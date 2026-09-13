@@ -1,0 +1,230 @@
+{
+  "schema_version": 1,
+  "review_date": "2026-09-13",
+  "baseline_commit": "d77085b",
+  "phase2_gate_passed": false,
+  "approved_runtime_bundle": null,
+  "kind": "candidate_source_matrix_not_runtime_lock",
+  "canonical_language": "en",
+  "components": [
+    {
+      "name": "frappe",
+      "repository": "https://github.com/frappe/frappe",
+      "tag": "v16.33.1",
+      "commit": "988e54f3c4c291e2077a83809663f123731abe76",
+      "selected_version": "16.33.1",
+      "selection_reason": "Newest non-prerelease v16 release observed; common framework for the app bundle.",
+      "status": "candidate_not_runtime_validated",
+      "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
+      "image_digest": null,
+      "source_file_sha256": {
+        "pyproject.toml": "75a442bcc2fdf946920bd4352c9719370869c5d943ad11e46e4f552bf301d8a6",
+        "package.json": "14db21279ddbbf525d41c678132614f4cc4b5404a41750cfe00d24d8c7f1c81d",
+        "yarn.lock": "4e39da1b48edcc235f1973302d96b283219b44774f07f447256319b66adfa608",
+        "frappe/hooks.py": "1e0b3523d6e554dde1d514f36bdcfac8fc11c44de3971fc34995bc55ce4e8c2e"
+      },
+      "source_version": "16.33.1"
+    },
+    {
+      "name": "erpnext",
+      "repository": "https://github.com/frappe/erpnext",
+      "tag": "v16.34.2",
+      "commit": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+      "selected_version": "16.34.2",
+      "selection_reason": "Newest non-prerelease v16 release observed; requires Frappe >=16.21,<17, satisfied by candidate source version.",
+      "status": "candidate_not_runtime_validated",
+      "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
+      "image_digest": null,
+      "source_file_sha256": {
+        "pyproject.toml": "8d473ef638e91c825d6d6d8e816c392b18b0f201c220f8ab2ecc0a4839d7f83b",
+        "package.json": "15104ce6d422c8c079b5014b3b46d1e89a40d201338d4d89a50748b735587d8c",
+        "yarn.lock": "ba6a3285c968d3e7ac606652b1aee15ed9c3ea133c019a7c0697533cf5dad8f0",
+        "erpnext/hooks.py": "9fad9522838a7e99f114ad03e7fa30a5d99b9804c5ede8222aba46f8264f0f8b"
+      },
+      "source_version": "16.34.2"
+    },
+    {
+      "name": "education",
+      "repository": "https://github.com/frappe/education",
+      "tag": "v16.1.0",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "selected_version": "16.1.0",
+      "selection_reason": "Newest non-prerelease v16 Education release observed. Prefer release commit over Phase 1 moving-branch snapshot.",
+      "status": "standalone_frontend_build_only_backend_not_installed",
+      "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
+      "image_digest": null,
+      "source_file_sha256": {
+        "pyproject.toml": "ddf79d9b134c34744473d4a570e19607f9b3d1302d863a1771ddb9172adfa7d9",
+        "package.json": "a874cc50ebe49e78933035e4ce88c5aea9d015a9ced2ecef3d49a6f789d2c8e5",
+        "frontend/package.json": "c44548c1e7e9f3b6c75209710d0e12018be3a00945167df8f70c45fd537e7cd9",
+        "frontend/yarn.lock": "10618b30bd7dfd48d6fc5e85d56af3d07562c2c11f62efe0b746a8f95f328072",
+        "yarn.lock": "38df2378ed26e20124d8c38a945af1b4a058656aab3b3b1f71a9d8a629cc0d81",
+        "education/hooks.py": "f85b0f1ba82db0937f7ba6d39d1e9a845caa26d17f7cf78dce9928acc5f2f3cf"
+      },
+      "source_version": "16.0.1",
+      "risk": "Release tag says 16.1.0; source __version__ says 16.0.1. SHA is authoritative; release is not Phase 1 branch head. Npm advisory lookup on 255 installed package names returned 57 advisory entries across 21 packages; triage/remediation is required. Runtime exploitability was not tested.",
+      "frontend_resolved_versions": {
+        "vue": "3.4.19",
+        "vite": "2.9.17",
+        "frappe-ui": "0.1.31",
+        "pinia": "2.1.7",
+        "vue-router": "4.3.0",
+        "tailwindcss": "3.4.1"
+      }
+    },
+    {
+      "name": "hrms",
+      "repository": "https://github.com/frappe/hrms",
+      "tag": "v16.18.1",
+      "commit": "a4768b441cff346def505e27f2a2229ee1e05b9b",
+      "selected_version": "16.18.1",
+      "selection_reason": "Payroll/Salary Slip/Leave/Employee Attendance are HRMS DocTypes, absent from ERPNext alone; required for requested full HR/payroll scope, not for minimal academics.",
+      "status": "candidate_not_runtime_validated",
+      "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
+      "image_digest": null,
+      "source_file_sha256": {
+        "pyproject.toml": "9ab7257a74ffdf2f0645e9ebd38ff5a6655411d0c19d7fa7811f8451413d2cc1",
+        "package.json": "ad469a98d118030747e371e67ab0741ba3e2ff5f89097969203c7fa024eda8d8",
+        "frontend/package.json": "1ed2ee1c3d6b91c788eefc6fbeed45a8843e100cc144c74d11198ca1a339f685",
+        "frontend/yarn.lock": "8aaf33ce7e5756a992d68f07caa1df03d88f3694e085d99adcca047efcf6df7d",
+        "yarn.lock": "0ba78c1d62bacf9af7177df2ecb2c7ef1406fac5cf5f36fadec195196a983daf",
+        "hrms/hooks.py": "850d61b060383dd4c1a0c198478b2b9ffc172348adf4361805b9e585e86a8fd8"
+      },
+      "source_version": "16.18.1"
+    },
+    {
+      "name": "bench",
+      "repository": "https://github.com/frappe/bench",
+      "tag": "v5.31.0",
+      "commit": "f21f11793872705560e710b2bda69934c9c34011",
+      "selected_version": "5.31.0",
+      "selection_reason": "Released CLI instead of develop; installed through PyPI and version command and pip check succeeded.",
+      "status": "cli_version_verified_only",
+      "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
+      "image_digest": null,
+      "source_file_sha256": {
+        "pyproject.toml": "95ff7eb15dff70b6b402f5a1c0bf45bbb718462deacfc6c251bcbdbd8a6e678d"
+      },
+      "source_version": "5.31.0"
+    },
+    {
+      "name": "frappe_docker",
+      "repository": "https://github.com/frappe/frappe_docker",
+      "tag": "v3.2.2",
+      "commit": "3061850feface8fbbad15b5dc08a110c596107cb",
+      "selected_version": "3.2.2",
+      "selection_reason": "Released deployment recipe reviewed, not a built image or runtime proof.",
+      "status": "candidate_not_runtime_validated",
+      "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
+      "image_digest": null,
+      "source_file_sha256": {}
+    },
+    {
+      "name": "python",
+      "repository": "https://github.com/python/cpython",
+      "tag": "v3.14.7",
+      "commit": "823f0323ee6ec1402088b73bce1a38473cac36dc",
+      "selected_version": "3.14.7",
+      "selection_reason": "Newest stable 3.14 tag observed; satisfies Frappe >=3.14,<3.15. Initial uv bootstrap attempted older 3.14.4, not this candidate.",
+      "status": "candidate_not_runtime_validated",
+      "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
+      "image_digest": null,
+      "runtime_artifact_candidate": {
+        "provider": "astral-sh/python-build-standalone",
+        "release": "20260901",
+        "asset_id": 539917786,
+        "name": "cpython-3.14.7+20260901-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+        "upstream_digest": "sha256:3959f92825141e04adf44982d3a83ee57af0877e893b0796e04c1468749d9b04",
+        "download_status": "failed_EOF_zero_bytes",
+        "checksum_verified_locally": false
+      }
+    },
+    {
+      "name": "node",
+      "repository": "https://github.com/nodejs/node",
+      "tag": "v24.21.0",
+      "commit": "955266bfdd854cd280dffd47548673914484e4c0",
+      "selected_version": "24.21.0",
+      "selection_reason": "Newest v24 release observed; satisfies Frappe >=24 and stays on v24 instead of moving to v26.",
+      "status": "cli_and_standalone_education_frontend_build_verified",
+      "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
+      "image_digest": null,
+      "npm_distribution_integrity": "sha512-GquwdXTr1CyRzrHsP+GVYnKj/yxIX7kUpyGMKu30fKJa9Hqtp9GP/Zu4BXY3gLIQVc/H5eWdMQmBgMBx5veCbw==",
+      "tested_binary_sha256": "7fde7b8afa198da66257f42ee2001d874c7355631e6d1579a5fb5ef1f246df4c"
+    },
+    {
+      "name": "mariadb",
+      "repository": "https://github.com/MariaDB/server",
+      "tag": "mariadb-11.8.9",
+      "commit": "bf9193a939f515e95dd8def1a5468088c91cede6",
+      "selected_version": "11.8.9",
+      "selection_reason": "Newest observed patch of 11.8 line used by pinned frappe_docker; no evidence requires moving to 12.3.",
+      "status": "candidate_not_runtime_validated",
+      "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
+      "image_digest": null
+    },
+    {
+      "name": "redis",
+      "repository": "https://github.com/redis/redis",
+      "tag": "8.6.6",
+      "commit": "c78094fd4710bca2fa28d5dd2266b9b753b9868d",
+      "selected_version": "8.6.6",
+      "selection_reason": "Newest observed patch of 8.6 line used by pinned frappe_docker; do not add an untested Valkey substitution or jump to 8.10.",
+      "status": "candidate_not_runtime_validated",
+      "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
+      "image_digest": null
+    },
+    {
+      "name": "payments",
+      "repository": "https://github.com/frappe/payments",
+      "tag": null,
+      "commit": "cca07d9f9392e2ea0e521c5975151db9e4b6c321",
+      "selected_version": "0.0.1",
+      "status": "candidate_not_runtime_validated",
+      "selection_reason": "Education release billing imports Razorpay; its CI installs Payments. No published releases returned; pin explicit reviewed version-16 commit. Clean-site optionality is unproven.",
+      "risk": "Not a gateway approval; import/install requirements must be established before enabling online payments.",
+      "image_digest": null
+    },
+    {
+      "name": "yarn",
+      "selected_version": "1.22.22",
+      "source": "https://registry.npmjs.org/yarn/1.22.22",
+      "integrity": "sha512-prL3kGtyG7o9Z9Sv8IPfBNrWTDmXB4Qbes8A9rEzt6wkJV8mUvoirjU0Mp3GGAU06Y0XQyA3/2/RQFVuK7MTfg==",
+      "status": "cli_and_frozen_education_frontend_install_verified",
+      "selection_reason": "Yarn Classic matches upstream yarn.lock v1; frozen install was attempted and failed on transport."
+    },
+    {
+      "name": "uv",
+      "selected_version": "0.11.6",
+      "source": "https://pypi.org/project/uv/0.11.6/",
+      "status": "bootstrap_tool_only",
+      "selection_reason": "Pinned to Phase 1 Bench develop requirement for initial bootstrap; NOT a qualified tool for downloading selected Python 3.14.7. Automatic resolution attempted older 3.14.4."
+    }
+  ],
+  "host_observed": {
+    "os": "Debian GNU/Linux 12 (bookworm)",
+    "arch": "x86_64",
+    "python": "3.11.2",
+    "node_before_bootstrap": "22.22.3",
+    "memory_gib_approx": 4,
+    "free_disk_gib_approx": 19,
+    "docker_available": false,
+    "mariadb_available": false,
+    "redis_available": false
+  },
+  "unresolved_pins": [
+    "Docker Engine and Compose qualification",
+    "OCI image digests for every runtime service/base image",
+    "Resolved Python application dependencies and hashes",
+    "Full stack JavaScript installation integrity",
+    "Native OS package versions/snapshot",
+    "Downloaded and locally checksum-verified Python 3.14.7 runtime artifact"
+  ],
+  "newer_lines_not_selected": {
+    "frappe_and_erpnext": "v15 releases are not newer v16 replacements; develop/v17 not selected. No newer stable v16 releases appeared in refreshed release list.",
+    "education": "version-16 branch head 22e0910d8b4188f17b76e58d7b434354ce5a0e58 is newer source but not the selected v16.1.0 release; must be separately qualified if security or compatibility fixes require it.",
+    "node": "v26.8.2 not selected; v24.21.0 satisfies requirements. Initial 24.14.0 CLI experiment superseded.",
+    "mariadb": "12.3.3 not selected; align 11.8 candidate with deployment recipe.",
+    "redis": "8.10.1 and 8.8.2 not selected; align 8.6 patch candidate with deployment recipe."
+  }
+}

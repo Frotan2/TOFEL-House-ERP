@@ -7,6 +7,9 @@ common_site_config.json
 sites/
 backups/
 
+# Local foundation validation artifacts (curated evidence is tracked under docs)
+.foundation/
+
 # Development/runtime artifacts
 .venv/
 __pycache__/

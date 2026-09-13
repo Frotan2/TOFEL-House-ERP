@@ -1,0 +1,546 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "baseline_commit": "d77085b",
+  "branch": "arena/01a09bf3-tofel-house-erp",
+  "foundation_status": "ACCEPT WITH CONDITIONS",
+  "phase2_gate_passed": false,
+  "product_implementation_authorized": false,
+  "runtime_compatible_bundle_proven": false,
+  "approved_runtime_bundle": null,
+  "verdict_scope": "Retain candidate for further qualification only; no runtime/production acceptance. Environment blocked and frontend advisory gate failed.",
+  "matrix_sha256": "e9d1308ed1870a0dd7733efa1266015ce1ab8c1a8c673750474ad9296e6b401f",
+  "created_site_count": 0,
+  "created_business_fixture_count": 0,
+  "tests": [
+    {
+      "id": "source-release-verification",
+      "status": "pass",
+      "scope": "static_source",
+      "command": "git clone --depth 1 --branch <recorded-release-tag> <recorded-repository>; git rev-parse HEAD; manifest/lock SHA-256 verification",
+      "exit_code": 0,
+      "evidence": [
+        "source-verification.json"
+      ],
+      "observation": "Six release source clones verified; no app install inferred."
+    },
+    {
+      "id": "apt-http-update",
+      "status": "fail",
+      "scope": "environment",
+      "command": "sudo apt-get update",
+      "exit_code": 0,
+      "evidence": [
+        "apt-update.log"
+      ],
+      "observation": "APT exited zero despite unreachable indices. Semantic failure recorded; not treated as successful prerequisite setup."
+    },
+    {
+      "id": "native-os-packages",
+      "status": "fail",
+      "scope": "environment",
+      "command": "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mariadb-server mariadb-client redis-server pkg-config libmariadb-dev build-essential libffi-dev libssl-dev libjpeg-dev zlib1g-dev liblcms2-dev libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0 libcups2-dev docker.io python3-venv",
+      "exit_code": 100,
+      "evidence": [
+        "apt-install.log"
+      ],
+      "observation": "No usable apt indices; package installation failed before services were created."
+    },
+    {
+      "id": "apt-https-retry",
+      "status": "fail",
+      "scope": "environment",
+      "command": "sudo apt-get update -o APT::Update::Error-Mode=any (after temporary HTTPS source change)",
+      "exit_code": 100,
+      "evidence": [
+        "apt-update-https.log"
+      ],
+      "observation": "TLS connection terminated. Source configuration restored afterward; no TLS bypass."
+    },
+    {
+      "id": "bootstrap-tool-environment",
+      "status": "pass",
+      "scope": "tooling",
+      "command": "$LAB/tools/bin/pip check",
+      "exit_code": 0,
+      "evidence": [
+        "bootstrap-pip-check.log",
+        "bootstrap-tool-versions.txt",
+        "native-preflight.json"
+      ],
+      "observation": "Bench 5.31.0 tools environment only, not Frappe requirements."
+    },
+    {
+      "id": "python-initial-download",
+      "status": "fail",
+      "scope": "environment",
+      "command": "$LAB/tools/bin/uv python install 3.14; then UV_NATIVE_TLS=true uv python install 3.14.4",
+      "exit_code": 1,
+      "evidence": [
+        "python-install.log",
+        "python-install-system-trust.log"
+      ],
+      "observation": "uv 0.11.6 selected 3.14.4. Initial UnknownIssuer; system trust retry failed TLS handshake. Superseded by selected 3.14.7 attempt."
+    },
+    {
+      "id": "python-selected-download",
+      "status": "fail",
+      "scope": "environment",
+      "command": "gh api -H \"Accept: application/octet-stream\" repos/astral-sh/python-build-standalone/releases/assets/539917786",
+      "exit_code": 1,
+      "evidence": [
+        "python-selected-asset.log"
+      ],
+      "observation": "Selected CPython 3.14.7, build 20260901; EOF at release asset host. Zero downloaded bytes; upstream checksum not locally verified."
+    },
+    {
+      "id": "docker-download-connectivity",
+      "status": "fail",
+      "scope": "environment",
+      "command": "curl --head --max-time 10 <official static Docker endpoint and registry /v2/>",
+      "exit_code": 35,
+      "evidence": [
+        "network-probes.json"
+      ],
+      "observation": "Docker package install was also blocked by apt. No CLI, daemon, Compose or container runtime to test. 28.5.1 URL was a connectivity probe, not a selected engine pin."
+    },
+    {
+      "id": "selected-node-yarn-cli",
+      "status": "pass",
+      "scope": "tooling",
+      "command": "npm install --prefix \"$LAB/node\" --no-audit --no-fund node@24.21.0 yarn@1.22.22; node --version; yarn --version",
+      "exit_code": 0,
+      "evidence": [
+        "native-preflight.json"
+      ],
+      "observation": "Node 24.21.0 and Yarn 1.22.22 CLI verified. Earlier Node 24.14.0 bootstrap was superseded."
+    },
+    {
+      "id": "education-direct-frozen-install",
+      "status": "fail",
+      "scope": "frontend_dependency_install",
+      "command": "yarn install --frozen-lockfile --non-interactive --network-timeout 20000 --registry https://registry.npmjs.org",
+      "exit_code": 1,
+      "evidence": [
+        "education-frontend-install-selected.log",
+        "network-probes.json"
+      ],
+      "observation": "Frozen lock resolved URLs still use unreachable registry.yarnpkg.com; registry flag did not fix tarball transport.",
+      "duration_seconds": 12.549
+    },
+    {
+      "id": "education-mirror-seed",
+      "status": "pass",
+      "scope": "frontend_dependency_integrity",
+      "command": "python3 tools/foundation/seed_yarn_mirror.py \"$LAB/sources/education/frontend/yarn.lock\" \"$LAB/yarn-mirror-clean\"",
+      "exit_code": 0,
+      "evidence": [
+        "education-mirror-clean-seed.log"
+      ],
+      "observation": "286 npm tarballs verified against original Yarn lock integrity values; no dependency/lock changes.",
+      "duration_seconds": 8.015
+    },
+    {
+      "id": "education-clean-frozen-install",
+      "status": "pass",
+      "scope": "frontend_dependency_install",
+      "command": "yarn install --offline --frozen-lockfile --non-interactive --cache-folder \"$LAB/yarn-cache-clean\" --use-yarnrc \"$LAB/yarnrc-clean\"",
+      "exit_code": 0,
+      "evidence": [
+        "education-frontend-clean-install.log"
+      ],
+      "observation": "Ran with removed generated node_modules and a fresh cache. Peer/cache-destination warnings retained.",
+      "duration_seconds": 12.817
+    },
+    {
+      "id": "education-production-asset-build",
+      "status": "pass",
+      "scope": "frontend_build",
+      "command": "yarn build (in selected Education frontend source directory)",
+      "exit_code": 0,
+      "evidence": [
+        "education-frontend-clean-build.log",
+        "education-frontend-build-hashes.txt",
+        "education-resolved-frontend-versions.txt"
+      ],
+      "observation": "Standalone production assets compiled, 1587 modules. NO backend or browser workflow validated.",
+      "duration_seconds": 7.46
+    },
+    {
+      "id": "education-installed-dependency-advisories",
+      "status": "fail",
+      "scope": "dependency_security",
+      "command": "python3 tools/foundation/audit_frontend.py \"$LAB/sources/education/frontend/node_modules\" --output <evidence.json>",
+      "exit_code": 1,
+      "evidence": [
+        "education-frontend-advisories.json"
+      ],
+      "observation": "255 installed package names queried. 57 advisory entries in 21 packages: 27 high, 26 moderate, 4 low. Reachability not tested; remediation/triage gate remains open."
+    },
+    {
+      "id": "native-preflight",
+      "status": "fail",
+      "scope": "environment",
+      "command": "python3 tools/foundation/preflight.py --method native --output <evidence.json>",
+      "exit_code": 1,
+      "evidence": [
+        "native-preflight.json"
+      ],
+      "observation": "Python mismatch and MariaDB/Redis missing; CLI successes cannot qualify runtime."
+    },
+    {
+      "id": "docker-preflight",
+      "status": "fail",
+      "scope": "environment",
+      "command": "python3 tools/foundation/preflight.py --method docker --output <evidence.json>",
+      "exit_code": 1,
+      "evidence": [
+        "docker-preflight.json"
+      ],
+      "observation": "Docker server/Compose unavailable."
+    },
+    {
+      "id": "validation-helper-unit-tests",
+      "status": "pass",
+      "scope": "validation_tool_tests",
+      "command": "python3 -m unittest discover -s tests/foundation -v",
+      "exit_code": 0,
+      "evidence": [
+        "collector-unit-tests.log"
+      ],
+      "observation": "9 validation-helper tests passed. None are upstream ERP or workflow tests."
+    }
+  ],
+  "phase_gates": [
+    {
+      "phase": "2A",
+      "status": "pass",
+      "reason": "Repository and releases refreshed; immutable source evidence recorded."
+    },
+    {
+      "phase": "2B",
+      "status": "partial",
+      "reason": "Candidate commits/versions selected; approved runtime bundle and complete dependency/image pins absent."
+    },
+    {
+      "phase": "2C",
+      "status": "blocked",
+      "reason": "Native/Docker attempts blocked before ERP installation; conditional container target, not empirical full-stack comparison."
+    },
+    {
+      "phase": "2D",
+      "status": "partial",
+      "reason": "Clean source/frontend/cache proof; no clean ERP site possible."
+    },
+    {
+      "phase": "2E",
+      "status": "blocked",
+      "reason": "B1/B2: compatible Python, MariaDB, Redis, native packages and Docker unavailable."
+    },
+    {
+      "phase": "2F",
+      "status": "blocked",
+      "reason": "B2/B4: zero institution/business fixtures created."
+    },
+    {
+      "phase": "2G",
+      "status": "blocked",
+      "reason": "B2/B4: applicant-to-payment lifecycle requires installed site."
+    },
+    {
+      "phase": "2H",
+      "status": "blocked",
+      "reason": "B2/B4: placement boundary is source-based recommendation; no runtime probes."
+    },
+    {
+      "phase": "2I",
+      "status": "blocked",
+      "reason": "B2/B4: no finance posting, duplicate-fee, discount, refund or reconciliation experiments."
+    },
+    {
+      "phase": "2J",
+      "status": "blocked",
+      "reason": "B2/B4: HRMS source necessity established for payroll scope, but no installed Employee/payroll integration."
+    },
+    {
+      "phase": "2K",
+      "status": "blocked",
+      "reason": "B2/B4: no users, portal, REST/RPC authorization or file isolation tests."
+    },
+    {
+      "phase": "2L",
+      "status": "blocked",
+      "reason": "B2/B4: no live MariaDB schema/transaction tests."
+    },
+    {
+      "phase": "2M",
+      "status": "blocked",
+      "reason": "B2/B5: no site, attachments, backup or restore."
+    },
+    {
+      "phase": "2N",
+      "status": "blocked",
+      "reason": "B2/B5: no migration replay or cross-release upgrade."
+    },
+    {
+      "phase": "2O",
+      "status": "fail",
+      "reason": "B3: actual dependency advisory findings; rest of runtime security baseline blocked."
+    },
+    {
+      "phase": "2P",
+      "status": "blocked",
+      "reason": "B6: only dependency/build timings recorded, not app performance."
+    },
+    {
+      "phase": "2Q",
+      "status": "partial",
+      "reason": "Education frozen dependency install/build passed; full assets, browser flows, responsiveness/accessibility not tested."
+    },
+    {
+      "phase": "2R",
+      "status": "partial",
+      "reason": "9 helper tests run; upstream backend/API/UI tests blocked by missing runtime."
+    },
+    {
+      "phase": "2S",
+      "status": "blocked",
+      "reason": "Conditional candidate retention only. Phase 2 success standard not met; product work prohibited."
+    }
+  ],
+  "runtime_scenarios": [
+    {
+      "group": "installation-and-services",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Clean MariaDB site/schema creation",
+        "Install Frappe then ERPNext then Education; establish Payments import/install optionality",
+        "Record DocTypes before/after justified HRMS installation",
+        "Gunicorn/Bench startup, login, Redis cache, RQ job, scheduler, Socket.IO, file storage"
+      ],
+      "runtime_evidence": []
+    },
+    {
+      "group": "student-lifecycle",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Company/institution and branch",
+        "Program/course/academic year/term",
+        "Employee-linked Instructor",
+        "Admission/intake and approved Applicant",
+        "Supported conversion creates canonical Student and linked Customer",
+        "Program Enrollment submission creates Course Enrollments",
+        "Student Group/Batch membership and Course Schedule",
+        "Attendance submission",
+        "Assessment Plan/Result submission and computed grades",
+        "Fee obligation, invoice, allocation and ledger reconciliation",
+        "Conversion retry/duplicate prevention and cancel/history"
+      ],
+      "runtime_evidence": []
+    },
+    {
+      "group": "placement-boundary",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Plan before Student vs Result before Student",
+        "Applicant cannot be silently substituted for Student link",
+        "Absent course/group/enrollment and membership cases",
+        "Retake/amendment vs rule versioning",
+        "Future applicant-owned result link to later Student without duplicate authority"
+      ],
+      "runtime_evidence": []
+    },
+    {
+      "group": "finance",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Invoice-based receivable",
+        "Legacy Fees plus same logical invoice obligation duplicate experiment",
+        "Partial/full payment, overpayment, allocation and retry",
+        "Invoice/payment cancellation and reversal",
+        "Discount net/tax posting",
+        "Return/credit note plus refund payment",
+        "GL/payment-ledger reconciliation"
+      ],
+      "runtime_evidence": []
+    },
+    {
+      "group": "hr-payroll",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Employee/Department without HRMS",
+        "Employment/employee Attendance/Leave",
+        "Salary Structure/assignment",
+        "Salary Slip with deduction and Additional Salary",
+        "Payroll Entry Journal Entry posting and reversal",
+        "HRMS override composition on Employee/Payment Entry"
+      ],
+      "runtime_evidence": []
+    },
+    {
+      "group": "authorization",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Administrator actions",
+        "Academic manager scoped operations",
+        "Teacher assigned groups and denied finance/payroll write",
+        "Accountant denied sensitive HR/payroll controls",
+        "HR user limits",
+        "Student own record allow",
+        "Student other record ID change deny for profile/result/attendance/invoice",
+        "Report/export/print/private attachment scope",
+        "Guest/session/CSRF and privileged methods",
+        "Two-site isolation and trusted host routing"
+      ],
+      "runtime_evidence": []
+    },
+    {
+      "group": "database",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Version/charset/collation",
+        "Primary keys/Link and child metadata/indexes/audit fields",
+        "Duplicate/concurrent enrollment/results",
+        "Submit/cancel/delete linked history",
+        "Failed transaction rollback"
+      ],
+      "runtime_evidence": []
+    },
+    {
+      "group": "backup-restore",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Populate synthetic records and hash private/public files",
+        "Full backup with files and securely retained config/keys",
+        "Restore into distinct clean site with same pinned bundle",
+        "Verify login, counts, links, attachment hashes, ledger balances and critical record usability"
+      ],
+      "runtime_evidence": []
+    },
+    {
+      "group": "migration",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Controlled same-bundle migrate and unchanged rerun",
+        "Compare schema/patch state and business invariants",
+        "Separately pinned before/after release upgrade if upgrade claim is required"
+      ],
+      "runtime_evidence": []
+    },
+    {
+      "group": "frontend-and-performance",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Frappe Desk/ERPNext/HRMS asset builds",
+        "Actual portal routing/forms/tables/dashboards",
+        "English responsive/keyboard/focus/accessibility checks",
+        "Real startup/migration/page/list/report/job latency on representative data"
+      ],
+      "runtime_evidence": []
+    },
+    {
+      "group": "upstream-tests",
+      "status": "blocked",
+      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "scenarios": [
+        "Education student/applicant/enrollment/attendance/assessment/fees tests",
+        "ERPNext invoice/payment/ledger tests",
+        "HRMS attendance/leave/payroll/slip tests"
+      ],
+      "runtime_evidence": []
+    }
+  ],
+  "evidence_directory": "evidence/phase-2",
+  "evidence_files": {
+    "apt-install.log": {
+      "sha256": "6acb3ee2a431c8742c44242370e3ddce82068ea11b333b5c6e46d004ba998617",
+      "bytes": 1220
+    },
+    "apt-update-https.log": {
+      "sha256": "996fe75c6994825741df5e1179c1cc35fc549a44137e7025e2a298b3dacc7819",
+      "bytes": 1706
+    },
+    "apt-update.log": {
+      "sha256": "f01d4dbd835482603a0622d665e91d4b52882a9b0da786cf0aa3c197a7432594",
+      "bytes": 1375
+    },
+    "bootstrap-pip-check.log": {
+      "sha256": "9261363b733079a641c2e4cc9bc46ffa1d8336945a87f807b6cf68847dbc9b09",
+      "bytes": 30
+    },
+    "bootstrap-tool-versions.txt": {
+      "sha256": "058f1bbf4e18f530261ed1b749e067d9c13bb860f5c1b289b7adb37c77d059bc",
+      "bytes": 312
+    },
+    "collector-unit-tests.log": {
+      "sha256": "15134815067ae0e792a6312ad7de6caa880273798ec2b1e8bdb3245565e16d69",
+      "bytes": 1129
+    },
+    "docker-preflight.json": {
+      "sha256": "57c1eb0d3cd81cf490a872f66e1709ff3f550cee9cd1f6e7b17198f31bd1c044",
+      "bytes": 1414
+    },
+    "education-frontend-advisories.json": {
+      "sha256": "70fc996e663caa4d15aba3603b30e90befe9416f7eae3024eb49e125f159323c",
+      "bytes": 38596
+    },
+    "education-frontend-build-hashes.txt": {
+      "sha256": "c79d2a2fb1b3c36753c833e3a0a581e388f105ae8d39507ca19692f8a2d2afa5",
+      "bytes": 261
+    },
+    "education-frontend-clean-build.log": {
+      "sha256": "b4b7977a2f67098bd5041c821af05c02c7bd43bff83d54aa59de2f73b8ed5e2d",
+      "bytes": 9579
+    },
+    "education-frontend-clean-install.log": {
+      "sha256": "65ce382358d6bbef634631ff557844871b950b7767d45380db7d7f6f95a73508",
+      "bytes": 2974
+    },
+    "education-frontend-install-selected.log": {
+      "sha256": "0fbfc2fd64eab6662f07ca4e8bc0d40182a5e650a9a8c5b8da98181563189136",
+      "bytes": 1841
+    },
+    "education-mirror-clean-seed.log": {
+      "sha256": "90b4c80c629512cd6a1db2db1b422b9b1fb5d31f6e8742102a95206406b2bfe6",
+      "bytes": 167
+    },
+    "education-resolved-frontend-versions.txt": {
+      "sha256": "9225fb925b1317dd1f888abe0d4ae797e8214750784f8714dc326b74432b0806",
+      "bytes": 87
+    },
+    "native-preflight.json": {
+      "sha256": "d9a3dceaf94a0b0245c20ec870d443a9a17fe0683ba281774cf940dcfcaaca35",
+      "bytes": 1414
+    },
+    "network-probes.json": {
+      "sha256": "ce5de0d8af4c974464e75626475b2335937b8e4f808d5fde7b09dd9d0c04cdce",
+      "bytes": 1390
+    },
+    "python-install-system-trust.log": {
+      "sha256": "8c65366383b68e94b66008533ba59445e52f4d8a6d58624f58486c2e58725d93",
+      "bytes": 574
+    },
+    "python-install.log": {
+      "sha256": "1432d73abbb3c90b925b9c78536b6de12da2ef206d2eb56bc5842ad654589a8d",
+      "bytes": 595
+    },
+    "python-selected-asset.log": {
+      "sha256": "c21edd226bc473886f06db985426da771dd78f6a936994876505dbce997fe64d",
+      "bytes": 165
+    },
+    "source-verification.json": {
+      "sha256": "66759fb5652cda5117b7a1dd580ada84d26ae0e7704d7a01652bd47ba93f358c",
+      "bytes": 1876
+    }
+  }
+}

@@ -1,0 +1,3 @@
+10618b30bd7dfd48d6fc5e85d56af3d07562c2c11f62efe0b746a8f95f328072  yarn.lock
+c44548c1e7e9f3b6c75209710d0e12018be3a00945167df8f70c45fd537e7cd9  package.json
+539df07366386b23db122e462fd049d96d617be0d744c52b1baf05bcecf0afae  ../education/public/frontend/index.html

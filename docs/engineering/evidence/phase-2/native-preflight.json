@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "checked_at_utc": "2026-09-13T18:28:12.403721+00:00",
+  "scope": "Toolchain availability only; no site, workflow, or compatibility test",
+  "checks": {
+    "python": {
+      "status": "version_mismatch",
+      "expected": "3.14.7",
+      "observed": "3.11.2",
+      "exit_code": 0
+    },
+    "node": {
+      "status": "pass",
+      "expected": "24.21.0",
+      "observed": "24.21.0",
+      "exit_code": 0
+    },
+    "yarn": {
+      "status": "pass",
+      "expected": "1.22.22",
+      "observed": "1.22.22",
+      "exit_code": 0
+    },
+    "bench": {
+      "status": "pass",
+      "expected": "5.31.0",
+      "observed": "5.31.0",
+      "exit_code": 0
+    },
+    "mariadb": {
+      "status": "missing",
+      "expected": "11.8.9",
+      "observed": null
+    },
+    "redis": {
+      "status": "missing",
+      "expected": "8.6.6",
+      "observed": null
+    },
+    "docker_server": {
+      "status": "missing",
+      "expected": null,
+      "observed": null
+    },
+    "docker_compose": {
+      "status": "missing",
+      "expected": null,
+      "observed": null
+    }
+  },
+  "native_tool_versions_match": false,
+  "docker_daemon_and_compose_available": false,
+  "foundation_runtime_validated": false,
+  "warning": "Neither tool availability nor exact version matching proves app installation, native libraries, image availability, or runtime behavior.",
+  "requested_method": "native"
+}
