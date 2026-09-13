@@ -250,8 +250,18 @@ def main() -> int:
         for secured_site in (site, restored_site):
             bench("disable-website-html-cache-" + secured_site, "--site", secured_site, "set-config", "disable_website_cache", "1", "--parse")
             bench("install-security-extension-" + secured_site, "--site", secured_site, "install-app", "foundation_security")
-        # Restart HTTP workers so installed hook caches cannot retain the pre-extension state.
-        os.killpg(processes[0][0].pid, signal.SIGHUP)
+        # Editable installs add interpreter-startup path hooks. A Gunicorn HUP
+        # forks the old interpreter and is insufficient: fully restart Python
+        # processes, retaining their separate pre-extension logs.
+        for process, _, _ in processes[:3]:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGTERM)
+            process.wait(timeout=30)
+        launch("web-backend-secured", [bench_dir / "env/bin/gunicorn", "--bind", "127.0.0.1:8000", "--workers", "2", "frappe.app:application"], bench_dir / "sites")
+        worker = launch("worker-secured", [lab / "tools/bin/bench", "worker", "--queue", "short,default,long"], bench_dir)
+        scheduler = launch("scheduler-secured", [lab / "tools/bin/bench", "schedule"], bench_dir)
+        env["FOUNDATION_BACKGROUND_REPORT"] = str(evidence / "background-secured-result.json")
+        run("secured-background-cache-job", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_background.py", site], cwd=bench_dir / "sites")
         env["FOUNDATION_HTTP_REPORT"] = str(evidence / "http-restricted-result.json")
         run("http-isolation-with-native-user-permissions", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_http.py"], cwd=bench_dir)
         # A host-whitelisted reverse proxy serves only public assets statically.
@@ -326,7 +336,7 @@ http {{
             finally:
                 stream.close()
                 (evidence / log_path.name).write_text(redact(log_path.read_text()))
-        for label in ("business", "restore", "background", "http", "http-restricted", "isolation", "browser"):
+        for label in ("business", "restore", "background", "http", "http-restricted", "isolation", "browser", "background-secured"):
             path = evidence / (label + "-result.json")
             if path.exists():
                 sanitized = redact(path.read_text())

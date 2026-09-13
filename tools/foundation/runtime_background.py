@@ -19,7 +19,7 @@ def main():
         frappe.cache.delete_value("foundation-cache-proof")
         report["cache_round_trip"] = True
         started = time.monotonic()
-        job = frappe.enqueue("frappe.utils.now", queue="short", job_id="foundation-background-proof", enqueue_after_commit=False)
+        job = frappe.enqueue("frappe.utils.now", queue="short", job_id="foundation-background-proof-" + str(time.time_ns()), enqueue_after_commit=False)
         for attempt in range(60):
             status = job.get_status(refresh=True)
             status = getattr(status, "value", str(status))
