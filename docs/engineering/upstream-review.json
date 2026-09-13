@@ -1,0 +1,559 @@
+{
+  "review_date_utc": "2026-09-13",
+  "purpose": "Source-review evidence only; NOT an installation lock or qualified release bundle. No dependencies installed.",
+  "repositories": [
+    {
+      "repository": "https://github.com/frappe/frappe",
+      "review_ref": "version-16",
+      "commit": "988e54f3c4c291e2077a83809663f123731abe76",
+      "source_version": "16.33.1",
+      "python_requirement": ">=3.14,<3.15",
+      "declared_python_dependencies": [
+        "Babel~=2.16.0",
+        "Click~=8.4.1",
+        "filelock~=3.20.1",
+        "filetype~=1.2.0",
+        "GitPython~=3.1.45",
+        "Jinja2~=3.1.6",
+        "Pillow~=12.3.0",
+        "PyJWT~=2.13.0",
+        "duckdb~=1.4.3",
+        "pyarrow~=25.0.0",
+        "PyMySQL==1.1.2",
+        "pypdf==6.15.0",
+        "PyPika @ git+https://github.com/frappe/pypika@2c50e6142b2d61d2d243e466fdd5dc03b3d918f2",
+        "mysqlclient==2.2.7",
+        "PyQRCode~=1.2.1",
+        "PyYAML~=6.0.3",
+        "RestrictedPython~=8.1",
+        "WeasyPrint==68.0",
+        "pydyf==0.12.1",
+        "Werkzeug==3.1.6",
+        "Whoosh~=2.7.4",
+        "beautifulsoup4~=4.13.5",
+        "bleach-allowlist~=1.0.3",
+        "chardet~=5.2.0",
+        "croniter~=6.0.0",
+        "cryptography~=50.0.0",
+        "cssutils~=2.11.1",
+        "distro~=1.9.0",
+        "email-reply-parser~=0.5.12",
+        "gunicorn @ git+https://github.com/frappe/gunicorn@54b59ca884c79dcf04d4882658a32bbaf17e999f",
+        "html5lib~=1.1",
+        "ipython~=8.37.0",
+        "ldap3~=2.9.1",
+        "markdown2~=2.5.4",
+        "MarkupSafe~=3.0.3",
+        "nh3~=0.3.2",
+        "num2words~=0.5.14",
+        "oauthlib~=3.3.1",
+        "openpyxl~=3.1.5",
+        "xlsxwriter~=3.2.9",
+        "orjson~=3.11.5",
+        "passlib~=1.7.4",
+        "pdfkit~=1.0.0",
+        "phonenumbers~=9.0.23",
+        "premailer~=3.10.0",
+        "psutil~=7.0.0",
+        "psycopg2-binary~=2.9.11",
+        "pyOpenSSL~=26.4.0",
+        "pydantic~=2.12.5",
+        "pyotp~=2.9.0",
+        "python-dateutil~=2.9.0.post0",
+        "pytz==2025.2",
+        "rauth~=0.7.3",
+        "redis~=7.1.0",
+        "hiredis~=3.3.0",
+        "requests-oauthlib~=2.0.0",
+        "requests~=2.33.0",
+        "rq==2.6.1",
+        "rsa~=4.9.1",
+        "semantic-version~=2.10.0",
+        "sentry-sdk~=1.45.1",
+        "sqlparse~=0.6.0",
+        "sql_metadata~=3.0.1",
+        "tenacity~=9.1.2",
+        "terminaltables~=3.1.10",
+        "traceback-with-variables~=2.2.1",
+        "typing_extensions>=4.15.0,<5",
+        "xlrd~=2.0.2",
+        "zxcvbn~=4.5.0",
+        "markdownify~=1.2.2",
+        "google-api-python-client~=2.188.0",
+        "google-auth-oauthlib~=1.2.4",
+        "google-auth~=2.48.0",
+        "vobject~=0.9.9",
+        "pycountry~=24.6.1",
+        "websockets~=15.0.1"
+      ],
+      "bench_configuration": {
+        "dev-dependencies": {
+          "coverage": "~=7.10.0",
+          "Faker": "~=18.10.1",
+          "pyngrok": "~=7.5.0",
+          "unittest-xml-reporting": "~=3.2.0",
+          "watchdog": "~=6.0.0",
+          "hypothesis": "~=6.77.0",
+          "responses": "==0.23.1",
+          "freezegun": "~=1.5.5"
+        }
+      },
+      "javascript_manifests": {
+        "package.json": {
+          "name": "frappe-framework",
+          "scripts": {
+            "build": "node esbuild",
+            "production": "node esbuild --production",
+            "watch": "node esbuild --watch",
+            "coverage:report": "npx nyc report --reporter=clover"
+          },
+          "repository": {
+            "type": "git",
+            "url": "git+https://github.com/frappe/frappe.git"
+          },
+          "author": "Frappe Technologies Pvt. Ltd.",
+          "license": "MIT",
+          "bugs": {
+            "url": "https://github.com/frappe/frappe/issues"
+          },
+          "engines": {
+            "node": ">=24"
+          },
+          "homepage": "https://frappeframework.com",
+          "dependencies": {
+            "@editorjs/editorjs": "^2.28.2",
+            "@frappe/esbuild-plugin-postcss2": "^0.1.3",
+            "@fullcalendar/core": "^6.1.11",
+            "@fullcalendar/daygrid": "^6.1.11",
+            "@fullcalendar/interaction": "^6.1.11",
+            "@fullcalendar/list": "^6.1.11",
+            "@fullcalendar/timegrid": "^6.1.11",
+            "@headlessui/vue": "^1.7.16",
+            "@popperjs/core": "^2.11.2",
+            "@redis/client": "^1.5.8",
+            "@sentry/browser": "^7.119.1",
+            "@vue-flow/background": "^1.1.0",
+            "@vue-flow/core": "^1.16.2",
+            "@vue/component-compiler": "^4.2.4",
+            "@vueuse/core": "^9.5.0",
+            "ace-builds": "^1.4.8",
+            "air-datepicker": "git+https://github.com/frappe/air-datepicker",
+            "autoprefixer": "10",
+            "awesomplete": "^1.1.5",
+            "bootstrap": "4.6.2",
+            "chalk": "^2.3.2",
+            "cliui": "^7.0.4",
+            "cookie": "^0.7.0",
+            "cropperjs": "^1.5.12",
+            "cssnano": "^5.0.0",
+            "driver.js": "^0.9.8",
+            "editorjs-undo": "0.1.6",
+            "esbuild": "^0.14.29",
+            "esbuild-plugin-vue3": "^0.3.0",
+            "fast-deep-equal": "^2.0.1",
+            "fast-glob": "^3.2.5",
+            "frappe-charts": "2.0.0-rc27",
+            "frappe-datatable": "1.20.7",
+            "frappe-gantt": "^0.6.0",
+            "frappe-quill-image-resize": "^3.0.9",
+            "highlight.js": "^10.4.1",
+            "html5-qrcode": "^2.3.8",
+            "jquery": "3.7.0",
+            "js-sha256": "^0.9.0",
+            "jsbarcode": "^3.11.0",
+            "launch-editor": "^2.2.1",
+            "localforage": "^1.10.0",
+            "md5": "^2.3.0",
+            "moment": "^2.29.4",
+            "moment-timezone": "^0.5.35",
+            "photoswipe": "^5.4.3",
+            "pinia": "^2.0.23",
+            "plyr": "^3.7.8",
+            "popper.js": "^1.16.0",
+            "postcss": "8",
+            "quill": "2.0.3",
+            "quill-magic-url": "^3.0.0",
+            "qz-tray": "^2.0.8",
+            "rtlcss": "^4.0.0",
+            "sass": "^1.63.0",
+            "showdown": "^2.1.0",
+            "socket.io": "^4.7.1",
+            "socket.io-client": "^4.7.1",
+            "sortablejs": "^1.15.0",
+            "touch": "^3.1.0",
+            "vue": "^3.3.0",
+            "vue-router": "^4.1.5",
+            "vuedraggable": "^4.1.0",
+            "vuex": "4.0.2",
+            "yargs": "^17.5.1"
+          },
+          "nyc": {
+            "report-dir": ".cypress-coverage"
+          },
+          "optionalDependencies": {
+            "bufferutil": "^4.0.8",
+            "utf-8-validate": "^6.0.3"
+          }
+        }
+      },
+      "lockfiles": [
+        "yarn.lock",
+        "ui/yarn.lock"
+      ]
+    },
+    {
+      "repository": "https://github.com/frappe/erpnext",
+      "review_ref": "version-16",
+      "commit": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+      "source_version": "16.34.2",
+      "python_requirement": ">=3.14",
+      "declared_python_dependencies": [
+        "Unidecode~=1.4.0",
+        "barcodenumber~=0.5.0",
+        "rapidfuzz~=3.14.3",
+        "holidays~=0.87",
+        "googlemaps~=4.10.0",
+        "plaid-python~=7.2.1",
+        "python-youtube~=0.9.9",
+        "pypng~=0.20220715.0",
+        "mt-940>=4.26.0",
+        "pdfplumber>=0.11.0"
+      ],
+      "bench_configuration": {
+        "frappe-dependencies": {
+          "frappe": ">=16.21.0,<17.0.0"
+        },
+        "assets": {
+          "build_dir": "./banking",
+          "out_dir": "../erpnext/public/banking",
+          "index_html_path": "../erpnext/www/banking.html"
+        }
+      },
+      "javascript_manifests": {
+        "package.json": {
+          "name": "erpnext",
+          "description": "Open Source ERP System powered by the Frappe Framework",
+          "repository": {
+            "type": "git",
+            "url": "git+https://github.com/frappe/erpnext.git"
+          },
+          "homepage": "https://frappe.io/erpnext",
+          "author": "Frappe Technologies Pvt. Ltd.",
+          "license": "GPL-3.0",
+          "bugs": {
+            "url": "https://github.com/frappe/erpnext/issues"
+          },
+          "scripts": {
+            "postinstall": "cd banking && yarn install",
+            "dev": "cd banking && yarn dev",
+            "build": "cd banking && yarn build"
+          },
+          "devDependencies": {},
+          "dependencies": {
+            "onscan.js": "^1.5.2"
+          }
+        },
+        "banking/package.json": {
+          "name": "banking",
+          "private": true,
+          "version": "0.0.0",
+          "type": "module",
+          "scripts": {
+            "dev": "vite",
+            "build": "vite build --base=/assets/erpnext/banking/ && yarn copy-html-entry",
+            "lint": "eslint .",
+            "preview": "vite preview",
+            "copy-html-entry": "cp ../erpnext/public/banking/index.html ../erpnext/www/banking.html"
+          },
+          "dependencies": {
+            "@dnd-kit/core": "^6.3.1",
+            "@dnd-kit/sortable": "^10.0.0",
+            "@dnd-kit/utilities": "^3.2.2",
+            "@tailwindcss/vite": "^4.3.2",
+            "@tanstack/react-table": "^8.21.3",
+            "@tanstack/react-virtual": "^3.13.24",
+            "@vitejs/plugin-react": "^6.0.3",
+            "chrono-node": "^2.9.1",
+            "class-variance-authority": "^0.7.1",
+            "clsx": "^2.1.1",
+            "cmdk": "^1.1.1",
+            "date-fns": "^4.1.0",
+            "dayjs": "^1.11.20",
+            "frappe-react-sdk": "^1.17.1",
+            "fuse.js": "^7.3.0",
+            "jotai": "^2.20.2",
+            "jotai-family": "^1.1.0",
+            "lodash.isplainobject": "^4.0.6",
+            "lucide-react": "^1.14.0",
+            "radix-ui": "^1.6.1",
+            "react": "^19.2.7",
+            "react-currency-input-field": "^4.0.5",
+            "react-day-picker": "9.14.0",
+            "react-dom": "^19.2.7",
+            "react-dropzone": "^15.0.0",
+            "react-hook-form": "^7.75.0",
+            "react-hotkeys-hook": "^5.3.2",
+            "react-markdown": "^10.1.0",
+            "react-router": "^8.3.0",
+            "rehype-raw": "^7.0.0",
+            "remark-gfm": "^4.0.1",
+            "safe-expr-eval": "^1.0.4",
+            "sonner": "^2.0.7",
+            "tailwind-merge": "^3.5.0",
+            "tailwindcss": "^4.3.0",
+            "tw-animate-css": "^1.4.0",
+            "usehooks-ts": "^3.1.1",
+            "vite": "^8.2.1"
+          },
+          "devDependencies": {
+            "@eslint/js": "^9.39.5",
+            "@types/node": "^25.3.0",
+            "@types/react": "^19.2.7",
+            "@types/react-dom": "^19.2.3",
+            "eslint": "^10.8.1",
+            "eslint-plugin-react-hooks": "^7.1.1",
+            "eslint-plugin-react-refresh": "^0.5.3",
+            "globals": "^16.5.0",
+            "typescript": "~5.9.3",
+            "typescript-eslint": "^8.67.0"
+          }
+        }
+      },
+      "lockfiles": [
+        "yarn.lock",
+        "banking/yarn.lock"
+      ]
+    },
+    {
+      "repository": "https://github.com/frappe/education",
+      "review_ref": "version-16",
+      "commit": "22e0910d8b4188f17b76e58d7b434354ce5a0e58",
+      "source_version": "16.0.1",
+      "python_requirement": ">=3.10",
+      "declared_python_dependencies": [],
+      "bench_configuration": {
+        "frappe-dependencies": {
+          "frappe": ">=16.0.0,<17.0.0"
+        }
+      },
+      "javascript_manifests": {
+        "package.json": {
+          "private": true,
+          "scripts": {
+            "postinstall": "cd frontend && yarn install --check-files",
+            "dev": "cd frontend && yarn dev",
+            "build": "cd frontend && yarn build"
+          }
+        },
+        "frontend/package.json": {
+          "name": "frappe-ui-frontend",
+          "private": true,
+          "version": "0.0.0",
+          "scripts": {
+            "dev": "vite",
+            "build": "vite build --base=/assets/education/frontend/ && yarn copy-html-entry",
+            "preview": "vite preview",
+            "copy-html-entry": "cp ../education/public/frontend/index.html ../education/www/edu-portal.html"
+          },
+          "dependencies": {
+            "dayjs": "^1.11.10",
+            "feather-icons": "^4.28.0",
+            "frappe-ui": "^0.1.17",
+            "lucide-vue-next": "^0.259.0",
+            "pinia": "^2.1.7",
+            "qalendar": "^3.6.1",
+            "vue": "^3.2.25",
+            "tailwindcss": "^3.3.3",
+            "vue-router": "^4.0.12",
+            "vite": "^2.7.2",
+            "@vitejs/plugin-vue": "^2.0.0",
+            "autoprefixer": "^10.4.2",
+            "postcss": "^8.4.5"
+          },
+          "devDependencies": {
+            "@vitejs/plugin-vue": "^2.0.0",
+            "autoprefixer": "^10.4.2",
+            "postcss": "^8.4.5",
+            "vite": "^2.7.2"
+          }
+        }
+      },
+      "lockfiles": [
+        "yarn.lock",
+        "frontend/yarn.lock"
+      ]
+    },
+    {
+      "repository": "https://github.com/frappe/hrms",
+      "review_ref": "version-16",
+      "commit": "a4768b441cff346def505e27f2a2229ee1e05b9b",
+      "source_version": "16.18.1",
+      "python_requirement": ">=3.10",
+      "declared_python_dependencies": [],
+      "bench_configuration": {
+        "frappe-dependencies": {
+          "frappe": ">=16.0.0,<17.0.0",
+          "erpnext": ">=16.0.0,<17.0.0"
+        }
+      },
+      "javascript_manifests": {
+        "package.json": {
+          "private": true,
+          "name": "hrms",
+          "description": "Open Source HR & Payroll System powered by the Frappe Framework",
+          "repository": {
+            "type": "git",
+            "url": "git+https://github.com/frappe/hrms.git"
+          },
+          "homepage": "https://frappe.io/hr",
+          "author": "Frappe Technologies Pvt. Ltd.",
+          "license": "GPL-3.0",
+          "bugs": {
+            "url": "https://github.com/frappe/hrms/issues"
+          },
+          "aworkspaces": [
+            "frontend",
+            "roster",
+            "frappe-ui"
+          ],
+          "scripts": {
+            "postinstall": "yarn install-pwa-deps && yarn install-roster-deps",
+            "install-pwa-deps": "cd frontend && yarn install --check-files",
+            "install-roster-deps": "cd roster && yarn install --check-files",
+            "dev-pwa": "cd frontend && yarn dev",
+            "dev-roster": "cd roster && yarn dev",
+            "build": "yarn build-pwa && yarn build-roster",
+            "build-pwa": "cd frontend && yarn build",
+            "build-roster": "cd roster && yarn build"
+          },
+          "dependencies": {
+            "html2canvas": "^1.4.1"
+          }
+        },
+        "frontend/package.json": {
+          "name": "frappe-hr-ui",
+          "private": true,
+          "version": "0.0.0",
+          "type": "module",
+          "scripts": {
+            "dev": "vite",
+            "serve": "vite preview",
+            "build": "vite build --base=/assets/hrms/frontend/ && yarn copy-html-entry",
+            "ionic:build": "npm run build",
+            "ionic:serve": "vite dev --host",
+            "copy-html-entry": "cp ../hrms/public/frontend/index.html ../hrms/www/hrms.html"
+          },
+          "dependencies": {
+            "@ionic/vue": "^7.4.3",
+            "@ionic/vue-router": "^7.4.3",
+            "@vitejs/plugin-vue": "^4.4.0",
+            "autoprefixer": "^10.4.19",
+            "dayjs": "^1.11.11",
+            "feather-icons": "^4.29.1",
+            "firebase": "^10.8.0",
+            "frappe-ui": "0.1.105",
+            "postcss": "^8.4.5",
+            "tailwindcss": "^3.4.3",
+            "vite": "^5.4.10",
+            "vite-plugin-pwa": "^0.20.5",
+            "vue": "^3.5.12",
+            "vue-router": "^4.3.2",
+            "workbox-core": "^7.0.0",
+            "workbox-precaching": "^7.0.0"
+          },
+          "devDependencies": {
+            "eslint": "^8.39.0",
+            "eslint-plugin-vue": "^9.11.0",
+            "prettier": "^2.8.8"
+          }
+        },
+        "roster/package.json": {
+          "name": "roster",
+          "private": true,
+          "version": "0.0.0",
+          "type": "module",
+          "scripts": {
+            "dev": "vite",
+            "serve": "vite preview",
+            "build": "vite build --base=/assets/hrms/roster/ && yarn copy-html-entry",
+            "copy-html-entry": "cp ../hrms/public/roster/index.html ../hrms/www/roster.html"
+          },
+          "dependencies": {
+            "@vitejs/plugin-vue": "^4.4.0",
+            "autoprefixer": "^10.4.19",
+            "dayjs": "^1.11.11",
+            "feather-icons": "^4.29.1",
+            "frappe-ui": "0.1.105",
+            "postcss": "^8.4.5",
+            "tailwindcss": "^3.4.3",
+            "vite": "^5.4.10",
+            "vue": "^3.5.12",
+            "vue-router": "^4.3.2"
+          },
+          "devDependencies": {
+            "typescript": "^5.4.5"
+          }
+        }
+      },
+      "lockfiles": [
+        "yarn.lock",
+        "frontend/yarn.lock",
+        "roster/yarn.lock"
+      ]
+    },
+    {
+      "repository": "https://github.com/frappe/payments",
+      "review_ref": "version-16",
+      "commit": "cca07d9f9392e2ea0e521c5975151db9e4b6c321",
+      "source_version": "0.0.1",
+      "python_requirement": ">=3.14",
+      "declared_python_dependencies": [
+        "paytmchecksum~=1.7.0",
+        "razorpay~=2.0.0",
+        "stripe~=10.12.0",
+        "braintree~=4.20.0",
+        "pycryptodome>=3.18.0,<4.0.0",
+        "gocardless-pro~=1.22.0",
+        "setuptools==80.9.0"
+      ],
+      "bench_configuration": {
+        "frappe-dependencies": {
+          "frappe": ">=16.0.0,<17.0.0"
+        }
+      },
+      "javascript_manifests": {},
+      "lockfiles": []
+    },
+    {
+      "repository": "https://github.com/frappe/frappe_docker",
+      "review_ref": "main",
+      "commit": "a0c52135d4d41c4b8acf7adfdfc5bbcba46dd4d0",
+      "javascript_manifests": {},
+      "lockfiles": [
+        "docs/pnpm-lock.yaml"
+      ]
+    },
+    {
+      "repository": "https://github.com/frappe/bench",
+      "review_ref": "develop",
+      "commit": "c9d12503d9d7fbfd94086c3de3cd4ac23dd44823",
+      "source_version": "5.0.0-dev",
+      "python_requirement": ">=3.10",
+      "declared_python_dependencies": [
+        "Click~=8.2.0",
+        "GitPython~=3.1.30",
+        "honcho",
+        "Jinja2~=3.1.3",
+        "python-crontab~=2.6.0",
+        "requests~=2.33.0",
+        "semantic-version~=2.10.0",
+        "setuptools>=71.0.0,<82.0.0",
+        "tomli;python_version<'3.11'",
+        "uv~=0.11.6"
+      ],
+      "bench_configuration": {},
+      "javascript_manifests": {},
+      "lockfiles": []
+    }
+  ]
+}

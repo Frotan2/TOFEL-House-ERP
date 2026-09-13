@@ -1,0 +1,21 @@
+# Local credentials and Frappe site data (never product source)
+.env
+.env.*
+!.env.example
+site_config.json
+common_site_config.json
+sites/
+backups/
+
+# Development/runtime artifacts
+.venv/
+__pycache__/
+*.py[cod]
+node_modules/
+.pytest_cache/
+.ruff_cache/
+coverage/
+dist/
+build/
+*.log
+.DS_Store
