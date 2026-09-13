@@ -24,15 +24,18 @@ try {
       await page.goto('http://foundation.localhost:8080/login');
       await page.locator('#login_email').fill(`validation-${label}@example.test`);
       await page.locator('#login_password').fill(process.env.FOUNDATION_TEST_PASSWORD);
-      const response = page.waitForResponse(r => r.url().endsWith('/api/method/login') && r.request().method() === 'POST');
-      await page.locator('.btn-login').click();
-      requireCondition((await response).status() === 200, 'native login failed');
+      const [response] = await Promise.all([
+        page.waitForResponse(r => r.url().endsWith('/api/method/login') && r.request().method() === 'POST'),
+        page.locator('.for-login .form-login .btn-login[type=submit]').click(),
+      ]);
+      requireCondition(response.status() === 200, 'native login failed');
       // Try to select the other student through URL and persisted portal selection.
       await page.goto('http://foundation.localhost:8080/edu-portal');
       await page.evaluate(other => localStorage.setItem('education-active_student', JSON.stringify(other)), records.students[1-index]);
-      const invoices = page.waitForResponse(r => r.url().includes('education.education.api.get_student_invoices'), { timeout: 30000 });
-      await page.goto('http://foundation.localhost:8080/edu-portal/fees?student=' + encodeURIComponent(records.students[1-index]));
-      const r = await invoices;
+      const [r] = await Promise.all([
+        page.waitForResponse(r => r.url().includes('education.education.api.get_student_invoices'), { timeout: 30000 }),
+        page.goto('http://foundation.localhost:8080/edu-portal/fees?student=' + encodeURIComponent(records.students[1-index])),
+      ]);
       requireCondition(r.status() === 200, 'portal invoices RPC failed');
       const data = (await r.json()).message;
       if (label === 'alpha') {

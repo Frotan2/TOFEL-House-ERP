@@ -42,8 +42,14 @@ def main():
         assert r.status_code == 200 and r.json().get('message') == user, 'identity mismatch'
         page = s.get(base+'/edu-portal', timeout=30)
         match = re.search(r"window.csrf_token\s*=\s*['\"]([^'\"]+)['\"]", page.text)
-        assert match and match[1] not in ('None', ''), 'CSRF token missing from native portal document'
-        s.headers['X-Frappe-CSRF-Token'] = match[1]
+        csrf_present = bool(match and match[1] not in ('None', ''))
+        report['checks'].append({'name':site+'-'+user+'-portal-csrf-present',
+                                'status':'pass' if csrf_present else 'fail',
+                                'observation':{'page_http_status':page.status_code,'token_assignment_present':bool(match),'nonempty_token':csrf_present}})
+        # A missing token remains a failed gate, while independent read/permission
+        # checks continue. Never manufacture a token or disable CSRF validation.
+        if csrf_present:
+            s.headers['X-Frappe-CSRF-Token'] = match[1]
         return s
 
     def read(s, path, allowed, expected=None, params=None):
@@ -131,6 +137,29 @@ def main():
             assert r.status_code==200 and r.json()['data']['name']==records['source_only_todo'], 'proxy accepted client site-routing override'
             return {'untrusted_site_header_overwritten':True}
         check('proxy-site-header-fixed-to-host',header_override)
+        def sharing_denied(extra=None):
+            data={'doctype':'Student','name':own,'user':'validation-beta@example.test','read':1}
+            data.update(extra or {})
+            r=alpha.post(base+'/api/method/frappe.share.add',json=data,timeout=30)
+            assert r.status_code==403 and r.json().get('exc_type')=='PermissionError', f'sharing not denied: HTTP {r.status_code}'
+            return {'http_status':403}
+        check('student-cannot-share-own-record-to-peer',sharing_denied)
+        # Adversarial input to the public dispatcher; no server-side bypass is
+        # enabled. The expected result is that supplied flags cannot grant access.
+        check('public-rpc-rejects-permission-bypass-flags',lambda:sharing_denied({'flags':{'ignore_share_permission':True},'ignore_permissions':True}))
+        check('private-file-still-isolated-after-share-attempts',lambda:file_check(beta,False))
+        def signup_disabled():
+            r=guest.post(base+'/api/method/frappe.core.doctype.user.user.sign_up',json={'email':'validation-blocked-signup@example.test','full_name':'Blocked Signup','redirect_to':''},timeout=30)
+            assert r.status_code==417 and r.json().get('exc_type')=='ValidationError' and 'Sign Up is disabled' in r.text, f'signup not rejected by native setting: HTTP {r.status_code}'
+            return {'native_signup_disabled':True}
+        check('public-signup-disabled',signup_disabled)
+        check('unprovisioned-student-denied-to-alpha',lambda:read(alpha,'/api/resource/Student/'+quote(records['unprovisioned_student'],safe=''),False))
+        def unprovisioned_cannot_login():
+            r=guest.post(base+'/api/method/login',data={'usr':records['unprovisioned_email'],'pwd':os.environ['FOUNDATION_TEST_PASSWORD']},timeout=30)
+            assert r.status_code in (401,403), f'unprovisioned student login HTTP {r.status_code}'
+            return {'http_status':r.status_code}
+        check('no-automatic-unscoped-student-login',unprovisioned_cannot_login)
+
     except Exception as exc:
         report['checks'].append({'name':'prerequisite','status':'fail','exception':type(exc).__name__,'message':str(exc)[:250]})
     report['status']='pass' if report['checks'] and all(c['status']=='pass' for c in report['checks']) else 'fail'

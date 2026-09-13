@@ -18,6 +18,14 @@ def main():
         frappe.connect()
         frappe.set_user("Administrator")
         created = []
+        # Close uncontrolled activation and document-sharing paths using native
+        # settings. No role is activated by this validation-only script.
+        for doctype, fields in (("Website Settings", {"disable_signup": 1}),
+                                ("Education Settings", {"user_creation_skip": 1}),
+                                ("System Settings", {"apply_strict_user_permissions": 1, "disable_document_sharing": 1})):
+            settings = frappe.get_single(doctype)
+            settings.update(fields)
+            settings.save()
         for label, student in zip(("alpha", "beta"), records["students"], strict=True):
             user = f"validation-{label}@example.test"
             doc = frappe.get_doc("Student", student)
@@ -27,6 +35,14 @@ def main():
                                             "allow": allow, "for_value": value, "apply_to_all_doctypes": 1}).insert()
                 created.append({"user": user, "allow": allow, "for_value": value, "name": permission.name})
             frappe.clear_cache(user=user)
+        # With auto-creation off, a new Student must not silently receive a
+        # portal account/role before policy assignment.
+        pending_email = "validation-unprovisioned@example.test"
+        pending = frappe.get_doc({"doctype": "Student", "first_name": "Validation Pending",
+                                  "student_email_id": pending_email}).insert()
+        assert not frappe.db.exists("User", pending_email)
+        records["unprovisioned_student"] = pending.name
+        records["unprovisioned_email"] = pending_email
         marker = frappe.get_doc({"doctype": "ToDo", "description": "Source-only site isolation marker"}).insert()
         records["source_only_todo"] = marker.name
         business_path = Path(os.environ["FOUNDATION_BUSINESS_REPORT"])
