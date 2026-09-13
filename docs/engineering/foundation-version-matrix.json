@@ -251,7 +251,7 @@
     "name": "foundation_security",
     "version": "0.1.0",
     "source_path": "apps/foundation_security",
-    "source_revision": "186e49e5e5126d0f61f5fbf1dbc76407b860d64c",
+    "source_revision": "4aeac6ebfd83c402ef88829fd311f3cd98d43374",
     "status": "under_runtime_qualification_not_security_approved",
     "scope": "Generic supported Frappe hooks only; no product schema or TOEFL logic",
     "file_sha256": {
@@ -259,8 +259,8 @@
       "README.md": "03ca0e7c4598318620e54023f68ebfff5da4865f9914f0256af78a2a82666be3",
       "foundation_security/__init__.py": "91447944015cec709e8aa7655f7e9d64e1e4508e7023a57fe3746911c0fc6fed",
       "foundation_security/modules.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "foundation_security/hooks.py": "c6067a4f643d9c623205c56e33734579a8970b415f876677b14ebe9fa5cbe644",
-      "foundation_security/guards.py": "53f7632e1a39b0eee54693d956f5cbe25c68aa88af71eab8d24238f74af788c1",
+      "foundation_security/hooks.py": "18318d8e54b13a87c137f8be6577b44de4d4e2dc4bef1672fb7e762a7497d0d3",
+      "foundation_security/guards.py": "4afaac2a06f6241ff91009a45c5e1b589720af0f88870ec7c78e20209fa35800",
       "foundation_security/patches.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   }

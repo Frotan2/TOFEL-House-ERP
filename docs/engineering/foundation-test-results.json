@@ -9,8 +9,8 @@
   "runtime_compatible_bundle_proven": false,
   "approved_runtime_bundle": null,
   "verdict_scope": "Retain candidate for further qualification only. Hosted clean installation proven; complete domain/security/recovery acceptance not achieved; frontend advisory gate failed.",
-  "matrix_sha256": "b1d42604513d1fe9d48f4ea9054ec4fdd173e65aa2ce89dd07982a7d645bddc1",
-  "created_site_count": 16,
+  "matrix_sha256": "53fe682b8cacf8e975f9977fb8bcf3074873246f82358a4b729e7aff2a7a04f3",
+  "created_site_count": 18,
   "created_business_fixture_count": null,
   "tests": [
     {
@@ -1192,6 +1192,138 @@
         }
       ],
       "failure": "install-security-extension-foundation.localhost: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34781217903",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "a2b368982063f05d160c151aa66ae51ed73e04f3",
+      "evidence": [
+        "hosted/runtime-34781217903.json"
+      ],
+      "passed_stages": 80,
+      "failed_stages": [
+        "http-login-and-isolation",
+        "http-isolation-with-native-user-permissions"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 15.108,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.676,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.116,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.033,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.68,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.006,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        },
+        {
+          "name": "schedule-attendance-submitted-assessment",
+          "status": "pass",
+          "seconds": 0.086,
+          "observation": {
+            "attendance": "EDU-ATT-2026-00001",
+            "result": "EDU-RES-2026-00001",
+            "score": 75.0,
+            "grade": "B"
+          }
+        },
+        {
+          "name": "fee-invoice-discount-payment-ledger",
+          "status": "pass",
+          "seconds": 1.277,
+          "observation": {
+            "invoice": "ACC-SINV-2026-00001",
+            "payment": "ACC-PAY-2026-00001",
+            "discounted_total": 90.0,
+            "outstanding": 0.0,
+            "gl_debit": 180.0,
+            "gl_credit": 180.0,
+            "gl_rows": 4
+          }
+        },
+        {
+          "name": "private-attachment",
+          "status": "pass",
+          "seconds": 0.034,
+          "observation": {
+            "file": "66c7f36539",
+            "private": 1,
+            "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+            "public_file": "8f110ae15d"
+          }
+        }
+      ],
+      "failure": "http-isolation-with-native-user-permissions: exit 1"
     }
   ],
   "phase_gates": [
@@ -1303,7 +1435,7 @@
         "Gunicorn/Bench startup, login, Redis cache, RQ job, scheduler, Socket.IO, file storage"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     },
     {
@@ -1324,7 +1456,7 @@
         "Conversion retry/duplicate prevention and cancel/history"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     },
     {
@@ -1339,7 +1471,7 @@
         "Future applicant-owned result link to later Student without duplicate authority"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     },
     {
@@ -1356,7 +1488,7 @@
         "GL/payment-ledger reconciliation"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     },
     {
@@ -1372,7 +1504,7 @@
         "HRMS override composition on Employee/Payment Entry"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     },
     {
@@ -1392,7 +1524,7 @@
         "Two-site isolation and trusted host routing"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     },
     {
@@ -1407,7 +1539,7 @@
         "Failed transaction rollback"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     },
     {
@@ -1421,7 +1553,7 @@
         "Verify login, counts, links, attachment hashes, ledger balances and critical record usability"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     },
     {
@@ -1434,7 +1566,7 @@
         "Separately pinned before/after release upgrade if upgrade claim is required"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     },
     {
@@ -1448,7 +1580,7 @@
         "Real startup/migration/page/list/report/job latency on representative data"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     },
     {
@@ -1461,7 +1593,7 @@
         "HRMS attendance/leave/payroll/slip tests"
       ],
       "runtime_evidence": [
-        "hosted/runtime-34780667272.json"
+        "hosted/runtime-34781217903.json"
       ]
     }
   ],
@@ -1594,6 +1726,10 @@
     "hosted/runtime-34780667272.json": {
       "sha256": "bcfe5dded579c88cb30124d3a590a6211cf6f20311483f57e4a34a1be2ba169f",
       "bytes": 32929
+    },
+    "hosted/runtime-34781217903.json": {
+      "sha256": "4d4640000e6a41acce4cd065b8ccdf88e22558da201afc90dd3f99e3740b2636",
+      "bytes": 33121
     }
   },
   "created_site_count_scope": "Cumulative creations in retained disposable hosted runs, not currently live sites",
@@ -1601,11 +1737,11 @@
   "business_fixture_count_note": "No exact full-document count claimed; explicit named records and successful controller checks are retained in each business_result.",
   "clean_pinned_installation_proven": true,
   "latest_hosted_checkpoint": {
-    "run_id": "34780667272",
-    "commit": "1e8a6792a672f73236475b77fa8bede5402e6b7b",
+    "run_id": "34781217903",
+    "commit": "a2b368982063f05d160c151aa66ae51ed73e04f3",
     "status": "fail",
-    "evidence": "evidence/phase-2/hosted/runtime-34780667272.json",
-    "failure": "install-security-extension-foundation.localhost: exit 1",
+    "evidence": "evidence/phase-2/hosted/runtime-34781217903.json",
+    "failure": "http-isolation-with-native-user-permissions: exit 1",
     "business_active_check": "private-attachment",
     "business_failure": null
   },
