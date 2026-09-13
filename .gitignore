@@ -21,4 +21,6 @@ coverage/
 dist/
 build/
 *.log
+# Deliberately reviewed/redacted execution evidence, not live runtime logs
+!docs/engineering/evidence/phase-2/*.log
 .DS_Store

@@ -1,0 +1,111 @@
+yarn run v1.22.22
+$ vite build --base=/assets/education/frontend/ && yarn copy-html-entry
+No common_site_config.json found, using default port 8000
+vite v2.9.17 building for production...
+transforming...
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+✓ 1587 modules transformed.
+rendering chunks...
+../education/public/frontend/assets/Inter-Thin.918c5cbe.woff2                      99.03 KiB
+../education/public/frontend/assets/Inter-ThinItalic.a3279f0a.woff2                104.98 KiB
+../education/public/frontend/assets/Inter-ExtraLight.4c337585.woff2                103.48 KiB
+../education/public/frontend/assets/Inter-ExtraLightItalic.7b39e865.woff2          109.43 KiB
+../education/public/frontend/assets/Inter-Light.87ed65f8.woff2                     103.16 KiB
+../education/public/frontend/assets/Inter-LightItalic.5b94e337.woff2               109.34 KiB
+../education/public/frontend/assets/Inter-Regular.c342b1b7.woff2                   97.78 KiB
+../education/public/frontend/assets/Inter-Italic.950174d1.woff2                    104.99 KiB
+../education/public/frontend/assets/Inter-Medium.a4e1e7e6.woff2                    104.22 KiB
+../education/public/frontend/assets/Inter-MediumItalic.d4a7f5d9.woff2              109.87 KiB
+../education/public/frontend/assets/Inter-SemiBold.af44b8a2.woff2                  104.72 KiB
+../education/public/frontend/assets/Inter-SemiBoldItalic.a4f92da5.woff2            109.91 KiB
+../education/public/frontend/assets/Inter-Bold.2efd8e3c.woff2                      104.88 KiB
+../education/public/frontend/assets/Inter-BoldItalic.f528d863.woff2                109.94 KiB
+../education/public/frontend/assets/Inter-Black.bc2198e0.woff2                     102.07 KiB
+../education/public/frontend/assets/Inter-BlackItalic.1cb529a7.woff2               107.32 KiB
+../education/public/frontend/assets/Inter.var.d30c3bd0.woff2                       258.04 KiB
+../education/public/frontend/assets/Inter-Italic.var.d9f448e3.woff2                290.30 KiB
+../education/public/frontend/assets/Inter-Thin.914c3fab.woff2                      98.79 KiB
+../education/public/frontend/assets/Inter-ThinItalic.382fab25.woff2                104.14 KiB
+../education/public/frontend/assets/Inter-ExtraLight.25a4db7c.woff2                100.46 KiB
+../education/public/frontend/assets/Inter-ExtraLightItalic.f0df46d0.woff2          106.45 KiB
+../education/public/frontend/assets/Inter-Light.211445a8.woff2                     100.85 KiB
+../education/public/frontend/assets/Inter-LightItalic.9ea2db78.woff2               106.02 KiB
+../education/public/frontend/assets/Inter-Regular.edd1deaf.woff2                   98.43 KiB
+../education/public/frontend/assets/Inter-Italic.dd31ea31.woff2                    104.05 KiB
+../education/public/frontend/assets/Inter-Medium.24fb6e39.woff2                    102.76 KiB
+../education/public/frontend/assets/Inter-MediumItalic.a2db9bea.woff2              108.22 KiB
+../education/public/frontend/assets/Inter-SemiBold.51419407.woff2                  102.93 KiB
+../education/public/frontend/assets/Inter-SemiBoldItalic.daa7095c.woff2            108.05 KiB
+../education/public/frontend/assets/Inter-Bold.1dc41a58.woff2                      102.74 KiB
+../education/public/frontend/assets/Inter-BoldItalic.dc0d4194.woff2                107.93 KiB
+../education/public/frontend/assets/Inter-ExtraBold.8a72efb6.woff2                 102.53 KiB
+../education/public/frontend/assets/Inter-ExtraBoldItalic.38e71f7c.woff2           107.93 KiB
+../education/public/frontend/assets/Inter-Black.05e55dd7.woff2                     101.16 KiB
+../education/public/frontend/assets/Inter-BlackItalic.4ff7db4a.woff2               106.05 KiB
+../education/public/frontend/assets/Inter-DisplayThin.b64c173b.woff2               99.76 KiB
+../education/public/frontend/assets/Inter-DisplayThinItalic.b70f1c61.woff2         104.92 KiB
+../education/public/frontend/assets/Inter-DisplayExtraLight.32095132.woff2         103.39 KiB
+../education/public/frontend/assets/Inter-DisplayExtraLightItalic.8eeb78f4.woff2   108.51 KiB
+../education/public/frontend/assets/Inter-DisplayLight.e40a858d.woff2              102.88 KiB
+../education/public/frontend/assets/Inter-DisplayLightItalic.151e9a11.woff2        107.96 KiB
+../education/public/frontend/assets/Inter-DisplayItalic.938db435.woff2             103.63 KiB
+../education/public/frontend/assets/Inter-DisplayMedium.12a4a358.woff2             102.91 KiB
+../education/public/frontend/assets/Inter-ExtraBold.74e72c6b.woff2                 105.03 KiB
+../education/public/frontend/assets/Inter-DisplaySemiBold.856fcb49.woff2           103.09 KiB
+../education/public/frontend/assets/Inter-DisplaySemiBoldItalic.5e57e1d2.woff2     107.80 KiB
+../education/public/frontend/assets/Inter-DisplayBold.d9bf35ac.woff2               103.09 KiB
+../education/public/frontend/assets/Inter-DisplayBoldItalic.fef00c57.woff2         107.62 KiB
+../education/public/frontend/assets/Inter-DisplayExtraBold.b7cc680a.woff2          102.89 KiB
+../education/public/frontend/assets/Inter-DisplayExtraBoldItalic.e5a5984a.woff2    108.22 KiB
+../education/public/frontend/assets/Inter-DisplayBlack.b1d4e33d.woff2              99.53 KiB
+../education/public/frontend/assets/Inter-DisplayBlackItalic.d561e8dd.woff2        104.77 KiB
+../education/public/frontend/assets/Inter-ExtraBoldItalic.2abc7ab1.woff2           110.23 KiB
+../education/public/frontend/assets/Inter-DisplayMediumItalic.8968b5ab.woff2       107.88 KiB
+../education/public/frontend/assets/Inter-Thin.2198e9fb.woff                       133.74 KiB
+../education/public/frontend/assets/Inter-ThinItalic.f53f21de.woff                 141.03 KiB
+../education/public/frontend/assets/Inter-ExtraLight.1c06ef44.woff                 138.54 KiB
+../education/public/frontend/assets/Inter-ExtraLightItalic.0e5667b1.woff           145.20 KiB
+../education/public/frontend/assets/Inter-Light.319f53ba.woff                      138.21 KiB
+../education/public/frontend/assets/Inter-LightItalic.289a60bc.woff                144.96 KiB
+../education/public/frontend/assets/Inter-Regular.b825f1bc.woff                    131.50 KiB
+../education/public/frontend/assets/Inter-Italic.b0b21adf.woff                     139.40 KiB
+../education/public/frontend/assets/Inter-Medium.f500bbb9.woff                     139.49 KiB
+../education/public/frontend/assets/Inter-MediumItalic.d06751dd.woff               145.69 KiB
+../education/public/frontend/assets/Inter-SemiBold.3041a990.woff                   139.89 KiB
+../education/public/frontend/assets/Inter-SemiBoldItalic.5ce565c8.woff             145.78 KiB
+../education/public/frontend/assets/Inter-Bold.2b828bef.woff                       140.34 KiB
+../education/public/frontend/assets/Inter-Black.9c79713b.woff                      136.75 KiB
+../education/public/frontend/assets/Inter-BoldItalic.8bc8e0ff.woff                 145.92 KiB
+../education/public/frontend/assets/Inter-BlackItalic.7ecbf9fa.woff                142.50 KiB
+../education/public/frontend/assets/Inter-ExtraBold.585b4ce1.woff                  140.19 KiB
+../education/public/frontend/assets/Inter-ExtraBoldItalic.b87f7d97.woff            145.70 KiB
+../education/public/frontend/index.html                                            1.13 KiB
+../education/public/frontend/assets/index.c37adf01.js                              19.62 KiB / gzip: 7.80 KiB
+../education/public/frontend/assets/Schedule.0f06b4f6.js                           0.89 KiB / gzip: 0.54 KiB
+../education/public/frontend/assets/MissingData.f2aed391.js                        0.31 KiB / gzip: 0.25 KiB
+../education/public/frontend/assets/Calendar.cd9fd10b.js                           5.71 KiB / gzip: 2.04 KiB
+../education/public/frontend/assets/Attendance.79937fcc.js                         11.71 KiB / gzip: 4.96 KiB
+../education/public/frontend/assets/FontColor.1e3615cf.js                          2.30 KiB / gzip: 0.97 KiB
+../education/public/frontend/assets/index.2bfe60f8.js                              1.19 KiB / gzip: 0.68 KiB
+../education/public/frontend/assets/InsertImage.e4f11cb9.js                        1.73 KiB / gzip: 0.93 KiB
+../education/public/frontend/assets/Grades.93cf34b6.js                             1.87 KiB / gzip: 1.02 KiB
+../education/public/frontend/assets/Fees.fb67dcd2.js                               6.79 KiB / gzip: 2.66 KiB
+../education/public/frontend/assets/frappe-ui.005832b0.css                         1.69 KiB / gzip: 0.84 KiB
+../education/public/frontend/assets/Students.63754178.js                           1.93 KiB / gzip: 1.01 KiB
+../education/public/frontend/assets/InsertLink.371a426c.js                         1.40 KiB / gzip: 0.73 KiB
+../education/public/frontend/assets/InsertVideo.03630614.js                        1.89 KiB / gzip: 0.96 KiB
+../education/public/frontend/assets/index.1c5e72f7.css                             80.36 KiB / gzip: 11.33 KiB
+../education/public/frontend/assets/frappe-ui.7f34a029.js                          785.70 KiB / gzip: 245.24 KiB
+
+(!) Some chunks are larger than 500 KiB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/guide/en/#outputmanualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+$ cp ../education/public/frontend/index.html ../education/www/edu-portal.html
+Done in 7.29s.
+
+real	0m7.460s
+user	0m9.471s
+sys	0m0.848s
