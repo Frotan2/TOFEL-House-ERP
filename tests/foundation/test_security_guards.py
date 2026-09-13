@@ -24,6 +24,11 @@ class GuardTests(unittest.TestCase):
         self.guard=importlib.util.module_from_spec(spec)
         with patch.dict(sys.modules, {'frappe':self.frappe}): spec.loader.exec_module(self.guard)
 
+    def test_app_contains_bench_discovery_files(self):
+        root=Path(__file__).resolve().parents[2]/'apps/foundation_security/foundation_security'
+        for name in ('hooks.py','modules.txt','patches.txt'):
+            self.assertTrue((root/name).is_file(), name)
+
     def test_exact_native_scope_allowed(self):
         self.guard.validate_student_scope()
 
