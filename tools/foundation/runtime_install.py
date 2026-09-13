@@ -138,8 +138,12 @@ def main() -> int:
             time.sleep(2)
         else:
             raise RuntimeError("MariaDB startup timeout")
+        # Redis is supplied by the digest-pinned containers above, not a second
+        # host daemon. This upstream option avoids generating host Redis configs;
+        # it does not skip Redis service qualification or the connection settings.
         run("bench-init", [lab / "tools/bin/bench", "init", bench_dir, "--frappe-path", source_dir / "frappe",
-                           "--python", py, "--no-backups", "--skip-assets", "--verbose"])
+                           "--python", py, "--no-backups", "--skip-redis-config-generation",
+                           "--no-procfile", "--skip-assets", "--verbose"])
         for key, value in {"redis_cache": "redis://127.0.0.1:12379", "redis_queue": "redis://127.0.0.1:11379",
                            "redis_socketio": "redis://127.0.0.1:11379"}.items():
             bench("config-" + key, "set-config", "--global", key, value)
