@@ -1,0 +1,142 @@
+"""Expanded real HTTP isolation checks on owned synthetic sites, after native policy.
+
+Writes deliberately target synthetic records only. No UI hiding or mocked permissions.
+"""
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import time
+from urllib.parse import quote
+
+
+def main():
+    import requests
+    if os.environ.get('GITHUB_ACTIONS') != 'true':
+        raise SystemExit('Disposable Actions runner only')
+    records = json.loads(Path(os.environ['FOUNDATION_BUSINESS_REPORT']).read_text())['records']
+    destination = Path(os.environ['FOUNDATION_ISOLATION_REPORT'])
+    report = {'status': 'running', 'scope': 'Restricted native policy; real HTTP, synthetic data only',
+              'checks': [], 'phase2_gate_passed': False}
+    base = 'http://127.0.0.1:8080'
+
+    def check(name, fn):
+        start = time.monotonic()
+        try:
+            value = fn()
+            report['checks'].append({'name': name, 'status': 'pass', 'observation': value,
+                                     'seconds': round(time.monotonic()-start, 3)})
+        except Exception as exc:
+            # No response bodies, cookies, CSRF tokens or credentials in evidence.
+            report['checks'].append({'name': name, 'status': 'fail', 'exception': type(exc).__name__, 'message': str(exc)[:250]})
+        destination.write_text(json.dumps(report, indent=2)+'\n')
+
+    def login(user, site='foundation.localhost'):
+        s = requests.Session()
+        s.headers['Host'] = site
+        password = os.environ['FOUNDATION_ADMIN_PASSWORD' if user == 'Administrator' else 'FOUNDATION_TEST_PASSWORD']
+        r = s.post(base+'/api/method/login', data={'usr': user, 'pwd': password}, timeout=30)
+        assert r.status_code == 200, f'login status {r.status_code}'
+        r = s.get(base+'/api/method/frappe.auth.get_logged_user', timeout=30)
+        assert r.status_code == 200 and r.json().get('message') == user, 'identity mismatch'
+        page = s.get(base+'/edu-portal', timeout=30)
+        match = re.search(r"window.csrf_token\s*=\s*['\"]([^'\"]+)['\"]", page.text)
+        assert match and match[1] not in ('None', ''), 'CSRF token missing from native portal document'
+        s.headers['X-Frappe-CSRF-Token'] = match[1]
+        return s
+
+    def read(s, path, allowed, expected=None, params=None):
+        r = s.get(base+path, params=params, timeout=30, allow_redirects=False)
+        if allowed:
+            assert r.status_code == 200, f'positive control HTTP {r.status_code}'
+            if expected:
+                assert r.json()['data']['name'] == expected, 'target mismatch'
+        else:
+            assert r.status_code == 403, f'expected authorization denial, HTTP {r.status_code}'
+            assert r.json().get('exc_type') == 'PermissionError', 'denial not a document permission error'
+        return {'http_status': r.status_code}
+
+    try:
+        alpha, beta = [login(f'validation-{label}@example.test') for label in ('alpha','beta')]
+        admin, restored = login('Administrator'), login('Administrator', 'restore.localhost')
+        own, other = records['students']
+        for version in ('resource', 'v2/document'):
+            for s, target, allow, label in ((alpha,own,True,'alpha-own'),(alpha,other,False,'alpha-other'),
+                                            (beta,other,True,'beta-own'),(beta,own,False,'beta-other')):
+                path=f'/api/{version}/Student/{quote(target, safe="")}'
+                if version == 'v2/document': path += '/'
+                check(version+'-'+label, lambda s=s,path=path,allow=allow,target=target: read(s,path,allow,target))
+        for doctype, key in (('Assessment Result','assessment_result'),('Student Attendance','attendance'),('Sales Invoice','invoice')):
+            path='/api/resource/'+quote(doctype, safe='')+'/'+quote(records[key],safe='')
+            check(key+'-own', lambda path=path,key=key: read(alpha,path,True,records[key]))
+            check(key+'-other', lambda path=path: read(beta,path,False))
+
+        for method in ('get_student_context','get_student_invoices'):
+            path='/api/method/education.education.api.'+method
+            check(method+'-own', lambda path=path: read(alpha,path,True,params={'student':own}))
+            check(method+'-other', lambda path=path: read(beta,path,False,params={'student':own}))
+        for user,label,target in ((alpha,'alpha',own),(beta,'beta',other)):
+            def listing(user=user,target=target):
+                r=user.get(base+'/api/resource/Student',params={'fields':json.dumps(['name'])},timeout=30)
+                assert r.status_code==200
+                names={d['name'] for d in r.json()['data']}
+                assert names=={target}, 'list did not contain exactly the own Student'
+                return {'own_only':True}
+            check(label+'-rest-list',listing)
+            check(label+'-rpc-own',lambda user=user,target=target: read(user,'/api/method/frappe.client.get',True,params={'doctype':'Student','name':target}))
+        check('generic-rpc-other',lambda: read(alpha,'/api/method/frappe.client.get',False,params={'doctype':'Student','name':other}))
+
+        def write_other(rpc=False):
+            if rpc:
+                r=alpha.post(base+'/api/method/frappe.client.set_value',json={'doctype':'Student','name':other,'fieldname':'first_name','value':'Unauthorized synthetic mutation'},timeout=30)
+            else:
+                r=alpha.put(base+'/api/resource/Student/'+quote(other,safe=''),json={'first_name':'Unauthorized synthetic mutation'},timeout=30)
+            assert r.status_code==403 and r.json().get('exc_type')=='PermissionError', f'write not denied by permission check: HTTP {r.status_code}'
+            return {'http_status':403,'permission_not_csrf_denial':True}
+        check('rest-other-write-denied',write_other)
+        check('rpc-other-write-denied',lambda:write_other(True))
+        def unchanged():
+            r=admin.get(base+'/api/resource/Student/'+quote(other,safe=''),timeout=30)
+            assert r.status_code==200 and r.json()['data']['first_name']=='Validation beta', 'unauthorized mutation persisted'
+            return {'unchanged':True}
+        check('other-student-unchanged',unchanged)
+
+        def file_check(s,allowed):
+            r=s.get(base+records['private_file_url'],timeout=30,allow_redirects=False)
+            if allowed:
+                assert r.status_code==200 and hashlib.sha256(r.content).hexdigest()==records['private_file_sha256']
+            else:
+                assert r.status_code==403, f'private-file HTTP {r.status_code}'
+            return {'http_status':r.status_code}
+        guest=requests.Session();guest.headers['Host']='foundation.localhost'
+        check('proxy-private-own',lambda:file_check(alpha,True))
+        check('proxy-private-other',lambda:file_check(beta,False))
+        check('proxy-private-guest',lambda:file_check(guest,False))
+        check('guest-student-denied',lambda:read(guest,'/api/resource/Student/'+quote(own,safe=''),False))
+        def replay_cookie():
+            r=requests.get(base+'/api/method/frappe.auth.get_logged_user',headers={'Host':'restore.localhost','Cookie':'sid='+alpha.cookies.get('sid')},timeout=30)
+            assert r.status_code in (401,403), f'source session accepted by restore site: HTTP {r.status_code}'
+            return {'source_sid_rejected_on_restore':True}
+        check('cross-site-session-replay-denied',replay_cookie)
+        path='/api/resource/ToDo/'+quote(records['source_only_todo'],safe='')
+        check('source-only-marker-positive',lambda:read(admin,path,True,records['source_only_todo']))
+        def absent_on_restore():
+            r=restored.get(base+path,timeout=30)
+            assert r.status_code==404, f'source-only marker leaked across site: HTTP {r.status_code}'
+            return {'http_status':404}
+        check('source-only-marker-absent-on-restore',absent_on_restore)
+        def header_override():
+            r=admin.get(base+path,headers={'X-Frappe-Site-Name':'restore.localhost'},timeout=30)
+            assert r.status_code==200 and r.json()['data']['name']==records['source_only_todo'], 'proxy accepted client site-routing override'
+            return {'untrusted_site_header_overwritten':True}
+        check('proxy-site-header-fixed-to-host',header_override)
+    except Exception as exc:
+        report['checks'].append({'name':'prerequisite','status':'fail','exception':type(exc).__name__,'message':str(exc)[:250]})
+    report['status']='pass' if report['checks'] and all(c['status']=='pass' for c in report['checks']) else 'fail'
+    destination.write_text(json.dumps(report,indent=2)+'\n')
+    return 0 if report['status']=='pass' else 1
+
+
+if __name__=='__main__':
+    raise SystemExit(main())

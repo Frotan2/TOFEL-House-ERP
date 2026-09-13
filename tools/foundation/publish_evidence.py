@@ -22,6 +22,8 @@ def main():
         raise SystemExit("Evidence publication is restricted to the authorized branch")
     raw = args.report.read_bytes()
     report = json.loads(raw)
+    # Lossless compact transport; no observations are removed to meet the cap.
+    raw = json.dumps(report, separators=(",", ":"), ensure_ascii=True).encode()
     if len(raw) > 58000:
         raise SystemExit("Report too large for a check output; retain full artifact instead")
     summary = ("Qualification evidence only; no full-stack approval. "

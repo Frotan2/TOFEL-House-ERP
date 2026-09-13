@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 import secrets
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -236,6 +237,55 @@ def main() -> int:
         run("native-user-permission-configuration", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_permissions.py", site], cwd=bench_dir / "sites")
         env["FOUNDATION_HTTP_REPORT"] = str(evidence / "http-restricted-result.json")
         run("http-isolation-with-native-user-permissions", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_http.py"], cwd=bench_dir)
+        # A host-whitelisted reverse proxy serves only public assets statically.
+        # Private files always go through Frappe permissions, and client-provided
+        # routing headers are overwritten rather than trusted.
+        run("nginx-install", ["sudo", "apt-get", "install", "-y", "--no-install-recommends", "nginx"])
+        proxy_conf = lab / "nginx.conf"
+        proxy_conf.write_text(f"""pid {lab}/nginx.pid;
+error_log {lab}/nginx-error.log;
+events {{ worker_connections 128; }}
+http {{
+ include /etc/nginx/mime.types;
+ access_log off;
+ client_body_temp_path {lab}/nginx-body;
+ proxy_temp_path {lab}/nginx-proxy;
+ map $host $foundation_site {{ default ''; foundation.localhost foundation.localhost; restore.localhost restore.localhost; }}
+ server {{
+  listen 127.0.0.1:8080;
+  if ($foundation_site = '') {{ return 444; }}
+  location /assets/ {{ alias {bench_dir}/sites/assets/; }}
+  location / {{
+   proxy_set_header Host $http_host;
+   proxy_set_header X-Frappe-Site-Name $foundation_site;
+   proxy_pass http://127.0.0.1:8000;
+  }}
+ }}
+}}
+""")
+        run("nginx-config-check", ["nginx", "-t", "-c", proxy_conf])
+        launch("public-proxy", ["nginx", "-c", proxy_conf, "-g", "daemon off;"], lab)
+        env["FOUNDATION_ISOLATION_REPORT"] = str(evidence / "isolation-result.json")
+        diagnostic_failures = []
+        try:
+            run("expanded-restricted-http-isolation", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_isolation.py"], cwd=bench_dir / "sites")
+        except RuntimeError as exc:
+            diagnostic_failures.append(str(exc))
+        browser_dir = lab / "browser"
+        run("browser-package-install", ["npm", "install", "--prefix", browser_dir, "--save-exact", "--ignore-scripts", "playwright@1.58.2"])
+        browser_lock = json.loads((browser_dir / "package-lock.json").read_text())
+        assert browser_lock["packages"]["node_modules/playwright"]["integrity"] == "sha512-vA30H8Nvkq/cPBnNw4Q8TWz1EJyqgpuinBcHET0YVJVFldr8JDNiU9LaWAE1KqSkRYazuaBhTpB5ZzShOezQ6A=="
+        report["browser_test_tool"] = {"playwright": "1.58.2", "lock_sha256": hashlib.sha256((browser_dir / "package-lock.json").read_bytes()).hexdigest()}
+        run("chromium-install", [browser_dir / "node_modules/.bin/playwright", "install", "--with-deps", "chromium"])
+        shutil.copyfile(ROOT / "tools/foundation/runtime_browser.mjs", browser_dir / "check.mjs")
+        env["FOUNDATION_BROWSER_REPORT"] = str(evidence / "browser-result.json")
+        try:
+            run("browser-native-portal-isolation", ["node", browser_dir / "check.mjs"], timeout=300)
+        except RuntimeError as exc:
+            diagnostic_failures.append(str(exc))
+        report["restricted_diagnostic_failures"] = diagnostic_failures
+        if diagnostic_failures:
+            raise RuntimeError("Restricted policy regressions failed: " + "; ".join(diagnostic_failures))
         if baseline_failure:
             raise RuntimeError("Baseline HTTP isolation failed; restricted-configuration results are separate diagnostics: " + baseline_failure)
         report["status"] = "pass"
@@ -259,7 +309,7 @@ def main() -> int:
             finally:
                 stream.close()
                 (evidence / log_path.name).write_text(redact(log_path.read_text()))
-        for label in ("business", "restore", "background", "http", "http-restricted"):
+        for label in ("business", "restore", "background", "http", "http-restricted", "isolation", "browser"):
             path = evidence / (label + "-result.json")
             if path.exists():
                 sanitized = redact(path.read_text())

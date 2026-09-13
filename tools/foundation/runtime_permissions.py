@@ -27,7 +27,13 @@ def main():
                                             "allow": allow, "for_value": value, "apply_to_all_doctypes": 1}).insert()
                 created.append({"user": user, "allow": allow, "for_value": value, "name": permission.name})
             frappe.clear_cache(user=user)
+        marker = frappe.get_doc({"doctype": "ToDo", "description": "Source-only site isolation marker"}).insert()
+        records["source_only_todo"] = marker.name
+        business_path = Path(os.environ["FOUNDATION_BUSINESS_REPORT"])
+        business = json.loads(business_path.read_text())
+        business["records"] = records
         frappe.db.commit()
+        business_path.write_text(json.dumps(business, indent=2) + "\n")
         print(json.dumps({"native_user_permissions": created, "scope": "Configuration experiment; not automatic provisioning or full authorization proof"}))
     except Exception:
         frappe.db.rollback()
