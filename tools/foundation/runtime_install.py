@@ -40,10 +40,10 @@ def main() -> int:
               "runner_image": os.environ.get("ImageOS"), "runner_image_version": os.environ.get("ImageVersion"),
               "status": "running", "checks": [], "phase2_gate_passed": False,
               "product_implementation_authorized": False, "created_sites": [], "installed_apps": []}
-    passwords = [secrets.token_urlsafe(32) for _ in range(3)]
+    passwords = [secrets.token_urlsafe(32) for _ in range(5)]
     for value in passwords:
         print(f"::add-mask::{value}", flush=True)
-    root_password, admin_password, db_password = passwords
+    root_password, admin_password, db_password, test_password, restore_password = passwords
     secret_file = lab / "db-password"
     secret_file.write_text(root_password)
     secret_file.chmod(0o600)
@@ -173,19 +173,86 @@ def main() -> int:
         bench("migrate-first", "--site", site, "migrate")
         bench("migrate-replay", "--site", site, "migrate")
         bench("asset-build", "build", timeout=1800)
-        report["site_app_versions"] = bench("site-app-versions", "--site", site, "list-apps", "--format", "json")
-        # Additional runtime/business tests must be added and actually executed;
-        # a successful install does not automatically approve any of those gates.
+        report["site_apps"] = bench("site-app-list", "--site", site, "list-apps", "--format", "json")
+        env["FOUNDATION_TEST_PASSWORD"] = test_password
+        env["FOUNDATION_ADMIN_PASSWORD"] = admin_password
+        for label in ("business", "restore", "http", "background"):
+            env["FOUNDATION_" + label.upper() + "_REPORT"] = str(evidence / (label + "-result.json"))
+        run("business-smoke", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_smoke.py", site], cwd=bench_dir)
+        run("mariadb-client-install", ["sudo", "apt-get", "install", "-y", "--no-install-recommends", "mariadb-client", "file"])
+        report["mariadb_client_version"] = run("mariadb-client-version", ["mariadb", "--version"])
+        bench("backup-with-files", "--site", site, "backup", "--with-files")
+        backup_dir = bench_dir / "sites" / site / "private/backups"
+        database = next(backup_dir.glob("*-database.sql.gz"))
+        private_files = next(backup_dir.glob("*-private-files.tar"))
+        public_files = next(p for p in backup_dir.glob("*-files.tar") if "-private-files" not in p.name)
+        report["backup"] = {label: {"bytes": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                            for label, path in (("database", database), ("private_files", private_files), ("public_files", public_files))}
+        restored_site = "restore.localhost"
+        bench("new-restore-site", "new-site", restored_site, "--db-type", "mariadb", "--db-host", "127.0.0.1", "--db-port", "13306",
+              "--db-root-password", root_password, "--db-password", restore_password, "--admin-password", admin_password,
+              "--mariadb-user-host-login-scope", "%")
+        report["created_sites"].append(restored_site)
+        bench("restore-with-files", "--site", restored_site, "restore", str(database), "--db-root-password", root_password,
+              "--admin-password", admin_password, "--with-public-files", str(public_files), "--with-private-files", str(private_files))
+        original_config = json.loads((bench_dir / "sites" / site / "site_config.json").read_text())
+        restore_config_file = bench_dir / "sites" / restored_site / "site_config.json"
+        restore_config = json.loads(restore_config_file.read_text())
+        assert original_config["db_name"] != restore_config["db_name"], "Restore must use a different database"
+        if "encryption_key" in original_config:
+            restore_config["encryption_key"] = original_config["encryption_key"]
+            restore_config_file.write_text(json.dumps(restore_config, indent=2) + "\n")
+            restore_config_file.chmod(0o600)
+        report["restore_separate_database"] = True
+        report["site_encryption_key_restored"] = "encryption_key" in original_config
+        bench("restore-migrate", "--site", restored_site, "migrate")
+        run("restore-verification", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_restore.py", restored_site], cwd=bench_dir)
+
+        def launch(name, command, cwd):
+            log_path = lab / (name + ".txt")
+            stream = log_path.open("w")
+            process = subprocess.Popen([str(c) for c in command], cwd=cwd, env=env,
+                                       stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+            processes.append((process, stream, log_path))
+            return process
+
+        launch("web-backend", [bench_dir / "env/bin/gunicorn", "--bind", "127.0.0.1:8000", "--workers", "2", "frappe.app:application"], bench_dir / "sites")
+        worker = launch("worker", [lab / "tools/bin/bench", "worker", "--queue", "short,default,long"], bench_dir)
+        bench("enable-scheduler", "--site", site, "enable-scheduler")
+        scheduler = launch("scheduler", [lab / "tools/bin/bench", "schedule"], bench_dir)
+        socketio = launch("socketio", ["node", bench_dir / "apps/frappe/socketio.js"], bench_dir)
+        run("background-cache-job", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_background.py", site], cwd=bench_dir)
+        report["process_liveness"] = {"worker": worker.poll() is None, "scheduler": scheduler.poll() is None, "socketio": socketio.poll() is None}
+        if not all(report["process_liveness"].values()):
+            raise RuntimeError("One or more background processes exited")
+        run("http-login-and-isolation", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_http.py"], cwd=bench_dir)
         report["status"] = "pass"
-        report["remaining_gates"] = ["business lifecycle", "finance and payroll", "authorization",
-                                     "backup/restore", "HTTP/jobs/realtime", "frontend advisory remediation"]
+        report["remaining_gates"] = ["refunds and legacy Fees duplication", "payroll posting", "full staff role matrix",
+                                     "full realtime authorization and browser UI", "frontend advisory remediation", "upstream test suites"]
     except Exception as exc:
         report["status"] = "fail"
         report["failure"] = redact(str(exc))
         print(report["failure"], file=sys.stderr)
     finally:
-        for process in processes:
-            os.killpg(process.pid, signal.SIGTERM)
+        for process, stream, log_path in processes:
+            try:
+                if process.poll() is None:
+                    os.killpg(process.pid, signal.SIGTERM)
+                process.wait(timeout=20)
+            except ProcessLookupError:
+                pass
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=10)
+            finally:
+                stream.close()
+                (evidence / log_path.name).write_text(redact(log_path.read_text()))
+        for label in ("business", "restore", "background", "http"):
+            path = evidence / (label + "-result.json")
+            if path.exists():
+                sanitized = redact(path.read_text())
+                path.write_text(sanitized)
+                report[label + "_result"] = json.loads(sanitized)
         for name in ("mariadb", "redis-queue", "redis-cache"):
             try:
                 subprocess.run(["docker", "rm", "--force", "--volumes", "foundation-" + name],
