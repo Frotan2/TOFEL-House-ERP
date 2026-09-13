@@ -10,15 +10,16 @@ from unittest.mock import patch
 class GuardTests(unittest.TestCase):
     def setUp(self):
         self.settings = True
-        self.shared = False
+        self.shares = []
         self.students = [Obj(name='student-a', customer='customer-a')]
         self.rules = {'Student': [Obj(for_value='student-a', apply_to_all_doctypes=1)],
                       'Customer': [Obj(for_value='customer-a', apply_to_all_doctypes=1)]}
         def get_all(doctype, **kwargs):
+            if doctype=='DocShare': return self.shares
             return self.students if doctype=='Student' else self.rules[kwargs['filters']['allow']]
         self.frappe = Obj(session=Obj(user='student@example.test'), get_roles=lambda user:['Student'],
                           PermissionError=PermissionError, conf={'disable_website_cache':1},
-                          get_all=get_all, db=Obj(get_single_value=lambda *args:self.settings, exists=lambda *args:self.shared))
+                          get_all=get_all, db=Obj(get_single_value=lambda *args:self.settings, exists=lambda *args:False))
         path=Path(__file__).resolve().parents[2]/'apps/foundation_security/foundation_security/guards.py'
         spec=importlib.util.spec_from_file_location('guard_under_test',path)
         self.guard=importlib.util.module_from_spec(spec)
@@ -57,7 +58,7 @@ class GuardTests(unittest.TestCase):
         with self.assertRaises(PermissionError): self.guard.validate_student_scope()
 
     def test_existing_share_denied(self):
-        self.shared=True
+        self.shares=[Obj(share_doctype='Student', share_name='student-b', everyone=0)]
         with self.assertRaises(PermissionError): self.guard.validate_student_scope()
 
     def test_guest_and_trusted_admin_are_not_student_scoped(self):
@@ -65,3 +66,36 @@ class GuardTests(unittest.TestCase):
         for user in ('Guest','Administrator'):
             self.frappe.session.user=user
             self.guard.validate_student_scope()
+
+    def test_native_user_self_share_allowed(self):
+        self.shares=[Obj(share_doctype='User', share_name='student@example.test', everyone=0)]
+        self.guard.validate_student_scope()
+
+    def test_global_share_denied(self):
+        self.shares=[Obj(share_doctype='User', share_name='student@example.test', everyone=1)]
+        with self.assertRaises(PermissionError): self.guard.validate_student_scope()
+
+    def configure_csrf(self, method, path):
+        self.frappe.session.sid='synthetic-session'
+        self.frappe.session.data=Obj(csrf_token=None)
+        self.frappe.request=Obj(method=method, path=path)
+        self.frappe.form_dict={}
+        self.frappe.CSRFTokenError=ValueError
+        def mint(): self.frappe.session.data.csrf_token='synthetic-token'
+        return patch.dict(sys.modules, {'frappe':self.frappe, 'frappe.sessions':Obj(get_csrf_token=mint)})
+
+    def test_login_token_initialized_only_after_native_request_validation(self):
+        with self.configure_csrf('POST','/api/method/login'):
+            self.guard.on_session_creation()
+            self.assertIsNone(self.frappe.session.data.csrf_token)
+            self.guard.validate_request()
+            self.assertEqual(self.frappe.session.data.csrf_token,'synthetic-token')
+
+    def test_legacy_unsafe_request_without_token_denied(self):
+        with self.configure_csrf('POST','/api/method/frappe.client.set_value'):
+            with self.assertRaises(ValueError): self.guard.validate_request()
+
+    def test_safe_page_initializes_legacy_session_token(self):
+        with self.configure_csrf('GET','/edu-portal'):
+            self.guard.validate_request()
+            self.assertEqual(self.frappe.session.data.csrf_token,'synthetic-token')

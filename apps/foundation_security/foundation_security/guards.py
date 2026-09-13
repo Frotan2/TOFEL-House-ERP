@@ -26,14 +26,32 @@ def validate_student_scope():
                                fields=["for_value", "apply_to_all_doctypes"])
         if len(rules) != 1 or rules[0].for_value != expected or not rules[0].apply_to_all_doctypes:
             raise frappe.PermissionError("Student access requires an exact native permission scope")
-    # Existing shares can override User Permissions even after sharing is disabled.
-    # Fail closed instead of silently granting access through inherited shares.
-    if frappe.db.exists("DocShare", {"user": user}) or frappe.db.exists("DocShare", {"everyone": 1}):
+    # Core User.share_with_self creates a share for each user's own profile.
+    # Preserve that canonical self-profile grant, but reject other inherited or
+    # global shares that could override the Student document boundary.
+    shares = frappe.get_all("DocShare", or_filters={"user": user, "everyone": 1},
+                            fields=["share_doctype", "share_name", "everyone"])
+    if any(s.everyone or s.share_doctype != "User" or s.share_name != user for s in shares):
         raise frappe.PermissionError("Student document shares require security review")
 
 
 def on_session_creation(login_manager=None):
     validate_student_scope()
-    if frappe.session.user not in (None, "Guest"):
-        from frappe.sessions import get_csrf_token
+
+
+def validate_request():
+    validate_student_scope()
+    if frappe.session.user in (None, "Guest") or frappe.session.sid in (None, "Guest"):
+        return
+    # HTTPRequest establishes the login session BEFORE its native CSRF check.
+    # Minting in on_session_creation would invalidate the very login request
+    # that created the session. auth_hooks runs AFTER that native validation.
+    from frappe.sessions import get_csrf_token
+    missing = not frappe.session.data.csrf_token
+    login_request = frappe.request.path == "/api/method/login" or frappe.form_dict.get("cmd") == "login"
+    if missing and frappe.request.method not in ("GET", "HEAD", "OPTIONS") and not login_request:
+        # Legacy pre-extension sessions must reload rather than get one unsafe
+        # write through while their token is being initialized.
         get_csrf_token()
+        raise frappe.CSRFTokenError("Reload the page before changing data")
+    get_csrf_token()

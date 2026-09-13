@@ -6,4 +6,4 @@ app_email = "validation@example.test"
 app_license = "MIT"
 required_apps = ["education"]
 on_session_creation = "foundation_security.guards.on_session_creation"
-auth_hooks = ["foundation_security.guards.validate_student_scope"]
+auth_hooks = ["foundation_security.guards.validate_request"]
