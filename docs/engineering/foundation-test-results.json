@@ -514,6 +514,15 @@
         }
       ],
       "failure": "http-login-and-isolation: exit 1"
+    },
+    {
+      "id": "http-probe-failure-accounting-unit-tests",
+      "checkpoint": "local_after_hosted_baseline",
+      "status": "pass",
+      "scope": "Two mocked HTTP helper tests only, not application authorization proof",
+      "command": "python3 -m unittest discover -s tests/foundation -q",
+      "suite_total": 11,
+      "observation": "Disclosed target document/private bytes cause both negative checks and the process to fail; successful simulated controls never authorize Phase 2; placeholder passwords absent from reports."
     }
   ],
   "phase_gates": [
@@ -605,7 +614,7 @@
     {
       "phase": "2R",
       "status": "partial",
-      "reason": "9 local helper tests passed plus enumerated hosted owned probes. Existing upstream suites not yet executed."
+      "reason": "11 local helper tests passed, including two HTTP failure-accounting tests, plus enumerated real hosted probes. Existing upstream suites remain unexecuted."
     },
     {
       "phase": "2S",
@@ -666,7 +675,7 @@
     },
     {
       "group": "finance",
-      "status": "not_run",
+      "status": "partial",
       "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Invoice-based receivable",
@@ -699,8 +708,8 @@
     },
     {
       "group": "authorization",
-      "status": "not_run",
-      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "status": "fail",
+      "reason": "Baseline Student REST/private-file isolation failed; restricted native configuration is a separate diagnostic, not full authorization acceptance.",
       "scenarios": [
         "Administrator actions",
         "Academic manager scoped operations",
@@ -719,7 +728,7 @@
     },
     {
       "group": "database",
-      "status": "not_run",
+      "status": "partial",
       "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Version/charset/collation",
@@ -734,7 +743,7 @@
     },
     {
       "group": "backup-restore",
-      "status": "not_run",
+      "status": "partial",
       "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Populate synthetic records and hash private/public files",
@@ -899,7 +908,7 @@
     }
   },
   "created_site_count_scope": "Cumulative creations in retained disposable hosted runs, not currently live sites",
-  "currently_live_validation_sites": 0,
+  "currently_live_validation_sites": null,
   "business_fixture_count_note": "No exact full-document count claimed; explicit named records and successful controller checks are retained in each business_result.",
   "clean_pinned_installation_proven": true,
   "latest_hosted_checkpoint": {
@@ -910,5 +919,14 @@
     "failure": "http-login-and-isolation: exit 1",
     "business_active_check": "private-attachment",
     "business_failure": null
-  }
+  },
+  "latest_unverified_attempt": {
+    "run_id": 34778602344,
+    "commit": "43d4287",
+    "last_observed_status": "in_progress",
+    "final_status": "unknown",
+    "evidence_available": false,
+    "reason": "GitHub API returned HTTP 401 Bad credentials while monitoring. Reconnect GitHub in Arena before retrieving the native-permission experiment result."
+  },
+  "live_site_note": "Completed recorded jobs were disposable; unverified run 34778602344 final state is unknown after GitHub authentication loss."
 }

@@ -71,6 +71,21 @@ identical HTTP assertions. It cannot erase the baseline failure or establish a f
 Sanitized reports, including failures, are retained in `evidence/phase-2/hosted/`.
 Later harness revisions are not evidence until their own hosted report is recorded.
 
+### Unverified follow-up and connection blocker
+
+Native Student/Customer User Permission configuration plus the same HTTP probes was pushed
+at `43d4287` and run **34778602344** started. Its final outcome is **unknown**: the GitHub API
+returned `401 Bad credentials` during monitoring. Reconnect GitHub in Arena and retrieve its
+sanitized Check report before claiming either remediation success or failure. No passwords,
+tokens or site credentials should be shared in chat. The last complete evidence remains
+run **34778224918**, with two baseline isolation failures.
+
+The diagnostic runner deliberately retains the original failed HTTP report and overall failed
+status even if the separately restricted configuration passes. It changes only native User
+Permission records for the two synthetic users, not roles, core code or validation rules.
+Two local mocked HTTP helper tests verify failure accounting, not server authorization;
+**11 local helper tests pass**. No upstream ERP/Education/HRMS test suite has yet been executed.
+
 ### Qualification method and reproduction
 
 Use `.github/workflows/foundation-runtime.yml` on `arena/01a09bf3-tofel-house-erp`:
