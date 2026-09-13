@@ -64,6 +64,13 @@ def run():
             assert frappe.is_setup_complete()
             assert frappe.db.exists("Warehouse Type", "Transit")
             company = frappe.get_doc("Company", "Validation Institute")
+            holiday_date = start if today != start else end
+            holidays = create("Holiday List", holiday_list_name=f"Validation Calendar {year}",
+                              from_date=start, to_date=end,
+                              holidays=[{"holiday_date": holiday_date, "description": "Synthetic institution closure"}])
+            company.default_holiday_list = holidays.name
+            company.save()
+            records.update(holiday_list=holidays.name, holiday_date=holiday_date)
             fiscal = frappe.db.get_value("Fiscal Year", {"year_start_date": start, "year_end_date": end}, "name")
             assert fiscal
             branch = create("Branch", branch="Validation Branch")
