@@ -54,18 +54,22 @@ def run():
         report["app_versions"] = {app: importlib.import_module(app).__version__ for app in frappe.get_installed_apps()}
 
         def company_setup():
+            from frappe.desk.page.setup_wizard.setup_wizard import setup_complete
+            # App installation is not onboarding. Use the real upstream wizard
+            # stages, including presets, rather than inserting a fake Transit type.
+            setup_complete({"language": "English", "timezone": "UTC", "country": "United States",
+                            "currency": "USD", "company_name": "Validation Institute", "company_abbr": "VI",
+                            "chart_of_accounts": "Standard", "fy_start_date": start, "fy_end_date": end,
+                            "enable_telemetry": 0, "setup_demo": 0})
+            assert frappe.is_setup_complete()
+            assert frappe.db.exists("Warehouse Type", "Transit")
+            company = frappe.get_doc("Company", "Validation Institute")
             fiscal = frappe.db.get_value("Fiscal Year", {"year_start_date": start, "year_end_date": end}, "name")
-            if not fiscal:
-                fiscal = create("Fiscal Year", year=f"Validation {year}", year_start_date=start, year_end_date=end).name
-            company = create("Company", company_name="Validation Institute", abbr="VI", country="United States",
-                             default_currency="USD", create_chart_of_accounts_based_on="Standard Template", chart_of_accounts="Standard")
-            frappe.db.set_single_value("Global Defaults", "default_company", company.name)
-            frappe.db.set_single_value("Global Defaults", "default_currency", "USD")
-            frappe.defaults.set_global_default("company", company.name)
-            frappe.defaults.set_global_default("currency", "USD")
+            assert fiscal
             branch = create("Branch", branch="Validation Branch")
             records.update(company=company.name, branch=branch.name, fiscal_year=fiscal)
-            return {"company": company.name, "branch": branch.name, "account_count": frappe.db.count("Account", {"company": company.name})}
+            return {"setup_complete": True, "company": company.name, "branch": branch.name,
+                    "account_count": frappe.db.count("Account", {"company": company.name})}
         checked("company-chart-and-branch", company_setup)
 
         def academic_setup():

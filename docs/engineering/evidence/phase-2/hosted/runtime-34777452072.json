@@ -1,0 +1,879 @@
+{
+  "scope": "Clean upstream installation and explicitly executed smoke gates only",
+  "run_id": "34777452072",
+  "run_attempt": "1",
+  "commit": "b968161ea46a7a84b039299151eccb418fe29f4c",
+  "ref": "refs/heads/arena/01a09bf3-tofel-house-erp",
+  "runner_image": "ubuntu24",
+  "runner_image_version": "20260907.300.1",
+  "status": "fail",
+  "checks": [
+    {
+      "name": "docker-version",
+      "command": [
+        "docker",
+        "version",
+        "--format",
+        "{{.Client.Version}} {{.Server.Version}}"
+      ],
+      "exit_code": 0,
+      "seconds": 0.018,
+      "status": "pass"
+    },
+    {
+      "name": "compose-version",
+      "command": [
+        "docker",
+        "compose",
+        "version",
+        "--short"
+      ],
+      "exit_code": 0,
+      "seconds": 0.069,
+      "status": "pass"
+    },
+    {
+      "name": "python-version",
+      "command": [
+        "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+        "--version"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "node-version",
+      "command": [
+        "node",
+        "--version"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "status": "pass"
+    },
+    {
+      "name": "yarn-version",
+      "command": [
+        "yarn",
+        "--version"
+      ],
+      "exit_code": 0,
+      "seconds": 0.219,
+      "status": "pass"
+    },
+    {
+      "name": "bench-tools-venv",
+      "command": [
+        "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+        "-m",
+        "venv",
+        "/home/runner/work/_temp/foundation-runtime/tools"
+      ],
+      "exit_code": 0,
+      "seconds": 2.884,
+      "status": "pass"
+    },
+    {
+      "name": "bench-tools-install",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "frappe-bench==5.31.0",
+        "uv==0.11.6"
+      ],
+      "exit_code": 0,
+      "seconds": 3.57,
+      "status": "pass"
+    },
+    {
+      "name": "clone-frappe",
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "status": "pass"
+    },
+    {
+      "name": "origin-frappe",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/frappe"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "fetch-frappe",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "988e54f3c4c291e2077a83809663f123731abe76"
+      ],
+      "exit_code": 0,
+      "seconds": 4.764,
+      "status": "pass"
+    },
+    {
+      "name": "checkout-frappe",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.346,
+      "status": "pass"
+    },
+    {
+      "name": "verify-frappe",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "clone-erpnext",
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "status": "pass"
+    },
+    {
+      "name": "origin-erpnext",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/erpnext"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "fetch-erpnext",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd"
+      ],
+      "exit_code": 0,
+      "seconds": 7.087,
+      "status": "pass"
+    },
+    {
+      "name": "checkout-erpnext",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.485,
+      "status": "pass"
+    },
+    {
+      "name": "verify-erpnext",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "clone-education",
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/sources/education"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "status": "pass"
+    },
+    {
+      "name": "origin-education",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/education",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/education"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "fetch-education",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/education",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "93bc7075753369457919720690f80c6d2207b5f2"
+      ],
+      "exit_code": 0,
+      "seconds": 1.393,
+      "status": "pass"
+    },
+    {
+      "name": "checkout-education",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/education",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.067,
+      "status": "pass"
+    },
+    {
+      "name": "verify-education",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/education",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "clone-payments",
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "status": "pass"
+    },
+    {
+      "name": "origin-payments",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/payments"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "fetch-payments",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "cca07d9f9392e2ea0e521c5975151db9e4b6c321"
+      ],
+      "exit_code": 0,
+      "seconds": 0.496,
+      "status": "pass"
+    },
+    {
+      "name": "checkout-payments",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.009,
+      "status": "pass"
+    },
+    {
+      "name": "verify-payments",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "clone-hrms",
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "status": "pass"
+    },
+    {
+      "name": "origin-hrms",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/hrms"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "fetch-hrms",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "a4768b441cff346def505e27f2a2229ee1e05b9b"
+      ],
+      "exit_code": 0,
+      "seconds": 1.472,
+      "status": "pass"
+    },
+    {
+      "name": "checkout-hrms",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.145,
+      "status": "pass"
+    },
+    {
+      "name": "verify-hrms",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "start-mariadb",
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-mariadb",
+        "--publish",
+        "127.0.0.1:13306:3306",
+        "--mount",
+        "type=bind,source=/home/runner/work/_temp/foundation-runtime/db-password,target=/run/secrets/db-password,readonly",
+        "--env",
+        "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password",
+        "--env",
+        "MARIADB_ROOT_HOST=%",
+        "--health-cmd",
+        "healthcheck.sh --connect --innodb_initialized",
+        "--health-interval",
+        "2s",
+        "--health-retries",
+        "30",
+        "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+        "--character-set-server=utf8mb4",
+        "--collation-server=utf8mb4_unicode_ci"
+      ],
+      "exit_code": 0,
+      "seconds": 0.931,
+      "status": "pass"
+    },
+    {
+      "name": "start-redis-queue",
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-redis-queue",
+        "--publish",
+        "127.0.0.1:11379:6379",
+        "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+      ],
+      "exit_code": 0,
+      "seconds": 0.157,
+      "status": "pass"
+    },
+    {
+      "name": "start-redis-cache",
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-redis-cache",
+        "--publish",
+        "127.0.0.1:12379:6379",
+        "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+      ],
+      "exit_code": 0,
+      "seconds": 0.173,
+      "status": "pass"
+    },
+    {
+      "name": "bench-init",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/bench",
+        "--frappe-path",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe",
+        "--python",
+        "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+        "--no-backups",
+        "--skip-redis-config-generation",
+        "--no-procfile",
+        "--skip-assets",
+        "--verbose"
+      ],
+      "exit_code": 0,
+      "seconds": 29.653,
+      "status": "pass"
+    },
+    {
+      "name": "config-redis_cache",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_cache",
+        "redis://127.0.0.1:12379"
+      ],
+      "exit_code": 0,
+      "seconds": 1.474,
+      "status": "pass"
+    },
+    {
+      "name": "config-redis_queue",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_queue",
+        "redis://127.0.0.1:11379"
+      ],
+      "exit_code": 0,
+      "seconds": 0.449,
+      "status": "pass"
+    },
+    {
+      "name": "config-redis_socketio",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_socketio",
+        "redis://127.0.0.1:11379"
+      ],
+      "exit_code": 0,
+      "seconds": 0.45,
+      "status": "pass"
+    },
+    {
+      "name": "get-app-erpnext",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "get-app",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext"
+      ],
+      "exit_code": 0,
+      "seconds": 23.784,
+      "status": "pass"
+    },
+    {
+      "name": "get-app-education",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "get-app",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-runtime/sources/education"
+      ],
+      "exit_code": 0,
+      "seconds": 12.025,
+      "status": "pass"
+    },
+    {
+      "name": "get-app-payments",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "get-app",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments"
+      ],
+      "exit_code": 0,
+      "seconds": 1.668,
+      "status": "pass"
+    },
+    {
+      "name": "get-app-hrms",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "get-app",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms"
+      ],
+      "exit_code": 0,
+      "seconds": 38.687,
+      "status": "pass"
+    },
+    {
+      "name": "installed-revision-frappe",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/frappe",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "installed-revision-erpnext",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/erpnext",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "installed-revision-education",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/education",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "installed-revision-payments",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/payments",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "installed-revision-hrms",
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/hrms",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "name": "python-dependency-check",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/uv",
+        "pip",
+        "check",
+        "--python",
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python"
+      ],
+      "exit_code": 0,
+      "seconds": 0.018,
+      "status": "pass"
+    },
+    {
+      "name": "python-resolved-dependencies",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/uv",
+        "pip",
+        "freeze",
+        "--python",
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python"
+      ],
+      "exit_code": 0,
+      "seconds": 0.01,
+      "status": "pass"
+    },
+    {
+      "name": "new-site",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "new-site",
+        "foundation.localhost",
+        "--db-type",
+        "mariadb",
+        "--db-host",
+        "127.0.0.1",
+        "--db-port",
+        "13306",
+        "--db-root-password",
+        "[REDACTED]",
+        "--db-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--mariadb-user-host-login-scope",
+        "%",
+        "--set-default"
+      ],
+      "exit_code": 0,
+      "seconds": 23.005,
+      "status": "pass"
+    },
+    {
+      "name": "install-site-erpnext",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "install-app",
+        "erpnext"
+      ],
+      "exit_code": 0,
+      "seconds": 47.479,
+      "status": "pass"
+    },
+    {
+      "name": "install-site-education",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "install-app",
+        "education"
+      ],
+      "exit_code": 0,
+      "seconds": 9.944,
+      "status": "pass"
+    },
+    {
+      "name": "install-site-payments",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "install-app",
+        "payments"
+      ],
+      "exit_code": 0,
+      "seconds": 3.94,
+      "status": "pass"
+    },
+    {
+      "name": "install-site-hrms",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "install-app",
+        "hrms"
+      ],
+      "exit_code": 0,
+      "seconds": 29.097,
+      "status": "pass"
+    },
+    {
+      "name": "migrate-first",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "migrate"
+      ],
+      "exit_code": 0,
+      "seconds": 15.802,
+      "status": "pass"
+    },
+    {
+      "name": "migrate-replay",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "migrate"
+      ],
+      "exit_code": 0,
+      "seconds": 15.461,
+      "status": "pass"
+    },
+    {
+      "name": "asset-build",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "build"
+      ],
+      "exit_code": 0,
+      "seconds": 46.814,
+      "status": "pass"
+    },
+    {
+      "name": "site-app-list",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "list-apps",
+        "--format",
+        "json"
+      ],
+      "exit_code": 0,
+      "seconds": 0.961,
+      "status": "pass"
+    },
+    {
+      "name": "business-smoke",
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_smoke.py",
+        "foundation.localhost"
+      ],
+      "exit_code": 1,
+      "seconds": 2.177,
+      "status": "fail"
+    }
+  ],
+  "phase2_gate_passed": false,
+  "product_implementation_authorized": false,
+  "created_sites": [
+    "foundation.localhost"
+  ],
+  "installed_apps": [
+    "erpnext",
+    "education",
+    "payments",
+    "hrms"
+  ],
+  "docker_version": "28.0.4 28.0.4",
+  "compose_version": "2.38.2",
+  "python_version": "Python 3.14.7",
+  "node_version": "v24.21.0",
+  "yarn_version": "1.22.22",
+  "source_revisions": {
+    "frappe": "988e54f3c4c291e2077a83809663f123731abe76",
+    "erpnext": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+    "education": "93bc7075753369457919720690f80c6d2207b5f2",
+    "payments": "cca07d9f9392e2ea0e521c5975151db9e4b6c321",
+    "hrms": "a4768b441cff346def505e27f2a2229ee1e05b9b"
+  },
+  "site_apps": "{\n \"foundation.localhost\": [\n  \"frappe\",\n  \"erpnext\",\n  \"education\",\n  \"payments\",\n  \"hrms\"\n ]\n}",
+  "failure_output_tail": "Traceback (most recent call last):\n  File \"/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_smoke.py\", line 239, in <module>\n    run()\n    ~~~^^\n  File \"/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_smoke.py\", line 69, in run\n    checked(\"company-chart-and-branch\", company_setup)\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_smoke.py\", line 33, in checked\n    value = function()\n  File \"/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_smoke.py\", line 60, in company_setup\n    company = create(\"Company\", company_name=\"Validation Institute\", abbr=\"VI\", country=\"United States\",\n                     default_currency=\"USD\", create_chart_of_accounts_based_on=\"Standard Template\", chart_of_accounts=\"Standard\")\n  File \"/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_smoke.py\", line 28, in create\n    return frappe.get_doc(dict(doctype=doctype, **fields)).insert()\n           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/model/document.py\", line 513, in insert\n    self.run_post_save_methods()\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/model/document.py\", line 1454, in run_post_save_methods\n    self.run_method(\"on_update\")\n    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/model/document.py\", line 1260, in run_method\n    out = Document.hook(fn)(self, *args, **kwargs)\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/model/document.py\", line 1661, in composer\n    return composed(self, method, *args, **kwargs)\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/model/document.py\", line 1635, in runner\n    add_to_return_value(self, fn(self, *args, **kwargs))\n                              ~~^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/model/document.py\", line 1257, in fn\n    return method_object(*args, **kwargs)\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/erpnext/erpnext/setup/doctype/company/company.py\", line 350, in on_update\n    self.create_default_warehouses()\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/erpnext/erpnext/setup/doctype/company/company.py\", line 414, in create_default_warehouses\n    warehouse.insert()\n    ~~~~~~~~~~~~~~~~^^\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/model/document.py\", line 479, in insert\n    self._validate_links()\n    ~~~~~~~~~~~~~~~~~~~~^^\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/model/document.py\", line 1221, in _validate_links\n    frappe.throw(_(\"Could not find {0}\").format(msg), frappe.LinkValidationError)\n    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/utils/messages.py\", line 159, in throw\n    msgprint(\n    ~~~~~~~~^\n    \tmsg,\n     ^^^^\n    ...<7 lines>...\n    \tallow_dangerous_html=allow_dangerous_html,\n     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/utils/messages.py\", line 118, in msgprint\n    _raise_exception()\n    ~~~~~~~~~~~~~~~~^^\n  File \"/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/frappe/utils/messages.py\", line 59, in _raise_exception\n    raise exc\nfrappe.exceptions.LinkValidationError: Could not find Warehouse Type: Transit\n",
+  "failure": "business-smoke: exit 1",
+  "business_result": {
+    "scope": "Synthetic upstream data and explicitly enumerated assertions",
+    "status": "fail",
+    "checks": [],
+    "records": {},
+    "phase2_gate_passed": false,
+    "app_versions": {
+      "frappe": "16.33.1",
+      "erpnext": "16.34.2",
+      "education": "16.0.1",
+      "payments": "0.0.1",
+      "hrms": "16.18.1"
+    },
+    "active_check": "company-chart-and-branch",
+    "failure": {
+      "exception": "LinkValidationError",
+      "message": "Could not find Warehouse Type: Transit"
+    }
+  }
+}
