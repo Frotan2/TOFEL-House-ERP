@@ -71,20 +71,26 @@ identical HTTP assertions. It cannot erase the baseline failure or establish a f
 Sanitized reports, including failures, are retained in `evidence/phase-2/hosted/`.
 Later harness revisions are not evidence until their own hosted report is recorded.
 
-### Unverified follow-up and connection blocker
+### Security continuation: connection restored, native remedy verified
 
-Native Student/Customer User Permission configuration plus the same HTTP probes was pushed
-at `43d4287` and run **34778602344** started. Its final outcome is **unknown**: the GitHub API
-returned `401 Bad credentials` during monitoring. Reconnect GitHub in Arena and retrieve its
-sanitized Check report before claiming either remediation success or failure. No passwords,
-tokens or site credentials should be shared in chat. The last complete evidence remains
-run **34778224918**, with two baseline isolation failures.
+GitHub access recovered. Run **34778602344** at `43d4287` was retrieved and its
+native User Permission experiment verified: all ten restricted checks passed while the
+original two isolation failures remained recorded and the run remained failed.
 
-The diagnostic runner deliberately retains the original failed HTTP report and overall failed
-status even if the separately restricted configuration passes. It changes only native User
-Permission records for the two synthetic users, not roles, core code or validation rules.
-Two local mocked HTTP helper tests verify failure accounting, not server authorization;
-**11 local helper tests pass**. No upstream ERP/Education/HRMS test suite has yet been executed.
+See [foundation security qualification](foundation-security.md) for the root cause,
+exact native controls, threat-model limits and new regression matrix. Run **34779652716**
+passed the expanded source-site Student/result/attendance/invoice read controls, lists,
+write denials, private files, signup/sharing restrictions and HTTP cross-site checks.
+It found missing portal CSRF tokens; API v2 error-shape and browser redirect-race harness
+issues were also retained and corrected, not mistaken for permission disclosures.
+Alpha's actual Chromium portal/fees and browser API/file isolation checks passed.
+
+A minimal generic `foundation_security` Frappe extension is now under qualification.
+It initializes native session CSRF tokens and denies Student requests with missing,
+expanded or ambiguous native identity/permission scopes. It adds no domain schema,
+TOEFL-specific app, product UI or scoring. Supported hooks are used; upstream core
+remains untouched. **20 helper tests pass**, including guard tests; these are not a
+substitute for hosted integration results. Security and Phase 2 gates remain false.
 
 ### Qualification method and reproduction
 
