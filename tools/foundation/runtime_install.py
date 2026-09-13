@@ -235,6 +235,16 @@ def main() -> int:
             baseline_failure = str(exc)
         report["baseline_http_failed"] = baseline_failure is not None
         run("native-user-permission-configuration", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_permissions.py", site], cwd=bench_dir / "sites")
+        run("restore-native-permission-configuration", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_permissions.py", restored_site], cwd=bench_dir / "sites")
+        extension = ROOT / "apps/foundation_security"
+        report["security_extension"] = {"name": "foundation_security", "version": "0.1.0", "repository_commit": os.environ["GITHUB_SHA"],
+                                        "file_sha256": {str(p.relative_to(extension)): hashlib.sha256(p.read_bytes()).hexdigest() for p in extension.rglob("*") if p.is_file() and "__pycache__" not in p.parts}}
+        bench("get-security-extension", "get-app", "--soft-link", "--skip-assets", str(extension))
+        for secured_site in (site, restored_site):
+            bench("disable-website-html-cache-" + secured_site, "--site", secured_site, "set-config", "disable_website_cache", "1", "--parse")
+            bench("install-security-extension-" + secured_site, "--site", secured_site, "install-app", "foundation_security")
+        # Restart HTTP workers so installed hook caches cannot retain the pre-extension state.
+        os.killpg(processes[0][0].pid, signal.SIGHUP)
         env["FOUNDATION_HTTP_REPORT"] = str(evidence / "http-restricted-result.json")
         run("http-isolation-with-native-user-permissions", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_http.py"], cwd=bench_dir)
         # A host-whitelisted reverse proxy serves only public assets statically.

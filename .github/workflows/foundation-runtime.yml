@@ -7,6 +7,7 @@ on:
       - .github/workflows/foundation-runtime.yml
       - tools/foundation/runtime_*.py
       - tools/foundation/runtime_*.mjs
+      - apps/foundation_security/**
       - tools/foundation/publish_evidence.py
       - docs/engineering/foundation-version-matrix.json
   workflow_dispatch:

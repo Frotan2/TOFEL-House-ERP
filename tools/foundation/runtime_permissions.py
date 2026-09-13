@@ -9,7 +9,7 @@ import sys
 
 
 def main():
-    if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1:] != ["foundation.localhost"]:
+    if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1:] not in (["foundation.localhost"], ["restore.localhost"]):
         raise SystemExit("Restricted to the disposable Actions foundation site")
     import frappe
     records = json.loads(Path(os.environ["FOUNDATION_BUSINESS_REPORT"]).read_text())["records"]
@@ -35,6 +35,10 @@ def main():
                                             "allow": allow, "for_value": value, "apply_to_all_doctypes": 1}).insert()
                 created.append({"user": user, "allow": allow, "for_value": value, "name": permission.name})
             frappe.clear_cache(user=user)
+        if sys.argv[1] == "restore.localhost":
+            frappe.db.commit()
+            print(json.dumps({"native_user_permissions": created, "site": "restore.localhost"}))
+            return
         # With auto-creation off, a new Student must not silently receive a
         # portal account/role before policy assignment.
         pending_email = "validation-unprovisioned@example.test"

@@ -1,0 +1,9 @@
+app_name = "foundation_security"
+app_title = "Foundation Security"
+app_publisher = "Foundation validation maintainers"
+app_description = "Generic session and native permission safeguards; no domain schema"
+app_email = "validation@example.test"
+app_license = "MIT"
+required_apps = ["education"]
+on_session_creation = "foundation_security.guards.on_session_creation"
+auth_hooks = ["foundation_security.guards.validate_student_scope"]

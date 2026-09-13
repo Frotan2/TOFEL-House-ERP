@@ -60,7 +60,9 @@ def main():
                 assert r.json()['data']['name'] == expected, 'target mismatch'
         else:
             assert r.status_code == 403, f'expected authorization denial, HTTP {r.status_code}'
-            assert r.json().get('exc_type') == 'PermissionError', 'denial not a document permission error'
+            error = r.json()
+            types = {error.get('exc_type')} | {item.get('type') for item in error.get('errors', [])}
+            assert 'PermissionError' in types, 'denial not a document permission error'
         return {'http_status': r.status_code}
 
     try:
@@ -159,6 +161,44 @@ def main():
             assert r.status_code in (401,403), f'unprovisioned student login HTTP {r.status_code}'
             return {'http_status':r.status_code}
         check('no-automatic-unscoped-student-login',unprovisioned_cannot_login)
+        def csrf_enforced():
+            payload={'doctype':'User','name':'validation-alpha@example.test','fieldname':'first_name','value':'Validation alpha'}
+            headers={'Host':'foundation.localhost','Cookie':'sid='+alpha.cookies.get('sid')}
+            for token in (None,'invalid-synthetic-token'):
+                h=dict(headers)
+                if token: h['X-Frappe-CSRF-Token']=token
+                r=requests.post(base+'/api/method/frappe.client.set_value',headers=h,json=payload,timeout=30)
+                assert r.status_code==400 and r.json().get('exc_type')=='CSRFTokenError', f'missing/invalid CSRF was not rejected: HTTP {r.status_code}'
+            r=alpha.post(base+'/api/method/frappe.client.set_value',json=payload,timeout=30)
+            assert r.status_code==200, f'valid-CSRF own-profile control HTTP {r.status_code}'
+            return {'missing_and_invalid_tokens_denied':True,'valid_token_positive_control':True}
+        check('csrf-negative-and-positive-write-controls',csrf_enforced)
+        def policy_revocation():
+            r=admin.get(base+'/api/resource/User%20Permission',params={'filters':json.dumps({'user':'validation-alpha@example.test','allow':'Student'}),'fields':json.dumps(['name','user','allow','for_value','apply_to_all_doctypes'])},timeout=30)
+            assert r.status_code==200 and len(r.json()['data'])==1
+            rule=r.json()['data'][0]
+            r=alpha.delete(base+'/api/resource/User%20Permission/'+quote(rule['name'],safe=''),timeout=30)
+            assert r.status_code==403 and r.json().get('exc_type')=='PermissionError', 'student could alter native policy'
+            removed=False
+            try:
+                r=admin.delete(base+'/api/resource/User%20Permission/'+quote(rule['name'],safe=''),timeout=30)
+                removed=200 <= r.status_code < 300
+                assert r.status_code==202, f'admin permission deletion HTTP {r.status_code}'
+                for path in ('/api/resource/Student/'+quote(own,safe=''), records['private_file_url']):
+                    r=alpha.get(base+path,timeout=30)
+                    assert r.status_code==403, 'existing session retained access without required policy'
+                r=requests.post(base+'/api/method/login',headers={'Host':'foundation.localhost'},data={'usr':'validation-alpha@example.test','pwd':os.environ['FOUNDATION_TEST_PASSWORD']},timeout=30)
+                assert r.status_code==403 and r.json().get('exc_type')=='PermissionError', 'unscoped Student login accepted'
+            finally:
+                if removed:
+                    payload={k:v for k,v in rule.items() if k!='name'}
+                    r=admin.post(base+'/api/resource/User%20Permission',json=payload,timeout=30)
+                    assert r.status_code==200, f'policy restoration HTTP {r.status_code}'
+            fresh=login('validation-alpha@example.test')
+            read(fresh,'/api/resource/Student/'+quote(own,safe=''),True,own)
+            return {'student_cannot_edit_policy':True,'existing_session_revoked':True,'unscoped_login_denied':True,'restored_policy_usable':True}
+        check('native-policy-removal-fails-closed-and-recovers',policy_revocation)
+
 
     except Exception as exc:
         report['checks'].append({'name':'prerequisite','status':'fail','exception':type(exc).__name__,'message':str(exc)[:250]})

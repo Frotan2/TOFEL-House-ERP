@@ -29,6 +29,7 @@ try {
         page.locator('.for-login .form-login .btn-login[type=submit]').click(),
       ]);
       requireCondition(response.status() === 200, 'native login failed');
+      await page.waitForURL(url => url.pathname !== '/login', { waitUntil: 'domcontentloaded' });
       // Try to select the other student through URL and persisted portal selection.
       await page.goto('http://foundation.localhost:8080/edu-portal');
       await page.evaluate(other => localStorage.setItem('education-active_student', JSON.stringify(other)), records.students[1-index]);
