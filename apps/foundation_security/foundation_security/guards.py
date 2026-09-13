@@ -28,7 +28,7 @@ def validate_student_scope():
             raise frappe.PermissionError("Student access requires an exact native permission scope")
     # Existing shares can override User Permissions even after sharing is disabled.
     # Fail closed instead of silently granting access through inherited shares.
-    if frappe.db.exists("DocShare", {"user": user}):
+    if frappe.db.exists("DocShare", {"user": user}) or frappe.db.exists("DocShare", {"everyone": 1}):
         raise frappe.PermissionError("Student document shares require security review")
 
 

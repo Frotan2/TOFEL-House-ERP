@@ -239,7 +239,14 @@ def main() -> int:
         extension = ROOT / "apps/foundation_security"
         report["security_extension"] = {"name": "foundation_security", "version": "0.1.0", "repository_commit": os.environ["GITHUB_SHA"],
                                         "file_sha256": {str(p.relative_to(extension)): hashlib.sha256(p.read_bytes()).hexdigest() for p in extension.rglob("*") if p.is_file() and "__pycache__" not in p.parts}}
-        bench("get-security-extension", "get-app", "--soft-link", "--skip-assets", str(extension))
+        # Bench 5.31 expects a local app Git root even with --soft-link. Export
+        # only our app into the disposable lab; never initialize/move repo .git.
+        export = lab / "extension-source" / "foundation_security"
+        shutil.copytree(extension, export, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        run("security-export-git-init", ["git", "init", "--initial-branch", "arena/01a09bf3-tofel-house-erp", export])
+        run("security-export-git-add", ["git", "-C", export, "add", "."])
+        run("security-export-git-snapshot", ["git", "-C", export, "-c", "user.name=Foundation validation", "-c", "user.email=validation@example.test", "commit", "-m", "Exact security app export from " + os.environ["GITHUB_SHA"]])
+        bench("get-security-extension", "get-app", "--soft-link", "--skip-assets", str(export))
         for secured_site in (site, restored_site):
             bench("disable-website-html-cache-" + secured_site, "--site", secured_site, "set-config", "disable_website_cache", "1", "--parse")
             bench("install-security-extension-" + secured_site, "--site", secured_site, "install-app", "foundation_security")
