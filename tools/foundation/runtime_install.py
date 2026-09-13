@@ -178,7 +178,7 @@ def main() -> int:
         env["FOUNDATION_ADMIN_PASSWORD"] = admin_password
         for label in ("business", "restore", "http", "background"):
             env["FOUNDATION_" + label.upper() + "_REPORT"] = str(evidence / (label + "-result.json"))
-        run("business-smoke", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_smoke.py", site], cwd=bench_dir)
+        run("business-smoke", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_smoke.py", site], cwd=bench_dir / "sites")
         run("mariadb-client-install", ["sudo", "apt-get", "install", "-y", "--no-install-recommends", "mariadb-client", "file"])
         report["mariadb_client_version"] = run("mariadb-client-version", ["mariadb", "--version"])
         bench("backup-with-files", "--site", site, "backup", "--with-files")
@@ -206,7 +206,7 @@ def main() -> int:
         report["restore_separate_database"] = True
         report["site_encryption_key_restored"] = "encryption_key" in original_config
         bench("restore-migrate", "--site", restored_site, "migrate")
-        run("restore-verification", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_restore.py", restored_site], cwd=bench_dir)
+        run("restore-verification", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_restore.py", restored_site], cwd=bench_dir / "sites")
 
         def launch(name, command, cwd):
             log_path = lab / (name + ".txt")
@@ -221,7 +221,7 @@ def main() -> int:
         bench("enable-scheduler", "--site", site, "enable-scheduler")
         scheduler = launch("scheduler", [lab / "tools/bin/bench", "schedule"], bench_dir)
         socketio = launch("socketio", ["node", bench_dir / "apps/frappe/socketio.js"], bench_dir)
-        run("background-cache-job", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_background.py", site], cwd=bench_dir)
+        run("background-cache-job", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_background.py", site], cwd=bench_dir / "sites")
         report["process_liveness"] = {"worker": worker.poll() is None, "scheduler": scheduler.poll() is None, "socketio": socketio.poll() is None}
         if not all(report["process_liveness"].values()):
             raise RuntimeError("One or more background processes exited")

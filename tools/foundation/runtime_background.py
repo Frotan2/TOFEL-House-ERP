@@ -11,7 +11,7 @@ def main():
     if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1] != "foundation.localhost":
         raise SystemExit("Requires isolated Actions test site")
     report = {"scope": "Actual Redis cache and RQ processing; not all scheduler/realtime behavior", "status": "running"}
-    frappe.init(site=sys.argv[1], sites_path=str(Path.cwd() / "sites"))
+    frappe.init(site=sys.argv[1], sites_path=str(Path.cwd()))
     try:
         frappe.connect()
         frappe.cache.set_value("foundation-cache-proof", "synthetic-value", expires_in_sec=60)

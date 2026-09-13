@@ -233,7 +233,7 @@ if __name__ == "__main__":
     site = sys.argv[1]
     if site != "foundation.localhost":
         raise SystemExit("Unexpected test site")
-    frappe.init(site=site, sites_path=str(Path.cwd() / "sites"))
+    frappe.init(site=site, sites_path=str(Path.cwd()))
     try:
         frappe.connect()
         run()
