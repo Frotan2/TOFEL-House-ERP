@@ -8,10 +8,10 @@
   "product_implementation_authorized": false,
   "runtime_compatible_bundle_proven": false,
   "approved_runtime_bundle": null,
-  "verdict_scope": "Retain candidate for further qualification only; no runtime/production acceptance. Environment blocked and frontend advisory gate failed.",
-  "matrix_sha256": "e9d1308ed1870a0dd7733efa1266015ce1ab8c1a8c673750474ad9296e6b401f",
-  "created_site_count": 0,
-  "created_business_fixture_count": 0,
+  "verdict_scope": "Retain candidate for further qualification only. Hosted clean installation proven; complete domain/security/recovery acceptance not achieved; frontend advisory gate failed.",
+  "matrix_sha256": "f6a2787ad3c7605cc017ed7cd1d82337e2ede6222c560d70feb73d6793e641c4",
+  "created_site_count": 6,
+  "created_business_fixture_count": null,
   "tests": [
     {
       "id": "source-release-verification",
@@ -22,7 +22,8 @@
       "evidence": [
         "source-verification.json"
       ],
-      "observation": "Six release source clones verified; no app install inferred."
+      "observation": "Six release source clones verified; no app install inferred.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "apt-http-update",
@@ -33,7 +34,8 @@
       "evidence": [
         "apt-update.log"
       ],
-      "observation": "APT exited zero despite unreachable indices. Semantic failure recorded; not treated as successful prerequisite setup."
+      "observation": "APT exited zero despite unreachable indices. Semantic failure recorded; not treated as successful prerequisite setup.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "native-os-packages",
@@ -44,7 +46,8 @@
       "evidence": [
         "apt-install.log"
       ],
-      "observation": "No usable apt indices; package installation failed before services were created."
+      "observation": "No usable apt indices; package installation failed before services were created.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "apt-https-retry",
@@ -55,7 +58,8 @@
       "evidence": [
         "apt-update-https.log"
       ],
-      "observation": "TLS connection terminated. Source configuration restored afterward; no TLS bypass."
+      "observation": "TLS connection terminated. Source configuration restored afterward; no TLS bypass.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "bootstrap-tool-environment",
@@ -68,7 +72,8 @@
         "bootstrap-tool-versions.txt",
         "native-preflight.json"
       ],
-      "observation": "Bench 5.31.0 tools environment only, not Frappe requirements."
+      "observation": "Bench 5.31.0 tools environment only, not Frappe requirements.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "python-initial-download",
@@ -80,7 +85,8 @@
         "python-install.log",
         "python-install-system-trust.log"
       ],
-      "observation": "uv 0.11.6 selected 3.14.4. Initial UnknownIssuer; system trust retry failed TLS handshake. Superseded by selected 3.14.7 attempt."
+      "observation": "uv 0.11.6 selected 3.14.4. Initial UnknownIssuer; system trust retry failed TLS handshake. Superseded by selected 3.14.7 attempt.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "python-selected-download",
@@ -91,7 +97,8 @@
       "evidence": [
         "python-selected-asset.log"
       ],
-      "observation": "Selected CPython 3.14.7, build 20260901; EOF at release asset host. Zero downloaded bytes; upstream checksum not locally verified."
+      "observation": "Selected CPython 3.14.7, build 20260901; EOF at release asset host. Zero downloaded bytes; upstream checksum not locally verified.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "docker-download-connectivity",
@@ -102,7 +109,8 @@
       "evidence": [
         "network-probes.json"
       ],
-      "observation": "Docker package install was also blocked by apt. No CLI, daemon, Compose or container runtime to test. 28.5.1 URL was a connectivity probe, not a selected engine pin."
+      "observation": "Docker package install was also blocked by apt. No CLI, daemon, Compose or container runtime to test. 28.5.1 URL was a connectivity probe, not a selected engine pin.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "selected-node-yarn-cli",
@@ -113,7 +121,8 @@
       "evidence": [
         "native-preflight.json"
       ],
-      "observation": "Node 24.21.0 and Yarn 1.22.22 CLI verified. Earlier Node 24.14.0 bootstrap was superseded."
+      "observation": "Node 24.21.0 and Yarn 1.22.22 CLI verified. Earlier Node 24.14.0 bootstrap was superseded.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "education-direct-frozen-install",
@@ -126,7 +135,8 @@
         "network-probes.json"
       ],
       "observation": "Frozen lock resolved URLs still use unreachable registry.yarnpkg.com; registry flag did not fix tarball transport.",
-      "duration_seconds": 12.549
+      "duration_seconds": 12.549,
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "education-mirror-seed",
@@ -138,7 +148,8 @@
         "education-mirror-clean-seed.log"
       ],
       "observation": "286 npm tarballs verified against original Yarn lock integrity values; no dependency/lock changes.",
-      "duration_seconds": 8.015
+      "duration_seconds": 8.015,
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "education-clean-frozen-install",
@@ -150,7 +161,8 @@
         "education-frontend-clean-install.log"
       ],
       "observation": "Ran with removed generated node_modules and a fresh cache. Peer/cache-destination warnings retained.",
-      "duration_seconds": 12.817
+      "duration_seconds": 12.817,
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "education-production-asset-build",
@@ -164,7 +176,8 @@
         "education-resolved-frontend-versions.txt"
       ],
       "observation": "Standalone production assets compiled, 1587 modules. NO backend or browser workflow validated.",
-      "duration_seconds": 7.46
+      "duration_seconds": 7.46,
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "education-installed-dependency-advisories",
@@ -175,7 +188,8 @@
       "evidence": [
         "education-frontend-advisories.json"
       ],
-      "observation": "255 installed package names queried. 57 advisory entries in 21 packages: 27 high, 26 moderate, 4 low. Reachability not tested; remediation/triage gate remains open."
+      "observation": "255 installed package names queried. 57 advisory entries in 21 packages: 27 high, 26 moderate, 4 low. Reachability not tested; remediation/triage gate remains open.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "native-preflight",
@@ -186,7 +200,8 @@
       "evidence": [
         "native-preflight.json"
       ],
-      "observation": "Python mismatch and MariaDB/Redis missing; CLI successes cannot qualify runtime."
+      "observation": "Python mismatch and MariaDB/Redis missing; CLI successes cannot qualify runtime.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "docker-preflight",
@@ -197,7 +212,8 @@
       "evidence": [
         "docker-preflight.json"
       ],
-      "observation": "Docker server/Compose unavailable."
+      "observation": "Docker server/Compose unavailable.",
+      "checkpoint": "historical_local_validation"
     },
     {
       "id": "validation-helper-unit-tests",
@@ -208,7 +224,296 @@
       "evidence": [
         "collector-unit-tests.log"
       ],
-      "observation": "9 validation-helper tests passed. None are upstream ERP or workflow tests."
+      "observation": "9 validation-helper tests passed. None are upstream ERP or workflow tests.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "hosted-runtime-34776065793",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "15ac233147210579fe14b087f3a1cdfa0c2c4cfd",
+      "evidence": [
+        "hosted/runtime-34776065793.json"
+      ],
+      "passed_stages": 35,
+      "failed_stages": [
+        "bench-init"
+      ],
+      "business_checks": [],
+      "failure": "bench-init: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34776186463",
+      "checkpoint": "hosted_runtime",
+      "status": "pass",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "b3dc8c2e92e8284d594239adf88e834c501f08f3",
+      "evidence": [
+        "hosted/runtime-34776186463.json"
+      ],
+      "passed_stages": 59,
+      "failed_stages": [],
+      "business_checks": [],
+      "failure": null
+    },
+    {
+      "id": "hosted-runtime-34777102178",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "dd3d2b64a6e74c5734a2372975902abb4cd742e6",
+      "evidence": [
+        "hosted/runtime-34777102178.json"
+      ],
+      "passed_stages": 59,
+      "failed_stages": [
+        "business-smoke"
+      ],
+      "business_checks": [],
+      "failure": "business-smoke: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34777452072",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "b968161ea46a7a84b039299151eccb418fe29f4c",
+      "evidence": [
+        "hosted/runtime-34777452072.json"
+      ],
+      "passed_stages": 59,
+      "failed_stages": [
+        "business-smoke"
+      ],
+      "business_checks": [],
+      "failure": "business-smoke: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34777832562",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "7f73c6981dd93773a64772b9fbd3da29c0811d92",
+      "evidence": [
+        "hosted/runtime-34777832562.json"
+      ],
+      "passed_stages": 59,
+      "failed_stages": [
+        "business-smoke"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 14.879,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.675,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.116,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.031,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.668,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.006,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        }
+      ],
+      "failure": "business-smoke: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34778224918",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "ff2939532ce836174c5555d1be4f7f6b32b498d7",
+      "evidence": [
+        "hosted/runtime-34778224918.json"
+      ],
+      "passed_stages": 69,
+      "failed_stages": [
+        "http-login-and-isolation"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 11.347,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.503,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.082,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.023,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.503,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.005,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        },
+        {
+          "name": "schedule-attendance-submitted-assessment",
+          "status": "pass",
+          "seconds": 0.066,
+          "observation": {
+            "attendance": "EDU-ATT-2026-00001",
+            "result": "EDU-RES-2026-00001",
+            "score": 75.0,
+            "grade": "B"
+          }
+        },
+        {
+          "name": "fee-invoice-discount-payment-ledger",
+          "status": "pass",
+          "seconds": 0.942,
+          "observation": {
+            "invoice": "ACC-SINV-2026-00001",
+            "payment": "ACC-PAY-2026-00001",
+            "discounted_total": 90.0,
+            "outstanding": 0.0,
+            "gl_debit": 180.0,
+            "gl_credit": 180.0,
+            "gl_rows": 4
+          }
+        },
+        {
+          "name": "private-attachment",
+          "status": "pass",
+          "seconds": 0.025,
+          "observation": {
+            "file": "931c916839",
+            "private": 1,
+            "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+            "public_file": "073ac28c77"
+          }
+        }
+      ],
+      "failure": "http-login-and-isolation: exit 1"
     }
   ],
   "phase_gates": [
@@ -224,83 +529,83 @@
     },
     {
       "phase": "2C",
-      "status": "blocked",
-      "reason": "Native/Docker attempts blocked before ERP installation; conditional container target, not empirical full-stack comparison."
+      "status": "partial",
+      "reason": "Hosted native Bench plus container MariaDB/Redis proven; full application Docker image and local/WSL development usability unqualified."
     },
     {
       "phase": "2D",
       "status": "partial",
-      "reason": "Clean source/frontend/cache proof; no clean ERP site possible."
+      "reason": "Clean pinned site, five app installs, dependency consistency and full assets passed; broader recovery/reset proof depends on downstream probes."
     },
     {
       "phase": "2E",
-      "status": "blocked",
-      "reason": "B1/B2: compatible Python, MariaDB, Redis, native packages and Docker unavailable."
+      "status": "partial",
+      "reason": "Database, app schema and migrations passed. Service execution results are limited to recorded background/HTTP reports."
     },
     {
       "phase": "2F",
-      "status": "blocked",
-      "reason": "B2/B4: zero institution/business fixtures created."
+      "status": "partial",
+      "reason": "Company/chart/branch, academics, linked Employee/Instructor and two Applicant/Student/Customer/enrollment chains created."
     },
     {
       "phase": "2G",
-      "status": "blocked",
-      "reason": "B2/B4: applicant-to-payment lifecycle requires installed site."
+      "status": "partial",
+      "reason": "Six initial business checks passed in run 34777832562; see latest hosted report for downstream progression."
     },
     {
       "phase": "2H",
-      "status": "blocked",
-      "reason": "B2/B4: placement boundary is source-based recommendation; no runtime probes."
+      "status": "partial",
+      "reason": "Plan before Students allowed; no-Student Result and Applicant-as-Student rejected. Versioned/non-enrolled attempt behavior not proved."
     },
     {
       "phase": "2I",
-      "status": "blocked",
-      "reason": "B2/B4: no finance posting, duplicate-fee, discount, refund or reconciliation experiments."
+      "status": "partial",
+      "reason": "See business checks for invoice/payment/discount/GL outcomes. Refunds and legacy Fees overlap remain unexecuted."
     },
     {
       "phase": "2J",
-      "status": "blocked",
-      "reason": "B2/B4: HRMS source necessity established for payroll scope, but no installed Employee/payroll integration."
+      "status": "partial",
+      "reason": "Employee-linked Instructor created with HRMS installed. ERPNext-only comparison, leave and payroll posting unexecuted."
     },
     {
       "phase": "2K",
-      "status": "blocked",
-      "reason": "B2/B4: no users, portal, REST/RPC authorization or file isolation tests."
+      "status": "fail",
+      "reason": "See HTTP report if present; otherwise downstream probes were not reached. Full staff role matrix remains unexecuted."
     },
     {
       "phase": "2L",
-      "status": "blocked",
-      "reason": "B2/B4: no live MariaDB schema/transaction tests."
+      "status": "partial",
+      "reason": "See restored schema/index/deletion probes if present. Concurrency and full transaction/audit behavior remain unqualified."
     },
     {
       "phase": "2M",
-      "status": "blocked",
-      "reason": "B2/B5: no site, attachments, backup or restore."
+      "status": "partial",
+      "reason": "See actual backup/restore and HTTP reports if present; authored scripts alone are not proof."
     },
     {
       "phase": "2N",
-      "status": "blocked",
-      "reason": "B2/B5: no migration replay or cross-release upgrade."
+      "status": "partial",
+      "reason": "Same-version migration and replay passed; no separately pinned cross-release upgrade executed."
     },
     {
       "phase": "2O",
       "status": "fail",
-      "reason": "B3: actual dependency advisory findings; rest of runtime security baseline blocked."
+      "reason": "57 frontend advisory entries unresolved. Any HTTP isolation findings remain independently blocking."
     },
     {
       "phase": "2P",
-      "status": "blocked",
-      "reason": "B6: only dependency/build timings recorded, not app performance."
+      "status": "partial",
+      "reason": "Real installation/migration/build and individual completed probe timings recorded; not representative browser/list/load performance."
     },
     {
       "phase": "2Q",
       "status": "partial",
-      "reason": "Education frozen dependency install/build passed; full assets, browser flows, responsiveness/accessibility not tested."
+      "reason": "Full Frappe/ERPNext/Education/Payments/HRMS asset build passed; browser routing/forms/tables/accessibility not qualified."
     },
     {
       "phase": "2R",
       "status": "partial",
-      "reason": "9 helper tests run; upstream backend/API/UI tests blocked by missing runtime."
+      "reason": "9 local helper tests passed plus enumerated hosted owned probes. Existing upstream suites not yet executed."
     },
     {
       "phase": "2S",
@@ -311,20 +616,22 @@
   "runtime_scenarios": [
     {
       "group": "installation-and-services",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Clean MariaDB site/schema creation",
         "Install Frappe then ERPNext then Education; establish Payments import/install optionality",
         "Record DocTypes before/after justified HRMS installation",
         "Gunicorn/Bench startup, login, Redis cache, RQ job, scheduler, Socket.IO, file storage"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     },
     {
       "group": "student-lifecycle",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Company/institution and branch",
         "Program/course/academic year/term",
@@ -338,12 +645,14 @@
         "Fee obligation, invoice, allocation and ledger reconciliation",
         "Conversion retry/duplicate prevention and cancel/history"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     },
     {
       "group": "placement-boundary",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Plan before Student vs Result before Student",
         "Applicant cannot be silently substituted for Student link",
@@ -351,12 +660,14 @@
         "Retake/amendment vs rule versioning",
         "Future applicant-owned result link to later Student without duplicate authority"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     },
     {
       "group": "finance",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "not_run",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Invoice-based receivable",
         "Legacy Fees plus same logical invoice obligation duplicate experiment",
@@ -366,12 +677,14 @@
         "Return/credit note plus refund payment",
         "GL/payment-ledger reconciliation"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     },
     {
       "group": "hr-payroll",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Employee/Department without HRMS",
         "Employment/employee Attendance/Leave",
@@ -380,12 +693,14 @@
         "Payroll Entry Journal Entry posting and reversal",
         "HRMS override composition on Employee/Payment Entry"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     },
     {
       "group": "authorization",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "not_run",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Administrator actions",
         "Academic manager scoped operations",
@@ -398,12 +713,14 @@
         "Guest/session/CSRF and privileged methods",
         "Two-site isolation and trusted host routing"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     },
     {
       "group": "database",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "not_run",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Version/charset/collation",
         "Primary keys/Link and child metadata/indexes/audit fields",
@@ -411,53 +728,63 @@
         "Submit/cancel/delete linked history",
         "Failed transaction rollback"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     },
     {
       "group": "backup-restore",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "not_run",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Populate synthetic records and hash private/public files",
         "Full backup with files and securely retained config/keys",
         "Restore into distinct clean site with same pinned bundle",
         "Verify login, counts, links, attachment hashes, ledger balances and critical record usability"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     },
     {
       "group": "migration",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Controlled same-bundle migrate and unchanged rerun",
         "Compare schema/patch state and business invariants",
         "Separately pinned before/after release upgrade if upgrade claim is required"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     },
     {
       "group": "frontend-and-performance",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Frappe Desk/ERPNext/HRMS asset builds",
         "Actual portal routing/forms/tables/dashboards",
         "English responsive/keyboard/focus/accessibility checks",
         "Real startup/migration/page/list/report/job latency on representative data"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     },
     {
       "group": "upstream-tests",
-      "status": "blocked",
-      "reason": "No installed Frappe/MariaDB test site; not executed and not source-validated",
+      "status": "not_run",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
       "scenarios": [
         "Education student/applicant/enrollment/attendance/assessment/fees tests",
         "ERPNext invoice/payment/ledger tests",
         "HRMS attendance/leave/payroll/slip tests"
       ],
-      "runtime_evidence": []
+      "runtime_evidence": [
+        "hosted/runtime-34778224918.json"
+      ]
     }
   ],
   "evidence_directory": "evidence/phase-2",
@@ -541,6 +868,47 @@
     "source-verification.json": {
       "sha256": "66759fb5652cda5117b7a1dd580ada84d26ae0e7704d7a01652bd47ba93f358c",
       "bytes": 1876
+    },
+    "hosted/runner-34775900898.json": {
+      "sha256": "cf69ecc9faf123805038d8d9da79017e1d5cd5138a228daaaa93a497e05d2b6f",
+      "bytes": 6439
+    },
+    "hosted/runtime-34776065793.json": {
+      "sha256": "7b7b5a1531f8f0aeb858b54d3fcd7e9cc7ff001a6c286ad80aa247258d79062a",
+      "bytes": 15021
+    },
+    "hosted/runtime-34776186463.json": {
+      "sha256": "90bfdfcedba63d17a08bc098fdc57bba81657d4275c0bf5eb19dcd5f8fda8b0a",
+      "bytes": 20312
+    },
+    "hosted/runtime-34777102178.json": {
+      "sha256": "be0632938dbb482f1bb3de324c46a64756395586414a42e4b13deb0155d065a4",
+      "bytes": 23718
+    },
+    "hosted/runtime-34777452072.json": {
+      "sha256": "2304603d10f929d8e23d8bd15ac1acab6a6549b21c4ce831ef72a3a147aba3d7",
+      "bytes": 24953
+    },
+    "hosted/runtime-34777832562.json": {
+      "sha256": "deea2ce258ffb9502c09ffaacab2c152c7f1eb1c2a11e5f33d98255f7fab3b33",
+      "bytes": 28523
+    },
+    "hosted/runtime-34778224918.json": {
+      "sha256": "39856de7a6860fa576e059b2c0230bc612056845fa01153b0e474dbc4e2ee0e3",
+      "bytes": 43049
     }
+  },
+  "created_site_count_scope": "Cumulative creations in retained disposable hosted runs, not currently live sites",
+  "currently_live_validation_sites": 0,
+  "business_fixture_count_note": "No exact full-document count claimed; explicit named records and successful controller checks are retained in each business_result.",
+  "clean_pinned_installation_proven": true,
+  "latest_hosted_checkpoint": {
+    "run_id": "34778224918",
+    "commit": "ff2939532ce836174c5555d1be4f7f6b32b498d7",
+    "status": "fail",
+    "evidence": "evidence/phase-2/hosted/runtime-34778224918.json",
+    "failure": "http-login-and-isolation: exit 1",
+    "business_active_check": "private-attachment",
+    "business_failure": null
   }
 }

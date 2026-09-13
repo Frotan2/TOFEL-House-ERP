@@ -5,13 +5,14 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
-**Phase 2 qualification is incomplete. No ERP site or compatible backend bundle has
-been validated. Product implementation remains blocked.**
+**Phase 2 qualification is incomplete. A clean pinned ERP installation and migrations
+have passed on a controlled hosted runner. Product implementation remains blocked.**
 
-Education's standalone frontend installs from its frozen lock and builds on Node
-24.21.0. Backend prerequisites could not be installed because required download
-endpoints failed. The frontend dependency advisory gate also returned findings
-requiring triage/remediation. A build is not proof of a working or secure ERP.
+The hosted runner resolved the local download/service blocker. Five upstream apps
+install and build together, and synthetic academic-to-payment, backup/restore and worker probes passed.
+Student REST/private-file isolation failed in the tested baseline configuration.
+Full domain, authorization and payroll qualification is not complete. Frontend dependency advisories remain unresolved; installation and build
+success do not establish a working, secure ERP.
 
 - [Foundation validation checkpoint](docs/engineering/foundation-validation.md):
   actual attempts/results, blockers, reproduction instructions and conditional verdict.
@@ -30,8 +31,9 @@ upstream student, employee, academic and accounting authorities. Do not copy or
 modify upstream core in this repository. English is the canonical product and
 engineering language; no UI redesign or localization changes are in scope now.
 
-There is **no verified full-stack run command yet**. The validation report contains
-commands for the toolchain/frontend experiment and lists the missing ERP gates.
+The branch-scoped **Foundation runtime validation** GitHub Actions workflow is the
+reproducible clean-install qualification runner. It is not a production deployment
+or a verified interactive local-development setup. See the validation report for limits.
 Do not implement placement, scoring, custom finance/HR or student lifecycle until
 those gates pass.
 

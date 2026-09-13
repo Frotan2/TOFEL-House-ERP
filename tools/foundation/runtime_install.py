@@ -225,7 +225,19 @@ def main() -> int:
         report["process_liveness"] = {"worker": worker.poll() is None, "scheduler": scheduler.poll() is None, "socketio": socketio.poll() is None}
         if not all(report["process_liveness"].values()):
             raise RuntimeError("One or more background processes exited")
-        run("http-login-and-isolation", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_http.py"], cwd=bench_dir)
+        baseline_failure = None
+        try:
+            run("http-login-and-isolation", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_http.py"], cwd=bench_dir)
+        except RuntimeError as exc:
+            # Preserve the failed check/report. Independent remediation diagnostics
+            # must never turn a failed baseline into a passing overall run.
+            baseline_failure = str(exc)
+        report["baseline_http_failed"] = baseline_failure is not None
+        run("native-user-permission-configuration", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_permissions.py", site], cwd=bench_dir / "sites")
+        env["FOUNDATION_HTTP_REPORT"] = str(evidence / "http-restricted-result.json")
+        run("http-isolation-with-native-user-permissions", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_http.py"], cwd=bench_dir)
+        if baseline_failure:
+            raise RuntimeError("Baseline HTTP isolation failed; restricted-configuration results are separate diagnostics: " + baseline_failure)
         report["status"] = "pass"
         report["remaining_gates"] = ["refunds and legacy Fees duplication", "payroll posting", "full staff role matrix",
                                      "full realtime authorization and browser UI", "frontend advisory remediation", "upstream test suites"]
@@ -247,7 +259,7 @@ def main() -> int:
             finally:
                 stream.close()
                 (evidence / log_path.name).write_text(redact(log_path.read_text()))
-        for label in ("business", "restore", "background", "http"):
+        for label in ("business", "restore", "background", "http", "http-restricted"):
             path = evidence / (label + "-result.json")
             if path.exists():
                 sanitized = redact(path.read_text())

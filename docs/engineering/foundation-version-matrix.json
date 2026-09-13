@@ -14,7 +14,7 @@
       "commit": "988e54f3c4c291e2077a83809663f123731abe76",
       "selected_version": "16.33.1",
       "selection_reason": "Newest non-prerelease v16 release observed; common framework for the app bundle.",
-      "status": "candidate_not_runtime_validated",
+      "status": "clean_install_and_migrations_passed_domain_qualification_incomplete",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
       "image_digest": null,
       "source_file_sha256": {
@@ -23,7 +23,8 @@
         "yarn.lock": "4e39da1b48edcc235f1973302d96b283219b44774f07f447256319b66adfa608",
         "frappe/hooks.py": "1e0b3523d6e554dde1d514f36bdcfac8fc11c44de3971fc34995bc55ce4e8c2e"
       },
-      "source_version": "16.33.1"
+      "source_version": "16.33.1",
+      "runtime_imported_version": "16.33.1"
     },
     {
       "name": "erpnext",
@@ -32,7 +33,7 @@
       "commit": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
       "selected_version": "16.34.2",
       "selection_reason": "Newest non-prerelease v16 release observed; requires Frappe >=16.21,<17, satisfied by candidate source version.",
-      "status": "candidate_not_runtime_validated",
+      "status": "clean_install_and_migrations_passed_domain_qualification_incomplete",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
       "image_digest": null,
       "source_file_sha256": {
@@ -41,7 +42,8 @@
         "yarn.lock": "ba6a3285c968d3e7ac606652b1aee15ed9c3ea133c019a7c0697533cf5dad8f0",
         "erpnext/hooks.py": "9fad9522838a7e99f114ad03e7fa30a5d99b9804c5ede8222aba46f8264f0f8b"
       },
-      "source_version": "16.34.2"
+      "source_version": "16.34.2",
+      "runtime_imported_version": "16.34.2"
     },
     {
       "name": "education",
@@ -50,7 +52,7 @@
       "commit": "93bc7075753369457919720690f80c6d2207b5f2",
       "selected_version": "16.1.0",
       "selection_reason": "Newest non-prerelease v16 Education release observed. Prefer release commit over Phase 1 moving-branch snapshot.",
-      "status": "standalone_frontend_build_only_backend_not_installed",
+      "status": "clean_install_and_migrations_passed_domain_qualification_incomplete",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
       "image_digest": null,
       "source_file_sha256": {
@@ -70,7 +72,8 @@
         "pinia": "2.1.7",
         "vue-router": "4.3.0",
         "tailwindcss": "3.4.1"
-      }
+      },
+      "runtime_imported_version": "16.0.1"
     },
     {
       "name": "hrms",
@@ -79,7 +82,7 @@
       "commit": "a4768b441cff346def505e27f2a2229ee1e05b9b",
       "selected_version": "16.18.1",
       "selection_reason": "Payroll/Salary Slip/Leave/Employee Attendance are HRMS DocTypes, absent from ERPNext alone; required for requested full HR/payroll scope, not for minimal academics.",
-      "status": "candidate_not_runtime_validated",
+      "status": "clean_install_and_migrations_passed_domain_qualification_incomplete",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
       "image_digest": null,
       "source_file_sha256": {
@@ -90,7 +93,8 @@
         "yarn.lock": "0ba78c1d62bacf9af7177df2ecb2c7ef1406fac5cf5f36fadec195196a983daf",
         "hrms/hooks.py": "850d61b060383dd4c1a0c198478b2b9ffc172348adf4361805b9e585e86a8fd8"
       },
-      "source_version": "16.18.1"
+      "source_version": "16.18.1",
+      "runtime_imported_version": "16.18.1"
     },
     {
       "name": "bench",
@@ -99,7 +103,7 @@
       "commit": "f21f11793872705560e710b2bda69934c9c34011",
       "selected_version": "5.31.0",
       "selection_reason": "Released CLI instead of develop; installed through PyPI and version command and pip check succeeded.",
-      "status": "cli_version_verified_only",
+      "status": "used_in_successful_hosted_clean_erp_installation",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
       "image_digest": null,
       "source_file_sha256": {
@@ -126,7 +130,7 @@
       "commit": "823f0323ee6ec1402088b73bce1a38473cac36dc",
       "selected_version": "3.14.7",
       "selection_reason": "Newest stable 3.14 tag observed; satisfies Frappe >=3.14,<3.15. Initial uv bootstrap attempted older 3.14.4, not this candidate.",
-      "status": "hosted_runtime_version_and_checksum_verified_not_erp_qualified",
+      "status": "used_in_successful_hosted_clean_erp_installation",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
       "image_digest": null,
       "runtime_artifact_candidate": {
@@ -147,7 +151,7 @@
       "commit": "955266bfdd854cd280dffd47548673914484e4c0",
       "selected_version": "24.21.0",
       "selection_reason": "Newest v24 release observed; satisfies Frappe >=24 and stays on v24 instead of moving to v26.",
-      "status": "cli_and_standalone_education_frontend_build_verified",
+      "status": "used_in_successful_hosted_clean_erp_installation",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
       "image_digest": null,
       "npm_distribution_integrity": "sha512-GquwdXTr1CyRzrHsP+GVYnKj/yxIX7kUpyGMKu30fKJa9Hqtp9GP/Zu4BXY3gLIQVc/H5eWdMQmBgMBx5veCbw==",
@@ -160,7 +164,7 @@
       "commit": "bf9193a939f515e95dd8def1a5468088c91cede6",
       "selected_version": "11.8.9",
       "selection_reason": "Newest observed patch of 11.8 line used by pinned frappe_docker; no evidence requires moving to 12.3.",
-      "status": "hosted_service_probe_verified_not_erp_qualified",
+      "status": "used_in_successful_hosted_clean_erp_installation",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
       "image_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62"
     },
@@ -171,7 +175,7 @@
       "commit": "c78094fd4710bca2fa28d5dd2266b9b753b9868d",
       "selected_version": "8.6.6",
       "selection_reason": "Newest observed patch of 8.6 line used by pinned frappe_docker; do not add an untested Valkey substitution or jump to 8.10.",
-      "status": "hosted_service_probe_verified_not_erp_qualified",
+      "status": "used_in_successful_hosted_clean_erp_installation",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
       "image_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
     },
@@ -181,17 +185,18 @@
       "tag": null,
       "commit": "cca07d9f9392e2ea0e521c5975151db9e4b6c321",
       "selected_version": "0.0.1",
-      "status": "candidate_not_runtime_validated",
+      "status": "clean_install_and_migrations_passed_domain_qualification_incomplete",
       "selection_reason": "Education release billing imports Razorpay; its CI installs Payments. No published releases returned; pin explicit reviewed version-16 commit. Clean-site optionality is unproven.",
       "risk": "Not a gateway approval; import/install requirements must be established before enabling online payments.",
-      "image_digest": null
+      "image_digest": null,
+      "runtime_imported_version": "0.0.1"
     },
     {
       "name": "yarn",
       "selected_version": "1.22.22",
       "source": "https://registry.npmjs.org/yarn/1.22.22",
       "integrity": "sha512-prL3kGtyG7o9Z9Sv8IPfBNrWTDmXB4Qbes8A9rEzt6wkJV8mUvoirjU0Mp3GGAU06Y0XQyA3/2/RQFVuK7MTfg==",
-      "status": "cli_and_frozen_education_frontend_install_verified",
+      "status": "used_in_successful_hosted_clean_erp_installation",
       "selection_reason": "Yarn Classic matches upstream yarn.lock v1; frozen install was attempted and failed on transport."
     },
     {
@@ -235,5 +240,11 @@
     "runner_image_version": "20260907.300.1",
     "evidence": "evidence/phase-2/hosted/runner-34775900898.json",
     "scope": "Runner/download/service qualification only; NOT Frappe installation or ERP workflow proof"
+  },
+  "hosted_installation_proof": {
+    "run_id": 34776186463,
+    "commit": "b3dc8c2e92e8284d594239adf88e834c501f08f3",
+    "evidence": "evidence/phase-2/hosted/runtime-34776186463.json",
+    "scope": "Fresh site, five app installations, dependency consistency, two migrations and full asset build; NOT complete domain/security/recovery qualification"
   }
 }

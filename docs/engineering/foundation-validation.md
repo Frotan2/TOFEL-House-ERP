@@ -1,5 +1,121 @@
 # Foundation validation — Phase 2 checkpoint
 
+## Current hosted-runner checkpoint — 2026-09-13
+
+**ACCEPT WITH CONDITIONS — retain the architecture for further qualification only.**
+Phase 2 has **not** passed. Product implementation and deployment remain unauthorized.
+This section supersedes the local-environment runtime status in the historical assessment below;
+its source analysis, unresolved frontend advisories and unexecuted acceptance requirements remain relevant.
+
+### Proven on the controlled runner
+
+- Branch-only GitHub-hosted Ubuntu 24.04 runner, image `20260907.300.1`, with working
+  checksummed Python downloads and digest-pinned Docker MariaDB/Redis services.
+- Run [34776186463](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/34776186463)
+  at `b3dc8c2e92e8284d594239adf88e834c501f08f3`: clean site creation, all five app installs,
+  dependency consistency, migrations twice, and full asset build passed (59 recorded stages).
+  This was an **installation-only** success, not an accepted ERP foundation.
+- Observed runtime: Python 3.14.7, Node 24.21.0, Yarn 1.22.22, MariaDB 11.8.9,
+  Redis 8.6.6, Bench 5.31.0, Docker 28.0.4 and Compose 2.38.2.
+  Imported app versions subsequently confirmed Frappe 16.33.1, ERPNext 16.34.2,
+  Education **16.0.1** from release tag **16.1.0**, Payments 0.0.1 and HRMS 16.18.1.
+  Exact source revisions and hashes remain in the version matrix.
+- Run [34777832562](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/34777832562)
+  completed native setup-wizard stages, created a company with 97 accounts and a branch,
+  academic year/term/program/course/group/admission, and an Instructor linked to an Employee.
+  Two Applicants became Students, each with Customer and enrollment relationships and group membership.
+  Existing portal Users were **not automatically linked** to the Students; the probe explicitly
+  configured the upstream Student `user` field as an operator would.
+- A course/group Assessment Plan was created with zero Students. A Result without a Student
+  was rejected (`StudentNotInGroupError`); an Applicant identifier in its Student link was rejected
+  (`LinkValidationError`). These are limited runtime boundary observations, **not placement implementation**
+  or proof of versioned/pre-enrollment attempts.
+
+### Latest executed result: lifecycle/recovery passed, isolation failed
+
+Run [34778224918](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/34778224918)
+at `ff29395` completed all nine business checks. Attendance and Assessment Result were submitted
+(score 75, grade B); a 100 USD fee with 10% discount produced a 90 USD invoice, settled by
+Payment Entry, with zero outstanding and four balanced GL rows (180 debit / 180 credit across
+invoice and payment). Public/private attachments were created and hashed.
+
+A real database/files backup was restored into a **distinct clean database/site**, migrated,
+and verified for Student/Applicant/Customer/enrollment links, submitted records and both file hashes.
+Administrator login and Student HTTP reads worked on both sites. Ten canonical tables were
+inspected for columns/indexes/audit fields; referenced Student deletion was rejected with
+`LinkExistsError`. MariaDB reported `utf8mb4` / `utf8mb4_unicode_ci`.
+Cache round-trip and a real RQ job passed (1.004 seconds observed); Engine.IO 4 handshake passed.
+Scheduler process liveness is **not** proof of scheduled-task execution or realtime event isolation.
+
+**Blocking server-side isolation finding:** with the tested native Student role and explicit
+Student/user links, but without additional User Permission records:
+
+- Alpha could read Beta's Student document through generic REST (HTTP 200, target name verified).
+- Beta could download Alpha's private attachment (HTTP 200, exact file hash verified).
+- The Education portal context RPC correctly denied the other Student (HTTP 403).
+
+These were synthetic owned records on loopback, not production data. The overall run correctly
+failed. Portal-specific checking does not secure other server entry points. The baseline is retained;
+a separate native Student/Customer User Permission configuration experiment is being tested using
+identical HTTP assertions. It cannot erase the baseline failure or establish a full role matrix.
+
+### Failures preserved, not bypassed
+
+| Run | Failure / interpretation |
+|---|---|
+| 34776065793 | Bench expected a host Redis executable during config generation. Supported external-Redis options corrected the harness; real Redis remained required. |
+| 34777102178 | Direct probe ran from Bench root rather than `sites`, so Frappe logging resolved the wrong directory. Harness context corrected; no controller ran. |
+| 34777452072 | Company creation before onboarding lacked standard `Transit` Warehouse Type. Corrected by running upstream setup completion, not a placeholder or ignored link validation. |
+| 34777832562 | Attendance rejected the missing Company default Holiday List. Earlier six business checks passed. A normal institution calendar corrected this in run 34778224918; no holiday validation was disabled. |
+
+Sanitized reports, including failures, are retained in `evidence/phase-2/hosted/`.
+Later harness revisions are not evidence until their own hosted report is recorded.
+
+### Qualification method and reproduction
+
+Use `.github/workflows/foundation-runtime.yml` on `arena/01a09bf3-tofel-house-erp`:
+
+```sh
+gh workflow run foundation-runtime.yml --ref arena/01a09bf3-tofel-house-erp
+gh run list --workflow foundation-runtime.yml --branch arena/01a09bf3-tofel-house-erp
+# Substitute the returned run ID:
+gh run watch RUN_ID --exit-status
+```
+
+The workflow qualifies services, checks exact source/input hashes, installs the pinned native
+Bench environment and containerized MariaDB/Redis, and creates disposable synthetic sites.
+Native Bench plus container services is the **proven CI qualification method**; a full application
+Docker image and interactive OS/WSL development experience remain unqualified. Do not run the
+restricted synthetic harness against an existing institution site.
+
+MariaDB/Redis ports are loopback-only; HTTP and realtime probes also use runner loopback.
+Passwords are generated per run, masked and redacted; no site configs, backup databases,
+private files or credentials are uploaded. Sanitized JSON is published through a Checks API
+entry and sanitized evidence artifacts are retained for 14 days. Child processes, containers
+and temporary site storage are cleaned up at job end. A new workflow run is the clean reset.
+The scripts' connection context is the normal Bench `sites` working directory, not a custom
+installed application or an upstream core modification.
+
+### Remaining gates / interpretation
+
+The authored harness includes fee/invoice/payment/ledger, files, real backup/restore,
+DB inspection, cache/job, HTTP login/Student isolation and transport-handshake probes.
+**An authored test is not a passed test.** Only the explicitly enumerated lifecycle/recovery/cache/HTTP checks above have now passed;
+the two baseline isolation denials failed. Full staff/HR/payroll authorization, refunds/legacy Fees overlap,
+upstream regression suites, controlled version upgrade, browser UI/accessibility/performance,
+scheduler task execution and realtime event authorization still need evidence.
+The 57 frontend advisory entries (27 high, 26 moderate, 4 low) remain unresolved.
+Repeated same-version migrations are not version-upgrade proof. Company/Branch is not a tenant boundary.
+
+No TOEFL-specific app, schema, scoring, placement, lifecycle, finance, HR or UI was implemented.
+Main remains `9eccff957cadf036a3ac6f8208540a110148e67b` (remote reconfirmed during this continuation).
+The detailed 23-category analysis below is retained as the **historical local checkpoint**,
+not a claim that the now-proven hosted installation is still blocked.
+
+---
+
+## Historical local-environment assessment (before hosted qualification)
+
 Date: 2026-09-13 UTC · Baseline: `d77085b` · Branch: `arena/01a09bf3-tofel-house-erp`
 
 ## 1. Decision and limits
