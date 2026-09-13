@@ -126,7 +126,7 @@
       "commit": "823f0323ee6ec1402088b73bce1a38473cac36dc",
       "selected_version": "3.14.7",
       "selection_reason": "Newest stable 3.14 tag observed; satisfies Frappe >=3.14,<3.15. Initial uv bootstrap attempted older 3.14.4, not this candidate.",
-      "status": "candidate_not_runtime_validated",
+      "status": "hosted_runtime_version_and_checksum_verified_not_erp_qualified",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
       "image_digest": null,
       "runtime_artifact_candidate": {
@@ -135,8 +135,9 @@
         "asset_id": 539917786,
         "name": "cpython-3.14.7+20260901-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
         "upstream_digest": "sha256:3959f92825141e04adf44982d3a83ee57af0877e893b0796e04c1468749d9b04",
-        "download_status": "failed_EOF_zero_bytes",
-        "checksum_verified_locally": false
+        "download_status": "verified_on_hosted_runner_34775900898",
+        "checksum_verified_locally": false,
+        "checksum_verified_on_hosted_runner": true
       }
     },
     {
@@ -159,9 +160,9 @@
       "commit": "bf9193a939f515e95dd8def1a5468088c91cede6",
       "selected_version": "11.8.9",
       "selection_reason": "Newest observed patch of 11.8 line used by pinned frappe_docker; no evidence requires moving to 12.3.",
-      "status": "candidate_not_runtime_validated",
+      "status": "hosted_service_probe_verified_not_erp_qualified",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
-      "image_digest": null
+      "image_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62"
     },
     {
       "name": "redis",
@@ -170,9 +171,9 @@
       "commit": "c78094fd4710bca2fa28d5dd2266b9b753b9868d",
       "selected_version": "8.6.6",
       "selection_reason": "Newest observed patch of 8.6 line used by pinned frappe_docker; do not add an untested Valkey substitution or jump to 8.10.",
-      "status": "candidate_not_runtime_validated",
+      "status": "hosted_service_probe_verified_not_erp_qualified",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
-      "image_digest": null
+      "image_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
     },
     {
       "name": "payments",
@@ -226,5 +227,13 @@
     "node": "v26.8.2 not selected; v24.21.0 satisfies requirements. Initial 24.14.0 CLI experiment superseded.",
     "mariadb": "12.3.3 not selected; align 11.8 candidate with deployment recipe.",
     "redis": "8.10.1 and 8.8.2 not selected; align 8.6 patch candidate with deployment recipe."
+  },
+  "hosted_runner_probe": {
+    "run_id": "34775900898",
+    "commit": "0eeb8790d0c6b8fe245f2ed6c7e7efd32beb1b0b",
+    "runner_image": "ubuntu24",
+    "runner_image_version": "20260907.300.1",
+    "evidence": "evidence/phase-2/hosted/runner-34775900898.json",
+    "scope": "Runner/download/service qualification only; NOT Frappe installation or ERP workflow proof"
   }
 }
