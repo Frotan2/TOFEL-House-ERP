@@ -1,5 +1,61 @@
 # Phase 2 security and production-readiness continuation
 
+## Final recommendation — REJECT current Phase 2/production acceptance
+
+Run **34806388937**, commit `675736e540aacdbc46635a3ec121e683d1a58801`, completed
+with failure in **11m54s**. Both exact Check reports were retrieved and their compact
+JSON SHA-256 verified: runtime Check **103861011181**, remaining-gate Check
+**103861013308**. See `evidence/phase-2/hosted/{runtime,remaining}-34806388937.json`.
+No unknown active run is relied upon. This rejects current acceptance, not the use of
+canonical upstream authorities as a candidate architecture for continued qualification.
+
+| Remaining area | Hosted result | Gate interpretation |
+|---|---|---|
+| Frontend dependencies | 255 package names audited; 57 advisory entries / 21 packages reconfirmed | **FAIL**. All retained entries triaged; reachability/remediation remain open |
+| Native roles/payroll | 36 of 37 checks pass, including real draft payroll and all seven payroll read boundaries | **PARTIAL / FAIL**. Unscoped Guardian unrelated-Student request returned 200, not 403 |
+| Guardian native scopes | Own Student 200; unrelated Student 403 after explicit Student/Customer User Permissions | Narrow remedy **PASS**; not fail-closed provisioning, multi-child/relinking, portal/file or mixed-role qualification |
+| Realtime document events | Two Student sockets connect; owner event delivered; cross-student document event absent | Enumerated document-room check **PASS**, not all realtime authorization |
+| Realtime task events | Second user received synthetic task marker when given its identifier | **FAIL** under the tested ownership-isolation requirement |
+| Framework patch upgrade | Frappe 16.33.0→16.33.1, 19 stages, native record preservation and replay pass | Narrow framework experiment **PASS**; full bundle upgrade/rollback remains incomplete |
+| Authenticated HTML cache | Both portal responses have no-store/no-cache/must-revalidate/max-age=0 | Narrow cache policy **PASS**; production TLS/proxy/session-switch/headers not qualified |
+
+**Existing regressions also passed again:** business 9; ordinary restore 5; restricted
+HTTP 10; source isolation 47; Chromium 5; hardened recovery 7; recovered isolation 47;
+cache/RQ and encrypted/session recovery stages; unchanged upstream permission/sharing
+modules reporting 10 and 15 tests run. **29 local helper tests pass**, including lossless
+Check-transport round trips and protected-branch rejection. These are not substitutes
+for full role, domain, operational or dependency acceptance.
+
+### Blocking findings and closure requirements
+
+1. **SEC-GUARDIAN-01:** the native Guardian role plus a canonical Guardian/Student link
+   does not itself enforce the required generic REST isolation. The request to the
+   unrelated Student returned 200; the negative assertion did not retain its response
+   body, so no additional field-level disclosure claim is made. Explicit native scopes
+   corrected the enumerated reads, but missing/expanded/revoked scopes, multi-child
+   membership, shares, files, APIs and mixed roles need fail-closed lifecycle proof.
+   The Student-specific generic guard was not extended to Guardian in this continuation.
+2. **SEC-RT-TASK-01:** the known-identifier synthetic task event was delivered to both
+   users. Pinned `frappe/realtime/handlers.js` joins task/progress rooms without the
+   document permission callback used for document rooms. This is evidence about known
+   identifiers and synthetic markers—not proof of task-ID guessing, real payroll-job
+   disclosure, cross-site leakage or a persisted RQ job ownership check. Close with a
+   supported owner/delegation authorization design and real-job, site, revocation and
+   negative delivery regressions. Do not treat identifier secrecy alone as authorization.
+3. **SEC-DEPS-01:** advisory triage is not remediation or proof of non-reachability.
+   Require reviewed patched inputs and hosted audit/build/affected-path evidence. No
+   advisory has been waived merely because it is transitive or used in build tooling.
+
+Earlier **34804852658** and **34805581935** failures are preserved. Payroll initially
+needed a native Holiday List Assignment; inserting and submitting that normal document
+resolved the prerequisite without disabling a controller. Realtime initially used the
+wrong login routing and then an Origin without the proxy port; native realtime uses
+Origin for its backend permission callback. Correcting the test Origin to the actual
+8080 proxy made the checks execute and reveal the task-room failure.
+
+**Remaining work is not all complete.** In particular, this run does not clear the
+broader operational and coverage limits below. No production or TOEFL work is authorized.
+
 ## Acceptance standard
 
 No TOEFL-specific implementation. No upstream core edits. Only the authorized Arena
@@ -31,7 +87,7 @@ patch, fixed immutable inputs, fresh audit and affected-path regressions. Blind
 not acceptable. The remaining-gate workflow repeats the registry audit on its actual
 installed Education dependency tree; failures are preserved, not converted to warnings.
 
-## Newly authored hosted checks (not passes until evidence is retrieved)
+## Reproducible hosted checks and scope
 
 - Native Academics User, Instructor, Accounts User, HR User, Employee and Guardian
   accounts; actual Employee/Instructor and Guardian/Student relationships; real login
@@ -74,3 +130,16 @@ remaining gate evidence` Checks. Reports exceeding the Check text budget use a J
 both `report_sha256` and the Check summary before reading the inner JSON. No observations
 are removed. Full sanitized artifacts are retained for 14 days; blob downloads may be
 unavailable from this sandbox. No configurations, backups or credentials are published.
+
+## Reproduction and decision boundary
+
+```sh
+gh workflow run foundation-runtime.yml --ref arena/01a09bf3-tofel-house-erp -f profile=hardened
+gh run watch RUN_ID --exit-status
+```
+
+The hardened profile still exits nonzero for the retained new Guardian baseline,
+known-task event failure and positive advisory results. Do not alter assertions merely
+to obtain a green run. Qualification changes must preserve their baseline reports and
+publish separate remediated results. Main remains unchanged; no TOEFL app, product UI,
+placement, scoring, custom finance/HR or upstream core implementation was introduced.

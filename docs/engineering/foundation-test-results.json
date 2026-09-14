@@ -3,14 +3,14 @@
   "date": "2026-09-14",
   "baseline_commit": "d77085b",
   "branch": "arena/01a09bf3-tofel-house-erp",
-  "foundation_status": "ACCEPT WITH CONDITIONS",
+  "foundation_status": "REJECT",
   "phase2_gate_passed": false,
   "product_implementation_authorized": false,
   "runtime_compatible_bundle_proven": false,
   "approved_runtime_bundle": null,
-  "verdict_scope": "Retain candidate for further qualification only. Hosted clean installation proven; complete domain/security/recovery acceptance not achieved; frontend advisory gate failed.",
+  "verdict_scope": "REJECT current Phase 2/production acceptance: unscoped Guardian denial failure, known-task realtime marker delivery and unresolved dependency advisories; other critical coverage/operations incomplete. Scoped successful qualification remains valid.",
   "matrix_sha256": "53fe682b8cacf8e975f9977fb8bcf3074873246f82358a4b729e7aff2a7a04f3",
-  "created_site_count": 33,
+  "created_site_count": 45,
   "created_business_fixture_count": null,
   "tests": [
     {
@@ -1434,6 +1434,33 @@
         "restore-secured_result": 7,
         "isolation-recovered_result": 47
       }
+    },
+    {
+      "id": "remaining-gates-34804852658",
+      "status": "fail",
+      "scope": "Hosted native-role/REST, realtime, advisory and isolated framework upgrade continuation",
+      "evidence": [
+        "evidence/phase-2/hosted/remaining-34804852658.json"
+      ],
+      "observation": "Guardian unrelated Student returned 200. Salary fixture blocked by missing native holiday assignment. Socket client login 404 blocked realtime. 57 advisory matches persisted. Frappe-only patch upgrade and no-store checks passed."
+    },
+    {
+      "id": "remaining-gates-34805581935",
+      "status": "fail",
+      "scope": "Hosted role/payroll, native Guardian scope experiment, realtime, frontend audit and framework-only upgrade",
+      "evidence": [
+        "evidence/phase-2/hosted/remaining-34805581935.json"
+      ],
+      "observation": "See exact checks; no overall security or production pass inferred from narrow successes."
+    },
+    {
+      "id": "remaining-gates-34806388937",
+      "status": "fail",
+      "scope": "Hosted role/payroll, native Guardian scope experiment, realtime, frontend audit and framework-only upgrade",
+      "evidence": [
+        "evidence/phase-2/hosted/remaining-34806388937.json"
+      ],
+      "observation": "See exact checks; no overall security or production pass inferred from narrow successes."
     }
   ],
   "phase_gates": [
@@ -1485,12 +1512,12 @@
     {
       "phase": "2J",
       "status": "partial",
-      "reason": "Employee-linked Instructor created with HRMS installed. ERPNext-only comparison, leave and payroll posting unexecuted."
+      "reason": "Native payroll setup and draft salary slip pass with required Holiday List Assignment; seven tested payroll read boundaries pass. GL posting, leave and full payroll workflows remain unexecuted."
     },
     {
       "phase": "2K",
-      "status": "partial",
-      "reason": "Enumerated native policy plus generic guard HTTP/browser and recovered-site authorization passed; full staff/guardian/payroll role matrix remains unverified. Historical baseline disclosures remain retained."
+      "status": "fail",
+      "reason": "Unscoped Guardian unrelated-Student REST request returns 200. Explicit native scopes pass own/other reads, but fail-closed Guardian lifecycle and full role/files/report/write coverage remain unverified."
     },
     {
       "phase": "2L",
@@ -1505,12 +1532,12 @@
     {
       "phase": "2N",
       "status": "partial",
-      "reason": "Same-version migration and replay passed; no separately pinned cross-release upgrade executed."
+      "reason": "Hosted isolated Frappe 16.33.0\u219216.33.1 upgrade, requirements/build/migrate, native ToDo preservation and migration replay passed. Full bundle upgrade/rollback not proven."
     },
     {
       "phase": "2O",
       "status": "fail",
-      "reason": "57 frontend advisory entries unresolved; broader realtime, headers/cache and mixed-role authorization also unverified. Scoped guarded/recovery passes are not security acceptance."
+      "reason": "Hosted 57 frontend advisories persist. Known-task realtime marker delivered to second user. Document-room isolation and authenticated HTML no-store pass narrowly; full realtime/production readiness not passed."
     },
     {
       "phase": "2P",
@@ -1525,12 +1552,12 @@
     {
       "phase": "2R",
       "status": "partial",
-      "reason": "26 local helper tests pass; hosted guarded/recovered HTTP/browser checks and unchanged User Permission/DocShare modules pass (10/15 tests run). Other upstream suites remain unexecuted."
+      "reason": "29 helper tests pass; prior hosted Student isolation/recovery/browser and upstream modules pass; remaining-gate suite has retained real failures. Full upstream and operational suites not complete."
     },
     {
       "phase": "2S",
-      "status": "blocked",
-      "reason": "Conditional candidate retention only. Phase 2 success standard not met; product work prohibited."
+      "status": "fail",
+      "reason": "REJECT for current Phase 2/production acceptance; security disclosure and incomplete critical requirements. Product work remains prohibited."
     }
   ],
   "runtime_scenarios": [
@@ -1864,22 +1891,50 @@
     "hosted/runtime-34803138631.json": {
       "sha256": "634044a4149b8b266765a03608fb1ea3a3376be9d2aa2c36ae41ab2bd5d2350f",
       "bytes": 57156
+    },
+    "hosted/runtime-34804852658.json": {
+      "sha256": "fd4f2d1820ee36d23f3b8d348747da6e263a277cd21108dee64b40894b772e18",
+      "bytes": 58714
+    },
+    "hosted/remaining-34804852658.json": {
+      "sha256": "993f65fd4989fd5f80c2757c05fb6b987aeada4a4f133010962d4b1cb2877980",
+      "bytes": 24793
+    },
+    "hosted/runtime-34805581935.json": {
+      "sha256": "2c3c659bac48e7cf347ced609410b7c5d0291626b591ca2dc52c959bfea4b6f4",
+      "bytes": 58708
+    },
+    "hosted/remaining-34805581935.json": {
+      "sha256": "3c5f9b1da64752808bc9cedc0cd31717b7a27e5fe385ae3e29edcd65f6cee623",
+      "bytes": 24498
+    },
+    "hosted/runtime-34806388937.json": {
+      "sha256": "7845bac9ee87e0b30a16529a9a3f8f7660bcd656bc53bbb1aeb8a11fc61c8a30",
+      "bytes": 58718
+    },
+    "hosted/remaining-34806388937.json": {
+      "sha256": "d56cb830e46d1fb303c250b47a9f97199d4dec9268b4f280f5fe0a2c63273f6c",
+      "bytes": 24555
+    },
+    "frontend-advisory-triage.json": {
+      "sha256": "5bc276fba0554b04979e64f071968a160b31a40a408c0b09e0ed90be273835f4",
+      "bytes": 56126
     }
   },
-  "created_site_count_scope": "Sum of created_sites in unique retained runtime-*.json reports only; excludes unverified runs and does not count currently live sites.",
+  "created_site_count_scope": "Sum of created_sites in retained top-level runtime reports only; excludes isolated upgrade subprocess sites. Not currently live sites.",
   "currently_live_validation_sites": 0,
   "business_fixture_count_note": "No exact full-document count claimed; explicit named records and successful controller checks are retained in each business_result.",
   "clean_pinned_installation_proven": true,
   "latest_hosted_checkpoint": {
-    "run_id": "34803138631",
-    "commit": "35aed363e4da79fca4f483e8d53866918547ed03",
-    "status": "pass",
-    "profile": "hardened",
-    "evidence": "evidence/phase-2/hosted/runtime-34803138631.json",
-    "check_id": 103851249930,
-    "check_sha256": "634044a4149b8b266765a03608fb1ea3a3376be9d2aa2c36ae41ab2bd5d2350f"
+    "run_id": "34806388937",
+    "commit": "675736e540aacdbc46635a3ec121e683d1a58801",
+    "status": "fail",
+    "evidence": "evidence/phase-2/hosted/runtime-34806388937.json",
+    "remaining_gate_evidence": "evidence/phase-2/hosted/remaining-34806388937.json",
+    "runtime_check_id": 103861011181,
+    "remaining_check_id": 103861013308
   },
-  "live_site_note": "Latest workflow completed and teardown passed; no persistent ERP deployment.",
+  "live_site_note": "Latest hosted job completed and teardown passed; no persistent deployed ERP.",
   "github_connection": "Verified: run/check retrieval and authorized-branch push work. Run cancellation returned 403; no cancellation performed.",
   "security_gate_passed": false,
   "native_permission_remediation": {
@@ -1922,5 +1977,22 @@
       "site": "upstream-tests.localhost"
     }
   ],
-  "upstream_suite_evidence_limit": "Module exit codes and positive test counts verified in exact Check. Full artifact blob download failed with EOF; detailed skip counts not independently retrieved."
+  "upstream_suite_evidence_limit": "Module exit codes and positive test counts verified in exact Check. Full artifact blob download failed with EOF; detailed skip counts not independently retrieved.",
+  "remaining_gates_checkpoint": {
+    "run_id": "34806388937",
+    "readiness": {
+      "pass": 36,
+      "fail": 1
+    },
+    "payroll_read_boundaries": 7,
+    "realtime_document_isolation": "pass",
+    "realtime_known_task_isolation": "fail",
+    "framework_only_upgrade": "pass",
+    "html_no_store_checks": 2,
+    "frontend_advisory_entries": 57,
+    "frontend_advisory_packages": 21,
+    "local_helper_tests": 29,
+    "full_production_readiness": "not_passed"
+  },
+  "isolated_upgrade_sites_created": 3
 }

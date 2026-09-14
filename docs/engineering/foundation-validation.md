@@ -2,10 +2,34 @@
 
 ## Current hosted-runner checkpoint — 2026-09-14
 
-**ACCEPT WITH CONDITIONS — retain the architecture for further qualification only.**
+**REJECT — current pinned bundle/profile is not accepted for Phase 2 or production.**
 Phase 2 has **not** passed. Product implementation and deployment remain unauthorized.
 This section supersedes the local-environment runtime status in the historical assessment below;
 its source analysis, unresolved frontend advisories and unexecuted acceptance requirements remain relevant.
+
+### Production-readiness continuation
+
+See [security and production readiness](foundation-production-readiness.md) for advisory
+triage, native role/payroll probes, actual socket tests, operational limits and upgrade scope.
+Latest verified run **34806388937** (`675736e`) failed for the retained unscoped Guardian
+REST denial assertion, known-task realtime marker delivery, and 57 advisory entries.
+It passed **36/37 staff/guardian/payroll/HTTP checks**, including all seven payroll read
+boundaries and explicit Guardian own/other scopes. Two authenticated sockets and
+cross-student document-room delivery isolation passed; task-room ownership isolation did not.
+The isolated Frappe-only **16.33.0 → 16.33.1** upgrade (19 stages), persistent native record,
+migration replay and both authenticated HTML no-store checks passed. Existing Student
+security/recovery/browser regressions and the two upstream modules passed again.
+**29 local helper tests pass.** All three continuation runs and exact Check hashes are retained.
+
+Full bundle upgrade/rollback, Guardian lifecycle/mixed-role/files/report/export coverage,
+real-job task authorization, payroll posting, scheduled task execution, restart durability,
+production TLS/proxy/monitoring and other operational readiness remain incomplete.
+Only the narrowly evidenced checks are passed; **Phase 2 and security remain NOT PASSED**.
+
+The recommendation supersedes the earlier conditional **architecture-retention** verdict:
+reject the current qualification candidate for product/production acceptance. This does
+not erase successful installation, Student guard or hardened recovery evidence, and does
+not require abandoning canonical upstream academic/accounting/HR authorities.
 
 ### Proven on the controlled runner
 
