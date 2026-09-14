@@ -313,7 +313,7 @@ def main():
         over_bp=dict(mode='Digital',sections=[dict(id='listening_x',skill='Listening',item_count=12,minutes=60)],total_minutes=60)
         spk_bp=dict(mode='Digital',sections=[dict(id='speaking_x',skill='Speaking',item_count=2,minutes=10)],total_minutes=10)
         def publish_config_flow(code,definition):
-            doc=as_user('author',lambda:api.create_draft_config('alloc_cfg_%s_create_1'%code[4:].lower(),code,definition,1,definition))
+            doc=as_user('author',lambda:api.create_draft_config('alloc_cfg_%s_create_1'%code[4:].lower(),'blueprint',code,1,definition))
             doc=as_user('publisher',lambda:api.review_config('alloc_cfg_%s_review_1'%code[4:].lower(),'blueprint',doc['name'],1))
             doc=as_user('publisher2',lambda:api.publish_config('alloc_cfg_%s_publish_1'%code[4:].lower(),'blueprint',doc['name'],2))
             assert doc['status']=='Published' and doc['version']==3
