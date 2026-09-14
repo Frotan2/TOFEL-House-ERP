@@ -4,22 +4,34 @@
 
 **Security gate: NOT PASSED. Product implementation: NOT AUTHORIZED.**
 
-### Latest checkpoint — final integration outcome unavailable
+### Latest verified checkpoint — 2026-09-14
 
-Run **34781717183** at `956fd31` was last observed running. GitHub then returned
-**HTTP 401 Bad credentials**, so its final outcome has not been retrieved. Reconnect
-GitHub in Arena and retrieve the sanitized Check before relying on this candidate.
-The generic guard is **not runtime-approved**. There are **26 passing local helper tests**.
+GitHub access is restored. The exact sanitized Check for **34781717183** at `956fd31`
+has been retrieved and retained in `evidence/phase-2/hosted/runtime-34781717183.json`.
+The corrected generic guard passed **10 restricted HTTP checks, 47 expanded isolation
+checks, 5 Chromium checks, and the post-install cache/RQ probe**. The overall run failed
+solely because the deliberately retained unsafe baseline failed. This is scoped runtime
+proof for the enumerated controls, **not full security approval**. All 26 local helper tests pass.
 
-The last confirmed extension run, **34781217903**, installed the app and passed a fresh
-post-install cache/RQ job, but failed all four login controls: Administrator HTTP 400,
-Students HTTP 403. Source tracing identified two extension defects, not new upstream
-permission disclosures: generating CSRF inside session creation preceded Frappe's login
-request CSRF validation; rejecting every DocShare also rejected core's legitimate User
-self-profile share. The candidate now generates the token in the post-validation auth hook,
-rejects tokenless unsafe legacy-session requests, and preserves only native self-profile
-shares while rejecting other inherited/global shares. These corrections have unit coverage,
-but their hosted verification is the unavailable run above.
+The earlier **34781217903** login failures (Administrator 400, Students 403) were genuine
+extension defects. Moving token generation after native HTTP CSRF validation and allowing
+only native User self-profile shares corrected them; the later hosted checks verify those
+corrections. Tokenless unsafe legacy writes and other inherited/global shares remain denied.
+
+**34801558069** (`3f927a5`) repeated all guarded checks successfully and completed
+hardened SQL/files restore into a third database. It then failed with `KeyError: encryption_key`:
+the harness assumed a key existed, but this fixture had not initialized one. Recovery policy,
+session revocation and post-restore isolation remain unverified. The exact failure is retained.
+
+**34802126407** (`eb09b39`) corrects the fixture using Frappe's native encrypted Password
+API before backup, copies the newly initialized key without source DB credentials, and requires
+decryption after restore. It also includes unchanged User Permission/DocShare suites on a
+fourth Frappe-only disposable site. Final outcome is pending. Superseded **34801702600**
+contains the known key assumption; cancellation was denied (403), so it remains tracked.
+
+The hardened profile explicitly does not execute the unsafe baseline and references its
+historical failed evidence. The forensic profile retains it. Neither profile can turn the
+baseline failure into a pass or automatically clear the broader security/Phase 2 gates.
 
 Earlier packaging failures (`34780307591`, `34780667272`) are retained: Bench required a
 standalone local Git app root and its empty `patches.txt` discovery manifest. The runner
@@ -33,8 +45,8 @@ This is a synthetic-data qualification of the pinned upstream bundle, not a prod
 hardening guarantee. GitHub access has recovered. Run `34778602344` is now retrieved and
 verified against commit `43d4287bc63b47a2000cdb44a38f83fa322b9dc6`.
 
-No TOEFL-specific app, schema or workflow was introduced. The remediation currently uses
-native configuration and User Permission records, with no upstream core edits. The browser
+No TOEFL-specific app, schema or workflow was introduced. The remediation uses native configuration, User Permission records and the generic
+qualification extension, with no upstream core edits. The browser
 harness runs unchanged Education assets in real Chromium behind a loopback-only Nginx proxy.
 
 ## Confirmed failure and cause
@@ -123,11 +135,11 @@ Run `34779173567` exposed harness/browser prerequisites: the login locator match
 and the portal document did not supply the CSRF token expected by the HTTP harness. The locator
 and dangling browser promises were corrected. Token absence remains an explicit failing check;
 independent authorization probes now continue without inventing a token or disabling CSRF checks.
-The cause and impact of the portal token result require the follow-up report, not assumption.
+The later 34781717183 report verifies the corrected token behavior; this earlier failure remains historical evidence.
 
 ## Remaining critical gates
 
-- Final outcomes of the broadened browser/API/hardening probes and any required remediation.
+- Hardened recovery and upstream-suite outcomes; existing browser/API results cover only enumerated Student controls.
 - Student/guardian/staff/HR/payroll role combinations; list/report/export/print and realtime events.
 - Provisioning, account relinking, permission drift/revocation, and hardened-policy backup/restore.
   The original successful restore preceded permission hardening; it does not prove ACL recovery.
@@ -151,7 +163,7 @@ missing-User-Permission fallback fail closed. Therefore `apps/foundation_securit
 **generic security extension**, not a TOEFL product app. Supported `on_session_creation` and
 `auth_hooks` initialize the native token and validate exact native Student/Customer rules on
 login and authenticated requests. It adds no schema or parallel identity/finance authority.
-Its version and source hashes are recorded by the runner. Per-user document shares also cause
+Its version and source hashes are recorded by the runner. Non-self-profile per-user document shares cause
 a denial pending review. Administrator remains explicitly trusted.
 
 The extension requires disabling website HTML caching because Education embeds the session

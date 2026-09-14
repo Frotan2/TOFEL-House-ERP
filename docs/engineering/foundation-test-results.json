@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "date": "2026-09-13",
+  "date": "2026-09-14",
   "baseline_commit": "d77085b",
   "branch": "arena/01a09bf3-tofel-house-erp",
   "foundation_status": "ACCEPT WITH CONDITIONS",
@@ -10,7 +10,7 @@
   "approved_runtime_bundle": null,
   "verdict_scope": "Retain candidate for further qualification only. Hosted clean installation proven; complete domain/security/recovery acceptance not achieved; frontend advisory gate failed.",
   "matrix_sha256": "53fe682b8cacf8e975f9977fb8bcf3074873246f82358a4b729e7aff2a7a04f3",
-  "created_site_count": 18,
+  "created_site_count": 23,
   "created_business_fixture_count": null,
   "tests": [
     {
@@ -1332,6 +1332,46 @@
       "scope": "Unit tests only; include native self-share, global-share rejection and login/legacy-session token timing",
       "suite_total": 26,
       "command": "python3 -m unittest discover -s tests/foundation -q"
+    },
+    {
+      "id": "hosted-runtime-34781717183",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "956fd31889e8de6139c5f42a2300d124189e9b2e",
+      "run_id": "34781717183",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34781717183.json"
+      ],
+      "observation": "Baseline HTTP isolation failed; restricted-configuration results are separate diagnostics: http-login-and-isolation: exit 1",
+      "passed_subresults": {
+        "business_result": 9,
+        "restore_result": 5,
+        "background_result": 0,
+        "http-restricted_result": 10,
+        "isolation_result": 47,
+        "browser_result": 5,
+        "background-secured_result": 0
+      }
+    },
+    {
+      "id": "hosted-runtime-34801558069",
+      "status": "fail",
+      "scope": "Pinned foundation and enumerated security/recovery checks; not full Phase 2 acceptance",
+      "commit": "3f927a5d37671bfb861675dcf3c3dbb527fafdab",
+      "run_id": "34801558069",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34801558069.json"
+      ],
+      "observation": "'encryption_key'",
+      "passed_subresults": {
+        "business_result": 9,
+        "restore_result": 5,
+        "background_result": 0,
+        "http-restricted_result": 10,
+        "isolation_result": 47,
+        "browser_result": 5,
+        "background-secured_result": 0
+      }
     }
   ],
   "phase_gates": [
@@ -1738,23 +1778,29 @@
     "hosted/runtime-34781217903.json": {
       "sha256": "4d4640000e6a41acce4cd065b8ccdf88e22558da201afc90dd3f99e3740b2636",
       "bytes": 33121
+    },
+    "hosted/runtime-34781717183.json": {
+      "sha256": "165df6d93326430b56bc234e6bd96054490a930fc036482b517c3f9beeb794a7",
+      "bytes": 41903
+    },
+    "hosted/runtime-34801558069.json": {
+      "sha256": "8d6e2492086359a391d7ffa1451dee49f0bb1462d98a26893798c9be7ebecc62",
+      "bytes": 41983
     }
   },
-  "created_site_count_scope": "Cumulative creations in retained disposable hosted runs, not currently live sites",
+  "created_site_count_scope": "Sum of created_sites in unique retained runtime-*.json reports only; excludes unverified runs and does not count currently live sites.",
   "currently_live_validation_sites": null,
   "business_fixture_count_note": "No exact full-document count claimed; explicit named records and successful controller checks are retained in each business_result.",
   "clean_pinned_installation_proven": true,
   "latest_hosted_checkpoint": {
-    "run_id": "34781217903",
-    "commit": "a2b368982063f05d160c151aa66ae51ed73e04f3",
+    "run_id": "34801558069",
+    "commit": "3f927a5d37671bfb861675dcf3c3dbb527fafdab",
     "status": "fail",
-    "evidence": "evidence/phase-2/hosted/runtime-34781217903.json",
-    "failure": "http-isolation-with-native-user-permissions: exit 1",
-    "business_active_check": "private-attachment",
-    "business_failure": null
+    "evidence": "evidence/phase-2/hosted/runtime-34801558069.json",
+    "failure": "Harness assumed encryption_key existed; failed after successful database/files restore, before recovery security verification."
   },
-  "live_site_note": "Final state of run 34781717183 is unknown after authentication loss.",
-  "github_connection": "needs attention: HTTP 401 after the connection had initially recovered",
+  "live_site_note": "Disposable hosted jobs only; no persistent ERP deployment. Latest queued run has no verified final outcome.",
+  "github_connection": "Verified: run/check retrieval and authorized-branch push work. Run cancellation returned 403; no cancellation performed.",
   "security_gate_passed": false,
   "native_permission_remediation": {
     "run_id": 34778602344,
@@ -1763,12 +1809,20 @@
     "scope": "Original REST/private-file defects only; overall baseline remains failed"
   },
   "latest_unverified_attempt": {
-    "run_id": 34781717183,
-    "commit": "956fd31",
-    "last_observed_status": "in_progress",
+    "run_id": 34802126407,
+    "commit": "eb09b39",
+    "last_observed_status": "pending",
     "final_status": "unknown",
     "evidence_available": false,
-    "reason": "GitHub API returned HTTP 401 Bad credentials during monitoring; reconnect GitHub in Arena."
+    "reason": "Corrected encrypted-credential recovery fixture and unchanged upstream permission/sharing suites queued behind 34801702600; cancellation of superseded run was denied with 403."
   },
-  "generic_guard_runtime_approved": false
+  "generic_guard_runtime_approved": false,
+  "enumerated_guard_checks_proven": {
+    "run_id": 34781717183,
+    "restricted_http": 10,
+    "expanded_isolation": 47,
+    "chromium": 5,
+    "secured_cache_rq": "pass",
+    "scope": "Synthetic enumerated Student and tenant controls only; does not approve full role matrix, dependency security or production deployment."
+  }
 }

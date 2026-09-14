@@ -1,6 +1,6 @@
 # Foundation validation — Phase 2 checkpoint
 
-## Current hosted-runner checkpoint — 2026-09-13
+## Current hosted-runner checkpoint — 2026-09-14
 
 **ACCEPT WITH CONDITIONS — retain the architecture for further qualification only.**
 Phase 2 has **not** passed. Product implementation and deployment remain unauthorized.
@@ -31,7 +31,7 @@ its source analysis, unresolved frontend advisories and unexecuted acceptance re
   (`LinkValidationError`). These are limited runtime boundary observations, **not placement implementation**
   or proof of versioned/pre-enrollment attempts.
 
-### Latest executed result: lifecycle/recovery passed, isolation failed
+### Historical baseline: lifecycle/recovery passed, isolation failed
 
 Run [34778224918](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/34778224918)
 at `ff29395` completed all nine business checks. Attendance and Assessment Result were submitted
@@ -56,7 +56,7 @@ Student/user links, but without additional User Permission records:
 
 These were synthetic owned records on loopback, not production data. The overall run correctly
 failed. Portal-specific checking does not secure other server entry points. The baseline is retained;
-a separate native Student/Customer User Permission configuration experiment is being tested using
+a separate native Student/Customer User Permission configuration experiment subsequently passed
 identical HTTP assertions. It cannot erase the baseline failure or establish a full role matrix.
 
 ### Failures preserved, not bypassed
@@ -71,14 +71,20 @@ identical HTTP assertions. It cannot erase the baseline failure or establish a f
 Sanitized reports, including failures, are retained in `evidence/phase-2/hosted/`.
 Later harness revisions are not evidence until their own hosted report is recorded.
 
-### Latest integration checkpoint — blocked on evidence retrieval
+### Latest verified integration checkpoint
 
-The generic guard's corrected integration run **34781717183** (`956fd31`) has an
-**unknown final result** after GitHub again returned HTTP 401. Reconnect GitHub in Arena.
-Last confirmed extension run **34781217903** failed login controls; the session-token
-ordering and native User self-share handling were corrected afterward but are not yet
-runtime-verified. **26 helper tests pass**. Do not install this candidate in production.
-See the [security report](foundation-security.md) for exact failures and corrections.
+GitHub access is restored. **34781717183** (`956fd31`) passed the corrected generic guard's
+**10 restricted HTTP, 47 expanded isolation, 5 Chromium and secured cache/RQ checks**.
+Its overall failure preserves the unsafe baseline; it does not indicate failure of those
+corrected checks. The exact hosted report is retained. **26 local helper tests pass**.
+See the [security report](foundation-security.md) for scope and earlier failures.
+
+Run **34801558069** (`3f927a5`) repeated the guarded passes and restored hardened SQL/files,
+then failed on a harness assumption that an encryption key already existed. The retained
+failure does not prove policy/session recovery. **34802126407** (`eb09b39`) corrects this by
+creating a native encrypted Password fixture before backup and verifying decryption afterward;
+it also includes unchanged upstream User Permission/DocShare suites on a dedicated test site.
+The corrected result is **not yet verified**. Security and Phase 2 gates remain false.
 
 ### Security continuation: connection restored, native remedy verified
 
@@ -98,7 +104,7 @@ A minimal generic `foundation_security` Frappe extension is now under qualificat
 It initializes native session CSRF tokens and denies Student requests with missing,
 expanded or ambiguous native identity/permission scopes. It adds no domain schema,
 TOEFL-specific app, product UI or scoring. Supported hooks are used; upstream core
-remains untouched. **20 helper tests pass**, including guard tests; these are not a
+remains untouched. **26 helper tests pass**, including guard tests; these are not a
 substitute for hosted integration results. Security and Phase 2 gates remain false.
 
 ### Qualification method and reproduction
@@ -106,7 +112,8 @@ substitute for hosted integration results. Security and Phase 2 gates remain fal
 Use `.github/workflows/foundation-runtime.yml` on `arena/01a09bf3-tofel-house-erp`:
 
 ```sh
-gh workflow run foundation-runtime.yml --ref arena/01a09bf3-tofel-house-erp
+gh workflow run foundation-runtime.yml --ref arena/01a09bf3-tofel-house-erp -f profile=hardened
+# Historical unsafe-baseline reproduction: use -f profile=forensic instead.
 gh run list --workflow foundation-runtime.yml --branch arena/01a09bf3-tofel-house-erp
 # Substitute the returned run ID:
 gh run watch RUN_ID --exit-status

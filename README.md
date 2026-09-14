@@ -11,8 +11,9 @@ have passed on a controlled hosted runner. Product implementation remains blocke
 The hosted runner resolved the local download/service blocker. Five upstream apps
 install and build together, and synthetic academic-to-payment, backup/restore and worker probes passed.
 Student REST/private-file isolation failed in the baseline configuration; native
-User Permissions corrected those tested paths. Broader security and CSRF safeguards
-are still under qualification.
+User Permissions corrected those tested paths. The generic guard now has hosted proof
+for 47 expanded isolation checks and five browser checks, including CSRF controls.
+Security-bearing recovery, upstream suites and broader security remain under qualification.
 Full domain, authorization and payroll qualification is not complete. Frontend dependency advisories remain unresolved; installation and build
 success do not establish a working, secure ERP.
 
