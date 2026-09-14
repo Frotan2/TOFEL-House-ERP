@@ -7,6 +7,8 @@ on:
       - .github/workflows/foundation-runtime.yml
       - tools/foundation/runtime_*.py
       - tools/foundation/runtime_*.mjs
+      - tools/foundation/runtime_*.cjs
+      - tests/foundation/**
       - apps/foundation_security/**
       - tools/foundation/publish_evidence.py
       - docs/engineering/foundation-version-matrix.json
@@ -39,6 +41,10 @@ jobs:
         with:
           node-version: 24.21.0
           package-manager-cache: false
+      - name: Test owned qualification policies
+        run: |
+          python3 -m unittest discover -s tests/foundation -q
+          node tests/foundation/test_realtime_guard.cjs
       - name: Install pinned Yarn CLI
         run: npm install --global yarn@1.22.22
       - name: Establish fresh compatible Python and services
