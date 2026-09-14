@@ -4,8 +4,28 @@ from contextvars import ContextVar
 import frappe
 
 _CONTEXT = ContextVar("toefl_house_content_command", default=None)
-KINDS = {"create_draft", "revise_draft", "publish"}
-DOCTYPES = {"TH Placement Item Revision", "TH Placement Key Revision", "TH Placement Audit Event", "TH Placement Operation"}
+KIND_ROLES = {
+    "create_draft": "Placement Author",
+    "revise_draft": "Placement Author",
+    "publish": "Placement Publisher",
+    "create_blueprint": "Placement Author",
+    "create_policy": "Placement Author",
+    "revise_blueprint": "Placement Author",
+    "revise_policy": "Placement Author",
+    "review_blueprint": "Placement Publisher",
+    "review_policy": "Placement Publisher",
+    "publish_blueprint": "Placement Publisher",
+    "publish_policy": "Placement Publisher",
+    "retire_blueprint": "Placement Publisher",
+    "retire_policy": "Placement Publisher",
+}
+KINDS = set(KIND_ROLES)
+DOCTYPES = {
+    "TH Placement Item Revision", "TH Placement Key Revision",
+    "TH Placement Audit Event", "TH Placement Operation",
+    "TH Placement Blueprint Revision", "TH Placement Policy Revision",
+}
+CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision")
 
 
 def require_synthetic():
@@ -41,5 +61,5 @@ def require_command(doctype):
     context = _CONTEXT.get()
     if doctype not in DOCTYPES or context is None or context[1] != frappe.session.user:
         raise frappe.PermissionError("Protected records require an authorized placement command")
-    authorize("Placement Publisher" if context[0] == "publish" else "Placement Author")
+    authorize(KIND_ROLES[context[0]])
     return context

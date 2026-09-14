@@ -5,7 +5,12 @@ import frappe
 def after_migrate():
     frappe.db.add_unique("TH Placement Item Revision", ["family", "revision"], "th_item_family_revision")
     frappe.db.add_unique("TH Placement Key Revision", ["item_revision", "key_version"], "th_key_item_version")
+    frappe.db.add_unique("TH Placement Blueprint Revision", ["code", "revision"], "th_blueprint_code_revision")
+    frappe.db.add_unique("TH Placement Policy Revision", ["code", "revision"], "th_policy_code_revision")
     frappe.db.add_index("TH Placement Audit Event", ["item_revision", "creation"])
+    frappe.db.add_index("TH Placement Audit Event", ["target", "creation"])
+    frappe.db.add_index("TH Placement Blueprint Revision", ["status", "creation"])
+    frappe.db.add_index("TH Placement Policy Revision", ["status", "creation"])
 
 
 def after_install():

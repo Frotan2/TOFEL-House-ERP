@@ -3,8 +3,18 @@ import frappe
 from toefl_house.policy import can_read
 from toefl_house.security import require_synthetic
 
-KINDS = {"TH Placement Item Revision": "item", "TH Placement Key Revision": "key",
-         "TH Placement Audit Event": "audit", "TH Placement Operation": "operation"}
+KINDS = {
+    "TH Placement Item Revision": "item", "TH Placement Key Revision": "key",
+    "TH Placement Audit Event": "audit", "TH Placement Operation": "operation",
+    "TH Placement Blueprint Revision": "blueprint", "TH Placement Policy Revision": "policy",
+}
+TABLES = {
+    "item": "`tabTH Placement Item Revision`",
+    "key": "`tabTH Placement Key Revision`",
+    "blueprint": "`tabTH Placement Blueprint Revision`",
+    "policy": "`tabTH Placement Policy Revision`",
+}
+LISTED_KINDS = ("item", "blueprint", "policy")
 
 
 def has_permission(doc, ptype=None, user=None, **kwargs):
@@ -27,11 +37,11 @@ def query(kind, user=None):
         return "1=1" if "Placement Auditor" in roles else "1=0"
     if "Placement Publisher" in roles:
         return "1=1"
-    table = "`tabTH Placement Item Revision`" if kind == "item" else "`tabTH Placement Key Revision`"
+    table = TABLES[kind]
     conditions = []
     if "Placement Author" in roles:
         conditions.append(f"{table}.owner = {frappe.db.escape(user)}")
-    if kind == "item" and roles & {"Placement Author", "Placement Auditor"}:
+    if kind in LISTED_KINDS and roles & {"Placement Author", "Placement Auditor"}:
         conditions.append(f"{table}.status = 'Published'")
     return "(" + " OR ".join(conditions) + ")" if conditions else "1=0"
 
@@ -40,3 +50,5 @@ def query_item(user=None): return query("item", user)
 def query_key(user=None): return query("key", user)
 def query_audit(user=None): return query("audit", user)
 def query_operation(user=None): return query("operation", user)
+def query_blueprint(user=None): return query("blueprint", user)
+def query_policy(user=None): return query("policy", user)

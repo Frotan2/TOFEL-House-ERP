@@ -5,11 +5,24 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
+**Bounded synthetic-data placement implementation in progress (session branch
+`arena/01a0a055-tofel-house-erp`):** the approved technical specification has been
+implemented in vertical increments inside the owned `toefl_house` app —
+increment 1 (governed content: draft/revise/publish with restricted keys and audit)
+and increment 2 (versioned blueprint/policy configuration with
+Draft→Reviewed→Published→Retired, independent review/release and fail-closed
+activation). All operations fail closed outside the isolated synthetic test sites;
+fixtures are explicitly non-operational; allocation, scoring, delivery, release and
+retention capabilities remain unimplemented and disabled. See the
+[app boundary](apps/toefl_house/README.md) and the
+[increment 2 implementation record](docs/domain/PLACEMENT-INCREMENT-2.md).
+Production approval is not implied; F01–F05 remain closed; owner artifacts P1–P5
+remain prerequisites for any operational use.
+
 **Phase 3 domain architecture is ready for review:**
 [TOEFL House domain design package](docs/domain/README.md) covers native entity ownership,
 placement/admission/academic/finance/HR workflows, permissions, integration boundaries
-and the implementation plan. The user has authorized **design and planning only**.
-No domain app, schema, API or UI has been implemented; production approval is not implied.
+and the implementation plan.
 
 **Recommendation: REJECT current Phase 2/production acceptance.** Hosted tests verify
 controlled web/worker restart and existing security regressions. An isolated frontend
@@ -60,8 +73,9 @@ changes are in scope. The architecture choice is **not** production approval.
 The branch-scoped **Foundation runtime validation** GitHub Actions workflow is the
 reproducible clean-install qualification runner. It is not a production deployment
 or a verified interactive local-development setup. See the validation report for limits.
-Do not implement placement, scoring, custom finance/HR or student lifecycle until
-those gates pass.
+Beyond the authorized bounded synthetic placement increments recorded above, further
+placement capabilities (allocation, scoring, delivery, release, retention) and any
+custom finance/HR or student lifecycle work remain unauthorized until their gates pass.
 
 ## Validation utilities
 

@@ -11,6 +11,7 @@
     "operation",
     "action",
     "item_revision",
+    "target",
     "before_hash",
     "after_hash",
     "synthetic",
@@ -42,8 +43,12 @@
       "fieldname": "item_revision",
       "label": "Item Revision",
       "fieldtype": "Link",
-      "options": "TH Placement Item Revision",
-      "reqd": 1
+      "options": "TH Placement Item Revision"
+    },
+    {
+      "fieldname": "target",
+      "label": "Target",
+      "fieldtype": "Data"
     },
     {
       "fieldname": "before_hash",
@@ -73,8 +78,7 @@
       "fieldname": "after_key",
       "fieldtype": "Link",
       "label": "After Key",
-      "options": "TH Placement Key Revision",
-      "reqd": 1
+      "options": "TH Placement Key Revision"
     }
   ],
   "permissions": [

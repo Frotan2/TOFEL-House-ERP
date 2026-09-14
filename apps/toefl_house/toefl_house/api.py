@@ -1,14 +1,23 @@
-"""Three authenticated POST commands; no candidate, file or result endpoint."""
+"""Authenticated POST commands; no candidate, file or result endpoint."""
 import json
 import frappe
-from toefl_house.policy import canonical, digest, request_digest, validate_content, validate_family, validate_request_key
-from toefl_house.security import authorize, command
+from toefl_house.policy import (canonical, digest, request_digest, validate_blueprint,
+                                validate_config_code, validate_content, validate_family,
+                                validate_policy, validate_request_key)
+from toefl_house.security import KIND_ROLES, authorize, command
 from toefl_house.transactions import run_with_retry
 
 ITEM = "TH Placement Item Revision"
 KEY = "TH Placement Key Revision"
 OP = "TH Placement Operation"
 AUDIT = "TH Placement Audit Event"
+BLUEPRINT = "TH Placement Blueprint Revision"
+POLICY = "TH Placement Policy Revision"
+
+CONFIG = {
+    "blueprint": (BLUEPRINT, validate_blueprint),
+    "policy": (POLICY, validate_policy),
+}
 
 
 def _content(value):
@@ -30,7 +39,7 @@ def _execute(kind, request_key, payload, work):
 
 
 def _execute_once(kind, request_key, payload, work):
-    actor = authorize("Placement Publisher" if kind == "publish" else "Placement Author")
+    actor = authorize(KIND_ROLES[kind])
     try:
         validate_request_key(request_key)
     except ValueError as exc:
@@ -154,3 +163,147 @@ def publish(request_key, item_name, expected_version):
         return _result(item), dict(item_revision=item.name, before_hash=item.content_hash, after_hash=item.content_hash, before_key=key.name, after_key=key.name)
 
     return _execute("publish", request_key, {"item": item_name, "version": expected_version}, work)
+
+
+def _config(config):
+    try:
+        return CONFIG[config]
+    except (KeyError, TypeError):
+        raise frappe.ValidationError("Unsupported configuration type")
+
+
+def _definition(config, definition):
+    _, validator = _config(config)
+    if isinstance(definition, str):
+        if len(definition) > 20000:
+            raise frappe.ValidationError("Definition exceeds request limit")
+        try:
+            definition = json.loads(definition)
+        except (ValueError, TypeError) as exc:
+            raise frappe.ValidationError("Invalid JSON definition") from exc
+    try:
+        return validator(definition)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+
+
+def _config_result(doc):
+    return {"name": doc.name, "config": "blueprint" if doc.doctype == BLUEPRINT else "policy",
+            "version": doc.version, "status": doc.status, "content_hash": doc.content_hash}
+
+
+def _locked_config(doctype, name, expected_version):
+    if not isinstance(name, str) or not name or len(name) > 140 or type(expected_version) is not int:
+        raise frappe.ValidationError("Config name and integer expected_version required")
+    doc = frappe.get_doc(doctype, name, for_update=True)
+    if doc.version != expected_version:
+        raise frappe.ValidationError("Stale configuration revision")
+    return doc
+
+
+@frappe.whitelist(methods=["POST"])
+def create_draft_config(request_key, config, code, revision, definition):
+    doctype, _ = _config(config)
+    definition = _definition(config, definition)
+    try:
+        validate_config_code(code, revision)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+
+    def work(actor):
+        doc = frappe.get_doc(dict(doctype=doctype, code=code, revision=revision, version=1,
+                                  status="Draft", synthetic=1,
+                                  definition_json=canonical(definition), content_hash=digest(definition)))
+        doc.insert(ignore_permissions=True)
+        return _config_result(doc), dict(target=doc.name, after_hash=doc.content_hash)
+
+    return _execute(f"create_{config}", request_key,
+                    {"config": config, "code": code, "revision": revision, "definition": definition}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def revise_draft_config(request_key, config, name, expected_version, definition):
+    doctype, _ = _config(config)
+    definition = _definition(config, definition)
+
+    def work(actor):
+        doc = _locked_config(doctype, name, expected_version)
+        if doc.status != "Draft":
+            raise frappe.ValidationError("Only configuration drafts can be revised")
+        if doc.owner != actor:
+            raise frappe.PermissionError("Only the author may revise a configuration draft")
+        before = doc.content_hash
+        doc.definition_json = canonical(definition)
+        doc.content_hash = digest(definition)
+        doc.version += 1
+        doc.save(ignore_permissions=True)
+        return _config_result(doc), dict(target=doc.name, before_hash=before, after_hash=doc.content_hash)
+
+    return _execute(f"revise_{config}", request_key,
+                    {"config": config, "item": name, "version": expected_version, "definition": definition}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def review_config(request_key, config, name, expected_version):
+    doctype, _ = _config(config)
+
+    def work(actor):
+        doc = _locked_config(doctype, name, expected_version)
+        if doc.status != "Draft":
+            raise frappe.ValidationError("Only configuration drafts can be reviewed")
+        if doc.owner == actor:
+            raise frappe.PermissionError("Author cannot review their own draft")
+        doc.status = "Reviewed"
+        doc.review_actor = actor
+        doc.version += 1
+        doc.save(ignore_permissions=True)
+        return _config_result(doc), dict(target=doc.name, before_hash=doc.content_hash, after_hash=doc.content_hash)
+
+    return _execute(f"review_{config}", request_key,
+                    {"config": config, "item": name, "version": expected_version}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def publish_config(request_key, config, name, expected_version):
+    doctype, validator = _config(config)
+
+    def work(actor):
+        doc = _locked_config(doctype, name, expected_version)
+        if doc.status != "Reviewed":
+            raise frappe.ValidationError("Only reviewed configuration can be published")
+        if doc.owner == actor:
+            raise frappe.PermissionError("Author cannot publish their own revision")
+        if not doc.review_actor:
+            raise frappe.ValidationError("A recorded independent review is required before publication")
+        if doc.review_actor == actor:
+            raise frappe.PermissionError("Publication must be independent of the recorded reviewer")
+        stored = json.loads(doc.definition_json)
+        validator(stored)
+        if digest(stored) != doc.content_hash:
+            raise frappe.ValidationError("Stored definition integrity mismatch")
+        doc.status = "Published"
+        doc.version += 1
+        doc.save(ignore_permissions=True)
+        return _config_result(doc), dict(target=doc.name, before_hash=doc.content_hash, after_hash=doc.content_hash)
+
+    return _execute(f"publish_{config}", request_key,
+                    {"config": config, "item": name, "version": expected_version}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def retire_config(request_key, config, name, expected_version):
+    doctype, _ = _config(config)
+
+    def work(actor):
+        doc = _locked_config(doctype, name, expected_version)
+        if doc.status != "Published":
+            raise frappe.ValidationError("Only published configuration can be retired")
+        if doc.owner == actor:
+            raise frappe.PermissionError("Author cannot retire their own configuration")
+        doc.status = "Retired"
+        doc.version += 1
+        doc.save(ignore_permissions=True)
+        return _config_result(doc), dict(target=doc.name, before_hash=doc.content_hash, after_hash=doc.content_hash)
+
+    return _execute(f"retire_{config}", request_key,
+                    {"config": config, "item": name, "version": expected_version}, work)

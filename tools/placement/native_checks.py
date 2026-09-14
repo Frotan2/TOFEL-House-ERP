@@ -17,10 +17,11 @@ def main():
     from toefl_house import api
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
-    report={'scope':'Real native content-governance increment only; not full T01–T20','status':'running','checks':[],
+    report={'scope':'Synthetic content-governance and blueprint/policy configuration increment (1-2); not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
-           'publisher':'synthetic-publisher@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test'}
+           'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
+           'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
@@ -45,13 +46,31 @@ def main():
     def as_user(label,fn):frappe.set_user(users[label]);return fn()
     def connect(site):
         frappe.init(site=site,sites_path=str(Path.cwd()));frappe.connect();frappe.set_user('Administrator')
+    # Synthetic configuration fixtures. Structural values are fixture data, not
+    # approved operational policy (P1-P5 remain owner deliverables).
+    bp_code='SYN-BP-MAIN-1'
+    pol_code='SYN-POL-MAIN-1'
+    good_bp=dict(mode='Digital',
+                 sections=[dict(id='listening',skill='Listening',minutes=30,item_count=10),
+                           dict(id='reading',skill='Reading',minutes=40,item_count=12)],
+                 total_minutes=70)
+    revised_bp=dict(mode='Digital',
+                    sections=[dict(id='listening',skill='Listening',minutes=20,item_count=8),
+                              dict(id='reading',skill='Reading',minutes=50,item_count=14)],
+                    total_minutes=70)
+    conflict_bp=dict(good_bp,total_minutes=71)
+    bad_mode_bp=dict(good_bp,mode='Remote')
+    good_pol=dict(result_validity_days=90,retest_wait_days=14,
+                  release_working_days=2,appeal_working_days=5,retention_years=3)
+    bad_pol=dict(good_pol,retention_years=11)
     try:
         for site in ('placement-test.localhost','placement-second.localhost'):
             connect(site)
             assert frappe.conf.allow_tests==1 and frappe.conf.toefl_house_synthetic_only==1
             def setup():
                 mapping={'author':['Placement Author','Placement Publisher'],'other':['Placement Author'],
-                         'publisher':['Placement Publisher'],'auditor':['Placement Auditor'],'outsider':[]}
+                         'publisher':['Placement Publisher'],'publisher2':['Placement Publisher'],
+                         'second_author':['Placement Author'],'auditor':['Placement Auditor'],'outsider':[]}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -121,8 +140,99 @@ def main():
             assert (frappe.db.count(api.ITEM),frappe.db.count(api.KEY),frappe.db.count(api.OP))==(old,oldkey,oldop)
             return {'real_database_rollback':True,'injected_boundary':'audit append'}
         check('atomic-item-key-receipt-audit-rollback',rollback_proof)
+        # --- Increment 2: blueprint/policy configuration governance ---
+        check('config-conflicting-quotas-create-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_conflict_001','blueprint',bp_code,1,conflict_bp))))
+        check('config-invalid-mode-create-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_badmode_0001','blueprint',bp_code,1,bad_mode_bp))))
+        check('config-out-of-bounds-policy-create-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_bad_policy_01','policy',pol_code,1,bad_pol))))
+        check('config-unknown-type-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_unknown_type_1','bank',bp_code,1,good_bp))))
+        check('config-non-synthetic-code-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_realcode_001','blueprint','REAL-BP',1,good_bp))))
+        bp=check('config-create-blueprint-draft',lambda:as_user('author',lambda:api.create_draft_config('cfg_create_bp_001','blueprint',bp_code,1,good_bp)))
+        assert bp['status']=='Draft' and bp['version']==1
+        check('config-duplicate-code-revision-unique',lambda:denied(lambda:as_user('second_author',lambda:api.create_draft_config('cfg_dup_code_001','blueprint',bp_code,1,good_bp))))
+        def cfg_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('author',lambda:api.create_draft_config('cfg_create_bp_001','blueprint',bp_code,1,good_bp))
+            assert value==bp and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_audit':True}
+        check('config-idempotent-replay',cfg_replay)
+        check('config-changed-payload-conflict',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_create_bp_001','blueprint',bp_code,1,conflict_bp))))
+        check('config-changed-actor-conflict',lambda:denied(lambda:as_user('second_author',lambda:api.create_draft_config('cfg_create_bp_001','blueprint',bp_code,1,good_bp))))
+        pol=check('config-create-policy-draft',lambda:as_user('author',lambda:api.create_draft_config('cfg_create_pol_001','policy',pol_code,1,good_pol)))
+        bp=check('config-revise-draft',lambda:as_user('author',lambda:api.revise_draft_config('cfg_revise_bp_001','blueprint',bp['name'],1,revised_bp)))
+        assert bp['version']==2 and bp['status']=='Draft'
+        check('config-other-author-revise-denied',lambda:denied(lambda:as_user('second_author',lambda:api.revise_draft_config('cfg_other_revise_001','blueprint',bp['name'],2,good_bp))))
+        check('config-stale-version-revise-denied',lambda:denied(lambda:as_user('author',lambda:api.revise_draft_config('cfg_stale_revise_001','blueprint',bp['name'],1,good_bp))))
+        check('config-self-review-denied-despite-role-union',lambda:denied(lambda:as_user('author',lambda:api.review_config('cfg_self_review_001','blueprint',bp['name'],2))))
+        bp=check('config-independent-review',lambda:as_user('publisher',lambda:api.review_config('cfg_review_bp_001','blueprint',bp['name'],2)))
+        assert bp['status']=='Reviewed'
+        check('config-review-freezes-content',lambda:denied(lambda:as_user('author',lambda:api.revise_draft_config('cfg_frozen_revise_001','blueprint',bp['name'],3,revised_bp))))
+        check('config-reviewer-self-publish-denied',lambda:denied(lambda:as_user('publisher',lambda:api.publish_config('cfg_self_publish_001','blueprint',bp['name'],3))))
+        check('config-author-publish-denied',lambda:denied(lambda:as_user('author',lambda:api.publish_config('cfg_author_publish_001','blueprint',bp['name'],3))))
+        bp=check('config-independent-publication',lambda:as_user('publisher2',lambda:api.publish_config('cfg_publish_bp_001','blueprint',bp['name'],3)))
+        assert bp['status']=='Published'
+        check('config-published-revise-denied',lambda:denied(lambda:as_user('author',lambda:api.revise_draft_config('cfg_pub_revise_001','blueprint',bp['name'],4,good_bp))))
+        check('config-retire-by-author-denied',lambda:denied(lambda:as_user('author',lambda:api.retire_config('cfg_author_retire_001','blueprint',bp['name'],4))))
+        bp=check('config-independent-retirement',lambda:as_user('publisher2',lambda:api.retire_config('cfg_retire_bp_001','blueprint',bp['name'],4)))
+        assert bp['status']=='Retired'
+        check('config-retired-is-terminal',lambda:denied(lambda:as_user('publisher',lambda:api.retire_config('cfg_retired_again_001','blueprint',bp['name'],5))))
+        pol=check('config-policy-review',lambda:as_user('publisher',lambda:api.review_config('cfg_review_pol_001','policy',pol['name'],1)))
+        pol=check('config-policy-independent-publication',lambda:as_user('publisher2',lambda:api.publish_config('cfg_publish_pol_001','policy',pol['name'],2)))
+        assert pol['status']=='Published'
+        def cfg_generic_write():
+            frappe.set_user(users['publisher2']);doc=frappe.get_doc(api.BP,bp['name']);doc.status='Draft';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('config-ignore-permissions-does-not-bypass-controller',cfg_generic_write)
+        check('config-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.POLICY,pol['name']).db_set('status','Retired')))
+        check('config-direct-db-update-denied',lambda:denied(lambda:frappe.get_doc(api.BP,bp['name']).db_update()))
+        check('config-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.BP,bp['name'],ignore_permissions=True)))
+        def cfg_audit_shape():
+            frappe.set_user(users['auditor'])
+            rows=frappe.get_all(api.AUDIT,filters={'target':bp['name']},fields=['action','item_revision','before_key','after_key'])
+            assert len(rows)==5,rows
+            assert all(not r.item_revision and not r.before_key and not r.after_key for r in rows)
+            actions=sorted(r.action for r in rows)
+            assert actions==sorted(['create_blueprint','revise_blueprint','review_blueprint','publish_blueprint','retire_blueprint']),actions
+            return {'config_audit_rows':len(rows),'actions':actions,'no_item_key_references':True}
+        check('config-audit-ledger-shape',cfg_audit_shape)
+        def cfg_native_reads():
+            frappe.set_user(users['second_author'])
+            assert not frappe.get_doc(api.BP,bp['name']).has_permission('read')
+            assert not frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
+            frappe.set_user(users['author'])
+            assert frappe.get_doc(api.BP,bp['name']).has_permission('read')
+            frappe.set_user(users['publisher2'])
+            assert frappe.get_doc(api.BP,bp['name']).has_permission('read')
+            assert frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
+            frappe.set_user(users['auditor'])
+            assert frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
+            assert not frappe.get_doc(api.BP,bp['name']).has_permission('read')
+            frappe.set_user(users['second_author'])
+            assert not frappe.get_list(api.BP,filters={'code':bp_code})
+            frappe.set_user(users['auditor'])
+            assert not frappe.get_list(api.BP,filters={'code':bp_code})
+            assert len(frappe.get_list(api.POLICY,filters={'code':pol_code}))==1
+            return {'own_and_published_visible':True,'retired_hidden_from_auditor':True,'list_parity':True}
+        check('config-role-and-list-parity',cfg_native_reads)
+        def cfg_rollback_proof():
+            frappe.set_user(users['author']);frappe.db.savepoint('cfg_atomic')
+            old=frappe.db.count(api.BP);oldop=frappe.db.count(api.OP)
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:raise RuntimeError('synthetic configuration audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.create_draft_config('cfg_atomic_bp_0001','blueprint','SYN-BP-ROLLBACK-1',1,good_bp)
+            except RuntimeError:frappe.db.rollback(save_point='cfg_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert (frappe.db.count(api.BP),frappe.db.count(api.OP))==(old,oldop)
+            return {'real_database_rollback':True,'injected_boundary':'audit append'}
+        check('config-atomic-doc-receipt-audit-rollback',cfg_rollback_proof)
         frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
         check('second-site-no-first-site-record',lambda:{'absent':not frappe.db.exists(api.ITEM,item['name'])} if not frappe.db.exists(api.ITEM,item['name']) else (_ for _ in ()).throw(AssertionError('Cross-site record')))
+        def cfg_second_site():
+            assert not frappe.db.exists(api.BP,bp['name']) and not frappe.db.exists(api.POLICY,pol['name'])
+            return {'config_absent_on_second_site':True}
+        check('second-site-no-first-site-config-record',cfg_second_site)
 
         def transient_recovery(exhaust=False):
             frappe.set_user(users['author']);frappe.db.commit()
@@ -165,7 +275,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','auditor','outsider')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def http_denied(response,csrf=False):
             assert response.status_code in (400,403,404,405,409,417),f'Unexpected HTTP {response.status_code}'
@@ -211,10 +321,68 @@ def main():
             frappe.db.rollback();assert frappe.db.count(api.AUDIT,{'item_revision':httpitem['name'],'action':'publish'})==1
             return {'http_statuses':statuses,'one_publication':True}
         check('http-concurrent-publication-cas',concurrent_publish)
+        # --- Increment 2 over HTTP: routes, CSRF, CRUD containment, races, revocation ---
+        http_bp_def=dict(good_bp)
+        http_pol_def=dict(good_pol)
+        cfg_payload=dict(request_key='http_cfg_create_001',config='blueprint',code='SYN-BP-HTTP-1',revision=1,definition=http_bp_def)
+        def http_cfg_create():
+            r=post('author','create_draft_config',cfg_payload);assert r.status_code==200,f'config create HTTP {r.status_code}'
+            return r.json()['message']
+        httpbp=check('http-config-positive-create',http_cfg_create)
+        check('http-config-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.create_draft_config',headers={'Host':'placement-test.localhost'},json=cfg_payload,timeout=30)))
+        check('http-config-unrelated-role-denied',lambda:http_denied(post('outsider','create_draft_config',dict(cfg_payload,request_key='http_cfg_outsider_001'))))
+        check('http-config-get-cannot-mutate',lambda:http_denied(sessions['author'].get(base+'/api/method/toefl_house.api.create_draft_config',params={'request_key':'http_cfg_get_0001'},timeout=30)))
+        def cfg_csrf_negative():
+            s=sessions['author'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.create_draft_config',json=dict(cfg_payload,request_key='http_cfg_csrf_0001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-config-csrf-negative-with-positive-control',cfg_csrf_negative)
+        cfg_url=base+'/api/resource/'+quote(api.BP,safe='')+'/'+httpbp['name']
+        check('http-config-direct-crud-mutation-denied',lambda:http_denied(sessions['author'].put(cfg_url,json={'status':'Published','flags':{'ignore_permissions':1}},timeout=30)))
+        check('http-config-other-author-read-denied',lambda:http_denied(sessions['second_author'].get(cfg_url,timeout=30)))
+        def concurrent_cfg_create():
+            p=dict(cfg_payload,request_key='http_cfg_concurrent_001',code='SYN-BP-RACE-1')
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['author'].headers);s.cookies.update(sessions['author'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.create_draft_config',json=p,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            frappe.db.rollback();assert frappe.db.count(api.BP,{'code':p['code']})==1
+            assert frappe.db.count(api.AUDIT,{'target':results[0]['name']})==1
+            return {'http_statuses':[200,200],'one_doc_and_audit':True}
+        check('http-config-concurrent-create-idempotency',concurrent_cfg_create)
+        def concurrent_cfg_publish():
+            race_def=dict(good_bp)
+            doc=as_user('author',lambda:api.create_draft_config('cfg_race_create_001','blueprint','SYN-BP-RACE2-1',1,race_def))
+            as_user('publisher',lambda:api.review_config('cfg_race_review_001','blueprint',doc['name'],1))
+            frappe.db.commit()
+            def request(i):
+                s=requests.Session();s.headers.update(sessions['publisher2'].headers);s.cookies.update(sessions['publisher2'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.publish_config',json={'request_key':f'http_cfg_race_pub_00{i}','config':'blueprint','name':doc['name'],'expected_version':2},timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            statuses=sorted(r.status_code for r in rs);assert statuses==[200,417],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
+            frappe.db.rollback();assert frappe.db.count(api.AUDIT,{'target':doc['name'],'action':'publish_blueprint'})==1
+            return {'http_statuses':statuses,'one_publication':True}
+        check('http-config-concurrent-publication-cas',concurrent_cfg_publish)
+        def http_cfg_policy_flow():
+            r=post('author','create_draft_config',dict(request_key='http_cfg_pol_0001',config='policy',code='SYN-POL-HTTP-1',revision=1,definition=http_pol_def))
+            assert r.status_code==200,f'policy create HTTP {r.status_code}'
+            name=r.json()['message']['name']
+            r=post('publisher','review_config',dict(request_key='http_cfg_pol_review_001',config='policy',name=name,expected_version=1))
+            assert r.status_code==200,f'policy review HTTP {r.status_code}'
+            r=post('publisher2','publish_config',dict(request_key='http_cfg_pol_publish_001',config='policy',name=name,expected_version=2))
+            assert r.status_code==200,f'policy publish HTTP {r.status_code}'
+            return name
+        polhttp=check('http-config-policy-draft-review-publish-flow',http_cfg_policy_flow)
         def revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['other']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(post('other','create_draft',dict(payload,request_key='revoked_actor_001',family=family(users['other'],'REVOKED'))))
         check('http-role-revocation-old-session-denied',revoke)
+        def cfg_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['publisher2']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('publisher2','retire_config',dict(request_key='cfg_revoked_retire_001',config='policy',name=polhttp,expected_version=3)))
+        check('http-config-revoked-publisher-old-session-denied',cfg_revoke)
         def no_side_effects():
             after={dt:frappe.db.count(dt) for dt in before_counts};assert before_counts==after
             return {'native_domain_counts_unchanged':after}
