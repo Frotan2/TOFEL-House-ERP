@@ -8,9 +8,9 @@
   "product_implementation_authorized": false,
   "runtime_compatible_bundle_proven": false,
   "approved_runtime_bundle": null,
-  "verdict_scope": "Current production/Phase 2 acceptance rejected: scoped Guardian/realtime fixes and five-app patch upgrade proven, but additional file-owner/scheduler changes await reports after GitHub 401; dependency remediation and broader operations incomplete.",
+  "verdict_scope": "Current Phase 2/production acceptance REJECT: 0.2.1 legacy-file boundary and scheduler now hosted-proven; final workflow fails solely on dependency advisory audit and broader production requirements remain incomplete.",
   "matrix_sha256": "c6447f5b046d27449521b69415854f590f8c8a5abf3a17530737e13988f9e369",
-  "created_site_count": 57,
+  "created_site_count": 69,
   "created_business_fixture_count": null,
   "tests": [
     {
@@ -1488,6 +1488,33 @@
         "evidence/phase-2/hosted/remaining-34809413852.json",
         "evidence/phase-2/hosted/runtime-34809413852.json"
       ]
+    },
+    {
+      "id": "final-hardening-34809817009",
+      "status": "fail",
+      "scope": "Exact overall failed hosted run, with individual check results preserved; final follow-up has 54 readiness / 6 Guardian browser / 4 realtime / 33 upgrade passes, advisory failure",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34809817009.json",
+        "evidence/phase-2/hosted/remaining-34809817009.json"
+      ]
+    },
+    {
+      "id": "final-hardening-34810723925",
+      "status": "fail",
+      "scope": "Exact overall failed hosted run, with individual check results preserved; final follow-up has 54 readiness / 6 Guardian browser / 4 realtime / 33 upgrade passes, advisory failure",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34810723925.json",
+        "evidence/phase-2/hosted/remaining-34810723925.json"
+      ]
+    },
+    {
+      "id": "final-hardening-34812299091",
+      "status": "fail",
+      "scope": "Exact overall failed hosted run, with individual check results preserved; final follow-up has 54 readiness / 6 Guardian browser / 4 realtime / 33 upgrade passes, advisory failure",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34812299091.json",
+        "evidence/phase-2/hosted/remaining-34812299091.json"
+      ]
     }
   ],
   "phase_gates": [
@@ -1514,7 +1541,7 @@
     {
       "phase": "2E",
       "status": "partial",
-      "reason": "Cache/RQ pass. Scheduler-driven Complete seen in 34808064545; 180-second observer timed out in 34809413852 against native 240-second tick. Corrected tick-derived observer pending evidence."
+      "reason": "Cache/RQ and native scheduler-created Complete pass. Correct tick-derived observer proves 238.19s and 164.14s executions in retained hosted reports. Full service restart/production durability remains incomplete."
     },
     {
       "phase": "2F",
@@ -1544,7 +1571,7 @@
     {
       "phase": "2K",
       "status": "partial",
-      "reason": "0.2.0 Guardian native scopes/REST/RPC/browser/private-file and live drift tests pass; payroll read/report checks pass. New 0.2.1 legacy file ownership boundary and broader mixed-role/export/print/write coverage not fully verified."
+      "reason": "0.2.1 legacy-owner HTTP download/File REST/RPC/native content and Guardian scopes/browser pass with positive controls. Payroll read/report ACLs pass. Broader mixed-role/multi-child/lifecycle/export/print/attachment matrix incomplete."
     },
     {
       "phase": "2L",
@@ -1564,7 +1591,7 @@
     {
       "phase": "2O",
       "status": "fail",
-      "reason": "Guardian and real-job realtime resource remediation have scoped passes; 57 dependency findings classified without waivers, build-input conditions/remediation remain open. Additional file-owner patch unverified after GitHub 401; full production readiness not passed."
+      "reason": "Targeted Guardian, legacy-file ownership and realtime resource authorization pass hosted; 57 frontend advisory entries unresolved. Full dependency/security/production gate not passed."
     },
     {
       "phase": "2P",
@@ -1579,7 +1606,7 @@
     {
       "phase": "2R",
       "status": "partial",
-      "reason": "44 local Python tests plus Node adapter regression pass. Hosted enumerated guard/role/realtime tests pass through retained reports; latest file-owner and corrected scheduler outcomes unavailable after authentication loss."
+      "reason": "44 local Python tests and Node adapter regression pass. Final hosted policy-test step, 54 readiness, 6 Guardian browser, 4 realtime and 33 upgrade stages pass. Broader regression and production requirements incomplete."
     },
     {
       "phase": "2S",
@@ -1978,6 +2005,38 @@
     "education-security-candidate-review.json": {
       "sha256": "fd667e1d6168e6343c4a5dfa6f1dd0563b61c1ae65be8ff87d02ba0030348fd9",
       "bytes": 1081
+    },
+    "hosted/remaining-34809817009.json": {
+      "sha256": "8894c49ce56d3a139af293fb6e7000dfc5d377da78945a7d48cba56e8f971c3b",
+      "bytes": 60408
+    },
+    "hosted/runtime-34809817009.json": {
+      "sha256": "ecee2f87844c8f8a0d64aa61d02d19a868369528b0e62d3027ad7ecc999264d4",
+      "bytes": 59394
+    },
+    "hosted/remaining-34810723925.json": {
+      "sha256": "bc09d50fa6045cece54464a231f573f37f2df6c8b2b93e644b652d810fed4020",
+      "bytes": 60451
+    },
+    "hosted/runtime-34810723925.json": {
+      "sha256": "fa5035162532fbac325a87b8a0f749742eec6b58e9619afe7d8a0ef8dd530751",
+      "bytes": 59385
+    },
+    "hosted/remaining-34812299091.json": {
+      "sha256": "a4ece1ee42c8455bb2bdae49e48dea7ff16da7a7b9cefae2f32e364c890f8432",
+      "bytes": 61068
+    },
+    "hosted/runtime-34812299091.json": {
+      "sha256": "29f06f2040c5b11b881c42792f2134be5217fa149fb4e01abc431a2c760ca2ba",
+      "bytes": 59351
+    },
+    "final-hardening-hosted-verification.json": {
+      "sha256": "b3dcc62a576fcd97f385a81265c6366c18868564b5ad44abba36cfd77c620b44",
+      "bytes": 4185
+    },
+    "legacy-file-owner-source-review.json": {
+      "sha256": "c8a453b775b163adda9b71e71989db6c9e29b51e4e1935da7aa617624fcb6bc1",
+      "bytes": 2616
     }
   },
   "created_site_count_scope": "Sum of created_sites in retained top-level runtime reports only; excludes isolated upgrade subprocess sites. Not currently live sites.",
@@ -1985,16 +2044,17 @@
   "business_fixture_count_note": "No exact full-document count claimed; explicit named records and successful controller checks are retained in each business_result.",
   "clean_pinned_installation_proven": true,
   "latest_hosted_checkpoint": {
-    "run_id": "34809413852",
-    "commit": "1fe31af22af7dcbf72e7da281dd3d7fd13c88bff",
+    "run_id": "34812299091",
+    "commit": "ff39ae3883ca51b46be96235b8ecf13afbd331b6",
     "status": "fail",
-    "runtime_check_id": 103871056050,
-    "remaining_check_id": 103871057477,
-    "evidence": "evidence/phase-2/hosted/runtime-34809413852.json",
-    "remaining_gate_evidence": "evidence/phase-2/hosted/remaining-34809413852.json"
+    "runtime_check_id": 103882572226,
+    "remaining_check_id": 103882574041,
+    "evidence": "evidence/phase-2/hosted/runtime-34812299091.json",
+    "remaining_gate_evidence": "evidence/phase-2/hosted/remaining-34812299091.json",
+    "only_failing_executed_gate": "hosted-frontend-advisory-audit"
   },
-  "live_site_note": "Final state of the latest two ephemeral hosted attempts is unknown after GitHub authentication loss; no persistent deployment created.",
-  "github_connection": "Needs reconnection in Arena: HTTP 401 during final monitoring; no credentials requested or stored.",
+  "live_site_note": "All final qualification jobs completed on ephemeral hosted runners. No persistent deployment created; no independent live-site inventory is claimed.",
+  "github_connection": "Restored and verified by successful report retrieval and branch-only push on 2026-09-14.",
   "security_gate_passed": false,
   "native_permission_remediation": {
     "run_id": 34778602344,
@@ -2002,14 +2062,7 @@
     "restricted_http_checks": 10,
     "scope": "Original REST/private-file defects only; overall baseline remains failed"
   },
-  "latest_unverified_attempt": {
-    "run_id": 34810723925,
-    "commit": "22c6ad8",
-    "last_observed_status": "pending",
-    "final_status": "unknown",
-    "evidence_available": false,
-    "reason": "GitHub HTTP 401 during monitoring; requires reconnection."
-  },
+  "latest_unverified_attempt": null,
   "generic_guard_runtime_approved": false,
   "enumerated_guard_checks_proven": {
     "run_id": 34781717183,
@@ -2019,7 +2072,7 @@
     "secured_cache_rq": "pass",
     "scope": "Synthetic enumerated Student and tenant controls only; does not approve full role matrix, dependency security or production deployment."
   },
-  "hardened_profile_passed": true,
+  "hardened_profile_passed": false,
   "security_preserving_recovery_proven": {
     "run_id": "34803138631",
     "invariants": 7,
@@ -2045,39 +2098,59 @@
   ],
   "upstream_suite_evidence_limit": "Module exit codes and positive test counts verified in exact Check. Full artifact blob download failed with EOF; detailed skip counts not independently retrieved.",
   "remaining_gates_checkpoint": {
-    "latest_verified_run": 34809413852,
-    "guardian_scope_and_browser": "pass_scoped_0.2.0",
-    "realtime_doc_task_and_session_revocation": "pass_scoped_0.2.0",
-    "legacy_file_owner_boundary": "unverified_0.2.1",
+    "latest_verified_run": 34812299091,
+    "guardian_scope_and_browser": "pass_scoped_0.2.1",
+    "realtime_doc_task_and_session_revocation": "pass_scoped_0.2.1",
+    "legacy_file_owner_boundary": "pass_scoped_0.2.1",
     "payroll_read_and_report_acl": "pass_scoped",
     "five_app_framework_patch_upgrade": "pass_scoped",
     "dependency_gate": "fail",
-    "scheduler": "partial_observation_window_correction_unverified",
+    "scheduler": "pass_native_execution_scoped",
     "full_production_readiness": "not_passed"
   },
-  "isolated_upgrade_sites_created": 6,
-  "other_unverified_attempts": [
-    {
-      "run_id": 34809817009,
-      "commit": "6969ab3",
-      "last_observed_status": "in_progress",
-      "final_status": "unknown",
-      "scope": "Additional legacy private-file owner boundary"
-    }
-  ],
+  "isolated_upgrade_sites_created": 9,
+  "other_unverified_attempts": [],
   "cancelled_unexecuted_attempts": [
     34807925473,
     34807977896,
     34808944166,
-    34809760788
+    34809760788,
+    34812019158
   ],
   "guard_remediation_proof": {
-    "version": "0.2.0",
-    "run_id": 34807848711,
-    "readiness_pass": 43,
+    "version": "0.2.1",
+    "run_id": 34812299091,
+    "commit": "ff39ae3883ca51b46be96235b8ecf13afbd331b6",
+    "readiness_pass": 54,
     "guardian_browser_pass": 6,
     "realtime_pass": 4,
-    "scope": "Enumerated native scopes and resource delivery only; not newer 0.2.1 legacy file-owner proof or production certification."
+    "legacy_owner_http_private_file_status": 403,
+    "legacy_owner_rest_file_status": 403,
+    "legacy_owner_rpc_file_status": 403,
+    "legacy_owner_native_content": "PermissionError",
+    "authorized_file_controls_and_content_hash": "pass",
+    "all_extension_source_hashes_match_checkout": true,
+    "scope": "Enumerated hosted boundaries only; not full mixed-role/attachment/ZIP/export/public websocket production approval."
   },
-  "local_helper_tests": 44
+  "local_helper_tests": 44,
+  "hardened_profile_status_note": "Latest overall hardened workflow fails on advisory audit; enumerated guard checks pass separately. Earlier true checkpoint was scoped historical evidence, not the current full profile.",
+  "scheduler_execution_proof": [
+    {
+      "run_id": 34810723925,
+      "status": "Complete",
+      "seconds": 238.19,
+      "native_tick_seconds": 240,
+      "observation_budget_seconds": 360,
+      "scheduler_driven": true
+    },
+    {
+      "run_id": 34812299091,
+      "status": "Complete",
+      "scheduler_driven": true,
+      "native_tick_seconds": 240,
+      "observation_budget_seconds": 360,
+      "seconds": 164.14
+    }
+  ],
+  "final_hardening_verification": "evidence/phase-2/final-hardening-hosted-verification.json"
 }

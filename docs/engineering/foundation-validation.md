@@ -7,43 +7,45 @@ Phase 2 has **not** passed. Product implementation and deployment remain unautho
 This section supersedes the local-environment runtime status in the historical assessment below;
 its source analysis, unresolved frontend advisories and unexecuted acceptance requirements remain relevant.
 
-### Hardening remediation checkpoint — verified and pending evidence
+### Final targeted hardening verification
 
-See [hardening remediation](foundation-hardening-remediation.md) for architecture,
-per-advisory reachability decisions, compatibility costs and exact run history.
+GitHub access is restored. Runs **34809817009**, **34810723925** and corrected follow-up
+**34812299091** have verified, lossless hosted reports. Their report hashes, Check identities,
+commit identities and run IDs are recorded in
+[evidence verification](evidence/phase-2/final-hardening-hosted-verification.json).
+See [hardening remediation](foundation-hardening-remediation.md) for exact scope and history.
 
-- **34807848711** verified 43 readiness checks, six Guardian browser checks and four
-  realtime checks. These cover fail-closed missing/expanded Guardian scopes, canonical
-  REST/RPC/private-file access, real RQ job ownership and live session revocation.
-- **34808064545** additionally passed seven Salary Register report ACLs and an actual
-  scheduler-driven Complete log. Its expanded upgrade fixture hit a CLI site allowlist
-  error; that failure is preserved and the allowlist was corrected for the isolated site.
-- **34809413852** passed the five-upstream-app Frappe patch upgrade: 33 stages, nine native
-  business checks before, and five record/file/schema checks afterward plus replay.
-  Other app revisions were held fixed; this is not rollback or independent app upgrades.
-- Hosted production output is **ES**, with 33 first-party source files and hash-matched
-  frappe-ui source reviewed. The 57 advisory entries classify as 15 absent dev-service
-  surfaces, two inapplicable output-format gadgets, seven absent browser-package findings,
-  seven dormant bundled-code findings, and 26 build-tooling findings with exploit-specific
-  input conditions still open. These scoped classifications are **not blanket waivers**
-  and the dependency/security gate remains failed. Required patched ranges and decisions
-  are retained in the advisory evidence and remediation report.
-- The scheduler test also failed once because its 180-second observer was shorter than
-  the native 240-second tick. The corrected observer derives its budget from that tick;
-  its final hosted result is not retrieved. No execution assertion is replaced with liveness.
+| Gate / observation | Hosted outcome |
+|---|---|
+| Legacy private-file owner cannot override denied Student-parent access | **PASS scoped**: private download and File REST/RPC 403; native download false/content PermissionError; authorized positive controls and content hash pass |
+| Guardian/staff/payroll-report and operational checks | **54/54 PASS** in 34812299091; does not prove payroll posting or the full role/lifecycle matrix |
+| Guardian Chromium / resource-authorized realtime | **6/6 / 4/4 PASS**; broad/direct/clustered realtime compatibility is not universally approved |
+| Actual scheduler-created Complete log | **238.19s** in 34810723925 and **164.14s** in 34812299091; native tick 240s, observer 360s; no manual enqueue or forged schedule |
+| Five-upstream-app framework patch upgrade | **33/33 PASS**, nine pre-upgrade business checks and five post-upgrade preservation checks; not rollback or independent app upgrades |
+| Production frontend module graph | **PASS**: ES output, 33 first-party source files, same six reviewed frappe-ui source hashes |
+| Frontend advisory audit / full production acceptance | **FAIL / REJECT**: 57 advisory entries remain unresolved; broader production requirements remain incomplete |
 
-**GitHub returned HTTP 401 during final monitoring.** Runs **34809817009** (`6969ab3`,
-legacy File ownership/parent-permission hardening) and **34810723925** (`22c6ad8`, scheduler
-observer correction) have **unknown final outcomes**. The current 0.2.1 extension has
-**44 local Python tests plus the Node adapter regression passing**, not full runtime approval.
-Reconnect GitHub in Arena to retrieve those reports and publish this local checkpoint.
+Final source: **ff39ae3883ca51b46be96235b8ecf13afbd331b6**, extension **0.2.1**, all hosted
+extension source hashes matching the checkout. Run **34812299091** fails solely on its
+frontend advisory audit; it is not a successful overall workflow or Phase 2 gate.
 
-**Recommendation remains REJECT current Phase 2/production acceptance.** Previously
-confirmed Guardian/realtime failures are not falsely left as failures of the corrected
-0.2.0 enumerated paths; their failed baselines remain historical evidence. However the
-latest additional file-owner fix, dependency remediation, broader mixed-role and operational
-requirements, rollback, payroll posting and full production deployment are not all qualified.
-Security, Phase 2 and product gates remain false; no TOEFL development is authorized.
+Both requested older runs remain failures: immutable-owner fixture setup prevented Guardian
+provisioning. The first also timed out under the obsolete 180-second scheduler observer;
+the second proved corrected scheduler execution independently. The fixture correction uses
+normal insertion under Guardian identity and normal Administrator attachment, never owner
+rewrites or disabled validation. Those failed reports remain unchanged.
+
+All 57 advisory entries retain scoped classifications: 15 absent serving-profile surfaces,
+two inapplicable reported output-format gadgets, seven absent browser-bundle findings,
+seven dormant emitted-code findings and 26 build-tooling findings with exploit-specific
+input conditions open. None is a blanket dependency waiver.
+
+**Recommendation remains REJECT current Phase 2/production acceptance.** Remaining work
+includes dependency remediation, broader mixed-role/multi-child and print/export/attachment
+coverage, payroll posting, rollback/independent app upgrades, independent-host recovery and
+public TLS/proxy/service-durability/operational qualification. Native content-method proof
+is not an end-to-end HTTP ZIP test. Security, Phase 2 and product gates remain false.
+No TOEFL-specific implementation has begun; main remains untouched.
 
 ### Proven on the controlled runner
 

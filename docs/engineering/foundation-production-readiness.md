@@ -1,20 +1,25 @@
 # Phase 2 security and production-readiness continuation
 
-## Current remediation checkpoint — supersedes the previous result below
+## Final targeted hardening checkpoint — supersedes historical results below
 
-**REJECT current production acceptance.** Guardian and realtime resource guard corrections
-have enumerated hosted proof through run **34809413852**. Payroll report ACLs, production
-build/source reachability evidence and the five-app framework patch upgrade also have
-verified results. Dependency remediation and broader qualification are not complete.
+**REJECT current production acceptance.** Run **34812299091 / ff39ae3** passes all 54
+readiness checks, six Guardian Chromium checks, four realtime checks, the 33-stage five-app
+framework patch upgrade and production module graph. Legacy Guardian-owned private files
+cannot override denied Student-parent read on the enumerated HTTP/native paths. Actual
+scheduler-created Complete is observed at 164.14s (240s tick / 360s observer), corroborating
+238.19s in 34810723925. These are execution/authorization proofs, not merely liveness.
 
-The newer legacy private-file owner boundary and scheduler observer correction remain
-**unverified** after GitHub access expired with HTTP 401. Runs **34809817009** and
-**34810723925** must be retrieved before relying on them. See the authoritative
-[hardening remediation report](foundation-hardening-remediation.md) for exact scope,
-source boundaries, compatibility limitations and the current acceptance decision.
+GitHub access is restored and both requested earlier runs are retrieved. Their immutable
+owner fixture failures, and the first run's obsolete scheduler timeout, remain unchanged.
+The final workflow also remains **failed**, solely on the frontend advisory audit.
 
-The following prior checkpoint is retained as **historical failed evidence**, not as a
-claim that the corrected 0.2.0 Guardian/realtime checks still fail.
+Dependency remediation, full payroll posting, broad roles/attachment/export/print paths,
+rollback/independent app upgrades and independent-host/public deployment operations remain
+incomplete. No production or TOEFL implementation authorization is granted. Exact evidence,
+hash verification and scope are in [hardening remediation](foundation-hardening-remediation.md).
+
+The following prior checkpoint is **historical failed evidence**, not a claim that corrected
+Guardian/realtime or scheduler checks still fail.
 
 ## Final recommendation — REJECT current Phase 2/production acceptance
 

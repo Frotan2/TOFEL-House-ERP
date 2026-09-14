@@ -1,29 +1,61 @@
 # Foundation hardening remediation — qualification, not product development
 
-## Latest evidence checkpoint — 2026-09-14
+## Final targeted hardening verification — 2026-09-14
 
-**GitHub access expired (HTTP 401) during monitoring.** Final results of **34809817009**
-(commit `6969ab3`, legacy file-owner boundary) and **34810723925** (commit `22c6ad8`,
-correct native scheduler observation window) are **unknown and not approved**. The former
-was last seen in progress; the latter was last seen pending. A watch process exiting
-without a final report is not a passing run. Reconnect GitHub in Arena to retrieve both
-Checks and push the documentation checkpoint; do not supply credentials in chat.
+**Decision: REJECT current Phase 2 / production acceptance.** The targeted legacy-file
+ownership and scheduler fixes are now hosted-verified; this is not full production approval.
+GitHub access is restored. Both requested runs and the corrected follow-up were retrieved,
+with lossless report SHA-256 checked against the published Check summaries, embedded commit
+checked against the Check and workflow head, and embedded run ID checked against the run.
+See `evidence/phase-2/final-hardening-hosted-verification.json` for all six reports and Check IDs.
+Full artifact logs were not independently retrieved in this final verification.
 
-Verified evidence retained:
-
-| Run | Confirmed result |
+| Run / source | Verified result |
 |---|---|
-| 34807848711 / caed511 | Guardian/staff/readiness 43/43; Guardian Chromium 6/6; realtime 4/4 including real-job ownership and live session revocation; earlier guarded regressions pass. Overall fails solely for advisories |
-| 34808064545 / d21d79d | Readiness 51/51, including seven Salary Register ACLs and actual scheduler Complete at 74.07s; production module graph passed. Expanded upgrade failed the smoke CLI site allowlist, now corrected in source |
-| 34809413852 / 1fe31af | Guardian/browser/realtime and report ACLs pass; five-app upgrade **33 stages**, nine before/ five after business/record checks pass; ES production graph and source hashes pass. Scheduler observer timed out at 180s; native tick is 240s. Advisory failure retained |
+| 34809817009 / 6969ab3 | **FAIL**: changing immutable File Created By during fixture setup raised CannotChangeConstantError, preventing Guardian provisioning and cascading into Guardian checks/browser. Old 180-second scheduler observer also timed out. This does not establish a file-guard failure or pass |
+| 34810723925 / 22c6ad8 | **FAIL**: same fixture failure retained. Corrected observer saw actual scheduler-created **Complete at 238.19s**, native tick 240s, budget 360s |
+| **34812299091 / ff39ae3883ca51b46be96235b8ecf13afbd331b6** | **Readiness 54/54, Guardian Chromium 6/6, realtime 4/4, five-app patch upgrade 33/33, frontend graph PASS.** Actual scheduler Complete at **164.14s**. Overall workflow **FAIL solely on the frontend advisory audit** |
 
-The current **0.2.1** File-parent mixin candidate has **44 passing local Python tests**
-plus the Node adapter regression. Its additional legacy-owner runtime assertion is not
-verified yet. Do not treat the preceding 0.2.0 scoped passes as that new proof.
+### Legacy-owner boundary now proven in the corrected hosted fixture
 
-Cancelled pending snapshots 34807925473, 34807977896, 34808944166 and 34809760788 were
-superseded by GitHub concurrency before execution; they are neither passes nor failures.
-No running job was cancelled to conceal a result. All executed failures remain retained.
+Pinned Frappe both prohibits changing an existing owner and assigns the inserting user
+as owner. The fixture therefore creates an unattached private File as Guardian through
+normal insertion, restores Administrator, and attaches it to the unrelated Student through
+normal save. Persisted owner, private flag and unrelated parent are asserted. No SQL,
+ignore-permission, migration, constant-validation bypass or upstream changes are used.
+The rejected insert-dictionary owner proposal is retained in commit af4baf9; its queued
+run 34812019158 was superseded without executing. The source rationale is retained in
+`evidence/phase-2/legacy-file-owner-source-review.json`.
+
+For that confirmed Guardian-owned, unrelated-Student attachment, hosted results prove:
+
+- Private-file HTTP download, File REST metadata and File RPC return **403**.
+- Parent Student read is denied, native `is_downloadable()` is **false**, and native
+  `get_content()` raises **PermissionError** under Guardian identity.
+- Authorized private-file HTTP download remains **200**; native download/content works
+  and the returned content matches the expected SHA-256.
+- Missing/expanded live Guardian scopes still fail closed and recover; Guardian browser
+  regressions, seven Salary Register ACLs, real-job realtime ownership and session
+  revocation checks also pass.
+
+All hosted **0.2.1 extension file hashes match the checkout**. The native content-method
+check is not an end-to-end HTTP ZIP/export test. Wider lifecycle, mixed-role/multi-child,
+print/export and attachment combinations still need qualification. No blanket security
+approval follows from the enumerated paths.
+
+Local validation remains **44 Python tests plus the Node adapter regression passing**;
+Python compilation and JavaScript syntax checks pass. Hosted policy-test step also passed.
+The final workflow failure is retained, along with all preceding failed reports. No TOEFL
+implementation or main-branch changes occurred.
+
+### Earlier evidence remains historical and available
+
+34807848711 established 43 readiness, six Guardian browser and four realtime checks.
+34808064545 established 51 readiness checks but hit the expanded upgrade smoke-site
+allowlist error. 34809413852 proved the 33-stage upgrade and ES source/build graph but
+retained the too-short scheduler observation failure. Those observations are not rewritten.
+Pending snapshots 34807925473, 34807977896, 34808944166, 34809760788 and 34812019158 were
+superseded before execution; they are neither passing nor failed runtime evidence.
 
 ## Decision and boundaries
 

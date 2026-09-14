@@ -1,0 +1,34 @@
+{
+  "scope": "Pinned upstream source evidence for the synthetic legacy File ownership fixture; not runtime approval",
+  "frappe_commit": "988e54f3c4c291e2077a83809663f123731abe76",
+  "sources": [
+    {
+      "path": "frappe/model/document.py",
+      "url": "https://github.com/frappe/frappe/blob/988e54f3c4c291e2077a83809663f123731abe76/frappe/model/document.py",
+      "sha256": "902e8330128a8d541069355e9c66689c548fca749a9d05ccc69cdd952ac44937"
+    },
+    {
+      "path": "frappe/model/base_document.py",
+      "url": "https://github.com/frappe/frappe/blob/988e54f3c4c291e2077a83809663f123731abe76/frappe/model/base_document.py",
+      "sha256": "4362ec935db3b918463846ac3c73ffe0e7c8543c191b9aff766949a3c8e60a0e"
+    },
+    {
+      "path": "frappe/core/doctype/file/file.py",
+      "url": "https://github.com/frappe/frappe/blob/988e54f3c4c291e2077a83809663f123731abe76/frappe/core/doctype/file/file.py",
+      "sha256": "76ed4581dc83b984093eca05417abac2765fd6c8c13ddc307bc369aa580a4fbc"
+    },
+    {
+      "path": "frappe/core/doctype/file/file.json",
+      "url": "https://github.com/frappe/frappe/blob/988e54f3c4c291e2077a83809663f123731abe76/frappe/core/doctype/file/file.json",
+      "sha256": "72c2e1471daf3926de9b703afa2d2f518a8ce140cdc67a0f054fd7827be3586b"
+    }
+  ],
+  "observations": [
+    "BaseDocument._validate_constants rejects owner changes on an existing File; run 34809817009 confirms CannotChangeConstantError before Guardian scope provisioning.",
+    "Document.set_user_and_timestamp assigns owner from the inserting session user, overriding an owner supplied in the insert dictionary. Therefore the af4baf9 proposed fixture was superseded before execution, not approved.",
+    "File permissions grant All the create permission; unattached private File ownership remains native authority. The fixture inserts as Guardian using the normal controller, restores Administrator, and attaches the File to the unrelated Student using normal save. It never rewrites owner or uses SQL/ignore_permissions/constant or migration bypass flags.",
+    "The final fixture reloads and asserts persisted owner, private flag and unrelated parent before denial tests.",
+    "File module has_permission grants the owner access before checking the attached parent. The supported mixin adds a deny-only parent gate to is_downloadable and get_content, while the permission hook covers document access."
+  ],
+  "runtime_acceptance_requirement": "Final hosted Guardian direct-download, File REST/RPC and native download/content checks with positive authorized-file controls; do not infer pass from this source review."
+}

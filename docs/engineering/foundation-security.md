@@ -4,30 +4,28 @@
 
 **Security gate: NOT PASSED. Product implementation: NOT AUTHORIZED.**
 
-### Latest remediation evidence — 2026-09-14
+### Final targeted hardening evidence — 2026-09-14
 
-The generic extension's **0.2.0** canonical Guardian scopes and realtime resource-delivery
-checks now have hosted proof in **34807848711**, **34808064545** and **34809413852**:
-missing/expanded scopes deny and recover; REST/RPC/Chromium/private-file checks pass;
-real RQ owner-bound task events deny the other user; native session revocation stops
-subsequent document/task delivery. Native payroll read and seven Salary Register ACLs
-also pass. Historical Guardian and known-task failures remain retained, not overwritten.
+**34812299091 / ff39ae3883ca51b46be96235b8ecf13afbd331b6** verifies the **0.2.1** extension,
+with all installed source hashes matching the checkout. **54 readiness checks, six Guardian
+browser checks and four realtime checks pass.** A Guardian-owned private File attached to
+the unrelated Student is denied through HTTP download, REST metadata, RPC and native
+download/content methods; authorized controls still work and content hashes match.
+Live Guardian scope drift/recovery, native payroll read and seven Salary Register ACLs pass.
+Real RQ task ownership and native session revocation continue to deny unauthorized delivery.
 
-Source review found a further private-file edge: core ownership can outlive permission
-on the attached Student, and direct download/content paths can bypass controller hooks.
-Candidate **0.2.1** therefore adds a deny-only File hook plus a supported File class mixin,
-and tests legacy Guardian ownership of the unrelated Student's file. **Its final hosted
-proof is unknown** after GitHub returned HTTP 401 while monitoring **34809817009**.
-The scheduler correction in **34810723925** is also unverified. Reconnect GitHub in Arena.
+Both requested prior runs **34809817009** and **34810723925** are preserved failures of
+immutable-owner fixture setup, not accepted ownership-boundary evidence. The corrected
+fixture uses normal actor-owned insertion and Administrator attachment, without validation
+bypasses. Scheduler-driven Complete is proven in 34810723925 and the final follow-up.
+GitHub access is restored; exact report/commit/run verification is retained.
 
-**44 local Python tests and a Node adapter regression pass.** They do not substitute for
-those missing reports. Realtime broad-room denial has explicit availability costs;
-cluster/direct/acknowledged app-specific emits and public proxy/origin trust remain outside
-current acceptance. See [hardening remediation](foundation-hardening-remediation.md).
-
-The 57 frontend advisory entries have per-entry surface classifications and published
-patch ranges; no blanket waiver or dependency security pass is granted. Full security
-and production acceptance remain **REJECT / NOT PASSED**.
+**Full security and production acceptance remain REJECT / NOT PASSED.** The final workflow
+still fails on 57 advisory entries; scoped source/build classifications are not waivers.
+End-to-end ZIP/export/print combinations, broad mixed-role usability and public realtime
+proxy/origin/cluster/direct-emit compatibility remain outside current approval. See
+[hardening remediation](foundation-hardening-remediation.md) for reproducible evidence
+and explicit boundaries. Local 44 Python tests and Node regression also pass.
 
 ### Previous verified Student guard checkpoint — 2026-09-14
 
