@@ -11,7 +11,7 @@ if os.environ.get('GITHUB_ACTIONS')!='true' or os.environ.get('GITHUB_REF')!='re
     raise SystemExit('Authorized hosted branch only')
 run=os.environ['SOURCE_RUN']
 if not run.isdigit():raise SystemExit('Numeric source run required')
-root=Path(__file__).resolve().parents[2];out=root/'.foundation/recovered-placement';out.mkdir(parents=True,exist_ok=True)
+root=Path(__file__).resolve().parents[2];out=root/'.foundation/recovered-placement'/run;out.mkdir(parents=True,exist_ok=True)
 metadata=json.loads(subprocess.check_output(['gh','api',f'repos/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{run}']))
 if metadata['head_branch']!='arena/01a09bf3-tofel-house-erp' or metadata['name']!='Placement synthetic content qualification':
     raise SystemExit('Not an authorized placement qualification source')

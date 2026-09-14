@@ -7,7 +7,7 @@ on:
     inputs:
       source_run:
         description: Authorized synthetic qualification run
-        default: '34849070924'
+        default: '34850654470'
         required: true
 permissions:
   contents: read
@@ -26,5 +26,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_RUN: ${{ inputs.source_run || '34849070924' }}
+          SOURCE_RUN: ${{ inputs.source_run || '34850654470' }}
+        run: python3 tools/placement/recover_evidence.py
+      - name: Retain the earlier HMAC harness failure completely
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_RUN: '34848508030'
         run: python3 tools/placement/recover_evidence.py
