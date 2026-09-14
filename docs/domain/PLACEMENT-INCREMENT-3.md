@@ -154,11 +154,19 @@ explicit prior-session + this-session ref set (same pattern as increment 2).
     Classification: **test harness** (site sequencing) plus a product gap that
     missing pins raised raw `DoesNotExistError` instead of an operator reason.
     60 later checks did not run.
-  - This session: **PENDING** hosted re-qualification after reconnecting
-    increment 3 to the primary site, publishing a dedicated allocation policy
-    in the increment-3 fixtures, and wrapping missing case/config as explicit
-    `ValidationError`. Increments 1–2 remain qualified by run `34865327509`
-    (85/85 native checks, commit `c0048dc`).
+  - Run `34885543915` (commit `ff27f84` on `arena/01a0a13b-tofel-house-erp`):
+    primary-site reconnect **held**; allocation happy-path, manifest
+    determinism, exposure reuse and fail-closed infeasibility **passed**
+    (**88/89 executed checks passed**), then **FAILED** at
+    `alloc-role-and-list-parity` with `PermissionError: Insufficient Permission
+    for TH Placement Case`. Product is correct: case/attempt/manifest/exposure
+    have no Author DocType grant (deny-by-default). The check treated only an
+    empty `get_list` as denial. Classification: **test harness**. Remaining
+    HTTP/isolation checks did not run.
+  - This session: **PENDING** hosted re-qualification after treating
+    PermissionError as a valid read denial without adding Author grants.
+    Increments 1–2 remain qualified by run `34865327509` (85/85 native checks,
+    commit `c0048dc`).
 - Baseline for increments 1–2: hosted run `34865327509` (success, head
   `c0048dc86fd5cc772a3b8db1f887a0cff7b997ce`).
 

@@ -459,13 +459,21 @@ def main():
             assert {dt:frappe.db.count(dt) for dt in before}==before
             return dict(obs,no_partial_state=True)
         check('alloc-fourth-attempt-unavailable-fail-closed',fourth_unavailable)
+        def cannot_list(dt):
+            # No DocType grant (Author/outsider/guard) fails closed with
+            # PermissionError; a grant plus 1=0 query returns []. Both are denials.
+            try:return not frappe.get_list(dt)
+            except frappe.PermissionError:return True
+        def cannot_read_doc(doctype,name):
+            try:return not frappe.get_doc(doctype,name).has_permission('read')
+            except frappe.PermissionError:return True
         def alloc_reads():
             for label in ('second_author','other','outsider'):
                 frappe.set_user(users[label])
                 for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
-                    assert not frappe.get_list(dt),label
+                    assert cannot_list(dt),label
             frappe.set_user(users['second_author'])
-            assert not frappe.get_doc(api.ATTEMPT,alloc['attempt']).has_permission('read')
+            assert cannot_read_doc(api.ATTEMPT,alloc['attempt'])
             # Dual-role author includes Publisher: operational staff reads apply;
             # role union does not invent extra SoD on allocation records.
             frappe.set_user(users['author'])
@@ -477,12 +485,12 @@ def main():
                 assert frappe.get_list(dt),dt
             guard_name='AG-'+digest([api.BLUEPRINT,cfgx['main_bp']])[:32]
             assert frappe.db.exists(api.GUARD,guard_name)
-            assert not frappe.get_doc(api.GUARD,guard_name).has_permission('read')
-            assert not frappe.get_list(api.GUARD)
+            assert cannot_read_doc(api.GUARD,guard_name)
+            assert cannot_list(api.GUARD)
             frappe.set_user(users['auditor'])
             for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
                 assert frappe.get_list(dt),dt
-            assert not frappe.get_doc(api.GUARD,guard_name).has_permission('read')
+            assert cannot_read_doc(api.GUARD,guard_name)
             return {'staff_only_records':True,'guard_internal':True,'dual_role_author_reads_as_publisher':True}
         check('alloc-role-and-list-parity',alloc_reads)
         def alloc_generic_write():

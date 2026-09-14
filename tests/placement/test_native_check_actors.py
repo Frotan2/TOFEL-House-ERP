@@ -8,6 +8,7 @@ Using `author` there is accepted (correct product behavior) and aborts the
 hosted suite — run 34880406771.
 """
 import ast
+import json
 import re
 from pathlib import Path
 import unittest
@@ -122,6 +123,22 @@ class Increment3ActorGuardTests(unittest.TestCase):
         start = self.src.index("# --- Increment 3:")
         bank = self.src.index("alloc-bank-fixture-published", start)
         self.assertIn("connect('placement-test.localhost')", self.src[start:bank])
+
+    def test_allocation_doctypes_do_not_grant_author(self):
+        # Do not "fix" Insufficient Permission by adding Author read grants.
+        root = ROOT / "apps/toefl_house/toefl_house/placement/doctype"
+        for folder in ("th_placement_case", "th_placement_attempt",
+                       "th_placement_form_manifest", "th_placement_exposure"):
+            data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
+            roles = {row["role"] for row in data["permissions"]}
+            self.assertEqual(roles, {"Placement Publisher", "Placement Auditor"}, folder)
+        guard = json.loads((root / "th_placement_allocation_guard" /
+                            "th_placement_allocation_guard.json").read_text(encoding="utf-8"))
+        self.assertEqual(guard["permissions"], [])
+
+    def test_alloc_read_parity_treats_permissionerror_as_denial(self):
+        body = _function_source(self.src, "cannot_list") + _function_source(self.src, "cannot_read_doc")
+        self.assertIn("PermissionError", body)
 
     def test_increment3_pins_its_own_published_policy(self):
         # Do not capture increment-2's `pol` across the second-site hop.
