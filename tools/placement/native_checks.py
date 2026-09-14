@@ -17,11 +17,13 @@ def main():
     from toefl_house import api
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
-    report={'scope':'Synthetic content-governance and blueprint/policy configuration increment (1-2); not full T01-T20','status':'running','checks':[],
+    report={'scope':'Synthetic content-governance, blueprint/policy configuration and allocation increments (1-3); not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
-           'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test'}
+           'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',
+           'candidate':'synthetic-candidate@example.test','candidate2':'synthetic-candidate2@example.test',
+           'candidate3':'synthetic-candidate3@example.test','candidate4':'synthetic-candidate4@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
@@ -70,7 +72,8 @@ def main():
             def setup():
                 mapping={'author':['Placement Author','Placement Publisher'],'other':['Placement Author'],
                          'publisher':['Placement Publisher'],'publisher2':['Placement Publisher'],
-                         'second_author':['Placement Author'],'auditor':['Placement Auditor'],'outsider':[]}
+                         'second_author':['Placement Author'],'auditor':['Placement Auditor'],'outsider':[],
+                         'candidate':[],'candidate2':[],'candidate3':[],'candidate4':[]}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -257,6 +260,272 @@ def main():
             return {'attempts':len(calls),'rollback_and_wait_restore':True,'exhaustion':exhaust}
         check('native-whole-command-transient-recovery',transient_recovery)
         check('native-retry-exhaustion-bounded',lambda:transient_recovery(True))
+        # --- Increment 3: blueprint allocation and candidate form generation ---
+        from toefl_house import allocation
+        from toefl_house.policy import canonical as _canonical
+        from toefl_house.security import command as _command
+        def unavailable(fn,needle):
+            frappe.db.savepoint('denial')
+            try:fn()
+            except frappe.ValidationError as exc:
+                assert needle in str(exc),str(exc)
+                return {'denied':'ValidationError','reason':str(exc)[:140]}
+            else:raise AssertionError('Expected allocation unavailability was accepted')
+            finally:frappe.db.rollback(save_point='denial')
+        def bank_content(skill,difficulty,i,qtype):
+            if qtype=='True False':
+                options=[{'id':'true','text':'True'},{'id':'false','text':'False'}];answer='true'
+            else:
+                options=[{'id':'o%d'%j,'text':'SYN %s %s %d option %d'%(skill,difficulty,i,j)} for j in range(1,5)]
+                answer='o1'
+            return dict(skill=skill,difficulty=difficulty,question_type=qtype,
+                        prompt='SYNTHETIC: bank %s %s %d fixture question.'%(skill,difficulty,i),
+                        options=options,answer=answer)
+        def build_bank():
+            made=[]
+            for skill in ('Vocabulary','Grammar','Reading','Listening'):
+                for difficulty in ('Entry','Core','Stretch'):
+                    for i in range(3):
+                        qtype='True False' if i==2 else 'Single Choice'
+                        fam=family(users['author'],'BANK-%s-%s%d'%(skill[:3].upper(),difficulty[0].upper(),i))
+                        def make(f=fam,c=bank_content(skill,difficulty,i,qtype),k='bank-create-%s-%s-%d'%(skill,difficulty,i)):
+                            as_user('author',lambda:api.create_draft(k,f,1,c))
+                        make()
+                        made.append(fam)
+            frappe.db.commit()
+            rows=frappe.get_all(api.ITEM,filters={'status':'Draft','owner':users['author']},
+                                fields=['name','version'],order_by='creation asc')
+            for idx,row in enumerate(rows):
+                def pub(r=row,k='bank-publish-%03d'%idx):
+                    as_user('publisher',lambda:api.publish(k,r.name,r.version))
+                pub()
+            return {'bank_families':len(set(made)),'published_total':frappe.db.count(api.ITEM,{'status':'Published'})}
+        check('alloc-bank-fixture-published',build_bank)
+        alloc_sections=[dict(id='listening_a',skill='Listening',item_count=2,minutes=10),
+                        dict(id='reading_a',skill='Reading',item_count=3,minutes=15),
+                        dict(id='vocab_a',skill='Vocabulary',item_count=2,minutes=10),
+                        dict(id='grammar_a',skill='Grammar',item_count=2,minutes=10)]
+        alloc_bp=dict(mode='Digital',sections=alloc_sections,total_minutes=45)
+        alloc_bp2=dict(mode='Digital',
+                       sections=[dict(id='vocab_b',skill='Vocabulary',item_count=1,minutes=10),
+                                 dict(id='grammar_b',skill='Grammar',item_count=1,minutes=10)],
+                       total_minutes=20)
+        over_bp=dict(mode='Digital',sections=[dict(id='listening_x',skill='Listening',item_count=12,minutes=60)],total_minutes=60)
+        spk_bp=dict(mode='Digital',sections=[dict(id='speaking_x',skill='Speaking',item_count=2,minutes=10)],total_minutes=10)
+        def publish_config_flow(code,definition):
+            doc=as_user('author',lambda:api.create_draft_config('alloc_cfg_%s_create_1'%code[4:].lower(),code,definition,1,definition))
+            doc=as_user('publisher',lambda:api.review_config('alloc_cfg_%s_review_1'%code[4:].lower(),'blueprint',doc['name'],1))
+            doc=as_user('publisher2',lambda:api.publish_config('alloc_cfg_%s_publish_1'%code[4:].lower(),'blueprint',doc['name'],2))
+            assert doc['status']=='Published' and doc['version']==3
+            return doc
+        def config_fixtures():
+            draft_bp=as_user('author',lambda:api.create_draft_config('alloc_cfg_draftbp_001','blueprint','SYN-BP-DRAFT-1',1,alloc_bp))
+            draft_pol=as_user('author',lambda:api.create_draft_config('alloc_cfg_draftpol_001','policy','SYN-POL-DRAFT-1',1,good_pol))
+            assert draft_bp['status']=='Draft' and draft_pol['status']=='Draft'
+            over=publish_config_flow('SYN-BP-OVER-1',over_bp)
+            spk=publish_config_flow('SYN-BP-SPK-1',spk_bp)
+            main=publish_config_flow('SYN-BP-ALLOC-1',alloc_bp)
+            small=publish_config_flow('SYN-BP-ALLOC-2',alloc_bp2)
+            return {'draft_bp':draft_bp['name'],'draft_pol':draft_pol['name'],
+                    'over_bp':over['name'],'spk_bp':spk['name'],
+                    'main_bp':main['name'],'small_bp':small['name'],'main_version':3}
+        cfgx=check('alloc-config-fixtures-published',config_fixtures)
+        pol_name=pol['name']
+        main_skills={s['skill'] for s in alloc_sections}
+        main_sections=[dict(id=s['id'],skill=s['skill'],item_count=s['item_count']) for s in alloc_sections]
+        def solver_pool(excluded_families,skills):
+            rows=frappe.get_all(api.ITEM,filters={'status':'Published'},
+                                fields=['name','family','skill','difficulty','question_type','options_json'])
+            return [dict(name=r.name,family=r.family,skill=r.skill,difficulty=r.difficulty,
+                         question_type=r.question_type,options=[o['id'] for o in json.loads(r.options_json)])
+                    for r in rows if r.skill in skills and r.family not in excluded_families]
+        case=check('alloc-create-case',lambda:as_user('publisher',lambda:api.create_case('alloc_case_key_0001',users['candidate'])))
+        assert case['status']=='Open' and case['subject']==users['candidate']
+        check('alloc-case-duplicate-subject-denied',lambda:denied(lambda:as_user('publisher',lambda:api.create_case('alloc_case_dup_key_0001',users['candidate']))))
+        check('alloc-case-missing-subject-denied',lambda:denied(lambda:as_user('publisher',lambda:api.create_case('alloc_case_missing_001','nobody@example.test'))))
+        check('alloc-case-privileged-subject-denied',lambda:denied(lambda:as_user('publisher',lambda:api.create_case('alloc_case_admin_key_01','Administrator'))))
+        check('alloc-case-author-denied',lambda:denied(lambda:as_user('author',lambda:api.create_case('alloc_case_author_key_1',users['candidate2']))))
+        check('alloc-case-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.create_case('alloc_case_outsider_key_1',users['candidate2']))))
+        check('alloc-fail-missing-case',lambda:denied(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_case_0001','nonexistent-case-0001',cfgx['main_bp'],3,pol_name,3))))
+        check('alloc-fail-draft-blueprint',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_draftbp_01',case['name'],cfgx['draft_bp'],1,pol_name,3)),'Only published blueprint'))
+        check('alloc-fail-stale-blueprint-version',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_stalever_01',case['name'],cfgx['main_bp'],1,pol_name,3)),'Stale configuration revision'))
+        check('alloc-fail-draft-policy',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_draftpol_01',case['name'],cfgx['main_bp'],3,cfgx['draft_pol'],1)),'Only published policy'))
+        check('alloc-fail-infeasible-quota',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_over_0001',case['name'],cfgx['over_bp'],3,pol_name,3)),'insufficient eligible families for skill Listening'))
+        check('alloc-fail-missing-skill-section',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_spk_00001',case['name'],cfgx['spk_bp'],3,pol_name,3)),'insufficient eligible families for skill Speaking'))
+        alloc=check('alloc-happy-path',lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_001',case['name'],cfgx['main_bp'],3,pol_name,3)))
+        assert alloc['status']=='Allocated' and alloc['ordinal']==1 and alloc['item_count']==9
+        def manifest_integrity():
+            m=frappe.get_doc(api.MANIFEST,alloc['manifest'])
+            assert frappe.db.count(api.MANIFEST,{'attempt':alloc['attempt']})==1
+            assert m.status=='Committed' and m.algorithm_version==allocation.ALGORITHM_VERSION
+            assert len(m.seed)==64 and set(m.seed)<=set('0123456789abcdef')
+            form=json.loads(m.form_json)
+            assert m.form_hash==digest(form)
+            assert form['algorithm']==allocation.ALGORITHM_VERSION and form['seed']==m.seed
+            assert form['attempt']==alloc['attempt'] and form['case']==case['name'] and form['subject']==users['candidate']
+            assert form['pool_digest']==m.pool_digest
+            assert [(s['id'],s['skill'],s['minutes'],s['item_count']) for s in form['sections']]==[(s['id'],s['skill'],s['minutes'],s['item_count']) for s in alloc_sections]
+            a=frappe.get_doc(api.ATTEMPT,alloc['attempt'])
+            assert a.ordinal==1 and a.status=='Allocated' and a.mode=='Digital' and a.subject==users['candidate']
+            assert a.blueprint==cfgx['main_bp'] and a.blueprint_version==3
+            assert a.policy==pol_name and a.policy_version==3
+            assert a.blueprint_hash==frappe.db.get_value(api.BLUEPRINT,cfgx['main_bp'],'content_hash')
+            assert a.policy_hash==frappe.db.get_value(api.POLICY,pol_name,'content_hash')
+            items=form['items']
+            assert [e['order'] for e in items]==list(range(1,10))
+            by_section={}
+            for e in items:
+                by_section.setdefault(e['section'],[]).append(e)
+                row=frappe.db.get_value(api.ITEM,e['item'],['status','skill','difficulty','question_type','options_json','family'],as_dict=True)
+                assert row.status=='Published' and row.family==e['family']
+                assert row.skill==e['skill'] and row.skill==next(s['skill'] for s in alloc_sections if s['id']==e['section'])
+                assert row.difficulty==e['difficulty'] and row.question_type==e['question_type']
+                if row.question_type=='Single Choice':
+                    assert sorted(e['option_order'])==sorted(o['id'] for o in json.loads(row.options_json))
+                else:
+                    assert e['option_order'] is None
+            for s in alloc_sections:
+                picked=by_section[s['id']]
+                assert len(picked)==s['item_count'],s
+                assert len({e['family'] for e in picked})==len(picked)
+                assert len({e['difficulty'] for e in picked})==len(picked)
+            assert len({e['family'] for e in items})==9
+            pool=solver_pool(set(),main_skills)
+            assert m.pool_digest==allocation.pool_digest(pool)
+            plan=allocation.allocate(main_sections,pool,m.seed,{})
+            assert [(e['order'],e['item']) for e in plan['items']]==[(e['order'],e['item']) for e in items]
+            assert [e['option_order'] for e in plan['items']]==[e['option_order'] for e in items]
+            return {'one_manifest_per_attempt':True,'hash_bound':True,'quotas_exact':True,'strata_balanced':True,'rerun_identical':True}
+        check('alloc-manifest-integrity-and-determinism',manifest_integrity)
+        def audit_and_ledger():
+            rows=frappe.get_all(api.AUDIT,filters={'target':alloc['attempt']},fields=['action','item_revision','after_hash'])
+            assert len(rows)==1 and rows[0].action=='allocate_attempt' and not rows[0].item_revision
+            assert rows[0].after_hash==alloc['form_hash']
+            op=frappe.get_doc(api.OP,digest(['allocate_attempt','alloc_attempt_key_001']))
+            assert op.status=='Complete' and op.actor==users['publisher']
+            assert json.loads(op.result_json)['manifest']==alloc['manifest']
+            exp=frappe.get_all(api.EXPOSURE,filters={'attempt':alloc['attempt']},fields=['family','event','subject'])
+            assert len(exp)==9 and all(e.event=='Reserved' and e.subject==users['candidate'] for e in exp)
+            form=json.loads(frappe.get_doc(api.MANIFEST,alloc['manifest']).form_json)
+            assert {e.family for e in exp}=={i['family'] for i in form['items']}
+            assert len(frappe.get_all(api.AUDIT,filters={'target':case['name'],'action':'create_case'}))==1
+            return {'allocation_audit':1,'exposure_rows':9,'receipt_complete':True}
+        check('alloc-audit-and-exposure-ledger',audit_and_ledger)
+        def alloc_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_001',case['name'],cfgx['main_bp'],3,pol_name,3))
+            assert value==alloc and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count(api.ATTEMPT)==1
+            return {'same_result':True,'no_new_attempt':True}
+        check('alloc-idempotent-replay',alloc_replay)
+        check('alloc-changed-payload-conflict',lambda:denied(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_001',case['name'],cfgx['main_bp'],2,pol_name,3))))
+        check('alloc-changed-actor-conflict',lambda:denied(lambda:as_user('publisher2',lambda:api.allocate_attempt('alloc_attempt_key_001',case['name'],cfgx['main_bp'],3,pol_name,3))))
+        alloc2=check('alloc-second-attempt-ordinal',lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_002',case['name'],cfgx['main_bp'],3,pol_name,3)))
+        assert alloc2['ordinal']==2 and alloc2['attempt']!=alloc['attempt']
+        def reuse_controlled():
+            f1=json.loads(frappe.get_doc(api.MANIFEST,alloc['manifest']).form_json)['items']
+            f2=json.loads(frappe.get_doc(api.MANIFEST,alloc2['manifest']).form_json)['items']
+            fam1={e['family'] for e in f1};fam2={e['family'] for e in f2}
+            assert not (fam1&fam2)
+            assert len(fam2)==9
+            counts={r.family:max(0,r.c-(1 if r.family in fam2 else 0)) for r in frappe.db.sql('select family, count(*) as c from `tabTH Placement Exposure` group by family',as_dict=True)}
+            pool2=solver_pool(fam1,main_skills)
+            m2=frappe.get_doc(api.MANIFEST,alloc2['manifest'])
+            plan=allocation.allocate(main_sections,pool2,m2.seed,counts)
+            assert [(e['order'],e['item']) for e in plan['items']]==[(e['order'],e['item']) for e in f2]
+            return {'no_family_reuse_for_subject':True,'second_rerun_identical':True}
+        check('alloc-exposure-reuse-controlled',reuse_controlled)
+        case2=check('alloc-create-case-second-subject',lambda:as_user('publisher',lambda:api.create_case('alloc_case_key_0002',users['candidate2'])))
+        alloc3=check('alloc-other-subject-independent-pool',lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_010',case2['name'],cfgx['main_bp'],3,pol_name,3)))
+        assert alloc3['ordinal']==1
+        assert len(frappe.get_all(api.EXPOSURE,filters={'subject':users['candidate2']}))==9
+        alloc4=check('alloc-third-attempt',lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_003',case['name'],cfgx['main_bp'],3,pol_name,3)))
+        assert alloc4['ordinal']==3
+        def fourth_unavailable():
+            before={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.MANIFEST,api.EXPOSURE,api.OP,api.AUDIT)}
+            obs=unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_004',case['name'],cfgx['main_bp'],3,pol_name,3)),'insufficient eligible families for skill Reading')
+            assert {dt:frappe.db.count(dt) for dt in before}==before
+            return dict(obs,no_partial_state=True)
+        check('alloc-fourth-attempt-unavailable-fail-closed',fourth_unavailable)
+        def alloc_reads():
+            for label in ('author','second_author','outsider'):
+                frappe.set_user(users[label])
+                for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
+                    assert not frappe.get_list(dt),label
+            frappe.set_user(users['author'])
+            assert not frappe.get_doc(api.ATTEMPT,alloc['attempt']).has_permission('read')
+            frappe.set_user(users['publisher'])
+            for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
+                assert frappe.get_list(dt),dt
+            guard_name='AG-'+digest([api.BLUEPRINT,cfgx['main_bp']])[:32]
+            assert frappe.db.exists(api.GUARD,guard_name)
+            assert not frappe.get_doc(api.GUARD,guard_name).has_permission('read')
+            assert not frappe.get_list(api.GUARD)
+            frappe.set_user(users['auditor'])
+            for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
+                assert frappe.get_list(dt),dt
+            assert not frappe.get_doc(api.GUARD,guard_name).has_permission('read')
+            return {'staff_only_records':True,'guard_internal':True}
+        check('alloc-role-and-list-parity',alloc_reads)
+        def alloc_generic_write():
+            frappe.set_user(users['publisher']);doc=frappe.get_doc(api.ATTEMPT,alloc['attempt']);doc.subject='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('alloc-ignore-permissions-does-not-bypass-controller',alloc_generic_write)
+        check('alloc-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.MANIFEST,alloc['manifest']).db_set('form_hash','f'*64)))
+        check('alloc-direct-db-update-denied',lambda:denied(lambda:frappe.get_doc(api.ATTEMPT,alloc['attempt']).db_update()))
+        check('alloc-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.CASE,case['name'],ignore_permissions=True)))
+        def forged_manifest():
+            frappe.set_user(users['publisher'])
+            with _command('allocate_attempt',users['publisher']):
+                frappe.get_doc(dict(doctype=api.MANIFEST,attempt=alloc['attempt'],
+                    algorithm_version=allocation.ALGORITHM_VERSION,seed='0'*64,pool_digest='0'*64,
+                    form_json=_canonical({'algorithm':allocation.ALGORITHM_VERSION,'items':[]}),
+                    form_hash='f'*64,status='Committed',synthetic=1)).insert(ignore_permissions=True)
+        check('alloc-forged-manifest-hash-denied',lambda:denied(forged_manifest))
+        def alloc_rollback_proof():
+            frappe.set_user(users['publisher']);frappe.db.savepoint('alloc_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.MANIFEST,api.EXPOSURE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.EXPOSURE:raise RuntimeError('synthetic allocation exposure failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.allocate_attempt('alloc_atomic_key_0001',case2['name'],cfgx['main_bp'],3,pol_name,3)
+            except RuntimeError:frappe.db.rollback(save_point='alloc_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            return {'real_database_rollback':True,'injected_boundary':'exposure reservation'}
+        check('alloc-atomic-attempt-manifest-exposure-rollback',alloc_rollback_proof)
+        case4=check('alloc-create-case-transient-subject',lambda:as_user('publisher',lambda:api.create_case('alloc_case_key_0004',users['candidate4'])))
+        def alloc_transient(exhaust=False):
+            frappe.set_user(users['publisher']);frappe.db.commit()
+            calls=[];original=allocation.allocate
+            prev=frappe.db.count(api.ATTEMPT,{'case_name':case4['name']})
+            key='alloc_exhaust_key_0001' if exhaust else 'alloc_retry_key_0001'
+            def flaky(*args,**kwargs):
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic allocation deadlock')
+                return original(*args,**kwargs)
+            with patch.object(allocation,'allocate',side_effect=flaky):
+                if exhaust:
+                    try:api.allocate_attempt(key,case4['name'],cfgx['main_bp'],3,pol_name,3)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.allocate_attempt(key,case4['name'],cfgx['main_bp'],3,pol_name,3)
+            assert len(calls)==(4 if exhaust else 2)
+            assert frappe.db.count(api.ATTEMPT,{'case_name':case4['name']})==prev+(0 if exhaust else 1)
+            if not exhaust:
+                m=frappe.get_doc(api.MANIFEST,result['manifest']);form=json.loads(m.form_json)
+                assert m.form_hash==digest(form)
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('alloc-whole-command-transient-recovery',alloc_transient)
+        check('alloc-retry-exhaustion-bounded',lambda:alloc_transient(True))
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def alloc_second_site():
+            assert frappe.db.count(api.CASE)==0 and frappe.db.count(api.ATTEMPT)==0
+            assert frappe.db.count(api.MANIFEST)==0 and frappe.db.count(api.EXPOSURE)==0
+            return {'allocation_absent_on_second_site':True}
+        check('second-site-no-first-site-allocation-record',alloc_second_site)
         frappe.destroy();connect('placement-test.localhost')
         base='http://127.0.0.1:18000'
         for _ in range(60):
@@ -375,6 +644,59 @@ def main():
             assert r.status_code==200,f'policy publish HTTP {r.status_code}'
             return name
         polhttp=check('http-config-policy-draft-review-publish-flow',http_cfg_policy_flow)
+        # --- Increment 3 over HTTP: case + allocation routes, CSRF, containment, races, revocation ---
+        def http_case_create():
+            r=post('publisher','create_case',dict(request_key='http_case_key_0001',subject=users['candidate3']))
+            assert r.status_code==200,f'case create HTTP {r.status_code}'
+            return r.json()['message']
+        httpcase=check('http-alloc-case-create',http_case_create)
+        http_alloc_payload=dict(request_key='http_alloc_key_0001',case=httpcase['name'],
+                                blueprint=cfgx['main_bp'],blueprint_version=3,policy=pol_name,policy_version=3)
+        def http_alloc():
+            r=post('publisher','allocate_attempt',http_alloc_payload);assert r.status_code==200,f'allocate HTTP {r.status_code}'
+            return r.json()['message']
+        httpalloc=check('http-alloc-positive-create',http_alloc)
+        assert httpalloc['status']=='Allocated' and httpalloc['ordinal']==1
+        check('http-alloc-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.allocate_attempt',headers={'Host':'placement-test.localhost'},json=http_alloc_payload,timeout=30)))
+        check('http-alloc-unrelated-role-denied',lambda:http_denied(post('outsider','allocate_attempt',dict(http_alloc_payload,request_key='http_alloc_out_0001'))))
+        check('http-alloc-wrong-role-denied',lambda:http_denied(post('author','allocate_attempt',dict(http_alloc_payload,request_key='http_alloc_author_01'))))
+        check('http-alloc-case-wrong-role-denied',lambda:http_denied(post('second_author','create_case',dict(request_key='http_case_second_001',subject=users['candidate3']))))
+        check('http-alloc-get-cannot-mutate',lambda:http_denied(sessions['publisher'].get(base+'/api/method/toefl_house.api.allocate_attempt',params={'request_key':'http_alloc_get_0001'},timeout=30)))
+        def http_alloc_csrf():
+            s=sessions['publisher'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.allocate_attempt',json=dict(http_alloc_payload,request_key='http_alloc_csrf_0001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-alloc-csrf-negative-with-positive-control',http_alloc_csrf)
+        attempt_url=base+'/api/resource/'+quote(api.ATTEMPT,safe='')+'/'+httpalloc['attempt']
+        check('http-alloc-direct-crud-mutation-denied',lambda:http_denied(sessions['publisher'].put(attempt_url,json={'subject':'forged@example.test'},timeout=30)))
+        check('http-alloc-other-role-read-denied',lambda:http_denied(sessions['author'].get(attempt_url,timeout=30)))
+        def http_alloc_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['publisher'].headers);s.cookies.update(sessions['publisher'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.allocate_attempt',json=dict(http_alloc_payload,blueprint=cfgx['small_bp'],request_key='http_alloc_idem_0001'),timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count(api.ATTEMPT,{'case_name':httpcase['name']})==2
+            assert frappe.db.count(api.AUDIT,{'target':results[0]['attempt']})==1
+            return {'http_statuses':[200,200],'one_attempt_for_key':True}
+        check('http-alloc-concurrent-create-idempotency',http_alloc_idem)
+        def http_alloc_race():
+            def request(i):
+                s=requests.Session();s.headers.update(sessions['publisher'].headers);s.cookies.update(sessions['publisher'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.allocate_attempt',json=dict(http_alloc_payload,blueprint=cfgx['small_bp'],request_key='http_alloc_race_%04d'%i),timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs]
+            assert sorted(r['ordinal'] for r in results)==[3,4]
+            fams=[{i['family'] for i in json.loads(frappe.get_doc(api.MANIFEST,r['manifest']).form_json)['items']} for r in results]
+            assert not (fams[0]&fams[1])
+            return {'http_statuses':[200,200],'ordinals':[3,4],'concurrent_forms_disjoint':True}
+        check('http-alloc-concurrent-distinct-keys',http_alloc_race)
+        def alloc_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['publisher']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('publisher','allocate_attempt',dict(http_alloc_payload,blueprint=cfgx['small_bp'],request_key='http_alloc_revoked_001'),timeout=30))
+        check('http-alloc-revoked-publisher-old-session-denied',alloc_revoke)
         def revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['other']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(post('other','create_draft',dict(payload,request_key='revoked_actor_001',family=family(users['other'],'REVOKED'))))

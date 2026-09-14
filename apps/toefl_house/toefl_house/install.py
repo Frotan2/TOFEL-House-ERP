@@ -11,6 +11,13 @@ def after_migrate():
     frappe.db.add_index("TH Placement Audit Event", ["target", "creation"])
     frappe.db.add_index("TH Placement Blueprint Revision", ["status", "creation"])
     frappe.db.add_index("TH Placement Policy Revision", ["status", "creation"])
+    frappe.db.add_unique("TH Placement Case", ["subject"], "th_case_subject")
+    frappe.db.add_unique("TH Placement Attempt", ["case_name", "ordinal"], "th_attempt_case_ordinal")
+    frappe.db.add_unique("TH Placement Form Manifest", ["attempt"], "th_manifest_attempt")
+    frappe.db.add_unique("TH Placement Exposure", ["attempt", "family", "event"], "th_exposure_attempt_family_event")
+    frappe.db.add_index("TH Placement Item Revision", ["status", "skill"], "th_item_status_skill")
+    frappe.db.add_index("TH Placement Exposure", ["subject"], "th_exposure_subject")
+    frappe.db.add_index("TH Placement Exposure", ["family"], "th_exposure_family")
 
 
 def after_install():

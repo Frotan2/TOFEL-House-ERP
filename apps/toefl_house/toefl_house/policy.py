@@ -167,10 +167,17 @@ def validate_request_key(key):
 
 def can_read(kind, roles, actor, owner, status=None):
     roles = set(roles)
+    # The allocation guard is an internal lock row: no business role reads it.
+    if kind == "guard":
+        return False
     if kind in ("audit", "operation"):
         return "Placement Auditor" in roles
     if "Placement Publisher" in roles:
         return True
+    # Case/attempt/manifest/exposure are staff-only operational records (the
+    # manifest carries the seed and the full form, never candidate feedback).
+    if kind in ("case", "attempt", "manifest", "exposure"):
+        return "Placement Auditor" in roles
     if kind in ("item", "blueprint", "policy") and "Placement Auditor" in roles:
         return status == "Published"
     if kind in ("item", "blueprint", "policy"):

@@ -1,0 +1,116 @@
+{
+  "doctype": "DocType",
+  "name": "TH Placement Attempt",
+  "module": "Placement",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "case_name",
+    "ordinal",
+    "subject",
+    "blueprint",
+    "blueprint_version",
+    "blueprint_hash",
+    "policy",
+    "policy_version",
+    "policy_hash",
+    "mode",
+    "status",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "case_name",
+      "label": "Case",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Case"
+    },
+    {
+      "fieldname": "ordinal",
+      "label": "Ordinal",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "subject",
+      "label": "Subject",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "blueprint",
+      "label": "Blueprint",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Blueprint Revision"
+    },
+    {
+      "fieldname": "blueprint_version",
+      "label": "Blueprint Version",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "blueprint_hash",
+      "label": "Blueprint Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "policy",
+      "label": "Policy",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Policy Revision"
+    },
+    {
+      "fieldname": "policy_version",
+      "label": "Policy Version",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "policy_hash",
+      "label": "Policy Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "mode",
+      "label": "Mode",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "reqd": 1,
+      "options": "Allocated"
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Placement Publisher",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

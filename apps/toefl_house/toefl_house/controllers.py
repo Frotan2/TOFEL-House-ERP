@@ -1,7 +1,9 @@
 """Owned document invariants apply even when generic writes ignore permissions."""
 import frappe
+import json
+import re
 from frappe.model.document import Document
-from toefl_house.policy import FROZEN_STATUSES, is_config_transition
+from toefl_house.policy import FROZEN_STATUSES, digest, is_config_transition
 from toefl_house.security import require_command, CONFIG_DOCTYPES
 
 
@@ -62,3 +64,40 @@ class ProtectedRecord(Document):
 
     def on_trash(self):
         raise frappe.PermissionError("Placement history cannot be deleted through CRUD")
+
+
+class FrozenRecord(ProtectedRecord):
+    """Allocation-era records (case/attempt/manifest/exposure/guard) are
+    created exactly once by an authorized command and are immutable after.
+    A later increment advances state only through its own commands, never
+    through generic save."""
+
+    def validate(self):
+        super().validate()
+        if self.get_doc_before_save():
+            raise frappe.PermissionError("Placement allocation records are immutable after creation")
+
+
+class ManifestRecord(FrozenRecord):
+    """The form manifest additionally self-verifies its integrity at insert:
+    the stored form_hash must bind the exact canonical form_json, the seed is
+    bounded to 64 hex chars, the algorithm version must match the form and
+    occurrences must be ordered 1..N. This holds even under
+    ignore_permissions writes, because it lives in the controller."""
+
+    def validate(self):
+        super().validate()
+        if not self.get_doc_before_save():
+            try:
+                form = json.loads(self.form_json)
+            except ValueError as exc:
+                raise frappe.ValidationError("Manifest form_json must be valid JSON") from exc
+            if self.form_hash != digest(form):
+                raise frappe.ValidationError("Manifest hash mismatch")
+            if self.algorithm_version != form.get("algorithm"):
+                raise frappe.ValidationError("Manifest algorithm mismatch")
+            if not re.fullmatch(r"[0-9a-f]{64}", self.seed or ""):
+                raise frappe.ValidationError("Manifest seed must be 64 hex characters")
+            items = form.get("items")
+            if not isinstance(items, list) or [i.get("order") for i in items] != list(range(1, len(items) + 1)):
+                raise frappe.ValidationError("Manifest occurrences must be ordered 1..N")

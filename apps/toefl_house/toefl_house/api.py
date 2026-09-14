@@ -1,6 +1,8 @@
 """Authenticated POST commands; no candidate, file or result endpoint."""
 import json
+import secrets
 import frappe
+from toefl_house import allocation
 from toefl_house.policy import (canonical, digest, request_digest, validate_blueprint,
                                 validate_config_code, validate_content, validate_family,
                                 validate_policy, validate_request_key)
@@ -13,6 +15,15 @@ OP = "TH Placement Operation"
 AUDIT = "TH Placement Audit Event"
 BLUEPRINT = "TH Placement Blueprint Revision"
 POLICY = "TH Placement Policy Revision"
+CASE = "TH Placement Case"
+ATTEMPT = "TH Placement Attempt"
+MANIFEST = "TH Placement Form Manifest"
+EXPOSURE = "TH Placement Exposure"
+GUARD = "TH Placement Allocation Guard"
+
+# Synthetic-only purpose marker; other purposes are a later activation config,
+# not something this increment accepts or invents.
+SYNTHETIC_PURPOSE = "synthetic-placement"
 
 CONFIG = {
     "blueprint": (BLUEPRINT, validate_blueprint),
@@ -307,3 +318,151 @@ def retire_config(request_key, config, name, expected_version):
 
     return _execute(f"retire_{config}", request_key,
                     {"config": config, "item": name, "version": expected_version}, work)
+
+
+# --- Increment 3: case identity and blueprint allocation / form generation ---
+
+def _locked_case(name):
+    if not isinstance(name, str) or not name or len(name) > 140:
+        raise frappe.ValidationError("Case name required")
+    case = frappe.get_doc(CASE, name, for_update=True)
+    if case.status != "Open":
+        raise frappe.ValidationError("Case is not open for allocation")
+    return case
+
+
+def _pinned_published(doctype, validator, name, expected_version, label):
+    """Resolve a published configuration revision and re-verify its frozen
+    meaning (status, expected version, definition validity, stored hash)."""
+    if not isinstance(name, str) or not name or len(name) > 140 or type(expected_version) is not int:
+        raise frappe.ValidationError(f"{label} name and integer expected_version required")
+    doc = frappe.get_doc(doctype, name, for_update=True)
+    if doc.status != "Published":
+        raise frappe.ValidationError(f"Only published {label} revisions can be allocated")
+    if doc.version != expected_version:
+        raise frappe.ValidationError("Stale configuration revision")
+    stored = json.loads(doc.definition_json)
+    validator(stored)
+    if digest(stored) != doc.content_hash:
+        raise frappe.ValidationError("Stored definition integrity mismatch")
+    return doc, stored
+
+
+@frappe.whitelist(methods=["POST"])
+def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE):
+    if not isinstance(subject, str) or not 3 <= len(subject) <= 140:
+        raise frappe.ValidationError("Subject user reference required")
+    if purpose != SYNTHETIC_PURPOSE:
+        raise frappe.ValidationError("Unsupported purpose in this synthetic increment")
+
+    def work(actor):
+        if subject in ("Administrator", "Guest") or not frappe.db.get_value("User", subject, "enabled"):
+            raise frappe.ValidationError("Subject must be an enabled non-privileged native user")
+        if frappe.db.exists(CASE, {"subject": subject}):
+            raise frappe.ValidationError("Subject already has a case in this increment")
+        case = frappe.get_doc(dict(doctype=CASE, subject=subject, purpose=purpose,
+                                   status="Open", synthetic=1))
+        case.insert(ignore_permissions=True)
+        return {"name": case.name, "subject": subject, "purpose": purpose, "status": case.status}, \
+               dict(target=case.name, after_hash=digest([subject, purpose]))
+
+    return _execute("create_case", request_key, {"subject": subject, "purpose": purpose}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def allocate_attempt(request_key, case_name, blueprint_name, blueprint_version, policy_name, policy_version):
+    def work(actor):
+        # Canonical lock order (spec 8): case -> allocation guard -> family
+        # exposure -> result rows. The per-key operation receipt inserted by
+        # _execute_once is private to this request and never a contention
+        # point, so it precedes the business locks.
+        case = _locked_case(case_name)
+        subject = case.subject
+        bp, bp_def = _pinned_published(BLUEPRINT, validate_blueprint, blueprint_name, blueprint_version, "blueprint")
+        pol, _pol_def = _pinned_published(POLICY, validate_policy, policy_name, policy_version, "policy")
+        sections = [dict(id=s["id"], skill=s["skill"], item_count=s["item_count"])
+                    for s in bp_def["sections"]]
+        # Blueprint/pool revision allocation guard (spec 5.3): serializes a
+        # pool's allocation for correctness.
+        guard_name = "AG-" + digest([BLUEPRINT, bp.name])[:32]
+        if not frappe.db.exists(GUARD, guard_name):
+            frappe.get_doc(dict(doctype=GUARD, name=guard_name, blueprint=bp.name,
+                                synthetic=1)).insert(ignore_permissions=True)
+        frappe.get_doc(GUARD, guard_name, for_update=True)
+        # Reuse control: a family once exposed to this subject is never
+        # allocated to that subject again (new item IDs do not reset family
+        # history). The pool shrinks site-wide as families get exposed.
+        exposed = {row.family for row in
+                   frappe.get_all(EXPOSURE, filters={"subject": subject}, fields=["family"])}
+        rows = frappe.get_all(ITEM, filters={"status": "Published"},
+                              fields=["name", "family", "skill", "difficulty",
+                                      "question_type", "options_json"])
+        skill_set = {s["skill"] for s in sections}
+        solver_items = []
+        for row in rows:
+            if row.skill not in skill_set or row.family in exposed:
+                continue
+            solver_items.append(dict(name=row.name, family=row.family, skill=row.skill,
+                                     difficulty=row.difficulty, question_type=row.question_type,
+                                     options=[o["id"] for o in json.loads(row.options_json)]))
+        exposure_counts = {row.family: row.c for row in frappe.db.sql(
+            "select family, count(*) as c from `tabTH Placement Exposure` group by family",
+            as_dict=True)}
+        # Server-generated cryptographic randomness; never client input.
+        seed = secrets.token_hex(32)
+        try:
+            plan = allocation.allocate(sections, solver_items, seed, exposure_counts)
+        except ValueError as exc:
+            raise frappe.ValidationError(f"Allocation unavailable: {exc}") from exc
+        # Lock the selected families' exposure rows in canonical order and
+        # recheck eligibility before reserving (spec 5.3).
+        selected = sorted({item["family"] for item in plan["items"]})
+        for family in selected:
+            frappe.db.sql("select name from `tabTH Placement Exposure` where family = %s for update",
+                          (family,))
+        re_exposed = {row.family for row in
+                      frappe.get_all(EXPOSURE, filters={"subject": subject}, fields=["family"])}
+        if re_exposed & set(selected):
+            raise frappe.ValidationError(
+                "Allocation unavailable: pool changed during allocation; retry with a new key")
+        ordinal = frappe.db.sql(
+            "select coalesce(max(ordinal), 0) + 1 from `tabTH Placement Attempt` where case_name = %s for update",
+            (case.name,))[0][0]
+        attempt = frappe.get_doc(dict(doctype=ATTEMPT, case_name=case.name, ordinal=ordinal,
+                                      subject=subject, blueprint=bp.name,
+                                      blueprint_version=bp.version, blueprint_hash=bp.content_hash,
+                                      policy=pol.name, policy_version=pol.version,
+                                      policy_hash=pol.content_hash, mode=bp_def["mode"],
+                                      status="Allocated", synthetic=1))
+        attempt.insert(ignore_permissions=True)
+        # Exactly one manifest per attempt; frozen question manifest. The
+        # time profile is the published blueprint's section minutes (this
+        # increment's items carry no per-item duration or marks).
+        form = dict(plan, attempt=attempt.name, case=case.name, subject=subject,
+                    blueprint=bp.name, blueprint_version=bp.version,
+                    policy=pol.name, policy_version=pol.version,
+                    sections=[dict(s) for s in bp_def["sections"]])
+        form_hash = digest(form)
+        manifest = frappe.get_doc(dict(doctype=MANIFEST, attempt=attempt.name,
+                                       algorithm_version=plan["algorithm"], seed=seed,
+                                       pool_digest=plan["pool_digest"],
+                                       form_json=canonical(form), form_hash=form_hash,
+                                       status="Committed", synthetic=1))
+        manifest.insert(ignore_permissions=True)
+        # Reserve exposure before the commit; unique (attempt, family, event).
+        for item in plan["items"]:
+            frappe.get_doc(dict(doctype=EXPOSURE, attempt=attempt.name,
+                                family=item["family"], subject=subject,
+                                event="Reserved", synthetic=1)).insert(ignore_permissions=True)
+        return {"attempt": attempt.name, "ordinal": ordinal, "status": attempt.status,
+                "mode": attempt.mode, "case": case.name, "subject": subject,
+                "blueprint": bp.name, "blueprint_version": bp.version,
+                "policy": pol.name, "policy_version": pol.version,
+                "manifest": manifest.name, "form_hash": form_hash,
+                "item_count": len(plan["items"])}, \
+               dict(target=attempt.name, after_hash=form_hash)
+
+    return _execute("allocate_attempt", request_key,
+                    {"case": case_name, "blueprint": blueprint_name,
+                     "blueprint_version": blueprint_version,
+                     "policy": policy_name, "policy_version": policy_version}, work)

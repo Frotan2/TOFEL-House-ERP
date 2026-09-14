@@ -18,12 +18,16 @@ KIND_ROLES = {
     "publish_policy": "Placement Publisher",
     "retire_blueprint": "Placement Publisher",
     "retire_policy": "Placement Publisher",
+    "create_case": "Placement Publisher",
+    "allocate_attempt": "Placement Publisher",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
     "TH Placement Item Revision", "TH Placement Key Revision",
     "TH Placement Audit Event", "TH Placement Operation",
     "TH Placement Blueprint Revision", "TH Placement Policy Revision",
+    "TH Placement Case", "TH Placement Attempt", "TH Placement Form Manifest",
+    "TH Placement Exposure", "TH Placement Allocation Guard",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision")
 

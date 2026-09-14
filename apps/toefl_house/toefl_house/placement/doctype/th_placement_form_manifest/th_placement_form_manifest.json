@@ -1,0 +1,87 @@
+{
+  "doctype": "DocType",
+  "name": "TH Placement Form Manifest",
+  "module": "Placement",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "attempt",
+    "algorithm_version",
+    "seed",
+    "pool_digest",
+    "form_json",
+    "form_hash",
+    "status",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "attempt",
+      "label": "Attempt",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Attempt"
+    },
+    {
+      "fieldname": "algorithm_version",
+      "label": "Algorithm Version",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "seed",
+      "label": "Seed",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "pool_digest",
+      "label": "Pool Digest",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "form_json",
+      "label": "Form Json",
+      "fieldtype": "Code",
+      "reqd": 1,
+      "options": "JSON"
+    },
+    {
+      "fieldname": "form_hash",
+      "label": "Form Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "reqd": 1,
+      "options": "Committed"
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Placement Publisher",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

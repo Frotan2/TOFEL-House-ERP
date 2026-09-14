@@ -7,14 +7,23 @@ KINDS = {
     "TH Placement Item Revision": "item", "TH Placement Key Revision": "key",
     "TH Placement Audit Event": "audit", "TH Placement Operation": "operation",
     "TH Placement Blueprint Revision": "blueprint", "TH Placement Policy Revision": "policy",
+    "TH Placement Case": "case", "TH Placement Attempt": "attempt",
+    "TH Placement Form Manifest": "manifest", "TH Placement Exposure": "exposure",
+    "TH Placement Allocation Guard": "guard",
 }
 TABLES = {
     "item": "`tabTH Placement Item Revision`",
     "key": "`tabTH Placement Key Revision`",
     "blueprint": "`tabTH Placement Blueprint Revision`",
     "policy": "`tabTH Placement Policy Revision`",
+    "case": "`tabTH Placement Case`",
+    "attempt": "`tabTH Placement Attempt`",
+    "manifest": "`tabTH Placement Form Manifest`",
+    "exposure": "`tabTH Placement Exposure`",
+    "guard": "`tabTH Placement Allocation Guard`",
 }
 LISTED_KINDS = ("item", "blueprint", "policy")
+STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure")
 
 
 def has_permission(doc, ptype=None, user=None, **kwargs):
@@ -33,10 +42,14 @@ def query(kind, user=None):
         return "1=0"
     user = user or frappe.session.user
     roles = set(frappe.get_roles(user))
+    if kind == "guard":
+        return "1=0"
     if kind in ("audit", "operation"):
         return "1=1" if "Placement Auditor" in roles else "1=0"
     if "Placement Publisher" in roles:
         return "1=1"
+    if kind in STAFF_ONLY_KINDS:
+        return "1=1" if "Placement Auditor" in roles else "1=0"
     table = TABLES[kind]
     conditions = []
     if "Placement Author" in roles:
@@ -52,3 +65,8 @@ def query_audit(user=None): return query("audit", user)
 def query_operation(user=None): return query("operation", user)
 def query_blueprint(user=None): return query("blueprint", user)
 def query_policy(user=None): return query("policy", user)
+def query_case(user=None): return query("case", user)
+def query_attempt(user=None): return query("attempt", user)
+def query_manifest(user=None): return query("manifest", user)
+def query_exposure(user=None): return query("exposure", user)
+def query_guard(user=None): return query("guard", user)

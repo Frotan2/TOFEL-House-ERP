@@ -1,0 +1,65 @@
+{
+  "doctype": "DocType",
+  "name": "TH Placement Exposure",
+  "module": "Placement",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "attempt",
+    "family",
+    "subject",
+    "event",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "attempt",
+      "label": "Attempt",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Attempt"
+    },
+    {
+      "fieldname": "family",
+      "label": "Family",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "subject",
+      "label": "Subject",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "event",
+      "label": "Event",
+      "fieldtype": "Select",
+      "reqd": 1,
+      "options": "Reserved"
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Placement Publisher",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}
