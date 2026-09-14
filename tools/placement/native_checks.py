@@ -123,6 +123,30 @@ def main():
         check('atomic-item-key-receipt-audit-rollback',rollback_proof)
         frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
         check('second-site-no-first-site-record',lambda:{'absent':not frappe.db.exists(api.ITEM,item['name'])} if not frappe.db.exists(api.ITEM,item['name']) else (_ for _ in ()).throw(AssertionError('Cross-site record')))
+
+        def transient_recovery(exhaust=False):
+            frappe.set_user(users['author']);frappe.db.commit()
+            suffix='EXHAUST' if exhaust else 'RETRY'
+            f=family(users['author'],suffix);calls=[];original=api._new_key
+            previous=frappe.db.sql('SELECT @@SESSION.innodb_lock_wait_timeout')[0][0]
+            def flaky(*args):
+                calls.append(1)
+                assert frappe.db.sql('SELECT @@SESSION.innodb_lock_wait_timeout')[0][0]==5
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('Synthetic transient after item insert')
+                return original(*args)
+            with patch.object(api,'_new_key',side_effect=flaky):
+                if exhaust:
+                    try:api.create_draft('native_exhaust_retry_001',f,1,content())
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.create_draft('native_transient_retry_001',f,1,content())
+            assert len(calls)==(4 if exhaust else 2)
+            assert frappe.db.count(api.ITEM,{'family':f})==(0 if exhaust else 1)
+            if not exhaust:assert frappe.db.count(api.AUDIT,{'item_revision':result['name']})==1
+            assert frappe.db.sql('SELECT @@SESSION.innodb_lock_wait_timeout')[0][0]==previous
+            return {'attempts':len(calls),'rollback_and_wait_restore':True,'exhaustion':exhaust}
+        check('native-whole-command-transient-recovery',transient_recovery)
+        check('native-retry-exhaustion-bounded',lambda:transient_recovery(True))
         frappe.destroy();connect('placement-test.localhost')
         base='http://127.0.0.1:18000'
         for _ in range(60):

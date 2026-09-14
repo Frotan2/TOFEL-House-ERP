@@ -3,6 +3,7 @@ import json
 import frappe
 from toefl_house.policy import canonical, digest, request_digest, validate_content, validate_family, validate_request_key
 from toefl_house.security import authorize, command
+from toefl_house.transactions import run_with_retry
 
 ITEM = "TH Placement Item Revision"
 KEY = "TH Placement Key Revision"
@@ -25,6 +26,10 @@ def _content(value):
 
 
 def _execute(kind, request_key, payload, work):
+    return run_with_retry(lambda: _execute_once(kind, request_key, payload, work))
+
+
+def _execute_once(kind, request_key, payload, work):
     actor = authorize("Placement Publisher" if kind == "publish" else "Placement Author")
     try:
         validate_request_key(request_key)
