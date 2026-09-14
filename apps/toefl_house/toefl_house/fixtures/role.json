@@ -1,0 +1,23 @@
+[
+  {
+    "doctype": "Role",
+    "name": "Placement Author",
+    "role_name": "Placement Author",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Placement Publisher",
+    "role_name": "Placement Publisher",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Placement Auditor",
+    "role_name": "Placement Auditor",
+    "desk_access": 1,
+    "disabled": 0
+  }
+]

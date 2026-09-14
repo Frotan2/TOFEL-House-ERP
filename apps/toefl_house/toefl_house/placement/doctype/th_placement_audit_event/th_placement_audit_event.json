@@ -1,0 +1,89 @@
+{
+  "doctype": "DocType",
+  "name": "TH Placement Audit Event",
+  "module": "Placement",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "actor",
+    "operation",
+    "action",
+    "item_revision",
+    "before_hash",
+    "after_hash",
+    "synthetic",
+    "before_key",
+    "after_key"
+  ],
+  "fields": [
+    {
+      "fieldname": "actor",
+      "label": "Actor",
+      "fieldtype": "Link",
+      "options": "User",
+      "reqd": 1
+    },
+    {
+      "fieldname": "operation",
+      "label": "Operation",
+      "fieldtype": "Link",
+      "options": "TH Placement Operation",
+      "reqd": 1
+    },
+    {
+      "fieldname": "action",
+      "label": "Action",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "item_revision",
+      "label": "Item Revision",
+      "fieldtype": "Link",
+      "options": "TH Placement Item Revision",
+      "reqd": 1
+    },
+    {
+      "fieldname": "before_hash",
+      "label": "Before Hash",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "after_hash",
+      "label": "After Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    },
+    {
+      "fieldname": "before_key",
+      "fieldtype": "Link",
+      "label": "Before Key",
+      "options": "TH Placement Key Revision"
+    },
+    {
+      "fieldname": "after_key",
+      "fieldtype": "Link",
+      "label": "After Key",
+      "options": "TH Placement Key Revision",
+      "reqd": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Placement Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}
