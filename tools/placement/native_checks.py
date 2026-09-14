@@ -172,7 +172,7 @@ def main():
                 s=requests.Session();s.headers.update(sessions['author'].headers);s.cookies.update(sessions['author'].cookies)
                 return s.post(base+'/api/method/toefl_house.api.create_draft',json=p,timeout=40)
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
-            assert [r.status_code for r in rs]==[200,200],str([r.status_code for r in rs])
+            assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
             results=[r.json()['message'] for r in rs];assert results[0]==results[1]
             frappe.db.rollback();assert frappe.db.count(api.ITEM,{'family':p['family']})==1
             assert frappe.db.count(api.AUDIT,{'item_revision':results[0]['name']})==1
@@ -183,7 +183,7 @@ def main():
                 s=requests.Session();s.headers.update(sessions['publisher'].headers);s.cookies.update(sessions['publisher'].cookies)
                 return s.post(base+'/api/method/toefl_house.api.publish',json={'request_key':f'http_race_publish_00{i}','item_name':httpitem['name'],'expected_version':1},timeout=40)
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
-            statuses=sorted(r.status_code for r in rs);assert statuses==[200,417],str(statuses)
+            statuses=sorted(r.status_code for r in rs);assert statuses==[200,417],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
             frappe.db.rollback();assert frappe.db.count(api.AUDIT,{'item_revision':httpitem['name'],'action':'publish'})==1
             return {'http_statuses':statuses,'one_publication':True}
         check('http-concurrent-publication-cas',concurrent_publish)
