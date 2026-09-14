@@ -44,12 +44,14 @@ def main():
             student.append('guardians',{'guardian':guardian.name,'relation':'Father'})
             student.save()
             records['guardian']=guardian.name
-            other_file=frappe.get_doc({'doctype':'File','file_name':'guardian-other.txt','is_private':1,'attached_to_doctype':'Student','attached_to_name':records['students'][1],'content':'Owned Beta guardian isolation marker'}).insert()
-            # Model legacy ownership retained after a child's access is revoked.
-            # Owning a File must not override denied parent Student access.
-            other_file.owner='validation-guardian@example.test'
-            other_file.save()
+            # Created By is immutable after insertion. Administrator creates the
+            # synthetic legacy record with its intended owner from the outset.
+            other_file=frappe.get_doc({'doctype':'File','file_name':'guardian-other.txt','is_private':1,'attached_to_doctype':'Student','attached_to_name':records['students'][1],'owner':'validation-guardian@example.test','content':'Owned Beta guardian isolation marker'}).insert()
+            other_file.reload()
+            assert other_file.owner=='validation-guardian@example.test', 'Legacy ownership fixture not retained'
+            assert other_file.attached_to_name==records['students'][1] and other_file.is_private
             records['guardian_other_file_url']=other_file.file_url
+            records['guardian_other_file_name']=other_file.name
             frappe.db.commit()
             probe=requests.Session();probe.headers['Host']='foundation.localhost'
             denied=probe.post('http://127.0.0.1:8080/api/method/login',data={'usr':'validation-guardian@example.test','pwd':os.environ['FOUNDATION_TEST_PASSWORD']},timeout=30)
@@ -119,6 +121,31 @@ def main():
             check('guardian-rpc-'+str(index),lambda index=index:guardian_path('/api/method/frappe.client.get',200 if index==0 else 403,{'doctype':'Student','name':records['students'][index]}))
         check('guardian-own-private-file',lambda:guardian_path(records['private_file_url'],200))
         check('guardian-other-private-file',lambda:guardian_path(records['guardian_other_file_url'],403))
+        check('guardian-legacy-owned-file-metadata-denied',lambda:read('guardian','File',records['guardian_other_file_name'],403))
+        check('guardian-legacy-owned-file-rpc-denied',lambda:guardian_path('/api/method/frappe.client.get',403,{'doctype':'File','name':records['guardian_other_file_name']}))
+        def native_file_methods():
+            import hashlib
+            other=frappe.get_doc('File',records['guardian_other_file_name'])
+            own=frappe.get_doc('File',{'file_url':records['private_file_url']})
+            assert other.owner=='validation-guardian@example.test'
+            try:
+                frappe.set_user('validation-guardian@example.test')
+                assert not frappe.has_permission('Student',doc=records['students'][1],ptype='read')
+                assert other.is_downloadable() is False, 'Legacy owner must not override denied parent read'
+                try:
+                    other.get_content()
+                except frappe.PermissionError:
+                    pass
+                else:
+                    raise AssertionError('Legacy owner read unrelated private content')
+                assert own.is_downloadable(), 'Authorized parent download must remain available'
+                content=own.get_content()
+                if isinstance(content,str): content=content.encode()
+                assert hashlib.sha256(content).hexdigest()==records['private_file_sha256']
+                return {'legacy_owner_confirmed':True,'unrelated_parent_read':False,'unrelated_downloadable':False,'unrelated_content':'PermissionError','authorized_download_and_content_hash_match':True,'scope':'Native methods under Guardian identity; not an HTTP ZIP/export route test'}
+            finally:
+                frappe.set_user('Administrator')
+        check('guardian-legacy-owner-native-download-and-content-boundary',native_file_methods)
         def drift(mode):
             rule=frappe.get_doc('User Permission',{'user':'validation-guardian@example.test','allow':'Student','for_value':records['students'][0]})
             extra=None
