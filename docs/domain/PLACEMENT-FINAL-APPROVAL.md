@@ -2,9 +2,11 @@
 
 Date: 2026-09-14 · Baseline: `5474cc8279db6130d6961aea439b4583c0372969`
 
-**Five institutional approvals outstanding. No implementation authorization. Production: REJECT.**
+**F01–F05 APPROVED by the user. No implementation authorization. Production: REJECT.**
 
-This is the authoritative final M01–M05 approval set. It supersedes numerical proposals and the checklist in [PLACEMENT-DEFAULT-POLICY.md](PLACEMENT-DEFAULT-POLICY.md), not the multi-mode capabilities or native boundaries in [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md). Nothing here records a new user approval. Historical architecture/source-review evidence remains unchanged.
+The current approval record and remaining policy/technical prerequisites are in [PLACEMENT-APPROVED-BASELINE.md](PLACEMENT-APPROVED-BASELINE.md). The package descriptions below record the approved proposal; their original approval prompts are historical, not outstanding votes.
+
+This is the authoritative final M01–M05 approval set. It supersedes numerical proposals and the checklist in [PLACEMENT-DEFAULT-POLICY.md](PLACEMENT-DEFAULT-POLICY.md), not the multi-mode capabilities or native boundaries in [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md). The user subsequently approved all five packages as proposed; that approval does not supply missing owner artifacts or runtime proof. Historical architecture/source-review evidence remains unchanged.
 
 ## 1. Professional determinations — no further business vote
 
@@ -30,7 +32,7 @@ The local 0–4 analytic rubric remains a useful authoring convention, not an ab
 
 ## 2. Final approval set
 
-Approve or modify each package, or expressly delegate policy sign-off to its already approved organizational owner. Delegation is not approval of missing rules, factual assumptions or legal compliance.
+All five packages are approved. Organizational owners must still supply the delegated artifacts. Delegation is not approval of missing rules, factual assumptions or legal compliance.
 
 ### F01 — Curriculum authority and course-placement policy (M01)
 
@@ -80,8 +82,8 @@ These are operational starting periods, **not statutory requirements**. Relevant
 
 ## 3. What clears this gate—and what does not
 
-Only **F01–F05** need institutional approval. Internal consistency, item selection, supported native extension points, objective scoring correctness, security enforcement and test coverage remain professional design/proof responsibilities. Section quotas, sample instruments and rubric anchors are delegated academic deliverables, not a request for the user to choose every item or minute.
+Institutional approval of **F01–F05** is complete. Internal consistency, item selection, supported native extension points, objective scoring correctness, security enforcement and test coverage remain professional design/proof responsibilities. Section quotas, sample instruments and rubric anchors are delegated academic deliverables, not a request for the user to choose every item or minute.
 
 Approving the five packages records business direction; applicable signed owner artifacts must still exist before affected workflow implementation. Missing facts cannot be hidden behind delegation. Complete the bounded technical specification and acceptance plan, then obtain **separate explicit implementation authorization**. No empirical validation, domain runtime proof, deployment or production acceptance is claimed here. R01–R03 organizational responsibilities, the selected foundation, upstream sources and all application/schema/API/UI/dependency/deployment files remain unchanged.
 
-**Compact approval record:** F01 academic authority/catalog ___; F02 actual age groups + supervised/remote scope + appointment envelope ___; F03 validity/retest/appeal rights ___; F04 review capacity/service targets ___; F05 optional audio/retention + lawful records-policy authority ___.
+**Approval record:** F01 APPROVED; F02 APPROVED; F03 APPROVED; F04 APPROVED; F05 APPROVED. Actual age groups, course mappings, detailed instruments and legal/identity procedures remain owner deliverables; implementation is not authorized.
