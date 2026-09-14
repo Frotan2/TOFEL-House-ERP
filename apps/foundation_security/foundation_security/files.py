@@ -13,3 +13,18 @@ def parent_permission(doc, ptype=None, user=None, debug=False):
     required = "read" if ptype in (None, "read", "select", "print", "email") else "write"
     return bool(frappe.has_permission(doc.attached_to_doctype, doc=doc.attached_to_name,
                                       ptype=required, user=user))
+
+
+class ParentPermissionFileMixin:
+    """Supported v16 class extension covers direct download and ZIP/content paths.
+
+    Core File.is_downloadable calls its module-level permission helper directly,
+    so the deny-only controller hook alone is insufficient for legacy owners.
+    """
+    def is_downloadable(self):
+        return parent_permission(self, "read") and super().is_downloadable()
+
+    def get_content(self, *args, **kwargs):
+        if not parent_permission(self, "read"):
+            raise frappe.PermissionError("Private attachment requires access to its parent")
+        return super().get_content(*args, **kwargs)

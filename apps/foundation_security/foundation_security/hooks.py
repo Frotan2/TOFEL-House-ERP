@@ -8,3 +8,4 @@ required_apps = ["education"]
 on_session_creation = "foundation_security.guards.on_session_creation"
 auth_hooks = ["foundation_security.guards.validate_request"]
 has_permission = {"File": "foundation_security.files.parent_permission"}
+extend_doctype_class = {"File": ["foundation_security.files.ParentPermissionFileMixin"]}
