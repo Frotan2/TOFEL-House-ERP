@@ -122,9 +122,9 @@ explicit prior-session + this-session ref set (same pattern as increment 2).
 
 - Local pure unit tests, executed in the session workspace on 2026-09-14
   (this commit):
-  - `python3 -m unittest discover -s tests/placement -v`: **82/82 OK**
+  - `python3 -m unittest discover -s tests/placement -v`: **84/84 OK**
     (48 increments 1–2, 15 solver, 7 allocation read-boundary, 1 native-check
-    name guard, 12 actor/site/permission/branch-lock guards).
+    name guard, 14 actor/site/permission/HTTP-signature/branch-lock guards).
   - `python3 -m unittest discover -s tests/foundation -v`: **44/44 OK**.
   - `node tests/foundation/test_realtime_guard.cjs`: **PASS**.
 - Hosted qualification (`.github/workflows/placement-content.yml`):
@@ -172,10 +172,16 @@ explicit prior-session + this-session ref set (same pattern as increment 2).
     `case_name`/`blueprint_name`/`policy_name`. In-process calls are positional
     so they passed. Classification: **product HTTP contract** (signature), not
     allocation logic. Remaining HTTP CSRF/race/revocation checks did not run.
-  - This session: **PENDING** hosted re-qualification after aligning the
-    `allocate_attempt` whitelist with the HTTP/receipt keys. Increments 1–2
-    remain qualified by run `34865327509` (85/85 native checks, commit
-    `c0048dc`).
+  - Run `34887457604` (commit `956b62d` on `arena/01a0a13b-tofel-house-erp`):
+    HTTP allocate **held** (positive create, CSRF, concurrent idempotency and
+    disjoint concurrent keys all passed); **131/132 executed checks passed**,
+    then **FAILED** at `http-alloc-revoked-publisher-old-session-denied` with
+    `TypeError: post() got an unexpected keyword argument 'timeout'`. The
+    helper already sets timeout=40; the extra kwarg was a harness typo.
+    Classification: **test harness**. Three checks after it did not run.
+  - This session: **PENDING** hosted re-qualification after removing the
+    stray `timeout=` kwarg. Increments 1–2 remain qualified by run
+    `34865327509` (85/85 native checks, commit `c0048dc`).
 - Baseline for increments 1–2: hosted run `34865327509` (success, head
   `c0048dc86fd5cc772a3b8db1f887a0cff7b997ce`).
 

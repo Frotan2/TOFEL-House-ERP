@@ -140,6 +140,21 @@ class Increment3ActorGuardTests(unittest.TestCase):
         body = _function_source(self.src, "cannot_list") + _function_source(self.src, "cannot_read_doc")
         self.assertIn("PermissionError", body)
 
+    def test_post_helper_is_not_called_with_timeout(self):
+        # Run 34887457604: alloc_revoke passed timeout= into post(), which only
+        # takes (label, method, payload). Coverage of revocation stays.
+        tree = ast.parse(self.src)
+
+        class Visitor(ast.NodeVisitor):
+            def visit_Call(self, node):
+                if isinstance(node.func, ast.Name) and node.func.id == "post":
+                    for kw in node.keywords:
+                        if kw.arg == "timeout":
+                            raise AssertionError("post() does not accept timeout")
+                self.generic_visit(node)
+
+        Visitor().visit(tree)
+
     def test_http_allocate_keys_match_whitelist_signature(self):
         # Run 34886485679: HTTP JSON used case/blueprint/policy while the
         # whitelist still required case_name/blueprint_name/policy_name → 500.

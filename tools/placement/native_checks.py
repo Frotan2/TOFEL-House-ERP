@@ -721,7 +721,7 @@ def main():
         check('http-alloc-concurrent-distinct-keys',http_alloc_race)
         def alloc_revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['publisher']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
-            return http_denied(post('publisher','allocate_attempt',dict(http_alloc_payload,blueprint=cfgx['small_bp'],request_key='http_alloc_revoked_001'),timeout=30))
+            return http_denied(post('publisher','allocate_attempt',dict(http_alloc_payload,blueprint=cfgx['small_bp'],request_key='http_alloc_revoked_001')))
         check('http-alloc-revoked-publisher-old-session-denied',alloc_revoke)
         def revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['other']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
