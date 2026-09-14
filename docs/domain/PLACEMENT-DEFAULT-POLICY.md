@@ -1,5 +1,12 @@
 # TOEFL House — proposed default placement policy
 
+> **Superseded policy proposals:** [PLACEMENT-FINAL-APPROVAL.md](PLACEMENT-FINAL-APPROVAL.md)
+> is the current final M01–M05 approval set. It withdraws universal score cutoffs,
+> the 16+ rollout assumption and the hard retake-count cap, and revises timing,
+> moderation and retention policy. Numbers and approval prompts below are retained
+> as proposal history, not approved or current operating rules.
+
+
 Date: 2026-09-14 · Baseline: `7b1515b6d7de6a8a13b1bb0d3ad81beee22c94fd`
 
 **Authoritative M01–M05 policy proposal; not implementation authorization. Production: REJECT.** This document supplies defaults beneath [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md), replacing its open-ended policy questionnaire with the five approval items in §7. It does not change the architecture, previously approved organizational owners, or historical approval/evidence records. No proposed numerical value is already approved or validated by the center.
