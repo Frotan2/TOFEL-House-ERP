@@ -1,0 +1,1244 @@
+{
+  "scope": "Phase 3 architecture source cross-check; no new runtime qualification, no schemas implemented",
+  "sources": [
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/student_applicant/student_applicant.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/student_applicant/student_applicant.json",
+      "sha256": "328e557435f4e240fa197843b2ab3a0f6fab90042b0a855ea77652ac0ca283f1",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Student Applicant",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "first_name",
+          "fieldtype": "Data",
+          "reqd": 1
+        },
+        {
+          "fieldname": "program",
+          "fieldtype": "Link",
+          "options": "Program",
+          "reqd": 1
+        },
+        {
+          "fieldname": "naming_series",
+          "fieldtype": "Select",
+          "options": "EDU-APP-.YYYY.-"
+        },
+        {
+          "fieldname": "application_status",
+          "fieldtype": "Select",
+          "options": "Applied\nApproved\nRejected\nAdmitted"
+        },
+        {
+          "fieldname": "academic_year",
+          "fieldtype": "Link",
+          "options": "Academic Year",
+          "reqd": 1
+        },
+        {
+          "fieldname": "academic_term",
+          "fieldtype": "Link",
+          "options": "Academic Term"
+        },
+        {
+          "fieldname": "student_admission",
+          "fieldtype": "Link",
+          "options": "Student Admission"
+        },
+        {
+          "fieldname": "gender",
+          "fieldtype": "Link",
+          "options": "Gender"
+        },
+        {
+          "fieldname": "blood_group",
+          "fieldtype": "Select",
+          "options": "\nA+\nA-\nB+\nB-\nO+\nO-\nAB+\nAB-"
+        },
+        {
+          "fieldname": "guardians",
+          "fieldtype": "Table",
+          "options": "Student Guardian"
+        },
+        {
+          "fieldname": "siblings",
+          "fieldtype": "Table",
+          "options": "Student Sibling"
+        },
+        {
+          "fieldname": "amended_from",
+          "fieldtype": "Link",
+          "options": "Student Applicant"
+        },
+        {
+          "fieldname": "student_category",
+          "fieldtype": "Link",
+          "options": "Student Category"
+        },
+        {
+          "fieldname": "country",
+          "fieldtype": "Link",
+          "options": "Country"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/student_admission/student_admission.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/student_admission/student_admission.json",
+      "sha256": "fb90c3ec302ae02dedd9d3c93449968e13b99048f8bb18bc53413395ae4f2970",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Student Admission",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "academic_year",
+          "fieldtype": "Link",
+          "options": "Academic Year",
+          "reqd": 1
+        },
+        {
+          "fieldname": "program_details",
+          "fieldtype": "Table",
+          "options": "Student Admission Program"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/student/student.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/student/student.json",
+      "sha256": "0d8bf39a7392f003effb9ae4dd1da2f127d09203f4f5646d155599fdb3154bfe",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Student",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "first_name",
+          "fieldtype": "Data",
+          "reqd": 1
+        },
+        {
+          "fieldname": "user",
+          "fieldtype": "Link",
+          "options": "User"
+        },
+        {
+          "fieldname": "naming_series",
+          "fieldtype": "Select",
+          "options": "EDU-STU-.YYYY.-"
+        },
+        {
+          "fieldname": "student_email_id",
+          "fieldtype": "Data",
+          "reqd": 1
+        },
+        {
+          "fieldname": "blood_group",
+          "fieldtype": "Select",
+          "options": "\nA+\nA-\nB+\nB-\nO+\nO-\nAB+\nAB-"
+        },
+        {
+          "fieldname": "gender",
+          "fieldtype": "Link",
+          "options": "Gender"
+        },
+        {
+          "fieldname": "student_applicant",
+          "fieldtype": "Link",
+          "options": "Student Applicant"
+        },
+        {
+          "fieldname": "country",
+          "fieldtype": "Link",
+          "options": "Country"
+        },
+        {
+          "fieldname": "guardians",
+          "fieldtype": "Table",
+          "options": "Student Guardian"
+        },
+        {
+          "fieldname": "siblings",
+          "fieldtype": "Table",
+          "options": "Student Sibling"
+        },
+        {
+          "fieldname": "customer",
+          "fieldtype": "Link",
+          "options": "Customer"
+        },
+        {
+          "fieldname": "customer_group",
+          "fieldtype": "Link",
+          "options": "Customer Group"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/guardian/guardian.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/guardian/guardian.json",
+      "sha256": "b1d3cb25fd847ec1b0a49ce1f4c9bd3148f7fa3f9c349dfb72e44592a1cd1772",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Guardian",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "guardian_name",
+          "fieldtype": "Data",
+          "reqd": 1
+        },
+        {
+          "fieldname": "user",
+          "fieldtype": "Link",
+          "options": "User"
+        },
+        {
+          "fieldname": "students",
+          "fieldtype": "Table",
+          "options": "Guardian Student"
+        },
+        {
+          "fieldname": "interests",
+          "fieldtype": "Table",
+          "options": "Guardian Interest"
+        },
+        {
+          "fieldname": "gender",
+          "fieldtype": "Link",
+          "options": "Gender"
+        },
+        {
+          "fieldname": "blood_group",
+          "fieldtype": "Select",
+          "options": "\nA+\nA-\nB+\nB-\nO+\nO-\nAB+\nAB-"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/program/program.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/program/program.json",
+      "sha256": "3384c7191b4195ab2b71b30f10d00cf685b80d9f3b1de16e73ba1544ee3b9a6c",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Program",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "program_name",
+          "fieldtype": "Data",
+          "reqd": 1
+        },
+        {
+          "fieldname": "department",
+          "fieldtype": "Link",
+          "options": "Department"
+        },
+        {
+          "fieldname": "courses",
+          "fieldtype": "Table",
+          "options": "Program Course"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/program_enrollment/program_enrollment.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/program_enrollment/program_enrollment.json",
+      "sha256": "2c45fb2a4227e672a1aebc8157377fec0e8cae23b7fc8d1c6e485ffd73953905",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Program Enrollment",
+      "is_submittable": 1,
+      "fields": [
+        {
+          "fieldname": "student",
+          "fieldtype": "Link",
+          "options": "Student",
+          "reqd": 1
+        },
+        {
+          "fieldname": "student_category",
+          "fieldtype": "Link",
+          "options": "Student Category"
+        },
+        {
+          "fieldname": "student_batch_name",
+          "fieldtype": "Link",
+          "options": "Student Batch Name"
+        },
+        {
+          "fieldname": "program",
+          "fieldtype": "Link",
+          "options": "Program",
+          "reqd": 1
+        },
+        {
+          "fieldname": "academic_year",
+          "fieldtype": "Link",
+          "options": "Academic Year",
+          "reqd": 1
+        },
+        {
+          "fieldname": "academic_term",
+          "fieldtype": "Link",
+          "options": "Academic Term"
+        },
+        {
+          "fieldname": "enrollment_date",
+          "fieldtype": "Date",
+          "reqd": 1
+        },
+        {
+          "fieldname": "courses",
+          "fieldtype": "Table",
+          "options": "Program Enrollment Course"
+        },
+        {
+          "fieldname": "fees",
+          "fieldtype": "Table",
+          "options": "Program Fee"
+        },
+        {
+          "fieldname": "amended_from",
+          "fieldtype": "Link",
+          "options": "Program Enrollment"
+        },
+        {
+          "fieldname": "school_house",
+          "fieldtype": "Link",
+          "options": "School House"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/course_enrollment/course_enrollment.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/course_enrollment/course_enrollment.json",
+      "sha256": "20840cda810704b605b3377d92ad12e3aa16b3f3acd5d6d8ee51bf77d65100a7",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Course Enrollment",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "program_enrollment",
+          "fieldtype": "Link",
+          "options": "Program Enrollment",
+          "reqd": 1
+        },
+        {
+          "fieldname": "student",
+          "fieldtype": "Link",
+          "options": "Student",
+          "reqd": 1
+        },
+        {
+          "fieldname": "course",
+          "fieldtype": "Link",
+          "options": "Course",
+          "reqd": 1
+        },
+        {
+          "fieldname": "enrollment_date",
+          "fieldtype": "Date",
+          "reqd": 1
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/student_group/student_group.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/student_group/student_group.json",
+      "sha256": "cf4aa1ea73fc1e1266765ea1c204cffd40edaa452a0b288a66ba41dc5021a085",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Student Group",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "academic_year",
+          "fieldtype": "Link",
+          "options": "Academic Year",
+          "reqd": 1
+        },
+        {
+          "fieldname": "group_based_on",
+          "fieldtype": "Select",
+          "options": "\nBatch\nCourse\nActivity",
+          "reqd": 1
+        },
+        {
+          "fieldname": "student_group_name",
+          "fieldtype": "Data",
+          "reqd": 1
+        },
+        {
+          "fieldname": "academic_term",
+          "fieldtype": "Link",
+          "options": "Academic Term"
+        },
+        {
+          "fieldname": "program",
+          "fieldtype": "Link",
+          "options": "Program"
+        },
+        {
+          "fieldname": "batch",
+          "fieldtype": "Link",
+          "options": "Student Batch Name"
+        },
+        {
+          "fieldname": "course",
+          "fieldtype": "Link",
+          "options": "Course"
+        },
+        {
+          "fieldname": "students",
+          "fieldtype": "Table",
+          "options": "Student Group Student"
+        },
+        {
+          "fieldname": "instructors",
+          "fieldtype": "Table",
+          "options": "Student Group Instructor"
+        },
+        {
+          "fieldname": "student_category",
+          "fieldtype": "Link",
+          "options": "Student Category"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/instructor/instructor.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/instructor/instructor.json",
+      "sha256": "c0f99c42e1bff6466435595e47e792c3dd1708339ae47bea37552f2e7146f502",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Instructor",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "instructor_name",
+          "fieldtype": "Data",
+          "reqd": 1
+        },
+        {
+          "fieldname": "employee",
+          "fieldtype": "Link",
+          "options": "Employee"
+        },
+        {
+          "fieldname": "naming_series",
+          "fieldtype": "Select",
+          "options": "EDU-INS-.YYYY.-"
+        },
+        {
+          "fieldname": "department",
+          "fieldtype": "Link",
+          "options": "Department"
+        },
+        {
+          "fieldname": "instructor_log",
+          "fieldtype": "Table",
+          "options": "Instructor Log"
+        },
+        {
+          "fieldname": "status",
+          "fieldtype": "Select",
+          "options": "Active\nLeft"
+        },
+        {
+          "fieldname": "gender",
+          "fieldtype": "Link",
+          "options": "Gender"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/course_schedule/course_schedule.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/course_schedule/course_schedule.json",
+      "sha256": "da6b8beb3e68ebe5804cbf2b7c5d2deabbfa5f35684b5f52e1146f9beb7b55db",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Course Schedule",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "student_group",
+          "fieldtype": "Link",
+          "options": "Student Group",
+          "reqd": 1
+        },
+        {
+          "fieldname": "instructor",
+          "fieldtype": "Link",
+          "options": "Instructor",
+          "reqd": 1
+        },
+        {
+          "fieldname": "naming_series",
+          "fieldtype": "Select",
+          "options": "EDU-CSH-.YYYY.-"
+        },
+        {
+          "fieldname": "course",
+          "fieldtype": "Link",
+          "options": "Course",
+          "reqd": 1
+        },
+        {
+          "fieldname": "room",
+          "fieldtype": "Link",
+          "options": "Room",
+          "reqd": 1
+        },
+        {
+          "fieldname": "from_time",
+          "fieldtype": "Time",
+          "reqd": 1
+        },
+        {
+          "fieldname": "to_time",
+          "fieldtype": "Time",
+          "reqd": 1
+        },
+        {
+          "fieldname": "program",
+          "fieldtype": "Link",
+          "options": "Program"
+        },
+        {
+          "fieldname": "class_schedule_color",
+          "fieldtype": "Select",
+          "options": "blue\ngreen\nred\norange\nyellow\nteal\nviolet\ncyan\namber\npink\npurple"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/student_attendance/student_attendance.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/student_attendance/student_attendance.json",
+      "sha256": "d01b5c63e8c21b6d1dcdf917e59c890f20116484d44d90b1a1ec25538a76790d",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Student Attendance",
+      "is_submittable": 1,
+      "fields": [
+        {
+          "fieldname": "student",
+          "fieldtype": "Link",
+          "options": "Student",
+          "reqd": 1
+        },
+        {
+          "fieldname": "course_schedule",
+          "fieldtype": "Link",
+          "options": "Course Schedule"
+        },
+        {
+          "fieldname": "date",
+          "fieldtype": "Date",
+          "reqd": 1
+        },
+        {
+          "fieldname": "student_group",
+          "fieldtype": "Link",
+          "options": "Student Group"
+        },
+        {
+          "fieldname": "status",
+          "fieldtype": "Select",
+          "options": "Present\nAbsent\nLeave",
+          "reqd": 1
+        },
+        {
+          "fieldname": "leave_application",
+          "fieldtype": "Link",
+          "options": "Student Leave Application"
+        },
+        {
+          "fieldname": "naming_series",
+          "fieldtype": "Select",
+          "options": "EDU-ATT-.YYYY.-"
+        },
+        {
+          "fieldname": "amended_from",
+          "fieldtype": "Link",
+          "options": "Student Attendance"
+        },
+        {
+          "fieldname": "link_nvfk",
+          "fieldtype": "Link",
+          "options": "Program"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/assessment_plan/assessment_plan.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/assessment_plan/assessment_plan.json",
+      "sha256": "d8724f76bb60b3ca421a8a9c0bbe5ae565e7658ce292096739ab4eb79c783be2",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Assessment Plan",
+      "is_submittable": 1,
+      "fields": [
+        {
+          "fieldname": "student_group",
+          "fieldtype": "Link",
+          "options": "Student Group",
+          "reqd": 1
+        },
+        {
+          "fieldname": "assessment_group",
+          "fieldtype": "Link",
+          "options": "Assessment Group",
+          "reqd": 1
+        },
+        {
+          "fieldname": "grading_scale",
+          "fieldtype": "Link",
+          "options": "Grading Scale",
+          "reqd": 1
+        },
+        {
+          "fieldname": "course",
+          "fieldtype": "Link",
+          "options": "Course",
+          "reqd": 1
+        },
+        {
+          "fieldname": "program",
+          "fieldtype": "Link",
+          "options": "Program"
+        },
+        {
+          "fieldname": "academic_year",
+          "fieldtype": "Link",
+          "options": "Academic Year"
+        },
+        {
+          "fieldname": "academic_term",
+          "fieldtype": "Link",
+          "options": "Academic Term"
+        },
+        {
+          "fieldname": "schedule_date",
+          "fieldtype": "Date",
+          "reqd": 1
+        },
+        {
+          "fieldname": "room",
+          "fieldtype": "Link",
+          "options": "Room"
+        },
+        {
+          "fieldname": "examiner",
+          "fieldtype": "Link",
+          "options": "Instructor"
+        },
+        {
+          "fieldname": "from_time",
+          "fieldtype": "Time",
+          "reqd": 1
+        },
+        {
+          "fieldname": "to_time",
+          "fieldtype": "Time",
+          "reqd": 1
+        },
+        {
+          "fieldname": "supervisor",
+          "fieldtype": "Link",
+          "options": "Instructor"
+        },
+        {
+          "fieldname": "maximum_assessment_score",
+          "fieldtype": "Float",
+          "reqd": 1
+        },
+        {
+          "fieldname": "assessment_criteria",
+          "fieldtype": "Table",
+          "options": "Assessment Plan Criteria",
+          "reqd": 1
+        },
+        {
+          "fieldname": "amended_from",
+          "fieldtype": "Link",
+          "options": "Assessment Plan"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/assessment_result/assessment_result.json",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/assessment_result/assessment_result.json",
+      "sha256": "e5d7c943656cdb1dc43505e0b163a12a5b93a564443c3ac57866c76edb9890b3",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Assessment Result",
+      "is_submittable": 1,
+      "fields": [
+        {
+          "fieldname": "assessment_plan",
+          "fieldtype": "Link",
+          "options": "Assessment Plan",
+          "reqd": 1
+        },
+        {
+          "fieldname": "program",
+          "fieldtype": "Link",
+          "options": "Program"
+        },
+        {
+          "fieldname": "course",
+          "fieldtype": "Link",
+          "options": "Course"
+        },
+        {
+          "fieldname": "academic_year",
+          "fieldtype": "Link",
+          "options": "Academic Year"
+        },
+        {
+          "fieldname": "academic_term",
+          "fieldtype": "Link",
+          "options": "Academic Term"
+        },
+        {
+          "fieldname": "student",
+          "fieldtype": "Link",
+          "options": "Student",
+          "reqd": 1
+        },
+        {
+          "fieldname": "student_group",
+          "fieldtype": "Link",
+          "options": "Student Group"
+        },
+        {
+          "fieldname": "assessment_group",
+          "fieldtype": "Link",
+          "options": "Assessment Group"
+        },
+        {
+          "fieldname": "grading_scale",
+          "fieldtype": "Link",
+          "options": "Grading Scale"
+        },
+        {
+          "fieldname": "details",
+          "fieldtype": "Table",
+          "options": "Assessment Result Detail",
+          "reqd": 1
+        },
+        {
+          "fieldname": "amended_from",
+          "fieldtype": "Link",
+          "options": "Assessment Result"
+        }
+      ]
+    },
+    {
+      "app": "erpnext",
+      "commit": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+      "path": "erpnext/crm/doctype/lead/lead.json",
+      "url": "https://github.com/frappe/erpnext/blob/4048fb70e14d1843956fcdabb7c3cca75a1cbcdd/erpnext/crm/doctype/lead/lead.json",
+      "sha256": "6bbcd54335d5551b5a0b648ab73b0f82dda0c877ba7d537170981116cf658906",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Lead",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "naming_series",
+          "fieldtype": "Select",
+          "options": "CRM-LEAD-.YYYY.-"
+        },
+        {
+          "fieldname": "lead_owner",
+          "fieldtype": "Link",
+          "options": "User"
+        },
+        {
+          "fieldname": "status",
+          "fieldtype": "Select",
+          "options": "Lead\nOpen\nReplied\nOpportunity\nQuotation\nLost Quotation\nInterested\nConverted\nDo Not Contact",
+          "reqd": 1
+        },
+        {
+          "fieldname": "salutation",
+          "fieldtype": "Link",
+          "options": "Salutation"
+        },
+        {
+          "fieldname": "gender",
+          "fieldtype": "Link",
+          "options": "Gender"
+        },
+        {
+          "fieldname": "customer",
+          "fieldtype": "Link",
+          "options": "Customer"
+        },
+        {
+          "fieldname": "type",
+          "fieldtype": "Select",
+          "options": "\nClient\nChannel Partner\nConsultant"
+        },
+        {
+          "fieldname": "market_segment",
+          "fieldtype": "Link",
+          "options": "Market Segment"
+        },
+        {
+          "fieldname": "industry",
+          "fieldtype": "Link",
+          "options": "Industry Type"
+        },
+        {
+          "fieldname": "request_type",
+          "fieldtype": "Select",
+          "options": "\nProduct Enquiry\nRequest for Information\nSuggestions\nOther"
+        },
+        {
+          "fieldname": "company",
+          "fieldtype": "Link",
+          "options": "Company"
+        },
+        {
+          "fieldname": "territory",
+          "fieldtype": "Link",
+          "options": "Territory"
+        },
+        {
+          "fieldname": "language",
+          "fieldtype": "Link",
+          "options": "Language"
+        },
+        {
+          "fieldname": "no_of_employees",
+          "fieldtype": "Select",
+          "options": "1-10\n11-50\n51-200\n201-500\n501-1000\n1000+"
+        },
+        {
+          "fieldname": "qualified_by",
+          "fieldtype": "Link",
+          "options": "User"
+        },
+        {
+          "fieldname": "qualification_status",
+          "fieldtype": "Select",
+          "options": "Unqualified\nIn Process\nQualified"
+        },
+        {
+          "fieldname": "notes",
+          "fieldtype": "Table",
+          "options": "CRM Note"
+        },
+        {
+          "fieldname": "country",
+          "fieldtype": "Link",
+          "options": "Country"
+        },
+        {
+          "fieldname": "utm_source",
+          "fieldtype": "Link",
+          "options": "UTM Source"
+        },
+        {
+          "fieldname": "utm_medium",
+          "fieldtype": "Link",
+          "options": "UTM Medium"
+        },
+        {
+          "fieldname": "utm_campaign",
+          "fieldtype": "Link",
+          "options": "UTM Campaign"
+        }
+      ]
+    },
+    {
+      "app": "erpnext",
+      "commit": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+      "path": "erpnext/setup/doctype/employee/employee.json",
+      "url": "https://github.com/frappe/erpnext/blob/4048fb70e14d1843956fcdabb7c3cca75a1cbcdd/erpnext/setup/doctype/employee/employee.json",
+      "sha256": "238e600228dd3d0b842d2fd3915d64f0edea708fdc2cd9ee2edf8966fb2671c7",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Employee",
+      "is_submittable": 0,
+      "fields": [
+        {
+          "fieldname": "naming_series",
+          "fieldtype": "Select",
+          "options": "HR-EMP-"
+        },
+        {
+          "fieldname": "salutation",
+          "fieldtype": "Link",
+          "options": "Salutation"
+        },
+        {
+          "fieldname": "first_name",
+          "fieldtype": "Data",
+          "reqd": 1
+        },
+        {
+          "fieldname": "company",
+          "fieldtype": "Link",
+          "options": "Company",
+          "reqd": 1
+        },
+        {
+          "fieldname": "status",
+          "fieldtype": "Select",
+          "options": "Active\nInactive\nSuspended\nLeft",
+          "reqd": 1
+        },
+        {
+          "fieldname": "gender",
+          "fieldtype": "Link",
+          "options": "Gender",
+          "reqd": 1
+        },
+        {
+          "fieldname": "date_of_birth",
+          "fieldtype": "Date",
+          "reqd": 1
+        },
+        {
+          "fieldname": "date_of_joining",
+          "fieldtype": "Date",
+          "reqd": 1
+        },
+        {
+          "fieldname": "user_id",
+          "fieldtype": "Link",
+          "options": "User"
+        },
+        {
+          "fieldname": "department",
+          "fieldtype": "Link",
+          "options": "Department"
+        },
+        {
+          "fieldname": "designation",
+          "fieldtype": "Link",
+          "options": "Designation"
+        },
+        {
+          "fieldname": "reports_to",
+          "fieldtype": "Link",
+          "options": "Employee"
+        },
+        {
+          "fieldname": "branch",
+          "fieldtype": "Link",
+          "options": "Branch"
+        },
+        {
+          "fieldname": "holiday_list",
+          "fieldtype": "Link",
+          "options": "Holiday List"
+        },
+        {
+          "fieldname": "salary_mode",
+          "fieldtype": "Select",
+          "options": "\nBank\nCash\nCheque"
+        },
+        {
+          "fieldname": "prefered_contact_email",
+          "fieldtype": "Select",
+          "options": "\nCompany Email\nPersonal Email\nUser ID"
+        },
+        {
+          "fieldname": "permanent_accommodation_type",
+          "fieldtype": "Select",
+          "options": "\nRented\nOwned"
+        },
+        {
+          "fieldname": "current_accommodation_type",
+          "fieldtype": "Select",
+          "options": "\nRented\nOwned"
+        },
+        {
+          "fieldname": "marital_status",
+          "fieldtype": "Select",
+          "options": "\nSingle\nMarried\nDivorced\nWidowed"
+        },
+        {
+          "fieldname": "blood_group",
+          "fieldtype": "Select",
+          "options": "\nA+\nA-\nB+\nB-\nAB+\nAB-\nO+\nO-"
+        },
+        {
+          "fieldname": "education",
+          "fieldtype": "Table",
+          "options": "Employee Education"
+        },
+        {
+          "fieldname": "external_work_history",
+          "fieldtype": "Table",
+          "options": "Employee External Work History"
+        },
+        {
+          "fieldname": "internal_work_history",
+          "fieldtype": "Table",
+          "options": "Employee Internal Work History"
+        },
+        {
+          "fieldname": "leave_encashed",
+          "fieldtype": "Select",
+          "options": "\nYes\nNo"
+        },
+        {
+          "fieldname": "salary_currency",
+          "fieldtype": "Link",
+          "options": "Currency"
+        }
+      ]
+    },
+    {
+      "app": "hrms",
+      "commit": "a4768b441cff346def505e27f2a2229ee1e05b9b",
+      "path": "hrms/payroll/doctype/additional_salary/additional_salary.json",
+      "url": "https://github.com/frappe/hrms/blob/a4768b441cff346def505e27f2a2229ee1e05b9b/hrms/payroll/doctype/additional_salary/additional_salary.json",
+      "sha256": "d7cf9570e47aa5b9e3fc3f603a18548c7b65942580742d08744dcc6a02963d3c",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Additional Salary",
+      "is_submittable": 1,
+      "fields": [
+        {
+          "fieldname": "naming_series",
+          "fieldtype": "Select",
+          "options": "HR-ADS-.YY.-.MM.-",
+          "reqd": 1
+        },
+        {
+          "fieldname": "employee",
+          "fieldtype": "Link",
+          "options": "Employee",
+          "reqd": 1
+        },
+        {
+          "fieldname": "salary_component",
+          "fieldtype": "Link",
+          "options": "Salary Component",
+          "reqd": 1
+        },
+        {
+          "fieldname": "amount",
+          "fieldtype": "Currency",
+          "options": "currency",
+          "reqd": 1
+        },
+        {
+          "fieldname": "department",
+          "fieldtype": "Link",
+          "options": "Department"
+        },
+        {
+          "fieldname": "company",
+          "fieldtype": "Link",
+          "options": "Company",
+          "reqd": 1
+        },
+        {
+          "fieldname": "amended_from",
+          "fieldtype": "Link",
+          "options": "Additional Salary"
+        },
+        {
+          "fieldname": "ref_doctype",
+          "fieldtype": "Link",
+          "options": "DocType"
+        },
+        {
+          "fieldname": "currency",
+          "fieldtype": "Link",
+          "options": "Currency",
+          "reqd": 1
+        }
+      ]
+    },
+    {
+      "app": "hrms",
+      "commit": "a4768b441cff346def505e27f2a2229ee1e05b9b",
+      "path": "hrms/payroll/doctype/payroll_entry/payroll_entry.json",
+      "url": "https://github.com/frappe/hrms/blob/a4768b441cff346def505e27f2a2229ee1e05b9b/hrms/payroll/doctype/payroll_entry/payroll_entry.json",
+      "sha256": "c10f69369ee03ebb0fc5c1f3c77f46e665519f06d4b733e27dd4e7506dd019e9",
+      "evidence_type": "pinned_source_only_not_runtime",
+      "doctype": "Payroll Entry",
+      "is_submittable": 1,
+      "fields": [
+        {
+          "fieldname": "posting_date",
+          "fieldtype": "Date",
+          "reqd": 1
+        },
+        {
+          "fieldname": "payroll_frequency",
+          "fieldtype": "Select",
+          "options": "\nMonthly\nFortnightly\nBimonthly\nWeekly\nDaily"
+        },
+        {
+          "fieldname": "company",
+          "fieldtype": "Link",
+          "options": "Company",
+          "reqd": 1
+        },
+        {
+          "fieldname": "branch",
+          "fieldtype": "Link",
+          "options": "Branch"
+        },
+        {
+          "fieldname": "department",
+          "fieldtype": "Link",
+          "options": "Department"
+        },
+        {
+          "fieldname": "designation",
+          "fieldtype": "Link",
+          "options": "Designation"
+        },
+        {
+          "fieldname": "employees",
+          "fieldtype": "Table",
+          "options": "Payroll Employee Detail"
+        },
+        {
+          "fieldname": "start_date",
+          "fieldtype": "Date",
+          "reqd": 1
+        },
+        {
+          "fieldname": "end_date",
+          "fieldtype": "Date",
+          "reqd": 1
+        },
+        {
+          "fieldname": "cost_center",
+          "fieldtype": "Link",
+          "options": "Cost Center",
+          "reqd": 1
+        },
+        {
+          "fieldname": "project",
+          "fieldtype": "Link",
+          "options": "Project"
+        },
+        {
+          "fieldname": "payment_account",
+          "fieldtype": "Link",
+          "options": "Account"
+        },
+        {
+          "fieldname": "amended_from",
+          "fieldtype": "Link",
+          "options": "Payroll Entry"
+        },
+        {
+          "fieldname": "bank_account",
+          "fieldtype": "Link",
+          "options": "Bank Account"
+        },
+        {
+          "fieldname": "currency",
+          "fieldtype": "Link",
+          "options": "Currency",
+          "reqd": 1
+        },
+        {
+          "fieldname": "exchange_rate",
+          "fieldtype": "Float",
+          "reqd": 1
+        },
+        {
+          "fieldname": "payroll_payable_account",
+          "fieldtype": "Link",
+          "options": "Account",
+          "reqd": 1
+        },
+        {
+          "fieldname": "status",
+          "fieldtype": "Select",
+          "options": "Draft\nSubmitted\nCancelled\nQueued\nFailed"
+        },
+        {
+          "fieldname": "grade",
+          "fieldtype": "Link",
+          "options": "Employee Grade"
+        },
+        {
+          "fieldname": "overtime_step",
+          "fieldtype": "Select",
+          "options": "\nCreate\nSubmit"
+        }
+      ]
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/student_applicant/student_applicant.py",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/student_applicant/student_applicant.py",
+      "sha256": "c3f18a4cba6bd6f365a10d900fc5c4adb5ab9abf98e1cecf555099b7a92e65f5",
+      "evidence_type": "pinned_source_only_not_runtime"
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/student/student.py",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/student/student.py",
+      "sha256": "dd8c543818aa5377656b6918227c6dadf808df7d3c2a650bf1054c458545030a",
+      "evidence_type": "pinned_source_only_not_runtime"
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/doctype/program_enrollment/program_enrollment.py",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/doctype/program_enrollment/program_enrollment.py",
+      "sha256": "940861f19d967c7667fa1883441f04676c838f8691394b0d024e7da83deb9e34",
+      "evidence_type": "pinned_source_only_not_runtime"
+    },
+    {
+      "app": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "path": "education/education/api.py",
+      "url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/education/education/api.py",
+      "sha256": "888bdfbac5f4460013d609baadf1aa41a90f5d5fa02feacd045c1643cab4a04c",
+      "evidence_type": "pinned_source_only_not_runtime"
+    }
+  ],
+  "owned_boundary_review": {
+    "repository_commit": "a3bafc2bef51fa027d5efbec85844ab0de96e0c5",
+    "files": [
+      {
+        "path": "apps/foundation_security/foundation_security/guards.py",
+        "sha256": "2e7f0410b607269dd704c120e7beafbde4816eaef0543e7f8464ea1f6a9a85ce"
+      },
+      {
+        "path": "apps/foundation_security/foundation_security/files.py",
+        "sha256": "e85811795f776a1e74ac6e05b81f5128c8e1caeaf68dc84ef5245f79294f9f49"
+      }
+    ],
+    "observations": [
+      "Student and Guardian exact native scopes apply globally; broad same-account staff access is not established by a role selector.",
+      "Guardian membership lookup requires native Student parent rows; applicant-only guardian relationships do not meet that login contract.",
+      "Existing file parent guard specifically targets Student/Guardian profiles; new placement/HR parent types and staff assignment policies require additional owned design and qualification."
+    ],
+    "evidence_type": "owned_source_only_not_new_runtime_proof"
+  }
+}

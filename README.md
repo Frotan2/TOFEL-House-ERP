@@ -5,6 +5,12 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
+**Phase 3 domain architecture is ready for review:**
+[TOEFL House domain design package](docs/domain/README.md) covers native entity ownership,
+placement/admission/academic/finance/HR workflows, permissions, integration boundaries
+and the implementation plan. The user has authorized **design and planning only**.
+No domain app, schema, API or UI has been implemented; production approval is not implied.
+
 **Recommendation: REJECT current Phase 2/production acceptance.** Hosted tests verify
 controlled web/worker restart and existing security regressions. An isolated frontend
 candidate reduces advisory matches from 57 to 23 but is **not adopted**; production
@@ -46,9 +52,10 @@ Contracted, bounded upstream-aligned maintenance is the fallback if feasibility 
 a permanent private fork, replacement portal or forced dependency overrides.
 
 Preserve native student, employee, academic and accounting authorities, and keep owned
-security safeguards reversible. No product app or TOEFL-specific work begins until the
-required gates pass. English remains canonical; no UI redesign or localization changes
-are in scope. The architecture choice is **not** production approval.
+security safeguards reversible. Phase 3 domain design and planning are authorized; no
+product app or TOEFL-specific implementation begins without review, explicit authorization
+and the required gate agreement. English remains canonical; no UI redesign or localization
+changes are in scope. The architecture choice is **not** production approval.
 
 The branch-scoped **Foundation runtime validation** GitHub Actions workflow is the
 reproducible clean-install qualification runner. It is not a production deployment

@@ -2278,5 +2278,14 @@
     "risk_acceptance_granted": false,
     "runtime_changes": false,
     "new_runtime_tests_executed": false
+  },
+  "phase3_domain_design": {
+    "status": "design_proposal_ready_for_review",
+    "index": "../domain/README.md",
+    "review_status": "../domain/review-status.json",
+    "design_authorized": true,
+    "implementation_authorized": false,
+    "production_deployment_authorized": false,
+    "new_domain_runtime_evidence": false
   }
 }

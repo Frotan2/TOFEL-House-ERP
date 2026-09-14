@@ -114,3 +114,10 @@ The selected strategy does not eliminate these current blockers:
 - [Owned security boundaries and historical hardening evidence](foundation-hardening-remediation.md)
 
 All prior failed evidence is retained. This architecture-only decision introduces no new runtime pass, waiver, dependency version, deployment, vendor commitment or product feature.
+
+## Subsequent Phase 3 design authorization
+
+The user has authorized [TOEFL House domain architecture and planning](../domain/README.md)
+for review on this unchanged foundation. That permits domain **design**, not schema/API/UI
+implementation or deployment. The maintenance strategy, failed production acceptance,
+absence of risk acceptance and all retained evidence remain unchanged.
