@@ -13,9 +13,9 @@ async function connect(label){
  if(r.status!==200)throw new Error('Login HTTP '+r.status);
  const cookie=r.headers.getSetCookie().map(c=>c.split(';')[0]).find(c=>c.startsWith('sid='));
  if(!cookie)throw new Error('No authenticated cookie');
- const socket=io('http://foundation.localhost:9000/foundation.localhost',{transports:['websocket'],extraHeaders:{Host:'foundation.localhost',Origin:'http://foundation.localhost',Cookie:cookie},reconnection:false,timeout:10000});
+ const socket=io('http://foundation.localhost:9000/foundation.localhost',{transports:['websocket'],extraHeaders:{Host:'foundation.localhost',Origin:'http://foundation.localhost:8080',Cookie:cookie},reconnection:false,timeout:10000});
  sockets.push(socket);
- await new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('connect_error',()=>reject(new Error('Authenticated socket connection failed')));});
+ await new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('connect_error',e=>reject(new Error('Authenticated socket connection failed: '+String(e.message).replaceAll(cookie.slice(4),'[REDACTED]').slice(0,150))));});
  return socket;
 }
 function publish(kind){execFileSync(process.env.FOUNDATION_BENCH_PYTHON,[process.env.FOUNDATION_EVENT_HELPER,kind],{cwd:process.env.FOUNDATION_SITES_DIR,stdio:'pipe'});}
