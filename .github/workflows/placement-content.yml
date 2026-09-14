@@ -8,6 +8,8 @@ on:
       - tests/placement/**
       - tools/placement/native_checks.py
       - tools/placement/run_native.py
+      - tools/foundation/runner_probe.py
+      - tools/foundation/publish_evidence.py
   workflow_dispatch:
 permissions:
   contents: read

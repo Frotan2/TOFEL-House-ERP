@@ -17,11 +17,16 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-BRANCH = "refs/heads/arena/01a09bf3-tofel-house-erp"
+# Explicitly authorized hosted session branches: the previous session branch
+# (foundation workflows) and the current placement build session branch.
+AUTHORIZED_REFS = (
+    "refs/heads/arena/01a09bf3-tofel-house-erp",
+    "refs/heads/arena/01a0a055-tofel-house-erp",
+)
 
 
 def main() -> int:
-    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("GITHUB_REF") != BRANCH:
+    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("GITHUB_REF") not in AUTHORIZED_REFS:
         raise SystemExit("Run only in the explicitly authorized GitHub Actions branch/ephemeral runner")
     evidence = ROOT / ".foundation/runner-evidence"
     evidence.mkdir(parents=True, exist_ok=True)
