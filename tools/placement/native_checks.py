@@ -179,12 +179,12 @@ def main():
         pol=check('config-policy-independent-publication',lambda:as_user('publisher2',lambda:api.publish_config('cfg_publish_pol_001','policy',pol['name'],2)))
         assert pol['status']=='Published'
         def cfg_generic_write():
-            frappe.set_user(users['publisher2']);doc=frappe.get_doc(api.BP,bp['name']);doc.status='Draft';doc.flags.ignore_permissions=True
+            frappe.set_user(users['publisher2']);doc=frappe.get_doc(api.BLUEPRINT,bp['name']);doc.status='Draft';doc.flags.ignore_permissions=True
             return denied(lambda:doc.save(ignore_permissions=True))
         check('config-ignore-permissions-does-not-bypass-controller',cfg_generic_write)
         check('config-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.POLICY,pol['name']).db_set('status','Retired')))
-        check('config-direct-db-update-denied',lambda:denied(lambda:frappe.get_doc(api.BP,bp['name']).db_update()))
-        check('config-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.BP,bp['name'],ignore_permissions=True)))
+        check('config-direct-db-update-denied',lambda:denied(lambda:frappe.get_doc(api.BLUEPRINT,bp['name']).db_update()))
+        check('config-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.BLUEPRINT,bp['name'],ignore_permissions=True)))
         def cfg_audit_shape():
             frappe.set_user(users['auditor'])
             rows=frappe.get_all(api.AUDIT,filters={'target':bp['name']},fields=['action','item_revision','before_key','after_key'])
@@ -196,26 +196,26 @@ def main():
         check('config-audit-ledger-shape',cfg_audit_shape)
         def cfg_native_reads():
             frappe.set_user(users['second_author'])
-            assert not frappe.get_doc(api.BP,bp['name']).has_permission('read')
+            assert not frappe.get_doc(api.BLUEPRINT,bp['name']).has_permission('read')
             assert not frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
             frappe.set_user(users['author'])
-            assert frappe.get_doc(api.BP,bp['name']).has_permission('read')
+            assert frappe.get_doc(api.BLUEPRINT,bp['name']).has_permission('read')
             frappe.set_user(users['publisher2'])
-            assert frappe.get_doc(api.BP,bp['name']).has_permission('read')
+            assert frappe.get_doc(api.BLUEPRINT,bp['name']).has_permission('read')
             assert frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
             frappe.set_user(users['auditor'])
             assert frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
-            assert not frappe.get_doc(api.BP,bp['name']).has_permission('read')
+            assert not frappe.get_doc(api.BLUEPRINT,bp['name']).has_permission('read')
             frappe.set_user(users['second_author'])
-            assert not frappe.get_list(api.BP,filters={'code':bp_code})
+            assert not frappe.get_list(api.BLUEPRINT,filters={'code':bp_code})
             frappe.set_user(users['auditor'])
-            assert not frappe.get_list(api.BP,filters={'code':bp_code})
+            assert not frappe.get_list(api.BLUEPRINT,filters={'code':bp_code})
             assert len(frappe.get_list(api.POLICY,filters={'code':pol_code}))==1
             return {'own_and_published_visible':True,'retired_hidden_from_auditor':True,'list_parity':True}
         check('config-role-and-list-parity',cfg_native_reads)
         def cfg_rollback_proof():
             frappe.set_user(users['author']);frappe.db.savepoint('cfg_atomic')
-            old=frappe.db.count(api.BP);oldop=frappe.db.count(api.OP)
+            old=frappe.db.count(api.BLUEPRINT);oldop=frappe.db.count(api.OP)
             original=frappe.get_doc
             def injected(*args,**kwargs):
                 if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:raise RuntimeError('synthetic configuration audit failure')
@@ -224,13 +224,13 @@ def main():
                 with patch.object(frappe,'get_doc',side_effect=injected):api.create_draft_config('cfg_atomic_bp_0001','blueprint','SYN-BP-ROLLBACK-1',1,good_bp)
             except RuntimeError:frappe.db.rollback(save_point='cfg_atomic')
             else:raise AssertionError('Failure injection did not execute')
-            assert (frappe.db.count(api.BP),frappe.db.count(api.OP))==(old,oldop)
+            assert (frappe.db.count(api.BLUEPRINT),frappe.db.count(api.OP))==(old,oldop)
             return {'real_database_rollback':True,'injected_boundary':'audit append'}
         check('config-atomic-doc-receipt-audit-rollback',cfg_rollback_proof)
         frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
         check('second-site-no-first-site-record',lambda:{'absent':not frappe.db.exists(api.ITEM,item['name'])} if not frappe.db.exists(api.ITEM,item['name']) else (_ for _ in ()).throw(AssertionError('Cross-site record')))
         def cfg_second_site():
-            assert not frappe.db.exists(api.BP,bp['name']) and not frappe.db.exists(api.POLICY,pol['name'])
+            assert not frappe.db.exists(api.BLUEPRINT,bp['name']) and not frappe.db.exists(api.POLICY,pol['name'])
             return {'config_absent_on_second_site':True}
         check('second-site-no-first-site-config-record',cfg_second_site)
 
@@ -337,7 +337,7 @@ def main():
             try:return http_denied(s.post(base+'/api/method/toefl_house.api.create_draft_config',json=dict(cfg_payload,request_key='http_cfg_csrf_0001'),timeout=30),csrf=True)
             finally:s.headers['X-Frappe-CSRF-Token']=token
         check('http-config-csrf-negative-with-positive-control',cfg_csrf_negative)
-        cfg_url=base+'/api/resource/'+quote(api.BP,safe='')+'/'+httpbp['name']
+        cfg_url=base+'/api/resource/'+quote(api.BLUEPRINT,safe='')+'/'+httpbp['name']
         check('http-config-direct-crud-mutation-denied',lambda:http_denied(sessions['author'].put(cfg_url,json={'status':'Published','flags':{'ignore_permissions':1}},timeout=30)))
         check('http-config-other-author-read-denied',lambda:http_denied(sessions['second_author'].get(cfg_url,timeout=30)))
         def concurrent_cfg_create():
@@ -348,7 +348,7 @@ def main():
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
             assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
             results=[r.json()['message'] for r in rs];assert results[0]==results[1]
-            frappe.db.rollback();assert frappe.db.count(api.BP,{'code':p['code']})==1
+            frappe.db.rollback();assert frappe.db.count(api.BLUEPRINT,{'code':p['code']})==1
             assert frappe.db.count(api.AUDIT,{'target':results[0]['name']})==1
             return {'http_statuses':[200,200],'one_doc_and_audit':True}
         check('http-config-concurrent-create-idempotency',concurrent_cfg_create)

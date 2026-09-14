@@ -78,10 +78,33 @@ retry, two-site synthetic isolation gate):
 
 <!-- Filled from actual execution output only; no inferred or relabeled results. -->
 
-- Local pure unit tests (`python3 -m unittest discover -s tests/placement -v` and
-  `-s tests/foundation`): **PENDING**
-- Hosted native qualification run (`.github/workflows/placement-content.yml` on
-  `arena/01a0a055-tofel-house-erp`): **PENDING**
+- Local pure unit tests, executed in the session workspace on 2026-09-14:
+  - `python3 -m unittest discover -s tests/placement -v`: **47/47 OK**
+    (18 increment-1 content policy, 7 transactions, 22 increment-2 config
+    policy/state/read-boundary tests).
+  - `python3 -m unittest discover -s tests/foundation`: **OK** (unchanged).
+  - `node tests/foundation/test_realtime_guard.cjs`: **PASS** (unchanged).
+- Hosted qualification (`.github/workflows/placement-content.yml` on
+  `arena/01a0a055-tofel-house-erp`):
+  - Run `34859456825` (commit `1fbf2a474f7b87896fa73f17e4553a2d1c83e36e`):
+    **FAILED at the "Pinned runner dependencies" step before any Frappe
+    installation** — the shared foundation probe/evidence gates
+    (`tools/foundation/runner_probe.py`, `tools/foundation/publish_evidence.py`)
+    still matched only the previous session branch and exited before any
+    download/service check. The "Owned local tests" step passed on the
+    runner. Harness-gate fix in `1c53918`.
+  - Run `34861078186` (commit `1c5391826a972335438f379ce92e168c63d9fe70`):
+    probe passed; pinned installs, both site installations and migrations
+    **succeeded**; the native acceptance step then ran **57 of 58 checks to
+    completion, all earlier checks pass**, and failed at
+    `config-ignore-permissions-does-not-bypass-controller` with
+    `AttributeError: module 'toefl_house.api' has no attribute 'BP'` —
+    `tools/placement/native_checks.py` referenced `api.BP` while
+    `toefl_house/api.py` exports `BLUEPRINT` (14 occurrences). Fixed by
+    renaming the references to `api.BLUEPRINT` and adding a local AST guard
+    test (`tests/placement/test_native_check_names.py`) that fails locally if
+    any `api.*` name used by the hosted native checks is missing from
+    `api.py`. Re-qualification triggered by that fix commit.
 - Baseline for increment 1: hosted run `34851805904` (success, parent branch
   `arena/01a09bf3-tofel-house-erp`, head `092a06d2b3d597f42ccd858f2e99d2732f32cd19`).
 
