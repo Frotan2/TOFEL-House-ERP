@@ -197,7 +197,7 @@ def main():
         def cfg_native_reads():
             frappe.set_user(users['second_author'])
             assert not frappe.get_doc(api.BLUEPRINT,bp['name']).has_permission('read')
-            assert not frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
+            assert frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
             frappe.set_user(users['author'])
             assert frappe.get_doc(api.BLUEPRINT,bp['name']).has_permission('read')
             frappe.set_user(users['publisher2'])
