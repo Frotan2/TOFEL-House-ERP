@@ -43,6 +43,18 @@ def main():
             student=frappe.get_doc('Student',records['students'][0])
             student.append('guardians',{'guardian':guardian.name,'relation':'Father'})
             student.save()
+            records['guardian']=guardian.name
+            other_file=frappe.get_doc({'doctype':'File','file_name':'guardian-other.txt','is_private':1,'attached_to_doctype':'Student','attached_to_name':records['students'][1],'content':'Owned Beta guardian isolation marker'}).insert()
+            records['guardian_other_file_url']=other_file.file_url
+            frappe.db.commit()
+            probe=requests.Session();probe.headers['Host']='foundation.localhost'
+            denied=probe.post('http://127.0.0.1:8080/api/method/login',data={'usr':'validation-guardian@example.test','pwd':os.environ['FOUNDATION_TEST_PASSWORD']},timeout=30)
+            assert denied.status_code==403, 'Unscoped Guardian login must fail closed'
+            for allow,value in [('Guardian',guardian.name),('Student',student.name),('Customer',student.customer)]:
+                frappe.get_doc({'doctype':'User Permission','user':'validation-guardian@example.test','allow':allow,'for_value':value,'apply_to_all_doctypes':1}).insert()
+            business_path=Path(os.environ['FOUNDATION_BUSINESS_REPORT'])
+            business=json.loads(business_path.read_text());business['records']=records
+            business_path.write_text(json.dumps(business,indent=2)+'\n')
             return {'teacher_employee_instructor_link':True,'guardian_linked_to_alpha_only':True}
         check('native-teacher-and-guardian-links',links)
         payroll={}
@@ -82,6 +94,7 @@ def main():
         def guardian_scope():
             student=frappe.get_doc('Student',records['students'][0])
             for allow,value in [('Student',student.name),('Customer',student.customer)]:
+                if frappe.db.exists('User Permission',{'user':'validation-guardian@example.test','allow':allow,'for_value':value}): continue
                 frappe.get_doc({'doctype':'User Permission','user':'validation-guardian@example.test','allow':allow,'for_value':value,'apply_to_all_doctypes':1}).insert()
             frappe.db.commit()
             frappe.clear_cache(user='validation-guardian@example.test')
@@ -89,6 +102,39 @@ def main():
         check('guardian-native-scope-configuration',guardian_scope)
         check('guardian-scoped-own-student-read',lambda:read('guardian','Student',records['students'][0],200))
         check('guardian-scoped-other-student-denied',lambda:read('guardian','Student',records['students'][1],403))
+        def guardian_path(path,expected,params=None):
+            r=sessions['guardian'].get('http://127.0.0.1:8080'+path,params=params,timeout=30)
+            assert r.status_code==expected, f'Guardian path expected {expected}, observed {r.status_code}'
+            if expected==200 and path.startswith('/api/method/'):
+                assert r.json()['message']['name']==records['students'][0]
+            if expected==200 and path==records['private_file_url']:
+                import hashlib
+                assert hashlib.sha256(r.content).hexdigest()==records['private_file_sha256']
+            return {'http_status':r.status_code}
+        for index in (0,1):
+            check('guardian-rpc-'+str(index),lambda index=index:guardian_path('/api/method/frappe.client.get',200 if index==0 else 403,{'doctype':'Student','name':records['students'][index]}))
+        check('guardian-own-private-file',lambda:guardian_path(records['private_file_url'],200))
+        check('guardian-other-private-file',lambda:guardian_path(records['guardian_other_file_url'],403))
+        def drift(mode):
+            rule=frappe.get_doc('User Permission',{'user':'validation-guardian@example.test','allow':'Student','for_value':records['students'][0]})
+            extra=None
+            try:
+                if mode=='missing':
+                    rule.delete()
+                else:
+                    extra=frappe.get_doc({'doctype':'User Permission','user':'validation-guardian@example.test','allow':'Student','for_value':records['students'][1],'apply_to_all_doctypes':1}).insert()
+                frappe.db.commit()
+                guardian_path('/api/resource/Student/'+quote(records['students'][0],safe=''),403)
+                guardian_path('/api/method/frappe.client.get',403,{'doctype':'Student','name':records['students'][0]})
+                guardian_path(records['private_file_url'],403)
+            finally:
+                if extra: extra.delete()
+                if mode=='missing':
+                    frappe.get_doc({'doctype':'User Permission','user':'validation-guardian@example.test','allow':'Student','for_value':records['students'][0],'apply_to_all_doctypes':1}).insert()
+                frappe.db.commit()
+            return guardian_path(records['private_file_url'],200)
+        check('guardian-live-missing-scope-fail-closed-and-recovery',lambda:drift('missing'))
+        check('guardian-live-expanded-scope-fail-closed-and-recovery',lambda:drift('expanded'))
         for label,expected in [('accountant',200),('hr',403),('teacher',403),('guardian',403),('employee',403)]:
             check(label+'-finance-boundary',lambda label=label,expected=expected:read(label,'Sales Invoice',records['invoice'],expected))
         for label,expected in [('hr',200),('teacher',200),('academic',403),('accountant',403),('guardian',403),('employee',403),('alpha',403)]:

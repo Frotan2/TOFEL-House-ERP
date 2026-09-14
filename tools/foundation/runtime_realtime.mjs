@@ -20,6 +20,8 @@ async function connect(label){
 }
 function publish(kind){execFileSync(process.env.FOUNDATION_BENCH_PYTHON,[process.env.FOUNDATION_EVENT_HELPER,kind],{cwd:process.env.FOUNDATION_SITES_DIR,stdio:'pipe'});}
 try{
+ publish('prepare');
+ const task=JSON.parse(fs.readFileSync(process.env.FOUNDATION_REALTIME_TASK)).id;
  let alpha,beta;
  await check('authenticated-student-sockets',async()=>{alpha=await connect('alpha');beta=await connect('beta');return {connected:2};});
  await check('document-room-cross-student-isolation',async()=>{
@@ -34,11 +36,18 @@ try{
  await check('unrelated-task-progress-subscription-denied',async()=>{
   if(!alpha||!beta)throw new Error('Socket setup unavailable');
   const a=[],b=[];alpha.on('foundation_probe',m=>a.push(m));beta.on('foundation_probe',m=>b.push(m));
-  alpha.emit('task_subscribe','foundation-owned-secret-task');beta.emit('task_subscribe','foundation-owned-secret-task');
+  alpha.emit('task_subscribe',task);beta.emit('task_subscribe',task);
   await delay(500);publish('task');await delay(1500);
   if(!a.some(m=>m.marker==='owned-task-progress'))throw new Error('Positive-control task event absent');
   if(b.some(m=>m.marker==='owned-task-progress'))throw new Error('Unrelated authenticated user received task marker when task identifier was known');
   return {other_delivery:false};
+ });
+ await check('live-session-revocation-stops-document-and-task-delivery',async()=>{
+  if(!alpha?.connected||!beta?.connected)throw new Error('Positive socket setup unavailable');
+  const messages=[];alpha.on('foundation_probe',m=>messages.push(m));
+  publish('revoke');publish('document');publish('task');await delay(2000);
+  if(messages.length)throw new Error('Revoked session received resource data');
+  return {revoked_delivery:false};
  });
 }finally{for(const s of sockets)s.disconnect();report.status=report.checks.some(c=>c.status==='fail')?'fail':'pass';fs.writeFileSync(process.env.FOUNDATION_REALTIME_REPORT,JSON.stringify(report,null,2));}
 if(report.status!=='pass')process.exitCode=1;

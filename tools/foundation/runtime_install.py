@@ -244,7 +244,7 @@ def main() -> int:
         run("native-user-permission-configuration", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_permissions.py", site], cwd=bench_dir / "sites")
         run("restore-native-permission-configuration", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_permissions.py", restored_site], cwd=bench_dir / "sites")
         extension = ROOT / "apps/foundation_security"
-        report["security_extension"] = {"name": "foundation_security", "version": "0.1.0", "repository_commit": os.environ["GITHUB_SHA"],
+        report["security_extension"] = {"name": "foundation_security", "version": "0.2.0", "repository_commit": os.environ["GITHUB_SHA"],
                                         "file_sha256": {str(p.relative_to(extension)): hashlib.sha256(p.read_bytes()).hexdigest() for p in extension.rglob("*") if p.is_file() and "__pycache__" not in p.parts}}
         # Bench 5.31 expects a local app Git root even with --soft-link. Export
         # only our app into the disposable lab; never initialize/move repo .git.
@@ -384,9 +384,9 @@ http {{
                 diagnostic_failures.append(str(exc))
         # Independent remaining gates: failures must not suppress other evidence.
         env.update(FOUNDATION_BENCH_PYTHON=str(bench_dir / "env/bin/python"), FOUNDATION_SITES_DIR=str(bench_dir / "sites"),
-                   FOUNDATION_EVENT_HELPER=str(ROOT / "tools/foundation/runtime_publish_event.py"), FOUNDATION_LAB=str(lab),
+                   FOUNDATION_REALTIME_TASK=str(lab / "realtime-task.json"), FOUNDATION_EVENT_HELPER=str(ROOT / "tools/foundation/runtime_publish_event.py"), FOUNDATION_LAB=str(lab),
                    FOUNDATION_ROOT_PASSWORD=root_password, FOUNDATION_UPGRADE_PASSWORD=upgrade_password)
-        for label in ("readiness", "realtime", "upgrade"):
+        for label in ("readiness", "realtime", "upgrade", "guardian_browser"):
             env["FOUNDATION_" + label.upper() + "_REPORT"] = str(evidence / (label + "-result.json"))
         for label, command, directory in (
             ("remaining-role-and-operational-checks", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_readiness.py", site], bench_dir / "sites"),
@@ -394,8 +394,10 @@ http {{
         ):
             try: run(label, command, cwd=directory)
             except RuntimeError as exc: diagnostic_failures.append(str(exc))
+        shutil.copyfile(ROOT / "tools/foundation/runtime_guardian_browser.mjs", browser_dir / "guardian.mjs")
         shutil.copyfile(ROOT / "tools/foundation/runtime_realtime.mjs", browser_dir / "realtime.mjs")
         for label, command in (
+            ("guardian-browser-authorization", ["node", browser_dir / "guardian.mjs"]),
             ("actual-realtime-authorization", ["node", browser_dir / "realtime.mjs"]),
             ("hosted-frontend-advisory-audit", [bench_dir / "env/bin/python", ROOT / "tools/foundation/audit_frontend.py", bench_dir / "apps/education/frontend/node_modules", "--output", evidence / "frontend-advisories.json"]),
             ("isolated-controlled-patch-upgrade", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_upgrade.py"]),
@@ -403,7 +405,7 @@ http {{
             try: run(label, command, timeout=2400)
             except RuntimeError as exc: diagnostic_failures.append(str(exc))
         continuation = {"run_id": report["run_id"], "commit": report["commit"], "status":"pass", "security_gate_passed":False, "phase2_gate_passed":False}
-        for label in ("readiness", "realtime", "upgrade"):
+        for label in ("readiness", "realtime", "upgrade", "guardian_browser"):
             path=evidence / (label + "-result.json")
             if path.exists(): path.write_text(redact(path.read_text()))
             continuation[label] = json.loads(path.read_text()) if path.exists() else {"status":"blocked","reason":"No completed report"}

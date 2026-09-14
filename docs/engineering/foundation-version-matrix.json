@@ -249,19 +249,22 @@
   },
   "owned_security_extension_candidate": {
     "name": "foundation_security",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "source_path": "apps/foundation_security",
-    "source_revision": "4aeac6ebfd83c402ef88829fd311f3cd98d43374",
+    "source_revision": null,
     "status": "under_runtime_qualification_not_security_approved",
-    "scope": "Generic supported Frappe hooks only; no product schema or TOEFL logic",
+    "scope": "Generic Guardian/Student canonical scope hooks and pinned realtime resource-delivery guard; no product schema; not production approved.",
     "file_sha256": {
-      "pyproject.toml": "760bc925588b4c817c03a292d23a96ce2de5a7963f14eabf0ecb8b2af6f530af",
-      "README.md": "03ca0e7c4598318620e54023f68ebfff5da4865f9914f0256af78a2a82666be3",
-      "foundation_security/__init__.py": "91447944015cec709e8aa7655f7e9d64e1e4508e7023a57fe3746911c0fc6fed",
-      "foundation_security/modules.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "README.md": "f862cd6e68a5e513bd5f7aec3b5a780931eda43a1c185856b4ea4bb8e900d161",
+      "pyproject.toml": "5629e210b60b47c19ff54cfb98b19ddee70348e2a6eb8ceb87d1ced0cdae0edc",
+      "foundation_security/__init__.py": "667d4a15b970b851e20d17510224670c14646cfb6d5a1e388ca6b9cc6da8bf41",
+      "foundation_security/guards.py": "2e7f0410b607269dd704c120e7beafbde4816eaef0543e7f8464ea1f6a9a85ce",
       "foundation_security/hooks.py": "18318d8e54b13a87c137f8be6577b44de4d4e2dc4bef1672fb7e762a7497d0d3",
-      "foundation_security/guards.py": "4afaac2a06f6241ff91009a45c5e1b589720af0f88870ec7c78e20209fa35800",
-      "foundation_security/patches.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    }
+      "foundation_security/modules.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "foundation_security/patches.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "foundation_security/realtime.py": "4641122b8200dbd27b0b6455abe4969c899806f0a9f859d33be758a16d916e3e",
+      "realtime/handlers.js": "e0b60122c491671473591fc2e5cd0b2c58794ad21aa09022994d6533797dc266"
+    },
+    "source_revision_note": "Exact repository SHA recorded in each hosted report; file hashes below define this unapproved candidate."
   }
 }

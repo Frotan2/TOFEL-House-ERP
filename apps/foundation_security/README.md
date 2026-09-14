@@ -25,3 +25,24 @@ provisioning UI or institution-specific provisioning service is implemented here
 The validation workflow installs with supported Bench `get-app --soft-link --skip-assets`
 and `install-app`. Removal is the supported `uninstall-app foundation_security`; doing so
 removes these guards and invalidates this security qualification. It is not a secure rollback.
+
+## 0.2 qualification candidate (not production approval)
+
+Guardian requests now derive exact Guardian/Student/Customer scopes from native links,
+including multiple children. Missing, expanded or stale scopes and inherited shares
+fail closed at login and every HTTP request. Mixed Student/Guardian roles must satisfy
+both boundaries; broader mixed-role usability remains unqualified.
+
+The app's Frappe realtime entry point replaces unchecked subscriptions and wraps the
+pinned Socket.IO in-process adapter's broadcast boundary. Each delivery rechecks the
+native HTTP session and document permission or exact native RQ job site/user ownership.
+No identity or task ownership table is introduced. Unknown/broad/combined rooms are
+denied, not inferred safe. Namespace broadcasts target only explicitly checked socket
+IDs, preventing a new membership from racing into an authorized packet.
+
+This deliberately disables broad site/website/doctype announcements, unchecked task
+subscriptions and open-in-editor. There are availability/UX costs; this is not a claim
+of transparent compatibility with every upstream realtime feature. Cluster adapters,
+acknowledged broadcasts and new upstream app handlers need separate qualification.
+Only the pinned Frappe/Socket.IO contract is tested. HTTP/proxy origin protection must
+also be qualified before public exposure; post-auth resource checks do not replace it.

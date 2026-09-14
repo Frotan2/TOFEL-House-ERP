@@ -7,6 +7,7 @@ import frappe
 
 
 def validate_student_scope():
+    validate_guardian_scope()
     user = frappe.session.user
     if user in (None, "Guest", "Administrator") or "Student" not in frappe.get_roles(user):
         return
@@ -55,3 +56,37 @@ def validate_request():
         get_csrf_token()
         raise frappe.CSRFTokenError("Reload the page before changing data")
     get_csrf_token()
+
+
+def validate_guardian_scope():
+    """Canonical native Guardian membership, including multiple children; no cache."""
+    user = frappe.session.user
+    if user in (None, "Guest", "Administrator") or "Guardian" not in frappe.get_roles(user):
+        return
+    if not (frappe.db.get_single_value("Website Settings", "disable_signup")
+            and frappe.db.get_single_value("Education Settings", "user_creation_skip")
+            and frappe.db.get_single_value("System Settings", "apply_strict_user_permissions")
+            and frappe.db.get_single_value("System Settings", "disable_document_sharing")
+            and frappe.conf.get("disable_website_cache")):
+        raise frappe.PermissionError("Guardian requires qualified security settings")
+    guardians = frappe.get_all("Guardian", filters={"user": user}, fields=["name"], limit_page_length=2)
+    if len(guardians) != 1:
+        raise frappe.PermissionError("Guardian requires one canonical identity")
+    links = frappe.get_all("Student Guardian", filters={"guardian": guardians[0].name,
+        "parenttype":"Student", "parentfield":"guardians"}, pluck="parent")
+    if not links:
+        raise frappe.PermissionError("Guardian requires canonical child membership")
+    students = frappe.get_all("Student", filters={"name":["in", list(set(links))]}, fields=["name", "customer"])
+    if len(students) != len(set(links)) or any(not s.customer for s in students):
+        raise frappe.PermissionError("Guardian child/customer scope is incomplete")
+    expected = {"Guardian":{guardians[0].name}, "Student":{s.name for s in students},
+                "Customer":{s.customer for s in students}}
+    for allow, values in expected.items():
+        rules = frappe.get_all("User Permission", filters={"user":user,"allow":allow},
+                               fields=["for_value","apply_to_all_doctypes"])
+        if len(rules) != len(values) or {r.for_value for r in rules} != values or any(not r.apply_to_all_doctypes for r in rules):
+            raise frappe.PermissionError("Guardian requires exact native permission scopes")
+    shares = frappe.get_all("DocShare", or_filters={"user":user,"everyone":1},
+                            fields=["share_doctype","share_name","everyone"])
+    if any(s.everyone or s.share_doctype != "User" or s.share_name != user for s in shares):
+        raise frappe.PermissionError("Guardian document shares require security review")
