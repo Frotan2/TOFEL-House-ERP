@@ -1,0 +1,84 @@
+{
+  "date": "2026-09-14",
+  "recommendation": "REJECT",
+  "phase2_gate_passed": false,
+  "security_gate_passed": false,
+  "product_implementation_authorized": false,
+  "production_candidate_adopted": false,
+  "scope": "Current foundation acceptance; architecture remains candidate. No product or TOEFL implementation.",
+  "verification": "evidence/phase-2/dependency-operations-hosted-verification.json",
+  "items": [
+    {
+      "id": "education-dependencies",
+      "status": "fail",
+      "evidence": "hosted/frontend-34823793929.json",
+      "observed": "57 baseline matches; isolated candidate 23; 35 original matches removed, one newly applicable Vite match. Both builds and 8 API checks pass; candidate ranges satisfied, not adopted.",
+      "closure": "Coherent maintained upstream toolchain/UI/parser migration; exact locks, clean full audit, exploit-specific and native integration regressions."
+    },
+    {
+      "id": "web-worker-restart",
+      "status": "pass_scoped",
+      "evidence": "hosted/remaining-34823345078.json: restart",
+      "observed": "Native record/cache marker retained, previously queued job finished, native proxy ping, 47 post-restart authorization checks pass.",
+      "limits": "Gunicorn/RQ only; no claim for DB/Redis/host crash, HA, in-flight exactly-once, existing browser session or measured restart downtime."
+    },
+    {
+      "id": "native-scheduler",
+      "status": "pass_scoped",
+      "evidence": "hosted/remaining-34823345078.json: readiness",
+      "observed": "Actual scheduler-created Complete at 234.2s; tick 240s / budget 360s.",
+      "limits": "Not a long-duration scheduler availability or business-job completeness test."
+    },
+    {
+      "id": "security-regressions",
+      "status": "pass_scoped",
+      "evidence": "hosted/remaining-34823345078.json",
+      "observed": "54 readiness, 6 Guardian browser, 4 realtime checks; native private-file legacy ownership boundary retained.",
+      "limits": "Broad mixed-role/multi-child/lifecycle/print/export/attachment/delegation and app-specific realtime combinations remain unqualified."
+    },
+    {
+      "id": "patch-upgrade",
+      "status": "pass_scoped",
+      "evidence": "hosted/remaining-34823345078.json: upgrade",
+      "observed": "33 stages, nine business checks before and five preservation checks after Frappe patch upgrade with four other app pins fixed.",
+      "limits": "No independent ERPNext/Education/HRMS or security-extension upgrade/rollback proof."
+    },
+    {
+      "id": "hardened-restore",
+      "status": "pass_scoped",
+      "evidence": "hosted/runtime-34823345078.json",
+      "observed": "Separate database/site recovery, native records/files, encrypted credential recovery and copied-session revocation regressions retained.",
+      "limits": "Same controlled runner/Bench; not an independent-host disaster recovery or approved offsite key/backup retention process."
+    },
+    {
+      "id": "other-dependency-trees",
+      "status": "not_fully_qualified",
+      "closure": "Audit all relevant Frappe/ERPNext/HRMS/Payments, Node/server, Python and container dependency surfaces. Education-only results are not a whole-stack SBOM/security pass."
+    },
+    {
+      "id": "public-deployment-boundary",
+      "status": "not_qualified",
+      "closure": "Approved hostname/proxy topology/certificates; TLS, Secure cookies, origin/header spoofing, CSRF, private-file routing and realtime authentication tests on that deployment."
+    },
+    {
+      "id": "datastore-host-durability",
+      "status": "not_qualified",
+      "closure": "Controlled MariaDB/Redis restart and host-loss drills, configured persistence, queued/in-flight job handling and data integrity against defined recovery objectives."
+    },
+    {
+      "id": "rollback-independent-host-recovery",
+      "status": "not_qualified",
+      "closure": "Rehearse supported rollback or restore-based rollback, independent-host encrypted recovery and key availability/session revocation; define RPO/RTO and measure them."
+    },
+    {
+      "id": "capacity-monitoring-operations",
+      "status": "not_qualified",
+      "closure": "Define representative concurrency/data scale and availability objectives; prove queue/DB/web capacity, alert delivery, audit/log retention/rotation and incident recovery."
+    },
+    {
+      "id": "wider-business-role-coverage",
+      "status": "not_qualified",
+      "closure": "Native payroll posting/GL and broader staff/HR/finance role, report/export/print and attachment lifecycle coverage; do not substitute draft payroll/report read ACLs."
+    }
+  ]
+}

@@ -5,11 +5,12 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
-**Recommendation: REJECT current Phase 2/production acceptance.** Hosted verification now
-confirms the targeted Guardian legacy-file ownership protection, realtime resource guards
-and scheduler execution. Dependency remediation and broader production gates remain open;
-the final workflow still fails its advisory audit. No TOEFL-specific work is authorized.
-See the [hardening remediation report](docs/engineering/foundation-hardening-remediation.md).
+**Recommendation: REJECT current Phase 2/production acceptance.** Hosted tests verify
+controlled web/worker restart and existing security regressions. An isolated frontend
+candidate reduces advisory matches from 57 to 23 but is **not adopted**; production
+pins remain unchanged and broader operational gates remain open. No TOEFL-specific
+implementation is authorized. See the
+[final qualification review](docs/engineering/foundation-final-qualification.md).
 
 **Phase 2 qualification is incomplete. A clean pinned ERP installation and migrations
 have passed on a controlled hosted runner. Product implementation remains blocked.**

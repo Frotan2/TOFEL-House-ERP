@@ -1,5 +1,18 @@
 # Foundation hardening remediation — qualification, not product development
 
+## Subsequent dependency and operations qualification — 2026-09-14
+
+**REJECT remains current.** See [final qualification review](foundation-final-qualification.md)
+and [acceptance ledger](foundation-production-acceptance-ledger.json). Hosted frontend
+comparison **34823793929** reduces 57 baseline matches to 23 in an isolated candidate
+(35 removed, one newly applicable); the candidate is **not adopted** and both audits fail.
+Native run **34823345078** passes controlled Gunicorn/RQ restart and **47 post-restart
+isolation checks**, plus 54 readiness / 6 Guardian browser / 4 realtime / 33 upgrade checks.
+Actual scheduler Complete is observed at 234.2s. Full public deployment, data-store/host
+recovery, broader business/security coverage and dependency acceptance remain open.
+The detailed checkpoints below remain retained evidence, not newer production approvals.
+
+
 ## Final targeted hardening verification — 2026-09-14
 
 **Decision: REJECT current Phase 2 / production acceptance.** The targeted legacy-file
