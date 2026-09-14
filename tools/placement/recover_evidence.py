@@ -1,5 +1,7 @@
 """Recover only sanitized Placement qualification artifacts on an ephemeral runner."""
 import hashlib
+import base64
+import gzip
 import json
 import os
 from pathlib import Path
@@ -23,3 +25,15 @@ record={'status':'pass' if reports.get('result.json',{}).get('status')=='pass' e
         'source_run':run,'source_commit':metadata['head_sha'],'source_url':metadata['html_url'],
         'reports':reports,'logs':logs}
 (out/'recovered.json').write_text(json.dumps(record,indent=2)+'\n')
+
+# Split losslessly rather than truncating full logs to the Checks API text cap.
+raw=json.dumps(record,separators=(",",":"),ensure_ascii=True).encode()
+encoded=base64.b64encode(gzip.compress(raw,mtime=0)).decode()
+chunks=[encoded[i:i+42000] for i in range(0,len(encoded),42000)]
+for i,data in enumerate(chunks):
+    part={"status":record["status"],"encoding":"gzip+base64-part","source_run":run,
+          "source_commit":metadata["head_sha"],"payload_sha256":hashlib.sha256(raw).hexdigest(),
+          "part":i,"parts":len(chunks),"data":data}
+    target=out/f"part-{i}.json";target.write_text(json.dumps(part)+"\n")
+    subprocess.run(["python3",str(root/"tools/foundation/publish_evidence.py"),str(target),
+                    "--name",f"Placement recovered {run} part {i+1}/{len(chunks)}"],check=True)

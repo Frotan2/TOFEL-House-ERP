@@ -25,9 +25,6 @@ jobs:
       - name: Recover original sanitized evidence without changing observations
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           SOURCE_RUN: ${{ inputs.source_run || '34847470712' }}
         run: python3 tools/placement/recover_evidence.py
-      - name: Publish lossless transport
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 tools/foundation/publish_evidence.py .foundation/recovered-placement/recovered.json --name 'Placement recovered evidence'
