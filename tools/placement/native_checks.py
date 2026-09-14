@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import time
+import traceback
 from unittest.mock import patch
 from urllib.parse import quote
 
@@ -26,6 +27,7 @@ def main():
         try:
             value=fn();frappe.db.commit()
             report['checks'].append({'name':name,'status':'pass','observation':value,'seconds':round(time.monotonic()-start,3)})
+            return value
         except Exception as exc:
             frappe.db.rollback()
             report['checks'].append({'name':name,'status':'fail','exception':type(exc).__name__,'message':str(exc)[:600]})
@@ -197,6 +199,7 @@ def main():
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}
         print('Native qualification failed:',type(exc).__name__,str(exc)[:600],flush=True)
+        print(traceback.format_exc(),flush=True)
     finally:
         output.write_text(json.dumps(report,indent=2,default=str)+'\n')
         frappe.destroy()

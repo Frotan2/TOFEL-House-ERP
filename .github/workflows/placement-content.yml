@@ -6,7 +6,8 @@ on:
       - .github/workflows/placement-content.yml
       - apps/toefl_house/**
       - tests/placement/**
-      - tools/placement/**
+      - tools/placement/native_checks.py
+      - tools/placement/run_native.py
   workflow_dispatch:
 permissions:
   contents: read
