@@ -45,6 +45,10 @@ def main():
             student.save()
             records['guardian']=guardian.name
             other_file=frappe.get_doc({'doctype':'File','file_name':'guardian-other.txt','is_private':1,'attached_to_doctype':'Student','attached_to_name':records['students'][1],'content':'Owned Beta guardian isolation marker'}).insert()
+            # Model legacy ownership retained after a child's access is revoked.
+            # Owning a File must not override denied parent Student access.
+            other_file.owner='validation-guardian@example.test'
+            other_file.save()
             records['guardian_other_file_url']=other_file.file_url
             frappe.db.commit()
             probe=requests.Session();probe.headers['Host']='foundation.localhost'

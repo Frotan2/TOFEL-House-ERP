@@ -249,20 +249,21 @@
   },
   "owned_security_extension_candidate": {
     "name": "foundation_security",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "source_path": "apps/foundation_security",
     "source_revision": null,
     "status": "under_runtime_qualification_not_security_approved",
     "scope": "Generic Guardian/Student canonical scope hooks and pinned realtime resource-delivery guard; no product schema; not production approved.",
     "file_sha256": {
       "README.md": "f862cd6e68a5e513bd5f7aec3b5a780931eda43a1c185856b4ea4bb8e900d161",
-      "pyproject.toml": "5629e210b60b47c19ff54cfb98b19ddee70348e2a6eb8ceb87d1ced0cdae0edc",
-      "foundation_security/__init__.py": "667d4a15b970b851e20d17510224670c14646cfb6d5a1e388ca6b9cc6da8bf41",
+      "pyproject.toml": "4e4399387c218c062d1c2280022f9309337ed2277e7997d0d5ba7b9dae088961",
+      "foundation_security/__init__.py": "1df8d53aba539e667ec551426125665f9d045da050789b5e5071be3c3ea242cf",
       "foundation_security/guards.py": "2e7f0410b607269dd704c120e7beafbde4816eaef0543e7f8464ea1f6a9a85ce",
-      "foundation_security/hooks.py": "18318d8e54b13a87c137f8be6577b44de4d4e2dc4bef1672fb7e762a7497d0d3",
+      "foundation_security/hooks.py": "d3794c6329b19ed795b6577a13e123c728309bce83b813ce32604e833f3d594a",
       "foundation_security/modules.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "foundation_security/patches.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "foundation_security/realtime.py": "4641122b8200dbd27b0b6455abe4969c899806f0a9f859d33be758a16d916e3e",
+      "foundation_security/files.py": "f4e9dc0315d44d677ba85c14577691161ef8bb23aaefae631a9206c7368049f6",
       "realtime/handlers.js": "e0b60122c491671473591fc2e5cd0b2c58794ad21aa09022994d6533797dc266"
     },
     "source_revision_note": "Exact repository SHA recorded in each hosted report; file hashes below define this unapproved candidate."

@@ -244,7 +244,7 @@ def main() -> int:
         run("native-user-permission-configuration", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_permissions.py", site], cwd=bench_dir / "sites")
         run("restore-native-permission-configuration", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_permissions.py", restored_site], cwd=bench_dir / "sites")
         extension = ROOT / "apps/foundation_security"
-        report["security_extension"] = {"name": "foundation_security", "version": "0.2.0", "repository_commit": os.environ["GITHUB_SHA"],
+        report["security_extension"] = {"name": "foundation_security", "version": "0.2.1", "repository_commit": os.environ["GITHUB_SHA"],
                                         "file_sha256": {str(p.relative_to(extension)): hashlib.sha256(p.read_bytes()).hexdigest() for p in extension.rglob("*") if p.is_file() and "__pycache__" not in p.parts}}
         # Bench 5.31 expects a local app Git root even with --soft-link. Export
         # only our app into the disposable lab; never initialize/move repo .git.

@@ -7,3 +7,4 @@ app_license = "MIT"
 required_apps = ["education"]
 on_session_creation = "foundation_security.guards.on_session_creation"
 auth_hooks = ["foundation_security.guards.validate_request"]
+has_permission = {"File": "foundation_security.files.parent_permission"}
