@@ -2,6 +2,7 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 if(process.env.GITHUB_ACTIONS!=='true')throw new Error('Disposable runner only');
 const root=process.env.FOUNDATION_FRONTEND_ROOT;
+process.chdir(root);
 const vite=require(path.join(root,'node_modules/vite'));
 const packages=new Map();
 function owner(id){

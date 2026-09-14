@@ -8,7 +8,7 @@ import sys
 
 def main():
     import frappe
-    if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1] not in ("restore.localhost", "recovery.localhost"):
+    if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1] not in ("restore.localhost", "recovery.localhost", "upgrade.localhost"):
         raise SystemExit("Restore verification is restricted to the isolated Actions restore site")
     expected = json.loads(Path(os.environ["FOUNDATION_BUSINESS_REPORT"]).read_text())["records"]
     output = Path(os.environ["FOUNDATION_RESTORE_REPORT"])

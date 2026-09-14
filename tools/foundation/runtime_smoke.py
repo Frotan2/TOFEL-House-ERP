@@ -14,7 +14,7 @@ def run():
     import frappe
     from frappe.utils import nowdate, getdate
 
-    if frappe.local.site != "foundation.localhost" or os.environ.get("GITHUB_ACTIONS") != "true":
+    if frappe.local.site not in ("foundation.localhost", "upgrade.localhost") or os.environ.get("GITHUB_ACTIONS") != "true":
         raise RuntimeError("Synthetic smoke fixtures are restricted to the disposable Actions site")
     report = {"scope": "Synthetic upstream data and explicitly enumerated assertions", "status": "running",
               "checks": [], "records": {}, "phase2_gate_passed": False}
