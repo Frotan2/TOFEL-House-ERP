@@ -80,5 +80,8 @@
       "status": "not_qualified",
       "closure": "Native payroll posting/GL and broader staff/HR/finance role, report/export/print and attachment lifecycle coverage; do not substitute draft payroll/report read ACLs."
     }
-  ]
+  ],
+  "architecture_decision": "foundation-architecture-decision.json",
+  "risk_acceptance_granted": false,
+  "architecture_release_boundary": "Option 2 selected as maintenance direction; baseline is qualification-only and all current release gates remain unchanged."
 }

@@ -1,5 +1,14 @@
 # Final foundation qualification — dependency and operations review
 
+## Long-term architecture decision
+
+The [foundation architecture decision](foundation-architecture-decision.md) selects a
+controlled upstream-aligned frontend upgrade path. Current pins remain a qualification
+baseline, not an approved production risk acceptance. Contracted bounded maintenance is
+only a fallback; no permanent fork or replacement portal is authorized. This strategic
+decision does not change the **REJECT** acceptance result or any evidence below.
+
+
 ## Recommendation: REJECT current production / Phase 2 acceptance
 
 The architecture remains a candidate, not a rejected product direction. The pinned

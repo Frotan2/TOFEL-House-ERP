@@ -2269,5 +2269,14 @@
     "scope": "Controlled Gunicorn/RQ process replacement; DB/Redis stay running; no host crash/HA/exactly-once/session continuity/downtime claim"
   },
   "production_acceptance_ledger": "foundation-production-acceptance-ledger.json",
-  "final_recommendation_report": "foundation-final-qualification.md"
+  "final_recommendation_report": "foundation-final-qualification.md",
+  "architecture_decision": {
+    "record": "foundation-architecture-decision.json",
+    "report": "foundation-architecture-decision.md",
+    "selected_strategy": "controlled_upstream_aligned_frontend_upgrade",
+    "production_recommendation": "REJECT",
+    "risk_acceptance_granted": false,
+    "runtime_changes": false,
+    "new_runtime_tests_executed": false
+  }
 }

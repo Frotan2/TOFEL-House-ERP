@@ -10,7 +10,8 @@ controlled web/worker restart and existing security regressions. An isolated fro
 candidate reduces advisory matches from 57 to 23 but is **not adopted**; production
 pins remain unchanged and broader operational gates remain open. No TOEFL-specific
 implementation is authorized. See the
-[final qualification review](docs/engineering/foundation-final-qualification.md).
+[final qualification review](docs/engineering/foundation-final-qualification.md) and
+[long-term architecture decision](docs/engineering/foundation-architecture-decision.md).
 
 **Phase 2 qualification is incomplete. A clean pinned ERP installation and migrations
 have passed on a controlled hosted runner. Product implementation remains blocked.**
@@ -38,11 +39,16 @@ success do not establish a working, secure ERP.
 
 ## Architecture direction
 
-Provisionally qualify Frappe + ERPNext + Education, with HRMS justified for the full
-HR/payroll scope, before creating an owned `toefl_house` application. Preserve
-upstream student, employee, academic and accounting authorities. Do not copy or
-modify upstream core in this repository. English is the canonical product and
-engineering language; no UI redesign or localization changes are in scope now.
+Select **controlled upstream-aligned maintenance** for Frappe + ERPNext + Education,
+with MariaDB by default and HRMS for the justified native HR/payroll scope. Keep current
+pins as an isolated qualification baseline; no production risk acceptance is granted.
+Contracted, bounded upstream-aligned maintenance is the fallback if feasibility fails—not
+a permanent private fork, replacement portal or forced dependency overrides.
+
+Preserve native student, employee, academic and accounting authorities, and keep owned
+security safeguards reversible. No product app or TOEFL-specific work begins until the
+required gates pass. English remains canonical; no UI redesign or localization changes
+are in scope. The architecture choice is **not** production approval.
 
 The branch-scoped **Foundation runtime validation** GitHub Actions workflow is the
 reproducible clean-install qualification runner. It is not a production deployment
