@@ -321,6 +321,9 @@ http {{
         # re-provisioning is run on the recovered site: those must come from SQL.
         env["FOUNDATION_CAPTURED_SESSION"] = str(lab / "captured-session.json")
         run("capture-source-session-before-security-backup", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_recovery_session.py", "capture"])
+        run("prepare-native-encrypted-recovery-fixture", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_recovery_secret.py", "prepare", site], cwd=bench_dir / "sites")
+        original_config = json.loads((bench_dir / "sites" / site / "site_config.json").read_text())
+        assert original_config.get("encryption_key"), "Native encrypted fixture must initialize the site key"
         bench("hardened-backup-with-files", "--site", site, "backup", "--with-files")
         secured_database = max(backup_dir.glob("*-database.sql.gz"), key=lambda p: p.stat().st_mtime_ns)
         secured_private = max(backup_dir.glob("*-private-files.tar"), key=lambda p: p.stat().st_mtime_ns)
@@ -344,6 +347,7 @@ http {{
         recovered_config_file.chmod(0o600)
         bench("hardened-recovery-migrate", "--site", recovered_site, "migrate")
         env["FOUNDATION_RESTORE_REPORT"] = str(evidence / "restore-secured-result.json")
+        run("verify-native-encrypted-credential-recovery", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_recovery_secret.py", "verify", recovered_site], cwd=bench_dir / "sites")
         run("hardened-recovery-invariants", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_restore.py", recovered_site], cwd=bench_dir / "sites")
         run("copied-session-revocation-http-proof", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_recovery_session.py", "verify"])
         env["FOUNDATION_PRIMARY_SITE"] = recovered_site
