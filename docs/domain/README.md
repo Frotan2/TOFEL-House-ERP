@@ -1,5 +1,10 @@
 # Phase 3 — architecture review and decision lock
 
+## Current placement revision
+
+[PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md) is the authoritative revised placement model: managed bank, constrained randomized blueprints, six skills, digital/physical/hybrid delivery and objective/manual marking. It supersedes earlier narrow placement-slice restrictions, not native ownership or the production REJECT. M01–M05 consolidate remaining business policy approvals. Implementation is not authorized. Earlier architecture/source-review metadata records historical snapshots, not a new validation of this revision.
+
+
 Date: 2026-09-14. **Review record, not architecture sign-off or implementation authorization.** Selected Frappe + ERPNext + Education + HRMS/payroll foundation unchanged. Production acceptance remains **REJECT**.
 
 ## Mandatory placement meaning

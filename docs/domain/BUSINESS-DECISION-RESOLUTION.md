@@ -1,8 +1,18 @@
 # Phase 3 — minimum business decision set
 
+> **Placement scope revision:** [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md)
+> is the current authoritative placement design: governed question bank, blueprint-based
+> randomized forms, six-skill automatic/manual assessment and digital/physical/hybrid delivery.
+> It supersedes earlier staff-assisted-only/assessor-led-only scope and blanket exclusions
+> of objective-bank delivery or digital speaking evidence. Recording permissions and
+> operational policies remain conditional; R03 organizational owners and other domain
+> boundaries are unchanged. Earlier approval/checklist text below is historical where
+> it conflicts. No implementation authorization or production approval is granted.
+
+
 Date: 2026-09-14 · Baseline: `c11c9a6baac1f6fba692dfe13bd4fb53a4136823`
 
-**Current status: R01/R02/R03/R07 policy direction APPROVED; remaining policy detail and implementation entry NOT CLEARED. No implementation authorized. Production: REJECT.**
+**Prior gate status (delivery/method/evidence scope now revised): R01/R02/R03/R07 policy direction APPROVED; remaining policy detail and implementation entry NOT CLEARED. No implementation authorized. Production: REJECT.**
 
 The current approval record, exact organizational owner roles, outstanding policy blockers and next gate are in [PLACEMENT-IMPLEMENTATION-GATE.md](PLACEMENT-IMPLEMENTATION-GATE.md). That record supersedes the original approval prompts below for the initial slice. No individual owner names are required at this stage; individual assignments can be configured later without changing the domain architecture.
 

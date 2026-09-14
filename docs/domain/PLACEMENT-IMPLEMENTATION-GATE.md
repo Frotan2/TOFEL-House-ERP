@@ -1,8 +1,18 @@
 # Placement-first implementation-entry gate
 
+> **Placement scope revision:** [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md)
+> is the current authoritative placement design: governed question bank, blueprint-based
+> randomized forms, six-skill automatic/manual assessment and digital/physical/hybrid delivery.
+> It supersedes earlier staff-assisted-only/assessor-led-only scope and blanket exclusions
+> of objective-bank delivery or digital speaking evidence. Recording permissions and
+> operational policies remain conditional; R03 organizational owners and other domain
+> boundaries are unchanged. Earlier approval/checklist text below is historical where
+> it conflicts. No implementation authorization or production approval is granted.
+
+
 Date: 2026-09-14 · Review baseline: `6e6f6c4c85c50025b4128e4377ecf116e06a9956`
 
-**Business direction: APPROVED for R01, R02, R03 and R07. Implementation: NOT AUTHORIZED. Entry gate: NOT YET CLEARED. Production: REJECT.**
+**Prior gate business direction: APPROVED for R01, R02, R03 and R07; delivery/method/evidence scope subsequently revised. Implementation: NOT AUTHORIZED. Entry gate: NOT YET CLEARED. Production: REJECT.**
 
 This records the user's instruction to proceed with the approved policy direction and use organizational accountable owners, not individual names. It governs the current placement-first approval/blocker checklist, alongside [BUSINESS-DECISION-RESOLUTION.md](BUSINESS-DECISION-RESOLUTION.md). It does not replace [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md), change A01–A13 architecture statuses, grant blanket architecture sign-off or close native/Phase 2 proof gates.
 

@@ -1,5 +1,15 @@
 # Phase 3 implementation-readiness gate
 
+> **Placement scope revision:** [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md)
+> is the current authoritative placement design: governed question bank, blueprint-based
+> randomized forms, six-skill automatic/manual assessment and digital/physical/hybrid delivery.
+> It supersedes earlier staff-assisted-only/assessor-led-only scope and blanket exclusions
+> of objective-bank delivery or digital speaking evidence. Recording permissions and
+> operational policies remain conditional; R03 organizational owners and other domain
+> boundaries are unchanged. Earlier approval/checklist text below is historical where
+> it conflicts. No implementation authorization or production approval is granted.
+
+
 Date: 2026-09-14. **Architecture review only. Implementation authorization: NOT GRANTED. Architecture approval: NOT GRANTED. Deployment/production approval: NOT GRANTED. Production acceptance: REJECT.**
 
 The [decision record](ARCHITECTURE-DECISIONS.md) is complete in topic coverage: 5 DECIDED, 5 CONDITIONAL, 3 BLOCKED. The [domain contract](DOMAIN-CONTRACT.md) is authoritative for this review. Neither implies that all business policies are known, all native paths are containable, or the whole domain is implementation-ready.

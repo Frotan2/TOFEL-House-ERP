@@ -1,5 +1,15 @@
 # Phase 3 architecture review and decision lock
 
+> **Placement scope revision:** [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md)
+> is the current authoritative placement design: governed question bank, blueprint-based
+> randomized forms, six-skill automatic/manual assessment and digital/physical/hybrid delivery.
+> It supersedes earlier staff-assisted-only/assessor-led-only scope and blanket exclusions
+> of objective-bank delivery or digital speaking evidence. Recording permissions and
+> operational policies remain conditional; R03 organizational owners and other domain
+> boundaries are unchanged. Earlier approval/checklist text below is historical where
+> it conflicts. No implementation authorization or production approval is granted.
+
+
 Date: 2026-09-14. Scope: architecture only. **No implementation, architecture sign-off, deployment or production approval is granted. Production acceptance remains REJECT.**
 
 ## Authority, status and business invariant

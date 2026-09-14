@@ -1,5 +1,15 @@
 # Authoritative TOEFL House domain contract
 
+> **Placement scope revision:** [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md)
+> is the current authoritative placement design: governed question bank, blueprint-based
+> randomized forms, six-skill automatic/manual assessment and digital/physical/hybrid delivery.
+> It supersedes earlier staff-assisted-only/assessor-led-only scope and blanket exclusions
+> of objective-bank delivery or digital speaking evidence. Recording permissions and
+> operational policies remain conditional; R03 organizational owners and other domain
+> boundaries are unchanged. Earlier approval/checklist text below is historical where
+> it conflicts. No implementation authorization or production approval is granted.
+
+
 Date: 2026-09-14. Contract status: **architecture specification for review; not implementation authorization**. Decision authority: [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md). CONDITIONAL/BLOCKED decisions and unsupplied business policy are not implemented defaults. Selected foundation, pins, upstream source and production REJECT are unchanged.
 
 ## 1. Mandatory meaning and lifecycle
