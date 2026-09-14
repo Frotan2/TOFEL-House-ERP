@@ -42,9 +42,14 @@ def main():
         if sys.argv[1] == "recovery.localhost":
             from frappe.sessions import clear_all_sessions
             captured = json.loads(Path(os.environ["FOUNDATION_CAPTURED_SESSION"]).read_text())["sid"]
-            assert frappe.db.exists("Sessions", {"sid": captured}), "Backup did not contain the captured live source session"
+            # Sessions is a framework SQL table, not a DocType, and has no name
+            # column. db.exists() selects name and can return a false negative.
+            # Check the native sid column directly, with a bound parameter.
+            def captured_session_count():
+                return frappe.db.sql("SELECT COUNT(*) FROM `tabSessions` WHERE sid = %s", (captured,))[0][0]
+            assert captured_session_count() == 1, "Backup did not contain exactly one captured live source session"
             clear_all_sessions(reason="Revoke copied sessions during isolated security recovery")
-            assert not frappe.db.exists("Sessions", {"sid": captured})
+            assert captured_session_count() == 0
             report["checks"].append({"name": "copied-live-session-found-and-revoked-with-native-session-api", "status": "pass"})
             assert "foundation_security" in frappe.get_installed_apps()
             for dt, field in (("Website Settings", "disable_signup"), ("Education Settings", "user_creation_skip"),

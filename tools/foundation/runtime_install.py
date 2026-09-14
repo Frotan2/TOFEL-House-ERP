@@ -42,7 +42,7 @@ def main() -> int:
               "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
               "commit": os.environ["GITHUB_SHA"], "ref": os.environ["GITHUB_REF"],
               "runner_image": os.environ.get("ImageOS"), "runner_image_version": os.environ.get("ImageVersion"),
-              "status": "running", "checks": [], "phase2_gate_passed": False,
+              "status": "running", "checks": [], "phase2_gate_passed": False, "security_gate_passed": False,
               "product_implementation_authorized": False, "created_sites": [], "installed_apps": []}
     passwords = [secrets.token_urlsafe(32) for _ in range(7)]
     for value in passwords:
