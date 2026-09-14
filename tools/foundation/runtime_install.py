@@ -386,8 +386,32 @@ http {{
         env.update(FOUNDATION_BENCH_PYTHON=str(bench_dir / "env/bin/python"), FOUNDATION_SITES_DIR=str(bench_dir / "sites"),
                    FOUNDATION_REALTIME_TASK=str(lab / "realtime-task.json"), FOUNDATION_FRONTEND_ROOT=str(bench_dir / "apps/education/frontend"), FOUNDATION_GRAPH_BUILD=str(lab / "graph-assets"), FOUNDATION_AUDIT_REPORT=str(evidence / "frontend-advisories.json"), FOUNDATION_EVENT_HELPER=str(ROOT / "tools/foundation/runtime_publish_event.py"), FOUNDATION_LAB=str(lab),
                    FOUNDATION_ROOT_PASSWORD=root_password, FOUNDATION_UPGRADE_PASSWORD=upgrade_password)
-        for label in ("readiness", "realtime", "upgrade", "guardian_browser", "frontend_graph"):
+        for label in ("readiness", "realtime", "upgrade", "guardian_browser", "frontend_graph", "restart"):
             env["FOUNDATION_" + label.upper() + "_REPORT"] = str(evidence / (label + "-result.json"))
+        # Controlled replacement, not service liveness: queue a native job with
+        # the worker stopped, then prove it completes on the replacement worker.
+        try:
+            targets = [(p, log) for p, _, log in processes if log.stem in ("web-backend-secured", "worker-secured")]
+            assert len(targets) == 2 and all(p.poll() is None for p, _ in targets), "Expected live secured web/worker"
+            for process, _ in targets:
+                os.killpg(process.pid, signal.SIGTERM)
+                process.wait(timeout=30)
+            run("restart-prepare-native-queued-job", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_restart_probe.py", "prepare"], cwd=bench_dir / "sites")
+            launch("web-backend-restarted", [bench_dir / "env/bin/gunicorn", "--bind", "127.0.0.1:8000", "--workers", "2", "frappe.app:application"], bench_dir / "sites")
+            worker = launch("worker-restarted", [lab / "tools/bin/bench", "worker", "--queue", "short,default,long"], bench_dir)
+            run("restart-verify-native-state-and-job", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_restart_probe.py", "verify"], cwd=bench_dir / "sites")
+            env["FOUNDATION_PRIMARY_SITE"] = site
+            env["FOUNDATION_ISOLATION_REPORT"] = str(evidence / "isolation-restarted-result.json")
+            run("restarted-security-regressions", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_isolation.py"], cwd=bench_dir / "sites")
+            restart = json.loads((evidence / "restart-result.json").read_text())
+            restart["isolation"] = json.loads((evidence / "isolation-restarted-result.json").read_text())
+            (evidence / "restart-result.json").write_text(json.dumps(restart, indent=2)+"\n")
+        except Exception as exc:
+            diagnostic_failures.append("Controlled restart: " + str(exc))
+            path = evidence / "restart-result.json"
+            restart = json.loads(path.read_text()) if path.exists() else {}
+            restart.update(status="fail", failure=str(exc))
+            path.write_text(json.dumps(restart, indent=2)+"\n")
         for label, command, directory in (
             ("remaining-role-and-operational-checks", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_readiness.py", site], bench_dir / "sites"),
             ("realtime-client-dependency", ["npm", "install", "--prefix", browser_dir, "--save-exact", "--ignore-scripts", "socket.io-client@4.8.1"], lab),
@@ -406,7 +430,7 @@ http {{
             try: run(label, command, timeout=2400)
             except RuntimeError as exc: diagnostic_failures.append(str(exc))
         continuation = {"run_id": report["run_id"], "commit": report["commit"], "status":"pass", "security_gate_passed":False, "phase2_gate_passed":False}
-        for label in ("readiness", "realtime", "upgrade", "guardian_browser", "frontend_graph"):
+        for label in ("readiness", "realtime", "upgrade", "guardian_browser", "frontend_graph", "restart"):
             path=evidence / (label + "-result.json")
             if path.exists(): path.write_text(redact(path.read_text()))
             continuation[label] = json.loads(path.read_text()) if path.exists() else {"status":"blocked","reason":"No completed report"}
