@@ -9,4 +9,7 @@ def after_migrate():
 
 
 def after_install():
+    # Initialize the native site key once at install, never race key generation in requests.
+    from frappe.utils.password import get_encryption_key
+    get_encryption_key()
     after_migrate()

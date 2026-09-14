@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  checks: write
 concurrency:
   group: placement-content-${{ github.ref }}
   cancel-in-progress: false
@@ -39,6 +40,16 @@ jobs:
           python3 tools/foundation/runner_probe.py
       - name: Pinned native apps and synthetic content scenarios
         run: python3 tools/placement/run_native.py
+      - name: Publish native scenario evidence
+        if: always() && hashFiles('.foundation/placement-evidence/native-checks.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/foundation/publish_evidence.py .foundation/placement-evidence/native-checks.json --name 'Placement native checks'
+      - name: Publish installation and failure evidence
+        if: always() && hashFiles('.foundation/placement-evidence/result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/foundation/publish_evidence.py .foundation/placement-evidence/result.json --name 'Placement runner result'
       - name: Retain failures and scoped evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

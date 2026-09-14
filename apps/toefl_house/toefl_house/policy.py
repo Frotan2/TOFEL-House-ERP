@@ -1,5 +1,6 @@
 """Pure content validation, not scoring or academic placement policy."""
 import hashlib
+import hmac
 import json
 import re
 
@@ -14,6 +15,12 @@ def canonical(value):
 
 def digest(value):
     return hashlib.sha256(canonical(value).encode()).hexdigest()
+
+
+def request_digest(value, secret):
+    if not isinstance(secret, str) or not secret:
+        raise ValueError("Native site encryption key must be configured")
+    return hmac.new(secret.encode(), canonical(value).encode(), hashlib.sha256).hexdigest()
 
 
 def validate_content(value):

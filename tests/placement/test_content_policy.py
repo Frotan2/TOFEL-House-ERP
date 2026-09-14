@@ -6,7 +6,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps/toefl_house"))
-from toefl_house.policy import can_read, canonical, digest, validate_content, validate_family, validate_request_key
+from toefl_house.policy import can_read, canonical, digest, request_digest, validate_content, validate_family, validate_request_key
 
 
 def content():
@@ -15,6 +15,12 @@ def content():
 
 
 class PolicyTests(unittest.TestCase):
+    def test_receipt_fingerprint_is_keyed(self):
+        self.assertNotEqual(request_digest(content(), "test-key-a"), digest(content()))
+        self.assertNotEqual(request_digest(content(), "test-key-a"), request_digest(content(), "test-key-b"))
+        self.assertEqual(request_digest(content(), "test-key-a"), request_digest(content(), "test-key-a"))
+        with self.assertRaises(ValueError):request_digest(content(), None)
+
     def test_valid_single_choice(self): self.assertEqual(validate_content(content()), content())
     def test_canonical_order(self): self.assertEqual(digest({'b':2,'a':1}), digest({'a':1,'b':2}))
     def test_safe_ascii_serialization(self): self.assertEqual(json.loads(canonical({'x':'\u2028'})), {'x':'\u2028'})

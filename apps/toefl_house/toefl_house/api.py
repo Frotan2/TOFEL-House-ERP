@@ -1,7 +1,7 @@
 """Three authenticated POST commands; no candidate, file or result endpoint."""
 import json
 import frappe
-from toefl_house.policy import canonical, digest, validate_content, validate_family, validate_request_key
+from toefl_house.policy import canonical, digest, request_digest, validate_content, validate_family, validate_request_key
 from toefl_house.security import authorize, command
 
 ITEM = "TH Placement Item Revision"
@@ -31,7 +31,10 @@ def _execute(kind, request_key, payload, work):
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
     op_name = digest([kind, request_key])
-    input_hash = digest(payload)
+    try:
+        input_hash = request_digest(payload, frappe.conf.get("encryption_key"))
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
 
     def existing():
         row = frappe.db.get_value(OP, op_name, ["actor", "input_hash", "status", "result_json"], as_dict=True, for_update=True)

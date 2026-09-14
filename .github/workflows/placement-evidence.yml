@@ -1,0 +1,33 @@
+name: Placement evidence recovery
+on:
+  push:
+    branches: [arena/01a09bf3-tofel-house-erp]
+    paths: [.github/workflows/placement-evidence.yml, tools/placement/recover_evidence.py]
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Authorized synthetic qualification run
+        default: '34847470712'
+        required: true
+permissions:
+  contents: read
+  actions: read
+  checks: write
+jobs:
+  recover:
+    if: github.ref == 'refs/heads/arena/01a09bf3-tofel-house-erp'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Recover original sanitized evidence without changing observations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run || '34847470712' }}
+        run: python3 tools/placement/recover_evidence.py
+      - name: Publish lossless transport
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/foundation/publish_evidence.py .foundation/recovered-placement/recovered.json --name 'Placement recovered evidence'
