@@ -10,11 +10,13 @@ from pathlib import Path
 import time
 
 
+QUALIFICATION_SITES = frozenset({"foundation.localhost", "upgrade.localhost"})
+
 def run():
     import frappe
     from frappe.utils import nowdate, getdate
 
-    if frappe.local.site not in ("foundation.localhost", "upgrade.localhost") or os.environ.get("GITHUB_ACTIONS") != "true":
+    if frappe.local.site not in QUALIFICATION_SITES or os.environ.get("GITHUB_ACTIONS") != "true":
         raise RuntimeError("Synthetic smoke fixtures are restricted to the disposable Actions site")
     report = {"scope": "Synthetic upstream data and explicitly enumerated assertions", "status": "running",
               "checks": [], "records": {}, "phase2_gate_passed": False}
@@ -242,7 +244,7 @@ if __name__ == "__main__":
     import sys
     import frappe
     site = sys.argv[1]
-    if site != "foundation.localhost":
+    if site not in QUALIFICATION_SITES or os.environ.get("GITHUB_ACTIONS") != "true":
         raise SystemExit("Unexpected test site")
     frappe.init(site=site, sites_path=str(Path.cwd()))
     try:
