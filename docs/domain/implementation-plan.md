@@ -1,5 +1,13 @@
 # Review decisions and implementation plan
 
+> Supporting design detail. The current authoritative gate is
+> [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md),
+> [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md) and
+> [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md).
+> A01–A13 supersede earlier alternatives; old D01–D13 references are legacy questions
+> mapped in the decision record. Nothing here authorizes implementation or production.
+
+
 **Planning only.** The user authorized Phase 3 architecture before implementation. No application/schema/API/UI changes are authorized by this plan; no production acceptance is implied. Estimated order below is dependency-based, not a promised delivery schedule.
 
 ## 1. Approval gates
@@ -9,25 +17,24 @@
 - **G2 — Domain acceptance:** prove workflows and invariants on exact approved candidate artifacts, including native alternate routes and failures. Design/source checks do not pass this gate.
 - **G3 — Production acceptance:** separately close or formally adjudicate all applicable foundation/domain/deployment gates, with accountable operators and approved residual risk. Current Phase 2/production recommendation remains **REJECT**. No pilot with real data is implicitly approved.
 
-## 2. Review decisions requiring business/technical owners
+## 2. Authoritative decisions and explicit inputs
 
-Owner labels identify responsibilities, not assigned people. No numerical or legal policy below has been approved by this document.
+The former D01–D13 open-question list is now mapped to **A01–A13** in
+[ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md), which includes options,
+nine consequence dimensions, native constraints, recommendations and migration risk.
+The crosswalk retains every original question and B01–B13 business/input dependency.
 
-| ID | Decision / proposed default | Owner | Blocks |
-|---|---|---|---|
-| D01 | Prospect-linked placement before real program selection; native Applicant after actual program/year choice. No placeholder curriculum | Admissions + Academic | Intake and placement subject model |
-| D02 | Verified person/User/Guardian linkage, minors/shared email, pre-admission guardian/proxy limits, staff-versus-learner account conflicts, legitimate institutional mailbox option, consent and recording policy. Native Student email and existing guard constraints must be respected | Admissions + Privacy + Security | Conversion and self-service activation |
-| D03 | Program/Course/intake-term/group definitions, rolling calendar, same-term repeats, transfers and historical preservation | Academic + Platform | Enrollment/roster schema and workflows |
-| D04 | Test rights, skills, item/response types, rubrics, weights, thresholds, normalization/rounding, accommodations and band naming; no default official TOEFL/CEFR equivalence | Academic + Content/Legal | Instrument publication/scoring |
-| D05 | Assessor qualifications, blinding, moderation/disagreement, conflicts, retakes, expiry, interrupted tests and appeal policy | Academic + Privacy | Marking/release/access |
-| D06 | Admission eligibility, exemptions, offer expiry/acceptance, prerequisites and conditions requiring independent approval | Admissions + Academic | Admission decision |
-| D07 | Legal companies/branches, currency/tax/fiscal rules, native fee-generation route, deposits/credit, price/aid approval, installments, refund policy and payer relationships | Finance + Operations | Billing/registration integration |
-| D08 | Employee versus contractor model, native work evidence, pay basis, leave/working-day/overtime rules and jurisdiction; use native payroll, no new engine | HR + Payroll + Finance | Teacher-work adapter and payroll |
-| D09 | Retention/legal holds for recordings, identity, academic and statutory records; rights requests, exports and content licensing | Privacy/Legal + Records | Real-data storage and external results |
-| D10 | Role/assignment scope, multi-role conflicts, branch/company restrictions, break-glass and approval separation | Security + Domain owners | Any authorization implementation |
-| D11 | Supported users/devices/browsers, staff Desk-first scope, optional applicant delivery/guardian access, accessibility and offline requirements | Operations + Academic + Security | UI/delivery design; no new frontend approved yet |
-| D12 | Deployment topology, backup/key custody, RPO/RTO, capacity/availability objectives and operational ownership | Platform + Operations | Production gate, not just domain code |
-| D13 | Review which proposed conditional DocTypes are truly necessary versus native Workflow, Timesheet, integration/queue facilities | Platform + Domain owners | Final schema inventory and migration plan |
+- **DECIDED:** A01 pre-program routing, A07 claim boundaries, A08 canonical billing,
+  A10 admission separation, A12 metric/source ownership.
+- **CONDITIONAL:** A02 identity, A03 guardian access, A04 mixed-role accounts,
+  A06 internal scoring policy, A13 backend containment.
+- **BLOCKED:** A05 unsupported same-term repeat representation, A09 compensation/input
+  path, A11 history-affecting cancellation.
+
+The old D identifiers in the sequencing table below identify legacy planning inputs,
+not thirteen still-unnamed architecture decisions. The current readiness labels,
+remaining user approvals and source/runtime proof requirements are authoritative in
+[IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md). No implementation is authorized.
 
 ## 3. Recommended vertical slices after authorization
 
@@ -50,7 +57,7 @@ Finance design is a prerequisite of registration even though broader finance fea
 ### Canonical lifecycle
 
 - Inquiry without program → prospect placement → released recommendation → genuine Applicant → approved admission → exactly one Student/Customer and native enrollment chain.
-- Known-program Applicant → placement/exemption → conditional offer; missing conditions block enrollment. Returning Student reuses native identity.
+- Known-program Applicant → valid released internal placement → conditional offer; missing conditions block enrollment. Returning Student reuses native identity.
 - Native Applicant may be Admitted before registration completes; reports and entitlement do not falsely show active enrollment.
 - Same-term duplicate/retake conflict, last-seat race, transfer/cancel history, enrollment side effects and failure recovery preserve native authorities.
 
@@ -63,7 +70,7 @@ Finance design is a prerequisite of registration even though broader finance fea
 
 ### Finance, work and integration
 
-- Enrollment and fee batch paths cannot double-charge; advance/allocation/refund/credit/chargeback and amended invoices reconcile to native ledgers.
+- A08 enrollment-generated tuition invoicing is the single selected producer; competing batch/legacy Fees routes cannot create the same charge; advance/allocation/refund/credit/chargeback and amended invoices reconcile to native ledgers.
 - Provider duplicate/out-of-order/forged events, changed request payload and actor revocation cannot post unauthorized effects.
 - Canceled/substituted lessons do not automatically become deductions; duplicate approved work does not duplicate payroll inputs; native payroll posting and payment reconcile.
 - Jobs and notifications execute after commit with reauthorization, bounded retries and visible reconciliation states. Partial failure is not reported as a completed enrollment/payment.

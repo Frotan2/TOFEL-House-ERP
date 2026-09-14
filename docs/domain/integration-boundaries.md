@@ -1,5 +1,13 @@
 # Integration, consistency and reporting contracts
 
+> Supporting design detail. The current authoritative gate is
+> [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md),
+> [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md) and
+> [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md).
+> A01–A13 supersede earlier alternatives; old D01–D13 references are legacy questions
+> mapped in the decision record. Nothing here authorizes implementation or production.
+
+
 ## 1. Extension boundary
 
 A future `toefl_house` app would contain domain DocTypes, controllers, fixtures, policy validation, permission hooks, reports and narrowly scoped service commands. This document defines interfaces, **not an API implementation**. Keep native authority in Frappe/ERPNext/Education/HRMS; use supported document methods and lifecycle behavior rather than copying controllers or writing transactional SQL directly.
@@ -18,7 +26,7 @@ Commands would accept native/owned document references, expected revision and id
 |---|---|---|
 | Register/start/submit placement | Verified subject, Case/Form/Sitting, valid window/consent and current state | Attempt, sealed response receipt; never a client-computed final score |
 | Submit rating / release decision | Assigned assessor or independent approver, frozen rubric/policy, valid evidence set | Immutable rating or new released decision revision |
-| Decide admission | Assigned approver, native applicant/program/year, placement/exemption and eligibility evidence | TH Admission Decision; no automatic posting or enrollment |
+| Decide admission | Assigned approver, native applicant/program/year, valid released internal placement and eligibility evidence | TH Admission Decision; no automatic posting or enrollment |
 | Execute enrollment | Approved request, native subject and target, current prerequisites/financial clearance/capacity | Existing-or-new native Student and one Program Enrollment chain, Course Enrollments and native billing references |
 | Apply roster/academic change | Approved typed request, original records and impact plan | Supported native mutations plus correction/compensation references |
 | Collect / reconcile / refund | Scoped native finance role, approved charge and payment evidence | Native invoice/payment/credit/refund records; no custom balance |
@@ -61,13 +69,13 @@ Native User remains authentication authority. Proposed enrollment activation use
 
 ### Finance / Payments
 
-Retain Payments as required by the pinned bundle; that is not approval of any gateway. If a provider is added, use server-side verified events and transaction lookup as appropriate; browser redirects are advisory only. Store minimal receipt identity/hash/status and native document references; keep secrets outside code/evidence. Signature replay prevention and native document idempotency are separate requirements.
+A08 selects one native enrollment-generated tuition invoice chain; no simultaneous enrollment/batch/legacy Fees producer is permitted. Retain Payments as required by the pinned bundle; that is not approval of any gateway. If a provider is added, use server-side verified events and transaction lookup as appropriate; browser redirects are advisory only. Store minimal receipt identity/hash/status and native document references; keep secrets outside code/evidence. Signature replay prevention and native document idempotency are separate requirements.
 
 Reconcile accepted events to bank/provider settlement and native payments. Handle pending, failed, partial, reversed, disputed and refunded outcomes without inventing a separate cash ledger. Amount/currency/customer/account must match the approved native obligation; a user-supplied invoice name alone is insufficient.
 
 ### HR / teaching work
 
-Prefer native Instructor→Employee, schedule, Timesheet/Attendance and HRMS payroll inputs. An adapter may translate an approved work decision into one native supported input only after finance/HR signs off. Do not sum classroom minutes directly into a payslip without an approved employment/pay rule. Native Salary Structure and payroll controllers own calculation; native accounting owns resulting entries and settlement. Course revenue is not teacher compensation by default.
+Retain native Instructor→Employee, schedule and native work/payroll authorities. A09 blocks selection of a salary-based or time-based input path until B08 and native evidence establish it. An adapter may translate an approved work decision into one native supported input only after finance/HR signs off. Do not sum classroom minutes directly into a payslip without an approved employment/pay rule. Native Salary Structure and payroll controllers own calculation; native accounting owns resulting entries and settlement. Course revenue is not teacher compensation by default.
 
 ### Content, files and media
 

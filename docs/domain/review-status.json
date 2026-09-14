@@ -2,7 +2,7 @@
   "phase": 3,
   "title": "TOEFL House Domain Architecture",
   "date": "2026-09-14",
-  "status": "design_proposal_ready_for_review",
+  "status": "architecture_review_recorded_with_conditions_and_blocks",
   "design_authorized": true,
   "architecture_approved": false,
   "implementation_authorized": false,
@@ -19,6 +19,10 @@
   "ownership_rule": "Native identity, academic enrollment/results, accounting and HR/payroll authorities remain canonical; only justified placement and institution-specific decision/coordination records are proposed.",
   "implementation_app_name": "toefl_house (proposed; not created)",
   "documents": [
+    "ARCHITECTURE-DECISIONS.md",
+    "DOMAIN-CONTRACT.md",
+    "IMPLEMENTATION-READINESS.md",
+    "architecture-gate-review.json",
     "README.md",
     "domain-architecture.md",
     "entity-ownership.md",
@@ -28,7 +32,24 @@
     "implementation-plan.md",
     "pinned-source-review.json"
   ],
-  "review_decisions": [
+  "gates": {
+    "G0": "Architecture review recorded; user approval not granted; conditional/blocked decisions remain",
+    "G1": "Explicit bounded implementation authorization and foundation gate agreement",
+    "G2": "Domain acceptance on hosted evidence",
+    "G3": "Separate production acceptance"
+  },
+  "source_review_sha256": "b20a13274ef8583d2306233bc2273672354edf77e1506a38aa5f1a933c2980aa",
+  "foundation_matrix_sha256": "c6447f5b046d27449521b69415854f590f8c8a5abf3a17530737e13988f9e369",
+  "prior_foundation_adr": "../engineering/foundation-architecture-decision.md",
+  "acceptance_ledger": "../engineering/foundation-production-acceptance-ledger.json",
+  "decision_coverage_complete": true,
+  "full_domain_implementation_ready": false,
+  "authoritative_documents": [
+    "ARCHITECTURE-DECISIONS.md",
+    "DOMAIN-CONTRACT.md",
+    "IMPLEMENTATION-READINESS.md"
+  ],
+  "legacy_review_questions": [
     "D01",
     "D02",
     "D03",
@@ -43,14 +64,98 @@
     "D12",
     "D13"
   ],
-  "gates": {
-    "G0": "Architecture review",
-    "G1": "Explicit bounded implementation authorization and foundation gate agreement",
-    "G2": "Domain acceptance on hosted evidence",
-    "G3": "Separate production acceptance"
+  "decisions": [
+    {
+      "id": "A01",
+      "topic": "Pre-program placement",
+      "status": "DECIDED"
+    },
+    {
+      "id": "A02",
+      "topic": "Applicant/prospect identity",
+      "status": "CONDITIONAL"
+    },
+    {
+      "id": "A03",
+      "topic": "Guardian relationship/access",
+      "status": "CONDITIONAL"
+    },
+    {
+      "id": "A04",
+      "topic": "Mixed-role accounts",
+      "status": "CONDITIONAL"
+    },
+    {
+      "id": "A05",
+      "topic": "Rolling terms, repeat enrollments and retakes",
+      "status": "BLOCKED"
+    },
+    {
+      "id": "A06",
+      "topic": "Internal placement and academic scoring policy",
+      "status": "CONDITIONAL"
+    },
+    {
+      "id": "A07",
+      "topic": "Official TOEFL / CEFR claims",
+      "status": "DECIDED"
+    },
+    {
+      "id": "A08",
+      "topic": "Single canonical billing flow",
+      "status": "DECIDED"
+    },
+    {
+      "id": "A09",
+      "topic": "Teacher compensation/payroll input",
+      "status": "BLOCKED"
+    },
+    {
+      "id": "A10",
+      "topic": "Admission approval semantics",
+      "status": "DECIDED"
+    },
+    {
+      "id": "A11",
+      "topic": "Enrollment cancellation",
+      "status": "BLOCKED"
+    },
+    {
+      "id": "A12",
+      "topic": "Reporting/derived-data ownership",
+      "status": "DECIDED"
+    },
+    {
+      "id": "A13",
+      "topic": "Backend containment of native bypass routes",
+      "status": "CONDITIONAL"
+    }
+  ],
+  "required_business_inputs": [
+    "B01",
+    "B02",
+    "B03",
+    "B04",
+    "B05",
+    "B06",
+    "B07",
+    "B08",
+    "B09",
+    "B10",
+    "B11",
+    "B12",
+    "B13"
+  ],
+  "contract_invariants_not_runtime_proof": {
+    "placement_purpose": "Internal language-center entrance/English-level/course-placement decision",
+    "placement_precedes_relevant_enrollment": true,
+    "fake_student_or_enrollment_required": false,
+    "placement_creates_academic_results": false,
+    "placement_creates_official_or_mock_toefl_results": false,
+    "baseline_cefr_mapping_enabled": false,
+    "recommendation_is_admission_or_enrollment": false,
+    "historical_retest_attempts_preserved": true,
+    "reporting_separates_placement_and_academic_metrics": true
   },
-  "source_review_sha256": "b20a13274ef8583d2306233bc2273672354edf77e1506a38aa5f1a933c2980aa",
-  "foundation_matrix_sha256": "c6447f5b046d27449521b69415854f590f8c8a5abf3a17530737e13988f9e369",
-  "prior_foundation_adr": "../engineering/foundation-architecture-decision.md",
-  "acceptance_ledger": "../engineering/foundation-production-acceptance-ledger.json"
+  "gate_baseline_commit": "e0cafcd5bab2851dec3c3b7917c81ef174816094"
 }

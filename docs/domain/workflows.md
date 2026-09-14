@@ -1,5 +1,13 @@
 # Workflows, state transitions and exception handling
 
+> Supporting design detail. The current authoritative gate is
+> [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md),
+> [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md) and
+> [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md).
+> A01–A13 supersede earlier alternatives; old D01–D13 references are legacy questions
+> mapped in the decision record. Nothing here authorizes implementation or production.
+
+
 These are **proposed domain workflows**, not implemented Frappe Workflows. Every transition requires current server-side permission and business-state checks. Native `docstatus` semantics remain unchanged. R = requester/author; A = independent approver where separation of duties applies.
 
 ## W01 — Inquiry and application
@@ -38,11 +46,11 @@ Candidates never receive the entire question bank or scoring keys. Item/media de
 5. Release a learner-facing decision containing approved internal band, Program/Course recommendations, limitations and validity. Internal integrity notes, unpublished keys and third-party/private assessor information are excluded.
 6. Appeal creates TH Placement Review Request. Corrections supersede the decision and notify admissions if eligibility changed. Retakes create a new attempt under an approved retake/validity rule; historical attempts remain. Never silently select “highest score” or “latest score” without policy.
 
-A placement decision recommends learning; it neither enrolls nor creates an official TOEFL/CEFR result.
+A released Placement Result determines current internal English level and recommends a suitable TOEFL House course/level with rationale. It neither admits nor enrolls, creates native academic results, predicts mock TOEFL performance, nor generates an official TOEFL/CEFR result.
 
 ## W05 — Admission decision and offer
 
-Admissions reviews the native applicant, real program/year/term, released placement or an explicit evidence-backed exemption, eligibility/prerequisites and requested service. A returning student may have approved prior-learning evidence instead of a test; placement is not forced universally without policy.
+Admissions reviews the native applicant, real program/year/term, valid released internal placement, eligibility/prerequisites and requested service. A10 fixes the initial entrance flow through placement; no automatic exemption for external results, payment or prior learning is included. A06 leaves returning-learner validity/retesting policy to explicit approval, without creating a new Student or overwriting prior attempts.
 
 TH Admission Decision: **Draft → Review → Conditional / Approved / Deferred / Rejected**. Approved/conditional offers require documented acceptance within validity. Withdrawal, expiry, revocation and supersession are explicit. Conditions are individually identified and evaluated; do not treat Conditional as permission to enroll.
 
@@ -51,10 +59,10 @@ The decision references approved native quotation/order/pricing and payment term
 ## W06 — Registration, capacity and native side effects
 
 1. Enrollment Request records a stable idempotency identity, approved admission/re-enrollment basis and intended native target.
-2. Recheck applicant/student identity, decision validity, placement/exemption, company/branch, actual term, course prerequisites, seat capacity and approved financial-clearance policy. Lock a stable native roster/resource row or reviewed coordination claim while checking capacity. Every roster writer must use the same protection.
+2. Recheck applicant/student identity, decision validity, valid released internal placement, company/branch, actual term, course prerequisites, seat capacity and approved financial-clearance policy. Lock a stable native roster/resource row or reviewed coordination claim while checking capacity. Every roster writer must use the same protection.
 3. For a new student, create through native Student behavior once after authorization. Preserve Applicant/Customer/User links. Native Applicant may become “Admitted” here; the institution must **not** report completed registration yet.
 4. Financial policy must avoid a cycle: default proposal is **enrollment-generated billing** through the configured native fee path. If a deposit is required before enrollment, finance may verify a native Customer advance or approved credit arrangement; do not require an invoice that only enrollment submission will create. Student creation is not itself course access.
-5. Save/submit the one native Program Enrollment, letting its controller own Course Enrollment and configured Sales Order/Invoice creation. Do not separately issue the same tuition invoice or recreate Course Enrollments. If policy chooses batch Fee Schedule generation instead, disable the conflicting enrollment-generation route for that charge through reviewed configuration; never run both writers.
+5. Save/submit the one native Program Enrollment, letting its controller own Course Enrollment and the A08-selected native tuition Sales Invoice creation path. Do not separately issue the same tuition invoice, recreate Course Enrollments or run a competing batch/legacy Fees producer. A producer switch requires a new architecture/migration decision; no fee configuration is changed in this gate.
 6. Confirm generated billing references, required financial approval/allocation and roster membership. Mark the request Completed only when all applicable predicates hold. Course access follows approved active enrollment **and** roster/entitlement policy, not the existence of a Student or draft request.
 7. Partial completion enters reconciliation: link existing native results, identify missing effects and resume idempotently. Do not replay the entire native conversion or delete submitted finance records to “undo” an error.
 
@@ -79,7 +87,7 @@ Schedule creation/change checks instructor, student-group and room conflicts, in
 
 A change request identifies current and proposed Program/group/term and effective date. Academic reviewer checks continuity/capacity; finance independently evaluates charges, credits and refunds. Preserve attendance and assessment history against their original sessions.
 
-Use supported membership/effective-date operations where possible. Do **not** assume canceling Program Enrollment is a harmless transfer: the pinned controller deletes Course Enrollments. Cancellation requires a dependency/financial impact plan and qualification; if history cannot be preserved, block that transition until an approved native-compatible approach exists. Disable course entitlement prospectively without deleting earned results. Withdrawal does not itself create a refund, cancel employment or erase retained records.
+A11 is BLOCKED for history-affecting cancellation/transfer implementation. Evaluate supported prospective membership/effective-date operations, but do not assume they preserve all required history. Do **not** assume canceling Program Enrollment is a harmless transfer: the pinned controller deletes Course Enrollments. Cancellation requires a dependency/financial impact plan and qualification; if history cannot be preserved, block that transition until an approved native-compatible approach exists. Disable course entitlement prospectively without deleting earned results. Withdrawal does not itself create a refund, cancel employment or erase retained records.
 
 ## W10 — Finance, collection, aid and refund
 
@@ -95,7 +103,7 @@ Use supported membership/effective-date operations where possible. Do **not** as
 
 HR creates/maintains the native Employee, employment terms, department/branch, leave/shift settings and salary assignment. Academic operations links the native Instructor and assigns schedules/qualifications. External instructors require an explicit employment/contractor decision; do not create fake Employees or promise contractors native employee self-service. If true supplier contractors are approved, evaluate a native Supplier/Contact and Purchase Invoice payment path with a reviewed Instructor reference rather than Salary Slips; employment classification and tax treatment remain D08 decisions.
 
-Separate **planned teaching hours**, **actual delivered sessions**, **approved payable work** and **payroll posting**. Student attendance cannot be used as employee attendance. HR/academic supervisor approves substitutions, cancellations, preparation work and overtime under the chosen policy. Prefer native Timesheet/time-based payroll or HRMS inputs; use conditional Teaching Work Approval only for a proven gap. Each approved work item can contribute once to the chosen native payroll input; revisions produce authorized adjustments, not duplicate Additional Salary.
+Separate **planned teaching hours**, **actual delivered sessions**, **approved payable work** and **payroll posting**. Student attendance cannot be used as employee attendance. HR/academic supervisor approves substitutions, cancellations, preparation work and overtime under the chosen policy. A09 blocks choosing the salary-based/time-based native input until business rules and native behavior are established. Use conditional Teaching Work Approval only for a proven gap, not a payroll authority. Each approved work item can contribute once to the chosen native payroll input; revisions produce authorized adjustments, not duplicate Additional Salary.
 
 Payroll: define native Salary Components/Structures/Assignments and periods → collect approved native inputs → generate/review Salary Slips → authorize Payroll Entry/native posting → reconcile accounting and bank payment → release payslips to the employee. Exact statutory deductions, working-day/hour conversion, leave effects, currency, advances, expense treatment, overtime and termination settlement require jurisdictional approval. No custom payroll calculation engine or student-fee-to-salary automatic offset.
 

@@ -1,0 +1,268 @@
+{
+  "title": "Phase 3 architecture decision-lock verification",
+  "date": "2026-09-14",
+  "scope": "Static document/source verification only; not architecture approval, implementation authorization or runtime qualification",
+  "result": "CONSISTENT_FOR_REVIEW_WITH_CONDITIONAL_AND_BLOCKED_DECISIONS",
+  "baseline_commit": "e0cafcd5bab2851dec3c3b7917c81ef174816094",
+  "authorized_branch": "arena/01a09bf3-tofel-house-erp",
+  "main_commit_unchanged": "9eccff957cadf036a3ac6f8208540a110148e67b",
+  "architecture_approved": false,
+  "implementation_authorized": false,
+  "deployment_authorized": false,
+  "production_acceptance": "REJECT",
+  "new_runtime_tests_executed": false,
+  "decision_statuses": {
+    "A01": "DECIDED",
+    "A02": "CONDITIONAL",
+    "A03": "CONDITIONAL",
+    "A04": "CONDITIONAL",
+    "A05": "BLOCKED",
+    "A06": "CONDITIONAL",
+    "A07": "DECIDED",
+    "A08": "DECIDED",
+    "A09": "BLOCKED",
+    "A10": "DECIDED",
+    "A11": "BLOCKED",
+    "A12": "DECIDED",
+    "A13": "CONDITIONAL"
+  },
+  "decision_counts": {
+    "DECIDED": 5,
+    "CONDITIONAL": 5,
+    "BLOCKED": 3
+  },
+  "structural_checks": {
+    "all_13_topics": true,
+    "all_options_have_nine_consequence_dimensions": true,
+    "problem_options_native_constraints_recommendation_irreversibility_business_input_present": true,
+    "legacy_D01_D13_crosswalk_preserved": true,
+    "B01_B13_inputs_preserved": true,
+    "status_metadata_matches_decision_records": true,
+    "relative_link_targets_exist": true,
+    "relative_links_checked": 56,
+    "markdown_whitespace_clean": true
+  },
+  "semantic_review": {
+    "method": "Manual reconciliation of the authoritative contract and all six supporting design documents; specification statements, not runtime assertions",
+    "checks": [
+      "Internal entrance/current-English-level/course recommendation only",
+      "Prospect-linked placement before real Program/Applicant when necessary; no fake Student/Enrollment",
+      "Placement Result, Academic Assessment and external Official TOEFL Score distinct",
+      "No baseline official/mock TOEFL or CEFR outputs; no active external-result entity",
+      "Released valid internal placement precedes initial admission/enrollment; no default exemption",
+      "Component evidence, assessor review, rationale and retained retests under explicit internal policy",
+      "Separate native identity, admission, enrollment, participation and completion authorities",
+      "Single native enrollment-generated tuition invoice producer; other fee writers require containment",
+      "HRMS payroll authority retained; compensation/native input path not assumed",
+      "Current mixed-role/Guardian guard remains fail-closed; native bypass containment unproven",
+      "Independent same-key repeats and history-affecting cancellation remain blocked",
+      "Separate placement/academic metric grains and non-authoritative derived projections",
+      "All four requested readiness labels explicitly distinguish design readiness from authorization"
+    ]
+  },
+  "source_review": {
+    "immutable_record": "docs/domain/pinned-source-review.json",
+    "sha256": "b20a13274ef8583d2306233bc2273672354edf77e1506a38aa5f1a933c2980aa",
+    "upstream_files_rehashed": [
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/student_applicant/student_applicant.json",
+        "sha256": "328e557435f4e240fa197843b2ab3a0f6fab90042b0a855ea77652ac0ca283f1",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/student_admission/student_admission.json",
+        "sha256": "fb90c3ec302ae02dedd9d3c93449968e13b99048f8bb18bc53413395ae4f2970",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/student/student.json",
+        "sha256": "0d8bf39a7392f003effb9ae4dd1da2f127d09203f4f5646d155599fdb3154bfe",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/guardian/guardian.json",
+        "sha256": "b1d3cb25fd847ec1b0a49ce1f4c9bd3148f7fa3f9c349dfb72e44592a1cd1772",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/program/program.json",
+        "sha256": "3384c7191b4195ab2b71b30f10d00cf685b80d9f3b1de16e73ba1544ee3b9a6c",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/program_enrollment/program_enrollment.json",
+        "sha256": "2c45fb2a4227e672a1aebc8157377fec0e8cae23b7fc8d1c6e485ffd73953905",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/course_enrollment/course_enrollment.json",
+        "sha256": "20840cda810704b605b3377d92ad12e3aa16b3f3acd5d6d8ee51bf77d65100a7",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/student_group/student_group.json",
+        "sha256": "cf4aa1ea73fc1e1266765ea1c204cffd40edaa452a0b288a66ba41dc5021a085",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/instructor/instructor.json",
+        "sha256": "c0f99c42e1bff6466435595e47e792c3dd1708339ae47bea37552f2e7146f502",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/course_schedule/course_schedule.json",
+        "sha256": "da6b8beb3e68ebe5804cbf2b7c5d2deabbfa5f35684b5f52e1146f9beb7b55db",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/student_attendance/student_attendance.json",
+        "sha256": "d01b5c63e8c21b6d1dcdf917e59c890f20116484d44d90b1a1ec25538a76790d",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/assessment_plan/assessment_plan.json",
+        "sha256": "d8724f76bb60b3ca421a8a9c0bbe5ae565e7658ce292096739ab4eb79c783be2",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/assessment_result/assessment_result.json",
+        "sha256": "e5d7c943656cdb1dc43505e0b163a12a5b93a564443c3ac57866c76edb9890b3",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "erpnext",
+        "commit": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+        "path": "erpnext/crm/doctype/lead/lead.json",
+        "sha256": "6bbcd54335d5551b5a0b648ab73b0f82dda0c877ba7d537170981116cf658906",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "erpnext",
+        "commit": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+        "path": "erpnext/setup/doctype/employee/employee.json",
+        "sha256": "238e600228dd3d0b842d2fd3915d64f0edea708fdc2cd9ee2edf8966fb2671c7",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "hrms",
+        "commit": "a4768b441cff346def505e27f2a2229ee1e05b9b",
+        "path": "hrms/payroll/doctype/additional_salary/additional_salary.json",
+        "sha256": "d7cf9570e47aa5b9e3fc3f603a18548c7b65942580742d08744dcc6a02963d3c",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "hrms",
+        "commit": "a4768b441cff346def505e27f2a2229ee1e05b9b",
+        "path": "hrms/payroll/doctype/payroll_entry/payroll_entry.json",
+        "sha256": "c10f69369ee03ebb0fc5c1f3c77f46e665519f06d4b733e27dd4e7506dd019e9",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/student_applicant/student_applicant.py",
+        "sha256": "c3f18a4cba6bd6f365a10d900fc5c4adb5ab9abf98e1cecf555099b7a92e65f5",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/student/student.py",
+        "sha256": "dd8c543818aa5377656b6918227c6dadf808df7d3c2a650bf1054c458545030a",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/doctype/program_enrollment/program_enrollment.py",
+        "sha256": "940861f19d967c7667fa1883441f04676c838f8691394b0d024e7da83deb9e34",
+        "matches_immutable_record": true
+      },
+      {
+        "app": "education",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "path": "education/education/api.py",
+        "sha256": "888bdfbac5f4460013d609baadf1aa41a90f5d5fa02feacd045c1643cab4a04c",
+        "matches_immutable_record": true
+      }
+    ],
+    "owned_guards_rehashed": [
+      {
+        "path": "apps/foundation_security/foundation_security/guards.py",
+        "sha256": "2e7f0410b607269dd704c120e7beafbde4816eaef0543e7f8464ea1f6a9a85ce",
+        "matches_immutable_record": true
+      },
+      {
+        "path": "apps/foundation_security/foundation_security/files.py",
+        "sha256": "e85811795f776a1e74ac6e05b81f5128c8e1caeaf68dc84ef5245f79294f9f49",
+        "matches_immutable_record": true
+      }
+    ],
+    "evidence_type": "pinned_cached_source_identity_not_new_runtime_proof"
+  },
+  "change_scope": {
+    "changed_files": [
+      "docs/domain/ARCHITECTURE-DECISIONS.md",
+      "docs/domain/DOMAIN-CONTRACT.md",
+      "docs/domain/IMPLEMENTATION-READINESS.md",
+      "docs/domain/README.md",
+      "docs/domain/architecture-gate-review.json",
+      "docs/domain/domain-architecture.md",
+      "docs/domain/entity-ownership.md",
+      "docs/domain/implementation-plan.md",
+      "docs/domain/integration-boundaries.md",
+      "docs/domain/permission-model.md",
+      "docs/domain/review-status.json",
+      "docs/domain/workflows.md"
+    ],
+    "all_changes_under_docs_domain": true,
+    "outside_domain_tracked_content_and_modes_byte_identical_to_baseline": true,
+    "outside_domain_baseline_tree_sha256": "981fd20a853b98340d75f2f9762077fecdbb1e4034c7c1d76767d7fe726f230f",
+    "outside_domain_tracked_files": 137,
+    "foundation_matrix_sha256": "c6447f5b046d27449521b69415854f590f8c8a5abf3a17530737e13988f9e369",
+    "phase2_evidence_unchanged": true,
+    "upstream_source_and_pins_unchanged": true,
+    "application_schema_api_ui_dependency_deployment_changes": false
+  },
+  "reviewed_document_sha256": {
+    "docs/domain/ARCHITECTURE-DECISIONS.md": "3dd306a99f3cc01c8a9db04d5663d4a6713af52603818fd4c7d5e8bd25d87c18",
+    "docs/domain/DOMAIN-CONTRACT.md": "36e242e7bf827421279339a99883a194098784263c5dc40e4261adb014c7c99f",
+    "docs/domain/IMPLEMENTATION-READINESS.md": "b6c9535cf5f762f872723090195a50589ee4d84216404da4b67ec339a2b2064e",
+    "docs/domain/README.md": "091a5f82c177129b467928cef3da1af7c957b62332abb68f4201fb95c5239a03",
+    "docs/domain/domain-architecture.md": "f9f8f1a9d2acd321264b0107a7bef946fb2bb54c0757ab0d791da63a53445439",
+    "docs/domain/entity-ownership.md": "b6aa456ff0e0dcb4aed10da802684318ab89d3da4809a6ec794048ab39fe282d",
+    "docs/domain/implementation-plan.md": "4d5a536a6caf9d64d9a4ecc08199b0fcb2f7d7fba8172df7fc46ad7a6516d10f",
+    "docs/domain/integration-boundaries.md": "0656696cd2318d70a37a87f5877e8add0db7e567325d1a2a414db56f0e3a0ece",
+    "docs/domain/permission-model.md": "d96f9b6e19451e896a382323c8a76fe1e918c682a857bbe58cea8d6ddb428cc3",
+    "docs/domain/pinned-source-review.json": "b20a13274ef8583d2306233bc2273672354edf77e1506a38aa5f1a933c2980aa",
+    "docs/domain/review-status.json": "72835f64c3542d08c2f66e83cfaf26efc5844a197d1acd290df5c65a69be612a",
+    "docs/domain/workflows.md": "2479a0f85d9f31f1490f1c271425491b78e61cb330a53719b028e8925d5a8a5d"
+  },
+  "manifest_note": "Audit excludes its own hash to avoid circularity. Baseline is the pre-gate commit; final gate commit SHA is reported after commit. This JSON is a review artifact, not a test pass or approval."
+}

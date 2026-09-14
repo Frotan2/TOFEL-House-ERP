@@ -1,5 +1,13 @@
 # Permission, identity and privacy model
 
+> Supporting design detail. The current authoritative gate is
+> [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md),
+> [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md) and
+> [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md).
+> A01–A13 supersede earlier alternatives; old D01–D13 references are legacy questions
+> mapped in the decision record. Nothing here authorizes implementation or production.
+
+
 **Proposed policy only.** Names below are business roles to map to reviewed Frappe roles; they are not installed roles or a claim that stock Role Permissions enforce these scopes. Site/branch/company/assignment checks, native permissions and field visibility must all hold. Current foundation tests do not qualify these new domains.
 
 ## 1. Authorization rule
@@ -16,7 +24,7 @@ No client role/score/parent/status/`ignore_permissions` flag or hidden button co
 |---|---|---|---|
 | Reception | Assigned branch Lead/application contact and scheduling data | Intake drafts, placement registration, document collection | No scoring keys, ratings, unrestricted HR/payroll, payment settlement or admission override |
 | Admissions Officer | Assigned applicants, released placement summaries, offer/clearance status | Application review, offer/request drafting, acceptance evidence | Cannot alter raw scores, approve own exceptional admission or manufacture paid status |
-| Admissions Approver | Assigned admission cases and necessary eligibility evidence | Approve/defer/reject/exempt with reasons; independent exceptional approval | No ledger posting or unrestricted test key access |
+| Admissions Approver | Assigned admission cases and necessary eligibility evidence | Approve/defer/reject with reasons; no default placement exemption; independent exceptional approval | No ledger posting or unrestricted test key access |
 | Placement Author / Publisher | Authorized item/key/rubric/policy library | Draft/publish revisions with separation where required | No automatic access to all candidate recordings; author cannot self-approve controlled publication |
 | Placement Coordinator / Proctor | Assigned sittings, candidate identity and attempt state | Register/start/record incidents under policy | No keys or private human ratings by default; cannot change scores/deadlines without approved exception |
 | Assessor | Assigned attempt material and rubric, minimized identity | Draft/submit own ratings | No other assessor's blind draft, finance/HR records, global recordings or self/family assessment |
@@ -41,7 +49,7 @@ Use field-level restrictions/DTOs to exclude answer keys, moderation notes, bank
 
 - Provision applicant/student/guardian/employee links explicitly. Proposed applicant self-service is optional and blocked until the `User → native subject` claim/verification and required-email policy are reviewed. Staff-assisted intake does not resolve native Student's email requirement by itself.
 - Guardian.user and Student Guardian rows remain canonical. Grant exact child/customer scopes; relinking, new children, revoked guardianship and shared accounts require immediate revalidation. Existing single-purpose guard assumptions must be tested for multiple children, not broadened blindly.
-- The current foundation guard enforces exact Student/Guardian scopes globally, including all-doctype native User Permissions. A role selector cannot turn that into broader teacher access. The matrix describes desired policy, not proven same-account mixed-role usability. Default to denying conflicting grants until D02/D10 are resolved. Separate explicitly linked native staff and learner/guardian User accounts may be evaluated for one person, without duplicating Student or Employee masters; no shared credentials, fabricated email or weakening of the guard is authorized.
+- The current foundation guard enforces exact Student/Guardian scopes globally, including all-doctype native User Permissions. A role selector cannot turn that into broader teacher access. The matrix describes desired policy, not proven same-account mixed-role usability. Default to denying conflicting grants until D02/D10 are resolved. Separate explicitly linked native User accounts for each incompatible staff/Student/Guardian profile may be evaluated for one person, without duplicating Student or Employee masters; no shared credentials, fabricated email or weakening of the guard is authorized.
 - Existing Guardian login expects actual Student membership, not only a Student Applicant guardian child row. Pre-admission guardian self-service is therefore **not assumed supported**. Staff-assisted intake or a separately approved applicant/proxy relationship must be designed and qualified under D02; do not create fake Students to enable login. Any assisted response capture must record both actor and subject and explicit delegation, not impersonate the candidate.
 - A teacher who is also a guardian must not gain cohort-wide learner self-service; an employee who is also a student must not expose salary through student APIs. Self-service reads use the selected verified relationship, while staff actions require the corresponding staff assignment and field scope.
 - Impersonation and break-glass access are restricted, time-bounded and audited, with independent review. Technical Administrator remains a privileged capability, not a routine business persona. This design does not claim an application can make database administrators powerless.

@@ -1,34 +1,39 @@
-# Phase 3 — TOEFL House domain architecture review
+# Phase 3 — architecture review and decision lock
 
-**Date:** 2026-09-14
-**Status:** DESIGN PROPOSAL FOR REVIEW — no implementation or production authorization
-**Foundation:** unchanged Frappe + ERPNext + Education + justified HRMS/payroll, Payments dependency, MariaDB and owned foundation security extension.
+Date: 2026-09-14. **Review record, not architecture sign-off or implementation authorization.** Selected Frappe + ERPNext + Education + HRMS/payroll foundation unchanged. Production acceptance remains **REJECT**.
 
-The user's Phase 3 instruction authorizes domain architecture and implementation planning. It supersedes the earlier prohibition on TOEFL-specific **design**, not the requirement for review before implementation. Phase 2 remains incomplete; current production acceptance remains **REJECT**. None of the proposed entities, roles, endpoints, fields, workflows or integrations is installed or runtime-qualified.
+## Mandatory placement meaning
 
-## Review package
+TOEFL House is a language-training center. Placement is an **internal entrance and English-level assessment**, used before the relevant enrollment to determine current English level and recommend an appropriate TOEFL House course/level.
 
-1. [Domain architecture and invariants](domain-architecture.md)
-2. [Entity ownership and proposed logical model](entity-ownership.md)
-3. [End-to-end workflows and exception paths](workflows.md)
-4. [Permission, identity and privacy model](permission-model.md)
-5. [Integration, transaction and reporting boundaries](integration-boundaries.md)
-6. [Implementation sequence, acceptance tests and review decisions](implementation-plan.md)
-7. [Pinned source cross-check](pinned-source-review.json) — immutable source URLs, hashes and native schema facts; **not runtime proof**.
-8. [Machine-readable review status](review-status.json)
+**Prospect/Applicant → Placement Test → Determine English Level → Recommend Course/Level → Admission → Enrollment.** Placement Result, enrolled Academic Assessment and external Official TOEFL Score are separate concepts. Placement produces neither an official nor mock TOEFL performance score, nor an official CEFR certificate. Baseline CEFR mapping and external-examination features are excluded.
 
-## Decisions proposed for approval
+## Authoritative gate artifacts
 
-- Native Lead owns prospect identity; native Student Applicant owns an application once a **real** Program/year is selected. A prospect-linked placement case handles earlier testing without fake enrollment.
-- Native Student, Guardian, Program/Course Enrollment, Student Group, Course Schedule, attendance and academic results remain authoritative. No second student or class-enrollment ledger.
-- A future `toefl_house` extension would own only placement instruments/attempts/ratings/decisions, institution-specific approvals and necessary coordination records. Names beginning `TH` below are **proposed DocTypes**, not existing tables.
-- Separate placement, academic achievement, admission, registration, payment and employment states. One does not silently imply another.
-- ERPNext owns receivables, cash, refunds and GL; HRMS owns employment/payroll workflows over the native Employee and accounting authorities. No custom balances or payroll engine.
-- Native Desk-first staff workflows; defer any portal implementation/redesign until dependency and security qualification. Applicants, students and guardians receive different server-side scopes.
-- No official TOEFL score generation, CEFR equivalence, cutoffs, tuition values, tax formulas, retention periods or legal assumptions are invented. Academic, finance and privacy owners must approve those policies.
+1. [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md) — all 13 decisions, options, nine consequence dimensions, native constraints, status, reversibility and explicit missing inputs. A01–A13 follow the latest required topics; the original D01–D13 questions have a complete crosswalk.
+2. [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md) — authoritative domain ownership, lifecycle, placement/result separation, permissions, billing/payroll, transactions, retries and reporting rules.
+3. [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md) — scoped readiness labels, user approvals, native proof obligations and unchanged Phase 2 production blockers.
+4. [architecture-gate-review.json](architecture-gate-review.json) — source/consistency and change-scope audit, expressly not runtime proof.
+5. [review-status.json](review-status.json) — machine-readable decision and approval status.
 
-## Review gates
+| Status | Decisions |
+|---|---|
+| **DECIDED** | A01 pre-program placement; A07 official/CEFR exclusions; A08 canonical invoice billing; A10 admission separation; A12 reporting ownership |
+| **CONDITIONAL** | A02 identity; A03 guardians; A04 mixed-role accounts; A06 internal level/scoring policy; A13 backend containment |
+| **BLOCKED** | A05 unsupported same-term repeat representation; A09 compensation/native input path; A11 history-affecting cancellation |
 
-Approve the **architecture and policy decisions** before schema/API implementation. Any subsequent development needs explicit implementation authorization and an agreed relationship to the still-open Phase 2 gates. Synthetic experiments, domain acceptance and production release are separate approvals. There is no deployment approval, new risk acceptance or dependency upgrade in this package.
+DECIDED means the architectural boundary is explicit, **not** that the user has approved implementation or that all policy parameters/native behavior are proven. The package is decision-complete in coverage but not unconditionally implementation-ready. No code, DocType/schema, API, UI, dependency, foundation pin or deployment change is included.
 
-Historical foundation decisions and failed evidence remain intact: [architecture ADR](../engineering/foundation-architecture-decision.md), [production ledger](../engineering/foundation-production-acceptance-ledger.json), [qualification report](../engineering/foundation-final-qualification.md).
+## Supporting design detail
+
+These documents are reconciled to, and subordinate to, the authoritative contract:
+
+- [Domain context and invariants](domain-architecture.md)
+- [Entity ownership/cardinalities](entity-ownership.md)
+- [Detailed workflows](workflows.md)
+- [Permission matrix](permission-model.md)
+- [Integration/reporting detail](integration-boundaries.md)
+- [Sequenced implementation plan](implementation-plan.md)
+- [Unchanged pinned source evidence](pinned-source-review.json)
+
+All prior Phase 2 evidence remains unchanged: [foundation architecture](../engineering/foundation-architecture-decision.md), [production acceptance ledger](../engineering/foundation-production-acceptance-ledger.json), [qualification report](../engineering/foundation-final-qualification.md). Any implementation slice requires explicit user authorization and the applicable business/native gates. No pilot, deployment, risk exception or production approval is implied.

@@ -1,5 +1,13 @@
 # TOEFL House domain architecture
 
+> Supporting design detail. The current authoritative gate is
+> [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md),
+> [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md) and
+> [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md).
+> A01–A13 supersede earlier alternatives; old D01–D13 references are legacy questions
+> mapped in the decision record. Nothing here authorizes implementation or production.
+
+
 ## 1. Architectural shape
 
 Use the selected **site-based modular monolith**, not a new CRM, LMS, financial service, authentication system or SPA. A future owned app, tentatively `toefl_house`, extends native documents through supported hooks, namespaced Custom Fields, fixtures, workflows and reviewed service methods. Keep the generic `foundation_security` app separate from institution-specific policy; preserve its fail-closed checks and test extension composition on the exact pinned bundle.
@@ -17,7 +25,7 @@ Frappe site: identity, permissions, files, jobs, audit and configuration
  ├─ Education: Student ↔ Guardian → Program Enrollment → Course Enrollment
  │    └─ Student Group → Course Schedule → Student Attendance / Assessment Result
  │         └─ TOEFL House Progression Decision (reads native evidence)
- ├─ ERPNext: Customer → Sales Order/Invoice → Payment Entry → GL / reconciliation
+ ├─ ERPNext: Customer → Sales Invoice → Payment Entry → GL / reconciliation
  └─ ERPNext Employee + HRMS: Instructor link → work/leave → payroll → accounting
 ```
 
@@ -74,9 +82,11 @@ Native Student requires an email and can auto-create a website User unless `Educ
 
 ## 6. Placement versus official examinations
 
-Design an **internal placement assessment** for instructional decisions. Skills may include reading, listening, speaking, writing, grammar, vocabulary or interview, but academic owners must approve which apply, rubrics, weights, bands, retake intervals and validity. Do not adopt particular cutoffs or automatically label a result as CEFR or an official TOEFL score.
+Placement is the internal **entrance and English-level placement assessment** of a language-training center. Its output determines current English level and recommends the appropriate TOEFL House course/level **before the relevant enrollment**. It is not an official TOEFL examination, mock TOEFL performance score, academic final examination, external certificate or official CEFR certification.
 
-If official external results are accepted later, store provenance and verification status as restricted evidence, not a score produced by this placement engine. A proposed `TH External Result Evidence` is conditional on an approved use case and content/verification rights. Course marketing, official exam delivery and certificate claims require separate policy/licensing review. Do not copy licensed test content into the item bank without rights.
+Section/component results and assessor/teacher review apply according to the approved internal policy, not an assumed TOEFL exam structure. No overall total, four-section format, external scale or certification claim is selected. A06 leaves the actual internal levels, rubrics, mappings, moderation and retest parameters conditional on business decisions. Every retest preserves earlier attempts and decisions.
+
+A07 excludes official/external examination features and any CEFR output from the active baseline. The earlier conditional `TH External Result Evidence` proposal is withdrawn from this contract. A future explicit requirement could introduce a separate external evidence domain or a calibrated **internal reference** mapping, never official certification or automatic substitution for the placement decision. No rights to licensed examination content are assumed.
 
 ## 7. Audit, records and reporting semantics
 

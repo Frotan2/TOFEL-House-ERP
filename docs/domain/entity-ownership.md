@@ -1,5 +1,13 @@
 # Entity ownership and logical model
 
+> Supporting design detail. The current authoritative gate is
+> [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md),
+> [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md) and
+> [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md).
+> A01–A13 supersede earlier alternatives; old D01–D13 references are legacy questions
+> mapped in the decision record. Nothing here authorizes implementation or production.
+
+
 **All `TH` names and `th_*` fields are proposals, not installed schema.** Physical field types, indexes and migrations require review. Source-confirmed facts are catalogued in [pinned-source-review.json](pinned-source-review.json); other designs below are not claims of existing functionality.
 
 ## A. Native authorities: configure or extend, never duplicate
@@ -39,6 +47,8 @@ Relevant exact-source constraints: Student's controller can create/update Custom
 
 ## B. Proposed owned placement aggregates
 
+This is a conditional logical inventory, not a requirement to build every DocType. Under A06/B13, item/key/response/sitting structures apply only where the approved delivery process needs them; human-led component/rubric assessment must not be forced into an item-bank examination platform.
+
 Common keys: native Frappe `name`, site scope, branch/company where relevant, owner/modified audit, and explicit business uniqueness below. Use references rather than copied PII. Historical snapshots are labeled evidence, not competing masters.
 
 | Proposed DocType | Core fields / links | Lifecycle and key constraints |
@@ -47,26 +57,26 @@ Common keys: native Frappe `name`, site scope, branch/company where relevant, ow
 | **TH Placement Item Revision** | Stable item family ID, revision, skill, prompt, allowed response type, maximum/time expectations, private/media references, content rights | Draft → Published → Retired. Unique family/revision; published content immutable. Never expose author-only notes or keys in candidate DTOs |
 | **TH Placement Key Revision** | Item revision, answer/rule definition for objective scoring, marking method, maximum | Separate restricted authority from prompts/responses. Published immutable; no arbitrary Python/JS evaluation or key fields in candidate-readable parent records |
 | **TH Placement Rubric Revision** | Criteria child rows with bounds/units/descriptors, moderation policy, revision | Published immutable; criterion identity unique within revision; used by human ratings |
-| **TH Placement Policy Revision** | Required skills; normalization/weights/rounding; internal band thresholds; minimum-skill/tie/missing-data rules; Program/Course mapping, prerequisites, expiry/retake rules | Draft → Approved → Retired; approved snapshots immutable. No numerical values selected here; no unapproved CEFR/TOEFL equivalence |
-| **TH Placement Form Revision** | Ordered child links to exact item/key/rubric revisions, sections, timing/accommodation rules, policy revision | Draft → Published → Retired. Publication validates completeness and licensing; live attempts keep frozen revisions even after retirement |
+| **TH Placement Policy Revision** | Approved internal components and English-level definitions; normalization/weights/rounding only if approved; internal level thresholds; minimum-skill/tie/missing-data rules; Program/Course mapping, prerequisites, expiry/retake rules | Draft → Approved → Retired; approved snapshots immutable. No numerical policy selected; no baseline CEFR or official/mock TOEFL representation |
+| **TH Placement Form Revision** | Approved component/rubric references; ordered item/key revisions only for approved item-based delivery; timing/accommodation rules, policy revision | Draft → Published → Retired. Publication validates completeness and licensing; live attempts keep frozen revisions even after retirement |
 | **TH Placement Sitting** | Time window, branch, Room, proctor(s), capacity and form eligibility | Planned → Open → Running → Completed / Canceled. Coordinates resource conflicts with native schedules; candidates reside in attempt registrations, not a duplicate student group |
 | **TH Placement Attempt** | Case, attempt number, form revision, optional Sitting, server timestamps/deadline, accommodations, integrity/review flags | Registered → Started → Submitted/Timed Out → Marking → Review → Finalized; terminal No Show/Voided as explicit alternatives. Unique case/attempt number; retries must return same attempt, not increment |
 | **TH Placement Response** | Attempt + item occurrence, response revision, answer data or private File, received time, seal/hash | Draft autosave revisions until seal. Unique attempt/item occurrence/revision, one current revision; finalization seals a manifest. Item occurrences allow explicitly repeated items without ambiguous keys |
 | **TH Placement Rating** | Attempt, item/skill criterion, assessor assignment, rubric/key revision, raw score, rationale/evidence, supersedes | Draft → Submitted → Moderated/Superseded. Unique assignment/criterion/revision. Submitted values not edited; blind independent ratings where policy requires |
-| **TH Placement Decision** | Attempt, policy revision, sealed response/rating IDs, skill calculations and normalized units, internal band, recommended native Program/Courses, approver, validity, release status | Draft → Reviewed → Approved → Released → Superseded/Revoked. Only authorized released decisions are learner-visible; one effective decision per purpose via server-enforced transition |
+| **TH Placement Decision** | Attempt, policy revision, sealed response/rating IDs, component evidence/calculations with approved units, current internal English level, recommended native Program/Courses and internal course-level mapping, approver, validity, release status | Draft → Reviewed → Approved → Released → Superseded/Revoked. Only authorized released decisions are learner-visible; one effective decision per purpose via server-enforced transition |
 | **TH Placement Review Request** | Attempt/decision, requester, grounds, evidence, assigned reviewer and resolution/new decision link | Open → Investigating → Upheld/Corrected/Dismissed. Requests do not mutate scores; independent reviewer and restricted evidence |
 
 Child rows belong to their parent; do not pretend they have independent security boundaries. Sensitive key material is a separate restricted DocType. Assessors receive only necessary form/rubric material and assigned candidate evidence, not a global item-bank dump.
 
-### Scoring contract
+### Optional scoring mechanics — not a selected policy
 
-Skill/criterion identifiers are controlled versioned policy keys; publication rejects undeclared or duplicate references. For an approved ratio-scored dimension with a zero minimum, proposed normalization is `100 × earned / possible`, using Decimal, with `possible > 0`, validated bounds and policy-defined rounding. Nonzero minima, negative marking and rubric mappings need a separately approved normalization; do not silently clamp them into the ratio formula. Rubric-based mappings may differ and must be versioned. Overall weighted aggregation is allowed only when required dimensions are complete, units compatible and approved positive weights have a valid total. No implicit missing=0, automatic renormalization or averaging of unlike scales. Objective negative/partial marking, thresholds, rounding at boundaries, retake selection, moderation and validity are academic decisions, not invented defaults. A decision snapshot must be reproducible from referenced immutable inputs without running arbitrary policy code.
+A06 does not require an overall total or any official exam component/scale. The following describes conditional mechanics only, subject to B04/B05. Skill/criterion identifiers are controlled versioned policy keys; publication rejects undeclared or duplicate references. For an approved ratio-scored dimension with a zero minimum, proposed normalization is `100 × earned / possible`, using Decimal, with `possible > 0`, validated bounds and policy-defined rounding. Nonzero minima, negative marking and rubric mappings need a separately approved normalization; do not silently clamp them into the ratio formula. Rubric-based mappings may differ and must be versioned. Overall weighted aggregation is allowed only when required dimensions are complete, units compatible and approved positive weights have a valid total. No implicit missing=0, automatic renormalization or averaging of unlike scales. Objective negative/partial marking, thresholds, rounding at boundaries, retake selection, moderation and validity are academic decisions, not invented defaults. A decision snapshot must be reproducible from referenced immutable inputs without running arbitrary policy code.
 
 ## C. Admissions, registration and progress coordination
 
 | Proposed DocType | Links / responsibility | Not an authority for |
 |---|---|---|
-| **TH Admission Decision** | Native Student Applicant; optional verified existing Student; exact Program/year/term; released placement or an approved exemption with evidence; eligibility checks, offer/quotation reference, conditions, approver, acceptance and expiry evidence | Identity, scores, ledger or Course Enrollment. Distinguish decision status from derived fulfillment of conditions |
+| **TH Admission Decision** | Native Student Applicant; optional verified existing Student; exact Program/year/term; valid released internal placement decision; no default exemption; eligibility checks, offer/quotation reference, conditions, approver, acceptance and expiry evidence | Identity, scores, ledger or Course Enrollment. Distinguish decision status from derived fulfillment of conditions |
 | **TH Enrollment Request** | Admission Decision for a new applicant, or existing Student with approved re-enrollment basis; target Program/year/term/group, current-policy checks, idempotency identity, resulting native Student/Program Enrollment references | A second registration ledger. State is orchestration: Requested → Validated → Applying → Completed / Blocked / Failed Review / Canceled |
 | **TH Academic Change Request** | Existing Student/enrollment, transfer/withdrawal/roster or attendance correction request, proposed effective date, approvals, impact and resulting native references | Another roster, attendance table or automatic refund. Split command types with separate validators/permissions rather than a generic unrestricted mutation tool |
 | **TH Progression Decision** | Student + Program Enrollment; exact native result/attendance evidence set, completion/prerequisite policy revision, reviewer, next Program/Course recommendation | Native grades or automatic new enrollment. Corrections supersede; certificates, if approved, reference the decision and native records |
@@ -76,8 +86,8 @@ An offer's price and payment schedule are authoritative in its linked native com
 
 ## D. Conditional extensions and technical records
 
-- **TH Teaching Work Approval (conditional):** only if native Timesheet/HRMS approval cannot express the approved teaching-pay policy. Links Employee, Instructor, actual Course Schedule/substitution, native work evidence, approved units and native payroll-input result. Unique source work occurrence/pay basis; cannot mirror general attendance or calculate the statutory payroll. Native time-based payroll should be evaluated first.
-- **TH External Result Evidence (conditional):** provider, exam/date, reported score and scale, verification status, rights/consent and restricted file. It is not an official result issued by TOEFL House.
+- **TH Teaching Work Approval (conditional):** only if native Timesheet/HRMS approval cannot express the approved teaching-pay policy. Links Employee, Instructor, actual Course Schedule/substitution, native work evidence, approved units and native payroll-input result. Unique source work occurrence/pay basis; cannot mirror general attendance or calculate the statutory payroll. A09 blocks selection of salary-based versus time-based input until B08 and native-path evidence are supplied; no payroll-input route is selected here.
+- **External examination evidence: excluded by A07.** `TH External Result Evidence` is not an active Phase 3 entity. Do not create official/mock TOEFL result fields or default CEFR mapping.
 - **TH Domain Operation (technical proposal):** operation kind, tenant/actor scope, idempotency key, request hash, source references, status, native result references and restricted failure detail. Atomic uniqueness on tenant/operation/key; no reusable arbitrary-DocType CRUD endpoint.
 - **TH Integration Receipt / dispatch intent (conditional technical proposals):** reuse native integration/Email Queue facilities if they meet uniqueness, retention, access and retry guarantees; add only the missing durable inbox/outbox capability. Provider/event identity is unique; sensitive payloads are minimized. These records are not ledgers, business masters or a new event platform.
 
