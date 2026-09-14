@@ -44,10 +44,10 @@ def main() -> int:
               "runner_image": os.environ.get("ImageOS"), "runner_image_version": os.environ.get("ImageVersion"),
               "status": "running", "checks": [], "phase2_gate_passed": False,
               "product_implementation_authorized": False, "created_sites": [], "installed_apps": []}
-    passwords = [secrets.token_urlsafe(32) for _ in range(6)]
+    passwords = [secrets.token_urlsafe(32) for _ in range(7)]
     for value in passwords:
         print(f"::add-mask::{value}", flush=True)
-    root_password, admin_password, db_password, test_password, restore_password, recovery_password = passwords
+    root_password, admin_password, db_password, test_password, restore_password, recovery_password, upstream_password = passwords
     secret_file = lab / "db-password"
     secret_file.write_text(root_password)
     secret_file.chmod(0o600)
@@ -352,6 +352,32 @@ http {{
             run("recovered-security-regressions", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_isolation.py"], cwd=bench_dir / "sites")
         except RuntimeError as exc:
             diagnostic_failures.append(str(exc))
+        # Execute upstream security suites unchanged, on their own Frappe-only
+        # site. Their test DocTypes/DDL must never touch lifecycle/recovery sites.
+        upstream_site = "upstream-tests.localhost"
+        bench("upstream-security-test-dependencies", "setup", "requirements", "--dev", "frappe")
+        run("upstream-test-python-consistency", [lab / "tools/bin/uv", "pip", "check", "--python", bench_dir / "env/bin/python"])
+        test_freeze = run("upstream-test-python-freeze", [lab / "tools/bin/uv", "pip", "freeze", "--python", bench_dir / "env/bin/python"])
+        report["upstream_test_dependency_freeze_sha256"] = hashlib.sha256(test_freeze.encode()).hexdigest()
+        bench("new-upstream-security-test-site", "new-site", upstream_site, "--db-type", "mariadb", "--db-host", "127.0.0.1", "--db-port", "13306",
+              "--db-root-password", root_password, "--db-password", upstream_password, "--admin-password", admin_password,
+              "--mariadb-user-host-login-scope", "%")
+        report["created_sites"].append(upstream_site)
+        bench("upstream-test-allow-tests", "--site", upstream_site, "set-config", "allow_tests", "1", "--parse")
+        bench("upstream-test-developer-mode", "--site", upstream_site, "set-config", "developer_mode", "1", "--parse")
+        report["upstream_security_suites"] = []
+        for doctype in ("user_permission", "docshare"):
+            label = "upstream-security-" + doctype
+            module = "frappe.core.doctype." + doctype + ".test_" + doctype
+            try:
+                bench(label, "--site", upstream_site, "run-tests", "--module", module, timeout=600)
+                log = (evidence / (label + ".txt")).read_text()
+                counts = re.findall(r"Ran (\d+) tests?", log)
+                assert counts and int(counts[-1]) > 0, "No executed upstream test count found"
+                report["upstream_security_suites"].append({"module":module, "status":"pass", "tests_run":int(counts[-1]), "site":upstream_site})
+            except (RuntimeError, AssertionError) as exc:
+                report["upstream_security_suites"].append({"module":module, "status":"fail", "reason":str(exc)})
+                diagnostic_failures.append(str(exc))
         report["restricted_diagnostic_failures"] = diagnostic_failures
         if diagnostic_failures:
             raise RuntimeError("Restricted policy regressions failed: " + "; ".join(diagnostic_failures))
