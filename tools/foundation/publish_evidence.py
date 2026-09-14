@@ -20,11 +20,12 @@ def main():
     parser.add_argument("report", type=Path)
     parser.add_argument("--name", default="Foundation runner evidence")
     args = parser.parse_args()
-    # Explicitly authorized hosted session branches: the previous session branch
-    # and the current placement build session branch.
+    # Explicitly authorized hosted session branches: prior session branches
+    # and this placement build session branch.
     if os.environ.get("GITHUB_REF") not in (
             "refs/heads/arena/01a09bf3-tofel-house-erp",
-            "refs/heads/arena/01a0a055-tofel-house-erp"):
+            "refs/heads/arena/01a0a055-tofel-house-erp",
+            "refs/heads/arena/01a0a13b-tofel-house-erp"):
         raise SystemExit("Evidence publication is restricted to the authorized branch")
     raw = args.report.read_bytes()
     report = json.loads(raw)

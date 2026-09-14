@@ -70,6 +70,10 @@ def main():
             connect(site)
             assert frappe.conf.allow_tests==1 and frappe.conf.toefl_house_synthetic_only==1
             def setup():
+                # `author` is dual-role (Author+Publisher) for increment-1/2 SoD
+                # (self-publish/self-review denied despite role union). It is a
+                # Publisher for increment-3 operational commands. Author-only
+                # denials must use `other` / `second_author`, never `author`.
                 mapping={'author':['Placement Author','Placement Publisher'],'other':['Placement Author'],
                          'publisher':['Placement Publisher'],'publisher2':['Placement Publisher'],
                          'second_author':['Placement Author'],'auditor':['Placement Auditor'],'outsider':[],
@@ -344,7 +348,7 @@ def main():
         check('alloc-case-duplicate-subject-denied',lambda:denied(lambda:as_user('publisher',lambda:api.create_case('alloc_case_dup_key_0001',users['candidate']))))
         check('alloc-case-missing-subject-denied',lambda:denied(lambda:as_user('publisher',lambda:api.create_case('alloc_case_missing_001','nobody@example.test'))))
         check('alloc-case-privileged-subject-denied',lambda:denied(lambda:as_user('publisher',lambda:api.create_case('alloc_case_admin_key_01','Administrator'))))
-        check('alloc-case-author-denied',lambda:denied(lambda:as_user('author',lambda:api.create_case('alloc_case_author_key_1',users['candidate2']))))
+        check('alloc-case-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.create_case('alloc_case_author_key_1',users['candidate2']))))
         check('alloc-case-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.create_case('alloc_case_outsider_key_1',users['candidate2']))))
         check('alloc-fail-missing-case',lambda:denied(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_case_0001','nonexistent-case-0001',cfgx['main_bp'],3,pol_name,3))))
         check('alloc-fail-draft-blueprint',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_draftbp_01',case['name'],cfgx['draft_bp'],1,pol_name,3)),'Only published blueprint'))
@@ -448,12 +452,18 @@ def main():
             return dict(obs,no_partial_state=True)
         check('alloc-fourth-attempt-unavailable-fail-closed',fourth_unavailable)
         def alloc_reads():
-            for label in ('author','second_author','outsider'):
+            for label in ('second_author','other','outsider'):
                 frappe.set_user(users[label])
                 for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
                     assert not frappe.get_list(dt),label
-            frappe.set_user(users['author'])
+            frappe.set_user(users['second_author'])
             assert not frappe.get_doc(api.ATTEMPT,alloc['attempt']).has_permission('read')
+            # Dual-role author includes Publisher: operational staff reads apply;
+            # role union does not invent extra SoD on allocation records.
+            frappe.set_user(users['author'])
+            assert frappe.get_doc(api.ATTEMPT,alloc['attempt']).has_permission('read')
+            for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
+                assert frappe.get_list(dt),dt
             frappe.set_user(users['publisher'])
             for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
                 assert frappe.get_list(dt),dt
@@ -465,7 +475,7 @@ def main():
             for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
                 assert frappe.get_list(dt),dt
             assert not frappe.get_doc(api.GUARD,guard_name).has_permission('read')
-            return {'staff_only_records':True,'guard_internal':True}
+            return {'staff_only_records':True,'guard_internal':True,'dual_role_author_reads_as_publisher':True}
         check('alloc-role-and-list-parity',alloc_reads)
         def alloc_generic_write():
             frappe.set_user(users['publisher']);doc=frappe.get_doc(api.ATTEMPT,alloc['attempt']);doc.subject='forged@example.test';doc.flags.ignore_permissions=True
@@ -659,7 +669,7 @@ def main():
         assert httpalloc['status']=='Allocated' and httpalloc['ordinal']==1
         check('http-alloc-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.allocate_attempt',headers={'Host':'placement-test.localhost'},json=http_alloc_payload,timeout=30)))
         check('http-alloc-unrelated-role-denied',lambda:http_denied(post('outsider','allocate_attempt',dict(http_alloc_payload,request_key='http_alloc_out_0001'))))
-        check('http-alloc-wrong-role-denied',lambda:http_denied(post('author','allocate_attempt',dict(http_alloc_payload,request_key='http_alloc_author_01'))))
+        check('http-alloc-wrong-role-denied',lambda:http_denied(post('second_author','allocate_attempt',dict(http_alloc_payload,request_key='http_alloc_author_01'))))
         check('http-alloc-case-wrong-role-denied',lambda:http_denied(post('second_author','create_case',dict(request_key='http_case_second_001',subject=users['candidate3']))))
         check('http-alloc-get-cannot-mutate',lambda:http_denied(sessions['publisher'].get(base+'/api/method/toefl_house.api.allocate_attempt',params={'request_key':'http_alloc_get_0001'},timeout=30)))
         def http_alloc_csrf():
@@ -669,7 +679,7 @@ def main():
         check('http-alloc-csrf-negative-with-positive-control',http_alloc_csrf)
         attempt_url=base+'/api/resource/'+quote(api.ATTEMPT,safe='')+'/'+httpalloc['attempt']
         check('http-alloc-direct-crud-mutation-denied',lambda:http_denied(sessions['publisher'].put(attempt_url,json={'subject':'forged@example.test'},timeout=30)))
-        check('http-alloc-other-role-read-denied',lambda:http_denied(sessions['author'].get(attempt_url,timeout=30)))
+        check('http-alloc-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(attempt_url,timeout=30)))
         def http_alloc_idem():
             def request(_):
                 s=requests.Session();s.headers.update(sessions['publisher'].headers);s.cookies.update(sessions['publisher'].cookies)

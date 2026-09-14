@@ -17,11 +17,12 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-# Explicitly authorized hosted session branches: the previous session branch
-# (foundation workflows) and the current placement build session branch.
+# Explicitly authorized hosted session branches: prior session branches
+# (foundation workflows + previous placement build) and this session.
 AUTHORIZED_REFS = (
     "refs/heads/arena/01a09bf3-tofel-house-erp",
     "refs/heads/arena/01a0a055-tofel-house-erp",
+    "refs/heads/arena/01a0a13b-tofel-house-erp",
 )
 
 

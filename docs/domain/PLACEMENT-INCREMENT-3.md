@@ -1,6 +1,7 @@
 # Placement — increment 3 implementation record (blueprint allocation / candidate form generation)
 
-Date: 2026-09-14 · Session branch: `arena/01a0a055-tofel-house-erp` · Baseline: `857352e4afa74f6eb300b75fb8e50a8e8e036fdd`
+Date: 2026-09-14 · Session branch: `arena/01a0a13b-tofel-house-erp` (continuation of
+`arena/01a0a055-tofel-house-erp`) · Baseline: `857352e4afa74f6eb300b75fb8e50a8e8e036fdd`
 · Predecessor: increment 1–2 qualified in hosted run `34865327509` (commit `c0048dc`).
 
 **Status: PENDING HOSTED QUALIFICATION — synthetic-data implementation only,
@@ -104,26 +105,50 @@ identity verification and every later increment remain out of scope.
 | `apps/toefl_house/README.md` | increment-3 boundary documentation |
 | `tests/placement/test_allocation.py` | new pure local solver tests |
 | `tests/placement/test_allocation_policy.py` | new read-boundary matrix tests |
-| `tools/placement/native_checks.py` | increment-3 hosted scenarios (+ increment-1/2 regression) |
+| `tests/placement/test_native_check_actors.py` | local actor/branch-lock guard (dual-role `author` ≠ Author-only) |
+| `tools/placement/native_checks.py` | increment-3 hosted scenarios (+ increment-1/2 regression); Author-only denials use `second_author`/`other` |
+| `.github/workflows/placement-content.yml` | branch lock re-scoped to this session |
+| `tools/placement/run_native.py` | branch lock re-scoped to this session |
+| `tools/foundation/runner_probe.py` | authorization set includes this session branch |
+| `tools/foundation/publish_evidence.py` | authorization set includes this session branch |
 
-Increment 1–2 files are otherwise unchanged; foundation pins, dependency
-strategy, workflow and shared foundation tooling are untouched.
+Increment 1–2 product files are otherwise unchanged; foundation pins and
+dependency strategy are untouched. Shared probe/evidence gates accept the
+explicit prior-session + this-session ref set (same pattern as increment 2).
 
 ## 3. Evidence
 
 <!-- Filled from actual execution output only; no inferred or relabeled results. -->
 
 - Local pure unit tests, executed in the session workspace on 2026-09-14
-  (final state of the branch):
-  - `python3 -m unittest discover -s tests/placement -v`: **PENDING**
-    (70 tests after increment-3 additions: 48 increments 1–2, 15 solver,
-    7 allocation read-boundary).
-  - `python3 -m unittest discover -s tests/foundation`: **PENDING** (unchanged).
-  - `node tests/foundation/test_realtime_guard.cjs`: **PENDING** (unchanged).
-- Hosted qualification (`.github/workflows/placement-content.yml` on
-  `arena/01a0a055-tofel-house-erp`): **PENDING** — first increment-3 run
-  triggered by the increment-3 commit; previous increments remain qualified
-  by run `34865327509` (85/85 native checks, commit `c0048dc`).
+  (this commit):
+  - `python3 -m unittest discover -s tests/placement -v`: **78/78 OK**
+    (48 increments 1–2, 15 solver, 7 allocation read-boundary, 1 native-check
+    name guard, 8 actor/branch-lock guards).
+  - `python3 -m unittest discover -s tests/foundation -v`: **44/44 OK**.
+  - `node tests/foundation/test_realtime_guard.cjs`: **PASS**.
+- Hosted qualification (`.github/workflows/placement-content.yml`):
+  - Run `34876921205` (commit `d471780` on `arena/01a0a055-tofel-house-erp`):
+    **FAILED** at `alloc-config-fixtures-published` with
+    `ValidationError: Unsupported configuration type` — harness
+    `publish_config_flow` passed the blueprint code into `create_draft_config`'s
+    `config` slot. Application code was correct; call signature fixed in
+    `65b14c9`.
+  - Run `34880406771` (commit `65b14c9` on `arena/01a0a055-tofel-house-erp`):
+    pinned installs and both site migrations succeeded; **68/69 executed native
+    checks passed**, then **FAILED** at `alloc-case-author-denied` with
+    `AssertionError: Expected denial was accepted`. Root cause: the check used
+    the dual-role `author` fixture (Author+Publisher). `create_case` is
+    Publisher-only with no extra SoD, so the command was correctly accepted.
+    Classification: **test harness**, not product/infrastructure/specification.
+    Native report SHA-256
+    `2243822b007c54a9ca1e88c8d2c692014870bda79589fb0fe7c3b748be1b0e61`.
+    66 later checks (allocation happy-path, HTTP regression, side-effect
+    counts) did not run.
+  - This session branch (`arena/01a0a13b-tofel-house-erp`): **PENDING** hosted
+    re-qualification after retargeting Author-only denials at `second_author` /
+    `other` and re-scoping the branch lock. Increments 1–2 remain qualified by
+    run `34865327509` (85/85 native checks, commit `c0048dc`).
 - Baseline for increments 1–2: hosted run `34865327509` (success, head
   `c0048dc86fd5cc772a3b8db1f887a0cff7b997ce`).
 
