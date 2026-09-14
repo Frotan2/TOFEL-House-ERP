@@ -7,7 +7,7 @@ on:
     inputs:
       source_run:
         description: Authorized synthetic qualification run
-        default: '34847470712'
+        default: '34849070924'
         required: true
 permissions:
   contents: read
@@ -26,5 +26,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
-          SOURCE_RUN: ${{ inputs.source_run || '34847470712' }}
+          SOURCE_RUN: ${{ inputs.source_run || '34849070924' }}
         run: python3 tools/placement/recover_evidence.py
