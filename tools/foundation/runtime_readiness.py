@@ -150,7 +150,31 @@ def main():
                 assert 'no-store' in (headers['Cache-Control'] or '').lower(), 'Authenticated HTML lacks Cache-Control: no-store'
                 return headers
             check(label+'-authenticated-html-cache-policy',cache)
-        report['unverified']=['full mixed-role/report/export/print coverage','payroll GL posting','guardian portal and account relinking','TLS and production proxy headers','scheduled execution and service restart durability','cross-release upgrade']
+        for label,expected in [('hr',200),('teacher',403),('academic',403),('accountant',403),('guardian',403),('employee',403),('alpha',403)]:
+            def payroll_report(label=label,expected=expected):
+                from frappe.utils import get_first_day, get_last_day, today
+                response=sessions[label].get('http://127.0.0.1:8080/api/method/frappe.desk.query_report.run',params={'report_name':'Salary Register','filters':json.dumps({'from_date':str(get_first_day(today())),'to_date':str(get_last_day(today())),'company':records['company']})},timeout=30)
+                assert response.status_code==expected,f'{label} Salary Register expected {expected}, observed {response.status_code}'
+                if expected==200: assert 'result' in response.json()['message']
+                return {'http_status':response.status_code,'scope':'Report authorization, not payroll posting'}
+            check(label+'-salary-register-report-authorization',payroll_report)
+        def scheduled_execution():
+            import time
+            job=frappe.get_doc({'doctype':'Scheduled Job Type','method':'frappe.utils.now','frequency':'Cron','cron_format':'* * * * *','create_log':1,'stopped':0}).insert()
+            frappe.db.commit()
+            started=time.monotonic()
+            try:
+                while time.monotonic()-started<180:
+                    frappe.db.rollback()  # refresh MariaDB snapshot while another worker commits
+                    logs=frappe.get_all('Scheduled Job Log',filters={'scheduled_job_type':job.name},fields=['status'])
+                    if any(row.status=='Failed' for row in logs):raise AssertionError('Scheduled native job failed')
+                    if any(row.status=='Complete' for row in logs):return {'status':'Complete','scheduler_driven':True,'seconds':round(time.monotonic()-started,2)}
+                    time.sleep(2)
+                raise AssertionError('No scheduler-driven Complete log within 180 seconds')
+            finally:
+                job.reload();job.stopped=1;job.save();frappe.db.commit()
+        check('scheduler-driven-native-readonly-job',scheduled_execution)
+        report['unverified']=['full mixed-role/report/export/print coverage','payroll GL posting','guardian portal and account relinking','TLS and production proxy headers','service restart durability','cross-release upgrade']
     finally:
         report['status']='fail' if any(c['status']=='fail' for c in report['checks']) else 'pass'
         output.write_text(json.dumps(report,indent=2)+'\n')
