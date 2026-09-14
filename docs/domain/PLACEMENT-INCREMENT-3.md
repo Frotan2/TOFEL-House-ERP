@@ -180,9 +180,23 @@ explicit prior-session + this-session ref set (same pattern as increment 2).
     `TypeError: post() got an unexpected keyword argument 'timeout'`. The
     helper already sets timeout=40; the extra kwarg was a harness typo.
     Classification: **test harness**. Three checks after it did not run.
-  - This session: **PENDING** hosted re-qualification after removing the
-    stray `timeout=` kwarg. Increments 1–2 remain qualified by run
-    `34865327509` (85/85 native checks, commit `c0048dc`).
+  - Run `34888352524` (commit `c7277a4861cf0181b152a16de8b7cdaeafd00016` on
+    `arena/01a0a13b-tofel-house-erp`): **PASSED**.
+    - Pinned runner probe, pinned installs (Frappe/ERPNext/Education/
+      Payments/HRMS + foundation_security + toefl_house at pinned refs), both
+      synthetic site installations and migrations: **all 86 runner steps exit
+      0** (`runtime_complete: true`, `production: REJECT`; runner report
+      SHA-256 `13664384a114b0a335c15960033100fea97219044125ef95a586cbd26f0b0bab`).
+    - Native qualification: **135/135 checks pass** — increment 1–2 item/key
+      and blueprint/policy lifecycle plus increment 3 case/allocation
+      (fail-closed missing/draft/stale/infeasible config, happy-path form,
+      hash-bound determinism, exposure reuse, idempotency, rollback, transient
+      retry, staff-only reads, HTTP CSRF/races/revocation, two-site isolation,
+      no student/enrollment/academic/finance/payroll writes; native report
+      SHA-256
+      `0d075de6ead9cd326af831888287ae980c2b7007a2d6198f1b357fa42c9c1796`).
+    `native-acceptance` 8.945 s. Increments 1–2 remain independently qualified
+    by run `34865327509` (85/85 native checks, commit `c0048dc`).
 - Baseline for increments 1–2: hosted run `34865327509` (success, head
   `c0048dc86fd5cc772a3b8db1f887a0cff7b997ce`).
 
