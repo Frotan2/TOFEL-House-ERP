@@ -1,5 +1,13 @@
 # Placement — approved business-policy baseline and implementation prerequisites
 
+> **Subsequent technical gate:** [PLACEMENT-TECHNICAL-SPEC.md](PLACEMENT-TECHNICAL-SPEC.md)
+> and [PLACEMENT-TECHNICAL-READINESS.md](PLACEMENT-TECHNICAL-READINESS.md) now define the
+> bounded synthetic-data implementation request. F01–F05 remain closed. P1–P5 values
+> may be configured later, with affected real operations disabled until owner artifacts
+> and activation gates are satisfied. This refines the blanket pre-code prerequisite
+> wording below without inventing policy or granting implementation/deployment permission.
+
+
 Date: 2026-09-14 · Repository baseline: `b9e5cf274dc7c9fe03ab3ebe093d13216fc43bc6`
 
 **F01–F05: APPROVED by the user's explicit instruction. Implementation authorization: NOT GRANTED. Implementation-entry readiness: NOT YET CLEARED. Production: REJECT.**
