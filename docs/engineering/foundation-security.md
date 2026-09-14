@@ -4,32 +4,30 @@
 
 **Security gate: NOT PASSED. Product implementation: NOT AUTHORIZED.**
 
-### Latest remaining-gate findings — 2026-09-14
+### Latest remediation evidence — 2026-09-14
 
-Verified run **34806388937** (`675736e`) retains the unscoped Guardian unrelated-Student
-REST request returning **200 instead of 403**. Explicit native Student/Customer scopes
-then passed own-read/other-denial checks; fail-closed Guardian lifecycle remains unproved.
-The negative response body was not retained, so field-level disclosure is not claimed.
+The generic extension's **0.2.0** canonical Guardian scopes and realtime resource-delivery
+checks now have hosted proof in **34807848711**, **34808064545** and **34809413852**:
+missing/expanded scopes deny and recover; REST/RPC/Chromium/private-file checks pass;
+real RQ owner-bound task events deny the other user; native session revocation stops
+subsequent document/task delivery. Native payroll read and seven Salary Register ACLs
+also pass. Historical Guardian and known-task failures remain retained, not overwritten.
 
-Native draft payroll now passes normal Holiday List Assignment, Salary Structure and
-Assignment controllers. All **seven tested payroll read boundaries pass**: HR and the
-employee owner may read, five unrelated roles/users are denied. This is not payroll GL
-posting or comprehensive financial/payroll authorization.
+Source review found a further private-file edge: core ownership can outlive permission
+on the attached Student, and direct download/content paths can bypass controller hooks.
+Candidate **0.2.1** therefore adds a deny-only File hook plus a supported File class mixin,
+and tests legacy Guardian ownership of the unrelated Student's file. **Its final hosted
+proof is unknown** after GitHub returned HTTP 401 while monitoring **34809817009**.
+The scheduler correction in **34810723925** is also unverified. Reconnect GitHub in Arena.
 
-Real authenticated Socket.IO document isolation passes (positive owner delivery and
-cross-student non-delivery). **Known-task-identifier isolation fails:** a second user
-receives the synthetic marker. No real payroll-job disclosure or identifier guessing
-is claimed. The pinned native task/progress handlers join rooms without the document
-permission callback; real-job ownership/delegation and revocation remain to be qualified.
+**44 local Python tests and a Node adapter regression pass.** They do not substitute for
+those missing reports. Realtime broad-room denial has explicit availability costs;
+cluster/direct/acknowledged app-specific emits and public proxy/origin trust remain outside
+current acceptance. See [hardening remediation](foundation-hardening-remediation.md).
 
-All **57 frontend advisory entries / 21 packages** persist in the hosted audit. Both
-portal no-store checks and the isolated Frappe patch upgrade pass. Existing Student
-HTTP/browser/recovery and upstream User Permission/DocShare modules pass again.
-See the [production-readiness report](foundation-production-readiness.md) and exact
-`remaining-34806388937.json` for failures, limits and closure criteria.
-
-Recommendation: **REJECT current Phase 2/production acceptance**. No gate is passed based
-on source inspection alone, no earlier failure is erased, and no TOEFL work is authorized.
+The 57 frontend advisory entries have per-entry surface classifications and published
+patch ranges; no blanket waiver or dependency security pass is granted. Full security
+and production acceptance remain **REJECT / NOT PASSED**.
 
 ### Previous verified Student guard checkpoint — 2026-09-14
 

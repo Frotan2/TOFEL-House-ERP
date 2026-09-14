@@ -1,13 +1,27 @@
 {
   "date": "2026-09-14",
-  "scope": "Triage of all 57 retained Education frontend advisory entries; surface hypotheses are not exploit or non-reachability proof",
+  "scope": "Advisory-by-advisory reachability classification for pinned Education portal and hosted build profile. No global vulnerability waiver; build-input exploit conditions remain open.",
   "input_sha256": "70fc996e663caa4d15aba3603b30e90befe9416f7eae3024eb49e125f159323c",
   "gate_passed": false,
   "source_review": {
     "commit": "93bc7075753369457919720690f80c6d2207b5f2",
     "manifest_url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/frontend/package.json",
     "entry_url": "https://github.com/frappe/education/blob/93bc7075753369457919720690f80c6d2207b5f2/frontend/src/main.js",
-    "observation": "Entry imports frappe-ui Button/Card/Input/resourcesPlugin. This proves library use, not that every editor/markdown path survives tree-shaking or accepts attacker input. Vite is used for production asset generation and dev serving; advisories must be separated individually."
+    "observation": "Entry imports frappe-ui Button/Card/Input/resourcesPlugin. This proves library use, not that every editor/markdown path survives tree-shaking or accepts attacker input. Vite is used for production asset generation and dev serving; advisories must be separated individually.",
+    "direct_sink_search": "All 33 pinned frontend/src JS/Vue files inspected: no direct TextEditor/tiptap/markdown/showdown/socket imports or v-html/innerHTML matches. Transitive library execution remains to be established; this search alone is not a waiver.",
+    "frappe_ui_source_sha256": {
+      "src/index.js": "81606a3a33a6ec1ccbb7da7b3813a12983600ebac2e8bfa1aada9cad5a8982d0",
+      "src/utils/plugin.js": "674debbeb853f60031a78840a31444db87c5c84357d29d4907da27cd675e84d3",
+      "src/resources/plugin.js": "a6104afcea1fda8f6b8298f45a0809608763d487f7d5e44b052afa6611b7e848",
+      "src/utils/markdown.js": "940c1c43fbfc61adea2fc968a0e2fbac153ac11600120a2af43f420711a9fdfe",
+      "src/components/FormControl.vue": "bad97fc1f7a7ef93fc17a1237e7705725e32d9c3ca560f7d7e069e9a9c34634d",
+      "src/components/TextEditor/TextEditor.vue": "1605c94ada3aecae297ed5688a5100dcaa7c2bb6f9b05a0040609d9d3e96b431"
+    },
+    "hosted_graph_run": "34809413852",
+    "output_formats": [
+      "es"
+    ],
+    "frappe_ui_source_review": "Hash-matched index, resources/plugin, utils/plugin/socket activation, markdown helper, TextEditor, FormControl. Rich editor and socket initialization are not activated by reviewed pinned portal entry points; emitted code remains dormant, not absent."
   },
   "findings": [
     {
@@ -33,8 +47,23 @@
       "surface": "potential browser content processing",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Advisory first fix is 3.30.4, outside installed 2.x. Requires a coherent compatible editor/frappe-ui upgrade, not an isolated forced major override. Validate editor features and sanitized HTML handling.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@tiptap/core"
+          },
+          "vulnerable_version_range": ">= 2.0.0-alpha.0, < 3.30.4",
+          "first_patched_version": "3.30.4",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "dormant_code_no_portal_activation_path",
+      "hosted_rendered_bytes": 150395,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Code is emitted, not tree-shaken away. The 33 pinned portal source files do not instantiate TextEditor or initSocket/FrappeUI socket plugin; resourcesPlugin alone does not initialize sockets and FormControl has no editor branch. No activation path from these reviewed portal entrypoints was found. Do not generalize this to other apps or future UI."
     },
     {
       "package": "@tiptap/extension-link",
@@ -58,8 +87,23 @@
       "surface": "potential browser content processing",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "@tiptap/extension-link"
+          },
+          "vulnerable_version_range": "< 2.10.4",
+          "first_patched_version": "2.10.4",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "dormant_code_no_portal_activation_path",
+      "hosted_rendered_bytes": 10744,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Code is emitted, not tree-shaken away. The 33 pinned portal source files do not instantiate TextEditor or initSocket/FrappeUI socket plugin; resourcesPlugin alone does not initialize sockets and FormControl has no editor branch. No activation path from these reviewed portal entrypoints was found. Do not generalize this to other apps or future UI."
     },
     {
       "package": "brace-expansion",
@@ -83,8 +127,50 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 2.0.0, <= 2.0.1",
+          "first_patched_version": "2.0.2",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 1.0.0, <= 1.1.11",
+          "first_patched_version": "1.1.12",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": "= 3.0.0",
+          "first_patched_version": "3.0.1",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": "= 4.0.0",
+          "first_patched_version": "4.0.1",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "brace-expansion",
@@ -109,8 +195,50 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 5.0.8",
+          "first_patched_version": "5.0.8",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 3.0.0, < 3.0.3",
+          "first_patched_version": "3.0.3",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 2.0.0, < 2.1.3",
+          "first_patched_version": "2.1.3",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": "< 1.1.17",
+          "first_patched_version": "1.1.17",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "brace-expansion",
@@ -135,8 +263,50 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": "< 1.1.18",
+          "first_patched_version": "1.1.18",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 2.0.0, < 2.1.4",
+          "first_patched_version": "2.1.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 3.0.0, < 3.0.6",
+          "first_patched_version": "3.0.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 5.0.9",
+          "first_patched_version": "5.0.9",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "brace-expansion",
@@ -160,8 +330,50 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 5.0.5",
+          "first_patched_version": "5.0.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 3.0.0, < 3.0.2",
+          "first_patched_version": "3.0.2",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 2.0.0, < 2.0.3",
+          "first_patched_version": "2.0.3",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": "< 1.1.13",
+          "first_patched_version": "1.1.13",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "brace-expansion",
@@ -186,8 +398,41 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 3.0.0, < 5.0.7",
+          "first_patched_version": "5.0.7",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": "< 1.1.16",
+          "first_patched_version": "1.1.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "brace-expansion"
+          },
+          "vulnerable_version_range": ">= 2.0.0, < 2.1.2",
+          "first_patched_version": "2.1.2",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "braces",
@@ -212,8 +457,23 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "braces"
+          },
+          "vulnerable_version_range": "< 3.0.3",
+          "first_patched_version": "3.0.3",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "browserslist",
@@ -237,8 +497,23 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "browserslist"
+          },
+          "vulnerable_version_range": "<= 4.28.6",
+          "first_patched_version": "4.28.7",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "browserslist",
@@ -263,8 +538,23 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "browserslist"
+          },
+          "vulnerable_version_range": "<= 4.28.6",
+          "first_patched_version": "4.28.7",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "cross-spawn",
@@ -288,8 +578,32 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "cross-spawn"
+          },
+          "vulnerable_version_range": ">= 7.0.0, < 7.0.5",
+          "first_patched_version": "7.0.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "cross-spawn"
+          },
+          "vulnerable_version_range": "< 6.0.6",
+          "first_patched_version": "6.0.6",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "esbuild",
@@ -313,8 +627,24 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "esbuild"
+          },
+          "vulnerable_version_range": "<= 0.24.2",
+          "first_patched_version": "0.25.0",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "glob",
@@ -338,8 +668,32 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "glob"
+          },
+          "vulnerable_version_range": ">= 11.0.0, < 11.1.0",
+          "first_patched_version": "11.1.0",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "glob"
+          },
+          "vulnerable_version_range": ">= 10.2.0, < 10.5.0",
+          "first_patched_version": "10.5.0",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "linkify-it",
@@ -363,8 +717,23 @@
       "surface": "potential browser content processing",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "linkify-it"
+          },
+          "vulnerable_version_range": "<= 5.0.0",
+          "first_patched_version": "5.0.1",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_portal_bundle",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "No rendered package code in the production graph. Node/build or other-app use remains separate; in particular ws findings do not qualify the running realtime server dependency inventory."
     },
     {
       "package": "linkify-it",
@@ -388,8 +757,23 @@
       "surface": "potential browser content processing",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "linkify-it"
+          },
+          "vulnerable_version_range": "<= 5.0.1",
+          "first_patched_version": "5.0.2",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_portal_bundle",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "No rendered package code in the production graph. Node/build or other-app use remains separate; in particular ws findings do not qualify the running realtime server dependency inventory."
     },
     {
       "package": "markdown-it",
@@ -413,8 +797,23 @@
       "surface": "potential browser content processing",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "markdown-it"
+          },
+          "vulnerable_version_range": ">= 13.0.0, < 14.1.1",
+          "first_patched_version": "14.1.1",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_portal_bundle",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "No rendered package code in the production graph. Node/build or other-app use remains separate; in particular ws findings do not qualify the running realtime server dependency inventory."
     },
     {
       "package": "markdown-it",
@@ -439,8 +838,23 @@
       "surface": "potential browser content processing",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "markdown-it"
+          },
+          "vulnerable_version_range": "<= 14.1.1",
+          "first_patched_version": "14.2.0",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_portal_bundle",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "No rendered package code in the production graph. Node/build or other-app use remains separate; in particular ws findings do not qualify the running realtime server dependency inventory."
     },
     {
       "package": "micromatch",
@@ -464,8 +878,23 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "micromatch"
+          },
+          "vulnerable_version_range": "< 4.0.8",
+          "first_patched_version": "4.0.8",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "minimatch",
@@ -489,8 +918,86 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 10.0.0, < 10.2.1",
+          "first_patched_version": "10.2.1",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 9.0.0, < 9.0.6",
+          "first_patched_version": "9.0.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 8.0.0, < 8.0.5",
+          "first_patched_version": "8.0.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 7.0.0, < 7.4.7",
+          "first_patched_version": "7.4.7",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 6.0.0, < 6.2.1",
+          "first_patched_version": "6.2.1",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 5.0.0, < 5.1.7",
+          "first_patched_version": "5.1.7",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 4.2.4",
+          "first_patched_version": "4.2.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": "< 3.1.3",
+          "first_patched_version": "3.1.3",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "minimatch",
@@ -514,8 +1021,86 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 10.0.0, < 10.2.3",
+          "first_patched_version": "10.2.3",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 9.0.0, < 9.0.7",
+          "first_patched_version": "9.0.7",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 8.0.0, < 8.0.6",
+          "first_patched_version": "8.0.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 7.0.0, < 7.4.8",
+          "first_patched_version": "7.4.8",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 6.0.0, < 6.2.2",
+          "first_patched_version": "6.2.2",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 5.0.0, < 5.1.8",
+          "first_patched_version": "5.1.8",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 4.2.5",
+          "first_patched_version": "4.2.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": "< 3.1.3",
+          "first_patched_version": "3.1.3",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "minimatch",
@@ -539,8 +1124,86 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 10.0.0, < 10.2.3",
+          "first_patched_version": "10.2.3",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 9.0.0, < 9.0.7",
+          "first_patched_version": "9.0.7",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 8.0.0, < 8.0.6",
+          "first_patched_version": "8.0.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 7.0.0, < 7.4.8",
+          "first_patched_version": "7.4.8",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 6.0.0, < 6.2.2",
+          "first_patched_version": "6.2.2",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 5.0.0, < 5.1.8",
+          "first_patched_version": "5.1.8",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 4.2.5",
+          "first_patched_version": "4.2.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "minimatch"
+          },
+          "vulnerable_version_range": "< 3.1.4",
+          "first_patched_version": "3.1.4",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "nanoid",
@@ -564,8 +1227,32 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "nanoid"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 5.0.9",
+          "first_patched_version": "5.0.9",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "nanoid"
+          },
+          "vulnerable_version_range": "< 3.3.8",
+          "first_patched_version": "3.3.8",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "nanoid",
@@ -589,8 +1276,32 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "nanoid"
+          },
+          "vulnerable_version_range": "< 3.3.16",
+          "first_patched_version": "3.3.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "nanoid"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 5.1.16",
+          "first_patched_version": "5.1.16",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "nanoid",
@@ -614,8 +1325,32 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "nanoid"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 5.1.6",
+          "first_patched_version": "5.1.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "nanoid"
+          },
+          "vulnerable_version_range": "< 3.3.18",
+          "first_patched_version": "3.3.18",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "nanoid",
@@ -639,8 +1374,32 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "nanoid"
+          },
+          "vulnerable_version_range": "< 3.3.12",
+          "first_patched_version": "3.3.12",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "nanoid"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 5.1.11",
+          "first_patched_version": "5.1.11",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "picomatch",
@@ -664,8 +1423,41 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "picomatch"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 4.0.4",
+          "first_patched_version": "4.0.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "picomatch"
+          },
+          "vulnerable_version_range": ">= 3.0.0, < 3.0.2",
+          "first_patched_version": "3.0.2",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "picomatch"
+          },
+          "vulnerable_version_range": "< 2.3.2",
+          "first_patched_version": "2.3.2",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "picomatch",
@@ -689,8 +1481,41 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "picomatch"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 4.0.4",
+          "first_patched_version": "4.0.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "picomatch"
+          },
+          "vulnerable_version_range": ">= 3.0.0, < 3.0.2",
+          "first_patched_version": "3.0.2",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "picomatch"
+          },
+          "vulnerable_version_range": "< 2.3.2",
+          "first_patched_version": "2.3.2",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "postcss",
@@ -715,8 +1540,23 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "postcss"
+          },
+          "vulnerable_version_range": "<= 8.5.22",
+          "first_patched_version": "8.5.23",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "postcss",
@@ -740,8 +1580,23 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "postcss"
+          },
+          "vulnerable_version_range": "< 8.5.10",
+          "first_patched_version": "8.5.10",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "postcss",
@@ -766,8 +1621,23 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "postcss"
+          },
+          "vulnerable_version_range": "<= 8.5.11",
+          "first_patched_version": "8.5.12",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "postcss",
@@ -791,8 +1661,23 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "postcss"
+          },
+          "vulnerable_version_range": "<= 8.5.17",
+          "first_patched_version": "8.5.18",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "rollup",
@@ -816,8 +1701,41 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "rollup"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 4.22.4",
+          "first_patched_version": "4.22.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "rollup"
+          },
+          "vulnerable_version_range": ">= 3.0.0, < 3.29.5",
+          "first_patched_version": "3.29.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "rollup"
+          },
+          "vulnerable_version_range": "< 2.79.2",
+          "first_patched_version": "2.79.2",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_reported_output_format",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Hosted build reports only ES output. These reported generator gadgets require cjs/iife/umd output. This is not a claim about every possible gadget in third-party code."
     },
     {
       "package": "rollup",
@@ -841,8 +1759,41 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "rollup"
+          },
+          "vulnerable_version_range": "< 2.80.0",
+          "first_patched_version": "2.80.0",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "rollup"
+          },
+          "vulnerable_version_range": ">= 3.0.0, < 3.30.0",
+          "first_patched_version": "3.30.0",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "rollup"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 4.59.0",
+          "first_patched_version": "4.59.0",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     },
     {
       "package": "showdown",
@@ -867,8 +1818,23 @@
       "surface": "potential browser content processing",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "No patched Showdown version listed by the advisory API. Remove unused parser through maintained upstream dependency update, or provide audited replacement/sanitization with regression proof; no fabricated fixed version.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "showdown"
+          },
+          "vulnerable_version_range": "<= 2.1.0",
+          "first_patched_version": null,
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "dormant_code_no_portal_activation_path",
+      "hosted_rendered_bytes": 157932,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Code is emitted, not tree-shaken away. The 33 pinned portal source files do not instantiate TextEditor or initSocket/FrappeUI socket plugin; resourcesPlugin alone does not initialize sockets and FormControl has no editor branch. No activation path from these reviewed portal entrypoints was found. Do not generalize this to other apps or future UI."
     },
     {
       "package": "showdown",
@@ -892,8 +1858,23 @@
       "surface": "potential browser content processing",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "No patched Showdown version listed by the advisory API. Remove unused parser through maintained upstream dependency update, or provide audited replacement/sanitization with regression proof; no fabricated fixed version.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "showdown"
+          },
+          "vulnerable_version_range": "<= 2.1.0",
+          "first_patched_version": null,
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "dormant_code_no_portal_activation_path",
+      "hosted_rendered_bytes": 157932,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Code is emitted, not tree-shaken away. The 33 pinned portal source files do not instantiate TextEditor or initSocket/FrappeUI socket plugin; resourcesPlugin alone does not initialize sockets and FormControl has no editor branch. No activation path from these reviewed portal entrypoints was found. Do not generalize this to other apps or future UI."
     },
     {
       "package": "showdown",
@@ -917,8 +1898,23 @@
       "surface": "potential browser content processing",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "No patched Showdown version listed by the advisory API. Remove unused parser through maintained upstream dependency update, or provide audited replacement/sanitization with regression proof; no fabricated fixed version.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "showdown"
+          },
+          "vulnerable_version_range": "<= 2.1.0",
+          "first_patched_version": null,
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "dormant_code_no_portal_activation_path",
+      "hosted_rendered_bytes": 157932,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Code is emitted, not tree-shaken away. The 33 pinned portal source files do not instantiate TextEditor or initSocket/FrappeUI socket plugin; resourcesPlugin alone does not initialize sockets and FormControl has no editor branch. No activation path from these reviewed portal entrypoints was found. Do not generalize this to other apps or future UI."
     },
     {
       "package": "socket.io-parser",
@@ -943,8 +1939,41 @@
       "surface": "transport/parser; Node and browser applicability differ",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "socket.io-parser"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 4.2.7",
+          "first_patched_version": "4.2.7",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "socket.io-parser"
+          },
+          "vulnerable_version_range": ">= 3.4.0, < 3.4.5",
+          "first_patched_version": "3.4.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "socket.io-parser"
+          },
+          "vulnerable_version_range": "< 3.3.6",
+          "first_patched_version": "3.3.6",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "dormant_code_no_portal_activation_path",
+      "hosted_rendered_bytes": 14021,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Code is emitted, not tree-shaken away. The 33 pinned portal source files do not instantiate TextEditor or initSocket/FrappeUI socket plugin; resourcesPlugin alone does not initialize sockets and FormControl has no editor branch. No activation path from these reviewed portal entrypoints was found. Do not generalize this to other apps or future UI."
     },
     {
       "package": "socket.io-parser",
@@ -968,8 +1997,41 @@
       "surface": "transport/parser; Node and browser applicability differ",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "socket.io-parser"
+          },
+          "vulnerable_version_range": "< 3.3.5",
+          "first_patched_version": "3.3.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "socket.io-parser"
+          },
+          "vulnerable_version_range": ">= 3.4.0, < 3.4.4",
+          "first_patched_version": "3.4.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "socket.io-parser"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 4.2.6",
+          "first_patched_version": "4.2.6",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "dormant_code_no_portal_activation_path",
+      "hosted_rendered_bytes": 14021,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Code is emitted, not tree-shaken away. The 33 pinned portal source files do not instantiate TextEditor or initSocket/FrappeUI socket plugin; resourcesPlugin alone does not initialize sockets and FormControl has no editor branch. No activation path from these reviewed portal entrypoints was found. Do not generalize this to other apps or future UI."
     },
     {
       "package": "vite",
@@ -993,8 +2055,68 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 4.0.0, < 4.5.4",
+          "first_patched_version": "4.5.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.4.0, < 5.4.6",
+          "first_patched_version": "5.4.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.3.0, < 5.3.6",
+          "first_patched_version": "5.3.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.2.0, < 5.2.14",
+          "first_patched_version": "5.2.14",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "< 3.2.11",
+          "first_patched_version": "3.2.11",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.0.0, < 5.1.8",
+          "first_patched_version": "5.1.8",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_reported_output_format",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Hosted build reports only ES output. These reported generator gadgets require cjs/iife/umd output. This is not a claim about every possible gadget in third-party code."
     },
     {
       "package": "vite",
@@ -1019,8 +2141,69 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.4.0, <= 5.4.5",
+          "first_patched_version": "5.4.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.3.0, <= 5.3.5",
+          "first_patched_version": "5.3.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 4.0.0, <= 4.5.3",
+          "first_patched_version": "4.5.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "<= 3.2.10",
+          "first_patched_version": "3.2.11",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.2.0, < 5.2.14",
+          "first_patched_version": "5.2.14",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.0.0, <= 5.1.7",
+          "first_patched_version": "5.1.8",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1046,8 +2229,42 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.0.0, <= 6.0.8",
+          "first_patched_version": "6.0.9",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.0.0, <= 5.4.11",
+          "first_patched_version": "5.4.12",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "<= 4.5.5",
+          "first_patched_version": "4.5.6",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1072,8 +2289,60 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.2.0, < 6.2.3",
+          "first_patched_version": "6.2.3",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.1.0, < 6.1.2",
+          "first_patched_version": "6.1.2",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.0.0, < 6.0.12",
+          "first_patched_version": "6.0.12",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.0.0, < 5.4.15",
+          "first_patched_version": "5.4.15",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "< 4.5.10",
+          "first_patched_version": "4.5.10",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1097,8 +2366,60 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.2.0, < 6.2.6",
+          "first_patched_version": "6.2.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.1.0, < 6.1.5",
+          "first_patched_version": "6.1.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.0.0, < 6.0.15",
+          "first_patched_version": "6.0.15",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.0.0, < 5.4.18",
+          "first_patched_version": "5.4.18",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "< 4.5.13",
+          "first_patched_version": "4.5.13",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1122,8 +2443,60 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.3.0, <= 6.3.3",
+          "first_patched_version": "6.3.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.2.0, <= 6.2.6",
+          "first_patched_version": "6.2.7",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.0.0, <= 6.1.5",
+          "first_patched_version": "6.1.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.0.0, <= 5.4.18",
+          "first_patched_version": "5.4.19",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "<= 4.5.13",
+          "first_patched_version": "4.5.14",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1148,8 +2521,60 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.2.0, < 6.2.5",
+          "first_patched_version": "6.2.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.1.0, < 6.1.4",
+          "first_patched_version": "6.1.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.0.0, < 6.0.14",
+          "first_patched_version": "6.0.14",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.0.0, < 5.4.17",
+          "first_patched_version": "5.4.17",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "< 4.5.12",
+          "first_patched_version": "4.5.12",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1175,8 +2600,51 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 7.1.0, <= 7.1.4",
+          "first_patched_version": "7.1.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 7.0.0, <= 7.0.6",
+          "first_patched_version": "7.0.7",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.0.0, <= 6.3.5",
+          "first_patched_version": "6.3.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "<= 5.4.19",
+          "first_patched_version": "5.4.20",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1202,8 +2670,51 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 7.1.0, <= 7.1.4",
+          "first_patched_version": "7.1.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 7.0.0, <= 7.0.6",
+          "first_patched_version": "7.0.7",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.0.0, <= 6.3.5",
+          "first_patched_version": "6.3.6",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "<= 5.4.19",
+          "first_patched_version": "5.4.20",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1228,8 +2739,60 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.2.0, < 6.2.4",
+          "first_patched_version": "6.2.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.1.0, < 6.1.3",
+          "first_patched_version": "6.1.3",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 6.0.0, < 6.0.13",
+          "first_patched_version": "6.0.13",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.0.0, < 5.4.16",
+          "first_patched_version": "5.4.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "< 4.5.11",
+          "first_patched_version": "4.5.11",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1253,8 +2816,24 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "<= 5.4.8",
+          "first_patched_version": "5.4.9",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1279,8 +2858,42 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 8.0.0, <= 8.0.15",
+          "first_patched_version": "8.0.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 7.0.0, <= 7.3.4",
+          "first_patched_version": "7.3.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "<= 6.4.2",
+          "first_patched_version": "6.4.3",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1305,8 +2918,42 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 8.0.0, <= 8.0.4",
+          "first_patched_version": "8.0.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 7.0.0, <= 7.3.1",
+          "first_patched_version": "7.3.2",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "<= 6.4.1",
+          "first_patched_version": "6.4.2",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1331,8 +2978,69 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 2.7.0, <= 2.9.17",
+          "first_patched_version": "2.9.18",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 3.0.0, <= 3.2.8",
+          "first_patched_version": "3.2.10",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 4.0.0, <= 4.5.2",
+          "first_patched_version": "4.5.3",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.0.0, <= 5.0.12",
+          "first_patched_version": "5.0.13",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.1.0, <= 5.1.6",
+          "first_patched_version": "5.1.7",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 5.2.0, <= 5.2.5",
+          "first_patched_version": "5.2.6",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "vite",
@@ -1357,8 +3065,42 @@
       "surface": "build output and/or tooling",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 8.0.0, <= 8.0.15",
+          "first_patched_version": "8.0.16",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": ">= 7.0.0, <= 7.3.4",
+          "first_patched_version": "7.3.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "vite"
+          },
+          "vulnerable_version_range": "<= 6.4.2",
+          "first_patched_version": "6.4.3",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_serving_profile",
+      "mitigation": "Do not expose Vite/esbuild dev servers or editor endpoints. Replace legacy toolchain with maintained compatible upstream versions; qualify Windows separately.",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "The qualified profile serves built assets via Nginx/Gunicorn; no Vite/esbuild development server or editor endpoint runs. Windows editor/path cases are additionally outside the Linux profile."
     },
     {
       "package": "ws",
@@ -1382,8 +3124,50 @@
       "surface": "transport/parser; Node and browser applicability differ",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "ws"
+          },
+          "vulnerable_version_range": ">= 2.1.0, < 5.2.4",
+          "first_patched_version": "5.2.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "ws"
+          },
+          "vulnerable_version_range": ">= 6.0.0, < 6.2.3",
+          "first_patched_version": "6.2.3",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "ws"
+          },
+          "vulnerable_version_range": ">= 7.0.0, < 7.5.10",
+          "first_patched_version": "7.5.10",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "ws"
+          },
+          "vulnerable_version_range": ">= 8.0.0, < 8.17.1",
+          "first_patched_version": "8.17.1",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_portal_bundle",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "No rendered package code in the production graph. Node/build or other-app use remains separate; in particular ws findings do not qualify the running realtime server dependency inventory."
     },
     {
       "package": "ws",
@@ -1407,8 +3191,23 @@
       "surface": "transport/parser; Node and browser applicability differ",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "ws"
+          },
+          "vulnerable_version_range": ">= 8.0.0, < 8.20.1",
+          "first_patched_version": "8.20.1",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_portal_bundle",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "No rendered package code in the production graph. Node/build or other-app use remains separate; in particular ws findings do not qualify the running realtime server dependency inventory."
     },
     {
       "package": "ws",
@@ -1434,8 +3233,50 @@
       "surface": "transport/parser; Node and browser applicability differ",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P1",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "ws"
+          },
+          "vulnerable_version_range": ">= 1.1.0, < 5.2.5",
+          "first_patched_version": "5.2.5",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "ws"
+          },
+          "vulnerable_version_range": ">= 6.0.0, < 6.2.4",
+          "first_patched_version": "6.2.4",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "ws"
+          },
+          "vulnerable_version_range": ">= 7.0.0, < 7.5.11",
+          "first_patched_version": "7.5.11",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "ws"
+          },
+          "vulnerable_version_range": ">= 8.0.0, < 8.21.0",
+          "first_patched_version": "8.21.0",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "not_reachable_portal_bundle",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "No rendered package code in the production graph. Node/build or other-app use remains separate; in particular ws findings do not qualify the running realtime server dependency inventory."
     },
     {
       "package": "yaml",
@@ -1459,8 +3300,39 @@
       "surface": "primarily dependency/build tooling; untrusted input applicability requires verification",
       "exploit_reachability": "not proven; no waiver",
       "priority": "P2",
-      "disposition": "open",
-      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix."
+      "disposition": "open_dependency_remediation",
+      "remediation": "Select maintained upstream release or narrowly reviewed dependency patch outside the advisory range; require clean frozen-lock build, fresh audit, and affected-path regression evidence. No blind audit-fix.",
+      "published_fix_ranges": [
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "yaml"
+          },
+          "vulnerable_version_range": ">= 2.0.0, < 2.8.3",
+          "first_patched_version": "2.8.3",
+          "vulnerable_functions": []
+        },
+        {
+          "package": {
+            "ecosystem": "npm",
+            "name": "yaml"
+          },
+          "vulnerable_version_range": ">= 1.0.0, < 1.10.3",
+          "first_patched_version": "1.10.3",
+          "vulnerable_functions": []
+        }
+      ],
+      "reachability_classification": "reachable_build_tooling_input_conditions_open",
+      "hosted_rendered_bytes": 0,
+      "reachability_evidence": "hosted/remaining-34809413852.json: frontend_graph; reviewed pinned portal and hash-matched frappe-ui source",
+      "reachability_reason": "Build/dependency tooling executes on pinned inputs; no rendered package code in the portal. Exploit-specific untrusted pattern/CSS/stats/size/path/CLI prerequisites are not proven. Keep open for build-supply-chain remediation; absence from browser output is not a waiver."
     }
-  ]
+  ],
+  "classification_counts": {
+    "dormant_code_no_portal_activation_path": 7,
+    "reachable_build_tooling_input_conditions_open": 26,
+    "not_reachable_serving_profile": 15,
+    "not_reachable_portal_bundle": 7,
+    "not_reachable_reported_output_format": 2
+  }
 }

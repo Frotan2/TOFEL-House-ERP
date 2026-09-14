@@ -5,9 +5,11 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
-**Recommendation: REJECT current Phase 2/production acceptance.** New hosted Guardian
-isolation and known-task realtime failures, plus unresolved frontend advisories, block acceptance. See the
-[production-readiness report](docs/engineering/foundation-production-readiness.md).
+**Recommendation: REJECT current Phase 2/production acceptance.** Guardian and realtime
+resource guard corrections have scoped hosted proof, but dependency remediation and
+broader production readiness remain open. GitHub access expired during final monitoring;
+the latest private-file owner and scheduler changes are not yet runtime-approved.
+See the [hardening remediation report](docs/engineering/foundation-hardening-remediation.md).
 
 **Phase 2 qualification is incomplete. A clean pinned ERP installation and migrations
 have passed on a controlled hosted runner. Product implementation remains blocked.**

@@ -1,5 +1,21 @@
 # Phase 2 security and production-readiness continuation
 
+## Current remediation checkpoint — supersedes the previous result below
+
+**REJECT current production acceptance.** Guardian and realtime resource guard corrections
+have enumerated hosted proof through run **34809413852**. Payroll report ACLs, production
+build/source reachability evidence and the five-app framework patch upgrade also have
+verified results. Dependency remediation and broader qualification are not complete.
+
+The newer legacy private-file owner boundary and scheduler observer correction remain
+**unverified** after GitHub access expired with HTTP 401. Runs **34809817009** and
+**34810723925** must be retrieved before relying on them. See the authoritative
+[hardening remediation report](foundation-hardening-remediation.md) for exact scope,
+source boundaries, compatibility limitations and the current acceptance decision.
+
+The following prior checkpoint is retained as **historical failed evidence**, not as a
+claim that the corrected 0.2.0 Guardian/realtime checks still fail.
+
 ## Final recommendation — REJECT current Phase 2/production acceptance
 
 Run **34806388937**, commit `675736e540aacdbc46635a3ec121e683d1a58801`, completed

@@ -1,0 +1,25 @@
+{
+  "date": "2026-09-14",
+  "base": "93bc7075753369457919720690f80c6d2207b5f2",
+  "candidate": "22e0910d8b4188f17b76e58d7b434354ce5a0e58",
+  "ahead_by": 10,
+  "changed_files": [
+    "education/education/api.py",
+    "education/education/doctype/student/student.js",
+    "education/education/doctype/student_group/student_group.json",
+    "education/hooks.py",
+    "education/install.py",
+    "education/patches.txt",
+    "education/patches/v15_0/create_guardian_role.py",
+    "education/patches/v15_0/guardian_invoice_permission.py",
+    "frontend/src/components/Navbar.vue",
+    "frontend/src/components/ProgramSelector.vue",
+    "frontend/src/pages/Attendance.vue",
+    "frontend/src/pages/Fees.vue",
+    "frontend/src/pages/Grades.vue",
+    "frontend/src/pages/Schedule.vue",
+    "frontend/src/pages/Students.vue",
+    "frontend/src/stores/student.js"
+  ],
+  "decision": "Not adopted: no frontend dependency/lockfile update in this comparison; includes API/role/portal changes requiring separate qualification. Newer source is not evidence of fixing the 57 advisory entries."
+}

@@ -7,29 +7,43 @@ Phase 2 has **not** passed. Product implementation and deployment remain unautho
 This section supersedes the local-environment runtime status in the historical assessment below;
 its source analysis, unresolved frontend advisories and unexecuted acceptance requirements remain relevant.
 
-### Production-readiness continuation
+### Hardening remediation checkpoint — verified and pending evidence
 
-See [security and production readiness](foundation-production-readiness.md) for advisory
-triage, native role/payroll probes, actual socket tests, operational limits and upgrade scope.
-Latest verified run **34806388937** (`675736e`) failed for the retained unscoped Guardian
-REST denial assertion, known-task realtime marker delivery, and 57 advisory entries.
-It passed **36/37 staff/guardian/payroll/HTTP checks**, including all seven payroll read
-boundaries and explicit Guardian own/other scopes. Two authenticated sockets and
-cross-student document-room delivery isolation passed; task-room ownership isolation did not.
-The isolated Frappe-only **16.33.0 → 16.33.1** upgrade (19 stages), persistent native record,
-migration replay and both authenticated HTML no-store checks passed. Existing Student
-security/recovery/browser regressions and the two upstream modules passed again.
-**29 local helper tests pass.** All three continuation runs and exact Check hashes are retained.
+See [hardening remediation](foundation-hardening-remediation.md) for architecture,
+per-advisory reachability decisions, compatibility costs and exact run history.
 
-Full bundle upgrade/rollback, Guardian lifecycle/mixed-role/files/report/export coverage,
-real-job task authorization, payroll posting, scheduled task execution, restart durability,
-production TLS/proxy/monitoring and other operational readiness remain incomplete.
-Only the narrowly evidenced checks are passed; **Phase 2 and security remain NOT PASSED**.
+- **34807848711** verified 43 readiness checks, six Guardian browser checks and four
+  realtime checks. These cover fail-closed missing/expanded Guardian scopes, canonical
+  REST/RPC/private-file access, real RQ job ownership and live session revocation.
+- **34808064545** additionally passed seven Salary Register report ACLs and an actual
+  scheduler-driven Complete log. Its expanded upgrade fixture hit a CLI site allowlist
+  error; that failure is preserved and the allowlist was corrected for the isolated site.
+- **34809413852** passed the five-upstream-app Frappe patch upgrade: 33 stages, nine native
+  business checks before, and five record/file/schema checks afterward plus replay.
+  Other app revisions were held fixed; this is not rollback or independent app upgrades.
+- Hosted production output is **ES**, with 33 first-party source files and hash-matched
+  frappe-ui source reviewed. The 57 advisory entries classify as 15 absent dev-service
+  surfaces, two inapplicable output-format gadgets, seven absent browser-package findings,
+  seven dormant bundled-code findings, and 26 build-tooling findings with exploit-specific
+  input conditions still open. These scoped classifications are **not blanket waivers**
+  and the dependency/security gate remains failed. Required patched ranges and decisions
+  are retained in the advisory evidence and remediation report.
+- The scheduler test also failed once because its 180-second observer was shorter than
+  the native 240-second tick. The corrected observer derives its budget from that tick;
+  its final hosted result is not retrieved. No execution assertion is replaced with liveness.
 
-The recommendation supersedes the earlier conditional **architecture-retention** verdict:
-reject the current qualification candidate for product/production acceptance. This does
-not erase successful installation, Student guard or hardened recovery evidence, and does
-not require abandoning canonical upstream academic/accounting/HR authorities.
+**GitHub returned HTTP 401 during final monitoring.** Runs **34809817009** (`6969ab3`,
+legacy File ownership/parent-permission hardening) and **34810723925** (`22c6ad8`, scheduler
+observer correction) have **unknown final outcomes**. The current 0.2.1 extension has
+**44 local Python tests plus the Node adapter regression passing**, not full runtime approval.
+Reconnect GitHub in Arena to retrieve those reports and publish this local checkpoint.
+
+**Recommendation remains REJECT current Phase 2/production acceptance.** Previously
+confirmed Guardian/realtime failures are not falsely left as failures of the corrected
+0.2.0 enumerated paths; their failed baselines remain historical evidence. However the
+latest additional file-owner fix, dependency remediation, broader mixed-role and operational
+requirements, rollback, payroll posting and full production deployment are not all qualified.
+Security, Phase 2 and product gates remain false; no TOEFL development is authorized.
 
 ### Proven on the controlled runner
 
