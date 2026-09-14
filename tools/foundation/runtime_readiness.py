@@ -166,15 +166,20 @@ def main():
             import time
             job=frappe.get_doc({'doctype':'Scheduled Job Type','method':'frappe.utils.now','frequency':'Cron','cron_format':'* * * * *','create_log':1,'stopped':0}).insert()
             frappe.db.commit()
+            from frappe.utils.scheduler import get_scheduler_tick
+            tick=get_scheduler_tick()
+            # Native default is a four-minute wall-clock-aligned tick. Include
+            # one cron boundary and worker allowance; never force enqueue/time.
+            budget=tick+120
             started=time.monotonic()
             try:
-                while time.monotonic()-started<180:
+                while time.monotonic()-started<budget:
                     frappe.db.rollback()  # refresh MariaDB snapshot while another worker commits
                     logs=frappe.get_all('Scheduled Job Log',filters={'scheduled_job_type':job.name},fields=['status'])
                     if any(row.status=='Failed' for row in logs):raise AssertionError('Scheduled native job failed')
-                    if any(row.status=='Complete' for row in logs):return {'status':'Complete','scheduler_driven':True,'seconds':round(time.monotonic()-started,2)}
+                    if any(row.status=='Complete' for row in logs):return {'status':'Complete','scheduler_driven':True,'native_tick_seconds':tick,'observation_budget_seconds':budget,'seconds':round(time.monotonic()-started,2)}
                     time.sleep(2)
-                raise AssertionError('No scheduler-driven Complete log within 180 seconds')
+                raise AssertionError(f'No scheduler-driven Complete log within native tick + 120 seconds ({budget}s)')
             finally:
                 job.reload();job.stopped=1;job.save();frappe.db.commit()
         check('scheduler-driven-native-readonly-job',scheduled_execution)
