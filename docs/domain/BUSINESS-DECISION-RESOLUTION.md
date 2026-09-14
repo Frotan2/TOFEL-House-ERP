@@ -2,21 +2,23 @@
 
 Date: 2026-09-14 · Baseline: `c11c9a6baac1f6fba692dfe13bd4fb53a4136823`
 
-**Status: recommendations awaiting explicit decisions; no implementation authorized. Production: REJECT.**
+**Current status: R01/R02/R03/R07 policy direction APPROVED; remaining policy detail and implementation entry NOT CLEARED. No implementation authorized. Production: REJECT.**
 
-This is the authoritative **business-question list** for this gate. It consolidates B01–B13 from [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md), using [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md) and [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md). It supersedes the earlier questionnaire, not the architecture contract, recorded A statuses or proof requirements. No recommendation below is recorded as your approval.
+The current approval record, exact organizational owner roles, outstanding policy blockers and next gate are in [PLACEMENT-IMPLEMENTATION-GATE.md](PLACEMENT-IMPLEMENTATION-GATE.md). That record supersedes the original approval prompts below for the initial slice. No individual owner names are required at this stage; individual assignments can be configured later without changing the domain architecture.
+
+This is the authoritative **business-question list** for this gate. It consolidates B01–B13 from [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md), using [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md) and [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md). It supersedes the earlier questionnaire, not the architecture contract, recorded A statuses or proof requirements. The original alternatives below remain rationale/history; approval applies only to the direction explicitly recorded in the current gate, not unsupplied policy values or later slices.
 
 ## 1. Minimum gate, not thirteen independent approvals
 
-**Seven business decisions remain for the full domain. Only the applicable portions must be resolved before a particular slice is implemented.** Do not delay internal placement for payroll rules, or interpret placement approval as permission to implement payroll.
+**Seven decision topics cover the full domain. Four initial-slice directions are now approved; their detailed policy deliverables remain outstanding.** Do not delay internal placement for payroll rules, or interpret placement approval as permission to implement payroll.
 
-**Recommended first slice:** staff-assisted internal placement, from native prospect/applicant reference through preserved attempts and reviewed English-level/course recommendation. Exclude Student conversion, admission/enrollment execution, charging, payroll, public applicant/guardian portals and offline synchronization. These exclusions need your scope agreement, not new technologies.
+**Recommended first slice:** staff-assisted internal placement, from native prospect/applicant reference through preserved attempts and reviewed English-level/course recommendation. Exclude Student conversion, admission/enrollment execution, charging, payroll, public applicant/guardian portals and offline synchronization. These exclusions are included in the approved initial-slice direction.
 
-Before that slice: resolve **R01, the placement part of R02, placement authority in R03, and R07**. Supply the applicable approved policy documents, then separately authorize a bounded implementation after its engineering design is reviewed. Use synthetic data in an isolated environment; no live-data pilot is implied. R04–R06 and academic/admission extensions of R02/R03 remain gates for their respective later slices.
+Before that slice: complete the P01–P05 policy deliverables in the current gate under **R01, the placement part of R02, placement authority in R03, and R07**. Then separately authorize a bounded implementation after its engineering design is reviewed. Use synthetic data in an isolated environment; no live-data pilot is implied. R04–R06 and academic/admission extensions of R02/R03 remain gates for their respective later slices.
 
 Approval of a policy owner is acceptable delegation, **not resolution of missing policy values**. An affected workflow stays blocked until the owner supplies and approves the actual rules. Existing policies may be provided instead of answering a new questionnaire.
 
-## 2. Final decisions requiring your authority
+## 2. Decision rationale and original approval prompts
 
 ### R01 — How should learners enter the service?
 
@@ -36,9 +38,9 @@ Approval of a policy owner is acceptable delegation, **not resolution of missing
 - **Assessor-led placement:** approved interview/tasks and component rubrics with a reviewed recommendation; lower item-bank complexity, greater dependence on assessor calibration.
 - **Mixed placement:** approved objective components plus human review; potentially more consistent component scoring, but adds item/key governance and marking/security work. It still needs an internal level policy.
 
-**Recommendation:** assessor-led first, with short reading/writing/listening evidence where the academic lead finds it useful. Record component observations, current internal level, course recommendation and rationale; no forced overall total. Add objective scoring only for a demonstrated need. Prefer the most recent **reviewed, valid, explicitly released** decision as the effective recommendation, not the highest historical score; preserve every earlier attempt. This selection rule itself needs academic approval.
+**Recommendation:** assessor-led first, with short reading/writing/listening evidence where the academic lead finds it useful. Record component observations, current internal level, course recommendation and rationale; no forced overall total. Add objective scoring only for a demonstrated need. Prefer the most recent **reviewed, valid, explicitly released** decision as the effective recommendation, not the highest historical score; preserve every earlier attempt. The user has approved this selection direction; detailed validity and transition rules remain Academic Owner deliverables.
 
-**Exact decision from you:** approve assessor-led first or specify necessary objective components; approve/delegate to a named academic lead a versioned placement policy containing actual internal levels, course mappings, components/rubrics, release/moderation rules, validity, retest eligibility/wait, interrupted attempts, accommodations and appeals. Supply existing rules if available; none of these values can be inferred from the center's name. **Before academic assessment/progression implementation:** separately approve native course grading, weights, pass/completion criteria and correction rules. Placement thresholds cannot substitute for them.
+**Exact decision from you:** approve assessor-led first or specify necessary objective components; approve/delegate to the Academic Owner organizational role a versioned placement policy containing actual internal levels, course mappings, components/rubrics, release/moderation rules, validity, retest eligibility/wait, interrupted attempts, accommodations and appeals. Supply existing rules if available; none of these values can be inferred from the center's name. **Before academic assessment/progression implementation:** separately approve native course grading, weights, pass/completion criteria and correction rules. Placement thresholds cannot substitute for them.
 
 ### R03 — Who is accountable for decisions and offers?
 
@@ -47,9 +49,9 @@ Approval of a policy owner is acceptable delegation, **not resolution of missing
 - **Centralized:** an academic lead reviews placement release and designated managers approve admissions/financial exceptions; clearer oversight but greater bottlenecks.
 - **Delegated:** named qualified reviewers and admissions staff act within documented limits; faster service, but requires training, deputies and escalation rules.
 
-**Recommendation:** named domain owners with bounded delegation and independent review for conflicts, corrections and exceptions; preserve the contract's required approval separation. The academic owner governs levels/grades, admissions governs eligibility/offers, finance governs charges/refunds, HR/payroll governs payable work, and the records owner governs disclosures. Do not invent a manager for every technical operation or require you to approve database roles.
+**Approved initial-slice direction:** organizational domain owners with bounded delegation and independent review for conflicts, corrections and exceptions; preserve the contract's required approval separation. The academic owner governs levels/grades, admissions governs eligibility/offers, finance governs charges/refunds, HR/payroll governs payable work, and the records owner governs disclosures. Do not invent a manager for every technical operation or require you to approve database roles.
 
-**Exact decision from you:** nominate the accountable owners/deputies and approve one concise authority/delegation matrix, initially only for placement release, identity disputes and records access. **Before admission execution:** have the admissions owner approve eligibility/prerequisites, offer conditions, acceptance evidence and expiry. A valid internal placement remains required for initial entry; finance or an external score cannot silently exempt it. Named assignees and actual delegation limits cannot be selected by architecture reasoning.
+**Recorded R03 approval:** Academic Owner — **Academic / Academic Affairs Manager**; Identity Owner — **Admissions & Student Records Manager**; Records/Privacy Owner — **Administration / Records & Privacy Officer**. These are organizational responsibilities, not individual names. A concise role-level authority/delegation matrix for placement release, identity disputes and records access remains a policy deliverable. **Before admission execution:** have the admissions owner approve eligibility/prerequisites, offer conditions, acceptance evidence and expiry. A valid internal placement remains required for initial entry; finance or an external score cannot silently exempt it. Individual assignments can be configured later without changing the domain architecture; they are not a current design/implementation-entry blocker. Actual delegation limits still require organizational policy, and operational actions require auditable individual authorization.
 
 ### R04 — What do a repeat, transfer and withdrawal mean commercially and academically?
 
@@ -95,7 +97,7 @@ Approval of a policy owner is acceptable delegation, **not resolution of missing
 
 **Recommendation:** staff-assisted intake for the actual learner population, verified guardian/delegate authority where required, no pre-admission proxy portal, and no routine audio/video recording initially. Keep the minimum evidence needed to explain and review a recommendation; use owned/licensed assessment content only.
 
-**Exact decision from you:** confirm whether the first slice serves adults, minors or both; approve the no-routine-recording recommendation or justify required recordings. Name a records/privacy owner to approve applicable jurisdiction, age/delegation and evidence rules, notices/legal bases, permitted disclosures, retention/legal holds and rights-request handling before affected implementation. No legal regime, age cutoff, retention duration or licensing permission is invented here.
+**Exact decision from you:** confirm whether the first slice serves adults, minors or both; approve the no-routine-recording recommendation or justify required recordings. The approved Records/Privacy Owner organizational role must approve applicable jurisdiction, age/delegation and evidence rules, notices/legal bases, permitted disclosures, retention/legal holds and rights-request handling before affected implementation. No legal regime, age cutoff, retention duration or licensing permission is invented here.
 
 ## 3. Questions removed, safely determined or deferred
 
@@ -118,10 +120,10 @@ No new approval is needed to preserve A01 routing, A07 internal-only claims, A08
 
 A13's hook coverage, native RPC/CRUD/import/job containment, file/report permissions, concurrency/idempotency and recovery are **engineering proof obligations**, not business preferences. Approval of R01/R03/R07 cannot make these tests pass. No CONDITIONAL or BLOCKED A record changes status in this document.
 
-## 4. What your reply needs to authorize
+## 4. Current next gate
 
-For the recommended placement-first route, respond with **R01 scope; R02 placement method and approved policy or named policy owner; R03 accountable placement/identity/records authorities; R07 population and collection/privacy choices**. You may attach existing policies or delegate their approval. Missing rules remain explicit blockers for the affected work.
+R01/R02/R03/R07 direction is approved. Do not repeat requests for individual names or re-vote the approved method/scope. [PLACEMENT-IMPLEMENTATION-GATE.md](PLACEMENT-IMPLEMENTATION-GATE.md) records role ownership, remaining P01–P05 policy deliverables, the bounded candidate slice and evidence needed before a separate implementation authorization.
 
-R04, R05 and R06 require explicit approval **before their corresponding later slices**, not before unrelated placement work. Academic grading and admission-offer rules follow the same slice boundary. No answer to this document alone starts implementation: after decisions and applicable design/proof planning are reconciled, request a separate bounded implementation authorization. Production remains **REJECT** regardless.
+R04/R05/R06, academic grading and admission-offer rules remain gates for later slices. Missing policy content is not resolved by delegating its approval. No implementation starts from business-direction approval alone; production remains **REJECT**.
 
-**Review verification:** this gate adds only this document. Prior architecture/source-review metadata and Phase 2 evidence remain historical and unchanged; their hashes do not claim to cover this new file. No code, schema, API, UI, dependency, foundation pin, upstream source or deployment change; no runtime tests or deployment action.
+**Evidence boundary:** the original business-resolution gate added this document; the subsequent policy-approval gate updates it and adds the placement implementation-entry record. Historical architecture/source-review metadata and Phase 2 evidence remain unchanged and do not claim to cover these later files. No code, schema, API, UI, dependency, foundation pin, upstream source or deployment change; no runtime tests or deployment action.
