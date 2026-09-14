@@ -4,6 +4,31 @@
 
 **Security gate: NOT PASSED. Product implementation: NOT AUTHORIZED.**
 
+### Latest checkpoint — final integration outcome unavailable
+
+Run **34781717183** at `956fd31` was last observed running. GitHub then returned
+**HTTP 401 Bad credentials**, so its final outcome has not been retrieved. Reconnect
+GitHub in Arena and retrieve the sanitized Check before relying on this candidate.
+The generic guard is **not runtime-approved**. There are **26 passing local helper tests**.
+
+The last confirmed extension run, **34781217903**, installed the app and passed a fresh
+post-install cache/RQ job, but failed all four login controls: Administrator HTTP 400,
+Students HTTP 403. Source tracing identified two extension defects, not new upstream
+permission disclosures: generating CSRF inside session creation preceded Frappe's login
+request CSRF validation; rejecting every DocShare also rejected core's legitimate User
+self-profile share. The candidate now generates the token in the post-validation auth hook,
+rejects tokenless unsafe legacy-session requests, and preserves only native self-profile
+shares while rejecting other inherited/global shares. These corrections have unit coverage,
+but their hosted verification is the unavailable run above.
+
+Earlier packaging failures (`34780307591`, `34780667272`) are retained: Bench required a
+standalone local Git app root and its empty `patches.txt` discovery manifest. The runner
+exports exact owned app files into a disposable same-branch Git snapshot and uses supported
+Bench registration; it does not hand-edit apps.txt or bypass installation checks. Superseded
+pending runs `34780366068` and `34780432921` were cancelled by GitHub concurrency before
+execution; they are neither passing nor failing qualification evidence.
+
+
 This is a synthetic-data qualification of the pinned upstream bundle, not a production
 hardening guarantee. GitHub access has recovered. Run `34778602344` is now retrieved and
 verified against commit `43d4287bc63b47a2000cdb44a38f83fa322b9dc6`.

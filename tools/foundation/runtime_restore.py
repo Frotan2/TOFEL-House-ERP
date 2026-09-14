@@ -8,7 +8,7 @@ import sys
 
 def main():
     import frappe
-    if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1] != "restore.localhost":
+    if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1] not in ("restore.localhost", "recovery.localhost"):
         raise SystemExit("Restore verification is restricted to the isolated Actions restore site")
     expected = json.loads(Path(os.environ["FOUNDATION_BUSINESS_REPORT"]).read_text())["records"]
     output = Path(os.environ["FOUNDATION_RESTORE_REPORT"])
@@ -39,6 +39,23 @@ def main():
             actual = hashlib.sha256(Path(doc.get_full_path()).read_bytes()).hexdigest()
             assert actual == expected[label + "_file_sha256"]
             report["checks"].append({"name": label + "-file-restored", "status": "pass", "sha256": actual})
+        if sys.argv[1] == "recovery.localhost":
+            from frappe.sessions import clear_all_sessions
+            captured = json.loads(Path(os.environ["FOUNDATION_CAPTURED_SESSION"]).read_text())["sid"]
+            assert frappe.db.exists("Sessions", {"sid": captured}), "Backup did not contain the captured live source session"
+            clear_all_sessions(reason="Revoke copied sessions during isolated security recovery")
+            assert not frappe.db.exists("Sessions", {"sid": captured})
+            report["checks"].append({"name": "copied-live-session-found-and-revoked-with-native-session-api", "status": "pass"})
+            assert "foundation_security" in frappe.get_installed_apps()
+            for dt, field in (("Website Settings", "disable_signup"), ("Education Settings", "user_creation_skip"),
+                              ("System Settings", "apply_strict_user_permissions"), ("System Settings", "disable_document_sharing")):
+                assert frappe.db.get_single_value(dt, field) == 1
+            from foundation_security.guards import validate_student_scope
+            for label in ("alpha", "beta"):
+                frappe.set_user(f"validation-{label}@example.test")
+                validate_student_scope()
+            frappe.set_user("Administrator")
+            report["checks"].append({"name": "security-app-settings-and-native-permission-scopes-restored", "status": "pass"})
         report["database"] = frappe.db.sql("SELECT VERSION(), @@character_set_server, @@collation_server")[0]
         report["schema"] = {}
         for doctype in ("Student", "Student Applicant", "Program Enrollment", "Course Enrollment", "Assessment Result", "Sales Invoice", "Payment Entry", "Employee", "Salary Slip", "Payroll Entry"):

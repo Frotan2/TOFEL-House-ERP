@@ -15,10 +15,15 @@ def main():
     import requests
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise SystemExit('Disposable Actions runner only')
+    primary_site = os.environ.get('FOUNDATION_PRIMARY_SITE', 'foundation.localhost')
+    secondary_site = os.environ.get('FOUNDATION_SECONDARY_SITE', 'restore.localhost')
+    allowed_sites = {'foundation.localhost', 'restore.localhost', 'recovery.localhost'}
+    if primary_site not in allowed_sites or secondary_site not in allowed_sites or primary_site == secondary_site:
+        raise SystemExit('Only distinct disposable sites may be probed')
     records = json.loads(Path(os.environ['FOUNDATION_BUSINESS_REPORT']).read_text())['records']
     destination = Path(os.environ['FOUNDATION_ISOLATION_REPORT'])
     report = {'status': 'running', 'scope': 'Restricted native policy; real HTTP, synthetic data only',
-              'checks': [], 'phase2_gate_passed': False}
+              'checks': [], 'phase2_gate_passed': False, 'primary_site': primary_site, 'secondary_site': secondary_site}
     base = 'http://127.0.0.1:8080'
 
     def check(name, fn):
@@ -32,7 +37,7 @@ def main():
             report['checks'].append({'name': name, 'status': 'fail', 'exception': type(exc).__name__, 'message': str(exc)[:250]})
         destination.write_text(json.dumps(report, indent=2)+'\n')
 
-    def login(user, site='foundation.localhost'):
+    def login(user, site=primary_site):
         s = requests.Session()
         s.headers['Host'] = site
         password = os.environ['FOUNDATION_ADMIN_PASSWORD' if user == 'Administrator' else 'FOUNDATION_TEST_PASSWORD']
@@ -67,7 +72,7 @@ def main():
 
     try:
         alpha, beta = [login(f'validation-{label}@example.test') for label in ('alpha','beta')]
-        admin, restored = login('Administrator'), login('Administrator', 'restore.localhost')
+        admin, restored = login('Administrator'), login('Administrator', secondary_site)
         own, other = records['students']
         for version in ('resource', 'v2/document'):
             for s, target, allow, label in ((alpha,own,True,'alpha-own'),(alpha,other,False,'alpha-other'),
@@ -117,13 +122,13 @@ def main():
             else:
                 assert r.status_code==403, f'private-file HTTP {r.status_code}'
             return {'http_status':r.status_code}
-        guest=requests.Session();guest.headers['Host']='foundation.localhost'
+        guest=requests.Session();guest.headers['Host']=primary_site
         check('proxy-private-own',lambda:file_check(alpha,True))
         check('proxy-private-other',lambda:file_check(beta,False))
         check('proxy-private-guest',lambda:file_check(guest,False))
         check('guest-student-denied',lambda:read(guest,'/api/resource/Student/'+quote(own,safe=''),False))
         def replay_cookie():
-            r=requests.get(base+'/api/method/frappe.auth.get_logged_user',headers={'Host':'restore.localhost','Cookie':'sid='+alpha.cookies.get('sid')},timeout=30)
+            r=requests.get(base+'/api/method/frappe.auth.get_logged_user',headers={'Host':secondary_site,'Cookie':'sid='+alpha.cookies.get('sid')},timeout=30)
             assert r.status_code in (401,403), f'source session accepted by restore site: HTTP {r.status_code}'
             return {'source_sid_rejected_on_restore':True}
         check('cross-site-session-replay-denied',replay_cookie)
@@ -135,7 +140,7 @@ def main():
             return {'http_status':404}
         check('source-only-marker-absent-on-restore',absent_on_restore)
         def header_override():
-            r=admin.get(base+path,headers={'X-Frappe-Site-Name':'restore.localhost'},timeout=30)
+            r=admin.get(base+path,headers={'X-Frappe-Site-Name':secondary_site},timeout=30)
             assert r.status_code==200 and r.json()['data']['name']==records['source_only_todo'], 'proxy accepted client site-routing override'
             return {'untrusted_site_header_overwritten':True}
         check('proxy-site-header-fixed-to-host',header_override)
@@ -163,7 +168,7 @@ def main():
         check('no-automatic-unscoped-student-login',unprovisioned_cannot_login)
         def csrf_enforced():
             payload={'doctype':'User','name':'validation-alpha@example.test','fieldname':'first_name','value':'Validation alpha'}
-            headers={'Host':'foundation.localhost','Cookie':'sid='+alpha.cookies.get('sid')}
+            headers={'Host':primary_site,'Cookie':'sid='+alpha.cookies.get('sid')}
             for token in (None,'invalid-synthetic-token'):
                 h=dict(headers)
                 if token: h['X-Frappe-CSRF-Token']=token
@@ -187,7 +192,7 @@ def main():
                 for path in ('/api/resource/Student/'+quote(own,safe=''), records['private_file_url']):
                     r=alpha.get(base+path,timeout=30)
                     assert r.status_code==403, 'existing session retained access without required policy'
-                r=requests.post(base+'/api/method/login',headers={'Host':'foundation.localhost'},data={'usr':'validation-alpha@example.test','pwd':os.environ['FOUNDATION_TEST_PASSWORD']},timeout=30)
+                r=requests.post(base+'/api/method/login',headers={'Host':primary_site},data={'usr':'validation-alpha@example.test','pwd':os.environ['FOUNDATION_TEST_PASSWORD']},timeout=30)
                 assert r.status_code==403 and r.json().get('exc_type')=='PermissionError', 'unscoped Student login accepted'
             finally:
                 if removed:

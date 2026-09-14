@@ -1324,6 +1324,14 @@
         }
       ],
       "failure": "http-isolation-with-native-user-permissions: exit 1"
+    },
+    {
+      "id": "generic-guard-hook-order-and-share-unit-regressions",
+      "checkpoint": "local_security_continuation",
+      "status": "pass",
+      "scope": "Unit tests only; include native self-share, global-share rejection and login/legacy-session token timing",
+      "suite_total": 26,
+      "command": "python3 -m unittest discover -s tests/foundation -q"
     }
   ],
   "phase_gates": [
@@ -1380,7 +1388,7 @@
     {
       "phase": "2K",
       "status": "fail",
-      "reason": "See HTTP report if present; otherwise downstream probes were not reached. Full staff role matrix remains unexecuted."
+      "reason": "Baseline disclosure fixed by native policy in enumerated probes; generic guard subsequently failed login, corrections awaiting hosted evidence. Full role matrix unverified."
     },
     {
       "phase": "2L",
@@ -1415,7 +1423,7 @@
     {
       "phase": "2R",
       "status": "partial",
-      "reason": "9 local helper tests passed plus enumerated hosted owned probes. Existing upstream suites not yet executed."
+      "reason": "26 local helper tests pass. Earlier real HTTP/browser results recorded; latest generic guard integration outcome unknown. Upstream suites unexecuted."
     },
     {
       "phase": "2S",
@@ -1733,7 +1741,7 @@
     }
   },
   "created_site_count_scope": "Cumulative creations in retained disposable hosted runs, not currently live sites",
-  "currently_live_validation_sites": 0,
+  "currently_live_validation_sites": null,
   "business_fixture_count_note": "No exact full-document count claimed; explicit named records and successful controller checks are retained in each business_result.",
   "clean_pinned_installation_proven": true,
   "latest_hosted_checkpoint": {
@@ -1745,13 +1753,22 @@
     "business_active_check": "private-attachment",
     "business_failure": null
   },
-  "live_site_note": "A security-extension qualification job is running; see Actions. Completed evidence is retained separately.",
-  "github_connection": "restored; permission experiment retrieved and verified",
+  "live_site_note": "Final state of run 34781717183 is unknown after authentication loss.",
+  "github_connection": "needs attention: HTTP 401 after the connection had initially recovered",
   "security_gate_passed": false,
   "native_permission_remediation": {
     "run_id": 34778602344,
     "status": "pass",
     "restricted_http_checks": 10,
     "scope": "Original REST/private-file defects only; overall baseline remains failed"
-  }
+  },
+  "latest_unverified_attempt": {
+    "run_id": 34781717183,
+    "commit": "956fd31",
+    "last_observed_status": "in_progress",
+    "final_status": "unknown",
+    "evidence_available": false,
+    "reason": "GitHub API returned HTTP 401 Bad credentials during monitoring; reconnect GitHub in Arena."
+  },
+  "generic_guard_runtime_approved": false
 }

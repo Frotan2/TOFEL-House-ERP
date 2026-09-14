@@ -71,6 +71,15 @@ identical HTTP assertions. It cannot erase the baseline failure or establish a f
 Sanitized reports, including failures, are retained in `evidence/phase-2/hosted/`.
 Later harness revisions are not evidence until their own hosted report is recorded.
 
+### Latest integration checkpoint — blocked on evidence retrieval
+
+The generic guard's corrected integration run **34781717183** (`956fd31`) has an
+**unknown final result** after GitHub again returned HTTP 401. Reconnect GitHub in Arena.
+Last confirmed extension run **34781217903** failed login controls; the session-token
+ordering and native User self-share handling were corrected afterward but are not yet
+runtime-verified. **26 helper tests pass**. Do not install this candidate in production.
+See the [security report](foundation-security.md) for exact failures and corrections.
+
 ### Security continuation: connection restored, native remedy verified
 
 GitHub access recovered. Run **34778602344** at `43d4287` was retrieved and its
