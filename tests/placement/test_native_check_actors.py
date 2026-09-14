@@ -140,6 +140,27 @@ class Increment3ActorGuardTests(unittest.TestCase):
         body = _function_source(self.src, "cannot_list") + _function_source(self.src, "cannot_read_doc")
         self.assertIn("PermissionError", body)
 
+    def test_http_allocate_keys_match_whitelist_signature(self):
+        # Run 34886485679: HTTP JSON used case/blueprint/policy while the
+        # whitelist still required case_name/blueprint_name/policy_name → 500.
+        api_src = (ROOT / "apps/toefl_house/toefl_house/api.py").read_text(encoding="utf-8")
+        tree = ast.parse(api_src)
+        args = None
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "allocate_attempt":
+                args = [a.arg for a in node.args.args]
+        self.assertEqual(
+            args,
+            ["request_key", "case", "blueprint", "blueprint_version", "policy", "policy_version"],
+        )
+        start = self.src.index("http_alloc_payload=dict(")
+        blob = self.src[start:start + 400]
+        for key in ("request_key", "case", "blueprint", "blueprint_version", "policy", "policy_version"):
+            self.assertIn("%s=" % key, blob)
+        self.assertNotIn("case_name=", blob)
+        self.assertNotIn("blueprint_name=", blob)
+        self.assertNotIn("policy_name=", blob)
+
     def test_increment3_pins_its_own_published_policy(self):
         # Do not capture increment-2's `pol` across the second-site hop.
         self.assertNotIn("pol_name=pol['name']", self.inc3)

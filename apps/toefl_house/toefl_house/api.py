@@ -376,16 +376,18 @@ def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE):
 
 
 @frappe.whitelist(methods=["POST"])
-def allocate_attempt(request_key, case_name, blueprint_name, blueprint_version, policy_name, policy_version):
+def allocate_attempt(request_key, case, blueprint, blueprint_version, policy, policy_version):
     def work(actor):
         # Canonical lock order (spec 8): case -> allocation guard -> family
         # exposure -> result rows. The per-key operation receipt inserted by
         # _execute_once is private to this request and never a contention
         # point, so it precedes the business locks.
-        case = _locked_case(case_name)
-        subject = case.subject
-        bp, bp_def = _pinned_published(BLUEPRINT, validate_blueprint, blueprint_name, blueprint_version, "blueprint")
-        pol, _pol_def = _pinned_published(POLICY, validate_policy, policy_name, policy_version, "policy")
+        # HTTP JSON keys are the public contract (case/blueprint/policy); the
+        # in-process suite calls this positionally.
+        case_doc = _locked_case(case)
+        subject = case_doc.subject
+        bp, bp_def = _pinned_published(BLUEPRINT, validate_blueprint, blueprint, blueprint_version, "blueprint")
+        pol, _pol_def = _pinned_published(POLICY, validate_policy, policy, policy_version, "policy")
         sections = [dict(id=s["id"], skill=s["skill"], item_count=s["item_count"])
                     for s in bp_def["sections"]]
         # Blueprint/pool revision allocation guard (spec 5.3): serializes a
@@ -433,8 +435,8 @@ def allocate_attempt(request_key, case_name, blueprint_name, blueprint_version, 
                 "Allocation unavailable: pool changed during allocation; retry with a new key")
         ordinal = frappe.db.sql(
             "select coalesce(max(ordinal), 0) + 1 from `tabTH Placement Attempt` where case_name = %s for update",
-            (case.name,))[0][0]
-        attempt = frappe.get_doc(dict(doctype=ATTEMPT, case_name=case.name, ordinal=ordinal,
+            (case_doc.name,))[0][0]
+        attempt = frappe.get_doc(dict(doctype=ATTEMPT, case_name=case_doc.name, ordinal=ordinal,
                                       subject=subject, blueprint=bp.name,
                                       blueprint_version=bp.version, blueprint_hash=bp.content_hash,
                                       policy=pol.name, policy_version=pol.version,
@@ -444,7 +446,7 @@ def allocate_attempt(request_key, case_name, blueprint_name, blueprint_version, 
         # Exactly one manifest per attempt; frozen question manifest. The
         # time profile is the published blueprint's section minutes (this
         # increment's items carry no per-item duration or marks).
-        form = dict(plan, attempt=attempt.name, case=case.name, subject=subject,
+        form = dict(plan, attempt=attempt.name, case=case_doc.name, subject=subject,
                     blueprint=bp.name, blueprint_version=bp.version,
                     policy=pol.name, policy_version=pol.version,
                     sections=[dict(s) for s in bp_def["sections"]])
@@ -461,7 +463,7 @@ def allocate_attempt(request_key, case_name, blueprint_name, blueprint_version, 
                                 family=item["family"], subject=subject,
                                 event="Reserved", synthetic=1)).insert(ignore_permissions=True)
         return {"attempt": attempt.name, "ordinal": ordinal, "status": attempt.status,
-                "mode": attempt.mode, "case": case.name, "subject": subject,
+                "mode": attempt.mode, "case": case_doc.name, "subject": subject,
                 "blueprint": bp.name, "blueprint_version": bp.version,
                 "policy": pol.name, "policy_version": pol.version,
                 "manifest": manifest.name, "form_hash": form_hash,
@@ -469,6 +471,6 @@ def allocate_attempt(request_key, case_name, blueprint_name, blueprint_version, 
                dict(target=attempt.name, after_hash=form_hash)
 
     return _execute("allocate_attempt", request_key,
-                    {"case": case_name, "blueprint": blueprint_name,
+                    {"case": case, "blueprint": blueprint,
                      "blueprint_version": blueprint_version,
-                     "policy": policy_name, "policy_version": policy_version}, work)
+                     "policy": policy, "policy_version": policy_version}, work)

@@ -122,9 +122,9 @@ explicit prior-session + this-session ref set (same pattern as increment 2).
 
 - Local pure unit tests, executed in the session workspace on 2026-09-14
   (this commit):
-  - `python3 -m unittest discover -s tests/placement -v`: **80/80 OK**
+  - `python3 -m unittest discover -s tests/placement -v`: **82/82 OK**
     (48 increments 1–2, 15 solver, 7 allocation read-boundary, 1 native-check
-    name guard, 10 actor/site/branch-lock guards).
+    name guard, 12 actor/site/permission/branch-lock guards).
   - `python3 -m unittest discover -s tests/foundation -v`: **44/44 OK**.
   - `node tests/foundation/test_realtime_guard.cjs`: **PASS**.
 - Hosted qualification (`.github/workflows/placement-content.yml`):
@@ -163,10 +163,19 @@ explicit prior-session + this-session ref set (same pattern as increment 2).
     have no Author DocType grant (deny-by-default). The check treated only an
     empty `get_list` as denial. Classification: **test harness**. Remaining
     HTTP/isolation checks did not run.
-  - This session: **PENDING** hosted re-qualification after treating
-    PermissionError as a valid read denial without adding Author grants.
-    Increments 1–2 remain qualified by run `34865327509` (85/85 native checks,
-    commit `c0048dc`).
+  - Run `34886485679` (commit `6a337bd` on `arena/01a0a13b-tofel-house-erp`):
+    read-parity **held**; increment 1–2 HTTP regression **passed**;
+    `http-alloc-case-create` **passed**; **120/121 executed checks passed**,
+    then **FAILED** at `http-alloc-positive-create` with `allocate HTTP 500`.
+    Root cause: HTTP JSON used `case`/`blueprint`/`policy` (matching the
+    idempotency receipt and README) while the whitelist still required
+    `case_name`/`blueprint_name`/`policy_name`. In-process calls are positional
+    so they passed. Classification: **product HTTP contract** (signature), not
+    allocation logic. Remaining HTTP CSRF/race/revocation checks did not run.
+  - This session: **PENDING** hosted re-qualification after aligning the
+    `allocate_attempt` whitelist with the HTTP/receipt keys. Increments 1–2
+    remain qualified by run `34865327509` (85/85 native checks, commit
+    `c0048dc`).
 - Baseline for increments 1–2: hosted run `34865327509` (success, head
   `c0048dc86fd5cc772a3b8db1f887a0cff7b997ce`).
 
