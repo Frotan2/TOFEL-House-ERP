@@ -2,9 +2,10 @@
 
 Date: 2026-09-14 · Session branch: `arena/01a0a055-tofel-house-erp` · Baseline: `857352e4afa74f6eb300b75fb8e50a8e8e036fdd`
 
-**Status: IN PROGRESS — see the Evidence section for executed results. Synthetic-data
-implementation only, authorized for the bounded isolated build. Production remains
-REJECT. F01–F05 remain CLOSED/APPROVED; no policy value is invented or reopened.**
+**Status: COMPLETE — bounded increment-2 slice implemented and qualified on the
+hosted synthetic runner (see Evidence). Synthetic-data implementation only,
+authorized for the bounded isolated build. Production remains REJECT.
+F01–F05 remain CLOSED/APPROVED; no policy value is invented or reopened.**
 
 This records increment 2 of the vertical-increment sequence in
 [PLACEMENT-TECHNICAL-SPEC.md](PLACEMENT-TECHNICAL-SPEC.md) §1/§4.2 and
@@ -71,17 +72,21 @@ retry, two-site synthetic isolation gate):
 | `apps/toefl_house/README.md` | increment-2 boundary documentation |
 | `tests/placement/test_config_policy.py` | new pure local unit tests |
 | `tools/placement/native_checks.py` | increment-2 hosted acceptance scenarios (+ increment-1 regression) |
-| `.github/workflows/placement-content.yml` | branch lock re-scoped to this session branch |
+| `tests/placement/test_native_check_names.py` | local AST guard: `api.*` names used by native checks must exist in `api.py` |
+| `.github/workflows/placement-content.yml` | branch lock re-scoped to this session branch; paths also watch the two foundation gate scripts |
 | `tools/placement/run_native.py` | branch lock re-scoped to this session branch |
+| `tools/foundation/runner_probe.py` | authorization gate accepts the explicit two-ref set (parent + this session branch) |
+| `tools/foundation/publish_evidence.py` | same two-ref authorization set |
 
 ## 3. Evidence
 
 <!-- Filled from actual execution output only; no inferred or relabeled results. -->
 
-- Local pure unit tests, executed in the session workspace on 2026-09-14:
-  - `python3 -m unittest discover -s tests/placement -v`: **47/47 OK**
+- Local pure unit tests, executed in the session workspace on 2026-09-14
+  (final state of the branch):
+  - `python3 -m unittest discover -s tests/placement -v`: **48/48 OK**
     (18 increment-1 content policy, 7 transactions, 22 increment-2 config
-    policy/state/read-boundary tests).
+    policy/state/read-boundary tests, 1 static native-check name guard).
   - `python3 -m unittest discover -s tests/foundation`: **OK** (unchanged).
   - `node tests/foundation/test_realtime_guard.cjs`: **PASS** (unchanged).
 - Hosted qualification (`.github/workflows/placement-content.yml` on
@@ -104,7 +109,32 @@ retry, two-site synthetic isolation gate):
     renaming the references to `api.BLUEPRINT` and adding a local AST guard
     test (`tests/placement/test_native_check_names.py`) that fails locally if
     any `api.*` name used by the hosted native checks is missing from
-    `api.py`. Re-qualification triggered by that fix commit.
+    `api.py`.
+  - Run `34863482056` (commit `e9b68cdebc064b1ffbc505380cef07eeaa8bf4a8`):
+    installs and 57 native checks passed; the next check
+    `config-role-and-list-parity` failed on an inverted expectation **in the
+    check itself** — it asserted a second author cannot read a **Published**
+    configuration, while the approved read matrix (increment-1 semantics,
+    local `ConfigReadBoundaryTests`) grants any Placement Author read of
+    Published config. The application code was correct; the check was fixed
+    in `c0048dc`.
+  - Run `34865327509` (commit
+    `c0048dc86fd5cc772a3b8db1f887a0cff7b997ce`): **PASSED**.
+    - Pinned runner probe, pinned installs (Frappe/ERPNext/Education/
+      Payments/HRMS + foundation_security + toefl_house at pinned refs), both
+      synthetic site installations and migrations: **all 86 runner steps exit
+      0** (`runtime_complete: true`, `production: REJECT`; runner report
+      SHA-256 `35ecf4c7e779f9b71fede07c821a220a0ece52f5b5fcbc1153d181fe80e6127a`).
+    - Native qualification: **85/85 checks pass** — increment-1 item/key
+      lifecycle (idempotency, CAS publication, key history, rollback
+      atomicity, read/list parity, HTTP CSRF/race/revocation) plus increment-2
+      blueprint/policy lifecycle (Draft→Reviewed→Published→Retired,
+      independent review/publication, review freeze, identity immutability,
+      audit ledger shape, read/list parity, second-site isolation, transient
+      retry and exhaustion, HTTP config routes, concurrent idempotency and CAS
+      publication, role revocation, no writes to student/enrollment/academic/
+      finance/payroll domains; report SHA-256
+      `92faa1ea28d14e6719c2f067ece24251d66699967840f492936b31cc2d528d2e`).
 - Baseline for increment 1: hosted run `34851805904` (success, parent branch
   `arena/01a09bf3-tofel-house-erp`, head `092a06d2b3d597f42ccd858f2e99d2732f32cd19`).
 
