@@ -13,7 +13,9 @@ install and build together, and synthetic academic-to-payment, backup/restore an
 Student REST/private-file isolation failed in the baseline configuration; native
 User Permissions corrected those tested paths. The generic guard now has hosted proof
 for 47 expanded isolation checks and five browser checks, including CSRF controls.
-Security-bearing recovery, upstream suites and broader security remain under qualification.
+A later hardened run also passed encrypted-credential and permission recovery, copied-session
+revocation, 47 recovered-site checks, and two upstream permission/sharing suites.
+These scoped passes do not clear the broader security gate.
 Full domain, authorization and payroll qualification is not complete. Frontend dependency advisories remain unresolved; installation and build
 success do not establish a working, secure ERP.
 

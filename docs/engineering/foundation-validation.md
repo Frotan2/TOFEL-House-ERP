@@ -79,12 +79,16 @@ Its overall failure preserves the unsafe baseline; it does not indicate failure 
 corrected checks. The exact hosted report is retained. **26 local helper tests pass**.
 See the [security report](foundation-security.md) for scope and earlier failures.
 
-Run **34801558069** (`3f927a5`) repeated the guarded passes and restored hardened SQL/files,
-then failed on a harness assumption that an encryption key already existed. The retained
-failure does not prove policy/session recovery. **34802126407** (`eb09b39`) corrects this by
-creating a native encrypted Password fixture before backup and verifying decryption afterward;
-it also includes unchanged upstream User Permission/DocShare suites on a dedicated test site.
-The corrected result is **not yet verified**. Security and Phase 2 gates remain false.
+**34803138631** (`35aed36`) is now a verified successful hardened-profile run: **10 restricted
+HTTP, 47 source isolation, 5 Chromium, 7 hardened recovery and 47 recovered isolation checks**
+passed, along with cache/RQ, native encrypted-credential recovery and copied-session revocation
+HTTP proof. Upstream User Permission and DocShare modules passed unchanged on a separate
+Frappe-only site, reporting **10 and 15 tests run**. See the retained exact Check JSON and
+security report for scope, earlier harness failures and artifact-download limitations.
+
+The latest stable v16 app and v5 Bench releases were rechecked on **2026-09-14** and remain
+unchanged; see `evidence/phase-2/hosted/release-recheck-2026-09-14.json`. No source pins moved.
+The successful hardened run explicitly keeps the broader security and Phase 2 gates false.
 
 ### Security continuation: connection restored, native remedy verified
 
@@ -139,7 +143,7 @@ The authored harness includes fee/invoice/payment/ledger, files, real backup/res
 DB inspection, cache/job, HTTP login/Student isolation and transport-handshake probes.
 **An authored test is not a passed test.** Only the explicitly enumerated lifecycle/recovery/cache/HTTP checks above have now passed;
 the two baseline isolation denials failed. Full staff/HR/payroll authorization, refunds/legacy Fees overlap,
-upstream regression suites, controlled version upgrade, browser UI/accessibility/performance,
+remaining upstream regression suites, controlled version upgrade, broader browser UI/accessibility/performance,
 scheduler task execution and realtime event authorization still need evidence.
 The 57 frontend advisory entries (27 high, 26 moderate, 4 low) remain unresolved.
 Repeated same-version migrations are not version-upgrade proof. Company/Branch is not a tenant boundary.

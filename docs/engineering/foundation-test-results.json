@@ -10,7 +10,7 @@
   "approved_runtime_bundle": null,
   "verdict_scope": "Retain candidate for further qualification only. Hosted clean installation proven; complete domain/security/recovery acceptance not achieved; frontend advisory gate failed.",
   "matrix_sha256": "53fe682b8cacf8e975f9977fb8bcf3074873246f82358a4b729e7aff2a7a04f3",
-  "created_site_count": 23,
+  "created_site_count": 33,
   "created_business_fixture_count": null,
   "tests": [
     {
@@ -1372,6 +1372,68 @@
         "browser_result": 5,
         "background-secured_result": 0
       }
+    },
+    {
+      "id": "hosted-runtime-34801702600",
+      "status": "fail",
+      "scope": "Pinned foundation and enumerated security/recovery checks; not full Phase 2 acceptance",
+      "commit": "52830c96ca42f26d85625c9d9984d4e4d2e67945",
+      "run_id": "34801702600",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34801702600.json"
+      ],
+      "observation": "'encryption_key'",
+      "passed_subresults": {
+        "business_result": 9,
+        "restore_result": 5,
+        "background_result": 0,
+        "http-restricted_result": 10,
+        "isolation_result": 47,
+        "browser_result": 5,
+        "background-secured_result": 0
+      }
+    },
+    {
+      "id": "hosted-runtime-34802126407",
+      "status": "fail",
+      "scope": "Pinned foundation and enumerated security/recovery checks; not full Phase 2 acceptance",
+      "commit": "eb09b39be4e7e9686396cd606b9a9caac67279ae",
+      "run_id": "34802126407",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34802126407.json"
+      ],
+      "observation": "hardened-recovery-invariants: exit 1",
+      "passed_subresults": {
+        "business_result": 9,
+        "restore_result": 5,
+        "background_result": 0,
+        "http-restricted_result": 10,
+        "isolation_result": 47,
+        "browser_result": 5,
+        "background-secured_result": 0
+      }
+    },
+    {
+      "id": "hosted-runtime-34803138631",
+      "status": "pass",
+      "scope": "Pinned foundation and enumerated security/recovery checks; not full Phase 2 acceptance",
+      "commit": "35aed363e4da79fca4f483e8d53866918547ed03",
+      "run_id": "34803138631",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34803138631.json"
+      ],
+      "observation": "Hardened scoped qualification passed; broader gates remain false.",
+      "passed_subresults": {
+        "business_result": 9,
+        "restore_result": 5,
+        "background_result": 0,
+        "http-restricted_result": 10,
+        "isolation_result": 47,
+        "browser_result": 5,
+        "background-secured_result": 0,
+        "restore-secured_result": 7,
+        "isolation-recovered_result": 47
+      }
     }
   ],
   "phase_gates": [
@@ -1383,7 +1445,7 @@
     {
       "phase": "2B",
       "status": "partial",
-      "reason": "Candidate commits/versions selected; approved runtime bundle and complete dependency/image pins absent."
+      "reason": "Exact app/runtime/image pins executed; full dependency supply-chain locking and approved bundle remain incomplete."
     },
     {
       "phase": "2C",
@@ -1393,7 +1455,7 @@
     {
       "phase": "2D",
       "status": "partial",
-      "reason": "Clean pinned site, five app installs, dependency consistency and full assets passed; broader recovery/reset proof depends on downstream probes."
+      "reason": "Clean pinned installation, repeated migration/build and synthetic security-bearing backup/restore passed; interactive local/WSL reset usability remains unqualified."
     },
     {
       "phase": "2E",
@@ -1408,7 +1470,7 @@
     {
       "phase": "2G",
       "status": "partial",
-      "reason": "Six initial business checks passed in run 34777832562; see latest hosted report for downstream progression."
+      "reason": "Nine synthetic business checks passed through attendance, assessment, discounted invoice/payment and balanced ledger. Full domain scenarios remain incomplete."
     },
     {
       "phase": "2H",
@@ -1427,18 +1489,18 @@
     },
     {
       "phase": "2K",
-      "status": "fail",
-      "reason": "Baseline disclosure fixed by native policy in enumerated probes; generic guard subsequently failed login, corrections awaiting hosted evidence. Full role matrix unverified."
+      "status": "partial",
+      "reason": "Enumerated native policy plus generic guard HTTP/browser and recovered-site authorization passed; full staff/guardian/payroll role matrix remains unverified. Historical baseline disclosures remain retained."
     },
     {
       "phase": "2L",
       "status": "partial",
-      "reason": "See restored schema/index/deletion probes if present. Concurrency and full transaction/audit behavior remain unqualified."
+      "reason": "Ten native tables inspected for columns/indexes/audit fields; referenced Student deletion denied. Concurrency and full transaction/audit behavior remain unqualified."
     },
     {
       "phase": "2M",
-      "status": "partial",
-      "reason": "See actual backup/restore and HTTP reports if present; authored scripts alone are not proof."
+      "status": "pass",
+      "reason": "Synthetic SQL/files/relationships/submitted records, encrypted credential, security policy and copied-session revocation restored and verified in distinct clean database; 47 recovered-site checks passed."
     },
     {
       "phase": "2N",
@@ -1448,7 +1510,7 @@
     {
       "phase": "2O",
       "status": "fail",
-      "reason": "57 frontend advisory entries unresolved. Any HTTP isolation findings remain independently blocking."
+      "reason": "57 frontend advisory entries unresolved; broader realtime, headers/cache and mixed-role authorization also unverified. Scoped guarded/recovery passes are not security acceptance."
     },
     {
       "phase": "2P",
@@ -1458,12 +1520,12 @@
     {
       "phase": "2Q",
       "status": "partial",
-      "reason": "Full Frappe/ERPNext/Education/Payments/HRMS asset build passed; browser routing/forms/tables/accessibility not qualified."
+      "reason": "Full asset build and five native Chromium checks passed; broader forms/tables/dashboard/responsiveness/accessibility not fully qualified."
     },
     {
       "phase": "2R",
       "status": "partial",
-      "reason": "26 local helper tests pass. Earlier real HTTP/browser results recorded; latest generic guard integration outcome unknown. Upstream suites unexecuted."
+      "reason": "26 local helper tests pass; hosted guarded/recovered HTTP/browser checks and unchanged User Permission/DocShare modules pass (10/15 tests run). Other upstream suites remain unexecuted."
     },
     {
       "phase": "2S",
@@ -1786,20 +1848,38 @@
     "hosted/runtime-34801558069.json": {
       "sha256": "8d6e2492086359a391d7ffa1451dee49f0bb1462d98a26893798c9be7ebecc62",
       "bytes": 41983
+    },
+    "hosted/runtime-34801702600.json": {
+      "sha256": "3ae4f689efa6d4e87056101ef6a204101736873932058561b6e8fa512025992f",
+      "bytes": 41979
+    },
+    "hosted/runtime-34802126407.json": {
+      "sha256": "af69fbecc23869770066ca530484f55ffc1c49acc7d86ac4d54ce6cd0c6507a4",
+      "bytes": 44284
+    },
+    "hosted/release-recheck-2026-09-14.json": {
+      "sha256": "f077e972cfedaf8d0605526cd2744cd4a75b860c903fb9954a2638fcf684ed43",
+      "bytes": 1163
+    },
+    "hosted/runtime-34803138631.json": {
+      "sha256": "634044a4149b8b266765a03608fb1ea3a3376be9d2aa2c36ae41ab2bd5d2350f",
+      "bytes": 57156
     }
   },
   "created_site_count_scope": "Sum of created_sites in unique retained runtime-*.json reports only; excludes unverified runs and does not count currently live sites.",
-  "currently_live_validation_sites": null,
+  "currently_live_validation_sites": 0,
   "business_fixture_count_note": "No exact full-document count claimed; explicit named records and successful controller checks are retained in each business_result.",
   "clean_pinned_installation_proven": true,
   "latest_hosted_checkpoint": {
-    "run_id": "34801558069",
-    "commit": "3f927a5d37671bfb861675dcf3c3dbb527fafdab",
-    "status": "fail",
-    "evidence": "evidence/phase-2/hosted/runtime-34801558069.json",
-    "failure": "Harness assumed encryption_key existed; failed after successful database/files restore, before recovery security verification."
+    "run_id": "34803138631",
+    "commit": "35aed363e4da79fca4f483e8d53866918547ed03",
+    "status": "pass",
+    "profile": "hardened",
+    "evidence": "evidence/phase-2/hosted/runtime-34803138631.json",
+    "check_id": 103851249930,
+    "check_sha256": "634044a4149b8b266765a03608fb1ea3a3376be9d2aa2c36ae41ab2bd5d2350f"
   },
-  "live_site_note": "Disposable hosted jobs only; no persistent ERP deployment. Latest queued run has no verified final outcome.",
+  "live_site_note": "Latest workflow completed and teardown passed; no persistent ERP deployment.",
   "github_connection": "Verified: run/check retrieval and authorized-branch push work. Run cancellation returned 403; no cancellation performed.",
   "security_gate_passed": false,
   "native_permission_remediation": {
@@ -1808,14 +1888,7 @@
     "restricted_http_checks": 10,
     "scope": "Original REST/private-file defects only; overall baseline remains failed"
   },
-  "latest_unverified_attempt": {
-    "run_id": 34802126407,
-    "commit": "eb09b39",
-    "last_observed_status": "pending",
-    "final_status": "unknown",
-    "evidence_available": false,
-    "reason": "Corrected encrypted-credential recovery fixture and unchanged upstream permission/sharing suites queued behind 34801702600; cancellation of superseded run was denied with 403."
-  },
+  "latest_unverified_attempt": null,
   "generic_guard_runtime_approved": false,
   "enumerated_guard_checks_proven": {
     "run_id": 34781717183,
@@ -1824,5 +1897,30 @@
     "chromium": 5,
     "secured_cache_rq": "pass",
     "scope": "Synthetic enumerated Student and tenant controls only; does not approve full role matrix, dependency security or production deployment."
-  }
+  },
+  "hardened_profile_passed": true,
+  "security_preserving_recovery_proven": {
+    "run_id": "34803138631",
+    "invariants": 7,
+    "recovered_isolation_checks": 47,
+    "encrypted_credential_decryption": "pass",
+    "copied_live_session_native_revocation": "pass",
+    "source_valid_recovery_denied_http": "pass",
+    "scope": "Synthetic third-site SQL/files restore with existing pinned app code; not full deployment/upgrade qualification."
+  },
+  "upstream_security_suites": [
+    {
+      "module": "frappe.core.doctype.user_permission.test_user_permission",
+      "status": "pass",
+      "tests_run": 10,
+      "site": "upstream-tests.localhost"
+    },
+    {
+      "module": "frappe.core.doctype.docshare.test_docshare",
+      "status": "pass",
+      "tests_run": 15,
+      "site": "upstream-tests.localhost"
+    }
+  ],
+  "upstream_suite_evidence_limit": "Module exit codes and positive test counts verified in exact Check. Full artifact blob download failed with EOF; detailed skip counts not independently retrieved."
 }

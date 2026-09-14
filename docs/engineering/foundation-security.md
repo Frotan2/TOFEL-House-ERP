@@ -18,16 +18,35 @@ extension defects. Moving token generation after native HTTP CSRF validation and
 only native User self-profile shares corrected them; the later hosted checks verify those
 corrections. Tokenless unsafe legacy writes and other inherited/global shares remain denied.
 
-**34801558069** (`3f927a5`) repeated all guarded checks successfully and completed
-hardened SQL/files restore into a third database. It then failed with `KeyError: encryption_key`:
-the harness assumed a key existed, but this fixture had not initialized one. Recovery policy,
-session revocation and post-restore isolation remain unverified. The exact failure is retained.
+### Hardened recovery and upstream suites — verified
 
-**34802126407** (`eb09b39`) corrects the fixture using Frappe's native encrypted Password
-API before backup, copies the newly initialized key without source DB credentials, and requires
-decryption after restore. It also includes unchanged User Permission/DocShare suites on a
-fourth Frappe-only disposable site. Final outcome is pending. Superseded **34801702600**
-contains the known key assumption; cancellation was denied (403), so it remains tracked.
+Run **34803138631** at `35aed363e4da79fca4f483e8d53866918547ed03` completed successfully
+in 10m5s. Check **103851249930** was retrieved, its exact compact-text SHA-256 verified,
+and all **57,156 bytes** retained in `evidence/phase-2/hosted/runtime-34803138631.json`.
+
+- Source: restricted HTTP **10/10**, expanded isolation **47/47**, Chromium **5/5**,
+  and cache/RQ probes passed.
+- A fresh hardened SQL/files backup restored to a third distinct database/site. Native
+  encrypted Password-field decryption passed after explicit site-key recovery. No source
+  database credentials were copied into destination configuration.
+- **7/7 recovery invariants** passed: relationships, submitted records, public/private
+  file hashes, app/settings/native User Permissions, referenced-Student deletion denial,
+  and presence then native revocation of the copied live session.
+- Separate HTTP proof confirmed that captured SID still authenticates on the source and
+  is denied on recovery. **47/47 isolation checks** then passed on recovery, without
+  re-provisioning its native permissions or singleton security settings.
+- Unchanged upstream `test_user_permission` and `test_docshare` suites passed on their
+  own fourth, Frappe-only site, reporting **10 and 15 tests run**. Declared upstream test
+  dependencies installed and `uv pip check` passed. Detailed skip accounting is not in the
+  compact report; the full artifact download still fails at its blob host in this sandbox.
+  No claim is made that these two modules cover all upstream security.
+
+Earlier recovery failures remain retained. **34801558069** and **34801702600** assumed
+an encryption key already existed. **34802126407** proved encrypted recovery but used
+`db.exists` against `Sessions`, a framework SQL table with no `name` column. The pinned
+`frappe/database/mariadb/framework_mariadb.sql` defines its native `sid` index; the corrected
+probe uses a bound-parameter SQL count on `sid`. The later successful run verifies the
+correction and actual copied-session revocation, rather than removing that assertion.
 
 The hardened profile explicitly does not execute the unsafe baseline and references its
 historical failed evidence. The forensic profile retains it. Neither profile can turn the
@@ -139,15 +158,17 @@ The later 34781717183 report verifies the corrected token behavior; this earlier
 
 ## Remaining critical gates
 
-- Hardened recovery and upstream-suite outcomes; existing browser/API results cover only enumerated Student controls.
-- Student/guardian/staff/HR/payroll role combinations; list/report/export/print and realtime events.
-- Provisioning, account relinking, permission drift/revocation, and hardened-policy backup/restore.
-  The original successful restore preceded permission hardening; it does not prove ACL recovery.
-- CSRF/session baseline, production proxy/TLS/cookie configuration and frontend advisories.
-- Existing upstream suites, payroll/refunds/legacy Fees experiments and controlled version upgrade.
+- Full Student/guardian/staff/HR/payroll role combinations and list/report/export/print paths.
+- Full provisioning/account relinking and legitimate mixed-role sharing behavior beyond the
+  enumerated fail-closed scope/revocation tests. Guardian flows remain unqualified.
+- Realtime event authorization, client/proxy cache and session-switch behavior, production
+  proxy/TLS/cookie/security-header configuration, and frontend dependency remediation.
+- Other high-value upstream suites, payroll/refunds/legacy Fees experiments, accessibility,
+  representative performance, scheduled task execution and controlled version upgrade.
 
-Passing the restricted ten-check experiment does not clear these gates. The 57 recorded frontend
-advisory entries remain unresolved. All failed evidence is retained under `evidence/phase-2/hosted/`.
+The **57 frontend advisory entries remain unresolved**. The successful hardened profile
+explicitly reports security, Phase 2 and product gates **false**. All failures are retained.
+It is not a production approval or a full-role authorization certification.
 
 ## Architecture decision: generic guard extension (under runtime qualification)
 
