@@ -44,10 +44,10 @@ def main() -> int:
               "runner_image": os.environ.get("ImageOS"), "runner_image_version": os.environ.get("ImageVersion"),
               "status": "running", "checks": [], "phase2_gate_passed": False, "security_gate_passed": False,
               "product_implementation_authorized": False, "created_sites": [], "installed_apps": []}
-    passwords = [secrets.token_urlsafe(32) for _ in range(7)]
+    passwords = [secrets.token_urlsafe(32) for _ in range(8)]
     for value in passwords:
         print(f"::add-mask::{value}", flush=True)
-    root_password, admin_password, db_password, test_password, restore_password, recovery_password, upstream_password = passwords
+    root_password, admin_password, db_password, test_password, restore_password, recovery_password, upstream_password, upgrade_password = passwords
     secret_file = lab / "db-password"
     secret_file.write_text(root_password)
     secret_file.chmod(0o600)
@@ -382,6 +382,41 @@ http {{
             except (RuntimeError, AssertionError) as exc:
                 report["upstream_security_suites"].append({"module":module, "status":"fail", "reason":str(exc)})
                 diagnostic_failures.append(str(exc))
+        # Independent remaining gates: failures must not suppress other evidence.
+        env.update(FOUNDATION_BENCH_PYTHON=str(bench_dir / "env/bin/python"), FOUNDATION_SITES_DIR=str(bench_dir / "sites"),
+                   FOUNDATION_EVENT_HELPER=str(ROOT / "tools/foundation/runtime_publish_event.py"), FOUNDATION_LAB=str(lab),
+                   FOUNDATION_ROOT_PASSWORD=root_password, FOUNDATION_UPGRADE_PASSWORD=upgrade_password)
+        for label in ("readiness", "realtime", "upgrade"):
+            env["FOUNDATION_" + label.upper() + "_REPORT"] = str(evidence / (label + "-result.json"))
+        for label, command, directory in (
+            ("remaining-role-and-operational-checks", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_readiness.py", site], bench_dir / "sites"),
+            ("realtime-client-dependency", ["npm", "install", "--prefix", browser_dir, "--save-exact", "--ignore-scripts", "socket.io-client@4.8.1"], lab),
+        ):
+            try: run(label, command, cwd=directory)
+            except RuntimeError as exc: diagnostic_failures.append(str(exc))
+        shutil.copyfile(ROOT / "tools/foundation/runtime_realtime.mjs", browser_dir / "realtime.mjs")
+        for label, command in (
+            ("actual-realtime-authorization", ["node", browser_dir / "realtime.mjs"]),
+            ("hosted-frontend-advisory-audit", [bench_dir / "env/bin/python", ROOT / "tools/foundation/audit_frontend.py", bench_dir / "apps/education/frontend/node_modules", "--output", evidence / "frontend-advisories.json"]),
+            ("isolated-controlled-patch-upgrade", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_upgrade.py"]),
+        ):
+            try: run(label, command, timeout=2400)
+            except RuntimeError as exc: diagnostic_failures.append(str(exc))
+        continuation = {"run_id": report["run_id"], "commit": report["commit"], "status":"pass", "security_gate_passed":False, "phase2_gate_passed":False}
+        for label in ("readiness", "realtime", "upgrade"):
+            path=evidence / (label + "-result.json")
+            continuation[label] = json.loads(redact(path.read_text())) if path.exists() else {"status":"blocked","reason":"No completed report"}
+            if continuation[label]["status"] != "pass": continuation["status"]="fail"
+        audit_path=evidence / "frontend-advisories.json"
+        if audit_path.exists():
+            audit=json.loads(audit_path.read_text())
+            continuation["advisories"]={"status":"fail" if audit["advisories"] else "pass", "source":audit["source"],
+                "checked_at_utc":audit["checked_at_utc"], "packages":audit["packages_with_advisories"],
+                "findings":audit["advisories"], "scope":"Installed package matches; reachability/remediation separate"}
+            if audit["advisories"]: continuation["status"]="fail"
+        else:
+            continuation["advisories"]={"status":"blocked"}; continuation["status"]="fail"
+        (evidence / "continuation-result.json").write_text(redact(json.dumps(continuation,indent=2))+"\n")
         report["restricted_diagnostic_failures"] = diagnostic_failures
         if diagnostic_failures:
             raise RuntimeError("Restricted policy regressions failed: " + "; ".join(diagnostic_failures))

@@ -52,6 +52,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/foundation/publish_evidence.py .foundation/runtime-evidence/runtime-result.json --name 'Foundation runtime evidence'
+      - name: Publish remaining gate evidence
+        if: always() && hashFiles('.foundation/runtime-evidence/continuation-result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/foundation/publish_evidence.py .foundation/runtime-evidence/continuation-result.json --name 'Foundation remaining gate evidence'
       - name: Retain qualification evidence, including failed gates
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

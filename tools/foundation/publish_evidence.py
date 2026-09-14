@@ -6,6 +6,8 @@ reviewed synthetic qualification results when artifact download hosts are blocke
 Never point this at site config, backups, credentials or real business data.
 """
 import argparse
+import base64
+import gzip
 import hashlib
 import json
 import os
@@ -24,8 +26,13 @@ def main():
     report = json.loads(raw)
     # Lossless compact transport; no observations are removed to meet the cap.
     raw = json.dumps(report, separators=(",", ":"), ensure_ascii=True).encode()
+    transport = raw
     if len(raw) > 58000:
-        raise SystemExit("Report too large for a check output; retain full artifact instead")
+        # Lossless deterministic encoding, never truncate failed observations.
+        transport = json.dumps({"encoding":"gzip+base64", "report_sha256":hashlib.sha256(raw).hexdigest(),
+                                "data":base64.b64encode(gzip.compress(raw, mtime=0)).decode()},separators=(",", ":")).encode()
+    if len(transport) > 58000:
+        raise SystemExit("Encoded report too large; retain full artifact")
     summary = ("Qualification evidence only; no full-stack approval. "
                "Report SHA-256: " + hashlib.sha256(raw).hexdigest())
     payload = {
@@ -34,7 +41,7 @@ def main():
         "status": "completed",
         "conclusion": "success" if report.get("status") == "pass" else "failure",
         "output": {"title": args.name, "summary": summary,
-                   "text": "```json\n" + raw.decode() + "\n```"},
+                   "text": "```json\n" + transport.decode() + "\n```"},
     }
     request = Request(
         "https://api.github.com/repos/" + os.environ["GITHUB_REPOSITORY"] + "/check-runs",
