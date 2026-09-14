@@ -48,6 +48,9 @@ def main():
         payroll={}
         def salary_fixture():
             from frappe.utils import get_first_day, get_last_day, today
+            calendar=frappe.get_doc('Holiday List',records['holiday_list'])
+            holiday_assignment=frappe.get_doc({'doctype':'Holiday List Assignment','holiday_list':calendar.name,'applicable_for':'Employee','assigned_to':records['employee'],'from_date':calendar.from_date}).insert()
+            holiday_assignment.submit()
             component=frappe.get_doc({'doctype':'Salary Component','salary_component':'Validation Basic','salary_component_abbr':'VBASE','type':'Earning'}).insert()
             structure=frappe.get_doc({'doctype':'Salary Structure','name':'Validation Monthly','company':records['company'],'currency':'USD','payroll_frequency':'Monthly','earnings':[{'salary_component':component.name,'amount':100}]}).insert()
             structure.submit()
@@ -75,6 +78,17 @@ def main():
         for label,expected in [('academic',200),('teacher',200),('guardian',200)]:
             check(label+'-linked-student-read',lambda label=label,expected=expected:read(label,'Student',records['students'][0],expected))
         check('guardian-other-student-denied',lambda:read('guardian','Student',records['students'][1],403))
+        # Preserve native-role baseline, then test supported explicit scoping.
+        def guardian_scope():
+            student=frappe.get_doc('Student',records['students'][0])
+            for allow,value in [('Student',student.name),('Customer',student.customer)]:
+                frappe.get_doc({'doctype':'User Permission','user':'validation-guardian@example.test','allow':allow,'for_value':value,'apply_to_all_doctypes':1}).insert()
+            frappe.db.commit()
+            frappe.clear_cache(user='validation-guardian@example.test')
+            return {'native_scopes_applied':True,'fail_closed_guardian_provisioning_proven':False}
+        check('guardian-native-scope-configuration',guardian_scope)
+        check('guardian-scoped-own-student-read',lambda:read('guardian','Student',records['students'][0],200))
+        check('guardian-scoped-other-student-denied',lambda:read('guardian','Student',records['students'][1],403))
         for label,expected in [('accountant',200),('hr',403),('teacher',403),('guardian',403),('employee',403)]:
             check(label+'-finance-boundary',lambda label=label,expected=expected:read(label,'Sales Invoice',records['invoice'],expected))
         for label,expected in [('hr',200),('teacher',200),('academic',403),('accountant',403),('guardian',403),('employee',403),('alpha',403)]:

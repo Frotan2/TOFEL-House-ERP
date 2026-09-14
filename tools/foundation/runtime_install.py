@@ -405,7 +405,8 @@ http {{
         continuation = {"run_id": report["run_id"], "commit": report["commit"], "status":"pass", "security_gate_passed":False, "phase2_gate_passed":False}
         for label in ("readiness", "realtime", "upgrade"):
             path=evidence / (label + "-result.json")
-            continuation[label] = json.loads(redact(path.read_text())) if path.exists() else {"status":"blocked","reason":"No completed report"}
+            if path.exists(): path.write_text(redact(path.read_text()))
+            continuation[label] = json.loads(path.read_text()) if path.exists() else {"status":"blocked","reason":"No completed report"}
             if continuation[label]["status"] != "pass": continuation["status"]="fail"
         audit_path=evidence / "frontend-advisories.json"
         if audit_path.exists():

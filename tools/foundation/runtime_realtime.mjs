@@ -9,11 +9,11 @@ const sockets=[];
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function check(name,fn){try{report.checks.push({name,status:'pass',observation:await fn()});}catch(e){report.checks.push({name,status:'fail',message:String(e.message).slice(0,200)});}}
 async function connect(label){
- const r=await fetch('http://127.0.0.1:8000/api/method/login',{method:'POST',headers:{Host:'foundation.localhost','Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({usr:`validation-${label}@example.test`,pwd:process.env.FOUNDATION_TEST_PASSWORD})});
+ const r=await fetch('http://foundation.localhost:8000/api/method/login',{method:'POST',headers:{Host:'foundation.localhost','Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({usr:`validation-${label}@example.test`,pwd:process.env.FOUNDATION_TEST_PASSWORD})});
  if(r.status!==200)throw new Error('Login HTTP '+r.status);
  const cookie=r.headers.getSetCookie().map(c=>c.split(';')[0]).find(c=>c.startsWith('sid='));
  if(!cookie)throw new Error('No authenticated cookie');
- const socket=io('http://127.0.0.1:9000/foundation.localhost',{transports:['websocket'],extraHeaders:{Host:'foundation.localhost',Origin:'http://foundation.localhost',Cookie:cookie},reconnection:false,timeout:10000});
+ const socket=io('http://foundation.localhost:9000/foundation.localhost',{transports:['websocket'],extraHeaders:{Host:'foundation.localhost',Origin:'http://foundation.localhost',Cookie:cookie},reconnection:false,timeout:10000});
  sockets.push(socket);
  await new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('connect_error',()=>reject(new Error('Authenticated socket connection failed')));});
  return socket;
