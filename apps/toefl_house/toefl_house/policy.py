@@ -30,6 +30,8 @@ def validate_content(value):
         raise ValueError("Unknown editorial category")
     if value["question_type"] not in KINDS:
         raise ValueError("Format not implemented in this increment")
+    if value["skill"] in ("Speaking", "Writing"):
+        raise ValueError("Productive-skill rubric tasks are not implemented in this increment")
     # Test-content marker is an explicit guardrail, not a PII detection claim.
     if not isinstance(value["prompt"], str) or not value["prompt"].startswith("SYNTHETIC: ") or not 12 <= len(value["prompt"]) <= 4000:
         raise ValueError("Only bounded, explicitly synthetic plain-text prompts are accepted")

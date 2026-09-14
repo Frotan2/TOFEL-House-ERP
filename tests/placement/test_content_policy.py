@@ -32,7 +32,7 @@ class PolicyTests(unittest.TestCase):
             c=content();c.pop(field)
             with self.subTest(field=field),self.assertRaises(ValueError):validate_content(c)
     def test_bad_categories_and_types(self):
-        for field,value in [('skill','TOEFL'),('difficulty','B2'),('question_type','Code'),('prompt','Real response')]:
+        for field,value in [('skill','TOEFL'),('skill','Speaking'),('skill','Writing'),('difficulty','B2'),('question_type','Code'),('prompt','Real response')]:
             c=content();c[field]=value
             with self.subTest(field=field),self.assertRaises(ValueError):validate_content(c)
     def test_size_limits(self):
