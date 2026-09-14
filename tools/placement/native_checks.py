@@ -265,6 +265,11 @@ def main():
         check('native-whole-command-transient-recovery',transient_recovery)
         check('native-retry-exhaustion-bounded',lambda:transient_recovery(True))
         # --- Increment 3: blueprint allocation and candidate form generation ---
+        # Isolation + increment-1/2 transient recovery ran on the second site.
+        # Allocation must execute on the primary site (users already exist on
+        # both); otherwise increment-3 records land on the wrong site and
+        # names captured from increment 2 are missing (run 34883984456).
+        frappe.db.commit();frappe.destroy();connect('placement-test.localhost')
         from toefl_house import allocation
         from toefl_house.policy import canonical as _canonical
         from toefl_house.security import command as _command
@@ -316,10 +321,11 @@ def main():
                        total_minutes=20)
         over_bp=dict(mode='Digital',sections=[dict(id='listening_x',skill='Listening',item_count=12,minutes=60)],total_minutes=60)
         spk_bp=dict(mode='Digital',sections=[dict(id='speaking_x',skill='Speaking',item_count=2,minutes=10)],total_minutes=10)
-        def publish_config_flow(code,definition):
-            doc=as_user('author',lambda:api.create_draft_config('alloc_cfg_%s_create_1'%code[4:].lower(),'blueprint',code,1,definition))
-            doc=as_user('publisher',lambda:api.review_config('alloc_cfg_%s_review_1'%code[4:].lower(),'blueprint',doc['name'],1))
-            doc=as_user('publisher2',lambda:api.publish_config('alloc_cfg_%s_publish_1'%code[4:].lower(),'blueprint',doc['name'],2))
+        def publish_config_flow(code,definition,config='blueprint'):
+            tag=code[4:].lower()
+            doc=as_user('author',lambda:api.create_draft_config('alloc_cfg_%s_create_1'%tag,config,code,1,definition))
+            doc=as_user('publisher',lambda:api.review_config('alloc_cfg_%s_review_1'%tag,config,doc['name'],1))
+            doc=as_user('publisher2',lambda:api.publish_config('alloc_cfg_%s_publish_1'%tag,config,doc['name'],2))
             assert doc['status']=='Published' and doc['version']==3
             return doc
         def config_fixtures():
@@ -330,11 +336,13 @@ def main():
             spk=publish_config_flow('SYN-BP-SPK-1',spk_bp)
             main=publish_config_flow('SYN-BP-ALLOC-1',alloc_bp)
             small=publish_config_flow('SYN-BP-ALLOC-2',alloc_bp2)
+            main_pol=publish_config_flow('SYN-POL-ALLOC-1',good_pol,'policy')
             return {'draft_bp':draft_bp['name'],'draft_pol':draft_pol['name'],
                     'over_bp':over['name'],'spk_bp':spk['name'],
-                    'main_bp':main['name'],'small_bp':small['name'],'main_version':3}
+                    'main_bp':main['name'],'small_bp':small['name'],'main_version':3,
+                    'main_pol':main_pol['name'],'main_pol_version':3}
         cfgx=check('alloc-config-fixtures-published',config_fixtures)
-        pol_name=pol['name']
+        pol_name=cfgx['main_pol']
         main_skills={s['skill'] for s in alloc_sections}
         main_sections=[dict(id=s['id'],skill=s['skill'],item_count=s['item_count']) for s in alloc_sections]
         def solver_pool(excluded_families,skills):

@@ -118,6 +118,17 @@ class Increment3ActorGuardTests(unittest.TestCase):
         body = _check_call_source(self.src, "self-publication-denied-despite-role-union")
         self.assertIn("as_user('author'", body)
 
+    def test_increment3_reconnects_to_primary_site_before_allocation(self):
+        start = self.src.index("# --- Increment 3:")
+        bank = self.src.index("alloc-bank-fixture-published", start)
+        self.assertIn("connect('placement-test.localhost')", self.src[start:bank])
+
+    def test_increment3_pins_its_own_published_policy(self):
+        # Do not capture increment-2's `pol` across the second-site hop.
+        self.assertNotIn("pol_name=pol['name']", self.inc3)
+        self.assertIn("pol_name=cfgx['main_pol']", self.inc3)
+        self.assertIn("publish_config_flow('SYN-POL-ALLOC-1',good_pol,'policy')", self.inc3)
+
 
 class SessionBranchLockTests(unittest.TestCase):
     def test_workflow_triggers_on_this_session_branch(self):

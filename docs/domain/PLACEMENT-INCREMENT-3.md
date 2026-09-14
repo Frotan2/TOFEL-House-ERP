@@ -122,9 +122,9 @@ explicit prior-session + this-session ref set (same pattern as increment 2).
 
 - Local pure unit tests, executed in the session workspace on 2026-09-14
   (this commit):
-  - `python3 -m unittest discover -s tests/placement -v`: **78/78 OK**
+  - `python3 -m unittest discover -s tests/placement -v`: **80/80 OK**
     (48 increments 1–2, 15 solver, 7 allocation read-boundary, 1 native-check
-    name guard, 8 actor/branch-lock guards).
+    name guard, 10 actor/site/branch-lock guards).
   - `python3 -m unittest discover -s tests/foundation -v`: **44/44 OK**.
   - `node tests/foundation/test_realtime_guard.cjs`: **PASS**.
 - Hosted qualification (`.github/workflows/placement-content.yml`):
@@ -145,10 +145,20 @@ explicit prior-session + this-session ref set (same pattern as increment 2).
     `2243822b007c54a9ca1e88c8d2c692014870bda79589fb0fe7c3b748be1b0e61`.
     66 later checks (allocation happy-path, HTTP regression, side-effect
     counts) did not run.
-  - This session branch (`arena/01a0a13b-tofel-house-erp`): **PENDING** hosted
-    re-qualification after retargeting Author-only denials at `second_author` /
-    `other` and re-scoping the branch lock. Increments 1–2 remain qualified by
-    run `34865327509` (85/85 native checks, commit `c0048dc`).
+  - Run `34883984456` (commit `6cce2a5` on `arena/01a0a13b-tofel-house-erp`):
+    actor retarget **held** (`alloc-case-author-denied` passed); **74/75 executed
+    checks passed**, then **FAILED** at `alloc-fail-infeasible-quota` with
+    `AssertionError: TH Placement Policy Revision … not found`. Root cause:
+    increment 3 continued on `placement-second.localhost` after isolation /
+    transient-recovery and then pinned increment 2's site-1 policy name.
+    Classification: **test harness** (site sequencing) plus a product gap that
+    missing pins raised raw `DoesNotExistError` instead of an operator reason.
+    60 later checks did not run.
+  - This session: **PENDING** hosted re-qualification after reconnecting
+    increment 3 to the primary site, publishing a dedicated allocation policy
+    in the increment-3 fixtures, and wrapping missing case/config as explicit
+    `ValidationError`. Increments 1–2 remain qualified by run `34865327509`
+    (85/85 native checks, commit `c0048dc`).
 - Baseline for increments 1–2: hosted run `34865327509` (success, head
   `c0048dc86fd5cc772a3b8db1f887a0cff7b997ce`).
 

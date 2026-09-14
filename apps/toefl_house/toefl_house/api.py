@@ -325,7 +325,10 @@ def retire_config(request_key, config, name, expected_version):
 def _locked_case(name):
     if not isinstance(name, str) or not name or len(name) > 140:
         raise frappe.ValidationError("Case name required")
-    case = frappe.get_doc(CASE, name, for_update=True)
+    try:
+        case = frappe.get_doc(CASE, name, for_update=True)
+    except frappe.DoesNotExistError as exc:
+        raise frappe.ValidationError("Case not found") from exc
     if case.status != "Open":
         raise frappe.ValidationError("Case is not open for allocation")
     return case
@@ -336,7 +339,10 @@ def _pinned_published(doctype, validator, name, expected_version, label):
     meaning (status, expected version, definition validity, stored hash)."""
     if not isinstance(name, str) or not name or len(name) > 140 or type(expected_version) is not int:
         raise frappe.ValidationError(f"{label} name and integer expected_version required")
-    doc = frappe.get_doc(doctype, name, for_update=True)
+    try:
+        doc = frappe.get_doc(doctype, name, for_update=True)
+    except frappe.DoesNotExistError as exc:
+        raise frappe.ValidationError(f"Missing {label} revision") from exc
     if doc.status != "Published":
         raise frappe.ValidationError(f"Only published {label} revisions can be allocated")
     if doc.version != expected_version:
