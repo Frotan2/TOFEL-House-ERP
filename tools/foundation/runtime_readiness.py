@@ -44,20 +44,29 @@ def main():
             student.append('guardians',{'guardian':guardian.name,'relation':'Father'})
             student.save()
             records['guardian']=guardian.name
-            # Created By is immutable after insertion. Administrator creates the
-            # synthetic legacy record with its intended owner from the outset.
-            other_file=frappe.get_doc({'doctype':'File','file_name':'guardian-other.txt','is_private':1,'attached_to_doctype':'Student','attached_to_name':records['students'][1],'owner':'validation-guardian@example.test','content':'Owned Beta guardian isolation marker'}).insert()
-            other_file.reload()
-            assert other_file.owner=='validation-guardian@example.test', 'Legacy ownership fixture not retained'
-            assert other_file.attached_to_name==records['students'][1] and other_file.is_private
-            records['guardian_other_file_url']=other_file.file_url
-            records['guardian_other_file_name']=other_file.name
             frappe.db.commit()
             probe=requests.Session();probe.headers['Host']='foundation.localhost'
             denied=probe.post('http://127.0.0.1:8080/api/method/login',data={'usr':'validation-guardian@example.test','pwd':os.environ['FOUNDATION_TEST_PASSWORD']},timeout=30)
             assert denied.status_code==403, 'Unscoped Guardian login must fail closed'
             for allow,value in [('Guardian',guardian.name),('Student',student.name),('Customer',student.customer)]:
                 frappe.get_doc({'doctype':'User Permission','user':'validation-guardian@example.test','allow':allow,'for_value':value,'apply_to_all_doctypes':1}).insert()
+            # Native set_user_and_timestamp always assigns the inserting user.
+            # Create an ordinary unattached private file as Guardian, then have
+            # Administrator attach it to Beta. No owner rewrite, direct SQL,
+            # ignore_permissions, migration flags or constant-validation bypass.
+            try:
+                frappe.set_user('validation-guardian@example.test')
+                other_file=frappe.get_doc({'doctype':'File','file_name':'guardian-other.txt','is_private':1,'content':'Owned Beta guardian isolation marker'}).insert()
+            finally:
+                frappe.set_user('Administrator')
+            other_file.attached_to_doctype='Student'
+            other_file.attached_to_name=records['students'][1]
+            other_file.save()
+            other_file.reload()
+            assert other_file.owner=='validation-guardian@example.test', 'Legacy ownership fixture not retained'
+            assert other_file.attached_to_name==records['students'][1] and other_file.is_private
+            records['guardian_other_file_url']=other_file.file_url
+            records['guardian_other_file_name']=other_file.name
             business_path=Path(os.environ['FOUNDATION_BUSINESS_REPORT'])
             business=json.loads(business_path.read_text());business['records']=records
             business_path.write_text(json.dumps(business,indent=2)+'\n')
