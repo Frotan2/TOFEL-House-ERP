@@ -92,30 +92,21 @@ def _unexpired(row, now=None):
 
 @contextmanager
 def _native_student_write():
-    """Permit nested native Customer insert without persisting a session change.
+    """Permit nested native Customer insert without changing the HTTP session.
 
-    frappe.set_user rewrites the Redis SID and breaks later HTTP replay as the
-    Approver. Frappe v16 has_permission ignores frappe.flags.ignore_permissions
-    unless session.user is Administrator. Keep this thread-local only.
+    Student.on_update inserts Customer without ignore_permissions. Frappe v16
+    has_permission ignores frappe.flags.ignore_permissions, and set_user /
+    session.user swaps persist the Approver SID as Administrator, which denied
+    later HTTP idempotent replay. Bypass has_permission for this write only.
     """
-    session = frappe.local.session
-    previous_user = session.user
-    previous_local_user = getattr(frappe.local, "user", previous_user)
-    data = session.get("data") if hasattr(session, "get") else None
-    previous_data_user = data.get("user") if isinstance(data, dict) else None
+    original = frappe.has_permission
     previous_ignore = frappe.flags.ignore_permissions
-    session.user = "Administrator"
-    frappe.local.user = "Administrator"
-    if isinstance(data, dict):
-        data["user"] = "Administrator"
+    frappe.has_permission = lambda *args, **kwargs: True
     frappe.flags.ignore_permissions = True
     try:
         yield
     finally:
-        session.user = previous_user
-        frappe.local.user = previous_local_user
-        if isinstance(data, dict) and previous_data_user is not None:
-            data["user"] = previous_data_user
+        frappe.has_permission = original
         frappe.flags.ignore_permissions = previous_ignore
 
 
