@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 NATIVE = ROOT / "tools/placement/native_checks.py"
 SECURITY = ROOT / "apps/toefl_house/toefl_house/security.py"
 
-SESSION_BRANCH = "arena/01a0a13b-tofel-house-erp"
+SESSION_BRANCH = "arena/01a0a496-tofel-house-erp"
 SESSION_REF = "refs/heads/" + SESSION_BRANCH
 
 AUTHOR_ONLY = frozenset({"second_author", "other"})

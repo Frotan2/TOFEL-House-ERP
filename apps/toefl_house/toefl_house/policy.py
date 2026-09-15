@@ -330,6 +330,82 @@ def validate_admission_text(value, field):
     return text
 
 
+ATTENDANCE_STATUSES = ("Present", "Absent", "Leave")
+TIME_PATTERN = re.compile(r"([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?")
+
+
+def validate_group_name(value):
+    """Class roster names are explicit synthetic fixtures, not real classes."""
+    if not isinstance(value, str) or not SYNTHETIC_CODE.fullmatch(value):
+        raise ValueError("Synthetic student group name required")
+    return value
+
+
+def validate_capacity(value):
+    """Explicit declared class capacity; native max_strength stays the authority.
+
+    The 1..500 range is an engineering bound for the synthetic slice, not an
+    approved institutional class-size policy.
+    """
+    if type(value) is not int or not 1 <= value <= 500:
+        raise ValueError("max_strength must be an integer between 1 and 500")
+    return value
+
+
+def validate_schedule_date(value):
+    if not isinstance(value, str):
+        raise ValueError("schedule_date must be an ISO date string")
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError("schedule_date must be YYYY-MM-DD") from exc
+    return parsed.isoformat()
+
+
+def _normalize_time(value, field):
+    if not isinstance(value, str) or not TIME_PATTERN.fullmatch(value):
+        raise ValueError(f"{field} must be HH:MM or HH:MM:SS")
+    return value if len(value) == 8 else value + ":00"
+
+
+def validate_session_window(from_time, to_time):
+    """Bounded session window; zero-length or inverted windows fail closed.
+
+    The native Course Schedule controller remains the authority for the
+    academic-calendar window and instructor/room/group overlap.
+    """
+    start = _normalize_time(from_time, "from_time")
+    end = _normalize_time(to_time, "to_time")
+    if start >= end:
+        raise ValueError("from_time must be strictly before to_time")
+    return start, end
+
+
+def validate_attendance_statuses(value):
+    """Bounded attendance batch using only native Student Attendance statuses.
+
+    Present/Absent/Leave are the pinned native Select options; no status is
+    invented and missing evidence is never defaulted.
+    """
+    if isinstance(value, str):
+        if len(value) > 20000:
+            raise ValueError("Attendance batch exceeds request limit")
+        try:
+            value = json.loads(value)
+        except (ValueError, TypeError) as exc:
+            raise ValueError("Attendance batch must be a JSON object") from exc
+    if not isinstance(value, dict) or not 1 <= len(value) <= 100:
+        raise ValueError("Attendance batch must contain 1 to 100 entries")
+    marks = {}
+    for student, status in value.items():
+        if not isinstance(student, str) or not student or len(student) > 140:
+            raise ValueError("Invalid student reference")
+        if status not in ATTENDANCE_STATUSES:
+            raise ValueError("Unsupported attendance status")
+        marks[student] = status
+    return marks
+
+
 def enrollment_is_eligible(status, accepted, native_student, existing_student="", conditions=""):
     """Pure predicate: native Program Enrollment is allowed only after convert.
 
@@ -378,7 +454,8 @@ def can_read(kind, roles, actor, owner, status=None):
         return bool(roles & {"Admission Officer", "Admission Reviewer",
                              "Admission Approver", "Admission Auditor"})
     if kind in ("audit", "operation"):
-        return bool(roles & {"Placement Auditor", "Admission Auditor", "Enrollment Auditor"})
+        return bool(roles & {"Placement Auditor", "Admission Auditor", "Enrollment Auditor",
+                             "Teaching Auditor"})
     if "Placement Publisher" in roles:
         return True
     # Invigilator may operate the Digital session and read the operational

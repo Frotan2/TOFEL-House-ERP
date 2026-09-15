@@ -89,5 +89,26 @@
     "role_name": "Enrollment Auditor",
     "desk_access": 1,
     "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Teaching Scheduler",
+    "role_name": "Teaching Scheduler",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Attendance Recorder",
+    "role_name": "Attendance Recorder",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Teaching Auditor",
+    "role_name": "Teaching Auditor",
+    "desk_access": 1,
+    "disabled": 0
   }
 ]

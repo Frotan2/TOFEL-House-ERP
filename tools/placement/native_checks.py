@@ -18,11 +18,12 @@ def main():
     from toefl_house import api
     from toefl_house import admission as adm
     from toefl_house import enrollment as enr
+    from toefl_house import teaching as tea
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
     report={'scope':'Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
-            'note':'Thin admission and native Program Enrollment; no TH Enrollment ledger'}
+            'note':'Thin admission, native Program Enrollment and native teaching operations (Student Group / Course Schedule / Student Attendance); no TH Enrollment ledger, grading, fees or payroll'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
            'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',
@@ -41,7 +42,11 @@ def main():
            'approver':'synthetic-approver@example.test',
            'admissions_auditor':'synthetic-admissions-auditor@example.test',
            'enrollment_officer':'synthetic-enrollment-officer@example.test',
-           'enrollment_auditor':'synthetic-enrollment-auditor@example.test'}
+           'enrollment_auditor':'synthetic-enrollment-auditor@example.test',
+           'candidate9':'synthetic-candidate9@example.test',
+           'teaching_scheduler':'synthetic-teaching-scheduler@example.test',
+           'attendance_recorder':'synthetic-attendance-recorder@example.test',
+           'teaching_auditor':'synthetic-teaching-auditor@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
@@ -109,7 +114,11 @@ def main():
                          'approver':['Admission Approver'],
                          'admissions_auditor':['Admission Auditor'],
                          'enrollment_officer':['Enrollment Officer'],
-                         'enrollment_auditor':['Enrollment Auditor']}
+                         'enrollment_auditor':['Enrollment Auditor'],
+                         'candidate9':[],
+                         'teaching_scheduler':['Teaching Scheduler'],
+                         'attendance_recorder':['Attendance Recorder'],
+                         'teaching_auditor':['Teaching Auditor']}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -117,7 +126,7 @@ def main():
                 return {'site':site,'users':len(users),'apps':frappe.get_installed_apps()}
             check('native-fixtures-'+site,setup);frappe.destroy()
         connect('placement-test.localhost')
-        before_counts={dt:frappe.db.count(dt) for dt in ['Student','Student Applicant','Program Enrollment','Course Enrollment','Assessment Result','Sales Invoice','GL Entry','Salary Slip']}
+        before_counts={dt:frappe.db.count(dt) for dt in ['Student','Student Applicant','Program Enrollment','Course Enrollment','Assessment Result','Sales Invoice','GL Entry','Salary Slip','Student Group','Course Schedule','Student Attendance','Employee','Attendance','Timesheet','Additional Salary']}
         check('administrator-not-an-implicit-business-actor',lambda:denied(lambda:api.create_draft('admin_attempt_001',family(users['author'],'ADMIN'),1,content())))
         def disabled():
             original=frappe.conf.toefl_house_synthetic_only;frappe.conf.toefl_house_synthetic_only=0
@@ -1431,6 +1440,181 @@ def main():
             return {'enrollment_absent_on_second_site':True}
         check('second-site-no-first-site-enrollment-record',enr_second_site)
         frappe.destroy();connect('placement-test.localhost')
+
+        # --- Teaching operations: native Student Group / Course Schedule / Student Attendance ---
+        # Native authorities only: no TH roster/timetable/grading/fees/payroll DocType.
+        def teaching_catalog():
+            frappe.set_user('Administrator')
+            if not frappe.db.exists('Academic Year','SYN-AY-2027'):
+                frappe.get_doc(dict(doctype='Academic Year',academic_year_name='SYN-AY-2027',
+                    year_start_date='2027-01-01',year_end_date='2027-12-31')).insert()
+            if not frappe.db.exists('Course','SYN-COURSE-ELECTIVE'):
+                frappe.get_doc(dict(doctype='Course',course_name='SYN-COURSE-ELECTIVE')).insert()
+            rooms={}
+            for label in ('SYN-ROOM-A','SYN-ROOM-B'):
+                if not frappe.db.get_value('Room',{'room_name':label},'name'):
+                    frappe.get_doc(dict(doctype='Room',room_name=label,seating_capacity='24')).insert()
+                rooms[label]=frappe.db.get_value('Room',{'room_name':label},'name')
+            frappe.db.set_single_value('Education Settings','instructor_created_by','Naming Series')
+            instructors={}
+            for label,status in (('SYN Instructor One','Active'),('SYN Instructor Two','Active'),('SYN Instructor Left','Left')):
+                name=frappe.db.get_value('Instructor',{'instructor_name':label},'name')
+                if not name:
+                    name=frappe.get_doc(dict(doctype='Instructor',instructor_name=label,
+                        naming_series='EDU-INS-.YYYY.-',status=status)).insert().name
+                instructors[label]=name
+            # Native Student Attendance validation requires a default company with a
+            # holiday list; zero-holiday synthetic fixtures, no financial postings.
+            if not frappe.db.exists('Holiday List','SYN-HOLIDAYS-2026'):
+                frappe.get_doc(dict(doctype='Holiday List',holiday_list_name='SYN-HOLIDAYS-2026',
+                    from_date='2026-01-01',to_date='2026-12-31')).insert()
+            if not frappe.db.exists('Company','SYN Teaching House'):
+                frappe.get_doc(dict(doctype='Company',company_name='SYN Teaching House',abbr='SYNTH',
+                    country='United States',default_currency='USD',valuation_method='FIFO',
+                    enable_perpetual_inventory=0)).insert()
+            frappe.db.set_value('Company','SYN Teaching House','default_holiday_list','SYN-HOLIDAYS-2026')
+            frappe.db.set_single_value('Global Defaults','default_company','SYN Teaching House')
+            return {'rooms':rooms,'instructors':instructors,'company':'SYN Teaching House'}
+        tea_cat=check('teaching-native-catalog',teaching_catalog)
+        def second_intake():
+            rel=release_for('candidate9','teaching_pipe_a')
+            app9=as_user('officer',lambda:adm.record_applicant('teaching_record_app_0001',rel['decision'],'SYNTHETIC Classmate',cat['program'],cat['academic_year']))
+            dec9=as_user('officer',lambda:adm.create_admission('teaching_create_adm_0001',app9['name'],rel['decision']))
+            as_user('admissions_reviewer',lambda:adm.review_admission('teaching_review_adm_0001',dec9['name'],1))
+            as_user('approver',lambda:adm.decide_admission('teaching_decide_adm_001',dec9['name'],2,'Approved',REASON))
+            as_user('officer',lambda:adm.accept_offer('teaching_accept_adm_0001',dec9['name'],3))
+            conv=as_user('approver',lambda:adm.convert_applicant('teaching_convert_adm_001',dec9['name'],4))
+            enrolled2=as_user('enrollment_officer',lambda:enr.enroll_in_program('teaching_enroll_key_0001',dec9['name']))
+            assert enrolled2['docstatus']==1 and enrolled2['student']==conv['native_student']
+            assert frappe.db.count('Program Enrollment',{'program':cat['program'],'academic_year':cat['academic_year'],'docstatus':1})==2
+            return {'student':conv['native_student'],'program_enrollment':enrolled2['program_enrollment'],'released':rel['decision']}
+        second=check('teaching-second-intake-enrolled',second_intake)
+        GRP_A='SYN-GRP-MAIN-1';GRP_B='SYN-GRP-MAIN-2'
+        INS_ONE=tea_cat['instructors']['SYN Instructor One'];INS_TWO=tea_cat['instructors']['SYN Instructor Two']
+        INS_LEFT=tea_cat['instructors']['SYN Instructor Left']
+        ROOM_A=tea_cat['rooms']['SYN-ROOM-A'];ROOM_B=tea_cat['rooms']['SYN-ROOM-B']
+        check('teaching-outsider-group-denied',lambda:denied(lambda:as_user('outsider',lambda:tea.create_student_group('tea_out_group_0000001',GRP_A,cat['program'],cat['academic_year'],'',2))))
+        check('teaching-recorder-group-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.create_student_group('tea_rec_group_0000001',GRP_A,cat['program'],cat['academic_year'],'',2))))
+        check('teaching-enrollment-officer-group-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:tea.create_student_group('tea_enr_group_0000001',GRP_A,cat['program'],cat['academic_year'],'',2))))
+        check('teaching-group-non-synthetic-name-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_badname_000000001','REAL-CLASS-1',cat['program'],cat['academic_year'],'',2))))
+        check('teaching-group-unbounded-capacity-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_badsized_0000001',GRP_A,cat['program'],cat['academic_year'],'',0))))
+        check('teaching-group-unknown-year-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_badyear_0000001',GRP_A,cat['program'],'SYN-AY-NOPE','',2))))
+        check('teaching-group-empty-roster-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_empty_000000001',GRP_A,cat['program'],'SYN-AY-2027','',2))))
+        check('teaching-group-over-capacity-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_overcap_0000001',GRP_A,cat['program'],cat['academic_year'],'',1))))
+        groupA=check('teaching-group-happy-path',lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_a_key_00001',GRP_A,cat['program'],cat['academic_year'],'',2)))
+        assert groupA['name']==GRP_A and groupA['students']==2
+        assert groupA['roster']==sorted([converted['native_student'],second['student']])
+        def group_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_a_key_00001',GRP_A,cat['program'],cat['academic_year'],'',2))
+            assert value==groupA and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count('Student Group',{'student_group_name':GRP_A})==1
+            return {'same_result':True,'one_group':True}
+        check('teaching-group-idempotent-replay',group_replay)
+        check('teaching-group-duplicate-name-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_dup_0000001',GRP_A,cat['program'],cat['academic_year'],'',2))))
+        def group_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Student Group',student_group_name='SYN-GRP-DIRECT-1',
+                group_based_on='Batch',program=cat['program'],academic_year=cat['academic_year'],max_strength=2)).insert(ignore_permissions=True))
+        check('teaching-group-direct-write-denied',group_direct_denied)
+        groupB=check('teaching-second-group',lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_b_key_00001',GRP_B,cat['program'],cat['academic_year'],'',2)))
+        assert groupB['students']==2
+        check('teaching-session-recorder-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.schedule_session('tea_rec_sched_0000001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))))
+        check('teaching-session-inverted-window-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_badwindow_0000001',GRP_A,'2026-09-21','10:30:00','09:00:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))))
+        check('teaching-session-outside-year-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_baddate_000000001',GRP_A,'2027-01-05','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))))
+        check('teaching-session-left-instructor-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_leftins_000000001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_LEFT,ROOM_A,'SYN-COURSE-CORE'))))
+        check('teaching-session-unknown-course-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_badcourse_0000001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-NOPE'))))
+        check('teaching-session-course-outside-program-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_offcourse_0000001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-ELECTIVE'))))
+        schedA=check('teaching-session-happy-path',lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_a_key_00001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE')))
+        assert schedA['title']=='SYN-COURSE-CORE by SYN Instructor One' and schedA['student_group']==GRP_A
+        def sched_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_a_key_00001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))
+            assert value==schedA and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count('Course Schedule',{'student_group':GRP_A,'schedule_date':'2026-09-21'})==1
+            return {'same_result':True,'one_session':True}
+        check('teaching-session-idempotent-replay',sched_replay)
+        check('teaching-session-group-conflict-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_grp_conflict_0001',GRP_A,'2026-09-21','09:30:00','11:00:00',INS_TWO,ROOM_B,'SYN-COURSE-CORE'))))
+        check('teaching-session-instructor-conflict-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_ins_conflict_0001',GRP_B,'2026-09-21','09:30:00','11:00:00',INS_ONE,ROOM_B,'SYN-COURSE-CORE'))))
+        check('teaching-session-room-conflict-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_room_conflict_001',GRP_B,'2026-09-21','09:30:00','11:00:00',INS_TWO,ROOM_A,'SYN-COURSE-CORE'))))
+        def session_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Course Schedule',naming_series='EDU-CSH-.YYYY.-',
+                student_group=GRP_A,instructor=INS_TWO,room=ROOM_B,course='SYN-COURSE-CORE',
+                schedule_date='2026-09-24',from_time='09:00:00',to_time='10:00:00')).insert(ignore_permissions=True))
+        check('teaching-session-direct-write-denied',session_direct_denied)
+        schedB=check('teaching-second-session',lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_b_key_00001',GRP_B,'2026-09-22','13:00:00','14:30:00',INS_TWO,ROOM_B,'SYN-COURSE-CORE')))
+        def outsider_student():
+            frappe.set_user('Administrator')
+            return frappe.get_doc(dict(doctype='Student',first_name='SYNTHETIC Outsider',
+                student_email_id=users['outsider'])).insert().name
+        outsider_stu=check('teaching-outsider-student-fixture',outsider_student)
+        stu1,stu2=groupA['roster']
+        check('teaching-attendance-scheduler-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.record_attendance('tea_sch_att_000000001',schedA['name'],{stu1:'Present'}))))
+        check('teaching-attendance-invalid-status-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_badstatus_0000001',schedA['name'],{stu1:'Late'}))))
+        check('teaching-attendance-empty-batch-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_empty_att_0000001',schedA['name'],{}))))
+        check('teaching-attendance-off-roster-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_offroster_0000001',schedA['name'],{outsider_stu:'Present'}))))
+        attA=check('teaching-attendance-happy-path',lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_att_a_key_00000001',schedA['name'],{stu1:'Present',stu2:'Absent'})))
+        assert attA['marked']==2 and attA['date']=='2026-09-21' and attA['student_group']==GRP_A
+        for student,att_name in attA['records'].items():
+            att_row=frappe.db.get_value('Student Attendance',att_name,['docstatus','student_group'],as_dict=True)
+            assert att_row.docstatus==1 and att_row.student_group==GRP_A
+        assert frappe.db.get_value('Student Attendance',attA['records'][stu1],'status')=='Present'
+        assert frappe.db.get_value('Student Attendance',attA['records'][stu2],'status')=='Absent'
+        def att_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('attendance_recorder',lambda:tea.record_attendance('tea_att_a_key_00000001',schedA['name'],{stu1:'Present',stu2:'Absent'}))
+            assert value==attA and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count('Student Attendance',{'course_schedule':schedA['name']})==2
+            return {'same_result':True,'two_records':True}
+        check('teaching-attendance-idempotent-replay',att_replay)
+        check('teaching-attendance-duplicate-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_att_dup_00000001',schedA['name'],{stu1:'Present'}))))
+        def att_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Student Attendance',naming_series='EDU-ATT-.YYYY.-',
+                student=stu1,course_schedule=schedB['name'],status='Present')).insert(ignore_permissions=True))
+        check('teaching-attendance-direct-write-denied',att_direct_denied)
+        def att_rollback_proof():
+            frappe.set_user(users['attendance_recorder']);frappe.db.savepoint('tea_atomic')
+            old={dt:frappe.db.count(dt) for dt in ('Student Attendance',api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic teaching audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):
+                    tea.record_attendance('tea_att_atomic_00001',schedB['name'],{stu1:'Present'})
+            except RuntimeError:frappe.db.rollback(save_point='tea_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            return {'real_database_rollback':True,'injected_boundary':'teaching audit'}
+        check('teaching-attendance-atomic-rollback',att_rollback_proof)
+        def tea_reads():
+            frappe.set_user(users['teaching_scheduler'])
+            for dt in ('Student Group','Course Schedule','Student Attendance'):
+                try:listed=frappe.get_list(dt)
+                except frappe.PermissionError:listed=[]
+                assert not listed
+            frappe.set_user(users['attendance_recorder'])
+            for dt in ('Student Group','Course Schedule','Student Attendance'):
+                try:listed=frappe.get_list(dt)
+                except frappe.PermissionError:listed=[]
+                assert not listed
+            frappe.set_user(users['teaching_auditor'])
+            assert frappe.get_list(api.OP) and frappe.get_list(api.AUDIT)
+            try:listed=frappe.get_list(adm.DECISION_DT)
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            return {'teaching_no_native_crud':True,'auditor_receipts_only':True}
+        check('teaching-role-and-list-parity',tea_reads)
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def tea_second_site():
+            assert frappe.db.count('Student Group')==0 and frappe.db.count('Course Schedule')==0
+            assert frappe.db.count('Student Attendance')==0
+            return {'teaching_absent_on_second_site':True}
+        check('second-site-no-first-site-teaching-record',tea_second_site)
+        frappe.destroy();connect('placement-test.localhost')
         base='http://127.0.0.1:18000'
         for _ in range(60):
             try:
@@ -1448,7 +1632,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor','teaching_scheduler','attendance_recorder')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def apost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.admission.'+method,json=payload,timeout=40)
         def epost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.enrollment.'+method,json=payload,timeout=40)
@@ -1881,6 +2065,80 @@ def main():
             assert frappe.db.count('Program Enrollment',{'student':httpconverted['native_student']})==1
             return {'http_statuses':[200,200],'one_enrollment':True}
         check('http-enrollment-concurrent-idempotency',http_enr_idem)
+        # --- Teaching operations over HTTP: routes, CSRF, CRUD containment, races ---
+        def tpost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.teaching.'+method,json=payload,timeout=40)
+        GRP_HTTP='SYN-GRP-HTTP-1'
+        http_grp_payload=dict(request_key='http_tea_group_0000001',group_name=GRP_HTTP,program=cat['program'],academic_year=cat['academic_year'],max_strength=3)
+        def http_group():
+            r=tpost('teaching_scheduler','create_student_group',http_grp_payload);assert r.status_code==200,f'group HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpgroup=check('http-teaching-group-positive',http_group)
+        assert httpgroup['students']==3
+        check('http-teaching-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.teaching.create_student_group',headers={'Host':'placement-test.localhost'},json=http_grp_payload,timeout=30)))
+        check('http-teaching-unrelated-role-denied',lambda:http_denied(tpost('outsider','create_student_group',dict(http_grp_payload,request_key='http_tea_out_000000001'))))
+        check('http-teaching-wrong-role-denied',lambda:http_denied(tpost('attendance_recorder','create_student_group',dict(http_grp_payload,request_key='http_tea_rec_000000001'))))
+        check('http-teaching-get-cannot-mutate',lambda:http_denied(sessions['teaching_scheduler'].get(base+'/api/method/toefl_house.teaching.create_student_group',params={'request_key':'http_tea_get_000000001'},timeout=30)))
+        def http_tea_csrf():
+            s=sessions['teaching_scheduler'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:
+                result=http_denied(s.post(base+'/api/method/toefl_house.teaching.create_student_group',json=dict(http_grp_payload,request_key='http_tea_csrf_000000001'),timeout=30),csrf=True)
+                assert result['exception']=='CSRFTokenError',result
+                return result
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-teaching-csrf-negative-with-positive-control',http_tea_csrf)
+        grp_url=base+'/api/resource/'+quote('Student Group',safe='')+'/'+httpgroup['name']
+        check('http-teaching-direct-crud-mutation-denied',lambda:http_denied(sessions['teaching_scheduler'].put(grp_url,json={'max_strength':99},timeout=30)))
+        def http_grp_idem():
+            r0=tpost('teaching_scheduler','create_student_group',http_grp_payload)
+            assert r0.status_code==200,f'group replay HTTP {r0.status_code} {r0.text[:200]}'
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['teaching_scheduler'].headers);s.cookies.update(sessions['teaching_scheduler'].cookies)
+                return s.post(base+'/api/method/toefl_house.teaching.create_student_group',json=http_grp_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count('Student Group',{'student_group_name':GRP_HTTP})==1
+            return {'http_statuses':[200,200],'one_group':True}
+        check('http-teaching-concurrent-group-idempotency',http_grp_idem)
+        http_sched_payload=dict(request_key='http_tea_sched_000000001',student_group=GRP_HTTP,schedule_date='2026-09-22',from_time='11:00:00',to_time='12:30:00',instructor=INS_TWO,room=ROOM_B,course='SYN-COURSE-CORE')
+        def http_session():
+            r=tpost('teaching_scheduler','schedule_session',http_sched_payload);assert r.status_code==200,f'session HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpsched=check('http-teaching-session-positive',http_session)
+        check('http-teaching-session-unrelated-role-denied',lambda:http_denied(tpost('outsider','schedule_session',dict(http_sched_payload,request_key='http_tea_s_out_0000001'))))
+        http_att_payload=dict(request_key='http_tea_att_0000000001',course_schedule=httpsched['name'],statuses={s:'Present' for s in httpgroup['roster']})
+        def http_attendance():
+            r=tpost('attendance_recorder','record_attendance',http_att_payload);assert r.status_code==200,f'attendance HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpatt=check('http-teaching-attendance-positive',http_attendance)
+        assert httpatt['marked']==3
+        check('http-teaching-attendance-scheduler-denied',lambda:http_denied(tpost('teaching_scheduler','record_attendance',dict(http_att_payload,request_key='http_tea_a_sch_0000001'))))
+        def http_att_csrf():
+            s=sessions['attendance_recorder'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:
+                result=http_denied(s.post(base+'/api/method/toefl_house.teaching.record_attendance',json=dict(http_att_payload,request_key='http_tea_a_csrf_000001'),timeout=30),csrf=True)
+                assert result['exception']=='CSRFTokenError',result
+                return result
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-teaching-attendance-csrf-negative-with-positive-control',http_att_csrf)
+        def http_att_race():
+            def request(i):
+                s=requests.Session();s.headers.update(sessions['attendance_recorder'].headers);s.cookies.update(sessions['attendance_recorder'].cookies)
+                return s.post(base+'/api/method/toefl_house.teaching.record_attendance',json=dict(http_att_payload,request_key=f'http_tea_a_race_000{i}'),timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            statuses=sorted(r.status_code for r in rs);assert statuses==[200,417],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
+            frappe.db.rollback();assert frappe.db.count('Student Attendance',{'course_schedule':httpsched['name'],'docstatus':('!=',2)})==3
+            return {'http_statuses':statuses,'no_double_marking':True}
+        check('http-teaching-concurrent-attendance-duplicate-cas',http_att_race)
+        def http_att_replay():
+            r0=tpost('attendance_recorder','record_attendance',http_att_payload)
+            assert r0.status_code==200,f'attendance replay HTTP {r0.status_code} {r0.text[:200]}'
+            assert r0.json()['message']==httpatt
+            assert frappe.db.count('Student Attendance',{'course_schedule':httpsched['name']})==3
+            return {'same_result':True,'three_records':True}
+        check('http-teaching-attendance-idempotent-replay',http_att_replay)
+        att_url=base+'/api/resource/'+quote('Student Attendance',safe='')+'/'+httpatt['records'][httpgroup['roster'][0]]
+        check('http-teaching-attendance-direct-crud-mutation-denied',lambda:http_denied(sessions['attendance_recorder'].put(att_url,json={'status':'Absent'},timeout=30)))
         def enrollment_revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['enrollment_officer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(epost('enrollment_officer','enroll_in_program',dict(http_enr_payload,request_key='http_enr_revoked_0001')))
@@ -1921,16 +2179,29 @@ def main():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['publisher2']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(post('publisher2','retire_config',dict(request_key='cfg_revoked_retire_001',config='policy',name=polhttp,expected_version=3)))
         check('http-config-revoked-publisher-old-session-denied',cfg_revoke)
+        def teaching_scheduler_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['teaching_scheduler']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(tpost('teaching_scheduler','create_student_group',dict(http_grp_payload,request_key='http_tea_revoked_0001')))
+        check('http-teaching-revoked-scheduler-old-session-denied',teaching_scheduler_revoke)
+        def attendance_recorder_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['attendance_recorder']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(tpost('attendance_recorder','record_attendance',dict(http_att_payload,request_key='http_tea_a_revoked_001')))
+        check('http-teaching-revoked-recorder-old-session-denied',attendance_recorder_revoke)
         def no_side_effects():
             after={dt:frappe.db.count(dt) for dt in before_counts}
-            for dt in ('Assessment Result','Sales Invoice','GL Entry','Salary Slip'):
+            for dt in ('Assessment Result','Sales Invoice','GL Entry','Salary Slip','Employee','Attendance','Timesheet','Additional Salary'):
                 assert after[dt]==before_counts[dt],(dt,before_counts[dt],after[dt])
-            assert after['Program Enrollment']>=2 and after['Course Enrollment']>=2
-            assert after['Student']>=1 and after['Student Applicant']>=1
+            assert after['Program Enrollment']>=3 and after['Course Enrollment']>=3
+            assert after['Student']>=3 and after['Student Applicant']>=3
+            assert after['Student Group']>=3 and after['Course Schedule']>=3
+            assert after['Student Attendance']>=5
             return {'academic_finance_payroll_unchanged':True,
                     'native_program_enrollments':after['Program Enrollment'],
                     'native_course_enrollments':after['Course Enrollment'],
-                    'native_students':after['Student'],'native_applicants':after['Student Applicant']}
+                    'native_students':after['Student'],'native_applicants':after['Student Applicant'],
+                    'native_student_groups':after['Student Group'],
+                    'native_course_schedules':after['Course Schedule'],
+                    'native_student_attendance':after['Student Attendance']}
         check('no-academic-finance-payroll-writes',no_side_effects)
         report['status']='pass'
     except Exception as exc:

@@ -43,6 +43,9 @@ KIND_ROLES = {
     "expire_admission": "Admission Officer",
     "convert_applicant": "Admission Approver",
     "enroll_in_program": "Enrollment Officer",
+    "create_student_group": "Teaching Scheduler",
+    "schedule_session": "Teaching Scheduler",
+    "record_attendance": "Attendance Recorder",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -99,3 +102,17 @@ def require_command(doctype):
 def enrollment_command_active():
     context = _CONTEXT.get()
     return bool(context and context[0] == "enroll_in_program" and context[1] == frappe.session.user)
+
+
+TEACHING_COMMANDS = {
+    "create_student_group": "Student Group",
+    "schedule_session": "Course Schedule",
+    "record_attendance": "Student Attendance",
+}
+
+
+def teaching_command_active(doctype):
+    """Return True only inside the matching teaching command for this actor."""
+    context = _CONTEXT.get()
+    return bool(context and context[1] == frappe.session.user
+                and TEACHING_COMMANDS.get(context[0]) == doctype)

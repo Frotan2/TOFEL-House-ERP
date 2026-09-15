@@ -12,7 +12,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-BRANCH = 'refs/heads/arena/01a0a13b-tofel-house-erp'
+BRANCH = 'refs/heads/arena/01a0a496-tofel-house-erp'
 
 
 def main():
@@ -76,7 +76,7 @@ def main():
         for name in ('erpnext','education','payments','hrms'):bench('get-'+name,'get-app','--skip-assets',str(sources/name))
         for name in ('foundation_security','toefl_house'):
             export=lab/'owned'/name;shutil.copytree(ROOT/'apps'/name,export,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
-            run('export-init-'+name,['git','init','--initial-branch','arena/01a0a13b-tofel-house-erp',export])
+            run('export-init-'+name,['git','init','--initial-branch','arena/01a0a496-tofel-house-erp',export])
             run('export-add-'+name,['git','-C',export,'add','.'])
             run('export-commit-'+name,['git','-C',export,'-c','user.name=Synthetic qualification','-c','user.email=validation@example.test','commit','-m','Exact app export '+os.environ['GITHUB_SHA']])
             bench('get-'+name,'get-app','--soft-link','--skip-assets',str(export))
