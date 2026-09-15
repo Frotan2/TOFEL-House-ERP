@@ -59,14 +59,47 @@ untouched.
 <!-- Filled from actual execution output only; no inferred or relabeled results. -->
 
 - Local pure unit tests, executed in the session workspace on 2026-09-15
-  (this commit):
+  (qualifying commit `4ef4488`):
   - `python3 -m unittest discover -s tests/placement -v`: **110/110 OK**
     (99 increment 1–4 tests retained, plus 11 scoring tests).
   - `python3 -m unittest discover -s tests/foundation -v`: **44/44 OK**.
   - `node tests/foundation/test_realtime_guard.cjs`: **PASS**.
 - Hosted qualification (`.github/workflows/placement-content.yml`):
-  **not yet executed for this increment.** Increment 4 remains independently
-  qualified by run `34923752045` (188/188 native checks, commit `8b66bcb`).
+  - Run `34927008961` (commit `7e51160a73b8df452b035a1683fbd3365cee0f54` on
+    `arena/01a0a13b-tofel-house-erp`): **FAILED** at
+    `score-role-and-list-parity` with
+    `PermissionError: Insufficient Permission for TH Placement Case`.
+    **150/151 executed native checks passed.** Root cause: Assessor had no
+    DocType grant on Case/Attempt/Response (score listing would have failed
+    next: `query_score` was mapped in hooks but not defined). Classification:
+    **product** (Assessor read grants). Native report SHA-256
+    `3d131ec6350b044aa1cc236a72f0c4eac7d31d8ac7b1ed66d2de7c7d94274582`.
+    Remaining increment-5 native and HTTP checks did not run.
+  - Run `34927594996` (commit `4ef44885a4e80eb0ff19ee74fd9e9dc101511d5c` on
+    `arena/01a0a13b-tofel-house-erp`): **PASSED**.
+    - Pinned runner probe, pinned installs (Frappe/ERPNext/Education/
+      Payments/HRMS + foundation_security + toefl_house at pinned refs), both
+      synthetic site installations and migrations: **all 86 runner steps exit
+      0** (`runtime_complete: true`, `production: REJECT`; runner report
+      SHA-256 `1c77df6c02c69d5ff169bd620a9d3e5f1215eb70317388502f89dddf682fcc07`).
+    - Native qualification: **221/221 checks pass** — increment 1–4
+      item/key, blueprint/policy, allocation and staff-supervised Digital
+      delivery plus increment 5 objective scoring of sealed Digital attempts
+      (Assessor-only `score_attempt`, Sealed→Marking CAS, missing≠zero,
+      key-free projection, no composite/cutoff/recommendation, Publisher/
+      Auditor/Assessor score reads, Author/Invigilator denied, rollback,
+      transient retry, HTTP CSRF/races/revocation, two-site isolation, no
+      student/enrollment/academic/finance/payroll writes; native report
+      SHA-256
+      `472c9c243d9819133cfc9859768a6d6410a1c9366a97cac1d44159f4a9478af1`).
+    `native-acceptance` 11.544 s. Unique `check(` names in
+    `tools/placement/native_checks.py` are **219**; hosted **221** includes
+    the two fixture-site checks. Increments 1–2 remain independently
+    qualified by run `34865327509` (85/85 native checks, commit `c0048dc`).
+    Increment 3 remains independently qualified by run `34888352524`
+    (135/135 native checks, commit `c7277a4`). Increment 4 remains
+    independently qualified by run `34923752045` (188/188 native checks,
+    commit `8b66bcb`).
 
 ## 4. Known limitations (unchanged outer boundary)
 

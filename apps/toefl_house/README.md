@@ -66,7 +66,7 @@ The record-level `code` is identity (unique `(code, revision)` constraint) and n
 - New restricted DocType `TH Placement Score`, unique `(attempt, revision)`, FrozenRecord, self-verifying result hash. The stored projection never includes answers, option ids, item identity, family or seed. Publisher / Auditor / Assessor may read scores; Author and Invigilator may not.
 - Physical/Hybrid, candidate Website User, Subject Access, audio, release, moderation sample and productive-skill rating remain unimplemented.
 
-No public HTML editor, candidate portal, upload, bulk import, verified candidate identity, scoring, media, results/release, retention deletion or deployment feature is included yet. Those stay disabled/unimplemented rather than receiving unsafe defaults. F01–F05 remain closed; owner configuration for actual academic/privacy policies remains a later activation prerequisite.
+No public HTML editor, candidate portal, upload, bulk import, verified candidate identity, media, results/release, retention deletion or deployment feature is included yet. Those stay disabled/unimplemented rather than receiving unsafe defaults. F01–F05 remain closed; owner configuration for actual academic/privacy policies remains a later activation prerequisite.
 
 ## Qualification
 
