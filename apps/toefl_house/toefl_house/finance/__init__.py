@@ -152,7 +152,8 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             doctype=INVOICE, customer=customer_name, company=COMPANY,
             posting_date=posting, due_date=due, set_posting_time=0,
             is_pos=0, th_placement_case=case_name,
-            items=[dict(item_code=PLACEMENT_FEE_ITEM, qty=1)]))
+            selling_price_list=PRICE_LIST,
+            items=[dict(item_code=PLACEMENT_FEE_ITEM, qty=1, rate=float(rate))]))
         invoice.flags.ignore_permissions = True
         invoice.insert(ignore_permissions=True)
         invoice.flags.ignore_permissions = True

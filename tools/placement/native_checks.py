@@ -2325,6 +2325,26 @@ def main():
                     enable_perpetual_inventory=0)).insert()
             comp=frappe.get_doc('Company','TOEFL House')
             assert comp.default_receivable_account and comp.default_income_account and comp.cost_center
+            # UOM / Item Group / Customer Group / Territory masters are seeded
+            # by the ERPNext setup wizard; recreate the identical records on
+            # this wizard-less site (no business meaning, catalog scaffolding).
+            if not frappe.db.exists('UOM','Nos'):
+                frappe.get_doc(dict(doctype='UOM',uom_name='Nos')).insert()
+            if not frappe.db.exists('Item Group','All Item Groups'):
+                frappe.get_doc(dict(doctype='Item Group',item_group_name='All Item Groups',
+                    is_group=1)).insert()
+            if not frappe.db.exists('Item Group','Services'):
+                frappe.get_doc(dict(doctype='Item Group',item_group_name='Services',
+                    parent_item_group='All Item Groups')).insert()
+            if not frappe.db.exists('Customer Group','All Customer Groups'):
+                frappe.get_doc(dict(doctype='Customer Group',customer_group_name='All Customer Groups',
+                    is_group=1)).insert()
+            if not frappe.db.exists('Customer Group','Commercial'):
+                frappe.get_doc(dict(doctype='Customer Group',customer_group_name='Commercial',
+                    parent_customer_group='All Customer Groups')).insert()
+            if not frappe.db.count('Territory'):
+                frappe.get_doc(dict(doctype='Territory',territory_name='All Territories',
+                    is_group=1)).insert()
             if not frappe.db.exists('Item','SYN-PLACEMENT-FEE'):
                 frappe.get_doc(dict(doctype='Item',item_code='SYN-PLACEMENT-FEE',
                     item_name='Synthetic Placement Fee',item_group='Services',
@@ -2351,8 +2371,8 @@ def main():
             for label in ('one','two'):
                 key='SYN Placement Payer '+label.capitalize()
                 if not frappe.db.exists('Customer',{'customer_name':key}):
-                    frappe.get_doc(dict(doctype='Customer',customer_name=key,
-                        customer_group='Commercial',
+                    frappe.get_doc(dict(doctype='Customer',naming_series='CUST-.YYYY.-',
+                        customer_name=key,customer_group='Commercial',
                         territory=frappe.get_all('Territory',limit=1)[0].name)).insert()
                 payers[label]=frappe.db.get_value('Customer',{'customer_name':key})
             return {'company':'TOEFL House','price_list':'TOEFL House Standard',
@@ -2458,6 +2478,7 @@ def main():
             rule=frappe.get_doc(dict(doctype='Pricing Rule',title='SYN Placement Waiver',
                 apply_on='Item Code',items=[dict(item_code='SYN-PLACEMENT-FEE')],
                 rate_or_discount='Discount Percentage',discount_percentage=100,
+                apply_discount_on='Rate',
                 price_or_product_discount='Price',selling=1,
                 applicable_for='Customer',customer=fin['payer_waiver'],
                 company='TOEFL House')).insert()

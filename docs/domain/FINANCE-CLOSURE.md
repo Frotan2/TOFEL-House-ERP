@@ -1,0 +1,83 @@
+# Finance Operations (tuition & placement billing) — CLOSED / QUALIFIED (synthetic isolated build)
+
+Date: 2026-09-15 · Session branch: `arena/01a0a496-tofel-house-erp`
+· Qualifying product commit: `4172a65` (finance slice over integration proof `03c5ba4`)
+· Policy basis: [FINANCE-POLICY-APPROVAL.md](FINANCE-POLICY-APPROVAL.md)
+(R05/B07 resolved at framework level by the business owner 2026-09-15).
+· Teaching predecessor: [TEACHING-CLOSURE.md](TEACHING-CLOSURE.md) (CLOSED / QUALIFIED, `6ba5663`, hosted run `34966681820`). Teaching was not reopened.
+
+**Status: CLOSED / QUALIFIED — bounded thin Finance slice implemented and
+qualified on the hosted synthetic runner (see Evidence). Synthetic-data
+implementation only. Production remains REJECT. Do not deploy. Do not reopen
+Placement, Admission, Enrollment or Teaching. Academic assessment (B04/B05)
+and payroll (A09) remain GATED and unimplemented. No real prices, taxes or
+refund terms are invented: every monetary value in the qualification run is
+synthetic Finance-configured fixture data, and chargeability is configuration.**
+
+This records the **thin Finance slice** (bounded part of plan P3.6):
+**submitted native Program Enrollment → native `Fees` tuition receivable →
+native GL posting**, plus **configuration-driven placement billing** through
+native `Sales Invoice` / `Item Price` / `Pricing Rule`. No TH invoice, fee,
+ledger, price, tax, refund or payroll record exists. ERPNext accounts remain
+the only money authority.
+
+## 0. Scope and authority map
+
+| Capability | Authority | Owned code |
+|---|---|---|
+| Tuition receivable per enrollment | Native Education `Fees` (submitted; GL posting; `program_enrollment` required; native enrollment/student validation) | Thin idempotent `issue_tuition_fees` (receipt + audit); deny-by-default direct-write guard |
+| Price schedule | Native `Fee Structure` (program + academic year + components), configured by Finance | None — native master |
+| Placement chargeability | Native `Item Price` in selling `Price List`; zero/absent ⇒ not billable | Thin idempotent `issue_placement_fee`; Custom Field link `Sales Invoice.th_placement_case` |
+| Waivers / discounts | Native `Pricing Rule` (applied natively by the invoice); native `Authorization Rule` remains the native limit authority | None |
+| Money-in | Native `Payment Entry` / `Payment Request` | None — native, role-restricted |
+| Company / currency | Company `TOEFL House` (Afghanistan, AFN), Fiscal Year, Standard chart of accounts | Fixtures only |
+
+Owner decisions honored verbatim (see FINANCE-POLICY-APPROVAL.md): placement
+fee policy is configuration, never code — the `finance-placement-zero-rate-not-billable`
+check proves the system follows the configured rate in both directions; the
+placement domain's academic code and roles are untouched (finance reads
+placement cases read-only).
+
+## 1. Guard and permission model
+
+- `Fees` and `Sales Invoice` are deny-by-default: direct create/submit —
+  even `Administrator` with `ignore_permissions` — is denied outside the
+  matching receipted finance command (`finance_command_active`).
+- The enrollment slice's `deny_premature_invoice` guard stays in force,
+  chained inside `finance.guard_sales_invoice` (one handler per
+  doctype/method per app).
+- `Finance Officer` executes commands only; no Desk list/read access to
+  money documents or receipts. `Finance Auditor` reads the shared receipt /
+  audit ledger only (DocPerm read rows + `permissions.query()` +
+  `policy.can_read`, the Teaching Auditor precedent) — never native money
+  documents.
+- All writes are receipted (`TH Placement Operation` + `TH Placement Audit
+  Event`), idempotent by request key, and atomic: failure injection at the
+  audit boundary rolls back invoice/receipt/GL as one transaction.
+
+## 2. Evidence
+
+- Local pure unit tests, executed in the session workspace on 2026-09-15
+  (not native Frappe qualification): placement 147, admission 6,
+  enrollment 10, teaching 17, **finance 12**, foundation 44 (+123 published
+  runner checks).
+- Cross-domain integration proof (hosted, run `34971013355`, commit `03c5ba4`,
+  native report SHA-256
+  `e07e9958c68d30b25cbdf7f5b637118a3ab9feae2ad2416abcc0c39a4b435f3a`):
+  **486/486 checks pass** — the four earlier slices proven one connected
+  lifecycle (attendance → … → placement case re-read from the database,
+  journey receipt continuity, cross-domain referential integrity).
+- Hosted qualification (`.github/workflows/placement-content.yml`): **filled
+  from actual check-run output below.**
+
+## 3. Boundary and remaining gates
+
+- Not implemented / still gated: academic assessment & progression
+  (B04/B05 — owner deferred), payroll (A09/R06), refund automation (owner
+  terms outstanding; native Credit Note remains available to authorized
+  Finance staff), portals, payment-gateway integration (B12), tax
+  configuration (explicitly unconfigured until owner policy).
+- Reopening Placement, Admission, Enrollment or Teaching; TH money
+  DocTypes; parallel masters or ledgers: remain prohibited.
+
+Production remains **REJECT**.
