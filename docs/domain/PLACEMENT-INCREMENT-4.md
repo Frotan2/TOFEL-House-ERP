@@ -77,15 +77,43 @@ untouched.
 <!-- Filled from actual execution output only; no inferred or relabeled results. -->
 
 - Local pure unit tests, executed in the session workspace on 2026-09-15
-  (this commit):
-  - `python3 -m unittest discover -s tests/placement -v`: **98/98 OK**
+  (qualifying commit `8b66bcb`):
+  - `python3 -m unittest discover -s tests/placement -v`: **99/99 OK**
     (84 increment 1–3 tests retained, plus 12 delivery projection/clock/read
-    tests and 2 HTTP-session/signature guards).
+    tests and 3 HTTP-session/signature/allocator-insert guards).
   - `python3 -m unittest discover -s tests/foundation -v`: **44/44 OK**.
   - `node tests/foundation/test_realtime_guard.cjs`: **PASS**.
 - Hosted qualification (`.github/workflows/placement-content.yml`):
-  **not yet executed for this increment.** Increment 3 remains independently
-  qualified by run `34888352524` (135/135 native checks, commit `c7277a4`).
+  - Run `34923079666` (commit `fbce1bbf8d2411539409b4cdeeef2e9c719621ad` on
+    `arena/01a0a13b-tofel-house-erp`): **FAILED** at `alloc-happy-path` with
+    `ValidationError: Allocator is required`. **76/77 executed native checks
+    passed.** Root cause: `AttemptRecord` requires new attempts to start
+    `Allocated` at version 1 with `allocated_by` set; `allocate_attempt`
+    omitted both fields on insert. Classification: **product** (allocate
+    insert). Native report SHA-256
+    `8ac81786923decd45f9a7e092b9eb2eaf92ca2122b54c2b1e92b5920fbdcf0ab`.
+    Remaining increment-4 native and HTTP checks did not run.
+  - Run `34923752045` (commit `8b66bcb6ac784852a02919954c65ad2022d3e544` on
+    `arena/01a0a13b-tofel-house-erp`): **PASSED**.
+    - Pinned runner probe, pinned installs (Frappe/ERPNext/Education/
+      Payments/HRMS + foundation_security + toefl_house at pinned refs), both
+      synthetic site installations and migrations: **all 86 runner steps exit
+      0** (`runtime_complete: true`, `production: REJECT`; runner report
+      SHA-256 `091d675b16c92be0c7d0d1a9dca47d5ad36beb8de20d039a8ff7c4debd4b66bf`).
+    - Native qualification: **188/188 checks pass** — increment 1–3
+      item/key, blueprint/policy and allocation plus increment 4
+      staff-supervised Digital verify/deliver/save/seal (allocator≠operator
+      SoD, Physical fail-closed, Reserved→Delivered before projection, server
+      clocks, timeout seal `missing_count==8`, Submitted seal, rollback,
+      transient retry, Invigilator reads without manifest, HTTP
+      CSRF/races/revocation, two-site isolation, no
+      student/enrollment/academic/finance/payroll writes; native report
+      SHA-256
+      `60fdabf3f59b74bc35b4e0289a2e34877711e2d6290ad1ee09c34a793bac46b6`).
+    `native-acceptance` 9.687 s. Increments 1–2 remain independently qualified
+    by run `34865327509` (85/85 native checks, commit `c0048dc`). Increment 3
+    remains independently qualified by run `34888352524` (135/135 native
+    checks, commit `c7277a4`).
 
 ## 4. Known limitations (unchanged outer boundary)
 
