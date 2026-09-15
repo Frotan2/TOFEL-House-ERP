@@ -59,7 +59,7 @@ def query(kind, user=None):
                                  "Admission Approver", "Admission Auditor"} else "1=0"
     if kind in ("audit", "operation"):
         return "1=1" if roles & {"Placement Auditor", "Admission Auditor", "Enrollment Auditor",
-                                 "Teaching Auditor"} else "1=0"
+                                 "Teaching Auditor", "Finance Auditor"} else "1=0"
     if "Placement Publisher" in roles:
         return "1=1"
     if kind in ("case", "attempt", "exposure", "response") and "Placement Invigilator" in roles:

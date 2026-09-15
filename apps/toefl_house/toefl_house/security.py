@@ -46,6 +46,8 @@ KIND_ROLES = {
     "create_student_group": "Teaching Scheduler",
     "schedule_session": "Teaching Scheduler",
     "record_attendance": "Attendance Recorder",
+    "issue_tuition_fees": "Finance Officer",
+    "issue_placement_fee": "Finance Officer",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -116,3 +118,16 @@ def teaching_command_active(doctype):
     context = _CONTEXT.get()
     return bool(context and context[1] == frappe.session.user
                 and TEACHING_COMMANDS.get(context[0]) == doctype)
+
+
+FINANCE_COMMANDS = {
+    "issue_tuition_fees": "Fees",
+    "issue_placement_fee": "Sales Invoice",
+}
+
+
+def finance_command_active(doctype):
+    """Return True only inside the matching finance command for this actor."""
+    context = _CONTEXT.get()
+    return bool(context and context[1] == frappe.session.user
+                and FINANCE_COMMANDS.get(context[0]) == doctype)

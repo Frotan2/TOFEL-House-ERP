@@ -15,6 +15,7 @@ API = ROOT / "apps/toefl_house/toefl_house/api.py"
 ADMISSION = ROOT / "apps/toefl_house/toefl_house/admission/__init__.py"
 ENROLLMENT = ROOT / "apps/toefl_house/toefl_house/enrollment/__init__.py"
 TEACHING = ROOT / "apps/toefl_house/toefl_house/teaching/__init__.py"
+FINANCE = ROOT / "apps/toefl_house/toefl_house/finance/__init__.py"
 
 
 def _module_level_names(tree):
@@ -88,6 +89,17 @@ class NativeCheckNameGuardTests(unittest.TestCase):
             missing,
             [],
             "native_checks.py references teaching names not defined: %s" % missing,
+        )
+
+    def test_native_check_finance_references_resolve(self):
+        used = _api_attribute_uses(ast.parse(NATIVE.read_text(encoding="utf-8")), "fin_m")
+        defined = _module_level_names(ast.parse(FINANCE.read_text(encoding="utf-8")))
+        self.assertTrue(used, "expected fin_m.* references in native_checks.py")
+        missing = sorted(used - defined)
+        self.assertEqual(
+            missing,
+            [],
+            "native_checks.py references finance names not defined: %s" % missing,
         )
 
 

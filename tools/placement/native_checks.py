@@ -19,6 +19,7 @@ def main():
     from toefl_house import admission as adm
     from toefl_house import enrollment as enr
     from toefl_house import teaching as tea
+    from toefl_house import finance as fin_m
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
     report={'scope':'Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20','status':'running','checks':[],
@@ -46,7 +47,9 @@ def main():
            'candidate9':'synthetic-candidate9@example.test',
            'teaching_scheduler':'synthetic-teaching-scheduler@example.test',
            'attendance_recorder':'synthetic-attendance-recorder@example.test',
-           'teaching_auditor':'synthetic-teaching-auditor@example.test'}
+           'teaching_auditor':'synthetic-teaching-auditor@example.test',
+           'finance_officer':'synthetic-finance-officer@example.test',
+           'finance_auditor':'synthetic-finance-auditor@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
@@ -118,7 +121,9 @@ def main():
                          'candidate9':[],
                          'teaching_scheduler':['Teaching Scheduler'],
                          'attendance_recorder':['Attendance Recorder'],
-                         'teaching_auditor':['Teaching Auditor']}
+                         'teaching_auditor':['Teaching Auditor'],
+                         'finance_officer':['Finance Officer'],
+                         'finance_auditor':['Finance Auditor']}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -126,7 +131,7 @@ def main():
                 return {'site':site,'users':len(users),'apps':frappe.get_installed_apps()}
             check('native-fixtures-'+site,setup);frappe.destroy()
         connect('placement-test.localhost')
-        before_counts={dt:frappe.db.count(dt) for dt in ['Student','Student Applicant','Program Enrollment','Course Enrollment','Assessment Result','Sales Invoice','GL Entry','Salary Slip','Student Group','Course Schedule','Student Attendance','Employee','Attendance','Timesheet','Additional Salary']}
+        before_counts={dt:frappe.db.count(dt) for dt in ['Student','Student Applicant','Program Enrollment','Course Enrollment','Assessment Result','Sales Invoice','GL Entry','Salary Slip','Student Group','Course Schedule','Student Attendance','Employee','Attendance','Timesheet','Additional Salary','Fees']}
         check('administrator-not-an-implicit-business-actor',lambda:denied(lambda:api.create_draft('admin_attempt_001',family(users['author'],'ADMIN'),1,content())))
         def disabled():
             original=frappe.conf.toefl_house_synthetic_only;frappe.conf.toefl_house_synthetic_only=0
@@ -1725,7 +1730,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor','teaching_scheduler','attendance_recorder')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor','teaching_scheduler','attendance_recorder','finance_officer')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def apost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.admission.'+method,json=payload,timeout=40)
         def epost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.enrollment.'+method,json=payload,timeout=40)
@@ -2288,7 +2293,7 @@ def main():
         check('http-teaching-revoked-recorder-old-session-denied',attendance_recorder_revoke)
         def no_side_effects():
             after={dt:frappe.db.count(dt) for dt in before_counts}
-            for dt in ('Assessment Result','Sales Invoice','GL Entry','Salary Slip','Employee','Attendance','Timesheet','Additional Salary'):
+            for dt in ('Assessment Result','Sales Invoice','GL Entry','Salary Slip','Employee','Attendance','Timesheet','Additional Salary','Fees'):
                 assert after[dt]==before_counts[dt],(dt,before_counts[dt],after[dt])
             assert after['Program Enrollment']>=3 and after['Course Enrollment']>=3
             assert after['Student']>=3 and after['Student Applicant']>=3
@@ -2302,6 +2307,230 @@ def main():
                     'native_course_schedules':after['Course Schedule'],
                     'native_student_attendance':after['Student Attendance']}
         check('no-academic-finance-payroll-writes',no_side_effects)
+        # --- Finance slice (R05/B07 resolved at framework level): native Fees /
+        # Sales Invoice / Pricing Rule authorities; rates are Finance-configured
+        # synthetic values in this suite, never code constants. Payroll (A09)
+        # and academic assessment (B04/B05) remain gated and untouched. ---
+        def finance_catalog():
+            frappe.set_user('Administrator')
+            fin_before={dt:frappe.db.count(dt) for dt in before_counts}
+            if not frappe.db.get_value('Currency','AFN','enabled'):
+                frappe.db.set_value('Currency','AFN','enabled',1)
+            if not frappe.db.exists('Fiscal Year','2026'):
+                frappe.get_doc(dict(doctype='Fiscal Year',year='2026',
+                    year_start_date='2026-01-01',year_end_date='2026-12-31')).insert()
+            if not frappe.db.exists('Company','TOEFL House'):
+                frappe.get_doc(dict(doctype='Company',company_name='TOEFL House',abbr='TH',
+                    country='Afghanistan',default_currency='AFN',valuation_method='FIFO',
+                    enable_perpetual_inventory=0)).insert()
+            comp=frappe.get_doc('Company','TOEFL House')
+            assert comp.default_receivable_account and comp.default_income_account and comp.cost_center
+            if not frappe.db.exists('Item','SYN-PLACEMENT-FEE'):
+                frappe.get_doc(dict(doctype='Item',item_code='SYN-PLACEMENT-FEE',
+                    item_name='Synthetic Placement Fee',item_group='Services',
+                    stock_uom='Nos',is_stock_item=0)).insert()
+            if not frappe.db.exists('Price List','TOEFL House Standard'):
+                frappe.get_doc(dict(doctype='Price List',price_list_name='TOEFL House Standard',
+                    currency='AFN',selling=1,buying=0,enabled=1)).insert()
+            if not frappe.db.exists('Item Price',{'item_code':'SYN-PLACEMENT-FEE','price_list':'TOEFL House Standard'}):
+                # Synthetic configured rate; the owner supplies real values.
+                frappe.get_doc(dict(doctype='Item Price',item_code='SYN-PLACEMENT-FEE',
+                    price_list='TOEFL House Standard',selling=1,currency='AFN',
+                    price_list_rate=4000)).insert()
+            if not frappe.db.exists('Fee Category','SYN-Tuition'):
+                frappe.get_doc(dict(doctype='Fee Category',category_name='SYN-Tuition')).insert()
+            if not frappe.db.exists('Fee Structure',{'program':cat['program'],'academic_year':cat['academic_year']}):
+                fs=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
+                    program=cat['program'],academic_year=cat['academic_year'],
+                    receivable_account=comp.default_receivable_account,
+                    cost_center=comp.cost_center,company='TOEFL House'))
+                fs.append('components',{'fees_category':'SYN-Tuition','amount':25000})
+                fs.insert()
+            fs_name=frappe.db.get_value('Fee Structure',{'program':cat['program'],'academic_year':cat['academic_year']})
+            payers={}
+            for label in ('one','two'):
+                key='SYN Placement Payer '+label.capitalize()
+                if not frappe.db.exists('Customer',{'customer_name':key}):
+                    frappe.get_doc(dict(doctype='Customer',customer_name=key,
+                        customer_group='Commercial',
+                        territory=frappe.get_all('Territory',limit=1)[0].name)).insert()
+                payers[label]=frappe.db.get_value('Customer',{'customer_name':key})
+            return {'company':'TOEFL House','price_list':'TOEFL House Standard',
+                    'placement_item':'SYN-PLACEMENT-FEE','fee_structure':fs_name,
+                    'receivable':comp.default_receivable_account,'payer':payers['one'],
+                    'payer_waiver':payers['two'],'before':fin_before}
+        fin=check('finance-native-catalog',finance_catalog)
+        CASE9='teaching_pipe_a_case0000001'
+        check('finance-tuition-unknown-enrollment-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_pe_0000000001','NO-SUCH-PE',fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        check('finance-tuition-bad-window-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_window_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-30','2026-09-01'))))
+        def wrong_year_structure():
+            frappe.set_user('Administrator')
+            if not frappe.db.exists('Academic Year','SYN-AY-2027'):
+                frappe.get_doc(dict(doctype='Academic Year',academic_year_name='SYN-AY-2027',
+                    year_start_date='2027-01-01',year_end_date='2027-12-31')).insert()
+            fs2=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
+                program=cat['program'],academic_year='SYN-AY-2027',
+                receivable_account=fin['receivable'],cost_center=frappe.db.get_value('Company','TOEFL House','cost_center'),
+                company='TOEFL House'))
+            fs2.append('components',{'fees_category':'SYN-Tuition','amount':25000})
+            fs2.insert()
+            return denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_wrongyear_00001',second['program_enrollment'],fs2.name,'2026-09-01','2026-09-30')))
+        check('finance-tuition-outside-year-structure-denied',wrong_year_structure)
+        check('finance-tuition-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:fin_m.issue_tuition_fees('fin_out_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        check('finance-tuition-enrollment-officer-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:fin_m.issue_tuition_fees('fin_enr_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        check('finance-tuition-scheduler-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:fin_m.issue_tuition_fees('fin_sch_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        def tuition_positive():
+            value=as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_a_000001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))
+            assert value['grand_total']==25000.0 and value['outstanding_amount']==25000.0 and value['currency']=='AFN'
+            row=frappe.db.get_value('Fees',value['fees'],['docstatus','program_enrollment','fee_structure'],as_dict=True)
+            assert row.docstatus==1 and row.program_enrollment==second['program_enrollment'] and row.fee_structure==fin['fee_structure']
+            assert frappe.db.count('GL Entry',{'voucher_no':value['fees'],'voucher_type':'Fees'})>0
+            return value
+        fees1=check('finance-tuition-happy-path',tuition_positive)
+        def tuition_replay():
+            count=frappe.db.count(api.AUDIT);fees_count=frappe.db.count('Fees')
+            value=as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_a_000001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))
+            assert value==fees1 and frappe.db.count(api.AUDIT)==count and frappe.db.count('Fees')==fees_count
+            return {'same_result':True,'no_new_fees':True}
+        check('finance-tuition-idempotent-replay',tuition_replay)
+        check('finance-tuition-duplicate-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_dup_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        def tuition_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Fees',naming_series='EDU-FEE-.YYYY.-',
+                student=second['student'],program_enrollment=second['program_enrollment'],
+                company='TOEFL House',posting_date='2026-09-01',due_date='2026-09-30',
+                fee_structure=fin['fee_structure'],receivable_account=fin['receivable'],
+                components=[dict(fees_category='SYN-Tuition',amount=1)])).insert(ignore_permissions=True))
+        check('finance-tuition-direct-write-denied',tuition_direct_denied)
+        def tuition_rollback_proof():
+            frappe.set_user(users['finance_officer']);frappe.db.savepoint('fin_atomic')
+            old={dt:frappe.db.count(dt) for dt in ('Fees','GL Entry',api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic finance audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):
+                    fin_m.issue_tuition_fees('fin_tuition_atomic_01',enrolled['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30')
+            except RuntimeError:frappe.db.rollback(save_point='fin_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            return {'real_database_rollback':True,'injected_boundary':'finance audit'}
+        check('finance-tuition-atomic-rollback',tuition_rollback_proof)
+        check('finance-placement-unknown-case-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_bad_case_00000001','NO-SUCH-CASE',fin['payer'],'2026-09-01','2026-09-30'))))
+        check('finance-placement-unknown-customer-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_bad_cust_0000001',CASE9,'NO-SUCH-CUSTOMER','2026-09-01','2026-09-30'))))
+        check('finance-placement-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:fin_m.issue_placement_fee('fin_out_place_0000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))))
+        def zero_rate_not_billable():
+            # Owner policy: free-vs-charged is configuration, never code.
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Item Price',{'item_code':'SYN-PLACEMENT-FEE','price_list':'TOEFL House Standard'},'price_list_rate',0)
+            return denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_zero_000001',CASE9,fin['payer'],'2026-09-01','2026-09-30')))
+        check('finance-placement-zero-rate-not-billable',zero_rate_not_billable)
+        def placement_positive():
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Item Price',{'item_code':'SYN-PLACEMENT-FEE','price_list':'TOEFL House Standard'},'price_list_rate',4000)
+            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_a_00000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))
+            assert value['configured_rate']==4000.0 and value['grand_total']==4000.0 and value['currency']=='AFN'
+            row=frappe.db.get_value('Sales Invoice',value['sales_invoice'],['docstatus','customer','th_placement_case','company'],as_dict=True)
+            assert row.docstatus==1 and row.customer==fin['payer'] and row.th_placement_case==CASE9 and row.company=='TOEFL House'
+            assert frappe.db.count('GL Entry',{'voucher_no':value['sales_invoice'],'voucher_type':'Sales Invoice'})>0
+            return value
+        inv1=check('finance-placement-happy-path',placement_positive)
+        def placement_replay():
+            count=frappe.db.count(api.AUDIT);si_count=frappe.db.count('Sales Invoice')
+            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_a_00000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))
+            assert value==inv1 and frappe.db.count(api.AUDIT)==count and frappe.db.count('Sales Invoice')==si_count
+            return {'same_result':True,'no_new_invoice':True}
+        check('finance-placement-idempotent-replay',placement_replay)
+        check('finance-placement-duplicate-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_dup_000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))))
+        def placement_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Sales Invoice',customer=fin['payer'],
+                company='TOEFL House',posting_date='2026-09-01',due_date='2026-09-30',
+                th_placement_case=CASE9,
+                items=[dict(item_code='SYN-PLACEMENT-FEE',qty=1)])).insert(ignore_permissions=True))
+        check('finance-placement-direct-write-denied',placement_direct_denied)
+        def waiver_flow():
+            # Waivers are native Pricing Rules configured by Finance, applied
+            # natively by the invoice; no waiver logic exists in owned code.
+            frappe.set_user('Administrator')
+            rule=frappe.get_doc(dict(doctype='Pricing Rule',title='SYN Placement Waiver',
+                apply_on='Item Code',items=[dict(item_code='SYN-PLACEMENT-FEE')],
+                rate_or_discount='Discount Percentage',discount_percentage=100,
+                price_or_product_discount='Price',selling=1,
+                applicable_for='Customer',customer=fin['payer_waiver'],
+                company='TOEFL House')).insert()
+            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_waiver_01','adm_pipe_w_case0000001',fin['payer_waiver'],'2026-09-01','2026-09-30'))
+            line_disc=frappe.db.get_value('Sales Invoice Item',{'parent':value['sales_invoice']},'discount_amount')
+            assert value['configured_rate']==4000.0 and float(line_disc)==4000.0
+            assert value['net_total']==0.0 and value['grand_total']==0.0
+            return {'pricing_rule':rule.name,'waived_grand_total':value['grand_total'],
+                    'line_discount':float(line_disc),'sales_invoice':value['sales_invoice']}
+        waiver=check('finance-placement-native-pricing-rule-waiver',waiver_flow)
+        def fin_reads():
+            frappe.set_user(users['finance_officer'])
+            for dt in (api.OP,api.AUDIT,'Fees','Sales Invoice'):
+                try:listed=frappe.get_list(dt)
+                except frappe.PermissionError:listed=[]
+                assert not listed,(dt,'officer must not list through Desk roles')
+            frappe.set_user(users['finance_auditor'])
+            assert frappe.get_list(api.OP) and frappe.get_list(api.AUDIT)
+            for dt in ('Fees','Sales Invoice'):
+                try:listed=frappe.get_list(dt)
+                except frappe.PermissionError:listed=[]
+                assert not listed,(dt,'auditor reads receipts only')
+            return {'finance_no_native_crud':True,'auditor_receipts_only':True}
+        check('finance-role-and-list-parity',fin_reads)
+        def fpost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.finance.'+method,json=payload,timeout=40)
+        http_fin_payload=dict(request_key='http_fin_tuition_00001',program_enrollment=enrolled['program_enrollment'],fee_structure=fin['fee_structure'],posting_date='2026-09-02',due_date='2026-10-02')
+        def http_tuition():
+            r=fpost('finance_officer','issue_tuition_fees',http_fin_payload)
+            assert r.status_code==200,f'tuition HTTP {r.status_code} {r.text[:200]}'
+            value=r.json()['message']
+            assert value['grand_total']==25000.0 and value['currency']=='AFN'
+            return value
+        httpfees=check('http-finance-tuition-positive',http_tuition)
+        check('http-finance-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.finance.issue_tuition_fees',headers={'Host':'placement-test.localhost'},json=http_fin_payload,timeout=30)))
+        def http_fin_csrf():
+            s=sessions['finance_officer'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.finance.issue_tuition_fees',json=dict(http_fin_payload,request_key='http_fin_csrf_0000001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-finance-csrf-negative-with-positive-control',http_fin_csrf)
+        check('http-finance-wrong-role-denied',lambda:http_denied(fpost('enrollment_officer','issue_tuition_fees',dict(http_fin_payload,request_key='http_fin_role_0000001'))))
+        check('http-finance-get-cannot-mutate',lambda:http_denied(sessions['finance_officer'].get(base+'/api/method/toefl_house.finance.issue_tuition_fees',params={'request_key':'http_fin_get_0000001'},timeout=30)))
+        def http_tuition_replay():
+            r=fpost('finance_officer','issue_tuition_fees',http_fin_payload)
+            assert r.status_code==200 and r.json()['message']==httpfees
+            assert frappe.db.count('Fees',{'program_enrollment':enrolled['program_enrollment'],'docstatus':('!=',2)})==1
+            return {'same_result':True,'no_new_fees':True}
+        check('http-finance-tuition-idempotent-replay',http_tuition_replay)
+        def http_placement():
+            r=fpost('finance_officer','issue_placement_fee',dict(request_key='http_fin_place_00001',case='adm_pipe_r_case0000001',customer=fin['payer'],posting_date='2026-09-02',due_date='2026-10-02'))
+            assert r.status_code==200,f'placement fee HTTP {r.status_code} {r.text[:200]}'
+            value=r.json()['message']
+            assert value['grand_total']==4000.0 and value['currency']=='AFN'
+            return value
+        httpinv=check('http-finance-placement-positive',http_placement)
+        def finance_officer_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['finance_officer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(fpost('finance_officer','issue_tuition_fees',dict(http_fin_payload,request_key='http_fin_revoked_00001')))
+        check('http-finance-revoked-officer-old-session-denied',finance_officer_revoke)
+        def finance_containment():
+            after={dt:frappe.db.count(dt) for dt in before_counts}
+            fb=fin['before']
+            for dt in ('Assessment Result','Salary Slip','Employee','Attendance','Timesheet','Additional Salary',
+                       'Student','Student Applicant','Program Enrollment','Course Enrollment',
+                       'Student Group','Course Schedule','Student Attendance'):
+                assert after[dt]==fb[dt],(dt,fb[dt],after[dt])
+            assert after['Fees']==fb['Fees']+2,(fb['Fees'],after['Fees'])
+            assert after['Sales Invoice']==fb['Sales Invoice']+3,(fb['Sales Invoice'],after['Sales Invoice'])
+            assert after['GL Entry']>fb['GL Entry']
+            vouchers={r.voucher_type for r in frappe.db.sql("select distinct voucher_type from `tabGL Entry`",as_dict=True)}
+            assert vouchers<={'Fees','Sales Invoice'},vouchers
+            return {'fees_billed':after['Fees'],'placement_invoices':after['Sales Invoice'],
+                    'gl_voucher_types':sorted(vouchers),'academic_and_payroll_untouched':True}
+        check('finance-write-containment',finance_containment)
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}

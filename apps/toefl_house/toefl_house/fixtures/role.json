@@ -110,5 +110,19 @@
     "role_name": "Teaching Auditor",
     "desk_access": 1,
     "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Finance Officer",
+    "role_name": "Finance Officer",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Finance Auditor",
+    "role_name": "Finance Auditor",
+    "desk_access": 1,
+    "disabled": 0
   }
 ]

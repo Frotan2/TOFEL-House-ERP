@@ -7,7 +7,8 @@ app_license = "MIT"
 required_apps = ["erpnext", "education", "foundation_security"]
 after_install = "toefl_house.install.after_install"
 after_migrate = "toefl_house.install.after_migrate"
-fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor"]]]}]
+fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor"]]]},
+            {"dt": "Custom Field", "filters": [["dt", "=", "Sales Invoice"], ["fieldname", "=", "th_placement_case"]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"
     for name in ("TH Placement Item Revision", "TH Placement Key Revision", "TH Placement Audit Event",
@@ -43,7 +44,12 @@ doc_events = {
         "validate": "toefl_house.enrollment.guard_course_enrollment",
     },
     "Sales Invoice": {
-        "validate": "toefl_house.enrollment.deny_premature_invoice",
+        # finance.guard_sales_invoice chains the enrollment slice's
+        # premature-billing guard first, then applies finance containment.
+        "validate": "toefl_house.finance.guard_sales_invoice",
+    },
+    "Fees": {
+        "validate": "toefl_house.finance.guard_fees",
     },
     "Student Group": {
         "validate": "toefl_house.teaching.guard_student_group",

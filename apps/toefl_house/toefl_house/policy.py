@@ -362,6 +362,25 @@ def validate_schedule_date(value):
     return parsed.isoformat()
 
 
+def validate_finance_dates(posting_date, due_date):
+    """Billing dates are ISO calendar dates; the due date cannot precede posting.
+
+    No fiscal-calendar or payment-term policy is invented here: tax rules and
+    terms stay native configuration supplied by the owner (R05 record).
+    """
+    out = []
+    for field, value in (("posting_date", posting_date), ("due_date", due_date)):
+        if not isinstance(value, str):
+            raise ValueError(f"{field} must be an ISO date string")
+        try:
+            out.append(datetime.strptime(value, "%Y-%m-%d").date())
+        except ValueError as exc:
+            raise ValueError(f"{field} must be YYYY-MM-DD") from exc
+    if out[1] < out[0]:
+        raise ValueError("due_date cannot precede posting_date")
+    return out[0].isoformat(), out[1].isoformat()
+
+
 def _normalize_time(value, field):
     if not isinstance(value, str) or not TIME_PATTERN.fullmatch(value):
         raise ValueError(f"{field} must be HH:MM or HH:MM:SS")
@@ -455,7 +474,7 @@ def can_read(kind, roles, actor, owner, status=None):
                              "Admission Approver", "Admission Auditor"})
     if kind in ("audit", "operation"):
         return bool(roles & {"Placement Auditor", "Admission Auditor", "Enrollment Auditor",
-                             "Teaching Auditor"})
+                             "Teaching Auditor", "Finance Auditor"})
     if "Placement Publisher" in roles:
         return True
     # Invigilator may operate the Digital session and read the operational
