@@ -76,6 +76,13 @@ Approval of a policy owner is acceptable delegation, **not resolution of missing
 
 ### R05 — When does the center charge, grant credit and refund?
 
+> **RESOLVED at framework level 2026-09-15** — see
+> [FINANCE-POLICY-APPROVAL.md](FINANCE-POLICY-APPROVAL.md) for the recorded
+> owner decisions (TOEFL House / Afghanistan / AFN; enrollment-generated
+> native billing; configuration-driven placement fee; native Pricing Rule
+> waivers). Refund/withdrawal terms remain owner policy deliverables; the
+> text below is retained as rationale/history.
+
 **Business choice:** payment clearance before participation versus installments/approved credit, and the learner's financial rights on changes. **Covers B07 and policy dependencies of A08/A10/A11.**
 
 - **Payment-first:** simpler clearance and lower collection exposure; less affordable/flexible for some learners. Any pre-invoice deposit must use legitimate native Customer advance semantics.

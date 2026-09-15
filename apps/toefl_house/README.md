@@ -1,4 +1,19 @@
-# TOEFL House Placement (closed), thin Admission, thin Enrollment, thin Teaching Operations
+# TOEFL House Placement (closed), thin Admission, thin Enrollment, thin Teaching Operations, thin Finance
+
+**Finance** is a thin slice over the native money authorities under the
+owner-approved R05/B07 framework (`docs/domain/FINANCE-POLICY-APPROVAL.md`):
+`issue_tuition_fees` bills one submitted Program Enrollment through the
+native Education `Fees` receivable from a Finance-configured `Fee
+Structure`; `issue_placement_fee` bills a placement case through a native
+`Sales Invoice` only when the configured native price-list rate is
+chargeable (zero/absent ⇒ denied; waivers are native `Pricing Rule`s).
+Rates are configuration, never code. Deny-by-default guards confine `Fees`
+and `Sales Invoice` to the receipted commands; the enrollment
+premature-billing guard stays chained in force. Roles: Finance Officer
+(commands only) and Finance Auditor (receipt/audit ledger only). No money
+master, ledger, price, tax, refund or payroll record is owned; ERPNext
+accounts remain the only money authority. Hosted qualification status: see
+`docs/domain/FINANCE-CLOSURE.md`. Do not start the next domain.
 
 **Teaching Operations (Scheduling & Attendance)** are thin commands over
 native Education authorities — Student Group roster (derived only from

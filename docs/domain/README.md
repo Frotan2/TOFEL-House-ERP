@@ -19,9 +19,13 @@ Program Enrollment is recorded in
 [ENROLLMENT-CLOSURE.md](ENROLLMENT-CLOSURE.md). Thin **Teaching Operations**
 (Scheduling & Attendance) over native Student Group / Course Schedule /
 Student Attendance — no new DocType — is recorded in
-[TEACHING-CLOSURE.md](TEACHING-CLOSURE.md). Assessment/progression (B04/B05),
-finance (B07) and payroll (A09) remain gated and unimplemented. Do not start
-the next domain. Production remains **REJECT**.
+[TEACHING-CLOSURE.md](TEACHING-CLOSURE.md). Thin **Finance** (tuition via
+native `Fees`, placement billing via native `Sales Invoice` with
+configuration-driven chargeability) under the owner-approved R05/B07
+framework ([FINANCE-POLICY-APPROVAL.md](FINANCE-POLICY-APPROVAL.md)) is
+recorded in [FINANCE-CLOSURE.md](FINANCE-CLOSURE.md). Assessment/progression
+(B04/B05 — owner-deferred) and payroll (A09) remain gated and unimplemented.
+Do not start the next domain. Production remains **REJECT**.
 
 ## Current placement revision
 

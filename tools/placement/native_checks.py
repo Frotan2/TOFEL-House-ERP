@@ -2375,6 +2375,7 @@ def main():
                 fs=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
                     program=cat['program'],academic_year=cat['academic_year'],
                     receivable_account=comp.default_receivable_account,
+                    income_account=comp.default_income_account,
                     cost_center=comp.cost_center,company='TOEFL House'))
                 fs.append('components',{'fees_category':'SYN-Tuition','amount':25000})
                 fs.insert()
@@ -2414,7 +2415,9 @@ def main():
                     year_start_date='2027-01-01',year_end_date='2027-12-31')).insert()
             fs2=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
                 program=cat['program'],academic_year='SYN-AY-2027',
-                receivable_account=fin['receivable'],cost_center=frappe.db.get_value('Company','TOEFL House','cost_center'),
+                receivable_account=fin['receivable'],
+                income_account=frappe.db.get_value('Company','TOEFL House','default_income_account'),
+                cost_center=frappe.db.get_value('Company','TOEFL House','cost_center'),
                 company='TOEFL House'))
             fs2.append('components',{'fees_category':'SYN-Tuition','amount':25000})
             fs2.insert()

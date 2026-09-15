@@ -26,7 +26,13 @@ Thin **Teaching Operations** (Scheduling & Attendance: native Student Group
 roster, native Course Schedule sessions, submitted native Student Attendance;
 no new DocType) is CLOSED / QUALIFIED (`6ba5663`, hosted run `34966681820`,
 483/483 native checks). See
-[TEACHING-CLOSURE.md](docs/domain/TEACHING-CLOSURE.md). Do not start the
+[TEACHING-CLOSURE.md](docs/domain/TEACHING-CLOSURE.md). Thin **Finance**
+(tuition via native `Fees` from submitted Program Enrollments; placement
+billing via native `Sales Invoice` with configuration-driven chargeability
+under the owner-approved R05/B07 framework — rates are Finance-configured
+native records, never code constants) is CLOSED / QUALIFIED — see
+[FINANCE-CLOSURE.md](docs/domain/FINANCE-CLOSURE.md). Academic assessment
+(B04/B05, owner-deferred) and payroll (A09) remain gated. Do not start the
 next domain. Do not deploy. Production remains **REJECT**.
 
 **Phase 3 domain architecture is ready for review:**

@@ -28,6 +28,7 @@ the only money authority.
 | Tuition receivable per enrollment | Native Education `Fees` (submitted; GL posting; `program_enrollment` required; native enrollment/student validation) | Thin idempotent `issue_tuition_fees` (receipt + audit); deny-by-default direct-write guard |
 | Price schedule | Native `Fee Structure` (program + academic year + components), configured by Finance | None — native master |
 | Placement chargeability | Native `Item Price` in selling `Price List`; zero/absent ⇒ not billable | Thin idempotent `issue_placement_fee`; Custom Field link `Sales Invoice.th_placement_case` |
+| Fee Structure income account | The pinned education `Fees` fetches `income_account` from `Fee Structure` but ships without the field | Custom Field `Fee Structure.income_account` (Link Account) restores the intended native configuration; Finance configures the value |
 | Waivers / discounts | Native `Pricing Rule` (applied natively by the invoice); native `Authorization Rule` remains the native limit authority | None |
 | Money-in | Native `Payment Entry` / `Payment Request` | None — native, role-restricted |
 | Company / currency | Company `TOEFL House` (Afghanistan, AFN), Fiscal Year, Standard chart of accounts | Fixtures only |
@@ -81,6 +82,18 @@ placement cases read-only).
     depend on wizard setup). **486/487** recorded checks passed. Fixed in
     `0976ab3` by pre-creating the sales item explicitly (`create_item`
     reuses existing items) and seeding the `Fee Component` item group.
+  - Run `34978842234` (commit `0976ab3`): **FAIL** —
+    `finance-tuition-happy-path` `OperationalError 1054: Unknown column
+    'income_account' in 'SELECT'`. **493/494** recorded checks passed.
+    Instrumented diagnostics (commits `2c104dc`, `6df13e7`, `d264faf`;
+    runs `34981365688`, `34983249731`, `34985144000`) localized the failure
+    to frappe `_validate_links` → `get_invalid_links` during `Fees.insert`:
+    the pinned education `Fees` doctype fetches `income_account` from
+    `Fee Structure`, but the pinned `Fee Structure` ships without that
+    field — a latent inconsistency in the pinned app itself. Fixed by
+    restoring the intended native configuration as a Custom Field
+    (`Fee Structure.income_account`, Link Account) and configuring it in
+    the fixture Fee Structures; link validation stays fully active.
   - Final qualification run: filled from actual check-run output below.
 
 ## 3. Boundary and remaining gates

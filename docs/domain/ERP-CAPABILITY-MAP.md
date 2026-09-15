@@ -228,8 +228,8 @@ person master.
 | Configuration only | Company, accounts, tax, currency, fee structures, payment terms — **blocked on B07**, not on missing software. |
 | Custom code | None for money. Domain operations may store **native document names** only. |
 | Must NOT rebuild | Custom cashbook/balance, parallel Fees producer, marking paid from a browser redirect, placement fee hidden as tuition. |
-| Status | Not implemented. Isolated foundation probes are not domain finance qualification. |
-| Dependencies | Native enrollment (later); B07; A13 on fee writers. |
+| Status | **CLOSED / QUALIFIED** (thin slice: receipted `issue_tuition_fees` over native Fees + `issue_placement_fee` over native Sales Invoice with configuration-driven chargeability; see [FINANCE-CLOSURE.md](FINANCE-CLOSURE.md)). Refund terms, tax configuration and payment gateways remain owner policy / deferred. |
+| Dependencies | B07 resolved at framework level ([FINANCE-POLICY-APPROVAL.md](FINANCE-POLICY-APPROVAL.md)); A13 containment on fee writers in the synthetic suite. |
 
 ### 3.10 HR — **NATIVE**
 
@@ -374,19 +374,21 @@ Blocked or conditional gates that **do not** stop a thin Admission *design* but 
 
 **Closed thin slices (in dependency order):** Admission
 ([ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md)) → Enrollment
-([ENROLLMENT-CLOSURE.md](ENROLLMENT-CLOSURE.md)) → **Teaching Operations —
-Scheduling & Attendance** ([TEACHING-CLOSURE.md](TEACHING-CLOSURE.md)):
+([ENROLLMENT-CLOSURE.md](ENROLLMENT-CLOSURE.md)) → Teaching Operations —
+Scheduling & Attendance ([TEACHING-CLOSURE.md](TEACHING-CLOSURE.md)):
 native Student Group roster from submitted Program Enrollments, native Course
 Schedule sessions with serialized native overlap validation, submitted native
-Student Attendance. No new DocType; assessment, finance and payroll untouched.
+Student Attendance → **Finance — tuition & placement billing**
+([FINANCE-CLOSURE.md](FINANCE-CLOSURE.md)): native `Fees` tuition receivable
+from submitted Program Enrollments and configuration-driven native
+`Sales Invoice` placement billing under the owner-approved R05/B07 framework
+([FINANCE-POLICY-APPROVAL.md](FINANCE-POLICY-APPROVAL.md)). No money master
+was cloned; ERPNext accounts remain the only money authority.
 
 **No further domain may start without its business gate resolved.** The
-remaining lifecycle domains are all gated, and none may be unblocked by
+remaining lifecycle domains are gated, and none may be unblocked by
 inventing values:
 
-- **Finance / tuition invoicing (P3.6, A08 DECIDED route):** requires the B07
-  finance policy (legal entity, jurisdiction, currency/tax/fiscal rules,
-  prices, deposit/installment/credit limits, refund terms). Not invented here.
 - **Academic assessment / progression:** requires approved B04/B05 grading,
   weights, pass/completion and correction rules; placement thresholds cannot
   substitute.
