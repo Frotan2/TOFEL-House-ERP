@@ -800,3 +800,28 @@ def review_attempt(request_key, attempt, expected_version):
 
     return _execute("review_attempt", request_key,
                     {"attempt": attempt, "expected_version": expected_version}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def finalize_attempt(request_key, attempt, expected_version):
+    def work(actor):
+        doc = _locked_session(attempt, expected_version)
+        if doc.mode != "Digital":
+            raise frappe.ValidationError("Only digital independent finalization is implemented in this increment")
+        if doc.status != "Review":
+            raise frappe.ValidationError("Attempt is not reviewed for finalization")
+        scored_by = frappe.db.get_value(SCORE, {"attempt": doc.name}, "scored_by")
+        if not scored_by:
+            raise frappe.ValidationError("Attempt has no score to finalize")
+        if actor == scored_by:
+            raise frappe.PermissionError("Scorer cannot independently finalize this attempt")
+        if actor == doc.reviewed_by:
+            raise frappe.PermissionError("Reviewer cannot independently finalize this attempt")
+        finalized_at = _now()
+        _advance(doc, "Finalized", finalized_by=actor, finalized_at=finalized_at)
+        result = {"attempt": doc.name, "status": doc.status, "version": doc.version,
+                  "finalized_by": actor, "finalized_at": _iso(finalized_at)}
+        return result, dict(target=doc.name, after_hash=digest([doc.name, "Finalized", actor]))
+
+    return _execute("finalize_attempt", request_key,
+                    {"attempt": attempt, "expected_version": expected_version}, work)

@@ -45,6 +45,11 @@ INC6_AUTHOR_ONLY_CHECKS = (
     "http-review-wrong-role-denied",
     "http-review-other-role-read-denied",
 )
+INC7_AUTHOR_ONLY_CHECKS = (
+    "finalize-author-denied",
+    "http-finalize-wrong-role-denied",
+    "http-finalize-other-role-read-denied",
+)
 
 
 def _kind_roles():
@@ -111,6 +116,10 @@ class Increment3ActorGuardTests(unittest.TestCase):
             self.src,
             r"'reviewer'\s*:\s*\[\s*'Placement Reviewer'\s*\]",
         )
+        self.assertRegex(
+            self.src,
+            r"'reviewer2'\s*:\s*\[\s*'Placement Reviewer'\s*\]",
+        )
 
     def test_operational_commands_are_publisher_without_extra_sod(self):
         roles = _kind_roles()
@@ -122,10 +131,12 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertEqual(roles["seal_attempt"], "Placement Invigilator")
         self.assertEqual(roles["score_attempt"], "Placement Assessor")
         self.assertEqual(roles["review_attempt"], "Placement Reviewer")
+        self.assertEqual(roles["finalize_attempt"], "Placement Reviewer")
 
     def test_inc3_author_denials_use_author_only_fixtures(self):
         for name in (INC3_AUTHOR_ONLY_CHECKS + INC4_AUTHOR_ONLY_CHECKS
-                     + INC5_AUTHOR_ONLY_CHECKS + INC6_AUTHOR_ONLY_CHECKS):
+                     + INC5_AUTHOR_ONLY_CHECKS + INC6_AUTHOR_ONLY_CHECKS
+                     + INC7_AUTHOR_ONLY_CHECKS):
             with self.subTest(check=name):
                 body = _check_call_source(self.src, name)
                 self.assertNotIn("'%s'" % DUAL_ROLE, body.replace("check('%s'" % name, ""))
@@ -267,6 +278,7 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertIn("'invigilator'", blob)
         self.assertIn("'assessor'", blob)
         self.assertIn("'reviewer'", blob)
+        self.assertIn("'reviewer2'", blob)
 
     def test_http_session_keys_match_whitelist_signature(self):
         api_src = (ROOT / "apps/toefl_house/toefl_house/api.py").read_text(encoding="utf-8")

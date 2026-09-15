@@ -81,8 +81,8 @@ class FrozenRecord(ProtectedRecord):
 
 class AttemptRecord(ProtectedRecord):
     """Attempt identity is frozen at allocation; status moves only
-    Allocated → Verified → In Progress → Sealed → Marking → Review with a
-    version CAS and one-way clock fields."""
+    Allocated → Verified → In Progress → Sealed → Marking → Review →
+    Finalized with a version CAS and one-way clock fields."""
 
     IDENTITY = (
         "case_name", "ordinal", "subject", "blueprint", "blueprint_version",
@@ -92,6 +92,7 @@ class AttemptRecord(ProtectedRecord):
     CLOCKS = (
         "verified_by", "verified_at", "started_at", "deadline_at",
         "sealed_at", "seal_reason", "reviewed_by", "reviewed_at",
+        "finalized_by", "finalized_at",
     )
 
     def validate(self):
@@ -126,6 +127,8 @@ class AttemptRecord(ProtectedRecord):
                 raise frappe.ValidationError("Unsupported seal reason")
         if self.status == "Review" and not (self.reviewed_by and self.reviewed_at):
             raise frappe.ValidationError("Review actor and time required")
+        if self.status == "Finalized" and not (self.finalized_by and self.finalized_at):
+            raise frappe.ValidationError("Finalize actor and time required")
 
 
 class ManifestRecord(FrozenRecord):

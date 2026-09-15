@@ -219,13 +219,14 @@ def project_form(form, catalog):
     }
 
 
-ATTEMPT_STATUSES = ("Allocated", "Verified", "In Progress", "Sealed", "Marking", "Review")
+ATTEMPT_STATUSES = ("Allocated", "Verified", "In Progress", "Sealed", "Marking", "Review", "Finalized")
 ATTEMPT_TRANSITIONS = {
     ("Allocated", "Verified"),
     ("Verified", "In Progress"),
     ("In Progress", "Sealed"),
     ("Sealed", "Marking"),
     ("Marking", "Review"),
+    ("Review", "Finalized"),
 }
 
 CONFIG_VALIDATORS = {"blueprint": validate_blueprint, "policy": validate_policy}

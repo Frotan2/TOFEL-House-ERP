@@ -28,6 +28,8 @@
     "seal_reason",
     "reviewed_by",
     "reviewed_at",
+    "finalized_by",
+    "finalized_at",
     "synthetic"
   ],
   "fields": [
@@ -99,7 +101,7 @@
       "label": "Status",
       "fieldtype": "Select",
       "reqd": 1,
-      "options": "Allocated\nVerified\nIn Progress\nSealed\nMarking\nReview"
+      "options": "Allocated\nVerified\nIn Progress\nSealed\nMarking\nReview\nFinalized"
     },
     {
       "fieldname": "version",
@@ -153,6 +155,16 @@
     {
       "fieldname": "reviewed_at",
       "label": "Reviewed At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "finalized_by",
+      "label": "Finalized By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "finalized_at",
+      "label": "Finalized At",
       "fieldtype": "Datetime"
     },
     {

@@ -18,7 +18,7 @@ def main():
     from toefl_house import api
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
-    report={'scope':'Synthetic content-governance, blueprint/policy configuration, allocation, staff-supervised digital delivery, objective scoring and independent review increments (1-6); not full T01-T20','status':'running','checks':[],
+    report={'scope':'Synthetic content-governance, blueprint/policy configuration, allocation, staff-supervised digital delivery, objective scoring, independent review and finalization increments (1-7); not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
@@ -26,6 +26,7 @@ def main():
            'invigilator':'synthetic-invigilator@example.test',
            'assessor':'synthetic-assessor@example.test',
            'reviewer':'synthetic-reviewer@example.test',
+           'reviewer2':'synthetic-reviewer2@example.test',
            'candidate':'synthetic-candidate@example.test','candidate2':'synthetic-candidate2@example.test',
            'candidate3':'synthetic-candidate3@example.test','candidate4':'synthetic-candidate4@example.test'}
     item=None
@@ -84,6 +85,7 @@ def main():
                          'invigilator':['Placement Invigilator'],
                          'assessor':['Placement Assessor'],
                          'reviewer':['Placement Reviewer'],
+                         'reviewer2':['Placement Reviewer'],
                          'candidate':[],'candidate2':[],'candidate3':[],'candidate4':[]}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
@@ -935,6 +937,91 @@ def main():
             return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
         check('review-whole-command-transient-recovery',lambda:review_transient(False))
         check('review-retry-exhaustion-bounded',lambda:review_transient(True))
+
+        # --- Increment 7: independent finalization of reviewed Digital attempts ---
+        check('finalize-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.finalize_attempt('finalize_pub_key_00001',alloc2['attempt'],6))))
+        check('finalize-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.finalize_attempt('finalize_auth_key_0001',alloc2['attempt'],6))))
+        check('finalize-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.finalize_attempt('finalize_out_key_00001',alloc2['attempt'],6))))
+        check('finalize-invigilator-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.finalize_attempt('finalize_inv_key_0001',alloc2['attempt'],6))))
+        check('finalize-assessor-denied',lambda:denied(lambda:as_user('assessor',lambda:api.finalize_attempt('finalize_as_key_000001',alloc2['attempt'],6))))
+        check('finalize-reviewer-denied',lambda:denied(lambda:as_user('reviewer',lambda:api.finalize_attempt('finalize_self_key_0001',alloc2['attempt'],6))))
+        check('finalize-before-review-denied',lambda:denied(lambda:as_user('reviewer2',lambda:api.finalize_attempt('finalize_before_rev_001',alloc3['attempt'],4))))
+        def finalize_scorer_union_denied():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.add_roles('Placement Reviewer');frappe.db.commit();frappe.clear_cache(user=u.name)
+            try:return denied(lambda:as_user('assessor',lambda:api.finalize_attempt('finalize_scorer_key_001',alloc4['attempt'],6)))
+            finally:
+                frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.remove_roles('Placement Reviewer');frappe.db.commit();frappe.clear_cache(user=u.name)
+        check('finalize-scorer-cannot-finalize',finalize_scorer_union_denied)
+        finalized=check('finalize-happy-path',lambda:as_user('reviewer2',lambda:api.finalize_attempt('finalize_attempt_key_001',alloc2['attempt'],6)))
+        assert finalized['status']=='Finalized' and finalized['version']==7
+        assert finalized['finalized_by']==users['reviewer2']
+        assert 'recommendation' not in finalized and 'percent' not in finalized and 'cutoff' not in finalized
+        def finalize_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('reviewer2',lambda:api.finalize_attempt('finalize_attempt_key_001',alloc2['attempt'],6))
+            assert value==finalized and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_audit':True}
+        check('finalize-idempotent-replay',finalize_replay)
+        check('finalize-stale-version-denied',lambda:denied(lambda:as_user('reviewer2',lambda:api.finalize_attempt('finalize_stale_key_0001',alloc2['attempt'],6))))
+        check('finalize-second-denied',lambda:denied(lambda:as_user('reviewer2',lambda:api.finalize_attempt('finalize_second_key_001',alloc2['attempt'],7))))
+        def finalize_reads():
+            frappe.set_user(users['reviewer2'])
+            for dt in (api.CASE,api.ATTEMPT,api.RESPONSE,api.SCORE):
+                assert frappe.get_list(dt),dt
+            assert cannot_list(api.MANIFEST) and cannot_list(api.GUARD) and cannot_list(api.KEY)
+            frappe.set_user(users['invigilator']);assert cannot_list(api.SCORE)
+            frappe.set_user(users['second_author']);assert cannot_list(api.SCORE) and cannot_list(api.ATTEMPT)
+            return {'finalizer_no_manifest_or_key':True}
+        check('finalize-role-and-list-parity',finalize_reads)
+        def finalize_generic_write():
+            frappe.set_user(users['reviewer2']);doc=frappe.get_doc(api.ATTEMPT,alloc2['attempt']);doc.finalized_by='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('finalize-ignore-permissions-does-not-bypass-controller',finalize_generic_write)
+        check('finalize-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.ATTEMPT,alloc2['attempt']).db_set('finalized_by','forged@example.test')))
+        def finalize_rollback_proof():
+            frappe.set_user(users['reviewer2']);frappe.db.savepoint('finalize_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.SCORE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic finalize audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.finalize_attempt('finalize_atomic_key_001',alloc4['attempt'],6)
+            except RuntimeError:frappe.db.rollback(save_point='finalize_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            assert frappe.get_doc(api.ATTEMPT,alloc4['attempt']).status=='Review'
+            return {'real_database_rollback':True,'injected_boundary':'finalize audit'}
+        check('finalize-atomic-finalize-rollback',finalize_rollback_proof)
+        def finalize_transient(exhaust=False):
+            frappe.set_user(users['reviewer2']);frappe.db.commit()
+            if exhaust:
+                as_user('reviewer',lambda:api.review_attempt('finalize_review_alloc_01',alloc['attempt'],5));frappe.db.commit()
+                frappe.set_user(users['reviewer2'])
+                target,version,key=alloc['attempt'],6,'finalize_exhaust_key_001'
+            else:
+                target,version,key=alloc4['attempt'],6,'finalize_retry_key_0001'
+            calls=[];original=api._now
+            def flaky():
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic finalize deadlock')
+                return original()
+            with patch.object(api,'_now',side_effect=flaky):
+                if exhaust:
+                    try:api.finalize_attempt(key,target,version)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.finalize_attempt(key,target,version)
+            assert len(calls)==(4 if exhaust else 2)
+            if exhaust:
+                assert frappe.get_doc(api.ATTEMPT,target).status=='Review'
+                assert not frappe.db.get_value(api.ATTEMPT,target,'finalized_by')
+            else:
+                assert result['status']=='Finalized' and frappe.db.get_value(api.ATTEMPT,target,'finalized_by')==users['reviewer2']
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('finalize-whole-command-transient-recovery',lambda:finalize_transient(False))
+        check('finalize-retry-exhaustion-bounded',lambda:finalize_transient(True))
         frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
         def score_second_site():
             assert frappe.db.count(api.SCORE)==0 and frappe.db.count(api.RESPONSE)==0
@@ -944,6 +1031,10 @@ def main():
             assert frappe.db.count(api.ATTEMPT)==0
             return {'review_absent_on_second_site':True}
         check('second-site-no-first-site-review-record',review_second_site)
+        def finalize_second_site():
+            assert frappe.db.count(api.ATTEMPT)==0
+            return {'finalize_absent_on_second_site':True}
+        check('second-site-no-first-site-finalize-record',finalize_second_site)
         frappe.destroy();connect('placement-test.localhost')
         base='http://127.0.0.1:18000'
         for _ in range(60):
@@ -962,7 +1053,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def http_denied(response,csrf=False):
             assert response.status_code in (400,403,404,405,409,417),f'Unexpected HTTP {response.status_code}'
@@ -1228,6 +1319,44 @@ def main():
             assert frappe.get_doc(api.ATTEMPT,httpalloc['attempt']).status=='Review'
             return {'http_statuses':[200,200],'one_review':True}
         check('http-review-concurrent-idempotency',http_review_idem)
+
+        # --- Increment 7 over HTTP: finalize_attempt, CSRF, containment, races, revocation ---
+        http_finalize_payload=dict(request_key='http_finalize_key_0001',attempt=httpalloc['attempt'],expected_version=6)
+        def http_finalize():
+            r=post('reviewer2','finalize_attempt',http_finalize_payload);assert r.status_code==200,f'finalize HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpfinalized=check('http-finalize-positive',http_finalize)
+        assert httpfinalized['status']=='Finalized' and httpfinalized['version']==7
+        assert 'recommendation' not in httpfinalized and 'percent' not in httpfinalized
+        check('http-finalize-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.finalize_attempt',headers={'Host':'placement-test.localhost'},json=http_finalize_payload,timeout=30)))
+        check('http-finalize-unrelated-role-denied',lambda:http_denied(post('outsider','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_out_0001'))))
+        check('http-finalize-wrong-role-denied',lambda:http_denied(post('second_author','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_author_01'))))
+        check('http-finalize-invigilator-denied',lambda:http_denied(post('invigilator','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_inv_0001'))))
+        check('http-finalize-publisher-denied',lambda:http_denied(post('publisher','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_pub_0001'))))
+        check('http-finalize-assessor-denied',lambda:http_denied(post('assessor','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_as_00001'))))
+        check('http-finalize-reviewer-denied',lambda:http_denied(post('reviewer','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_self_0001'))))
+        check('http-finalize-get-cannot-mutate',lambda:http_denied(sessions['reviewer2'].get(base+'/api/method/toefl_house.api.finalize_attempt',params={'request_key':'http_finalize_get_0001'},timeout=30)))
+        def http_finalize_csrf():
+            s=sessions['reviewer2'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.finalize_attempt',json=dict(http_finalize_payload,request_key='http_finalize_csrf_0001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-finalize-csrf-negative-with-positive-control',http_finalize_csrf)
+        check('http-finalize-direct-crud-mutation-denied',lambda:http_denied(sessions['reviewer2'].put(attempt_url,json={'finalized_by':'forged@example.test'},timeout=30)))
+        check('http-finalize-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(score_url,timeout=30)))
+        def http_finalize_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['reviewer2'].headers);s.cookies.update(sessions['reviewer2'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.finalize_attempt',json=http_finalize_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.get_doc(api.ATTEMPT,httpalloc['attempt']).status=='Finalized'
+            return {'http_statuses':[200,200],'one_finalize':True}
+        check('http-finalize-concurrent-idempotency',http_finalize_idem)
+        def finalize_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['reviewer2']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('reviewer2','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_revoked_01')))
+        check('http-finalize-revoked-reviewer-old-session-denied',finalize_revoke)
         def review_revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['reviewer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(post('reviewer','review_attempt',dict(http_review_payload,request_key='http_review_revoked_0001')))

@@ -11,14 +11,15 @@ implemented in vertical increments inside the owned `toefl_house` app —
 increment 1 (governed content), increment 2 (versioned blueprint/policy),
 increment 3 (allocation / frozen form), increment 4 (staff-supervised Digital
 verify/deliver/save/seal with server clocks), increment 5 (objective scoring
-of sealed Digital attempts; missing is not zero) and increment 6 (independent
-review of marked Digital attempts; reviewer is not the scorer; no release).
+of sealed Digital attempts; missing is not zero), increment 6 (independent
+review of marked Digital attempts; reviewer is not the scorer) and increment 7
+(independent finalization; Finalized is not released).
 All operations fail closed outside
 the isolated synthetic test sites; fixtures are explicitly non-operational;
 candidate portal, Subject Access, audio, physical packets, release and
 retention remain unimplemented and disabled. See the
 [app boundary](apps/toefl_house/README.md) and the
-[increment 6 implementation record](docs/domain/PLACEMENT-INCREMENT-6.md).
+[increment 7 implementation record](docs/domain/PLACEMENT-INCREMENT-7.md).
 Production approval is not implied; F01–F05 remain closed; owner artifacts P1–P5
 remain prerequisites for any operational use.
 
