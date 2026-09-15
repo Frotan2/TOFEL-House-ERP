@@ -2391,8 +2391,6 @@ def main():
                     'placement_item':'SYN-PLACEMENT-FEE','fee_structure':fs_name,
                     'receivable':comp.default_receivable_account,'payer':payers['one'],
                     'payer_waiver':payers['two'],'before':fin_before}
-        fin=check('finance-native-catalog',traced(finance_catalog))
-        CASE9='teaching_pipe_a_case0000001'
         def traced(fn):
             # Diagnostics: name the exact statement of a failure in one hosted
             # cycle instead of guessing (job logs are unreachable; only the
@@ -2404,6 +2402,8 @@ def main():
                     frames=" <- ".join(f.filename.split('/')[-1]+':'+str(f.lineno)+':'+f.name for f in _tb.extract_tb(exc.__traceback__)[-5:])
                     raise AssertionError(f'{type(exc).__name__}: {exc} @ {frames}') from exc
             return wrapped
+        fin=check('finance-native-catalog',traced(finance_catalog))
+        CASE9='teaching_pipe_a_case0000001'
         check('finance-tuition-unknown-enrollment-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_pe_0000000001','NO-SUCH-PE',fin['fee_structure'],'2026-09-01','2026-09-30'))))
         check('finance-tuition-bad-window-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_window_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-30','2026-09-01'))))
         def wrong_year_structure():
