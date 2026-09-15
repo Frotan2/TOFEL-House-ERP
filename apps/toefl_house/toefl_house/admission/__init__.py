@@ -418,7 +418,15 @@ def convert_applicant(request_key, name, expected_version):
             naming_series="EDU-STU-.YYYY.-",
             enabled=1,
         ))
-        student.insert(ignore_permissions=True)
+        # Native Student.on_update creates a Customer without ignore_permissions,
+        # and Link checks still require Student Applicant read. This command is
+        # already authorized; do not grant Approver Customer/Applicant CRUD.
+        previous_ignore = frappe.flags.ignore_permissions
+        frappe.flags.ignore_permissions = True
+        try:
+            student.insert(ignore_permissions=True)
+        finally:
+            frappe.flags.ignore_permissions = previous_ignore
         if frappe.db.exists("Program Enrollment", {"student": student.name}):
             raise frappe.ValidationError("Student conversion must not create Program Enrollment")
         customer = student.customer or frappe.db.get_value(STUDENT, student.name, "customer")
