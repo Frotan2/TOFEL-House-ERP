@@ -96,6 +96,11 @@
       "role": "Enrollment Auditor",
       "read": 1,
       "select": 1
+    },
+{
+      "role": "Teaching Auditor",
+      "read": 1,
+      "select": 1
     }
   ],
   "sort_field": "creation",
