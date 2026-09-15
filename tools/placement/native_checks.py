@@ -2508,7 +2508,7 @@ def main():
             rule=frappe.get_doc(dict(doctype='Pricing Rule',title='SYN Placement Waiver',
                 apply_on='Item Code',items=[dict(item_code='SYN-PLACEMENT-FEE')],
                 rate_or_discount='Discount Percentage',discount_percentage=100,
-                apply_discount_on='Rate',
+                apply_discount_on='Grand Total',
                 price_or_product_discount='Price',selling=1,
                 applicable_for='Customer',customer=fin['payer_waiver'],
                 company='TOEFL House')).insert()
