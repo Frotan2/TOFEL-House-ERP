@@ -82,13 +82,19 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
         if frappe.db.exists(FEES, {"program_enrollment": pe_name,
                                    "fee_structure": fs_name, "docstatus": ("!=", 2)}):
             raise frappe.ValidationError("Tuition is already billed for this enrollment")
+        company = fs.company or COMPANY
+        # The framework prefills an empty `currency` field from the system
+        # default; set the company's currency explicitly so the receivable is
+        # never denominated in the wrong currency.
+        company_currency = frappe.get_cached_value("Company", company, "default_currency")
         student_name = frappe.db.get_value("Student", pe.student, "student_name")
         fees = frappe.get_doc(dict(
             doctype=FEES, naming_series="EDU-FEE-.YYYY.-",
             student=pe.student, student_name=student_name or pe.student,
             program_enrollment=pe_name, program=pe.program,
             academic_year=pe.academic_year,
-            company=fs.company or COMPANY, posting_date=posting, due_date=due,
+            company=company, currency=company_currency,
+            posting_date=posting, due_date=due,
             fee_structure=fs_name, receivable_account=fs.receivable_account,
             components=[dict(fees_category=c.fees_category, amount=c.amount)
                         for c in components]))
@@ -150,6 +156,7 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             raise frappe.ValidationError("Placement fee is already billed for this case")
         invoice = frappe.get_doc(dict(
             doctype=INVOICE, customer=customer_name, company=COMPANY,
+            currency=frappe.get_cached_value("Company", COMPANY, "default_currency"),
             posting_date=posting, due_date=due, set_posting_time=0,
             is_pos=0, th_placement_case=case_name,
             selling_price_list=PRICE_LIST,
