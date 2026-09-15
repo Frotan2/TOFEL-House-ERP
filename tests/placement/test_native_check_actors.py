@@ -176,6 +176,18 @@ class Increment3ActorGuardTests(unittest.TestCase):
             data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
             self.assertIn("Placement Invigilator",
                           {row["role"] for row in data["permissions"]}, folder)
+        # Assessor reads the operational rows needed to mark; not the seed
+        # or the unused exposure ledger. Do not grant Manifest/Key/Guard.
+        for folder in ("th_placement_case", "th_placement_attempt",
+                       "th_placement_response"):
+            data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
+            self.assertIn("Placement Assessor",
+                          {row["role"] for row in data["permissions"]}, folder)
+        for folder in ("th_placement_form_manifest", "th_placement_exposure",
+                       "th_placement_key_revision"):
+            data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
+            self.assertNotIn("Placement Assessor",
+                             {row["role"] for row in data["permissions"]}, folder)
 
     def test_alloc_read_parity_treats_permissionerror_as_denial(self):
         body = _function_source(self.src, "cannot_list") + _function_source(self.src, "cannot_read_doc")
