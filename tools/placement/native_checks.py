@@ -2324,7 +2324,7 @@ def main():
                     country='Afghanistan',default_currency='AFN',valuation_method='FIFO',
                     enable_perpetual_inventory=0)).insert()
             comp=frappe.get_doc('Company','TOEFL House')
-            assert comp.default_receivable_account and comp.default_income_account and comp.cost_center
+            assert comp.default_receivable_account and comp.default_income_account and comp.cost_center,(comp.default_receivable_account,comp.default_income_account,comp.cost_center)
             # UOM / Item Group / Customer Group / Territory masters are seeded
             # by the ERPNext setup wizard; recreate the identical records on
             # this wizard-less site (no business meaning, catalog scaffolding).
@@ -2428,10 +2428,10 @@ def main():
         check('finance-tuition-scheduler-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:fin_m.issue_tuition_fees('fin_sch_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
         def tuition_positive():
             value=as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_a_000001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))
-            assert value['grand_total']==25000.0 and value['outstanding_amount']==25000.0 and value['currency']=='AFN'
+            assert value['grand_total']==25000.0 and value['outstanding_amount']==25000.0 and value['currency']=='AFN',value
             row=frappe.db.get_value('Fees',value['fees'],['docstatus','program_enrollment','fee_structure'],as_dict=True)
-            assert row.docstatus==1 and row.program_enrollment==second['program_enrollment'] and row.fee_structure==fin['fee_structure']
-            assert frappe.db.count('GL Entry',{'voucher_no':value['fees'],'voucher_type':'Fees'})>0
+            assert row.docstatus==1 and row.program_enrollment==second['program_enrollment'] and row.fee_structure==fin['fee_structure'],(row,value)
+            assert frappe.db.count('GL Entry',{'voucher_no':value['fees'],'voucher_type':'Fees'})>0,value
             return value
         fees1=check('finance-tuition-happy-path',traced(tuition_positive))
         def tuition_replay():
@@ -2478,9 +2478,9 @@ def main():
             frappe.set_user('Administrator')
             frappe.db.set_value('Item Price',{'item_code':'SYN-PLACEMENT-FEE','price_list':'TOEFL House Standard'},'price_list_rate',4000)
             value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_a_00000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))
-            assert value['configured_rate']==4000.0 and value['grand_total']==4000.0 and value['currency']=='AFN'
+            assert value['configured_rate']==4000.0 and value['grand_total']==4000.0 and value['currency']=='AFN',value
             row=frappe.db.get_value('Sales Invoice',value['sales_invoice'],['docstatus','customer','th_placement_case','company'],as_dict=True)
-            assert row.docstatus==1 and row.customer==fin['payer'] and row.th_placement_case==CASE9 and row.company=='TOEFL House'
+            assert row.docstatus==1 and row.customer==fin['payer'] and row.th_placement_case==CASE9 and row.company=='TOEFL House',(row,value)
             assert frappe.db.count('GL Entry',{'voucher_no':value['sales_invoice'],'voucher_type':'Sales Invoice'})>0
             return value
         inv1=check('finance-placement-happy-path',traced(placement_positive))
@@ -2511,8 +2511,8 @@ def main():
                 company='TOEFL House')).insert()
             value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_waiver_01','adm_pipe_w_case0000001',fin['payer_waiver'],'2026-09-01','2026-09-30'))
             line_disc=frappe.db.get_value('Sales Invoice Item',{'parent':value['sales_invoice']},'discount_amount')
-            assert value['configured_rate']==4000.0 and float(line_disc)==4000.0
-            assert value['net_total']==0.0 and value['grand_total']==0.0
+            assert value['configured_rate']==4000.0 and float(line_disc)==4000.0,(value,line_disc)
+            assert value['net_total']==0.0 and value['grand_total']==0.0,value
             return {'pricing_rule':rule.name,'waived_grand_total':value['grand_total'],
                     'line_discount':float(line_disc),'sales_invoice':value['sales_invoice']}
         waiver=check('finance-placement-native-pricing-rule-waiver',traced(waiver_flow))
@@ -2536,7 +2536,7 @@ def main():
             r=fpost('finance_officer','issue_tuition_fees',http_fin_payload)
             assert r.status_code==200,f'tuition HTTP {r.status_code} {r.text[:200]}'
             value=r.json()['message']
-            assert value['grand_total']==25000.0 and value['currency']=='AFN'
+            assert value['grand_total']==25000.0 and value['currency']=='AFN',value
             return value
         httpfees=check('http-finance-tuition-positive',http_tuition)
         check('http-finance-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.finance.issue_tuition_fees',headers={'Host':'placement-test.localhost'},json=http_fin_payload,timeout=30)))
@@ -2557,7 +2557,7 @@ def main():
             r=fpost('finance_officer','issue_placement_fee',dict(request_key='http_fin_place_00001',case='adm_pipe_r_case0000001',customer=fin['payer'],posting_date='2026-09-02',due_date='2026-10-02'))
             assert r.status_code==200,f'placement fee HTTP {r.status_code} {r.text[:200]}'
             value=r.json()['message']
-            assert value['grand_total']==4000.0 and value['currency']=='AFN'
+            assert value['grand_total']==4000.0 and value['currency']=='AFN',value
             return value
         httpinv=check('http-finance-placement-positive',http_placement)
         def finance_officer_revoke():
