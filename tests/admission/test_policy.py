@@ -1,4 +1,5 @@
 """Pure local unit checks for thin admission policy. Not native Frappe qualification."""
+import ast
 from pathlib import Path
 import sys
 import unittest
@@ -6,6 +7,9 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps/toefl_house"))
 from toefl_house.policy import (ADMISSION_OUTCOMES, ADMISSION_TRANSITIONS, can_read,
                                 is_admission_transition, validate_admission_text)
+
+ROOT = Path(__file__).resolve().parents[2]
+ADMISSION = ROOT / "apps/toefl_house/toefl_house/admission/__init__.py"
 
 
 class AdmissionTransitionTests(unittest.TestCase):
@@ -58,6 +62,33 @@ class AdmissionReadBoundaryTests(unittest.TestCase):
         self.assertTrue(can_read("audit", ["Admission Auditor"], "a", "someone"))
         self.assertTrue(can_read("operation", ["Admission Auditor"], "a", "someone"))
         self.assertFalse(can_read("admission_decision", ["Placement Auditor"], "a", "someone"))
+
+
+class NestedWorkScopeTests(unittest.TestCase):
+    def test_work_does_not_assign_enclosing_parameters(self):
+        tree = ast.parse(ADMISSION.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            params = {arg.arg for arg in node.args.args}
+            for child in node.body:
+                if not (isinstance(child, ast.FunctionDef) and child.name == "work"):
+                    continue
+                assigned = set()
+                for inner in ast.walk(child):
+                    if isinstance(inner, ast.Assign):
+                        for target in inner.targets:
+                            if isinstance(target, ast.Name):
+                                assigned.add(target.id)
+                    if isinstance(inner, ast.AnnAssign) and isinstance(inner.target, ast.Name):
+                        assigned.add(inner.target.id)
+                overlap = sorted(assigned & params)
+                self.assertEqual(
+                    overlap,
+                    [],
+                    "%s.work assigns enclosing parameters %s (UnboundLocalError)"
+                    % (node.name, overlap),
+                )
 
 
 if __name__ == "__main__":

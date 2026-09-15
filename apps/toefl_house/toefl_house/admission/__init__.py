@@ -139,11 +139,11 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
         first = _name(first_name, "First name")
         if not first.startswith("SYNTHETIC"):
             raise frappe.ValidationError("Only explicitly synthetic applicant names are accepted")
-        program = _name(program, "Program")
-        academic_year = _name(academic_year, "Academic Year")
-        if not frappe.db.exists(PROGRAM, program):
+        program_name = _name(program, "Program")
+        year_name = _name(academic_year, "Academic Year")
+        if not frappe.db.exists(PROGRAM, program_name):
             raise frappe.ValidationError("Unknown program")
-        if not frappe.db.exists(YEAR, academic_year):
+        if not frappe.db.exists(YEAR, year_name):
             raise frappe.ValidationError("Unknown academic year")
         if frappe.db.exists(APPLICANT, {"student_email_id": subject}):
             raise frappe.ValidationError("Applicant already exists for this placement subject")
@@ -152,8 +152,8 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             first_name=first,
             last_name="Applicant",
             student_email_id=subject,
-            program=program,
-            academic_year=academic_year,
+            program=program_name,
+            academic_year=year_name,
             naming_series="EDU-APP-.YYYY.-",
             paid=0,
         ))
@@ -165,13 +165,13 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
         result = {
             "name": applicant.name,
             "student_email_id": subject,
-            "program": program,
-            "academic_year": academic_year,
+            "program": program_name,
+            "academic_year": year_name,
             "application_status": applicant.application_status or "Applied",
             "paid": int(applicant.paid or 0),
             "placement_decision": row.name,
         }
-        return result, dict(target=applicant.name, after_hash=digest([applicant.name, subject, program]))
+        return result, dict(target=applicant.name, after_hash=digest([applicant.name, subject, program_name]))
 
     return _execute("record_applicant", request_key,
                     {"placement_decision": placement_decision, "first_name": first_name,
@@ -201,12 +201,11 @@ def create_admission(request_key, student_applicant, placement_decision, existin
         subject = _placement_subject(row)
         if (applicant.student_email_id or "") != subject:
             raise frappe.ValidationError("Placement subject does not match the native applicant")
+        returning = None
         if existing_student:
-            existing_student = _name(existing_student, "Existing Student")
-            if not frappe.db.exists(STUDENT, existing_student):
+            returning = _name(existing_student, "Existing Student")
+            if not frappe.db.exists(STUDENT, returning):
                 raise frappe.ValidationError("Existing Student not found")
-        else:
-            existing_student = None
         if _active_duplicate(applicant_name):
             raise frappe.ValidationError("Applicant already has an active admission decision")
         linked = frappe.db.sql(
@@ -219,7 +218,7 @@ def create_admission(request_key, student_applicant, placement_decision, existin
             doctype=DECISION_DT, student_applicant=applicant_name,
             program=applicant.program, academic_year=applicant.academic_year,
             academic_term=applicant.get("academic_term") or None,
-            placement_decision=row.name, existing_student=existing_student,
+            placement_decision=row.name, existing_student=returning,
             status="Draft", version=1, drafted_by=actor, accepted=0, synthetic=1,
         ))
         doc.insert(ignore_permissions=True)
@@ -264,28 +263,27 @@ def decide_admission(request_key, name, expected_version, outcome, reason, condi
         if outcome not in ADMISSION_OUTCOMES:
             raise frappe.ValidationError("Unsupported admission outcome")
         try:
-            reason = validate_admission_text(reason, "reason")
+            outcome_reason = validate_admission_text(reason, "reason")
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
+        recorded_conditions = ""
         if outcome == "Conditional":
             try:
-                conditions = validate_admission_text(conditions, "conditions")
+                recorded_conditions = validate_admission_text(conditions, "conditions")
             except ValueError as exc:
                 raise frappe.ValidationError(str(exc)) from exc
-        else:
-            if conditions not in ("", None):
-                raise frappe.ValidationError("Conditions are only recorded for Conditional outcomes")
-            conditions = ""
+        elif conditions not in ("", None):
+            raise frappe.ValidationError("Conditions are only recorded for Conditional outcomes")
         if outcome in ("Approved", "Conditional"):
             row = _placement_row(doc.placement_decision)
             _unexpired(row)
         decided_at = _now()
         _advance(doc, outcome, decided_by=actor, decided_at=decided_at,
-                 outcome_reason=reason, conditions=conditions)
+                 outcome_reason=outcome_reason, conditions=recorded_conditions)
         result = _result(doc)
         result["decided_by"] = actor
         result["decided_at"] = _iso(decided_at)
-        result["outcome_reason"] = reason
+        result["outcome_reason"] = outcome_reason
         return result, dict(target=doc.name, after_hash=digest([doc.name, outcome, actor]))
 
     return _execute("decide_admission", request_key,
@@ -326,12 +324,12 @@ def withdraw_admission(request_key, name, expected_version, reason):
         if actor != doc.drafted_by:
             raise frappe.PermissionError("Only the drafting officer may withdraw")
         try:
-            reason = validate_admission_text(reason, "reason")
+            recorded_reason = validate_admission_text(reason, "reason")
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
-        _advance(doc, "Withdrawn", outcome_reason=reason)
+        _advance(doc, "Withdrawn", outcome_reason=recorded_reason)
         result = _result(doc)
-        result["outcome_reason"] = reason
+        result["outcome_reason"] = recorded_reason
         return result, dict(target=doc.name, after_hash=digest([doc.name, "Withdrawn", actor]))
 
     return _execute("withdraw_admission", request_key,
