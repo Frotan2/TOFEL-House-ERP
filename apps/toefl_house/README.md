@@ -10,7 +10,9 @@ chargeable (zero/absent ⇒ denied; waivers are native `Pricing Rule`s).
 Rates are configuration, never code. Deny-by-default guards confine `Fees`
 and `Sales Invoice` to the receipted commands; the enrollment
 premature-billing guard stays chained in force. Roles: Finance Officer
-(commands only) and Finance Auditor (receipt/audit ledger only). No money
+(commands, plus the native `Accounts User` role ERPNext's party/currency
+validation requires; no receipt-ledger read) and Finance Auditor
+(receipt/audit ledger only). No money
 master, ledger, price, tax, refund or payroll record is owned; ERPNext
 accounts remain the only money authority. Hosted qualification status: see
 `docs/domain/FINANCE-CLOSURE.md`. Do not start the next domain.

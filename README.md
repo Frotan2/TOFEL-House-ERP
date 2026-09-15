@@ -30,7 +30,8 @@ no new DocType) is CLOSED / QUALIFIED (`6ba5663`, hosted run `34966681820`,
 (tuition via native `Fees` from submitted Program Enrollments; placement
 billing via native `Sales Invoice` with configuration-driven chargeability
 under the owner-approved R05/B07 framework — rates are Finance-configured
-native records, never code constants) is CLOSED / QUALIFIED — see
+native records, never code constants) is CLOSED / QUALIFIED (`e73abef`,
+hosted run `34999987969`, 517/517 native checks) — see
 [FINANCE-CLOSURE.md](docs/domain/FINANCE-CLOSURE.md). Academic assessment
 (B04/B05, owner-deferred) and payroll (A09) remain gated. Do not start the
 next domain. Do not deploy. Production remains **REJECT**.

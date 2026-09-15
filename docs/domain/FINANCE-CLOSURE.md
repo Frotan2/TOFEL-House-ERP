@@ -1,7 +1,7 @@
 # Finance Operations (tuition & placement billing) — CLOSED / QUALIFIED (synthetic isolated build)
 
 Date: 2026-09-15 · Session branch: `arena/01a0a496-tofel-house-erp`
-· Qualifying product commit: `4172a65` (finance slice over integration proof `03c5ba4`)
+· Qualifying product commit: `e73abef` (finance slice over integration proof `03c5ba4`, incl. explicit-currency `cf6d749` and command-whitelist `e73abef` fixes)
 · Policy basis: [FINANCE-POLICY-APPROVAL.md](FINANCE-POLICY-APPROVAL.md)
 (R05/B07 resolved at framework level by the business owner 2026-09-15).
 · Teaching predecessor: [TEACHING-CLOSURE.md](TEACHING-CLOSURE.md) (CLOSED / QUALIFIED, `6ba5663`, hosted run `34966681820`). Teaching was not reopened.
@@ -138,7 +138,18 @@ placement cases read-only).
     exercised it). Fixed by adding `@frappe.whitelist(methods=["POST"])`
     to `issue_tuition_fees` and `issue_placement_fee`, matching every
     other command surface.
-  - Final qualification run: filled from actual check-run output below.
+  - Run `34999987969` (commit `e73abef`): **PASS — 517/517 checks**, native
+    report SHA-256
+    `663aad8c6469e83882cd06313259708194ebe3683306645bd1127034e6b0bb06`.
+    All 31 finance checks green: native catalog; tuition denials ×6,
+    happy path (AFN 25000, GL posted), idempotent replay, duplicate
+    denial, direct-write denial, atomic rollback; placement denials ×4,
+    happy path, idempotent replay, duplicate denial, direct-write denial,
+    native Pricing Rule waiver (line discount 4000 → grand total 0);
+    role/list parity; HTTP surface ×8 (positive tuition & placement,
+    guest/CSRF/wrong-role/GET/replayed-session denials); write
+    containment (Fees +2, Sales Invoice +3, GL voucher types ⊆ {Fees,
+    Sales Invoice}, academic & payroll tables untouched).
 
 ## 3. Boundary and remaining gates
 
