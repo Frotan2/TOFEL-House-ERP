@@ -1613,6 +1613,94 @@ def main():
             assert not listed
             return {'teaching_no_native_crud':True,'auditor_receipts_only':True}
         check('teaching-role-and-list-parity',tea_reads)
+        # Cross-domain integration proof: the four qualified slices are one
+        # connected lifecycle, not isolated domains. Every hop is re-read from
+        # the database; fixture variables are only used to locate the start.
+        def journey_trace():
+            frappe.set_user('Administrator')
+            start=second['student']
+            att=frappe.db.get_value('Student Attendance',attA['records'][start],
+                ['name','docstatus','student','course_schedule','student_group','status'],as_dict=True)
+            assert att and att.docstatus==1 and att.student==start and att.student_group==GRP_A
+            assert att.course_schedule==schedA['name']
+            sess=frappe.db.get_value('Course Schedule',att.course_schedule,
+                ['name','student_group','instructor','room','course','schedule_date'],as_dict=True)
+            assert sess.student_group==GRP_A and sess.instructor and sess.room and sess.course
+            grp=frappe.db.get_value('Student Group',sess.student_group,
+                ['name','program','academic_year','group_based_on'],as_dict=True)
+            assert grp.program==cat['program'] and grp.academic_year==cat['academic_year']
+            roster={r.student for r in frappe.db.sql("select student from `tabStudent Group Student` where parent=%s",(GRP_A,),as_dict=True)}
+            assert start in roster
+            pe=frappe.db.get_value('Program Enrollment',{'student':start,'program':grp.program,'academic_year':grp.academic_year,'docstatus':1},['name'],as_dict=True)
+            assert pe and pe.name==second['program_enrollment']
+            dec=frappe.db.get_value(adm.DECISION_DT,{'native_student':start},
+                ['name','student_applicant','placement_decision','status','accepted','converted_at'],as_dict=True)
+            assert dec and dec.accepted==1 and dec.converted_at and dec.status in ('Approved','Conditional')
+            pd=frappe.db.get_value(api.DECISION,dec.placement_decision,
+                ['name','attempt','status','internal_level','course_code'],as_dict=True)
+            assert pd and pd.status=='Released' and pd.internal_level and pd.course_code
+            attempt=frappe.db.get_value(api.ATTEMPT,pd.attempt,['name','case_name','status','subject'],as_dict=True)
+            case=frappe.db.get_value(api.CASE,attempt.case_name,['name','subject','purpose','status'],as_dict=True)
+            assert case.subject==attempt.subject==users['candidate9']
+            appl=frappe.db.get_value('Student Applicant',dec.student_applicant,['name'],as_dict=True)
+            assert appl
+            return {'attendance':att.name,'course_schedule':sess.name,'student_group':grp.name,
+                    'program_enrollment':pe.name,'admission_decision':dec.name,
+                    'placement_decision':pd.name,'placement_case':case.name,
+                    'student':start,'chain_complete':True}
+        check('integration-e2e-student-journey',journey_trace)
+        def journey_receipts():
+            frappe.set_user('Administrator')
+            journey=[('release_decision','teaching_pipe_a_rel0000001',users['releaser']),
+                     ('record_applicant','teaching_record_app_0001',users['officer']),
+                     ('create_admission','teaching_create_adm_0001',users['officer']),
+                     ('review_admission','teaching_review_adm_0001',users['admissions_reviewer']),
+                     ('decide_admission','teaching_decide_adm_001',users['approver']),
+                     ('accept_offer','teaching_accept_adm_0001',users['officer']),
+                     ('convert_applicant','teaching_convert_adm_001',users['approver']),
+                     ('enroll_in_program','teaching_enroll_key_0001',users['enrollment_officer']),
+                     ('create_student_group','tea_group_a_key_00001',users['teaching_scheduler']),
+                     ('schedule_session','tea_sched_a_key_00001',users['teaching_scheduler']),
+                     ('record_attendance','tea_att_a_key_00000001',users['attendance_recorder'])]
+            kinds=[]
+            for kind,key,actor in journey:
+                op=frappe.db.get_value(api.OP,digest([kind,key]),['name','kind','actor','status'],as_dict=True)
+                assert op and op.kind==kind and op.status=='Complete',(kind,'missing or incomplete receipt')
+                assert op.actor==actor,(kind,'actor separation broken')
+                assert frappe.db.count(api.AUDIT,{'operation':op.name})>=1,(kind,'no audit event')
+                kinds.append(kind)
+            assert len(set(kinds))==len(kinds)
+            return {'journey_commands_receipted':len(kinds),'actor_separation_verified':True,'kinds':kinds}
+        check('integration-journey-receipt-continuity',journey_receipts)
+        def cross_domain_invariants():
+            frappe.set_user('Administrator')
+            groups=frappe.db.get_all('Student Group',['name','program','academic_year'])
+            assert groups
+            for g in groups:
+                assert frappe.db.exists('Program',g.program) and frappe.db.exists('Academic Year',g.academic_year)
+                enrolled={r.student for r in frappe.db.get_all('Program Enrollment',{'program':g.program,'academic_year':g.academic_year,'docstatus':1},['student'])}
+                roster=[r.student for r in frappe.db.sql("select student from `tabStudent Group Student` where parent=%s",(g.name,),as_dict=True)]
+                orphan=[s for s in roster if s not in enrolled]
+                assert not orphan,(g.name,orphan)
+            schedules=frappe.db.get_all('Course Schedule',['name','student_group'])
+            assert schedules
+            for s in schedules:
+                assert frappe.db.exists('Student Group',s.student_group),s.name
+            atts=frappe.db.get_all('Student Attendance',['name','student','course_schedule','student_group','docstatus'])
+            assert atts
+            for a in atts:
+                assert a.docstatus==1,a.name
+                assert a.course_schedule and frappe.db.get_value('Course Schedule',a.course_schedule,'student_group')==a.student_group,a.name
+                assert frappe.db.sql("select name from `tabStudent Group Student` where parent=%s and student=%s",(a.student_group,a.student)),a.name
+            for pe in frappe.db.get_all('Program Enrollment',{'docstatus':1},['name','student']):
+                dec=frappe.db.get_value(adm.DECISION_DT,{'native_student':pe.student},['accepted'],as_dict=True)
+                assert dec and dec.accepted==1,pe.name
+            total=frappe.db.count(api.AUDIT)
+            linked=frappe.db.sql("select count(*) from `tabTH Placement Audit Event` e join `tabTH Placement Operation` o on e.operation=o.name")[0][0]
+            assert total>0 and total==linked,(total,linked)
+            return {'groups_verified':len(groups),'schedules_verified':len(schedules),
+                    'attendance_verified':len(atts),'audit_ledger_referential':total}
+        check('integration-cross-domain-referential-integrity',cross_domain_invariants)
         frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
         def tea_second_site():
             assert frappe.db.count('Student Group')==0 and frappe.db.count('Course Schedule')==0
