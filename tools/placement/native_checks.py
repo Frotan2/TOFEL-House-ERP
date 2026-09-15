@@ -2604,17 +2604,26 @@ def main():
             return name
         cancel_targets=[('Fees',fees1['fees']),('Sales Invoice',httpinv['sales_invoice']),('Program Enrollment',enrolled['program_enrollment']),('Course Enrollment',first_doc('Course Enrollment')),('Student Group',first_doc('Student Group')),('Course Schedule',first_doc('Course Schedule')),('Student Attendance',attA['records'][stu1])]
         def cancel_probes():
+            # Submitted documents (docstatus 1) reach the before_cancel guard;
+            # drafts of non-submittable doctypes are denied earlier by frappe's
+            # native docstatus transition validator (draft cannot go to 2) -
+            # both layers are containment; the observation records which fired.
             frappe.set_user('Administrator')
             probed={}
             for dt,name in cancel_targets:
-                before=frappe.db.get_value(dt,name,'docstatus')
+                before=int(frappe.db.get_value(dt,name,'docstatus') or 0)
                 try:
                     frappe.get_doc(dt,name).cancel()
                     raise AssertionError((dt,name,'cancel unexpectedly succeeded'))
                 except (frappe.ValidationError,frappe.PermissionError) as exc:
-                    assert 'requires an authorized' in str(exc),(dt,name,str(exc)[:200])
+                    msg=str(exc)
+                    if before==1:
+                        assert 'requires an authorized' in msg,(dt,name,msg[:200])
+                        probed[dt]='command-only guard (before_cancel)'
+                    else:
+                        assert 'Cannot change docstatus' in msg,(dt,name,msg[:200])
+                        probed[dt]='native docstatus transition (draft, non-submittable)'
                 assert frappe.db.get_value(dt,name,'docstatus')==before,(dt,name,'docstatus changed by denied cancel')
-                probed[dt]=before
             return {'cancel_denied_docstatus_intact':probed}
         check('containment-admin-cancel-denied',traced(cancel_probes))
         def probe_field(dt):
@@ -2622,21 +2631,27 @@ def main():
                 if df.fieldtype in ('Data','Small Text','Text') and df.fieldname not in ('naming_series','amended_from'):
                     return df.fieldname
             raise AssertionError((dt,'no text probe field found'))
+        edit_targets=[('Fees',fees1['fees']),('Sales Invoice',httpinv['sales_invoice']),('Course Enrollment',first_doc('Course Enrollment')),('Student Group',first_doc('Student Group')),('Course Schedule',first_doc('Course Schedule'))]
         def edit_probes():
+            # Submitted Fees/SI exercise the before_update_after_submit seam;
+            # draft CE/SG/CS exercise the validate seam on save. Program
+            # Enrollment and Student Attendance carry no plain-text field, so
+            # their edit seam stays covered by the pinned hooks and the
+            # identical guard code path, reported not probed here.
             frappe.set_user('Administrator')
             probed={}
-            for dt,name in (('Fees',fees1['fees']),('Sales Invoice',httpinv['sales_invoice'])):
+            for dt,name in edit_targets:
                 field=probe_field(dt)
                 doc=frappe.get_doc(dt,name);doc.update({field:'SYN-PROBE'})
                 try:
                     doc.save()
-                    raise AssertionError((dt,name,field,'post-submit edit unexpectedly succeeded'))
+                    raise AssertionError((dt,name,field,'edit unexpectedly succeeded'))
                 except (frappe.ValidationError,frappe.PermissionError) as exc:
                     assert 'requires an authorized' in str(exc),(dt,name,field,str(exc)[:200])
                 assert frappe.db.get_value(dt,name,field)!='SYN-PROBE',(dt,name,field,'denied edit persisted')
                 probed[dt]=field
-            return {'post_submit_edit_denied':probed}
-        check('containment-post-submit-edit-denied',traced(edit_probes))
+            return {'edit_seam_denied':probed,'no_text_probe_field':['Program Enrollment','Student Attendance']}
+        check('containment-edit-seam-denied',traced(edit_probes))
         def rpc_probes():
             frappe.set_user('Administrator')
             client_insert=frappe.get_attr('frappe.client.insert');client_set_value=frappe.get_attr('frappe.client.set_value');client_delete=frappe.get_attr('frappe.client.delete')
