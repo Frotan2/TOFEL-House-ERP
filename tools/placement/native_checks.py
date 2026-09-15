@@ -2127,13 +2127,19 @@ def main():
             finally:s.headers['X-Frappe-CSRF-Token']=token
         check('http-teaching-attendance-csrf-negative-with-positive-control',http_att_csrf)
         def http_att_race():
+            # CAS needs an unmarked session: the positive check already committed
+            # httpsched attendance, so race on a fresh race-day session. The loser
+            # must fail closed under the session-row lock (no double marking).
+            r=tpost('teaching_scheduler','schedule_session',dict(request_key='http_tea_sched_race_0001',student_group=GRP_HTTP,schedule_date='2026-09-23',from_time='11:00:00',to_time='12:30:00',instructor=INS_TWO,room=ROOM_B,course='SYN-COURSE-CORE'))
+            assert r.status_code==200,f'race session HTTP {r.status_code} {r.text[:200]}'
+            race_sched=r.json()['message']['name']
             def request(i):
                 s=requests.Session();s.headers.update(sessions['attendance_recorder'].headers);s.cookies.update(sessions['attendance_recorder'].cookies)
-                return s.post(base+'/api/method/toefl_house.teaching.record_attendance',json=dict(http_att_payload,request_key=f'http_tea_a_race_000{i}'),timeout=40)
+                return s.post(base+'/api/method/toefl_house.teaching.record_attendance',json=dict(request_key=f'http_tea_a_race_000{i}',course_schedule=race_sched,statuses=http_att_payload['statuses']),timeout=40)
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
             statuses=sorted(r.status_code for r in rs);assert statuses==[200,417],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
-            frappe.db.rollback();assert frappe.db.count('Student Attendance',{'course_schedule':httpsched['name'],'docstatus':('!=',2)})==3
-            return {'http_statuses':statuses,'no_double_marking':True}
+            frappe.db.rollback();assert frappe.db.count('Student Attendance',{'course_schedule':race_sched,'docstatus':('!=',2)})==3
+            return {'http_statuses':statuses,'no_double_marking':True,'race_session':race_sched}
         check('http-teaching-concurrent-attendance-duplicate-cas',http_att_race)
         def http_att_replay():
             r0=tpost('attendance_recorder','record_attendance',http_att_payload)
