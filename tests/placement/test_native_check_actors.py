@@ -55,6 +55,11 @@ DECISION_AUTHOR_ONLY_CHECKS = (
     "http-decision-wrong-role-denied",
     "http-decision-other-role-read-denied",
 )
+ADMISSION_AUTHOR_ONLY_CHECKS = (
+    "admission-author-denied",
+    "http-admission-wrong-role-denied",
+    "http-admission-other-role-read-denied",
+)
 
 
 def _kind_roles():
@@ -129,6 +134,22 @@ class Increment3ActorGuardTests(unittest.TestCase):
             self.src,
             r"'releaser'\s*:\s*\[\s*'Placement Releaser'\s*\]",
         )
+        self.assertRegex(
+            self.src,
+            r"'officer'\s*:\s*\[\s*'Admission Officer'\s*\]",
+        )
+        self.assertRegex(
+            self.src,
+            r"'admissions_reviewer'\s*:\s*\[\s*'Admission Reviewer'\s*\]",
+        )
+        self.assertRegex(
+            self.src,
+            r"'approver'\s*:\s*\[\s*'Admission Approver'\s*\]",
+        )
+        self.assertRegex(
+            self.src,
+            r"'admissions_auditor'\s*:\s*\[\s*'Admission Auditor'\s*\]",
+        )
 
     def test_operational_commands_are_publisher_without_extra_sod(self):
         roles = _kind_roles()
@@ -144,11 +165,21 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertEqual(roles["release_decision"], "Placement Releaser")
         self.assertEqual(roles["create_course_map"], "Placement Author")
         self.assertEqual(roles["publish_course_map"], "Placement Publisher")
+        self.assertEqual(roles["record_applicant"], "Admission Officer")
+        self.assertEqual(roles["create_admission"], "Admission Officer")
+        self.assertEqual(roles["review_admission"], "Admission Reviewer")
+        self.assertEqual(roles["decide_admission"], "Admission Approver")
+        self.assertEqual(roles["accept_offer"], "Admission Officer")
+        self.assertEqual(roles["withdraw_admission"], "Admission Officer")
+        self.assertEqual(roles["revoke_admission"], "Admission Approver")
+        self.assertEqual(roles["expire_admission"], "Admission Officer")
+        self.assertEqual(roles["convert_applicant"], "Admission Approver")
 
     def test_inc3_author_denials_use_author_only_fixtures(self):
         for name in (INC3_AUTHOR_ONLY_CHECKS + INC4_AUTHOR_ONLY_CHECKS
                      + INC5_AUTHOR_ONLY_CHECKS + INC6_AUTHOR_ONLY_CHECKS
-                     + INC7_AUTHOR_ONLY_CHECKS + DECISION_AUTHOR_ONLY_CHECKS):
+                     + INC7_AUTHOR_ONLY_CHECKS + DECISION_AUTHOR_ONLY_CHECKS
+                     + ADMISSION_AUTHOR_ONLY_CHECKS):
             with self.subTest(check=name):
                 body = _check_call_source(self.src, name)
                 self.assertNotIn("'%s'" % DUAL_ROLE, body.replace("check('%s'" % name, ""))
@@ -336,6 +367,62 @@ class Increment3ActorGuardTests(unittest.TestCase):
                         self.src.index("http_deliver_payload=dict(") + 500]
         for key in ("request_key", "attempt", "expected_version"):
             self.assertIn("%s=" % key, blob)
+
+    def test_admission_doctype_is_admission_staff_read_only(self):
+        data = json.loads((ROOT / "apps/toefl_house/toefl_house/admission/doctype"
+                           / "th_admission_decision" / "th_admission_decision.json")
+                          .read_text(encoding="utf-8"))
+        roles = {row["role"] for row in data["permissions"]}
+        self.assertEqual(
+            roles,
+            {"Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor"},
+        )
+        for row in data["permissions"]:
+            self.assertEqual(row.get("read"), 1)
+            self.assertEqual(row.get("select"), 1)
+            self.assertNotEqual(row.get("write"), 1)
+            self.assertNotEqual(row.get("create"), 1)
+            self.assertNotEqual(row.get("delete"), 1)
+        self.assertNotIn("Placement Author", roles)
+        self.assertNotIn("Placement Publisher", roles)
+        self.assertNotIn("Placement Releaser", roles)
+
+    def test_http_admission_keys_match_whitelist_signature(self):
+        adm_src = (ROOT / "apps/toefl_house/toefl_house/admission/__init__.py").read_text(
+            encoding="utf-8")
+        tree = ast.parse(adm_src)
+        expected = {
+            "record_applicant": ["request_key", "placement_decision", "first_name",
+                                 "program", "academic_year"],
+            "create_admission": ["request_key", "student_applicant", "placement_decision",
+                                 "existing_student"],
+            "review_admission": ["request_key", "name", "expected_version"],
+            "decide_admission": ["request_key", "name", "expected_version", "outcome",
+                                 "reason", "conditions"],
+            "accept_offer": ["request_key", "name", "expected_version"],
+            "convert_applicant": ["request_key", "name", "expected_version"],
+        }
+        found = {}
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name in expected:
+                found[node.name] = [a.arg for a in node.args.args]
+        self.assertEqual(found, expected)
+        self.assertIn("http_adm_payload=dict(", self.src)
+        blob = self.src[self.src.index("http_adm_payload=dict("):
+                        self.src.index("http_adm_payload=dict(") + 280]
+        for key in ("request_key", "student_applicant", "placement_decision"):
+            self.assertIn("%s=" % key, blob)
+
+    def test_admission_happy_path_uses_released_candidate5_not_alloc2(self):
+        body = _check_call_source(self.src, "admission-record-applicant")
+        self.assertIn("released['decision']", body)
+        self.assertNotIn("alloc2", body)
+        convert = _check_call_source(self.src, "admission-convert-student")
+        self.assertIn("as_user('approver'", convert)
+        start = self.src.index("check('admission-convert-student'")
+        blob = self.src[start:start + 900]
+        self.assertIn("program_enrollment", blob)
+        self.assertIn("native_application_status", blob)
 
     def test_increment3_pins_its_own_published_policy(self):
         # Do not capture increment-2's `pol` across the second-site hop.

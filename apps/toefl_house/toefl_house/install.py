@@ -27,6 +27,10 @@ def after_migrate():
     frappe.db.add_index("TH Placement Score", ["attempt"], "th_score_attempt")
     frappe.db.add_unique("TH Placement Decision", ["attempt", "revision"], "th_decision_attempt_revision")
     frappe.db.add_index("TH Placement Decision", ["attempt"], "th_decision_attempt")
+    frappe.db.add_index("TH Admission Decision", ["student_applicant"], "th_admission_applicant")
+    frappe.db.add_index("TH Admission Decision", ["placement_decision"], "th_admission_placement")
+    frappe.db.add_index("TH Admission Decision", ["native_student"], "th_admission_student")
+    frappe.db.add_index("TH Admission Decision", ["status"], "th_admission_status")
 
 
 def after_install():

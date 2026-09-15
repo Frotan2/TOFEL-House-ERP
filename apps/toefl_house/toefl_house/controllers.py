@@ -3,7 +3,8 @@ import frappe
 import json
 import re
 from frappe.model.document import Document
-from toefl_house.policy import ATTEMPT_TRANSITIONS, FROZEN_STATUSES, digest, is_config_transition
+from toefl_house.policy import (ADMISSION_OUTCOMES, ATTEMPT_TRANSITIONS, FROZEN_STATUSES,
+                                digest, is_admission_transition, is_config_transition)
 from toefl_house.scoring import SCORER_VERSION
 from toefl_house.security import require_command, CONFIG_DOCTYPES
 
@@ -219,3 +220,82 @@ class DecisionRecord(FrozenRecord):
                 raise frappe.ValidationError("Unsupported decision algorithm")
             if result.get("internal_level") != self.internal_level or result.get("course_code") != self.course_code:
                 raise frappe.ValidationError("Decision projection mismatch")
+
+
+class AdmissionDecisionRecord(ProtectedRecord):
+    """Owned institutional admission decision. Native Applicant/Student remain
+    Education authorities. Status advances only through authorized commands;
+    acceptance and native Student conversion do not enroll or bill."""
+
+    IDENTITY = (
+        "student_applicant", "program", "academic_year", "academic_term",
+        "placement_decision", "existing_student", "drafted_by",
+    )
+    CLOCKS = (
+        "reviewed_by", "reviewed_at", "decided_by", "decided_at",
+        "outcome_reason", "conditions", "accepted_by", "accepted_at",
+        "revoked_by", "revoked_at", "native_student", "converted_at",
+    )
+
+    def validate(self):
+        super().validate()
+        before = self.get_doc_before_save()
+        if not before:
+            if self.status != "Draft" or self.version != 1:
+                raise frappe.ValidationError("New admission decisions start Draft at version 1")
+            if not self.drafted_by:
+                raise frappe.ValidationError("Drafting actor is required")
+            if self.accepted or any(self.get(field) for field in self.CLOCKS):
+                raise frappe.ValidationError("New admission decisions have empty clocks")
+            return
+        for field in self.IDENTITY:
+            if before.get(field) != self.get(field):
+                raise frappe.PermissionError("Admission identity is immutable")
+        if type(self.version) is not int or self.version != before.version + 1:
+            raise frappe.ValidationError("Admission version must advance by one")
+        if before.status == self.status:
+            self._validate_same_status(before)
+            return
+        if not is_admission_transition(before.status, self.status):
+            raise frappe.PermissionError("Illegal admission state transition")
+        for field in self.CLOCKS:
+            if before.get(field) and before.get(field) != self.get(field):
+                raise frappe.PermissionError("Admission clock fields are immutable once set")
+        if before.accepted and not self.accepted:
+            raise frappe.PermissionError("Offer acceptance cannot be reversed")
+        if self.status == "Review" and not (self.reviewed_by and self.reviewed_at):
+            raise frappe.ValidationError("Review actor and time required")
+        if self.status in ADMISSION_OUTCOMES and not (self.decided_by and self.decided_at and self.outcome_reason):
+            raise frappe.ValidationError("Decision actor, time and reason required")
+        if self.status == "Conditional" and not self.conditions:
+            raise frappe.ValidationError("Conditional admission requires recorded conditions")
+        if self.status == "Approved" and self.conditions:
+            raise frappe.ValidationError("Approved admission cannot carry unresolved conditions")
+        if self.status == "Revoked" and not (self.revoked_by and self.revoked_at):
+            raise frappe.ValidationError("Revocation actor and time required")
+        if before.status in ("Approved", "Conditional") and before.native_student:
+            raise frappe.PermissionError("Converted admission decisions are terminal for mutation")
+
+    def _validate_same_status(self, before):
+        if before.status not in ("Approved", "Conditional"):
+            raise frappe.PermissionError("Illegal admission state transition")
+        allowed = set()
+        if not before.accepted and self.accepted:
+            allowed.update(("accepted", "accepted_by", "accepted_at"))
+            if not (self.accepted_by and self.accepted_at):
+                raise frappe.ValidationError("Acceptance actor and time required")
+        if before.status == "Approved" and not before.native_student and self.native_student:
+            allowed.update(("native_student", "converted_at"))
+            if not self.converted_at:
+                raise frappe.ValidationError("Conversion time required")
+            if not self.accepted:
+                raise frappe.ValidationError("Native Student conversion requires an accepted Approved decision")
+        if before.accepted and not self.accepted:
+            raise frappe.PermissionError("Offer acceptance cannot be reversed")
+        if before.native_student and before.native_student != self.native_student:
+            raise frappe.PermissionError("Native Student pointer is immutable once set")
+        for field in list(self.CLOCKS) + ["accepted"]:
+            if field in allowed:
+                continue
+            if before.get(field) != self.get(field):
+                raise frappe.PermissionError("Admission clock fields are immutable once set")

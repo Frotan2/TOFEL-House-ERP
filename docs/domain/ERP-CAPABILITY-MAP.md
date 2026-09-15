@@ -4,9 +4,10 @@ Date: 2026-09-15 · Session branch: `arena/01a0a13b-tofel-house-erp`
 · Placement predecessor: [PLACEMENT-CLOSURE.md](PLACEMENT-CLOSURE.md) (CLOSED / QUALIFIED, hosted run `34932512626`).
 
 **Purpose:** prevent TOEFL House from becoming a second ERP on top of ERPNext.
-This is a product-capability review, not implementation authorization, not
-Admission coding, and not production approval. Production remains **REJECT**.
-Do not deploy. Do not reopen Placement.
+This is a product-capability review, not production approval. Thin Admission
+implementation on this branch is recorded in
+[ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md). Production remains **REJECT**.
+Do not deploy. Do not reopen Placement. Do not start Enrollment.
 
 **Foundation strategy (unchanged):** Frappe → ERPNext → Education → HRMS/Payments
 are the systems of record for identity, CRM, students, catalog, enrollment,
@@ -56,10 +57,11 @@ or Payroll inside `toefl_house`.
 | Placement | **TOEFL HOUSE EXTENSION** | **CLOSED / QUALIFIED** (synthetic). Do not reopen |
 | Integrations | **CONFIGURATION** / external adapters **DEFERRED** | No second bus |
 
-**Recommended next domain:** **Admission**, as a *thin* owned `TH Admission Decision`
-on top of native **Student Applicant** and **Student Admission** (intake), consuming
-a released **TH Placement Decision**. Not CRM. Not Student. Not enrollment. Not
-a portal. Not finance.
+**Recommended next domain after Admission is hosted-qualified:** native
+**Enrollment** (Program Enrollment as authority) — **do not start it in this
+close**. Admission remains a *thin* owned `TH Admission Decision` on native
+**Student Applicant**, consuming a released **TH Placement Decision**. Not CRM.
+Not a second Student master. Not a portal. Not finance.
 
 ---
 
@@ -78,15 +80,19 @@ a portal. Not finance.
 - `foundation_security`: generic Student/Guardian/File/realtime guards. **Not** a
   TOEFL product and **not** a second ERP.
 
-### 2.2 Owned `toefl_house` (Placement only)
+### 2.2 Owned `toefl_house` (Placement closed; thin Admission)
 
-Installed and synthetically qualified: item/key bank, blueprint/policy/course-map
+Installed and synthetically qualified Placement: item/key bank, blueprint/policy/course-map
 revisions, case/attempt/manifest/exposure/response/score, `TH Placement Decision`,
-operation receipts, placement roles. **No** Student, Applicant, Admission,
-Enrollment, Course catalog, Invoice, Attendance, HR or portal code.
+operation receipts, placement roles.
+
+Thin Admission (this branch, hosted qualification pending): `TH Admission Decision`
+plus native Applicant/Student conversion commands. **No** TH Student, TH Applicant,
+TH Enrollment, Course catalog, Invoice, Attendance, HR or portal code.
 
 Synthetic limitation (do not “fix” by reopening Placement): case `subject` is a
-test User, not native Lead/Applicant/Student. Operational Admission must attach
+test User, not native Lead/Applicant/Student. This Admission slice binds Applicant
+`student_email_id` to that subject for isolation only. Operational CRM must attach
 to **Lead / Student Applicant / Student**, not treat the synthetic User as a
 person master.
 
@@ -123,9 +129,9 @@ person master.
 | Foundation already provides | **Student Applicant** (person’s application; **not submittable**; status Applied/Approved/Rejected/Admitted). **Student Admission** (intake *publication/configuration*, not one person’s case). `enroll_student` mapper (S8) can create Student + Program Enrollment with `ignore_permissions=True` — this is a containment problem, not an admission authority. |
 | Reuse unchanged | Applicant identity, Program/year required fields, Student Admission windows, native conversion to Student. |
 | Configuration only | Intake programs/years on Student Admission; Desk Workflow *may* assist routing but cannot be the durable institutional decision (A10 option W rejected because Applicant “Admitted” is a Student-creation side effect). |
-| Custom code | **`TH Admission Decision` only:** references native Applicant (or verified existing Student), released valid **TH Placement Decision**, target Program/year/term, conditions, approver, offer acceptance/expiry. Logical states Draft → Review → Conditional / Approved / Deferred / Rejected. Does **not** create Student, enrollment, invoice or placement edits. |
+| Custom code | **`TH Admission Decision` only:** references native Applicant (or verified existing Student), released valid **TH Placement Decision**, target Program/year/term, conditions, approver, offer acceptance/expiry. Logical states Draft → Review → Conditional / Approved / Deferred / Rejected. `convert_applicant` creates a **native** Student after accepted Approved; it does **not** create Program Enrollment, invoice, payment or placement edits. Returning-student conversion is recorded and denied in this slice. |
 | Must NOT rebuild | Application form platform, admissions CRM, auto-enrollment from recommendation, payment-as-admission, “Admitted” status as proof of registration, applicant portal as the first slice. |
-| Status | **Not implemented.** A10 is DECIDED (boundary). B06 (eligibility, conditions, offer rules, approvers) is still a business input. A13 containment of `enroll_student` is **unproven**. |
+| Status | **Implemented; hosted qualification pending** ([ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md)). A10 boundary held. B06 (eligibility, scholarships, named offer rules) is still a business input and is not invented. A13 containment of HTTP `enroll_student` plus PE/CE/invoice hooks is in the synthetic suite — not a claim that every Python import path is wrapped. |
 | Dependencies | Closed Placement (released decision). Native Program + Academic Year (Applicant requires them). Identity A02 for conversion. **Enrollment is a later native step, not part of this slice.** |
 
 **Challenge:** native Student Admission looks like “admissions” but is an intake catalog. Native Applicant.Admitted looks like approval but is set when a Student is created (S2). That is why a small owned decision is justified — and why anything larger is a rebuild.
@@ -357,23 +363,25 @@ Blocked or conditional gates that **do not** stop a thin Admission *design* but 
 
 ## 7. Recommended next domain
 
-**Admission — thin extension only.**
+**Enrollment — native Program Enrollment as authority. Do not start it until
+Admission is hosted-qualified and explicitly closed.** See
+[ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md).
 
-In scope when explicitly authorized:
+Admission in-scope (this slice):
 
-- Reuse Student Applicant + Student Admission configuration.
-- Create `TH Admission Decision` that requires a released internal Placement Decision and does not enroll.
-- Staff-assisted Desk/RPC; fail closed on missing placement, unknown program, or native bypass.
+- Reuse Student Applicant + native Program/Academic Year.
+- `TH Admission Decision` that requires a released internal Placement Decision.
+- Native Student conversion after accepted Approved; no enrollment/billing.
 
-Out of scope for that slice:
+Out of scope (still):
 
 - Reopening Placement
 - TH Enrollment Request / native enroll_student as “admission success”
 - Applicant or candidate portal
-- Student/Course/Invoice DocTypes
+- TH Student/Course/Invoice DocTypes
 - Invented B06 cutoffs, scholarships, or exemptions
 
-**Still not production.** Isolated synthetic work, if later authorized, remains REJECT for deployment.
+**Still not production.** Isolated synthetic work remains REJECT for deployment.
 
 ---
 

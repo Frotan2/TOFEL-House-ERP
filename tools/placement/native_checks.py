@@ -16,10 +16,12 @@ def main():
     import frappe
     import requests
     from toefl_house import api
+    from toefl_house import admission as adm
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
     report={'scope':'Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20','status':'running','checks':[],
-            'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT'}
+            'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
+            'note':'Thin admission over native Applicant/Student; no enrollment engine'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
            'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',
@@ -30,7 +32,13 @@ def main():
            'releaser':'synthetic-releaser@example.test',
            'candidate':'synthetic-candidate@example.test','candidate2':'synthetic-candidate2@example.test',
            'candidate3':'synthetic-candidate3@example.test','candidate4':'synthetic-candidate4@example.test',
-           'candidate5':'synthetic-candidate5@example.test'}
+           'candidate5':'synthetic-candidate5@example.test',
+           'candidate6':'synthetic-candidate6@example.test','candidate7':'synthetic-candidate7@example.test',
+           'candidate8':'synthetic-candidate8@example.test',
+           'officer':'synthetic-officer@example.test',
+           'admissions_reviewer':'synthetic-admissions-reviewer@example.test',
+           'approver':'synthetic-approver@example.test',
+           'admissions_auditor':'synthetic-admissions-auditor@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
@@ -91,7 +99,12 @@ def main():
                          'reviewer':['Placement Reviewer'],
                          'reviewer2':['Placement Reviewer'],
                          'releaser':['Placement Releaser'],
-                         'candidate':[],'candidate2':[],'candidate3':[],'candidate4':[],'candidate5':[]}
+                         'candidate':[],'candidate2':[],'candidate3':[],'candidate4':[],'candidate5':[],
+                         'candidate6':[],'candidate7':[],'candidate8':[],
+                         'officer':['Admission Officer'],
+                         'admissions_reviewer':['Admission Reviewer'],
+                         'approver':['Admission Approver'],
+                         'admissions_auditor':['Admission Auditor']}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -1169,6 +1182,165 @@ def main():
             return {'decision_absent_on_second_site':True}
         check('second-site-no-first-site-decision-record',decision_second_site)
         frappe.destroy();connect('placement-test.localhost')
+
+        # --- Admission: thin decision over native Applicant/Student ---
+        from frappe.utils.nestedset import get_root_of
+        def placement_wrote_no_learner():
+            assert frappe.db.count('Student')==before_counts['Student']
+            assert frappe.db.count('Student Applicant')==before_counts['Student Applicant']
+            assert frappe.db.count('Program Enrollment')==before_counts['Program Enrollment']
+            return {'placement_no_student_or_applicant':True}
+        check('placement-closed-without-student-or-applicant',placement_wrote_no_learner)
+        def catalog():
+            frappe.set_user('Administrator')
+            if not frappe.db.exists('Academic Year','SYN-AY-2026'):
+                frappe.get_doc(dict(doctype='Academic Year',academic_year_name='SYN-AY-2026',
+                    year_start_date='2026-01-01',year_end_date='2026-12-31')).insert()
+            if not frappe.db.exists('Program','SYN-PROGRAM-GENERAL'):
+                frappe.get_doc(dict(doctype='Program',program_name='SYN-PROGRAM-GENERAL')).insert()
+            if not frappe.db.exists('Customer Group','Student'):
+                frappe.get_doc(dict(doctype='Customer Group',customer_group_name='Student',
+                    parent_customer_group=get_root_of('Customer Group'),is_group=0)).insert()
+            try:frappe.db.set_single_value('Education Settings','user_creation_skip',1)
+            except Exception:pass
+            return {'program':'SYN-PROGRAM-GENERAL','academic_year':'SYN-AY-2026'}
+        cat=check('admission-native-catalog',catalog)
+        REASON='Eligible after internal placement.'
+        COND='Awaiting document verification only.'
+        check('admission-unknown-program-denied',lambda:denied(lambda:as_user('officer',lambda:adm.record_applicant('adm_bad_program_0001',released['decision'],'SYNTHETIC Applicant','NOT-A-PROGRAM',cat['academic_year']))))
+        check('admission-missing-placement-denied',lambda:denied(lambda:as_user('officer',lambda:adm.record_applicant('adm_bad_place_000001','missing-placement-decision','SYNTHETIC Applicant',cat['program'],cat['academic_year']))))
+        check('admission-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:adm.record_applicant('adm_out_record_00001',released['decision'],'SYNTHETIC Applicant',cat['program'],cat['academic_year']))))
+        check('admission-author-denied',lambda:denied(lambda:as_user('second_author',lambda:adm.record_applicant('adm_auth_record_0001',released['decision'],'SYNTHETIC Applicant',cat['program'],cat['academic_year']))))
+        check('admission-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:adm.record_applicant('adm_pub_record_00001',released['decision'],'SYNTHETIC Applicant',cat['program'],cat['academic_year']))))
+        app=check('admission-record-applicant',lambda:as_user('officer',lambda:adm.record_applicant('adm_record_app_00001',released['decision'],'SYNTHETIC Applicant',cat['program'],cat['academic_year'])))
+        assert app['application_status']=='Applied' and app['paid']==0
+        assert app['student_email_id']==users['candidate5']
+        check('admission-duplicate-applicant-denied',lambda:denied(lambda:as_user('officer',lambda:adm.record_applicant('adm_dup_app_00000001',released['decision'],'SYNTHETIC Applicant',cat['program'],cat['academic_year']))))
+        dec=check('admission-create-draft',lambda:as_user('officer',lambda:adm.create_admission('adm_create_key_00001',app['name'],released['decision'])))
+        assert dec['status']=='Draft' and dec['version']==1
+        check('admission-duplicate-active-denied',lambda:denied(lambda:as_user('officer',lambda:adm.create_admission('adm_dup_dec_00000001',app['name'],released['decision']))))
+        check('admission-officer-self-review-denied',lambda:denied(lambda:as_user('officer',lambda:adm.review_admission('adm_self_review_00001',dec['name'],1))))
+        check('admission-approver-review-denied',lambda:denied(lambda:as_user('approver',lambda:adm.review_admission('adm_appr_review_00001',dec['name'],1))))
+        reviewed=check('admission-review',lambda:as_user('admissions_reviewer',lambda:adm.review_admission('adm_review_key_00001',dec['name'],1)))
+        assert reviewed['status']=='Review' and reviewed['version']==2
+        check('admission-officer-self-decide-denied',lambda:denied(lambda:as_user('officer',lambda:adm.decide_admission('adm_self_decide_00001',dec['name'],2,'Approved',REASON))))
+        check('admission-reviewer-decide-denied',lambda:denied(lambda:as_user('admissions_reviewer',lambda:adm.decide_admission('adm_rev_decide_00001',dec['name'],2,'Approved',REASON))))
+        approved=check('admission-approve',lambda:as_user('approver',lambda:adm.decide_admission('adm_decide_key_00001',dec['name'],2,'Approved',REASON)))
+        assert approved['status']=='Approved' and approved['version']==3
+        assert frappe.db.get_value('Student Applicant',app['name'],'application_status') in (None,'','Applied')
+        check('admission-convert-before-accept-denied',lambda:denied(lambda:as_user('approver',lambda:adm.convert_applicant('adm_early_conv_00001',dec['name'],3))))
+        check('admission-approver-self-accept-denied',lambda:denied(lambda:as_user('approver',lambda:adm.accept_offer('adm_self_accept_00001',dec['name'],3))))
+        accepted=check('admission-accept-offer',lambda:as_user('officer',lambda:adm.accept_offer('adm_accept_key_00001',dec['name'],3)))
+        assert accepted['accepted']==1 and accepted['status']=='Approved' and accepted['version']==4
+        check('admission-officer-convert-denied',lambda:denied(lambda:as_user('officer',lambda:adm.convert_applicant('adm_off_conv_0000001',dec['name'],4))))
+        converted=check('admission-convert-student',lambda:as_user('approver',lambda:adm.convert_applicant('adm_convert_key_00001',dec['name'],4)))
+        assert converted['native_student'] and converted['version']==5
+        assert converted['native_application_status']=='Admitted'
+        assert converted['program_enrollment']==0
+        assert frappe.db.count('Program Enrollment')==before_counts['Program Enrollment']
+        assert frappe.db.count('Course Enrollment')==before_counts['Course Enrollment']
+        assert frappe.db.count('Sales Invoice')==before_counts['Sales Invoice']
+        assert frappe.db.count('GL Entry')==before_counts['GL Entry']
+        assert frappe.db.count('Salary Slip')==before_counts['Salary Slip']
+        def convert_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('approver',lambda:adm.convert_applicant('adm_convert_key_00001',dec['name'],4))
+            assert value==converted and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count('Student',{'student_applicant':app['name']})==1
+            return {'same_result':True,'one_student':True}
+        check('admission-convert-idempotent',convert_replay)
+        check('admission-stale-convert-denied',lambda:denied(lambda:as_user('approver',lambda:adm.convert_applicant('adm_stale_conv_00001',dec['name'],4))))
+        check('admission-revoke-converted-denied',lambda:denied(lambda:as_user('approver',lambda:adm.revoke_admission('adm_rev_conv_0000001',dec['name'],5,REASON))))
+        def enroll_contained():
+            return denied(lambda:adm.deny_enroll_student(app['name']))
+        check('admission-enroll-student-contained',enroll_contained)
+        def pe_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Program Enrollment',student=converted['native_student'],
+                program=cat['program'],academic_year=cat['academic_year'],enrollment_date=frappe.utils.today())).insert(ignore_permissions=True))
+        check('admission-program-enrollment-denied',pe_denied)
+        def adm_generic_write():
+            frappe.set_user(users['officer']);doc=frappe.get_doc(adm.DECISION_DT,dec['name']);doc.status='Rejected';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('admission-ignore-permissions-does-not-bypass-controller',adm_generic_write)
+        check('admission-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(adm.DECISION_DT,dec['name']).db_set('status','Rejected')))
+        check('admission-delete-denied',lambda:denied(lambda:frappe.delete_doc(adm.DECISION_DT,dec['name'],ignore_permissions=True)))
+        def release_for(label,prefix):
+            case=as_user('publisher',lambda:api.create_case(prefix+'_case0000001',users[label]))
+            alloc=digital_finalize(case['name'],prefix)
+            rel=as_user('releaser',lambda:api.release_decision(prefix+'_rel0000001',alloc['attempt'],7))
+            return rel
+        rel6=check('admission-extra-released-withdraw',lambda:release_for('candidate6','adm_pipe_w'))
+        app6=check('admission-record-withdraw-applicant',lambda:as_user('officer',lambda:adm.record_applicant('adm_record_w_0000001',rel6['decision'],'SYNTHETIC Withdraw',cat['program'],cat['academic_year'])))
+        dec6=check('admission-create-withdraw-draft',lambda:as_user('officer',lambda:adm.create_admission('adm_create_w_0000001',app6['name'],rel6['decision'])))
+        withdrawn=check('admission-withdraw',lambda:as_user('officer',lambda:adm.withdraw_admission('adm_withdraw_key_0001',dec6['name'],1,REASON)))
+        assert withdrawn['status']=='Withdrawn'
+        check('admission-withdraw-other-denied',lambda:denied(lambda:as_user('admissions_reviewer',lambda:adm.withdraw_admission('adm_withdraw_other01',dec6['name'],2,REASON))))
+        rel7=check('admission-extra-released-reject',lambda:release_for('candidate7','adm_pipe_r'))
+        app7=check('admission-record-reject-applicant',lambda:as_user('officer',lambda:adm.record_applicant('adm_record_r_0000001',rel7['decision'],'SYNTHETIC Reject',cat['program'],cat['academic_year'])))
+        dec7=check('admission-create-reject-draft',lambda:as_user('officer',lambda:adm.create_admission('adm_create_r_0000001',app7['name'],rel7['decision'])))
+        as_user('admissions_reviewer',lambda:adm.review_admission('adm_review_r_0000001',dec7['name'],1))
+        rejected=check('admission-reject',lambda:as_user('approver',lambda:adm.decide_admission('adm_decide_r_0000001',dec7['name'],2,'Rejected',REASON)))
+        assert rejected['status']=='Rejected'
+        assert frappe.db.get_value('Student Applicant',app7['name'],'application_status') in (None,'','Applied')
+        def reject_no_student():
+            count=frappe.db.count('Student',{'student_applicant':app7['name']})
+            assert count==0
+            return {'students':0}
+        check('admission-reject-does-not-convert',reject_no_student)
+        rel8=check('admission-extra-released-conditional',lambda:release_for('candidate8','adm_pipe_c'))
+        app8=check('admission-record-conditional-applicant',lambda:as_user('officer',lambda:adm.record_applicant('adm_record_c_0000001',rel8['decision'],'SYNTHETIC Conditional',cat['program'],cat['academic_year'])))
+        dec8=check('admission-create-conditional-draft',lambda:as_user('officer',lambda:adm.create_admission('adm_create_c_0000001',app8['name'],rel8['decision'])))
+        as_user('admissions_reviewer',lambda:adm.review_admission('adm_review_c_0000001',dec8['name'],1))
+        conditional=check('admission-conditional',lambda:as_user('approver',lambda:adm.decide_admission('adm_decide_c_0000001',dec8['name'],2,'Conditional',REASON,COND)))
+        assert conditional['status']=='Conditional' and conditional['conditions']==COND
+        as_user('officer',lambda:adm.accept_offer('adm_accept_c_0000001',dec8['name'],3))
+        check('admission-conditional-convert-denied',lambda:denied(lambda:as_user('approver',lambda:adm.convert_applicant('adm_cond_conv_000001',dec8['name'],4))))
+        def expire_now():
+            started=frappe.utils.get_datetime(rel8['expires_at'])
+            with patch.object(adm,'_now',return_value=started+timedelta(days=1)):
+                value=as_user('officer',lambda:adm.expire_admission('adm_expire_key_00001',dec8['name'],4))
+            assert value['status']=='Expired'
+            return {'status':'Expired'}
+        check('admission-expire-after-placement-validity',expire_now)
+        def adm_reads():
+            frappe.set_user(users['officer']);assert frappe.get_list(adm.DECISION_DT)
+            frappe.set_user(users['admissions_reviewer']);assert frappe.get_list(adm.DECISION_DT)
+            frappe.set_user(users['approver']);assert frappe.get_list(adm.DECISION_DT)
+            frappe.set_user(users['admissions_auditor']);assert frappe.get_list(adm.DECISION_DT)
+            frappe.set_user(users['second_author'])
+            try:listed=frappe.get_list(adm.DECISION_DT)
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            frappe.set_user(users['publisher'])
+            try:listed=frappe.get_list(adm.DECISION_DT)
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            return {'admission_staff_only':True}
+        check('admission-role-and-list-parity',adm_reads)
+        def adm_rollback_proof():
+            frappe.set_user(users['officer']);frappe.db.savepoint('adm_atomic')
+            old={dt:frappe.db.count(dt) for dt in (adm.DECISION_DT,api.OP,api.AUDIT,'Student Applicant')}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic admission audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):
+                    adm.create_admission('adm_atomic_key_00001',app6['name'],rel6['decision'])
+            except RuntimeError:frappe.db.rollback(save_point='adm_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            return {'real_database_rollback':True,'injected_boundary':'admission audit'}
+        check('admission-atomic-decision-rollback',adm_rollback_proof)
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def adm_second_site():
+            assert frappe.db.count(adm.DECISION_DT)==0
+            assert frappe.db.count('Student Applicant')==0
+            return {'admission_absent_on_second_site':True}
+        check('second-site-no-first-site-admission-record',adm_second_site)
+        frappe.destroy();connect('placement-test.localhost')
         base='http://127.0.0.1:18000'
         for _ in range(60):
             try:
@@ -1186,8 +1358,9 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
+        def apost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.admission.'+method,json=payload,timeout=40)
         def http_denied(response,csrf=False):
             assert response.status_code in (400,403,404,405,409,417),f'Unexpected HTTP {response.status_code}'
             data=response.json()
@@ -1528,6 +1701,65 @@ def main():
             assert frappe.db.count(api.DECISION,{'attempt':httpdec['attempt']})==1
             return {'http_statuses':[200,200],'one_decision':True}
         check('http-decision-concurrent-idempotency',http_decision_idem)
+        # --- Admission over HTTP ---
+        http_adm_payload=dict(request_key='http_adm_create_00001',student_applicant=app6['name'],placement_decision=rel6['decision'])
+        def http_adm_create():
+            r=apost('officer','create_admission',http_adm_payload);assert r.status_code==200,f'admission create HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpadm=check('http-admission-create',http_adm_create)
+        assert httpadm['status']=='Draft' and httpadm['version']==1
+        check('http-admission-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.admission.create_admission',headers={'Host':'placement-test.localhost'},json=http_adm_payload,timeout=30)))
+        check('http-admission-unrelated-role-denied',lambda:http_denied(apost('outsider','create_admission',dict(http_adm_payload,request_key='http_adm_out_0000001'))))
+        check('http-admission-wrong-role-denied',lambda:http_denied(apost('second_author','create_admission',dict(http_adm_payload,request_key='http_adm_author_0001'))))
+        check('http-admission-publisher-denied',lambda:http_denied(apost('publisher','create_admission',dict(http_adm_payload,request_key='http_adm_pub_0000001'))))
+        check('http-admission-get-cannot-mutate',lambda:http_denied(sessions['officer'].get(base+'/api/method/toefl_house.admission.create_admission',params={'request_key':'http_adm_get_0000001'},timeout=30)))
+        def http_adm_csrf():
+            s=sessions['officer'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.admission.create_admission',json=dict(http_adm_payload,request_key='http_adm_csrf_0000001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-admission-csrf-negative-with-positive-control',http_adm_csrf)
+        adm_url=base+'/api/resource/'+quote(adm.DECISION_DT,safe='')+'/'+httpadm['name']
+        check('http-admission-direct-crud-mutation-denied',lambda:http_denied(sessions['officer'].put(adm_url,json={'status':'Approved'},timeout=30)))
+        check('http-admission-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(adm_url,timeout=30)))
+        def http_adm_review():
+            r=apost('admissions_reviewer','review_admission',dict(request_key='http_adm_review_00001',name=httpadm['name'],expected_version=1))
+            assert r.status_code==200,f'review HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httprev=check('http-admission-review',http_adm_review)
+        assert httprev['status']=='Review'
+        def http_adm_decide():
+            r=apost('approver','decide_admission',dict(request_key='http_adm_decide_00001',name=httpadm['name'],expected_version=2,outcome='Approved',reason='Eligible after internal placement.'))
+            assert r.status_code==200,f'decide HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpdecided=check('http-admission-approve',http_adm_decide)
+        assert httpdecided['status']=='Approved'
+        def http_adm_accept():
+            r=apost('officer','accept_offer',dict(request_key='http_adm_accept_00001',name=httpadm['name'],expected_version=3))
+            assert r.status_code==200,f'accept HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpaccepted=check('http-admission-accept',http_adm_accept)
+        assert httpaccepted['accepted']==1
+        def http_adm_convert():
+            r=apost('approver','convert_applicant',dict(request_key='http_adm_convert_0001',name=httpadm['name'],expected_version=4))
+            assert r.status_code==200,f'convert HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpconverted=check('http-admission-convert',http_adm_convert)
+        assert httpconverted['native_student'] and httpconverted['program_enrollment']==0
+        check('http-admission-enroll-student-denied',lambda:http_denied(sessions['officer'].post(base+'/api/method/education.education.api.enroll_student',json={'source_name':app6['name']},timeout=30)))
+        def http_adm_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['approver'].headers);s.cookies.update(sessions['approver'].cookies)
+                return s.post(base+'/api/method/toefl_house.admission.convert_applicant',json=dict(request_key='http_adm_convert_0001',name=httpadm['name'],expected_version=4),timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count('Student',{'student_applicant':app6['name']})==1
+            return {'http_statuses':[200,200],'one_student':True}
+        check('http-admission-concurrent-idempotency',http_adm_idem)
+        def admission_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['officer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(apost('officer','create_admission',dict(http_adm_payload,request_key='http_adm_revoked_0001')))
+        check('http-admission-revoked-officer-old-session-denied',admission_revoke)
         def decision_revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['releaser']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(post('releaser','release_decision',dict(http_decision_payload,request_key='http_decision_revoked_01')))
@@ -1561,9 +1793,13 @@ def main():
             return http_denied(post('publisher2','retire_config',dict(request_key='cfg_revoked_retire_001',config='policy',name=polhttp,expected_version=3)))
         check('http-config-revoked-publisher-old-session-denied',cfg_revoke)
         def no_side_effects():
-            after={dt:frappe.db.count(dt) for dt in before_counts};assert before_counts==after
-            return {'native_domain_counts_unchanged':after}
-        check('no-student-enrollment-academic-finance-payroll-writes',no_side_effects)
+            after={dt:frappe.db.count(dt) for dt in before_counts}
+            for dt in ('Program Enrollment','Course Enrollment','Assessment Result','Sales Invoice','GL Entry','Salary Slip'):
+                assert after[dt]==before_counts[dt],(dt,before_counts[dt],after[dt])
+            assert after['Student']>=1 and after['Student Applicant']>=1
+            return {'enrollment_academic_finance_payroll_unchanged':True,
+                    'native_students':after['Student'],'native_applicants':after['Student Applicant']}
+        check('no-enrollment-academic-finance-payroll-writes',no_side_effects)
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}

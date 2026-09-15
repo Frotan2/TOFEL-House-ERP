@@ -33,6 +33,15 @@ KIND_ROLES = {
     "publish_course_map": "Placement Publisher",
     "retire_course_map": "Placement Publisher",
     "release_decision": "Placement Releaser",
+    "record_applicant": "Admission Officer",
+    "create_admission": "Admission Officer",
+    "review_admission": "Admission Reviewer",
+    "decide_admission": "Admission Approver",
+    "accept_offer": "Admission Officer",
+    "withdraw_admission": "Admission Officer",
+    "revoke_admission": "Admission Approver",
+    "expire_admission": "Admission Officer",
+    "convert_applicant": "Admission Approver",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -43,6 +52,7 @@ DOCTYPES = {
     "TH Placement Exposure", "TH Placement Allocation Guard",
     "TH Placement Response", "TH Placement Score",
     "TH Placement Course Map Revision", "TH Placement Decision",
+    "TH Admission Decision",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision",
                    "TH Placement Course Map Revision")
@@ -80,6 +90,6 @@ def require_command(doctype):
     require_synthetic()
     context = _CONTEXT.get()
     if doctype not in DOCTYPES or context is None or context[1] != frappe.session.user:
-        raise frappe.PermissionError("Protected records require an authorized placement command")
+        raise frappe.PermissionError("Protected records require an authorized domain command")
     authorize(KIND_ROLES[context[0]])
     return context

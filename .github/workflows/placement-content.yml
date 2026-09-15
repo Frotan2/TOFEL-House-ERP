@@ -6,6 +6,7 @@ on:
       - .github/workflows/placement-content.yml
       - apps/toefl_house/**
       - tests/placement/**
+      - tests/admission/**
       - tools/placement/native_checks.py
       - tools/placement/run_native.py
       - tools/foundation/runner_probe.py

@@ -86,6 +86,11 @@
       "role": "Placement Auditor",
       "read": 1,
       "select": 1
+    },
+    {
+      "role": "Admission Auditor",
+      "read": 1,
+      "select": 1
     }
   ],
   "sort_field": "creation",

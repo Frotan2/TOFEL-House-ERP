@@ -12,9 +12,10 @@ See [PLACEMENT-CLOSURE.md](PLACEMENT-CLOSURE.md). Hosted run `34932512626`
 **Authoritative product-capability review:** [ERP-CAPABILITY-MAP.md](ERP-CAPABILITY-MAP.md).
 Every major domain is classified **NATIVE / CONFIGURATION / TOEFL HOUSE EXTENSION /
 DEFERRED**. Placement is the only large justified extension and is closed.
-Admission, if later authorized, is a *thin* decision on native Student Applicant —
-not a second ERP. Recommended next domain: **Admission** (thin). Production remains
-**REJECT**.
+Thin Admission is implemented as `TH Admission Decision` over native Student
+Applicant / Student; hosted qualification is recorded in
+[ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md). Do not start Enrollment.
+Production remains **REJECT**.
 
 ## Current placement revision
 

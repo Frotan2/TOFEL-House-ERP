@@ -293,6 +293,42 @@ ATTEMPT_TRANSITIONS = {
     ("Review", "Finalized"),
 }
 
+ADMISSION_STATUSES = (
+    "Draft", "Review", "Approved", "Conditional", "Deferred", "Rejected",
+    "Withdrawn", "Revoked", "Expired",
+)
+ADMISSION_ACTIVE = ("Draft", "Review", "Approved", "Conditional")
+ADMISSION_TERMINAL = ("Deferred", "Rejected", "Withdrawn", "Revoked", "Expired")
+ADMISSION_TRANSITIONS = {
+    ("Draft", "Review"),
+    ("Draft", "Withdrawn"),
+    ("Review", "Approved"),
+    ("Review", "Conditional"),
+    ("Review", "Deferred"),
+    ("Review", "Rejected"),
+    ("Review", "Withdrawn"),
+    ("Approved", "Revoked"),
+    ("Approved", "Expired"),
+    ("Conditional", "Revoked"),
+    ("Conditional", "Expired"),
+}
+ADMISSION_OUTCOMES = ("Approved", "Conditional", "Deferred", "Rejected")
+REASON_LIMIT = (8, 500)
+
+
+def is_admission_transition(before, after):
+    return (before, after) in ADMISSION_TRANSITIONS
+
+
+def validate_admission_text(value, field):
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be text")
+    text = value.strip()
+    lo, hi = REASON_LIMIT
+    if not lo <= len(text) <= hi:
+        raise ValueError(f"{field} must be {lo} to {hi} characters")
+    return text
+
 CONFIG_VALIDATORS = {"blueprint": validate_blueprint, "policy": validate_policy,
                      "course_map": validate_course_map}
 
@@ -320,8 +356,11 @@ def can_read(kind, roles, actor, owner, status=None):
     # The allocation guard is an internal lock row: no business role reads it.
     if kind == "guard":
         return False
+    if kind == "admission_decision":
+        return bool(roles & {"Admission Officer", "Admission Reviewer",
+                             "Admission Approver", "Admission Auditor"})
     if kind in ("audit", "operation"):
-        return "Placement Auditor" in roles
+        return bool(roles & {"Placement Auditor", "Admission Auditor"})
     if "Placement Publisher" in roles:
         return True
     # Invigilator may operate the Digital session and read the operational

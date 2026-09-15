@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "toefl_house"
 version = "0.1.0"
-description = "Synthetic-only TOEFL House placement qualification increment"
+description = "Synthetic-only TOEFL House placement and thin admission qualification"
 requires-python = ">=3.14"
 
 [tool.setuptools.package-data]
-toefl_house = ["modules.txt", "patches.txt", "fixtures/*.json", "placement/doctype/*/*.json"]
+toefl_house = ["modules.txt", "patches.txt", "fixtures/*.json", "placement/doctype/*/*.json", "admission/doctype/*/*.json"]
 
 [tool.setuptools.packages.find]
 include = ["toefl_house*"]

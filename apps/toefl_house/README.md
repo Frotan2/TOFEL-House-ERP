@@ -1,3 +1,11 @@
+# TOEFL House Placement (closed) and thin Admission
+
+**Admission** is a thin owned `TH Admission Decision` over native Student
+Applicant / Student. Commands live in `toefl_house.admission`. Approval and
+conversion must not create Program Enrollment, invoices, payments, attendance
+or payroll. Hosted qualification status: see
+`docs/domain/ADMISSION-CLOSURE.md`. Do not start Enrollment.
+
 # TOEFL House Placement — increments 1–7 plus closure slice
 
 **Synthetic-only, not production.** Implements the first protected content-governance
@@ -97,6 +105,6 @@ No public HTML editor, candidate portal, upload, bulk import, verified candidate
 
 `python3 -m unittest discover -s tests/placement -v` runs pure local tests, not Frappe runtime tests.
 
-The push/manual, branch-restricted `.github/workflows/placement-content.yml` invokes the unchanged foundation runner probe, then installs exact native commits and both owned apps on two disposable sites. `tools/placement/native_checks.py` exercises real controllers, database constraints, HTTP/CSRF, independent review/publication, allocation feasibility/fail-closed, exposure reuse, deterministic re-run provenance, staff-supervised Digital delivery (verify/deliver/save/seal, server clocks, Reserved→Delivered), objective scoring of sealed Digital attempts (missing≠zero, key-free projection), independent review of marked Digital attempts (reviewer≠scorer), independent finalization of reviewed Digital attempts (finalizer≠scorer and ≠reviewer), internal Decision release of finalized Digital attempts (releaser≠scorer/reviewer/finalizer; course-map fail-closed; Finalized is not mutated), idempotency/races and rollback for increments 1–7 plus the closure slice. It does not weaken upstream tests, modify pins or expose services outside the hosted runner. Failed evidence is retained. No build/install success qualifies unexecuted acceptance scenarios.
+The push/manual, branch-restricted `.github/workflows/placement-content.yml` invokes the unchanged foundation runner probe, then installs exact native commits and both owned apps on two disposable sites. `tools/placement/native_checks.py` exercises real controllers, database constraints, HTTP/CSRF, independent review/publication, allocation feasibility/fail-closed, exposure reuse, deterministic re-run provenance, staff-supervised Digital delivery (verify/deliver/save/seal, server clocks, Reserved→Delivered), objective scoring of sealed Digital attempts (missing≠zero, key-free projection), independent review of marked Digital attempts (reviewer≠scorer), independent finalization of reviewed Digital attempts (finalizer≠scorer and ≠reviewer), internal Decision release of finalized Digital attempts (releaser≠scorer/reviewer/finalizer; course-map fail-closed; Finalized is not mutated), thin Admission over native Applicant/Student (no premature enrollment/billing), idempotency/races and rollback for increments 1–7 plus Placement closure plus Admission. It does not weaken upstream tests, modify pins or expose services outside the hosted runner. Failed evidence is retained. No build/install success qualifies unexecuted acceptance scenarios.
 
 Never uninstall this app to work around retention or remove audit evidence. Any populated schema rollback/recovery needs separate qualification; destructive uninstall is not supplied as a rollback method.

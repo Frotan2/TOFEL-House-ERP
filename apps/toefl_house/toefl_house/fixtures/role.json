@@ -47,5 +47,33 @@
     "role_name": "Placement Releaser",
     "desk_access": 1,
     "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Admission Officer",
+    "role_name": "Admission Officer",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Admission Reviewer",
+    "role_name": "Admission Reviewer",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Admission Approver",
+    "role_name": "Admission Approver",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Admission Auditor",
+    "role_name": "Admission Auditor",
+    "desk_access": 1,
+    "disabled": 0
   }
 ]
