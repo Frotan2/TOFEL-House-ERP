@@ -20,10 +20,9 @@ The strategy remains reuse of Frappe/ERPNext/Education/HRMS. Thin Admission
 QUALIFIED (`4da6f1b`, hosted run `34941341845`). See
 [ADMISSION-CLOSURE.md](docs/domain/ADMISSION-CLOSURE.md). Thin Enrollment
 (`toefl_house.enrollment.enroll_in_program` over native Program Enrollment)
-is implemented on this branch and is **not hosted-qualified until the
-synthetic runner passes**. See
-[ENROLLMENT-CLOSURE.md](docs/domain/ENROLLMENT-CLOSURE.md). Do not start the
-next domain. Do not deploy. Production remains **REJECT**.
+is CLOSED / QUALIFIED (`756614e`, hosted run `34946981784`, 425/425 native
+checks). See [ENROLLMENT-CLOSURE.md](docs/domain/ENROLLMENT-CLOSURE.md). Do
+not start the next domain. Do not deploy. Production remains **REJECT**.
 
 **Phase 3 domain architecture is ready for review:**
 [TOEFL House domain design package](docs/domain/README.md) covers native entity ownership,
