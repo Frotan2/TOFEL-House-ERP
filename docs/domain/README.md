@@ -1,5 +1,13 @@
 # Phase 3 — architecture review and decision lock
 
+## Placement domain status (synthetic isolated build)
+
+**CLOSED / QUALIFIED** for the bounded synthetic isolated build on 2026-09-15.
+See [PLACEMENT-CLOSURE.md](PLACEMENT-CLOSURE.md). Hosted run `34932512626`
+(commit `4571e6c`, **332/332** native checks, **86/86** runner steps,
+`production: REJECT`). Do not start another Placement increment. Recommended
+next ERP domain: **Admission**. Do not deploy.
+
 ## Current placement revision
 
 [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md) is the authoritative revised placement model: managed bank, constrained randomized blueprints, six skills, digital/physical/hybrid delivery and objective/manual marking. It supersedes earlier narrow placement-slice restrictions, not native ownership or the production REJECT. M01–M05 consolidate remaining business policy approvals. Implementation is not authorized. Earlier architecture/source-review metadata records historical snapshots, not a new validation of this revision.
