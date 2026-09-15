@@ -180,6 +180,17 @@ class Increment3ActorGuardTests(unittest.TestCase):
 
         Visitor().visit(tree)
 
+    def test_allocate_insert_records_allocator_and_version_one(self):
+        # Run 34923079666: AttemptRecord requires Allocated/version=1/allocated_by
+        # on insert; omitting them aborted the suite at alloc-happy-path.
+        api_src = (ROOT / "apps/toefl_house/toefl_house/api.py").read_text(encoding="utf-8")
+        start = api_src.index("def allocate_attempt")
+        end = api_src.index("\ndef _now(")
+        blob = api_src[start:end]
+        self.assertIn("allocated_by=actor", blob)
+        self.assertIn("version=1", blob)
+        self.assertIn('status="Allocated"', blob)
+
     def test_http_allocate_keys_match_whitelist_signature(self):
         # Run 34886485679: HTTP JSON used case/blueprint/policy while the
         # whitelist still required case_name/blueprint_name/policy_name → 500.

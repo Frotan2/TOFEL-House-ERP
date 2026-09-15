@@ -444,7 +444,8 @@ def allocate_attempt(request_key, case, blueprint, blueprint_version, policy, po
                                       blueprint_version=bp.version, blueprint_hash=bp.content_hash,
                                       policy=pol.name, policy_version=pol.version,
                                       policy_hash=pol.content_hash, mode=bp_def["mode"],
-                                      status="Allocated", synthetic=1))
+                                      status="Allocated", version=1, allocated_by=actor,
+                                      synthetic=1))
         attempt.insert(ignore_permissions=True)
         # Exactly one manifest per attempt; frozen question manifest. The
         # time profile is the published blueprint's section minutes (this
