@@ -2348,7 +2348,8 @@ def main():
             if not frappe.db.exists('Item','SYN-PLACEMENT-FEE'):
                 frappe.get_doc(dict(doctype='Item',item_code='SYN-PLACEMENT-FEE',
                     item_name='Synthetic Placement Fee',item_group='Services',
-                    stock_uom='Nos',is_stock_item=0)).insert()
+                    stock_uom='Nos',uom='Nos',is_stock_item=0,is_sales_item=1,
+                    is_service_item=1)).insert()
             if not frappe.db.exists('Price List','TOEFL House Standard'):
                 frappe.get_doc(dict(doctype='Price List',price_list_name='TOEFL House Standard',
                     currency='AFN',selling=1,buying=0,enabled=1)).insert()
@@ -2357,6 +2358,17 @@ def main():
                 frappe.get_doc(dict(doctype='Item Price',item_code='SYN-PLACEMENT-FEE',
                     price_list='TOEFL House Standard',selling=1,currency='AFN',
                     price_list_rate=4000)).insert()
+            # Fee Category after_insert auto-creates a sales Item in group
+            # 'Fee Component' (education integration); reuse an explicitly
+            # created item so no default depends on the setup wizard.
+            if not frappe.db.exists('Item Group','Fee Component'):
+                frappe.get_doc(dict(doctype='Item Group',item_group_name='Fee Component',
+                    parent_item_group='All Item Groups')).insert()
+            if not frappe.db.exists('Item','SYN-Tuition'):
+                frappe.get_doc(dict(doctype='Item',item_code='SYN-Tuition',
+                    item_name='SYN-Tuition',item_group='Fee Component',
+                    stock_uom='Nos',uom='Nos',is_stock_item=0,is_sales_item=1,
+                    is_service_item=1)).insert()
             if not frappe.db.exists('Fee Category','SYN-Tuition'):
                 frappe.get_doc(dict(doctype='Fee Category',category_name='SYN-Tuition')).insert()
             if not frappe.db.exists('Fee Structure',{'program':cat['program'],'academic_year':cat['academic_year']}):
