@@ -98,6 +98,7 @@ class ClockTests(unittest.TestCase):
             ("Verified", "In Progress"),
             ("In Progress", "Sealed"),
             ("Sealed", "Marking"),
+            ("Marking", "Review"),
         })
 
 

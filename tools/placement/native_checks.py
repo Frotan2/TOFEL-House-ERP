@@ -18,13 +18,14 @@ def main():
     from toefl_house import api
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
-    report={'scope':'Synthetic content-governance, blueprint/policy configuration, allocation, staff-supervised digital delivery and objective scoring increments (1-5); not full T01-T20','status':'running','checks':[],
+    report={'scope':'Synthetic content-governance, blueprint/policy configuration, allocation, staff-supervised digital delivery, objective scoring and independent review increments (1-6); not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
            'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',
            'invigilator':'synthetic-invigilator@example.test',
            'assessor':'synthetic-assessor@example.test',
+           'reviewer':'synthetic-reviewer@example.test',
            'candidate':'synthetic-candidate@example.test','candidate2':'synthetic-candidate2@example.test',
            'candidate3':'synthetic-candidate3@example.test','candidate4':'synthetic-candidate4@example.test'}
     item=None
@@ -82,6 +83,7 @@ def main():
                          'second_author':['Placement Author'],'auditor':['Placement Auditor'],'outsider':[],
                          'invigilator':['Placement Invigilator'],
                          'assessor':['Placement Assessor'],
+                         'reviewer':['Placement Reviewer'],
                          'candidate':[],'candidate2':[],'candidate3':[],'candidate4':[]}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
@@ -850,11 +852,98 @@ def main():
             return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
         check('score-whole-command-transient-recovery',lambda:score_transient(False))
         check('score-retry-exhaustion-bounded',lambda:score_transient(True))
+
+        # --- Increment 6: independent review of marked Digital attempts ---
+        check('review-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.review_attempt('review_pub_key_000001',alloc2['attempt'],5))))
+        check('review-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.review_attempt('review_auth_key_000001',alloc2['attempt'],5))))
+        check('review-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.review_attempt('review_out_key_0000001',alloc2['attempt'],5))))
+        check('review-invigilator-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.review_attempt('review_inv_key_000001',alloc2['attempt'],5))))
+        check('review-assessor-denied',lambda:denied(lambda:as_user('assessor',lambda:api.review_attempt('review_as_key_00000001',alloc2['attempt'],5))))
+        check('review-before-score-denied',lambda:denied(lambda:as_user('reviewer',lambda:api.review_attempt('review_before_score_001',alloc3['attempt'],4))))
+        def review_scorer_union_denied():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.add_roles('Placement Reviewer');frappe.db.commit();frappe.clear_cache(user=u.name)
+            try:return denied(lambda:as_user('assessor',lambda:api.review_attempt('review_self_key_0000001',alloc4['attempt'],5)))
+            finally:
+                frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.remove_roles('Placement Reviewer');frappe.db.commit();frappe.clear_cache(user=u.name)
+        check('review-scorer-cannot-self-review',review_scorer_union_denied)
+        reviewed=check('review-happy-path',lambda:as_user('reviewer',lambda:api.review_attempt('review_attempt_key_0001',alloc2['attempt'],5)))
+        assert reviewed['status']=='Review' and reviewed['version']==6
+        assert reviewed['reviewed_by']==users['reviewer']
+        def review_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('reviewer',lambda:api.review_attempt('review_attempt_key_0001',alloc2['attempt'],5))
+            assert value==reviewed and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_audit':True}
+        check('review-idempotent-replay',review_replay)
+        check('review-stale-version-denied',lambda:denied(lambda:as_user('reviewer',lambda:api.review_attempt('review_stale_key_00001',alloc2['attempt'],5))))
+        check('review-second-denied',lambda:denied(lambda:as_user('reviewer',lambda:api.review_attempt('review_second_key_0001',alloc2['attempt'],6))))
+        def review_reads():
+            frappe.set_user(users['reviewer'])
+            for dt in (api.CASE,api.ATTEMPT,api.RESPONSE,api.SCORE):
+                assert frappe.get_list(dt),dt
+            assert cannot_list(api.MANIFEST) and cannot_list(api.GUARD) and cannot_list(api.KEY)
+            frappe.set_user(users['invigilator']);assert cannot_list(api.SCORE)
+            frappe.set_user(users['second_author']);assert cannot_list(api.SCORE) and cannot_list(api.ATTEMPT)
+            return {'reviewer_no_manifest_or_key':True}
+        check('review-role-and-list-parity',review_reads)
+        def review_generic_write():
+            frappe.set_user(users['reviewer']);doc=frappe.get_doc(api.ATTEMPT,alloc2['attempt']);doc.reviewed_by='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('review-ignore-permissions-does-not-bypass-controller',review_generic_write)
+        check('review-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.ATTEMPT,alloc2['attempt']).db_set('reviewed_by','forged@example.test')))
+        def review_rollback_proof():
+            frappe.set_user(users['reviewer']);frappe.db.savepoint('review_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.SCORE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic review audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.review_attempt('review_atomic_key_0001',alloc4['attempt'],5)
+            except RuntimeError:frappe.db.rollback(save_point='review_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            assert frappe.get_doc(api.ATTEMPT,alloc4['attempt']).status=='Marking'
+            return {'real_database_rollback':True,'injected_boundary':'review audit'}
+        check('review-atomic-review-rollback',review_rollback_proof)
+        def review_transient(exhaust=False):
+            frappe.set_user(users['reviewer']);frappe.db.commit()
+            if exhaust:
+                as_user('assessor',lambda:api.score_attempt('review_score_alloc_0001',alloc['attempt'],4));frappe.db.commit()
+                frappe.set_user(users['reviewer'])
+                target,version,key=alloc['attempt'],5,'review_exhaust_key_0001'
+            else:
+                target,version,key=alloc4['attempt'],5,'review_retry_key_00001'
+            calls=[];original=api._now
+            def flaky():
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic review deadlock')
+                return original()
+            with patch.object(api,'_now',side_effect=flaky):
+                if exhaust:
+                    try:api.review_attempt(key,target,version)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.review_attempt(key,target,version)
+            assert len(calls)==(4 if exhaust else 2)
+            if exhaust:
+                assert frappe.get_doc(api.ATTEMPT,target).status=='Marking'
+                assert not frappe.db.get_value(api.ATTEMPT,target,'reviewed_by')
+            else:
+                assert result['status']=='Review' and frappe.db.get_value(api.ATTEMPT,target,'reviewed_by')==users['reviewer']
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('review-whole-command-transient-recovery',lambda:review_transient(False))
+        check('review-retry-exhaustion-bounded',lambda:review_transient(True))
         frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
         def score_second_site():
             assert frappe.db.count(api.SCORE)==0 and frappe.db.count(api.RESPONSE)==0
             return {'score_absent_on_second_site':True}
         check('second-site-no-first-site-score-record',score_second_site)
+        def review_second_site():
+            assert frappe.db.count(api.ATTEMPT)==0
+            return {'review_absent_on_second_site':True}
+        check('second-site-no-first-site-review-record',review_second_site)
         frappe.destroy();connect('placement-test.localhost')
         base='http://127.0.0.1:18000'
         for _ in range(60):
@@ -873,7 +962,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def http_denied(response,csrf=False):
             assert response.status_code in (400,403,404,405,409,417),f'Unexpected HTTP {response.status_code}'
@@ -1107,6 +1196,42 @@ def main():
             assert frappe.db.count(api.SCORE,{'attempt':httpalloc['attempt']})==1
             return {'http_statuses':[200,200],'one_score':True}
         check('http-score-concurrent-idempotency',http_score_idem)
+
+        # --- Increment 6 over HTTP: review_attempt, CSRF, containment, races, revocation ---
+        http_review_payload=dict(request_key='http_review_key_0001',attempt=httpalloc['attempt'],expected_version=5)
+        def http_review():
+            r=post('reviewer','review_attempt',http_review_payload);assert r.status_code==200,f'review HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpreviewed=check('http-review-positive',http_review)
+        assert httpreviewed['status']=='Review' and httpreviewed['version']==6
+        check('http-review-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.review_attempt',headers={'Host':'placement-test.localhost'},json=http_review_payload,timeout=30)))
+        check('http-review-unrelated-role-denied',lambda:http_denied(post('outsider','review_attempt',dict(http_review_payload,request_key='http_review_out_00001'))))
+        check('http-review-wrong-role-denied',lambda:http_denied(post('second_author','review_attempt',dict(http_review_payload,request_key='http_review_author_0001'))))
+        check('http-review-invigilator-denied',lambda:http_denied(post('invigilator','review_attempt',dict(http_review_payload,request_key='http_review_inv_000001'))))
+        check('http-review-publisher-denied',lambda:http_denied(post('publisher','review_attempt',dict(http_review_payload,request_key='http_review_pub_000001'))))
+        check('http-review-assessor-denied',lambda:http_denied(post('assessor','review_attempt',dict(http_review_payload,request_key='http_review_as_0000001'))))
+        check('http-review-get-cannot-mutate',lambda:http_denied(sessions['reviewer'].get(base+'/api/method/toefl_house.api.review_attempt',params={'request_key':'http_review_get_00001'},timeout=30)))
+        def http_review_csrf():
+            s=sessions['reviewer'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.review_attempt',json=dict(http_review_payload,request_key='http_review_csrf_00001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-review-csrf-negative-with-positive-control',http_review_csrf)
+        check('http-review-direct-crud-mutation-denied',lambda:http_denied(sessions['reviewer'].put(attempt_url,json={'reviewed_by':'forged@example.test'},timeout=30)))
+        check('http-review-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(score_url,timeout=30)))
+        def http_review_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['reviewer'].headers);s.cookies.update(sessions['reviewer'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.review_attempt',json=http_review_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.get_doc(api.ATTEMPT,httpalloc['attempt']).status=='Review'
+            return {'http_statuses':[200,200],'one_review':True}
+        check('http-review-concurrent-idempotency',http_review_idem)
+        def review_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['reviewer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('reviewer','review_attempt',dict(http_review_payload,request_key='http_review_revoked_0001')))
+        check('http-review-revoked-reviewer-old-session-denied',review_revoke)
         def score_revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(post('assessor','score_attempt',dict(http_score_payload,request_key='http_score_revoked_0001')))

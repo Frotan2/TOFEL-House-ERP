@@ -56,6 +56,8 @@ def query(kind, user=None):
         return "1=1"
     if kind in ("case", "attempt", "response", "score") and "Placement Assessor" in roles:
         return "1=1"
+    if kind in ("case", "attempt", "response", "score") and "Placement Reviewer" in roles:
+        return "1=1"
     if kind in STAFF_ONLY_KINDS:
         return "1=1" if "Placement Auditor" in roles else "1=0"
     table = TABLES[kind]

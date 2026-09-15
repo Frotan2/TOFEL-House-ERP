@@ -777,3 +777,26 @@ def score_attempt(request_key, attempt, expected_version):
 
     return _execute("score_attempt", request_key,
                     {"attempt": attempt, "expected_version": expected_version}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def review_attempt(request_key, attempt, expected_version):
+    def work(actor):
+        doc = _locked_session(attempt, expected_version)
+        if doc.mode != "Digital":
+            raise frappe.ValidationError("Only digital independent review is implemented in this increment")
+        if doc.status != "Marking":
+            raise frappe.ValidationError("Attempt is not marked for review")
+        scored_by = frappe.db.get_value(SCORE, {"attempt": doc.name}, "scored_by")
+        if not scored_by:
+            raise frappe.ValidationError("Attempt has no score to review")
+        if actor == scored_by:
+            raise frappe.PermissionError("Scorer cannot independently review this attempt")
+        reviewed_at = _now()
+        _advance(doc, "Review", reviewed_by=actor, reviewed_at=reviewed_at)
+        result = {"attempt": doc.name, "status": doc.status, "version": doc.version,
+                  "reviewed_by": actor, "reviewed_at": _iso(reviewed_at)}
+        return result, dict(target=doc.name, after_hash=digest([doc.name, "Review", actor]))
+
+    return _execute("review_attempt", request_key,
+                    {"attempt": attempt, "expected_version": expected_version}, work)

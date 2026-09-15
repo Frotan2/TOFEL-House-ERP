@@ -25,6 +25,7 @@ KIND_ROLES = {
     "save_response": "Placement Invigilator",
     "seal_attempt": "Placement Invigilator",
     "score_attempt": "Placement Assessor",
+    "review_attempt": "Placement Reviewer",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {

@@ -219,12 +219,13 @@ def project_form(form, catalog):
     }
 
 
-ATTEMPT_STATUSES = ("Allocated", "Verified", "In Progress", "Sealed", "Marking")
+ATTEMPT_STATUSES = ("Allocated", "Verified", "In Progress", "Sealed", "Marking", "Review")
 ATTEMPT_TRANSITIONS = {
     ("Allocated", "Verified"),
     ("Verified", "In Progress"),
     ("In Progress", "Sealed"),
     ("Sealed", "Marking"),
+    ("Marking", "Review"),
 }
 
 CONFIG_VALIDATORS = {"blueprint": validate_blueprint, "policy": validate_policy}
@@ -264,6 +265,10 @@ def can_read(kind, roles, actor, owner, status=None):
     # Assessor marks sealed Digital attempts; keys and the seed-bearing
     # manifest stay off this role (loaded only inside the scoring command).
     if kind in ("case", "attempt", "response", "score") and "Placement Assessor" in roles:
+        return True
+    # Reviewer independently accepts a marked Digital score; keys and the
+    # seed-bearing manifest stay off this role.
+    if kind in ("case", "attempt", "response", "score") and "Placement Reviewer" in roles:
         return True
     # Case/attempt/manifest/exposure/response/score are staff-only operational
     # records (the manifest carries the seed and the full form, never

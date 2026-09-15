@@ -26,6 +26,8 @@
     "deadline_at",
     "sealed_at",
     "seal_reason",
+    "reviewed_by",
+    "reviewed_at",
     "synthetic"
   ],
   "fields": [
@@ -97,7 +99,7 @@
       "label": "Status",
       "fieldtype": "Select",
       "reqd": 1,
-      "options": "Allocated\nVerified\nIn Progress\nSealed\nMarking"
+      "options": "Allocated\nVerified\nIn Progress\nSealed\nMarking\nReview"
     },
     {
       "fieldname": "version",
@@ -144,6 +146,16 @@
       "options": "\nSubmitted\nTimeout"
     },
     {
+      "fieldname": "reviewed_by",
+      "label": "Reviewed By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "reviewed_at",
+      "label": "Reviewed At",
+      "fieldtype": "Datetime"
+    },
+    {
       "fieldname": "synthetic",
       "label": "Synthetic",
       "fieldtype": "Check",
@@ -169,6 +181,11 @@
     },
     {
       "role": "Placement Assessor",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Reviewer",
       "read": 1,
       "select": 1
     }

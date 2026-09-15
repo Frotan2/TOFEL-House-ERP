@@ -40,6 +40,11 @@ INC5_AUTHOR_ONLY_CHECKS = (
     "http-score-wrong-role-denied",
     "http-score-other-role-read-denied",
 )
+INC6_AUTHOR_ONLY_CHECKS = (
+    "review-author-denied",
+    "http-review-wrong-role-denied",
+    "http-review-other-role-read-denied",
+)
 
 
 def _kind_roles():
@@ -102,6 +107,10 @@ class Increment3ActorGuardTests(unittest.TestCase):
             self.src,
             r"'assessor'\s*:\s*\[\s*'Placement Assessor'\s*\]",
         )
+        self.assertRegex(
+            self.src,
+            r"'reviewer'\s*:\s*\[\s*'Placement Reviewer'\s*\]",
+        )
 
     def test_operational_commands_are_publisher_without_extra_sod(self):
         roles = _kind_roles()
@@ -112,9 +121,11 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertEqual(roles["save_response"], "Placement Invigilator")
         self.assertEqual(roles["seal_attempt"], "Placement Invigilator")
         self.assertEqual(roles["score_attempt"], "Placement Assessor")
+        self.assertEqual(roles["review_attempt"], "Placement Reviewer")
 
     def test_inc3_author_denials_use_author_only_fixtures(self):
-        for name in INC3_AUTHOR_ONLY_CHECKS + INC4_AUTHOR_ONLY_CHECKS + INC5_AUTHOR_ONLY_CHECKS:
+        for name in (INC3_AUTHOR_ONLY_CHECKS + INC4_AUTHOR_ONLY_CHECKS
+                     + INC5_AUTHOR_ONLY_CHECKS + INC6_AUTHOR_ONLY_CHECKS):
             with self.subTest(check=name):
                 body = _check_call_source(self.src, name)
                 self.assertNotIn("'%s'" % DUAL_ROLE, body.replace("check('%s'" % name, ""))
@@ -188,6 +199,16 @@ class Increment3ActorGuardTests(unittest.TestCase):
             data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
             self.assertNotIn("Placement Assessor",
                              {row["role"] for row in data["permissions"]}, folder)
+        for folder in ("th_placement_case", "th_placement_attempt",
+                       "th_placement_response", "th_placement_score"):
+            data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
+            self.assertIn("Placement Reviewer",
+                          {row["role"] for row in data["permissions"]}, folder)
+        for folder in ("th_placement_form_manifest", "th_placement_exposure",
+                       "th_placement_key_revision"):
+            data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
+            self.assertNotIn("Placement Reviewer",
+                             {row["role"] for row in data["permissions"]}, folder)
 
     def test_alloc_read_parity_treats_permissionerror_as_denial(self):
         body = _function_source(self.src, "cannot_list") + _function_source(self.src, "cannot_read_doc")
@@ -245,6 +266,7 @@ class Increment3ActorGuardTests(unittest.TestCase):
         blob = self.src[start:start + 360]
         self.assertIn("'invigilator'", blob)
         self.assertIn("'assessor'", blob)
+        self.assertIn("'reviewer'", blob)
 
     def test_http_session_keys_match_whitelist_signature(self):
         api_src = (ROOT / "apps/toefl_house/toefl_house/api.py").read_text(encoding="utf-8")
