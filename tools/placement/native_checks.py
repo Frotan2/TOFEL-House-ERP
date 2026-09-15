@@ -1465,6 +1465,11 @@ def main():
                 instructors[label]=name
             # Native Student Attendance validation requires a default company with a
             # holiday list; zero-holiday synthetic fixtures, no financial postings.
+            # Company default-warehouse creation links Warehouse Type 'Transit',
+            # which the ERPNext setup wizard seeds; create the identical fixture
+            # record on this wizard-less site (no financial effect).
+            if not frappe.db.exists('Warehouse Type','Transit'):
+                frappe.get_doc(dict(doctype='Warehouse Type',name='Transit')).insert()
             if not frappe.db.exists('Holiday List','SYN-HOLIDAYS-2026'):
                 frappe.get_doc(dict(doctype='Holiday List',holiday_list_name='SYN-HOLIDAYS-2026',
                     from_date='2026-01-01',to_date='2026-12-31')).insert()
