@@ -2405,7 +2405,10 @@ def main():
                     raise AssertionError(f'{type(exc).__name__}: {exc} @ {frames}') from exc
             return wrapped
         fin=check('finance-native-catalog',traced(finance_catalog))
-        CASE9='teaching_pipe_a_case0000001'
+        def case_of(label):
+            # Cases are autonamed; the request key is only the receipt identity.
+            return frappe.db.get_value(api.CASE,{'subject':users[label]},'name')
+        CASE9=case_of('candidate9')
         check('finance-tuition-unknown-enrollment-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_pe_0000000001','NO-SUCH-PE',fin['fee_structure'],'2026-09-01','2026-09-30'))))
         check('finance-tuition-bad-window-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_window_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-30','2026-09-01'))))
         def wrong_year_structure():
@@ -2509,7 +2512,7 @@ def main():
                 price_or_product_discount='Price',selling=1,
                 applicable_for='Customer',customer=fin['payer_waiver'],
                 company='TOEFL House')).insert()
-            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_waiver_01','adm_pipe_w_case0000001',fin['payer_waiver'],'2026-09-01','2026-09-30'))
+            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_waiver_01',case_of('candidate6'),fin['payer_waiver'],'2026-09-01','2026-09-30'))
             line_disc=frappe.db.get_value('Sales Invoice Item',{'parent':value['sales_invoice']},'discount_amount')
             assert value['configured_rate']==4000.0 and float(line_disc)==4000.0,(value,line_disc)
             assert value['net_total']==0.0 and value['grand_total']==0.0,value
@@ -2554,7 +2557,7 @@ def main():
             return {'same_result':True,'no_new_fees':True}
         check('http-finance-tuition-idempotent-replay',http_tuition_replay)
         def http_placement():
-            r=fpost('finance_officer','issue_placement_fee',dict(request_key='http_fin_place_00001',case='adm_pipe_r_case0000001',customer=fin['payer'],posting_date='2026-09-02',due_date='2026-10-02'))
+            r=fpost('finance_officer','issue_placement_fee',dict(request_key='http_fin_place_00001',case=case_of('candidate7'),customer=fin['payer'],posting_date='2026-09-02',due_date='2026-10-02'))
             assert r.status_code==200,f'placement fee HTTP {r.status_code} {r.text[:200]}'
             value=r.json()['message']
             assert value['grand_total']==4000.0 and value['currency']=='AFN',value
