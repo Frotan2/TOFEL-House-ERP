@@ -19,5 +19,12 @@
     "role_name": "Placement Auditor",
     "desk_access": 1,
     "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Placement Invigilator",
+    "role_name": "Placement Invigilator",
+    "desk_access": 1,
+    "disabled": 0
   }
 ]

@@ -1,4 +1,5 @@
 """Pure content validation, not scoring or academic placement policy."""
+from datetime import datetime, timedelta
 import hashlib
 import hmac
 import json
@@ -144,6 +145,87 @@ def validate_policy(value):
     return value
 
 
+def attempt_deadline(started_at, total_minutes):
+    """Overall candidate-work deadline from the pinned blueprint budget.
+
+    Fixture minutes are engineering bounds, not approved institutional timing.
+    """
+    if not isinstance(started_at, datetime):
+        raise ValueError("started_at must be a datetime")
+    return started_at + timedelta(minutes=_bounded_int(total_minutes, "total_minutes", 1, 240))
+
+
+def deadline_reached(now, deadline):
+    if not isinstance(now, datetime) or not isinstance(deadline, datetime):
+        raise ValueError("now and deadline must be datetimes")
+    return now >= deadline
+
+
+def project_form(form, catalog):
+    """Staff-supervised delivery projection: prompts and display options only.
+
+    The catalog is keyed by item name and must not include answers. Seed,
+    algorithm, pool digest, family and item identity never appear in the
+    projection (those stay on the staff-restricted manifest).
+    """
+    if not isinstance(form, dict) or not isinstance(catalog, dict):
+        raise ValueError("Form and catalog required")
+    items = form.get("items")
+    if not isinstance(items, list) or not items:
+        raise ValueError("Form items required")
+    projected = []
+    for entry in items:
+        if not isinstance(entry, dict):
+            raise ValueError("Invalid form item")
+        src = catalog.get(entry.get("item"))
+        if not isinstance(src, dict):
+            raise ValueError("Catalog missing allocated item")
+        if "answer" in src:
+            raise ValueError("Catalog must not include answers")
+        options = src.get("options")
+        if not isinstance(options, list):
+            raise ValueError("Catalog options required")
+        by_id = {}
+        for option in options:
+            if not isinstance(option, dict) or "id" not in option or "text" not in option:
+                raise ValueError("Invalid catalog option")
+            by_id[option["id"]] = option["text"]
+        if entry.get("question_type") == "True False":
+            displayed = [{"id": option["id"], "text": option["text"]} for option in options]
+        else:
+            order = entry.get("option_order")
+            if not isinstance(order, list):
+                raise ValueError("Single-choice option_order required")
+            displayed = [{"id": option_id, "text": by_id[option_id]} for option_id in order]
+        projected.append({
+            "order": entry["order"],
+            "occurrence_id": entry["occurrence_id"],
+            "section": entry["section"],
+            "skill": entry["skill"],
+            "difficulty": entry["difficulty"],
+            "question_type": entry["question_type"],
+            "prompt": src["prompt"],
+            "options": displayed,
+        })
+    sections = [{"id": section["id"], "skill": section["skill"],
+                 "minutes": section["minutes"], "item_count": section["item_count"]}
+                for section in form["sections"]]
+    return {
+        "attempt": form["attempt"],
+        "case": form["case"],
+        "subject": form["subject"],
+        "sections": sections,
+        "items": projected,
+    }
+
+
+ATTEMPT_STATUSES = ("Allocated", "Verified", "In Progress", "Sealed")
+ATTEMPT_TRANSITIONS = {
+    ("Allocated", "Verified"),
+    ("Verified", "In Progress"),
+    ("In Progress", "Sealed"),
+}
+
 CONFIG_VALIDATORS = {"blueprint": validate_blueprint, "policy": validate_policy}
 
 # Draft -> Reviewed -> Published -> Retired. Retired is terminal.
@@ -174,9 +256,14 @@ def can_read(kind, roles, actor, owner, status=None):
         return "Placement Auditor" in roles
     if "Placement Publisher" in roles:
         return True
-    # Case/attempt/manifest/exposure are staff-only operational records (the
-    # manifest carries the seed and the full form, never candidate feedback).
-    if kind in ("case", "attempt", "manifest", "exposure"):
+    # Invigilator may operate the Digital session and read the operational
+    # rows it needs; the manifest (seed / full form) stays Publisher/Auditor.
+    if kind in ("case", "attempt", "exposure", "response") and "Placement Invigilator" in roles:
+        return True
+    # Case/attempt/manifest/exposure/response are staff-only operational
+    # records (the manifest carries the seed and the full form, never
+    # candidate feedback).
+    if kind in ("case", "attempt", "manifest", "exposure", "response"):
         return "Placement Auditor" in roles
     if kind in ("item", "blueprint", "policy") and "Placement Auditor" in roles:
         return status == "Published"

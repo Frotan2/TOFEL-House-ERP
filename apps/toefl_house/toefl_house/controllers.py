@@ -3,7 +3,7 @@ import frappe
 import json
 import re
 from frappe.model.document import Document
-from toefl_house.policy import FROZEN_STATUSES, digest, is_config_transition
+from toefl_house.policy import ATTEMPT_TRANSITIONS, FROZEN_STATUSES, digest, is_config_transition
 from toefl_house.security import require_command, CONFIG_DOCTYPES
 
 
@@ -67,15 +67,62 @@ class ProtectedRecord(Document):
 
 
 class FrozenRecord(ProtectedRecord):
-    """Allocation-era records (case/attempt/manifest/exposure/guard) are
+    """Allocation-era records (case/manifest/exposure/guard/response) are
     created exactly once by an authorized command and are immutable after.
-    A later increment advances state only through its own commands, never
-    through generic save."""
+    Attempt state advances only through AttemptRecord under command context,
+    never through generic save."""
 
     def validate(self):
         super().validate()
         if self.get_doc_before_save():
             raise frappe.PermissionError("Placement allocation records are immutable after creation")
+
+
+class AttemptRecord(ProtectedRecord):
+    """Attempt identity is frozen at allocation; status moves only
+    Allocated → Verified → In Progress → Sealed with a version CAS and
+    one-way clock fields."""
+
+    IDENTITY = (
+        "case_name", "ordinal", "subject", "blueprint", "blueprint_version",
+        "blueprint_hash", "policy", "policy_version", "policy_hash", "mode",
+        "allocated_by",
+    )
+    CLOCKS = (
+        "verified_by", "verified_at", "started_at", "deadline_at",
+        "sealed_at", "seal_reason",
+    )
+
+    def validate(self):
+        super().validate()
+        before = self.get_doc_before_save()
+        if not before:
+            if self.status != "Allocated" or self.version != 1:
+                raise frappe.ValidationError("New attempts start Allocated at version 1")
+            if not self.allocated_by:
+                raise frappe.ValidationError("Allocator is required")
+            if any(self.get(field) for field in self.CLOCKS):
+                raise frappe.ValidationError("New attempts have empty clocks")
+            return
+        for field in self.IDENTITY:
+            if before.get(field) != self.get(field):
+                raise frappe.PermissionError("Attempt identity is immutable")
+        for field in self.CLOCKS:
+            if before.get(field) and before.get(field) != self.get(field):
+                raise frappe.PermissionError("Attempt clock and verification fields are immutable once set")
+        if type(self.version) is not int or self.version != before.version + 1:
+            raise frappe.ValidationError("Attempt version must advance by one")
+        if before.status == self.status or (before.status, self.status) not in ATTEMPT_TRANSITIONS:
+            raise frappe.PermissionError("Illegal attempt state transition")
+        if self.status == "Verified" and not (self.verified_by and self.verified_at):
+            raise frappe.ValidationError("Verification actor and time required")
+        if self.status == "In Progress" and not (self.started_at and self.deadline_at):
+            raise frappe.ValidationError("Session clock required")
+        if self.status == "Sealed":
+            if not (self.sealed_at and self.seal_reason):
+                raise frappe.ValidationError("Seal time and reason required")
+            if self.seal_reason not in ("Submitted", "Timeout"):
+                raise frappe.ValidationError("Unsupported seal reason")
 
 
 class ManifestRecord(FrozenRecord):

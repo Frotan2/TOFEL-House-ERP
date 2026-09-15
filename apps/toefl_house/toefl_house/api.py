@@ -3,7 +3,9 @@ import json
 import secrets
 import frappe
 from toefl_house import allocation
-from toefl_house.policy import (canonical, digest, request_digest, validate_blueprint,
+from frappe.utils import get_datetime
+from toefl_house.policy import (attempt_deadline, canonical, deadline_reached, digest,
+                                project_form, request_digest, validate_blueprint,
                                 validate_config_code, validate_content, validate_family,
                                 validate_policy, validate_request_key)
 from toefl_house.security import KIND_ROLES, authorize, command
@@ -20,6 +22,7 @@ ATTEMPT = "TH Placement Attempt"
 MANIFEST = "TH Placement Form Manifest"
 EXPOSURE = "TH Placement Exposure"
 GUARD = "TH Placement Allocation Guard"
+RESPONSE = "TH Placement Response"
 
 # Synthetic-only purpose marker; other purposes are a later activation config,
 # not something this increment accepts or invents.
@@ -474,3 +477,225 @@ def allocate_attempt(request_key, case, blueprint, blueprint_version, policy, po
                     {"case": case, "blueprint": blueprint,
                      "blueprint_version": blueprint_version,
                      "policy": policy, "policy_version": policy_version}, work)
+
+
+# --- Increment 4: staff-supervised Digital verify / deliver / save / seal ---
+
+def _now():
+    return frappe.utils.now_datetime()
+
+
+def _iso(value):
+    return get_datetime(value).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _locked_session(attempt_name, expected_version):
+    """Lock case then attempt (spec 8). Missing pins fail closed as operator reasons."""
+    if not isinstance(attempt_name, str) or not attempt_name or len(attempt_name) > 140 \
+            or type(expected_version) is not int:
+        raise frappe.ValidationError("Attempt name and integer expected_version required")
+    case_name = frappe.db.get_value(ATTEMPT, attempt_name, "case_name")
+    if not case_name:
+        raise frappe.ValidationError("Attempt not found")
+    frappe.get_doc(CASE, case_name, for_update=True)
+    try:
+        attempt = frappe.get_doc(ATTEMPT, attempt_name, for_update=True)
+    except frappe.DoesNotExistError as exc:
+        raise frappe.ValidationError("Attempt not found") from exc
+    if attempt.version != expected_version:
+        raise frappe.ValidationError("Stale attempt revision")
+    return attempt
+
+
+def _require_session_operator(actor, attempt):
+    if actor == attempt.allocated_by:
+        raise frappe.PermissionError("Allocator cannot operate the session")
+    if attempt.mode != "Digital":
+        raise frappe.ValidationError("Only digital delivery is implemented in this increment")
+
+
+def _advance(attempt, status, **fields):
+    attempt.status = status
+    attempt.version += 1
+    for field, value in fields.items():
+        attempt.set(field, value)
+    attempt.save(ignore_permissions=True)
+
+
+def _manifest_form(attempt_name):
+    # Invigilator has no DocType read on the seed-bearing manifest; the
+    # command loads it through the database under command context.
+    row = frappe.db.get_value(MANIFEST, {"attempt": attempt_name},
+                              ["name", "form_json", "form_hash"], as_dict=True)
+    if not row:
+        raise frappe.ValidationError("Manifest not found")
+    try:
+        form = json.loads(row.form_json)
+    except ValueError as exc:
+        raise frappe.ValidationError("Manifest form_json must be valid JSON") from exc
+    if row.form_hash != digest(form):
+        raise frappe.ValidationError("Stored form integrity mismatch")
+    return row, form
+
+
+def _occurrence_options(form, occurrence):
+    if type(occurrence) is not int or occurrence < 1:
+        raise frappe.ValidationError("Occurrence must be a positive integer")
+    entry = next((item for item in form["items"] if item.get("order") == occurrence), None)
+    if entry is None:
+        raise frappe.ValidationError("Unknown occurrence")
+    if entry.get("question_type") == "True False":
+        return entry, {"true", "false"}
+    order = entry.get("option_order")
+    if not isinstance(order, list):
+        raise frappe.ValidationError("Single-choice option_order required")
+    return entry, set(order)
+
+
+def _response_revision(attempt_name, occurrence):
+    return frappe.db.sql(
+        "select coalesce(max(revision), 0) from `tabTH Placement Response` "
+        "where attempt = %s and occurrence = %s for update",
+        (attempt_name, occurrence))[0][0]
+
+
+def _seal(attempt, reason):
+    _, form = _manifest_form(attempt.name)
+    missing_count = 0
+    for entry in form["items"]:
+        current = _response_revision(attempt.name, entry["order"])
+        if current == 0:
+            frappe.get_doc(dict(doctype=RESPONSE, attempt=attempt.name,
+                                occurrence=entry["order"], revision=1,
+                                option_id="", missing=1, synthetic=1)).insert(ignore_permissions=True)
+            missing_count += 1
+    sealed_at = _now()
+    _advance(attempt, "Sealed", sealed_at=sealed_at, seal_reason=reason)
+    result = {"attempt": attempt.name, "status": attempt.status, "version": attempt.version,
+              "seal_reason": reason, "sealed_at": _iso(sealed_at), "missing_count": missing_count}
+    return result, dict(target=attempt.name, after_hash=digest([attempt.name, "Sealed", reason]))
+
+
+@frappe.whitelist(methods=["POST"])
+def verify_attempt(request_key, attempt, expected_version):
+    def work(actor):
+        doc = _locked_session(attempt, expected_version)
+        _require_session_operator(actor, doc)
+        if doc.status != "Allocated":
+            raise frappe.ValidationError("Attempt is not allocated for verification")
+        verified_at = _now()
+        _advance(doc, "Verified", verified_by=actor, verified_at=verified_at)
+        result = {"attempt": doc.name, "status": doc.status, "version": doc.version,
+                  "verified_by": actor, "verified_at": _iso(verified_at)}
+        return result, dict(target=doc.name, after_hash=digest([doc.name, "Verified", actor]))
+
+    return _execute("verify_attempt", request_key,
+                    {"attempt": attempt, "expected_version": expected_version}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def deliver_attempt(request_key, attempt, expected_version):
+    def work(actor):
+        doc = _locked_session(attempt, expected_version)
+        _require_session_operator(actor, doc)
+        if doc.status != "Verified":
+            raise frappe.ValidationError("Attempt is not verified for delivery")
+        _, form = _manifest_form(doc.name)
+        names = [entry["item"] for entry in form["items"]]
+        rows = frappe.get_all(ITEM, filters={"name": ("in", names)},
+                              fields=["name", "prompt", "question_type", "options_json", "status"],
+                              ignore_permissions=True)
+        catalog = {}
+        for row in rows:
+            if row.status != "Published":
+                raise frappe.ValidationError("Allocated item is no longer published")
+            catalog[row.name] = dict(prompt=row.prompt, question_type=row.question_type,
+                                     options=json.loads(row.options_json))
+        projection = project_form(form, catalog)
+        projection["mode"] = doc.mode
+        bp = frappe.db.get_value(BLUEPRINT, doc.blueprint,
+                                 ["content_hash", "status", "definition_json"], as_dict=True)
+        if not bp or bp.content_hash != doc.blueprint_hash or bp.status != "Published":
+            raise frappe.ValidationError("Pinned blueprint is no longer valid")
+        bp_def = json.loads(bp.definition_json)
+        validate_blueprint(bp_def)
+        started = _now()
+        deadline = attempt_deadline(started, bp_def["total_minutes"])
+        # Convert reservation to irreversible exposure before the projection
+        # is returned (spec 5.5). Reserved rows remain; Delivered is a new event.
+        for family in sorted({entry["family"] for entry in form["items"]}):
+            frappe.get_doc(dict(doctype=EXPOSURE, attempt=doc.name, family=family,
+                                subject=doc.subject, event="Delivered",
+                                synthetic=1)).insert(ignore_permissions=True)
+        _advance(doc, "In Progress", started_at=started, deadline_at=deadline)
+        result = {"attempt": doc.name, "status": doc.status, "version": doc.version,
+                  "started_at": _iso(started), "deadline_at": _iso(deadline),
+                  "item_count": len(form["items"]), "projection": projection}
+        return result, dict(target=doc.name,
+                            after_hash=digest([doc.name, "Delivered", result["started_at"],
+                                               result["deadline_at"]]))
+
+    return _execute("deliver_attempt", request_key,
+                    {"attempt": attempt, "expected_version": expected_version}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def save_response(request_key, attempt, expected_version, occurrence, expected_revision,
+                  option_id="", missing=0):
+    def work(actor):
+        doc = _locked_session(attempt, expected_version)
+        _require_session_operator(actor, doc)
+        if doc.status != "In Progress":
+            raise frappe.ValidationError("Attempt is not in progress")
+        if deadline_reached(_now(), get_datetime(doc.deadline_at)):
+            return _seal(doc, "Timeout")
+        if type(occurrence) is not int or type(expected_revision) is not int \
+                or type(missing) is not int:
+            raise frappe.ValidationError("Occurrence, expected_revision and missing must be integers")
+        if missing not in (0, 1) or expected_revision < 0:
+            raise frappe.ValidationError("Invalid response revision or missing flag")
+        stored_option = "" if option_id is None else option_id
+        _, form = _manifest_form(doc.name)
+        _, allowed = _occurrence_options(form, occurrence)
+        if missing:
+            if stored_option not in ("", None):
+                raise frappe.ValidationError("Missing responses cannot carry an option")
+            stored_option = ""
+        else:
+            if not isinstance(stored_option, str) or stored_option not in allowed:
+                raise frappe.ValidationError("Unknown option id")
+        current = _response_revision(doc.name, occurrence)
+        if current != expected_revision:
+            raise frappe.ValidationError("Stale response revision")
+        revision = current + 1
+        frappe.get_doc(dict(doctype=RESPONSE, attempt=doc.name, occurrence=occurrence,
+                            revision=revision, option_id=stored_option, missing=missing,
+                            synthetic=1)).insert(ignore_permissions=True)
+        result = {"attempt": doc.name, "occurrence": occurrence, "revision": revision,
+                  "option_id": stored_option, "missing": missing, "status": doc.status}
+        return result, dict(target=doc.name,
+                            after_hash=digest([doc.name, occurrence, revision, stored_option, missing]))
+
+    return _execute("save_response", request_key,
+                    {"attempt": attempt, "expected_version": expected_version,
+                     "occurrence": occurrence, "expected_revision": expected_revision,
+                     "option_id": option_id, "missing": missing}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def seal_attempt(request_key, attempt, expected_version, reason):
+    def work(actor):
+        doc = _locked_session(attempt, expected_version)
+        _require_session_operator(actor, doc)
+        if doc.status != "In Progress":
+            raise frappe.ValidationError("Attempt is not in progress")
+        if reason not in ("Submitted", "Timeout"):
+            raise frappe.ValidationError("Unsupported seal reason")
+        reached = deadline_reached(_now(), get_datetime(doc.deadline_at))
+        if reason == "Timeout" and not reached:
+            raise frappe.ValidationError("Timeout seal requires a reached deadline")
+        seal_reason = "Timeout" if reached else reason
+        return _seal(doc, seal_reason)
+
+    return _execute("seal_attempt", request_key,
+                    {"attempt": attempt, "expected_version": expected_version, "reason": reason}, work)

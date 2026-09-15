@@ -23,7 +23,7 @@ class AllocationReadBoundaryTests(unittest.TestCase):
                 self.assertTrue(can_read(kind, ["Placement Auditor"], "a", "someone"))
 
     def test_author_reads_no_allocation_records(self):
-        for kind in ("case", "attempt", "manifest", "exposure"):
+        for kind in ("case", "attempt", "manifest", "exposure", "response"):
             with self.subTest(kind=kind):
                 self.assertFalse(can_read(kind, ["Placement Author"], "a", "a"))
 
@@ -35,7 +35,7 @@ class AllocationReadBoundaryTests(unittest.TestCase):
 
     def test_guard_is_internal_for_every_role(self):
         for roles in ([], ["Placement Author"], ["Placement Publisher"],
-                      ["Placement Auditor"],
+                      ["Placement Auditor"], ["Placement Invigilator"],
                       ["Placement Author", "Placement Publisher", "Placement Auditor"]):
             with self.subTest(roles=roles):
                 self.assertFalse(can_read("guard", roles, "x", "x"))

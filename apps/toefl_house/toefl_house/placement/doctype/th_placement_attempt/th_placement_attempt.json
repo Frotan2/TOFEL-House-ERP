@@ -18,6 +18,14 @@
     "policy_hash",
     "mode",
     "status",
+    "version",
+    "allocated_by",
+    "verified_by",
+    "verified_at",
+    "started_at",
+    "deadline_at",
+    "sealed_at",
+    "seal_reason",
     "synthetic"
   ],
   "fields": [
@@ -89,7 +97,51 @@
       "label": "Status",
       "fieldtype": "Select",
       "reqd": 1,
-      "options": "Allocated"
+      "options": "Allocated\nVerified\nIn Progress\nSealed"
+    },
+    {
+      "fieldname": "version",
+      "label": "Version",
+      "fieldtype": "Int",
+      "reqd": 1,
+      "default": "1"
+    },
+    {
+      "fieldname": "allocated_by",
+      "label": "Allocated By",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "verified_by",
+      "label": "Verified By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "verified_at",
+      "label": "Verified At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "started_at",
+      "label": "Started At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "deadline_at",
+      "label": "Deadline At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "sealed_at",
+      "label": "Sealed At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "seal_reason",
+      "label": "Seal Reason",
+      "fieldtype": "Select",
+      "options": "\nSubmitted\nTimeout"
     },
     {
       "fieldname": "synthetic",
@@ -107,6 +159,11 @@
     },
     {
       "role": "Placement Auditor",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Invigilator",
       "read": 1,
       "select": 1
     }

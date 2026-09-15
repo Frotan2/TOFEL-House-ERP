@@ -18,6 +18,9 @@ def after_migrate():
     frappe.db.add_index("TH Placement Item Revision", ["status", "skill"], "th_item_status_skill")
     frappe.db.add_index("TH Placement Exposure", ["subject"], "th_exposure_subject")
     frappe.db.add_index("TH Placement Exposure", ["family"], "th_exposure_family")
+    frappe.db.add_unique("TH Placement Response", ["attempt", "occurrence", "revision"],
+                         "th_response_attempt_occurrence_revision")
+    frappe.db.add_index("TH Placement Response", ["attempt", "occurrence"], "th_response_attempt_occurrence")
 
 
 def after_install():

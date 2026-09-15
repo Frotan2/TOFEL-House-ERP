@@ -6,16 +6,16 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 ## Current status
 
 **Bounded synthetic-data placement implementation in progress (session branch
-`arena/01a0a055-tofel-house-erp`):** the approved technical specification has been
+`arena/01a0a13b-tofel-house-erp`):** the approved technical specification has been
 implemented in vertical increments inside the owned `toefl_house` app —
-increment 1 (governed content: draft/revise/publish with restricted keys and audit)
-and increment 2 (versioned blueprint/policy configuration with
-Draft→Reviewed→Published→Retired, independent review/release and fail-closed
-activation). All operations fail closed outside the isolated synthetic test sites;
-fixtures are explicitly non-operational; allocation, scoring, delivery, release and
-retention capabilities remain unimplemented and disabled. See the
+increment 1 (governed content), increment 2 (versioned blueprint/policy),
+increment 3 (allocation / frozen form) and increment 4 (staff-supervised Digital
+verify/deliver/save/seal with server clocks). All operations fail closed outside
+the isolated synthetic test sites; fixtures are explicitly non-operational;
+scoring, candidate portal, Subject Access, audio, physical packets, release and
+retention remain unimplemented and disabled. See the
 [app boundary](apps/toefl_house/README.md) and the
-[increment 2 implementation record](docs/domain/PLACEMENT-INCREMENT-2.md).
+[increment 4 implementation record](docs/domain/PLACEMENT-INCREMENT-4.md).
 Production approval is not implied; F01–F05 remain closed; owner artifacts P1–P5
 remain prerequisites for any operational use.
 

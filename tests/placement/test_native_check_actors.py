@@ -30,6 +30,11 @@ INC3_AUTHOR_ONLY_CHECKS = (
     "http-alloc-other-role-read-denied",
     "http-alloc-case-wrong-role-denied",
 )
+INC4_AUTHOR_ONLY_CHECKS = (
+    "deliver-verify-author-denied",
+    "http-deliver-wrong-role-denied",
+    "http-deliver-other-role-response-read-denied",
+)
 
 
 def _kind_roles():
@@ -84,14 +89,22 @@ class Increment3ActorGuardTests(unittest.TestCase):
         )
         self.assertRegex(self.src, r"'second_author'\s*:\s*\[\s*'Placement Author'\s*\]")
         self.assertRegex(self.src, r"'other'\s*:\s*\[\s*'Placement Author'\s*\]")
+        self.assertRegex(
+            self.src,
+            r"'invigilator'\s*:\s*\[\s*'Placement Invigilator'\s*\]",
+        )
 
     def test_operational_commands_are_publisher_without_extra_sod(self):
         roles = _kind_roles()
         self.assertEqual(roles["create_case"], "Placement Publisher")
         self.assertEqual(roles["allocate_attempt"], "Placement Publisher")
+        self.assertEqual(roles["verify_attempt"], "Placement Invigilator")
+        self.assertEqual(roles["deliver_attempt"], "Placement Invigilator")
+        self.assertEqual(roles["save_response"], "Placement Invigilator")
+        self.assertEqual(roles["seal_attempt"], "Placement Invigilator")
 
     def test_inc3_author_denials_use_author_only_fixtures(self):
-        for name in INC3_AUTHOR_ONLY_CHECKS:
+        for name in INC3_AUTHOR_ONLY_CHECKS + INC4_AUTHOR_ONLY_CHECKS:
             with self.subTest(check=name):
                 body = _check_call_source(self.src, name)
                 self.assertNotIn("'%s'" % DUAL_ROLE, body.replace("check('%s'" % name, ""))
@@ -128,13 +141,25 @@ class Increment3ActorGuardTests(unittest.TestCase):
         # Do not "fix" Insufficient Permission by adding Author read grants.
         root = ROOT / "apps/toefl_house/toefl_house/placement/doctype"
         for folder in ("th_placement_case", "th_placement_attempt",
-                       "th_placement_form_manifest", "th_placement_exposure"):
+                       "th_placement_form_manifest", "th_placement_exposure",
+                       "th_placement_response"):
             data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
             roles = {row["role"] for row in data["permissions"]}
-            self.assertEqual(roles, {"Placement Publisher", "Placement Auditor"}, folder)
+            self.assertNotIn("Placement Author", roles, folder)
+            self.assertIn("Placement Publisher", roles, folder)
+            self.assertIn("Placement Auditor", roles, folder)
         guard = json.loads((root / "th_placement_allocation_guard" /
                             "th_placement_allocation_guard.json").read_text(encoding="utf-8"))
         self.assertEqual(guard["permissions"], [])
+        manifest = json.loads((root / "th_placement_form_manifest" /
+                               "th_placement_form_manifest.json").read_text(encoding="utf-8"))
+        self.assertNotIn("Placement Invigilator",
+                         {row["role"] for row in manifest["permissions"]})
+        for folder in ("th_placement_case", "th_placement_attempt",
+                       "th_placement_exposure", "th_placement_response"):
+            data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
+            self.assertIn("Placement Invigilator",
+                          {row["role"] for row in data["permissions"]}, folder)
 
     def test_alloc_read_parity_treats_permissionerror_as_denial(self):
         body = _function_source(self.src, "cannot_list") + _function_source(self.src, "cannot_read_doc")
@@ -175,6 +200,31 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertNotIn("case_name=", blob)
         self.assertNotIn("blueprint_name=", blob)
         self.assertNotIn("policy_name=", blob)
+
+    def test_http_sessions_include_invigilator(self):
+        start = self.src.index("sessions={label:login")
+        self.assertIn("'invigilator'", self.src[start:start + 280])
+
+    def test_http_session_keys_match_whitelist_signature(self):
+        api_src = (ROOT / "apps/toefl_house/toefl_house/api.py").read_text(encoding="utf-8")
+        tree = ast.parse(api_src)
+        expected = {
+            "verify_attempt": ["request_key", "attempt", "expected_version"],
+            "deliver_attempt": ["request_key", "attempt", "expected_version"],
+            "save_response": ["request_key", "attempt", "expected_version",
+                              "occurrence", "expected_revision", "option_id", "missing"],
+            "seal_attempt": ["request_key", "attempt", "expected_version", "reason"],
+        }
+        found = {}
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name in expected:
+                found[node.name] = [a.arg for a in node.args.args]
+        self.assertEqual(found, expected)
+        self.assertIn("http_deliver_payload=dict(", self.src)
+        blob = self.src[self.src.index("http_deliver_payload=dict("):
+                        self.src.index("http_deliver_payload=dict(") + 500]
+        for key in ("request_key", "attempt", "expected_version"):
+            self.assertIn("%s=" % key, blob)
 
     def test_increment3_pins_its_own_published_policy(self):
         # Do not capture increment-2's `pol` across the second-site hop.

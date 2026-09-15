@@ -1,6 +1,6 @@
 {
   "doctype": "DocType",
-  "name": "TH Placement Exposure",
+  "name": "TH Placement Response",
   "module": "Placement",
   "autoname": "hash",
   "engine": "InnoDB",
@@ -8,9 +8,10 @@
   "track_changes": 0,
   "field_order": [
     "attempt",
-    "family",
-    "subject",
-    "event",
+    "occurrence",
+    "revision",
+    "option_id",
+    "missing",
     "synthetic"
   ],
   "fields": [
@@ -22,23 +23,27 @@
       "options": "TH Placement Attempt"
     },
     {
-      "fieldname": "family",
-      "label": "Family",
-      "fieldtype": "Data",
+      "fieldname": "occurrence",
+      "label": "Occurrence",
+      "fieldtype": "Int",
       "reqd": 1
     },
     {
-      "fieldname": "subject",
-      "label": "Subject",
-      "fieldtype": "Data",
+      "fieldname": "revision",
+      "label": "Revision",
+      "fieldtype": "Int",
       "reqd": 1
     },
     {
-      "fieldname": "event",
-      "label": "Event",
-      "fieldtype": "Select",
-      "reqd": 1,
-      "options": "Reserved\nDelivered"
+      "fieldname": "option_id",
+      "label": "Option Id",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "missing",
+      "label": "Missing",
+      "fieldtype": "Check",
+      "default": "0"
     },
     {
       "fieldname": "synthetic",

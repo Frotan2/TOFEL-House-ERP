@@ -1,5 +1,5 @@
-from toefl_house.controllers import FrozenRecord
+from toefl_house.controllers import AttemptRecord
 
 
-class THPlacementAttempt(FrozenRecord):
+class THPlacementAttempt(AttemptRecord):
     pass

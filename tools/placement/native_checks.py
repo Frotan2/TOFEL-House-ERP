@@ -1,6 +1,7 @@
 """Real native DB/controller/HTTP acceptance on isolated synthetic sites only."""
 import concurrent.futures
 import copy
+from datetime import timedelta
 import json
 import os
 from pathlib import Path
@@ -17,11 +18,12 @@ def main():
     from toefl_house import api
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
-    report={'scope':'Synthetic content-governance, blueprint/policy configuration and allocation increments (1-3); not full T01-T20','status':'running','checks':[],
+    report={'scope':'Synthetic content-governance, blueprint/policy configuration, allocation and staff-supervised digital delivery increments (1-4); not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
            'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',
+           'invigilator':'synthetic-invigilator@example.test',
            'candidate':'synthetic-candidate@example.test','candidate2':'synthetic-candidate2@example.test',
            'candidate3':'synthetic-candidate3@example.test','candidate4':'synthetic-candidate4@example.test'}
     item=None
@@ -77,6 +79,7 @@ def main():
                 mapping={'author':['Placement Author','Placement Publisher'],'other':['Placement Author'],
                          'publisher':['Placement Publisher'],'publisher2':['Placement Publisher'],
                          'second_author':['Placement Author'],'auditor':['Placement Auditor'],'outsider':[],
+                         'invigilator':['Placement Invigilator'],
                          'candidate':[],'candidate2':[],'candidate3':[],'candidate4':[]}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
@@ -553,6 +556,179 @@ def main():
             return {'allocation_absent_on_second_site':True}
         check('second-site-no-first-site-allocation-record',alloc_second_site)
         frappe.destroy();connect('placement-test.localhost')
+        # --- Increment 4: staff-supervised Digital verify / deliver / save / seal ---
+        check('deliver-verify-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.verify_attempt('deliver_pub_verify_0001',alloc3['attempt'],1))))
+        check('deliver-verify-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.verify_attempt('deliver_auth_verify_0001',alloc3['attempt'],1))))
+        check('deliver-verify-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.verify_attempt('deliver_out_verify_0001',alloc3['attempt'],1))))
+        def allocator_sod():
+            frappe.set_user('Administrator')
+            u=frappe.get_doc('User',users['publisher']);u.append('roles',{'role':'Placement Invigilator'});u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            try:return denied(lambda:as_user('publisher',lambda:api.verify_attempt('deliver_sod_verify_0001',alloc3['attempt'],1)))
+            finally:
+                frappe.set_user('Administrator');u=frappe.get_doc('User',users['publisher']);u.roles=[];u.append('roles',{'role':'Placement Publisher'});u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+        check('deliver-allocator-operator-denied',allocator_sod)
+        check('deliver-before-verify-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.deliver_attempt('deliver_before_verify_001',alloc['attempt'],1))))
+        def physical_denied():
+            phys=publish_config_flow('SYN-BP-PHYS-1',dict(alloc_bp2,mode='Physical'))
+            phys_alloc=as_user('publisher',lambda:api.allocate_attempt('alloc_phys_key_0001',case2['name'],phys['name'],3,pol_name,3))
+            obs=denied(lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_phys_verify_0001',phys_alloc['attempt'],1)))
+            assert frappe.get_doc(api.ATTEMPT,phys_alloc['attempt']).status=='Allocated'
+            return dict(obs,mode='Physical',status='Allocated')
+        check('deliver-physical-mode-denied',physical_denied)
+        verified=check('deliver-verify-happy',lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_verify_key_0001',alloc3['attempt'],1)))
+        assert verified['status']=='Verified' and verified['version']==2 and verified['verified_by']==users['invigilator']
+        def verify_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('invigilator',lambda:api.verify_attempt('deliver_verify_key_0001',alloc3['attempt'],1))
+            assert value==verified and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_audit':True}
+        check('deliver-verify-idempotent',verify_replay)
+        check('deliver-verify-stale-version-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_stale_verify_0001',alloc3['attempt'],1))))
+        check('deliver-second-verify-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_second_verify_001',alloc3['attempt'],2))))
+        delivered=check('deliver-happy-path',lambda:as_user('invigilator',lambda:api.deliver_attempt('deliver_attempt_key_001',alloc3['attempt'],2)))
+        assert delivered['status']=='In Progress' and delivered['version']==3 and delivered['item_count']==9
+        def deliver_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('invigilator',lambda:api.deliver_attempt('deliver_attempt_key_001',alloc3['attempt'],2))
+            assert value==delivered and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_delivery':True}
+        check('deliver-idempotent-replay',deliver_replay)
+        def exposure_converted():
+            rows=frappe.get_all(api.EXPOSURE,filters={'attempt':alloc3['attempt']},fields=['family','event'])
+            reserved={r.family for r in rows if r.event=='Reserved'}
+            delivered_f={r.family for r in rows if r.event=='Delivered'}
+            assert reserved==delivered_f and len(reserved)==9
+            return {'reserved':9,'delivered':9,'reserved_retained':True}
+        check('deliver-exposure-converted',exposure_converted)
+        def projection_strips_secrets():
+            projection=delivered['projection'];blob=json.dumps(projection)
+            assert 'seed' not in projection and 'algorithm' not in projection and 'pool_digest' not in projection
+            seed=frappe.db.get_value(api.MANIFEST,alloc3['manifest'],'seed')
+            assert seed and seed not in blob
+            for item in projection['items']:
+                assert 'family' not in item and 'item' not in item and 'answer' not in item
+                assert item['prompt'].startswith('SYNTHETIC: ') and item['options']
+            key_names=[row.name for row in frappe.get_all(api.KEY,fields=['name'])]
+            assert not any(name in blob for name in key_names)
+            return {'items':len(projection['items']),'no_seed_or_key':True}
+        check('deliver-projection-strips-secrets',projection_strips_secrets)
+        def clock_started():
+            a=frappe.get_doc(api.ATTEMPT,alloc3['attempt'])
+            assert a.started_at and a.deadline_at and a.status=='In Progress'
+            assert delivered['started_at'] and delivered['deadline_at']
+            return {'started_at':delivered['started_at'],'deadline_at':delivered['deadline_at']}
+        check('deliver-clock-started',clock_started)
+        first=delivered['projection']['items'][0]
+        oid=first['options'][0]['id'];occ=first['order']
+        oid2=first['options'][1]['id'] if len(first['options'])>1 else oid
+        check('deliver-save-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.save_response('deliver_pub_save_0001',alloc3['attempt'],3,occ,0,oid,0))))
+        check('deliver-save-unknown-occurrence-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.save_response('deliver_bad_occ_0001',alloc3['attempt'],3,99,0,oid,0))))
+        check('deliver-save-unknown-option-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.save_response('deliver_bad_opt_0001',alloc3['attempt'],3,occ,0,'not_an_option',0))))
+        check('deliver-save-missing-requires-empty-option',lambda:denied(lambda:as_user('invigilator',lambda:api.save_response('deliver_missing_opt_0001',alloc3['attempt'],3,occ,0,oid,1))))
+        saved=check('deliver-save-response',lambda:as_user('invigilator',lambda:api.save_response('deliver_save_key_0001',alloc3['attempt'],3,occ,0,oid,0)))
+        assert saved['revision']==1 and saved['option_id']==oid and saved['missing']==0
+        def save_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('invigilator',lambda:api.save_response('deliver_save_key_0001',alloc3['attempt'],3,occ,0,oid,0))
+            assert value==saved and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count(api.RESPONSE,{'attempt':alloc3['attempt'],'occurrence':occ})==1
+            return {'same_result':True,'one_revision':True}
+        check('deliver-save-idempotent',save_replay)
+        check('deliver-save-stale-revision-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.save_response('deliver_stale_save_0001',alloc3['attempt'],3,occ,0,oid2,0))))
+        revised=check('deliver-save-revise',lambda:as_user('invigilator',lambda:api.save_response('deliver_revise_key_0001',alloc3['attempt'],3,occ,1,oid2,0)))
+        assert revised['revision']==2 and revised['option_id']==oid2
+        def timeout_seal():
+            started=frappe.utils.get_datetime(frappe.db.get_value(api.ATTEMPT,alloc3['attempt'],'started_at'))
+            before=frappe.db.count(api.RESPONSE,{'attempt':alloc3['attempt']})
+            with patch.object(api,'_now',return_value=started+timedelta(minutes=46)):
+                value=as_user('invigilator',lambda:api.save_response('deliver_timeout_save_0001',alloc3['attempt'],3,2,0,oid,0))
+            assert value['status']=='Sealed' and value['seal_reason']=='Timeout' and value['version']==4
+            assert value['missing_count']==8
+            assert frappe.db.count(api.RESPONSE,{'attempt':alloc3['attempt'],'occurrence':2,'missing':0})==0
+            assert frappe.db.count(api.RESPONSE,{'attempt':alloc3['attempt']})==before+8
+            return {'seal_reason':'Timeout','missing_count':8,'late_save_rejected':True}
+        check('deliver-deadline-timeout-seal',timeout_seal)
+        check('deliver-save-after-seal-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.save_response('deliver_after_seal_0001',alloc3['attempt'],4,occ,2,oid,0))))
+        check('deliver-seal-after-seal-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.seal_attempt('deliver_reseal_key_0001',alloc3['attempt'],4,'Submitted'))))
+        verified2=check('deliver-verify-second-form',lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_verify_alloc2_001',alloc2['attempt'],1)))
+        assert verified2['status']=='Verified'
+        delivered2=check('deliver-second-form',lambda:as_user('invigilator',lambda:api.deliver_attempt('deliver_attempt_alloc2_1',alloc2['attempt'],2)))
+        first2=delivered2['projection']['items'][0]
+        saved2=check('deliver-save-second-form',lambda:as_user('invigilator',lambda:api.save_response('deliver_save_alloc2_0001',alloc2['attempt'],3,first2['order'],0,first2['options'][0]['id'],0)))
+        assert saved2['revision']==1
+        sealed2=check('deliver-submit-seal',lambda:as_user('invigilator',lambda:api.seal_attempt('deliver_seal_alloc2_0001',alloc2['attempt'],3,'Submitted')))
+        assert sealed2['status']=='Sealed' and sealed2['seal_reason']=='Submitted' and sealed2['missing_count']==8
+        def deliver_reads():
+            frappe.set_user(users['invigilator'])
+            for dt in (api.CASE,api.ATTEMPT,api.EXPOSURE,api.RESPONSE):
+                assert frappe.get_list(dt),dt
+            assert cannot_list(api.MANIFEST) and cannot_list(api.GUARD)
+            frappe.set_user(users['second_author'])
+            for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE,api.RESPONSE):
+                assert cannot_list(dt),dt
+            frappe.set_user(users['publisher'])
+            assert frappe.get_list(api.RESPONSE) and frappe.get_list(api.MANIFEST)
+            frappe.set_user(users['auditor'])
+            assert frappe.get_list(api.RESPONSE) and frappe.get_list(api.MANIFEST)
+            return {'invigilator_no_manifest':True,'author_denied':True,'staff_response_readable':True}
+        check('deliver-role-and-list-parity',deliver_reads)
+        def deliver_generic_write():
+            frappe.set_user(users['invigilator']);doc=frappe.get_doc(api.ATTEMPT,alloc3['attempt']);doc.subject='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('deliver-ignore-permissions-does-not-bypass-controller',deliver_generic_write)
+        resp_name=frappe.db.get_value(api.RESPONSE,{'attempt':alloc3['attempt'],'occurrence':occ,'revision':2},'name')
+        check('deliver-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.RESPONSE,resp_name).db_set('option_id','forged')))
+        check('deliver-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.RESPONSE,resp_name,ignore_permissions=True)))
+        check('deliver-verify-fourth',lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_verify_alloc4_001',alloc4['attempt'],1)))
+        def deliver_rollback_proof():
+            frappe.set_user(users['invigilator']);frappe.db.savepoint('deliver_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.EXPOSURE,api.RESPONSE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.EXPOSURE and args[0].get('event')=='Delivered':
+                    raise RuntimeError('synthetic delivery exposure failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.deliver_attempt('deliver_atomic_key_0001',alloc4['attempt'],2)
+            except RuntimeError:frappe.db.rollback(save_point='deliver_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            assert frappe.get_doc(api.ATTEMPT,alloc4['attempt']).status=='Verified'
+            return {'real_database_rollback':True,'injected_boundary':'delivered exposure'}
+        check('deliver-atomic-exposure-rollback',deliver_rollback_proof)
+        def deliver_transient(exhaust=False):
+            frappe.set_user(users['invigilator']);frappe.db.commit()
+            if exhaust:
+                as_user('invigilator',lambda:api.verify_attempt('deliver_verify_alloc_0001',alloc['attempt'],1));frappe.db.commit()
+                target,version,key=alloc['attempt'],2,'deliver_exhaust_key_0001'
+            else:
+                target,version,key=alloc4['attempt'],2,'deliver_retry_key_0001'
+            calls=[];original=api._now
+            def flaky():
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic delivery deadlock')
+                return original()
+            with patch.object(api,'_now',side_effect=flaky):
+                if exhaust:
+                    try:api.deliver_attempt(key,target,version)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.deliver_attempt(key,target,version)
+            assert len(calls)==(4 if exhaust else 2)
+            if exhaust:
+                assert frappe.get_doc(api.ATTEMPT,target).status=='Verified'
+            else:
+                assert result['status']=='In Progress' and frappe.db.count(api.EXPOSURE,{'attempt':target,'event':'Delivered'})==9
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('deliver-whole-command-transient-recovery',lambda:deliver_transient(False))
+        check('deliver-retry-exhaustion-bounded',lambda:deliver_transient(True))
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def deliver_second_site():
+            assert frappe.db.count(api.CASE)==0 and frappe.db.count(api.ATTEMPT)==0
+            assert frappe.db.count(api.RESPONSE)==0 and frappe.db.count(api.EXPOSURE)==0
+            return {'delivery_absent_on_second_site':True}
+        check('second-site-no-first-site-delivery-record',deliver_second_site)
+        frappe.destroy();connect('placement-test.localhost')
         base='http://127.0.0.1:18000'
         for _ in range(60):
             try:
@@ -570,7 +746,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def http_denied(response,csrf=False):
             assert response.status_code in (400,403,404,405,409,417),f'Unexpected HTTP {response.status_code}'
@@ -719,6 +895,63 @@ def main():
             assert not (fams[0]&fams[1])
             return {'http_statuses':[200,200],'ordinals':[3,4],'concurrent_forms_disjoint':True}
         check('http-alloc-concurrent-distinct-keys',http_alloc_race)
+
+        # --- Increment 4 over HTTP: verify/deliver/save/seal, CSRF, containment, races, revocation ---
+        def http_verify():
+            r=post('invigilator','verify_attempt',dict(request_key='http_verify_key_0001',attempt=httpalloc['attempt'],expected_version=1))
+            assert r.status_code==200,f'verify HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpverified=check('http-deliver-verify',http_verify)
+        assert httpverified['status']=='Verified' and httpverified['version']==2
+        http_deliver_payload=dict(request_key='http_deliver_key_0001',attempt=httpalloc['attempt'],expected_version=2)
+        def http_deliver():
+            r=post('invigilator','deliver_attempt',http_deliver_payload);assert r.status_code==200,f'deliver HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpdelivered=check('http-deliver-positive',http_deliver)
+        assert httpdelivered['status']=='In Progress' and httpdelivered['version']==3
+        check('http-deliver-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.deliver_attempt',headers={'Host':'placement-test.localhost'},json=http_deliver_payload,timeout=30)))
+        check('http-deliver-unrelated-role-denied',lambda:http_denied(post('outsider','deliver_attempt',dict(http_deliver_payload,request_key='http_deliver_out_0001'))))
+        check('http-deliver-wrong-role-denied',lambda:http_denied(post('second_author','deliver_attempt',dict(http_deliver_payload,request_key='http_deliver_author_01'))))
+        check('http-deliver-publisher-denied',lambda:http_denied(post('publisher','deliver_attempt',dict(http_deliver_payload,request_key='http_deliver_pub_0001'))))
+        check('http-deliver-get-cannot-mutate',lambda:http_denied(sessions['invigilator'].get(base+'/api/method/toefl_house.api.deliver_attempt',params={'request_key':'http_deliver_get_0001'},timeout=30)))
+        def http_deliver_csrf():
+            s=sessions['invigilator'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.deliver_attempt',json=dict(http_deliver_payload,request_key='http_deliver_csrf_0001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-deliver-csrf-negative-with-positive-control',http_deliver_csrf)
+        check('http-deliver-direct-crud-mutation-denied',lambda:http_denied(sessions['invigilator'].put(attempt_url,json={'status':'Sealed'},timeout=30)))
+        http_first=httpdelivered['projection']['items'][0]
+        http_save_payload=dict(request_key='http_save_key_0001',attempt=httpalloc['attempt'],expected_version=3,
+                               occurrence=http_first['order'],expected_revision=0,option_id=http_first['options'][0]['id'],missing=0)
+        def http_save():
+            r=post('invigilator','save_response',http_save_payload);assert r.status_code==200,f'save HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpsaved=check('http-save-positive',http_save)
+        assert httpsaved['revision']==1
+        resp_url=base+'/api/resource/'+quote(api.RESPONSE,safe='')+'/'+frappe.db.get_value(api.RESPONSE,{'attempt':httpalloc['attempt'],'occurrence':http_first['order'],'revision':1},'name')
+        check('http-deliver-other-role-response-read-denied',lambda:http_denied(sessions['second_author'].get(resp_url,timeout=30)))
+        def http_save_idem():
+            p=dict(http_save_payload,request_key='http_save_idem_0001',occurrence=httpdelivered['projection']['items'][1]['order'],
+                   option_id=httpdelivered['projection']['items'][1]['options'][0]['id'])
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['invigilator'].headers);s.cookies.update(sessions['invigilator'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.save_response',json=p,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count(api.RESPONSE,{'attempt':httpalloc['attempt'],'occurrence':p['occurrence']})==1
+            return {'http_statuses':[200,200],'one_revision':True}
+        check('http-save-concurrent-idempotency',http_save_idem)
+        def http_seal():
+            r=post('invigilator','seal_attempt',dict(request_key='http_seal_key_0001',attempt=httpalloc['attempt'],expected_version=3,reason='Submitted'))
+            assert r.status_code==200,f'seal HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpsealed=check('http-seal-submitted',http_seal)
+        assert httpsealed['status']=='Sealed' and httpsealed['seal_reason']=='Submitted'
+        def deliver_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['invigilator']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('invigilator','seal_attempt',dict(request_key='http_deliver_revoked_001',attempt=httpalloc['attempt'],expected_version=4,reason='Submitted')))
+        check('http-deliver-revoked-invigilator-old-session-denied',deliver_revoke)
         def alloc_revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['publisher']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(post('publisher','allocate_attempt',dict(http_alloc_payload,blueprint=cfgx['small_bp'],request_key='http_alloc_revoked_001')))
