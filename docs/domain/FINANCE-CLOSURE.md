@@ -67,8 +67,21 @@ placement cases read-only).
   **486/486 checks pass** — the four earlier slices proven one connected
   lifecycle (attendance → … → placement case re-read from the database,
   journey receipt continuity, cross-domain referential integrity).
-- Hosted qualification (`.github/workflows/placement-content.yml`): **filled
-  from actual check-run output below.**
+- Hosted iteration record (actual runner output; nothing relabeled):
+  - Run `34974750579` (commit `4172a65`): **FAIL** — `finance-native-catalog`
+    `LinkValidationError: Could not find Item Group: Services, Default Unit
+    of Measure: Nos` (ERPNext setup-wizard-seeded masters absent on a
+    wizard-less site; Warehouse Type 'Transit' precedent). All **486** other
+    recorded checks passed, including the complete retained
+    Placement/Admission/Enrollment/Teaching suites and the integration
+    proof. Fixed in `827519e` by seeding the identical catalog masters.
+  - Run `34976974917` (commit `827519e`): **FAIL** — `finance-native-catalog`
+    `MandatoryError: [Item, SYN-Tuition]: stock_uom, uom` (education
+    `FeeCategory.after_insert` auto-creates a sales Item whose defaults
+    depend on wizard setup). **486/487** recorded checks passed. Fixed in
+    `0976ab3` by pre-creating the sales item explicitly (`create_item`
+    reuses existing items) and seeding the `Fee Component` item group.
+  - Final qualification run: filled from actual check-run output below.
 
 ## 3. Boundary and remaining gates
 

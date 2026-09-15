@@ -2391,8 +2391,19 @@ def main():
                     'placement_item':'SYN-PLACEMENT-FEE','fee_structure':fs_name,
                     'receivable':comp.default_receivable_account,'payer':payers['one'],
                     'payer_waiver':payers['two'],'before':fin_before}
-        fin=check('finance-native-catalog',finance_catalog)
+        fin=check('finance-native-catalog',traced(finance_catalog))
         CASE9='teaching_pipe_a_case0000001'
+        def traced(fn):
+            # Diagnostics: name the exact statement of a failure in one hosted
+            # cycle instead of guessing (job logs are unreachable; only the
+            # exception message reaches the report).
+            def wrapped():
+                try:return fn()
+                except Exception as exc:
+                    import traceback as _tb
+                    frames=" <- ".join(f.filename.split('/')[-1]+':'+str(f.lineno)+':'+f.name for f in _tb.extract_tb(exc.__traceback__)[-5:])
+                    raise AssertionError(f'{type(exc).__name__}: {exc} @ {frames}') from exc
+            return wrapped
         check('finance-tuition-unknown-enrollment-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_pe_0000000001','NO-SUCH-PE',fin['fee_structure'],'2026-09-01','2026-09-30'))))
         check('finance-tuition-bad-window-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_window_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-30','2026-09-01'))))
         def wrong_year_structure():
@@ -2418,7 +2429,7 @@ def main():
             assert row.docstatus==1 and row.program_enrollment==second['program_enrollment'] and row.fee_structure==fin['fee_structure']
             assert frappe.db.count('GL Entry',{'voucher_no':value['fees'],'voucher_type':'Fees'})>0
             return value
-        fees1=check('finance-tuition-happy-path',tuition_positive)
+        fees1=check('finance-tuition-happy-path',traced(tuition_positive))
         def tuition_replay():
             count=frappe.db.count(api.AUDIT);fees_count=frappe.db.count('Fees')
             value=as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_a_000001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))
@@ -2468,7 +2479,7 @@ def main():
             assert row.docstatus==1 and row.customer==fin['payer'] and row.th_placement_case==CASE9 and row.company=='TOEFL House'
             assert frappe.db.count('GL Entry',{'voucher_no':value['sales_invoice'],'voucher_type':'Sales Invoice'})>0
             return value
-        inv1=check('finance-placement-happy-path',placement_positive)
+        inv1=check('finance-placement-happy-path',traced(placement_positive))
         def placement_replay():
             count=frappe.db.count(api.AUDIT);si_count=frappe.db.count('Sales Invoice')
             value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_a_00000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))
@@ -2500,7 +2511,7 @@ def main():
             assert value['net_total']==0.0 and value['grand_total']==0.0
             return {'pricing_rule':rule.name,'waived_grand_total':value['grand_total'],
                     'line_discount':float(line_disc),'sales_invoice':value['sales_invoice']}
-        waiver=check('finance-placement-native-pricing-rule-waiver',waiver_flow)
+        waiver=check('finance-placement-native-pricing-rule-waiver',traced(waiver_flow))
         def fin_reads():
             frappe.set_user(users['finance_officer'])
             for dt in (api.OP,api.AUDIT,'Fees','Sales Invoice'):
