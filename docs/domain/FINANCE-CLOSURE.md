@@ -121,6 +121,23 @@ placement cases read-only).
     finance-staff role) and re-tuning `finance-role-and-list-parity` to the
     honest model (containment is the absolute guard; receipt ledger stays
     auditor-only; ERPNext's native `All`-read on Sales Invoice unchanged).
+  - Run `34993134632` (commit `3b8530c`): **FAIL** — **506/507** recorded
+    checks passed; Accounts User fix green (placement happy path, replay,
+    duplicate, direct-write-denied and the re-tuned parity check all pass).
+    Remaining failure: `finance-placement-native-pricing-rule-waiver` —
+    native `Pricing Rule` rejects `apply_discount_on='Rate'` at insert
+    (select allows only `Grand Total` / `Net Total`). Fixed in `ddd35a4`
+    (`Grand Total`; the 100% discount distributes to the single invoice
+    line, so line/net/grand assertions stand).
+  - Run `34995212211` (commit `ddd35a4`): **FAIL** — **508/509** recorded
+    checks passed; waiver check green. Remaining failure:
+    `http-finance-tuition-positive` HTTP 403 — frappe's `is_whitelisted`
+    raises "Login to access" for **any** caller when the function is not
+    in the whitelist registry: the two finance commands had no
+    `@frappe.whitelist()` decorator (direct in-process checks never
+    exercised it). Fixed by adding `@frappe.whitelist(methods=["POST"])`
+    to `issue_tuition_fees` and `issue_placement_fee`, matching every
+    other command surface.
   - Final qualification run: filled from actual check-run output below.
 
 ## 3. Boundary and remaining gates

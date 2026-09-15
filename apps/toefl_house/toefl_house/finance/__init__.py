@@ -45,6 +45,7 @@ def guard_sales_invoice(doc, method=None):
     raise frappe.ValidationError("Sales Invoice requires an authorized finance command")
 
 
+@frappe.whitelist(methods=["POST"])
 def issue_tuition_fees(request_key, program_enrollment, fee_structure,
                        posting_date, due_date):
     """Bill one submitted Program Enrollment from a configured Fee Structure.
@@ -124,6 +125,7 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
                      "posting_date": posting_date, "due_date": due_date}, work)
 
 
+@frappe.whitelist(methods=["POST"])
 def issue_placement_fee(request_key, case, customer, posting_date, due_date):
     """Bill a placement case only when Finance has configured a charge.
 
