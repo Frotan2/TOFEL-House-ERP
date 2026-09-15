@@ -123,7 +123,11 @@ def main():
                          'attendance_recorder':['Attendance Recorder'],
                          'teaching_auditor':['Teaching Auditor'],
                          'finance_officer':['Finance Officer','Accounts User'],
-                         'finance_auditor':['Finance Auditor']}
+                         'finance_auditor':['Finance Auditor'],
+                         # A13 web-seam containment probe: native Accounts
+                         # User only; never revoked, so the REST probes below
+                         # exercise the guard layer, not a permission denial.
+                         'containment_probe':['Accounts User']}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -1730,7 +1734,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor','teaching_scheduler','attendance_recorder','finance_officer')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor','teaching_scheduler','attendance_recorder','finance_officer','containment_probe')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def apost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.admission.'+method,json=payload,timeout=40)
         def epost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.enrollment.'+method,json=payload,timeout=40)
@@ -2675,21 +2679,21 @@ def main():
             return {'rpc_insert_denied':True,'rpc_set_value_denied':field,'rpc_delete_denied_natively':True}
         check('containment-rpc-routes-denied',traced(rpc_probes))
         def rest_probes():
-            # Guard-layer proof at the web seam needs a live session with
-            # native Fees write; the Finance Officer revocation above has
-            # already proven old-session denial, so Accounts User is
-            # re-granted for these probes and the restore is reported.
-            frappe.set_user('Administrator')
-            u=frappe.get_doc('User',users['finance_officer'])
-            if not any(r.role=='Accounts User' for r in u.roles):u.append('roles',{'role':'Accounts User'})
-            u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
-            s=sessions['finance_officer'];field=probe_field('Fees')
+            # containment_probe natively carries Accounts User (Fees
+            # read/write/create/delete in education's Fees permissions) and
+            # is never revoked, so a 417 ValidationError below is the
+            # command-only guard at the web seam, not a role denial. The
+            # Desk cancel route is expected to stop at the permission layer
+            # (no cancel permission on Fees for Accounts User); the guard
+            # layer on the cancel seam is proven server-side above where
+            # permission checks are bypassed.
+            s=sessions['containment_probe'];field=probe_field('Fees')
             obs={'rest_insert':http_denied(s.post(base+'/api/resource/Fees',json=dict(naming_series='EDU-FEE-.YYYY.-',student=second['student'],program_enrollment=second['program_enrollment'],company='TOEFL House',posting_date='2026-09-01',due_date='2026-09-30',fee_structure=fin['fee_structure'],receivable_account=fin['receivable'],components=[dict(fees_category='SYN-Tuition',amount=1)]),timeout=40))}
             obs['rest_update']=http_denied(s.put(base+'/api/resource/Fees/'+quote(fees1['fees'],safe=''),json={field:'SYN-PROBE'},timeout=40))
             assert frappe.db.get_value('Fees',fees1['fees'],field)!='SYN-PROBE','denied REST update persisted'
-            obs['desk_cancel_route']=http_denied(s.post(base+'/api/method/runserverobj',json={'method':'cancel','dt':'Fees','dn':fees1['fees'],'args':'[]'},timeout=40))
+            obs['desk_cancel_route_permission_layer']=http_denied(s.post(base+'/api/method/runserverobj',json={'method':'cancel','dt':'Fees','dn':fees1['fees'],'args':'[]'},timeout=40))
             obs['rest_delete']=http_denied(s.delete(base+'/api/resource/Fees/'+quote(fees1['fees'],safe=''),timeout=40))
-            obs['roles_restored_for_probe']='Accounts User'
+            obs['probe_user']='containment_probe (native Accounts User, never revoked)'
             return obs
         check('containment-rest-routes-denied',rest_probes)
         def amend_copy_probes():
