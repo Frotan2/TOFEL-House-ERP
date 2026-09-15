@@ -49,7 +49,8 @@ def main():
            'attendance_recorder':'synthetic-attendance-recorder@example.test',
            'teaching_auditor':'synthetic-teaching-auditor@example.test',
            'finance_officer':'synthetic-finance-officer@example.test',
-           'finance_auditor':'synthetic-finance-auditor@example.test'}
+           'finance_auditor':'synthetic-finance-auditor@example.test',
+           'containment_probe':'synthetic-containment-probe@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
