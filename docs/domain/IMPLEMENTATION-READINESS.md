@@ -8,6 +8,11 @@
 > operational policies remain conditional; R03 organizational owners and other domain
 > boundaries are unchanged. Earlier approval/checklist text below is historical where
 > it conflicts. No implementation authorization or production approval is granted.
+>
+> **Later (2026-09-15):** Placement is CLOSED/QUALIFIED synthetic
+> ([PLACEMENT-CLOSURE.md](PLACEMENT-CLOSURE.md)). The reuse-versus-custom map is
+> [ERP-CAPABILITY-MAP.md](ERP-CAPABILITY-MAP.md). This 2026-09-14 gate text is not
+> rewritten as if it included those later events. Admission is not started. Production remains REJECT.
 
 
 Date: 2026-09-14. **Architecture review only. Implementation authorization: NOT GRANTED. Architecture approval: NOT GRANTED. Deployment/production approval: NOT GRANTED. Production acceptance: REJECT.**

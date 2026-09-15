@@ -1,0 +1,384 @@
+# TOEFL House ERP capability map
+
+Date: 2026-09-15 · Session branch: `arena/01a0a13b-tofel-house-erp`
+· Placement predecessor: [PLACEMENT-CLOSURE.md](PLACEMENT-CLOSURE.md) (CLOSED / QUALIFIED, hosted run `34932512626`).
+
+**Purpose:** prevent TOEFL House from becoming a second ERP on top of ERPNext.
+This is a product-capability review, not implementation authorization, not
+Admission coding, and not production approval. Production remains **REJECT**.
+Do not deploy. Do not reopen Placement.
+
+**Foundation strategy (unchanged):** Frappe → ERPNext → Education → HRMS/Payments
+are the systems of record for identity, CRM, students, catalog, enrollment,
+timetable, academic results, receivables/GL, employees and payroll. Owned code
+exists only where the foundation cannot express a proven TOEFL House invariant.
+See [foundation-architecture-decision.md](../engineering/foundation-architecture-decision.md)
+and [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md).
+
+**Classification (exactly one primary label per domain):**
+
+| Label | Meaning |
+|---|---|
+| **NATIVE** | Use the pinned Frappe / ERPNext / Education / HRMS documents and controllers as the authority. Do not add a parallel master or ledger. |
+| **CONFIGURATION** | Achievable with native settings, fixtures, naming series, print formats, Role Permissions, Workflow, Custom Fields that only *link*, or Query Reports. No new transactional DocType. |
+| **TOEFL HOUSE EXTENSION** | Proven gap: custom domain logic is required. Keep it the smallest record that does not own native side effects. |
+| **DEFERRED** | Part of the product vision, intentionally later. Do not implement now; do not invent a custom platform “to get ready.” |
+
+A domain classified **NATIVE** may still need configuration. A domain classified
+**EXTENSION** must still *reuse* native masters. The label is the *treatment*,
+not a claim that native objects are absent.
+
+---
+
+## 1. Verdict
+
+The project is **still following the reuse-the-enterprise-foundation strategy**
+if and only if the next slices stay thin. Placement is the one large justified
+extension (pre-enrollment assessment is not Education Assessment Result). The
+failure mode from here is to clone Student, Course, Enrollment, Invoice, Attendance
+or Payroll inside `toefl_house`.
+
+| Domain | Primary classification | Custom code now? |
+|---|---|---|
+| Applicants / CRM | **NATIVE** | No |
+| Admission | **TOEFL HOUSE EXTENSION** (thin decision only) | Not started — next authorized *design* slice |
+| Students | **NATIVE** | No |
+| Courses / Programs | **NATIVE** | No (placement course-map is mapping, not catalog) |
+| Batches / Scheduling | **NATIVE** | No |
+| Attendance | **NATIVE** | No |
+| Academic assessment | **NATIVE** | No |
+| Teachers | **NATIVE** | No |
+| Finance / billing / payments | **NATIVE** | No |
+| HR | **NATIVE** | No |
+| Payroll | **NATIVE** | No (teaching-pay path **BLOCKED**, A09) |
+| Reporting | **CONFIGURATION** | No warehouse |
+| Portals | **DEFERRED** | No replacement SPA |
+| Placement | **TOEFL HOUSE EXTENSION** | **CLOSED / QUALIFIED** (synthetic). Do not reopen |
+| Integrations | **CONFIGURATION** / external adapters **DEFERRED** | No second bus |
+
+**Recommended next domain:** **Admission**, as a *thin* owned `TH Admission Decision`
+on top of native **Student Applicant** and **Student Admission** (intake), consuming
+a released **TH Placement Decision**. Not CRM. Not Student. Not enrollment. Not
+a portal. Not finance.
+
+---
+
+## 2. What is actually installed today
+
+### 2.1 Foundation (pinned, unchanged)
+
+- Frappe site: User, Role, User Permission, File, Email Queue, Notification, RQ, Version.
+- ERPNext: Lead, Customer, Item, Sales Invoice, Payment Entry, GL, Employee, Supplier.
+- Education: Student Applicant, Student Admission, Student, Guardian, Program, Course,
+  Program Enrollment, Course Enrollment, Student Group, Instructor, Course Schedule,
+  Room, Student Attendance, Student Leave Application, Assessment Plan/Result,
+  Fee Structure/Schedule (source-reviewed in [pinned-source-review.json](pinned-source-review.json)).
+- HRMS: employee lifecycle, leave, Attendance, Salary Component/Structure/Assignment,
+  Salary Slip, Payroll Entry, Additional Salary.
+- `foundation_security`: generic Student/Guardian/File/realtime guards. **Not** a
+  TOEFL product and **not** a second ERP.
+
+### 2.2 Owned `toefl_house` (Placement only)
+
+Installed and synthetically qualified: item/key bank, blueprint/policy/course-map
+revisions, case/attempt/manifest/exposure/response/score, `TH Placement Decision`,
+operation receipts, placement roles. **No** Student, Applicant, Admission,
+Enrollment, Course catalog, Invoice, Attendance, HR or portal code.
+
+Synthetic limitation (do not “fix” by reopening Placement): case `subject` is a
+test User, not native Lead/Applicant/Student. Operational Admission must attach
+to **Lead / Student Applicant / Student**, not treat the synthetic User as a
+person master.
+
+### 2.3 Explicitly withdrawn or never to be built
+
+- `TH Applicant` / `TH Student` / `TH Course` / `TH Class` / `TH Course Offering`
+- Custom invoice, outstanding-balance table, or second Fees producer
+- Custom payroll engine or student-attendance-as-pay
+- `TH External Result Evidence`; official/mock TOEFL; baseline CEFR certification
+- Replacement portal / new SPA / Kafka / second workflow engine
+
+---
+
+## 3. Domain catalog
+
+### 3.1 Applicants / CRM — **NATIVE**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | ERPNext **Lead** (prospect); Contact/Address; Education **Student Applicant** (application for a real Program/Academic Year). |
+| Reuse unchanged | Lead as pre-program person (A01 route P). Student Applicant when a real program is intended (A01 route K). Native application_status values; do not invent Select options. |
+| Configuration only | Lead source/territory, naming series, required documents as native attachments, Student Admission intake windows. |
+| Custom code | None for a person/CRM master. Optional **link field** `Student Applicant.th_lead` (entity-ownership §E) only if provenance cannot be stored natively. Placement Case already holds the testing subject — do not clone it into a CRM. |
+| Must NOT rebuild | `TH Applicant`, `TH Prospect`, custom pipeline, duplicate contact directory, email-as-identity merge. |
+| Status | Not implemented. Placement does not write Lead/Applicant. |
+| Dependencies | A02 (identity/email/merge) still **CONDITIONAL**. Staff-assisted intake is the locked first path. |
+
+**Challenge:** building an “Applicant module” inside `toefl_house` would be a second CRM. Education already owns the application document. TOEFL House must not.
+
+### 3.2 Admission — **TOEFL HOUSE EXTENSION** (thin)
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | **Student Applicant** (person’s application; **not submittable**; status Applied/Approved/Rejected/Admitted). **Student Admission** (intake *publication/configuration*, not one person’s case). `enroll_student` mapper (S8) can create Student + Program Enrollment with `ignore_permissions=True` — this is a containment problem, not an admission authority. |
+| Reuse unchanged | Applicant identity, Program/year required fields, Student Admission windows, native conversion to Student. |
+| Configuration only | Intake programs/years on Student Admission; Desk Workflow *may* assist routing but cannot be the durable institutional decision (A10 option W rejected because Applicant “Admitted” is a Student-creation side effect). |
+| Custom code | **`TH Admission Decision` only:** references native Applicant (or verified existing Student), released valid **TH Placement Decision**, target Program/year/term, conditions, approver, offer acceptance/expiry. Logical states Draft → Review → Conditional / Approved / Deferred / Rejected. Does **not** create Student, enrollment, invoice or placement edits. |
+| Must NOT rebuild | Application form platform, admissions CRM, auto-enrollment from recommendation, payment-as-admission, “Admitted” status as proof of registration, applicant portal as the first slice. |
+| Status | **Not implemented.** A10 is DECIDED (boundary). B06 (eligibility, conditions, offer rules, approvers) is still a business input. A13 containment of `enroll_student` is **unproven**. |
+| Dependencies | Closed Placement (released decision). Native Program + Academic Year (Applicant requires them). Identity A02 for conversion. **Enrollment is a later native step, not part of this slice.** |
+
+**Challenge:** native Student Admission looks like “admissions” but is an intake catalog. Native Applicant.Admitted looks like approval but is set when a Student is created (S2). That is why a small owned decision is justified — and why anything larger is a rebuild.
+
+**Challenge:** proposed **TH Enrollment Request** (entity-ownership §C, plan P3.4) is *not* Admission. It is the highest-risk future custom: it will become a second enrollment ledger if it stores roster/course truth. Prefer native Program Enrollment plus A13 hooks. Do not implement it in the Admission slice.
+
+### 3.3 Students — **NATIVE**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | Education **Student** (email required; can provision User and Customer; can set Applicant to Admitted). Guardian / Student Guardian. `foundation_security` exact Student/Customer scope. |
+| Reuse unchanged | One Student per verified person. Returning learners reuse Student. Customer is the accounting party. User is authentication, not the learner master. |
+| Configuration only | `Education Settings.user_creation_skip` to prevent premature website users; naming series; User Permission patterns already qualified for Student/Guardian. |
+| Custom code | None for the master. Provenance links from Admission/Placement only. |
+| Must NOT rebuild | `TH Student`, fake Student for portal login (A03), relaxing required email. |
+| Status | Guards exist. No TOEFL House Student DocType (correct). |
+| Dependencies | A02/A03/A04 still CONDITIONAL for activation, guardians, mixed roles. |
+
+### 3.4 Courses / Programs — **NATIVE**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | Education **Program**, **Course**, Program Course, Academic Year/Term. |
+| Reuse unchanged | Catalog and curriculum. Program Enrollment uniqueness is student/program/year/term (S3). |
+| Configuration only | Real programs, years, terms, course lists — **operational prerequisite for Applicant**, not custom code. |
+| Custom code | None for catalog. **TH Placement Course Map Revision** maps sealed placement evidence to synthetic internal codes (`SYN-COURSE-GENERAL` fixtures). It is **placement policy**, not a course master. Operational mapping must eventually **Link native Course/Program**, not grow a second catalog. |
+| Must NOT rebuild | `TH Course`, `TH Program`, encoding live learner scores on Course masters, using course-map as the timetable. |
+| Status | Native catalog unused in synthetic placement. Course-map is fixture-only and non-operational. |
+| Dependencies | B03 calendars; B04 operational mappings (still conditional). Do not reopen Placement to invent cutoffs. |
+
+### 3.5 Batches / Scheduling — **NATIVE**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | **Student Group** (roster), Student Batch Name (label, not a class), **Course Schedule**, **Room**. |
+| Reuse unchanged | Teaching roster and session authority. |
+| Configuration only | Groups, rooms, instructor assignment on native schedules. |
+| Custom code | None. Do not add `TH Class` / `TH Course Offering` unless a proven invariant cannot be expressed natively (domain-architecture §2). Proposed **TH Placement Sitting** (if ever) coordinates capacity with native Room/Schedule; it must not own a second timetable. |
+| Must NOT rebuild | Custom calendar, duplicate roster, batch-as-enrollment. |
+| Status | Not implemented. Physical placement sitting **DEFERRED**. |
+| Dependencies | Native catalog and groups; A05 BLOCKED for same-term repeat representation. |
+
+### 3.6 Attendance — **NATIVE**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | **Student Attendance**, **Student Leave Application**. Bulk attendance in pinned Education **commits internally** (S8). |
+| Reuse unchanged | Student attendance semantics. |
+| Configuration only | Leave types, naming, instructor roles. |
+| Custom code | None for recording attendance. Typed **TH Academic Change Request** only later, if native amend/cancel cannot express approved corrections — coordination, not a second attendance table. |
+| Must NOT rebuild | `TH Attendance`; using this as **Employee Attendance** or payroll input. |
+| Status | Not implemented. |
+| Dependencies | Native groups/schedules; A13 if using the committing bulk path. |
+
+### 3.7 Academic assessment — **NATIVE**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | **Assessment Plan / Criteria / Result**, Grading Scale. These are **enrolled learning** records (S4). |
+| Reuse unchanged | Course grading, progress evidence. |
+| Configuration only | Grading scales, plans, weights — after B04 academic (not placement) policy. |
+| Custom code | None for enrolled exams. Optional later **TH Progression Decision** *reads* native results; it must not write Assessment Result or enroll. |
+| Must NOT rebuild | Reuse Placement Score/Decision as academic grades; union placement and academic into one “test score”; official TOEFL/CEFR. |
+| Status | Not implemented. **Placement is a different domain and is CLOSED.** |
+| Dependencies | Enrollment + B04 academic policy. A07 DECIDED: no official/mock TOEFL. |
+
+### 3.8 Teachers — **NATIVE**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | Education **Instructor** with explicit **Employee** link (S5). Not identity-by-name. |
+| Reuse unchanged | Teaching role vs employment identity. |
+| Configuration only | Instructor records, schedule assignment, qualifications as native/small child fields if needed. |
+| Custom code | None for the teacher master. |
+| Must NOT rebuild | `TH Teacher`; granting payroll admin via teaching assignment. |
+| Status | Not implemented. |
+| Dependencies | Employee (HR); A04 mixed-role still CONDITIONAL. |
+
+### 3.9 Finance / billing / payments — **NATIVE**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | Education fee configuration; ERPNext **Sales Invoice**, Payment Entry, credit/refund, GL. Student maintains Customer (S2). Program Enrollment can generate invoice/order (S3). Payments app is in the pinned bundle, **not** a chosen gateway. |
+| Reuse unchanged | **A08 lock:** one enrollment-generated tuition Sales Invoice chain per obligation. |
+| Configuration only | Company, accounts, tax, currency, fee structures, payment terms — **blocked on B07**, not on missing software. |
+| Custom code | None for money. Domain operations may store **native document names** only. |
+| Must NOT rebuild | Custom cashbook/balance, parallel Fees producer, marking paid from a browser redirect, placement fee hidden as tuition. |
+| Status | Not implemented. Isolated foundation probes are not domain finance qualification. |
+| Dependencies | Native enrollment (later); B07; A13 on fee writers. |
+
+### 3.10 HR — **NATIVE**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | ERPNext Employee; HRMS recruitment/onboarding/leave/shifts/check-in/Attendance/Expense Claim. |
+| Reuse unchanged | Employment lifecycle. |
+| Configuration only | Departments, leave policies, shifts. |
+| Custom code | None. |
+| Must NOT rebuild | HR inside `toefl_house`; classroom attendance as HR attendance. |
+| Status | App installed on synthetic sites; no TOEFL House HR code. |
+| Dependencies | B08 classification; A04 accounts. |
+
+### 3.11 Payroll — **NATIVE** (custom teaching-pay **BLOCKED**)
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | HRMS Salary Component/Structure/Assignment, Salary Slip, Payroll Entry, Additional Salary; native accounting/payment (S6). |
+| Reuse unchanged | **HRMS is the sole payroll calculation authority.** |
+| Configuration only | Structures and assignments after employment terms exist. |
+| Custom code | **Do not implement.** A09 is BLOCKED until pay basis and exactly one native input path are proven. Conditional **TH Teaching Work Approval** only after a documented native gap — evidence + native input reference, never a second salary amount. |
+| Must NOT rebuild | Custom payslip, dual Timesheet + Additional Salary for the same basis, fee-to-salary offset. |
+| Status | Not implemented. Full payroll posting remains an open foundation/domain gate. |
+| Dependencies | B08; native path proof. |
+
+### 3.12 Reporting — **CONFIGURATION**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | Desk Query/Script Reports, print, export, Version. |
+| Reuse unchanged | **A12:** scoped queries over source documents first. Placement metrics from released TH Placement Decision; academic from Assessment Result; finance from Invoice/GL; HR from slips. Never mixed “test score.” |
+| Configuration only | Report definitions, role restrictions, print formats, stewards’ denominators once B04/B07/B09/B10 exist. |
+| Custom code | Rebuildable projections **only** after measured need (A12 option P). No independently editable warehouse. |
+| Must NOT rebuild | Analytics platform, custom outstanding-balance cube, official TOEFL metric. |
+| Status | No product reports. Placement qualification reports are evidence, not operational BI. |
+| Dependencies | Source domains; named stewards. |
+
+### 3.13 Portals — **DEFERRED**
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | Education student/guardian website; Frappe Desk. Frontend advisory gate is **failed** (57 baseline matches; experimental candidate not adopted). |
+| Reuse unchanged | Desk for staff. `disable_website_cache` and no public signup as security settings. |
+| Configuration only | Website settings when a portal slice is explicitly authorized. |
+| Custom code | None now. Applicant self-service is A02 option U (not first). Guardian pre-admission proxy is A03 option P (not first). **Placement candidate portal remains out of scope.** |
+| Must NOT rebuild | Replacement SPA, parallel auth provider, new frontend toolchain to “unblock” Education. |
+| Status | Production portal **REJECT**. Placement has no candidate Website User path. |
+| Dependencies | Phase 2 frontend/ops gates; B01/B02/B11. |
+
+### 3.14 Placement — **TOEFL HOUSE EXTENSION** (closed)
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | **Nothing that is a pre-enrollment English-level assessment.** Education Assessment Result is enrolled academic evidence and must not be reused (A06/S4). |
+| Reuse unchanged | Native User/Role/File/RQ only as platform. Future operational subjects: Lead/Applicant/Student references — without rewriting qualified synthetic history. |
+| Configuration only | Published blueprint/policy/course-map revisions (already a governed config lifecycle). Operational cutoffs/P1–P5 are **owner artifacts**, not code. |
+| Custom code | Already implemented: bank, allocation, Digital session, objective scoring, review, finalize, internal decision/release. **Do not start another Placement increment.** |
+| Must NOT rebuild | Official/mock TOEFL, CEFR certificate, academic Assessment Result writes, candidate portal, Physical/Hybrid (still fail-closed), invented percent/cutoff. |
+| Status | **CLOSED / QUALIFIED** synthetic isolated build (run `34932512626`, 332/332 native, 86/86 runner, production REJECT). |
+| Dependencies | None for further Placement work. Admission *consumes* released decisions. |
+
+### 3.15 Integrations — **CONFIGURATION** (external adapters **DEFERRED**)
+
+| Question | Answer |
+|---|---|
+| Foundation already provides | Email Queue, Notification, RQ, Communication; Payments app present but **no gateway selected**. |
+| Reuse unchanged | After-commit native queues; idempotent consumers. Placement already has `TH Placement Operation` receipts — do not invent a second global bus for the same need. |
+| Configuration only | Email accounts, print, notification templates (minimize PII). |
+| Custom code | `TH Domain Operation` / integration receipt **only** after B13 shows native queues lack uniqueness/retention. No Kafka, no custom workflow engine. |
+| Must NOT rebuild | Parallel messaging platform; storing provider secrets in evidence; treating webhooks as settlement. |
+| Status | No external provider. |
+| Dependencies | B07/B12 if a gateway is ever requested — separate decision. |
+
+---
+
+## 4. Architecture challenges (do not paper over)
+
+1. **`toefl_house` can still become a second ERP.** It currently is not: it is a placement engine. Admission + Enrollment Request + Progression + Teaching Work + Domain Operation, if all built as masters, would be a clone. Default answer to a new DocType is **no**.
+2. **TH Enrollment Request is more dangerous than TH Admission Decision.** Admission Decision fills a proven native gap (Applicant not submittable; Admitted is a side effect). Enrollment Request duplicates Program Enrollment unless it is strictly an orchestration pointer. **Do not bundle it with Admission.**
+3. **Course-map codes are not courses.** `SYN-COURSE-GENERAL` is a synthetic fixture. Linking operational maps to native Course is configuration/extension of *placement policy*, not a catalog project. Do not reopen Placement to build a course directory.
+4. **Student Admission ≠ person admission.** Using the wrong native DocType will either skip institutional approval or force a custom admissions ERP. The thin decision record exists so we can keep Student Applicant.
+5. **`enroll_student` is not an Admission API.** S8: mapped conversion ignores mapping permissions. An Admission slice that “just calls enroll” would violate A10 and A13. Admission **stops at the decision**. Enrollment is a later native-controlled step.
+6. **Synthetic Placement subject is a User.** That was valid for isolated qualification. Staff must not productize it as CRM. Admission uses Lead/Applicant.
+7. **Stale status docs** (corrected in this review’s navigation updates): root README still described Placement as in-progress increment 7; `review-status.json` still said `toefl_house` was not created. Historical architecture-gate text in IMPLEMENTATION-READINESS remains a 2026-09-14 snapshot and is not rewritten as if it were this review.
+8. **Phase 2 REJECT still caps every domain.** Capability labels do not authorize production, real student/payroll data, or portal go-live.
+
+---
+
+## 5. Redundant custom functionality — avoid (nothing to delete from Placement)
+
+Placement’s DocTypes are **not** redundant with Education Assessment; do not remove them.
+
+**Do not add** (would be redundant with the foundation):
+
+| Temptation | Native authority already |
+|---|---|
+| TH Applicant / CRM pipeline | Lead + Student Applicant |
+| TH Student / learner master | Student |
+| TH Course / Program / Offering / Class | Program, Course, Student Group, Course Schedule |
+| TH Enrollment ledger / Course Enrollment copy | Program Enrollment / Course Enrollment |
+| TH Invoice / balance / cashbook | Sales Invoice, Payment Entry, GL |
+| TH Attendance (student or staff) | Student Attendance / HRMS Attendance |
+| TH Academic exam engine | Assessment Plan/Result |
+| TH Payroll / payslip | HRMS payroll |
+| TH Teacher master | Instructor + Employee |
+| Replacement student portal | Education website + Desk (portal itself DEFERRED) |
+| Official TOEFL/CEFR engine | **Excluded** (A07) |
+| TH External Result Evidence | **Withdrawn** |
+| Global TH Domain Operation bus | Placement Operation already covers placement; native RQ otherwise |
+
+**Do not expand Placement** with Sitting/portal/Physical/audio/CEFR “while we are here.”
+
+---
+
+## 6. Dependency graph (implementation order if authorized)
+
+```text
+[NATIVE config] Program, Course, Academic Year/Term, Student Admission windows
+        │
+        ▼
+Placement (CLOSED) ── released TH Placement Decision
+        │
+        ▼
+Admission slice (thin): native Student Applicant + TH Admission Decision
+        │
+        ▼
+[NATIVE] Student conversion ──► Program Enrollment ──► Course Enrollment
+        │                              │
+        │                              └── A08 Sales Invoice
+        ▼
+[NATIVE] Student Group / Course Schedule / Attendance / Assessment Result
+        │
+        ▼
+[NATIVE] Employee / Instructor / HRMS payroll   (A09 still BLOCKED for custom input)
+```
+
+Blocked or conditional gates that **do not** stop a thin Admission *design* but **do** stop operational conversion, portals, repeats, payroll and production: A02, A03, A04, A05, A09, A11, A13, B01–B12, Phase 2 REJECT.
+
+---
+
+## 7. Recommended next domain
+
+**Admission — thin extension only.**
+
+In scope when explicitly authorized:
+
+- Reuse Student Applicant + Student Admission configuration.
+- Create `TH Admission Decision` that requires a released internal Placement Decision and does not enroll.
+- Staff-assisted Desk/RPC; fail closed on missing placement, unknown program, or native bypass.
+
+Out of scope for that slice:
+
+- Reopening Placement
+- TH Enrollment Request / native enroll_student as “admission success”
+- Applicant or candidate portal
+- Student/Course/Invoice DocTypes
+- Invented B06 cutoffs, scholarships, or exemptions
+
+**Still not production.** Isolated synthetic work, if later authorized, remains REJECT for deployment.
+
+---
+
+## 8. Strategy statement
+
+**Yes — the overall project still follows reuse-the-enterprise-foundation**, provided Admission and later slices obey this map. Placement was the exception that proves the rule: Education cannot host pre-enrollment placement without misusing Assessment Result. Everything else on this list already has a native owner.
+
+If a future slice needs a new master for Student, Course, Enrollment, money, attendance or pay, the strategy has failed and architecture must be reopened — not silently extended.

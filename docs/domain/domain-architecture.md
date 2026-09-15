@@ -4,8 +4,12 @@
 > [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md),
 > [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md) and
 > [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md).
-> A01–A13 supersede earlier alternatives; old D01–D13 references are legacy questions
-> mapped in the decision record. Nothing here authorizes implementation or production.
+> Reuse-versus-custom classification: [ERP-CAPABILITY-MAP.md](ERP-CAPABILITY-MAP.md)
+> (challenges a custom enrollment ledger; do not treat the Enrollment Request
+> coordinator below as authorized). A01–A13 supersede earlier alternatives; old
+> D01–D13 references are legacy questions mapped in the decision record. Nothing
+> here authorizes implementation or production. Placement is CLOSED. Admission is
+> not started. Production remains REJECT.
 
 
 ## 1. Architectural shape

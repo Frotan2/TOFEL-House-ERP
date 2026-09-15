@@ -5,23 +5,19 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
-**Bounded synthetic-data placement implementation in progress (session branch
-`arena/01a0a13b-tofel-house-erp`):** the approved technical specification has been
-implemented in vertical increments inside the owned `toefl_house` app —
-increment 1 (governed content), increment 2 (versioned blueprint/policy),
-increment 3 (allocation / frozen form), increment 4 (staff-supervised Digital
-verify/deliver/save/seal with server clocks), increment 5 (objective scoring
-of sealed Digital attempts; missing is not zero), increment 6 (independent
-review of marked Digital attempts; reviewer is not the scorer) and increment 7
-(independent finalization; Finalized is not released).
-All operations fail closed outside
-the isolated synthetic test sites; fixtures are explicitly non-operational;
-candidate portal, Subject Access, audio, physical packets, release and
-retention remain unimplemented and disabled. See the
-[app boundary](apps/toefl_house/README.md) and the
-[increment 7 implementation record](docs/domain/PLACEMENT-INCREMENT-7.md).
-Production approval is not implied; F01–F05 remain closed; owner artifacts P1–P5
-remain prerequisites for any operational use.
+**Placement is CLOSED / QUALIFIED** for the bounded synthetic isolated build
+(session branch `arena/01a0a13b-tofel-house-erp`). Hosted run `34932512626`
+on commit `4571e6c`: 332/332 native checks, 86/86 runner steps, production
+**REJECT**. Do not reopen Placement. See
+[PLACEMENT-CLOSURE.md](docs/domain/PLACEMENT-CLOSURE.md) and the
+[app boundary](apps/toefl_house/README.md).
+
+**ERP capability review (no new product code):**
+[ERP-CAPABILITY-MAP.md](docs/domain/ERP-CAPABILITY-MAP.md) classifies every
+major domain as NATIVE, CONFIGURATION, TOEFL HOUSE EXTENSION or DEFERRED.
+The strategy remains reuse of Frappe/ERPNext/Education/HRMS. Recommended next
+custom domain is a *thin* Admission decision on native Student Applicant — not
+a second ERP. Admission is **not started**. Do not deploy.
 
 **Phase 3 domain architecture is ready for review:**
 [TOEFL House domain design package](docs/domain/README.md) covers native entity ownership,
@@ -69,17 +65,17 @@ Contracted, bounded upstream-aligned maintenance is the fallback if feasibility 
 a permanent private fork, replacement portal or forced dependency overrides.
 
 Preserve native student, employee, academic and accounting authorities, and keep owned
-security safeguards reversible. Phase 3 domain design and planning are authorized; no
-product app or TOEFL-specific implementation begins without review, explicit authorization
-and the required gate agreement. English remains canonical; no UI redesign or localization
-changes are in scope. The architecture choice is **not** production approval.
+security safeguards reversible. Placement is the only authorized custom domain and is
+closed. Further custom work (thin Admission or anything else) needs explicit
+authorization and must follow the [capability map](docs/domain/ERP-CAPABILITY-MAP.md).
+English remains canonical; no UI redesign or localization changes are in scope. The
+architecture choice is **not** production approval.
 
 The branch-scoped **Foundation runtime validation** GitHub Actions workflow is the
 reproducible clean-install qualification runner. It is not a production deployment
 or a verified interactive local-development setup. See the validation report for limits.
-Beyond the authorized bounded synthetic placement increments recorded above, further
-placement capabilities (allocation, scoring, delivery, release, retention) and any
-custom finance/HR or student lifecycle work remain unauthorized until their gates pass.
+Do not reopen Placement. Custom finance/HR or a second student lifecycle remain
+unauthorized. Production remains **REJECT**.
 
 ## Validation utilities
 

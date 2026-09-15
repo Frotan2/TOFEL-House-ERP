@@ -10,6 +10,11 @@
 
 **Planning only.** The user authorized Phase 3 architecture before implementation. No application/schema/API/UI changes are authorized by this plan; no production acceptance is implied. Estimated order below is dependency-based, not a promised delivery schedule.
 
+**Capability governance:** [ERP-CAPABILITY-MAP.md](ERP-CAPABILITY-MAP.md) is the
+authoritative reuse-versus-custom map. Placement is CLOSED. Do not implement
+P3.4 enrollment orchestration as a second ledger. A future Admission slice is
+`TH Admission Decision` plus native Student Applicant only.
+
 ## 1. Approval gates
 
 - **G0 — Architecture review:** approve native ownership, placement-before-program route, proposed owned entities, security and transaction boundaries. Resolve the business decisions relevant to the next slice.
