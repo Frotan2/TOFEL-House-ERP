@@ -97,7 +97,7 @@
       "label": "Status",
       "fieldtype": "Select",
       "reqd": 1,
-      "options": "Allocated\nVerified\nIn Progress\nSealed"
+      "options": "Allocated\nVerified\nIn Progress\nSealed\nMarking"
     },
     {
       "fieldname": "version",

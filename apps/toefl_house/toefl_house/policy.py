@@ -219,11 +219,12 @@ def project_form(form, catalog):
     }
 
 
-ATTEMPT_STATUSES = ("Allocated", "Verified", "In Progress", "Sealed")
+ATTEMPT_STATUSES = ("Allocated", "Verified", "In Progress", "Sealed", "Marking")
 ATTEMPT_TRANSITIONS = {
     ("Allocated", "Verified"),
     ("Verified", "In Progress"),
     ("In Progress", "Sealed"),
+    ("Sealed", "Marking"),
 }
 
 CONFIG_VALIDATORS = {"blueprint": validate_blueprint, "policy": validate_policy}
@@ -260,10 +261,14 @@ def can_read(kind, roles, actor, owner, status=None):
     # rows it needs; the manifest (seed / full form) stays Publisher/Auditor.
     if kind in ("case", "attempt", "exposure", "response") and "Placement Invigilator" in roles:
         return True
-    # Case/attempt/manifest/exposure/response are staff-only operational
+    # Assessor marks sealed Digital attempts; keys and the seed-bearing
+    # manifest stay off this role (loaded only inside the scoring command).
+    if kind in ("case", "attempt", "response", "score") and "Placement Assessor" in roles:
+        return True
+    # Case/attempt/manifest/exposure/response/score are staff-only operational
     # records (the manifest carries the seed and the full form, never
     # candidate feedback).
-    if kind in ("case", "attempt", "manifest", "exposure", "response"):
+    if kind in ("case", "attempt", "manifest", "exposure", "response", "score"):
         return "Placement Auditor" in roles
     if kind in ("item", "blueprint", "policy") and "Placement Auditor" in roles:
         return status == "Published"

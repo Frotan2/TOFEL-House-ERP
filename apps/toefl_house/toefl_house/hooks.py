@@ -7,14 +7,14 @@ app_license = "MIT"
 required_apps = ["erpnext", "education", "foundation_security"]
 after_install = "toefl_house.install.after_install"
 after_migrate = "toefl_house.install.after_migrate"
-fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator"]]]}]
+fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor"]]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"
     for name in ("TH Placement Item Revision", "TH Placement Key Revision", "TH Placement Audit Event",
                  "TH Placement Operation", "TH Placement Blueprint Revision", "TH Placement Policy Revision",
                  "TH Placement Case", "TH Placement Attempt", "TH Placement Form Manifest",
                  "TH Placement Exposure", "TH Placement Allocation Guard",
-                 "TH Placement Response")
+                 "TH Placement Response", "TH Placement Score")
 }
 permission_query_conditions = {
     name: "toefl_house.permissions.query_" + suffix
@@ -24,5 +24,6 @@ permission_query_conditions = {
         ("TH Placement Blueprint Revision", "blueprint"), ("TH Placement Policy Revision", "policy"),
         ("TH Placement Case", "case"), ("TH Placement Attempt", "attempt"),
         ("TH Placement Form Manifest", "manifest"), ("TH Placement Exposure", "exposure"),
-        ("TH Placement Allocation Guard", "guard"), ("TH Placement Response", "response"))
+        ("TH Placement Allocation Guard", "guard"), ("TH Placement Response", "response"),
+        ("TH Placement Score", "score"))
 }

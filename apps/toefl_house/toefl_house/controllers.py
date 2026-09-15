@@ -4,6 +4,7 @@ import json
 import re
 from frappe.model.document import Document
 from toefl_house.policy import ATTEMPT_TRANSITIONS, FROZEN_STATUSES, digest, is_config_transition
+from toefl_house.scoring import SCORER_VERSION
 from toefl_house.security import require_command, CONFIG_DOCTYPES
 
 
@@ -80,8 +81,8 @@ class FrozenRecord(ProtectedRecord):
 
 class AttemptRecord(ProtectedRecord):
     """Attempt identity is frozen at allocation; status moves only
-    Allocated → Verified → In Progress → Sealed with a version CAS and
-    one-way clock fields."""
+    Allocated → Verified → In Progress → Sealed → Marking with a version
+    CAS and one-way clock fields."""
 
     IDENTITY = (
         "case_name", "ordinal", "subject", "blueprint", "blueprint_version",
@@ -148,3 +149,39 @@ class ManifestRecord(FrozenRecord):
             items = form.get("items")
             if not isinstance(items, list) or [i.get("order") for i in items] != list(range(1, len(items) + 1)):
                 raise frappe.ValidationError("Manifest occurrences must be ordered 1..N")
+
+
+class ScoreRecord(FrozenRecord):
+    """Objective score rows are created exactly once per revision and
+    self-verify that the stored hash binds a key-free projection."""
+
+    def validate(self):
+        super().validate()
+        if not self.get_doc_before_save():
+            try:
+                result = json.loads(self.result_json)
+            except ValueError as exc:
+                raise frappe.ValidationError("Score result_json must be valid JSON") from exc
+            if self.result_hash != digest(result):
+                raise frappe.ValidationError("Score hash mismatch")
+            if self.scorer_version != SCORER_VERSION or result.get("algorithm") != SCORER_VERSION:
+                raise frappe.ValidationError("Unsupported scorer version")
+            if type(self.revision) is not int or self.revision < 1:
+                raise frappe.ValidationError("Score revision must be a positive integer")
+            forbidden = ("seed", "answer", "item", "family", "option_id", "key")
+            if any(field in result for field in forbidden):
+                raise frappe.ValidationError("Score projection must not include keys or item identity")
+            items = result.get("items")
+            if not isinstance(items, list) or not items:
+                raise frappe.ValidationError("Score items required")
+            for entry in items:
+                if not isinstance(entry, dict) or any(field in entry for field in forbidden):
+                    raise frappe.ValidationError("Score projection must not include keys or item identity")
+                if entry.get("outcome") not in ("correct", "incorrect", "missing"):
+                    raise frappe.ValidationError("Unsupported score outcome")
+            presented = result.get("presented")
+            if type(presented) is not int or presented != (
+                    result.get("correct", 0) + result.get("incorrect", 0) + result.get("missing", 0)):
+                raise frappe.ValidationError("Score completeness mismatch")
+            if type(result.get("missing")) is not int or result["missing"] < 0:
+                raise frappe.ValidationError("Missing evidence must be an explicit non-negative count")

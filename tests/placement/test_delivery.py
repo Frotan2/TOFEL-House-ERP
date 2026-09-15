@@ -97,6 +97,7 @@ class ClockTests(unittest.TestCase):
             ("Allocated", "Verified"),
             ("Verified", "In Progress"),
             ("In Progress", "Sealed"),
+            ("Sealed", "Marking"),
         })
 
 

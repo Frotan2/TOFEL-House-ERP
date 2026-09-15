@@ -18,12 +18,13 @@ def main():
     from toefl_house import api
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
-    report={'scope':'Synthetic content-governance, blueprint/policy configuration, allocation and staff-supervised digital delivery increments (1-4); not full T01-T20','status':'running','checks':[],
+    report={'scope':'Synthetic content-governance, blueprint/policy configuration, allocation, staff-supervised digital delivery and objective scoring increments (1-5); not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
            'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',
            'invigilator':'synthetic-invigilator@example.test',
+           'assessor':'synthetic-assessor@example.test',
            'candidate':'synthetic-candidate@example.test','candidate2':'synthetic-candidate2@example.test',
            'candidate3':'synthetic-candidate3@example.test','candidate4':'synthetic-candidate4@example.test'}
     item=None
@@ -80,6 +81,7 @@ def main():
                          'publisher':['Placement Publisher'],'publisher2':['Placement Publisher'],
                          'second_author':['Placement Author'],'auditor':['Placement Auditor'],'outsider':[],
                          'invigilator':['Placement Invigilator'],
+                         'assessor':['Placement Assessor'],
                          'candidate':[],'candidate2':[],'candidate3':[],'candidate4':[]}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
@@ -729,6 +731,131 @@ def main():
             return {'delivery_absent_on_second_site':True}
         check('second-site-no-first-site-delivery-record',deliver_second_site)
         frappe.destroy();connect('placement-test.localhost')
+        # --- Increment 5: objective scoring of sealed Digital attempts ---
+        from toefl_house import scoring as _scoring
+        check('score-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.score_attempt('score_pub_key_0000001',alloc2['attempt'],4))))
+        check('score-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.score_attempt('score_auth_key_0000001',alloc2['attempt'],4))))
+        check('score-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.score_attempt('score_out_key_0000001',alloc2['attempt'],4))))
+        check('score-invigilator-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.score_attempt('score_inv_key_0000001',alloc2['attempt'],4))))
+        check('score-before-seal-denied',lambda:denied(lambda:as_user('assessor',lambda:api.score_attempt('score_before_seal_0001',alloc4['attempt'],3))))
+        scored=check('score-happy-path',lambda:as_user('assessor',lambda:api.score_attempt('score_attempt_key_0001',alloc2['attempt'],4)))
+        assert scored['status']=='Marking' and scored['version']==5
+        assert scored['presented']==9 and scored['missing']==8
+        assert scored['correct']+scored['incorrect']==1
+        assert scored['correct']+scored['incorrect']+scored['missing']==scored['presented']
+        assert scored['scorer_version']==_scoring.SCORER_VERSION
+        def score_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('assessor',lambda:api.score_attempt('score_attempt_key_0001',alloc2['attempt'],4))
+            assert value==scored and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count(api.SCORE,{'attempt':alloc2['attempt']})==1
+            return {'same_result':True,'one_score':True}
+        check('score-idempotent-replay',score_replay)
+        check('score-stale-version-denied',lambda:denied(lambda:as_user('assessor',lambda:api.score_attempt('score_stale_key_000001',alloc2['attempt'],4))))
+        check('score-second-denied',lambda:denied(lambda:as_user('assessor',lambda:api.score_attempt('score_second_key_00001',alloc2['attempt'],5))))
+        def score_missing_not_zero():
+            assert sum(1 for item in scored['items'] if item['outcome']=='missing')==8
+            assert all(item['outcome'] in ('correct','incorrect','missing') for item in scored['items'])
+            listening=scored['by_skill'].get('Listening') or scored['by_skill'].get('listening')
+            # Skills use blueprint labels; missing rows are not filed as incorrect.
+            assert scored['missing']==8 and scored['incorrect']>=0
+            assert 'percent' not in scored and 'cutoff' not in scored and 'recommendation' not in scored
+            return {'missing':8,'not_zero':True,'no_cutoff':True}
+        check('score-missing-is-not-zero',score_missing_not_zero)
+        def score_hides_keys():
+            blob=json.dumps(scored)
+            seed=frappe.db.get_value(api.MANIFEST,alloc2['manifest'],'seed')
+            assert seed and seed not in blob
+            assert 'answer' not in blob
+            for item in scored['items']:
+                assert 'item' not in item and 'family' not in item and 'option_id' not in item
+            key_names=[row[0] for row in frappe.db.sql('select name from `tabTH Placement Key Revision`')]
+            assert key_names and not any(name in blob for name in key_names)
+            return {'items':len(scored['items']),'no_seed_or_key':True}
+        check('score-projection-strips-keys',score_hides_keys)
+        def score_determinism():
+            form=json.loads(frappe.db.get_value(api.MANIFEST,{'attempt':alloc2['attempt']},'form_json'))
+            latest=api._latest_responses(alloc2['attempt'])
+            catalog=api._key_catalog(form)
+            expected=_scoring.score(form,latest,catalog)
+            assert [(i['order'],i['outcome']) for i in expected['items']]==[(i['order'],i['outcome']) for i in scored['items']]
+            assert expected['missing']==scored['missing'] and expected['correct']==scored['correct']
+            return {'rerun_identical':True,'scorer':_scoring.SCORER_VERSION}
+        check('score-determinism',score_determinism)
+        def score_reads():
+            frappe.set_user(users['assessor'])
+            for dt in (api.CASE,api.ATTEMPT,api.RESPONSE,api.SCORE):
+                assert frappe.get_list(dt),dt
+            assert cannot_list(api.MANIFEST) and cannot_list(api.GUARD) and cannot_list(api.KEY)
+            frappe.set_user(users['invigilator'])
+            assert cannot_list(api.SCORE)
+            frappe.set_user(users['second_author'])
+            assert cannot_list(api.SCORE) and cannot_list(api.ATTEMPT)
+            frappe.set_user(users['publisher'])
+            assert frappe.get_list(api.SCORE)
+            frappe.set_user(users['auditor'])
+            assert frappe.get_list(api.SCORE)
+            return {'assessor_no_manifest_or_key':True,'invigilator_no_score':True}
+        check('score-role-and-list-parity',score_reads)
+        def score_generic_write():
+            frappe.set_user(users['assessor']);doc=frappe.get_doc(api.SCORE,scored['score']);doc.scored_by='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('score-ignore-permissions-does-not-bypass-controller',score_generic_write)
+        check('score-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.SCORE,scored['score']).db_set('result_hash','f'*64)))
+        check('score-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.SCORE,scored['score'],ignore_permissions=True)))
+        def score_rollback_proof():
+            frappe.set_user(users['assessor']);frappe.db.savepoint('score_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.SCORE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.SCORE:
+                    raise RuntimeError('synthetic scoring insert failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.score_attempt('score_atomic_key_0001',alloc3['attempt'],4)
+            except RuntimeError:frappe.db.rollback(save_point='score_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            assert frappe.get_doc(api.ATTEMPT,alloc3['attempt']).status=='Sealed'
+            return {'real_database_rollback':True,'injected_boundary':'score insert'}
+        check('score-atomic-score-rollback',score_rollback_proof)
+        sealed4=check('score-seal-fourth',lambda:as_user('invigilator',lambda:api.seal_attempt('score_seal_alloc4_0001',alloc4['attempt'],3,'Submitted')))
+        assert sealed4['status']=='Sealed' and sealed4['version']==4
+        def score_transient(exhaust=False):
+            frappe.set_user(users['assessor']);frappe.db.commit()
+            if exhaust:
+                as_user('invigilator',lambda:api.deliver_attempt('score_deliver_alloc_001',alloc['attempt'],2))
+                as_user('invigilator',lambda:api.seal_attempt('score_seal_alloc_000001',alloc['attempt'],3,'Submitted'));frappe.db.commit()
+                frappe.set_user(users['assessor'])
+                target,version,key=alloc['attempt'],4,'score_exhaust_key_0001'
+            else:
+                target,version,key=alloc4['attempt'],4,'score_retry_key_00001'
+            calls=[];original=_scoring.score
+            def flaky(*args,**kwargs):
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic scoring deadlock')
+                return original(*args,**kwargs)
+            with patch.object(_scoring,'score',side_effect=flaky):
+                if exhaust:
+                    try:api.score_attempt(key,target,version)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.score_attempt(key,target,version)
+            assert len(calls)==(4 if exhaust else 2)
+            if exhaust:
+                assert frappe.get_doc(api.ATTEMPT,target).status=='Sealed'
+                assert frappe.db.count(api.SCORE,{'attempt':target})==0
+            else:
+                assert result['status']=='Marking' and frappe.db.count(api.SCORE,{'attempt':target})==1
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('score-whole-command-transient-recovery',lambda:score_transient(False))
+        check('score-retry-exhaustion-bounded',lambda:score_transient(True))
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def score_second_site():
+            assert frappe.db.count(api.SCORE)==0 and frappe.db.count(api.RESPONSE)==0
+            return {'score_absent_on_second_site':True}
+        check('second-site-no-first-site-score-record',score_second_site)
+        frappe.destroy();connect('placement-test.localhost')
         base='http://127.0.0.1:18000'
         for _ in range(60):
             try:
@@ -746,7 +873,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def http_denied(response,csrf=False):
             assert response.status_code in (400,403,404,405,409,417),f'Unexpected HTTP {response.status_code}'
@@ -948,6 +1075,42 @@ def main():
             return r.json()['message']
         httpsealed=check('http-seal-submitted',http_seal)
         assert httpsealed['status']=='Sealed' and httpsealed['seal_reason']=='Submitted'
+        # --- Increment 5 over HTTP: score_attempt, CSRF, containment, races, revocation ---
+        http_score_payload=dict(request_key='http_score_key_0001',attempt=httpalloc['attempt'],expected_version=4)
+        def http_score():
+            r=post('assessor','score_attempt',http_score_payload);assert r.status_code==200,f'score HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpscored=check('http-score-positive',http_score)
+        assert httpscored['status']=='Marking' and httpscored['version']==5
+        assert httpscored['missing']>=0 and httpscored['presented']==httpscored['correct']+httpscored['incorrect']+httpscored['missing']
+        check('http-score-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.score_attempt',headers={'Host':'placement-test.localhost'},json=http_score_payload,timeout=30)))
+        check('http-score-unrelated-role-denied',lambda:http_denied(post('outsider','score_attempt',dict(http_score_payload,request_key='http_score_out_00001'))))
+        check('http-score-wrong-role-denied',lambda:http_denied(post('second_author','score_attempt',dict(http_score_payload,request_key='http_score_author_0001'))))
+        check('http-score-invigilator-denied',lambda:http_denied(post('invigilator','score_attempt',dict(http_score_payload,request_key='http_score_inv_000001'))))
+        check('http-score-publisher-denied',lambda:http_denied(post('publisher','score_attempt',dict(http_score_payload,request_key='http_score_pub_000001'))))
+        check('http-score-get-cannot-mutate',lambda:http_denied(sessions['assessor'].get(base+'/api/method/toefl_house.api.score_attempt',params={'request_key':'http_score_get_00001'},timeout=30)))
+        def http_score_csrf():
+            s=sessions['assessor'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.score_attempt',json=dict(http_score_payload,request_key='http_score_csrf_00001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-score-csrf-negative-with-positive-control',http_score_csrf)
+        score_url=base+'/api/resource/'+quote(api.SCORE,safe='')+'/'+httpscored['score']
+        check('http-score-direct-crud-mutation-denied',lambda:http_denied(sessions['assessor'].put(score_url,json={'scored_by':'forged@example.test'},timeout=30)))
+        check('http-score-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(score_url,timeout=30)))
+        def http_score_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['assessor'].headers);s.cookies.update(sessions['assessor'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.score_attempt',json=http_score_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count(api.SCORE,{'attempt':httpalloc['attempt']})==1
+            return {'http_statuses':[200,200],'one_score':True}
+        check('http-score-concurrent-idempotency',http_score_idem)
+        def score_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('assessor','score_attempt',dict(http_score_payload,request_key='http_score_revoked_0001')))
+        check('http-score-revoked-assessor-old-session-denied',score_revoke)
         def deliver_revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['invigilator']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(post('invigilator','seal_attempt',dict(request_key='http_deliver_revoked_001',attempt=httpalloc['attempt'],expected_version=4,reason='Submitted')))

@@ -9,8 +9,9 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 `arena/01a0a13b-tofel-house-erp`):** the approved technical specification has been
 implemented in vertical increments inside the owned `toefl_house` app —
 increment 1 (governed content), increment 2 (versioned blueprint/policy),
-increment 3 (allocation / frozen form) and increment 4 (staff-supervised Digital
-verify/deliver/save/seal with server clocks). All operations fail closed outside
+increment 3 (allocation / frozen form), increment 4 (staff-supervised Digital
+verify/deliver/save/seal with server clocks) and increment 5 (objective scoring
+of sealed Digital attempts; missing is not zero). All operations fail closed outside
 the isolated synthetic test sites; fixtures are explicitly non-operational;
 scoring, candidate portal, Subject Access, audio, physical packets, release and
 retention remain unimplemented and disabled. See the

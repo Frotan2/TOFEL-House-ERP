@@ -26,5 +26,12 @@
     "role_name": "Placement Invigilator",
     "desk_access": 1,
     "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Placement Assessor",
+    "role_name": "Placement Assessor",
+    "desk_access": 1,
+    "disabled": 0
   }
 ]

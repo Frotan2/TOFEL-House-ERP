@@ -24,6 +24,7 @@ KIND_ROLES = {
     "deliver_attempt": "Placement Invigilator",
     "save_response": "Placement Invigilator",
     "seal_attempt": "Placement Invigilator",
+    "score_attempt": "Placement Assessor",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -32,7 +33,7 @@ DOCTYPES = {
     "TH Placement Blueprint Revision", "TH Placement Policy Revision",
     "TH Placement Case", "TH Placement Attempt", "TH Placement Form Manifest",
     "TH Placement Exposure", "TH Placement Allocation Guard",
-    "TH Placement Response",
+    "TH Placement Response", "TH Placement Score",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision")
 

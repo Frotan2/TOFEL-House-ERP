@@ -35,6 +35,11 @@ INC4_AUTHOR_ONLY_CHECKS = (
     "http-deliver-wrong-role-denied",
     "http-deliver-other-role-response-read-denied",
 )
+INC5_AUTHOR_ONLY_CHECKS = (
+    "score-author-denied",
+    "http-score-wrong-role-denied",
+    "http-score-other-role-read-denied",
+)
 
 
 def _kind_roles():
@@ -93,6 +98,10 @@ class Increment3ActorGuardTests(unittest.TestCase):
             self.src,
             r"'invigilator'\s*:\s*\[\s*'Placement Invigilator'\s*\]",
         )
+        self.assertRegex(
+            self.src,
+            r"'assessor'\s*:\s*\[\s*'Placement Assessor'\s*\]",
+        )
 
     def test_operational_commands_are_publisher_without_extra_sod(self):
         roles = _kind_roles()
@@ -102,9 +111,10 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertEqual(roles["deliver_attempt"], "Placement Invigilator")
         self.assertEqual(roles["save_response"], "Placement Invigilator")
         self.assertEqual(roles["seal_attempt"], "Placement Invigilator")
+        self.assertEqual(roles["score_attempt"], "Placement Assessor")
 
     def test_inc3_author_denials_use_author_only_fixtures(self):
-        for name in INC3_AUTHOR_ONLY_CHECKS + INC4_AUTHOR_ONLY_CHECKS:
+        for name in INC3_AUTHOR_ONLY_CHECKS + INC4_AUTHOR_ONLY_CHECKS + INC5_AUTHOR_ONLY_CHECKS:
             with self.subTest(check=name):
                 body = _check_call_source(self.src, name)
                 self.assertNotIn("'%s'" % DUAL_ROLE, body.replace("check('%s'" % name, ""))
@@ -142,7 +152,7 @@ class Increment3ActorGuardTests(unittest.TestCase):
         root = ROOT / "apps/toefl_house/toefl_house/placement/doctype"
         for folder in ("th_placement_case", "th_placement_attempt",
                        "th_placement_form_manifest", "th_placement_exposure",
-                       "th_placement_response"):
+                       "th_placement_response", "th_placement_score"):
             data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
             roles = {row["role"] for row in data["permissions"]}
             self.assertNotIn("Placement Author", roles, folder)
@@ -155,6 +165,12 @@ class Increment3ActorGuardTests(unittest.TestCase):
                                "th_placement_form_manifest.json").read_text(encoding="utf-8"))
         self.assertNotIn("Placement Invigilator",
                          {row["role"] for row in manifest["permissions"]})
+        score = json.loads((root / "th_placement_score" / "th_placement_score.json").read_text(
+            encoding="utf-8"))
+        score_roles = {row["role"] for row in score["permissions"]}
+        self.assertIn("Placement Assessor", score_roles)
+        self.assertNotIn("Placement Author", score_roles)
+        self.assertNotIn("Placement Invigilator", score_roles)
         for folder in ("th_placement_case", "th_placement_attempt",
                        "th_placement_exposure", "th_placement_response"):
             data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
@@ -214,7 +230,9 @@ class Increment3ActorGuardTests(unittest.TestCase):
 
     def test_http_sessions_include_invigilator(self):
         start = self.src.index("sessions={label:login")
-        self.assertIn("'invigilator'", self.src[start:start + 280])
+        blob = self.src[start:start + 360]
+        self.assertIn("'invigilator'", blob)
+        self.assertIn("'assessor'", blob)
 
     def test_http_session_keys_match_whitelist_signature(self):
         api_src = (ROOT / "apps/toefl_house/toefl_house/api.py").read_text(encoding="utf-8")
@@ -225,6 +243,7 @@ class Increment3ActorGuardTests(unittest.TestCase):
             "save_response": ["request_key", "attempt", "expected_version",
                               "occurrence", "expected_revision", "option_id", "missing"],
             "seal_attempt": ["request_key", "attempt", "expected_version", "reason"],
+            "score_attempt": ["request_key", "attempt", "expected_version"],
         }
         found = {}
         for node in tree.body:

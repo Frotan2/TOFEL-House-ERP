@@ -1,0 +1,105 @@
+{
+  "doctype": "DocType",
+  "name": "TH Placement Score",
+  "module": "Placement",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "attempt",
+    "revision",
+    "scorer_version",
+    "form_hash",
+    "response_digest",
+    "key_digest",
+    "result_json",
+    "result_hash",
+    "scored_by",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "attempt",
+      "label": "Attempt",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Attempt"
+    },
+    {
+      "fieldname": "revision",
+      "label": "Revision",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "scorer_version",
+      "label": "Scorer Version",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "form_hash",
+      "label": "Form Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "response_digest",
+      "label": "Response Digest",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "key_digest",
+      "label": "Key Digest",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "result_json",
+      "label": "Result Json",
+      "fieldtype": "Code",
+      "reqd": 1,
+      "options": "JSON"
+    },
+    {
+      "fieldname": "result_hash",
+      "label": "Result Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "scored_by",
+      "label": "Scored By",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Placement Publisher",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Auditor",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Assessor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

@@ -23,7 +23,7 @@ class AllocationReadBoundaryTests(unittest.TestCase):
                 self.assertTrue(can_read(kind, ["Placement Auditor"], "a", "someone"))
 
     def test_author_reads_no_allocation_records(self):
-        for kind in ("case", "attempt", "manifest", "exposure", "response"):
+        for kind in ("case", "attempt", "manifest", "exposure", "response", "score"):
             with self.subTest(kind=kind):
                 self.assertFalse(can_read(kind, ["Placement Author"], "a", "a"))
 

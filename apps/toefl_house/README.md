@@ -3,8 +3,9 @@
 **Synthetic-only, not production.** Implements the first protected content-governance
 path (increment 1), the versioned blueprint/policy configuration lifecycle
 (increment 2), the bounded allocation / candidate form generation slice
-(increment 3) and the staff-supervised Digital verify/deliver/save/seal slice
-(increment 4) from the approved technical specification. This is NOT a complete
+(increment 3), the staff-supervised Digital verify/deliver/save/seal slice
+(increment 4) and the objective scoring slice (increment 5) from the approved
+technical specification. This is NOT a complete
 placement assessment system.
 
 Requires the unchanged pinned Frappe/ERPNext/Education foundation and `foundation_security`. Build backend is the same pinned setuptools used by the existing owned app; no new runtime dependencies. Install only on an explicitly authorized disposable test site through supported Bench app installation/migration.
@@ -57,12 +58,20 @@ The record-level `code` is identity (unique `(code, revision)` constraint) and n
 - Physical and Hybrid modes fail closed in this increment. No candidate Website User, Subject Access, scoring, audio, printing or physical packet path exists.
 - New restricted DocType `TH Placement Response`, unique `(attempt, occurrence, revision)`, readable by Invigilator / Publisher / Auditor. No generic CRUD write roles.
 
+### Increment 5 — objective scoring of sealed Digital attempts (bounded slice)
+
+- One native authenticated POST RPC: `toefl_house.api.score_attempt`. Requires `Placement Assessor`. Authors, outsiders, guests, Publishers and Invigilators have no scoring path. Keys and the seed-bearing manifest are not granted to Assessor; the command loads them through the database under command context.
+- Attempt status advances **Sealed → Marking** under command context with integer version CAS. Scoring does not unseal or edit responses.
+- Closed-registry scorer (`toefl_house.scoring`, `objective-v1`, no Frappe import): Single Choice and True False **exact match** only. Unsupported types fail closed. **Missing evidence is an explicit outcome, never a silent zero and never dropped from the denominator.** Incorrect is recorded as incorrect, never a negative mark. No composite, percent, cutoff, CEFR map, course recommendation or human rubric.
+- New restricted DocType `TH Placement Score`, unique `(attempt, revision)`, FrozenRecord, self-verifying result hash. The stored projection never includes answers, option ids, item identity, family or seed. Publisher / Auditor / Assessor may read scores; Author and Invigilator may not.
+- Physical/Hybrid, candidate Website User, Subject Access, audio, release, moderation sample and productive-skill rating remain unimplemented.
+
 No public HTML editor, candidate portal, upload, bulk import, verified candidate identity, scoring, media, results/release, retention deletion or deployment feature is included yet. Those stay disabled/unimplemented rather than receiving unsafe defaults. F01–F05 remain closed; owner configuration for actual academic/privacy policies remains a later activation prerequisite.
 
 ## Qualification
 
 `python3 -m unittest discover -s tests/placement -v` runs pure local tests, not Frappe runtime tests.
 
-The push/manual, branch-restricted `.github/workflows/placement-content.yml` invokes the unchanged foundation runner probe, then installs exact native commits and both owned apps on two disposable sites. `tools/placement/native_checks.py` exercises real controllers, database constraints, HTTP/CSRF, independent review/publication, allocation feasibility/fail-closed, exposure reuse, deterministic re-run provenance, staff-supervised Digital delivery (verify/deliver/save/seal, server clocks, Reserved→Delivered), idempotency/races and rollback for all four increments. It does not weaken upstream tests, modify pins or expose services outside the hosted runner. Failed evidence is retained. No build/install success qualifies unexecuted acceptance scenarios.
+The push/manual, branch-restricted `.github/workflows/placement-content.yml` invokes the unchanged foundation runner probe, then installs exact native commits and both owned apps on two disposable sites. `tools/placement/native_checks.py` exercises real controllers, database constraints, HTTP/CSRF, independent review/publication, allocation feasibility/fail-closed, exposure reuse, deterministic re-run provenance, staff-supervised Digital delivery (verify/deliver/save/seal, server clocks, Reserved→Delivered), objective scoring of sealed Digital attempts (missing≠zero, key-free projection), idempotency/races and rollback for all five increments. It does not weaken upstream tests, modify pins or expose services outside the hosted runner. Failed evidence is retained. No build/install success qualifies unexecuted acceptance scenarios.
 
 Never uninstall this app to work around retention or remove audit evidence. Any populated schema rollback/recovery needs separate qualification; destructive uninstall is not supplied as a rollback method.

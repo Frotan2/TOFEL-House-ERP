@@ -2,7 +2,7 @@
 import json
 import secrets
 import frappe
-from toefl_house import allocation
+from toefl_house import allocation, scoring
 from frappe.utils import get_datetime
 from toefl_house.policy import (attempt_deadline, canonical, deadline_reached, digest,
                                 project_form, request_digest, validate_blueprint,
@@ -23,6 +23,7 @@ MANIFEST = "TH Placement Form Manifest"
 EXPOSURE = "TH Placement Exposure"
 GUARD = "TH Placement Allocation Guard"
 RESPONSE = "TH Placement Response"
+SCORE = "TH Placement Score"
 
 # Synthetic-only purpose marker; other purposes are a later activation config,
 # not something this increment accepts or invents.
@@ -700,3 +701,79 @@ def seal_attempt(request_key, attempt, expected_version, reason):
 
     return _execute("seal_attempt", request_key,
                     {"attempt": attempt, "expected_version": expected_version, "reason": reason}, work)
+
+
+# --- Increment 5: objective scoring of sealed Digital attempts ---
+
+def _latest_responses(attempt_name):
+    rows = frappe.db.sql(
+        "select occurrence, revision, option_id, missing from `tabTH Placement Response` "
+        "where attempt = %s order by occurrence asc, revision asc",
+        (attempt_name,), as_dict=True)
+    latest = {}
+    for row in rows:
+        latest[int(row.occurrence)] = dict(
+            option_id=row.option_id or "", missing=int(row.missing or 0),
+            revision=int(row.revision))
+    return latest
+
+
+def _key_catalog(form):
+    names = [entry["item"] for entry in form["items"]]
+    rows = frappe.get_all(ITEM, filters={"name": ("in", names)},
+                          fields=["name", "key_revision", "status"],
+                          ignore_permissions=True)
+    if len(rows) != len(set(names)):
+        raise frappe.ValidationError("Allocated item is missing")
+    catalog = {}
+    for row in rows:
+        if row.status != "Published":
+            raise frappe.ValidationError("Allocated item is no longer published")
+        key = frappe.db.get_value(KEY, row.key_revision,
+                                  ["answer", "key_version", "content_hash", "item_revision"],
+                                  as_dict=True)
+        if not key or key.item_revision != row.name:
+            raise frappe.ValidationError("Key integrity mismatch")
+        if key.content_hash != digest([row.name, key.key_version, key.answer]):
+            raise frappe.ValidationError("Key integrity mismatch")
+        catalog[row.name] = dict(answer=key.answer, key_version=key.key_version,
+                                 content_hash=key.content_hash)
+    return catalog
+
+
+@frappe.whitelist(methods=["POST"])
+def score_attempt(request_key, attempt, expected_version):
+    def work(actor):
+        doc = _locked_session(attempt, expected_version)
+        if doc.mode != "Digital":
+            raise frappe.ValidationError("Only digital objective scoring is implemented in this increment")
+        if doc.status != "Sealed":
+            raise frappe.ValidationError("Attempt is not sealed for scoring")
+        manifest, form = _manifest_form(doc.name)
+        responses = _latest_responses(doc.name)
+        catalog = _key_catalog(form)
+        try:
+            projection = scoring.score(form, responses, catalog)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        revision = 1
+        result_hash = digest(projection)
+        row = frappe.get_doc(dict(
+            doctype=SCORE, attempt=doc.name, revision=revision,
+            scorer_version=scoring.SCORER_VERSION, form_hash=manifest.form_hash,
+            response_digest=scoring.response_fingerprint(responses),
+            key_digest=scoring.key_fingerprint(catalog),
+            result_json=canonical(projection), result_hash=result_hash,
+            scored_by=actor, synthetic=1))
+        row.insert(ignore_permissions=True)
+        _advance(doc, "Marking")
+        result = {"attempt": doc.name, "status": doc.status, "version": doc.version,
+                  "score": row.name, "revision": revision,
+                  "scorer_version": scoring.SCORER_VERSION,
+                  "presented": projection["presented"], "correct": projection["correct"],
+                  "incorrect": projection["incorrect"], "missing": projection["missing"],
+                  "by_skill": projection["by_skill"], "items": projection["items"]}
+        return result, dict(target=doc.name, after_hash=result_hash)
+
+    return _execute("score_attempt", request_key,
+                    {"attempt": attempt, "expected_version": expected_version}, work)

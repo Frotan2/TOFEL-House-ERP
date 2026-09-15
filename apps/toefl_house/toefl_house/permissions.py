@@ -11,6 +11,7 @@ KINDS = {
     "TH Placement Form Manifest": "manifest", "TH Placement Exposure": "exposure",
     "TH Placement Allocation Guard": "guard",
     "TH Placement Response": "response",
+    "TH Placement Score": "score",
 }
 TABLES = {
     "item": "`tabTH Placement Item Revision`",
@@ -23,9 +24,10 @@ TABLES = {
     "exposure": "`tabTH Placement Exposure`",
     "guard": "`tabTH Placement Allocation Guard`",
     "response": "`tabTH Placement Response`",
+    "score": "`tabTH Placement Score`",
 }
 LISTED_KINDS = ("item", "blueprint", "policy")
-STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response")
+STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score")
 
 
 def has_permission(doc, ptype=None, user=None, **kwargs):
@@ -51,6 +53,8 @@ def query(kind, user=None):
     if "Placement Publisher" in roles:
         return "1=1"
     if kind in ("case", "attempt", "exposure", "response") and "Placement Invigilator" in roles:
+        return "1=1"
+    if kind in ("case", "attempt", "response", "score") and "Placement Assessor" in roles:
         return "1=1"
     if kind in STAFF_ONLY_KINDS:
         return "1=1" if "Placement Auditor" in roles else "1=0"
