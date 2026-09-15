@@ -1747,11 +1747,13 @@ def main():
         assert httpconverted['native_student'] and httpconverted['program_enrollment']==0
         check('http-admission-enroll-student-denied',lambda:http_denied(sessions['officer'].post(base+'/api/method/education.education.api.enroll_student',json={'source_name':app6['name']},timeout=30)))
         def http_adm_idem():
+            r0=apost('approver','convert_applicant',dict(request_key='http_adm_convert_0001',name=httpadm['name'],expected_version=4))
+            assert r0.status_code==200,f'convert replay HTTP {r0.status_code} {r0.text[:200]}'
             def request(_):
                 s=requests.Session();s.headers.update(sessions['approver'].headers);s.cookies.update(sessions['approver'].cookies)
                 return s.post(base+'/api/method/toefl_house.admission.convert_applicant',json=dict(request_key='http_adm_convert_0001',name=httpadm['name'],expected_version=4),timeout=40)
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
-            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type'),'message':(r.json().get('exception') or r.text)[:240]} for r in rs])
             results=[r.json()['message'] for r in rs];assert results[0]==results[1]
             assert frappe.db.count('Student',{'student_applicant':app6['name']})==1
             return {'http_statuses':[200,200],'one_student':True}

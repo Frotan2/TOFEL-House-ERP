@@ -92,22 +92,42 @@ def _unexpired(row, now=None):
 
 @contextmanager
 def _native_student_write():
-    """Permit nested native Customer insert without changing the HTTP session.
+    """Insert nested Customer with ignore_permissions; do not touch session.
 
-    Student.on_update inserts Customer without ignore_permissions. Frappe v16
-    has_permission ignores frappe.flags.ignore_permissions, and set_user /
-    session.user swaps persist the Approver SID as Administrator, which denied
-    later HTTP idempotent replay. Bypass has_permission for this write only.
+    Student.on_update Customer.insert() has no ignore_permissions. Do not patch
+    frappe.has_permission or call set_user: both persist onto the Approver SID
+    and denied later HTTP idempotent replay on the second gunicorn worker.
     """
-    original = frappe.has_permission
-    previous_ignore = frappe.flags.ignore_permissions
-    frappe.has_permission = lambda *args, **kwargs: True
-    frappe.flags.ignore_permissions = True
+    from education.education.doctype.student.student import Student as StudentController
+    original_create = StudentController.create_customer
+    original_update = StudentController.update_linked_customer
+
+    def create_customer(this):
+        customer = frappe.get_doc(dict(
+            doctype="Customer",
+            customer_name=this.student_name,
+            customer_group=this.customer_group or "Student",
+            customer_type="Individual",
+            image=this.get("image"),
+        )).insert(ignore_permissions=True)
+        frappe.db.set_value("Student", this.name, "customer", customer.name)
+        this.customer = customer.name
+
+    def update_linked_customer(this):
+        customer = frappe.get_doc("Customer", this.customer)
+        if this.customer_group:
+            customer.customer_group = this.customer_group
+        customer.customer_name = this.student_name
+        customer.image = this.get("image")
+        customer.save(ignore_permissions=True)
+
+    StudentController.create_customer = create_customer
+    StudentController.update_linked_customer = update_linked_customer
     try:
         yield
     finally:
-        frappe.has_permission = original
-        frappe.flags.ignore_permissions = previous_ignore
+        StudentController.create_customer = original_create
+        StudentController.update_linked_customer = original_update
 
 
 def _active_duplicate(applicant_name):
@@ -420,35 +440,31 @@ def convert_applicant(request_key, name, expected_version):
             raise frappe.PermissionError("Reviewer cannot convert this admission")
         row = _placement_row(doc.placement_decision)
         _unexpired(row)
-        # Native Student.on_update inserts Customer without ignore_permissions.
-        # Frappe v16 has_permission does not honor frappe.flags.ignore_permissions,
-        # and Admission Approver has no Customer/Applicant CRUD. The command is
-        # already authorized; switch only for the native Student write.
-        previous_user = frappe.session.user
-        try:
-            frappe.set_user("Administrator")
-            applicant = frappe.get_doc(APPLICANT, doc.student_applicant)
-            if (applicant.application_status or "Applied") != "Applied":
-                raise frappe.ValidationError("Applicant is not in Applied status")
-            if frappe.db.exists(STUDENT, {"student_applicant": applicant.name}):
-                raise frappe.ValidationError("A native Student already exists for this applicant")
-            try:
-                frappe.db.set_single_value("Education Settings", "user_creation_skip", 1)
-            except Exception:
-                pass
-            student = frappe.get_doc(dict(
-                doctype=STUDENT,
-                first_name=applicant.first_name,
-                last_name=applicant.last_name,
-                student_email_id=applicant.student_email_id,
-                student_applicant=applicant.name,
-                joining_date=frappe.utils.today(),
-                naming_series="EDU-STU-.YYYY.-",
-                enabled=1,
-            ))
+        applicant = frappe.db.get_value(
+            APPLICANT, doc.student_applicant,
+            ["name", "first_name", "last_name", "student_email_id", "application_status"],
+            as_dict=True,
+        )
+        if not applicant:
+            raise frappe.ValidationError("Student Applicant not found")
+        if (applicant.application_status or "Applied") != "Applied":
+            raise frappe.ValidationError("Applicant is not in Applied status")
+        if frappe.db.exists(STUDENT, {"student_applicant": applicant.name}):
+            raise frappe.ValidationError("A native Student already exists for this applicant")
+        student = frappe.get_doc(dict(
+            doctype=STUDENT,
+            first_name=applicant.first_name,
+            last_name=applicant.last_name,
+            student_email_id=applicant.student_email_id,
+            student_applicant=applicant.name,
+            joining_date=frappe.utils.today(),
+            naming_series="EDU-STU-.YYYY.-",
+            enabled=1,
+        ))
+        student.flags.ignore_permissions = True
+        student.flags.ignore_links = True
+        with _native_student_write():
             student.insert(ignore_permissions=True)
-        finally:
-            frappe.set_user(previous_user)
         if frappe.db.exists("Program Enrollment", {"student": student.name}):
             raise frappe.ValidationError("Student conversion must not create Program Enrollment")
         customer = student.customer or frappe.db.get_value(STUDENT, student.name, "customer")
