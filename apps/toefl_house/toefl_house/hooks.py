@@ -36,28 +36,50 @@ permission_query_conditions = {
 override_whitelisted_methods = {
     "education.education.api.enroll_student": "toefl_house.admission.deny_enroll_student",
 }
+# Containment seam coverage (A13): in pinned frappe (988e54f3c4c2,
+# frappe/model/document.py run_before_save_methods), the "validate"
+# doc_event fires only for save/submit actions. Cancel runs
+# "before_cancel" and post-submit edits run "before_update_after_submit"
+# WITHOUT validate, so each command-only doctype pins the same guard on
+# all three seams. Delete of submitted documents is natively denied by
+# frappe (delete_doc check_permission_and_not_submitted); drafts cannot
+# exist outside commands because insert is denied on validate.
 doc_events = {
     "Program Enrollment": {
         "validate": "toefl_house.enrollment.guard_program_enrollment",
+        "before_cancel": "toefl_house.enrollment.guard_program_enrollment",
+        "before_update_after_submit": "toefl_house.enrollment.guard_program_enrollment",
     },
     "Course Enrollment": {
         "validate": "toefl_house.enrollment.guard_course_enrollment",
+        "before_cancel": "toefl_house.enrollment.guard_course_enrollment",
+        "before_update_after_submit": "toefl_house.enrollment.guard_course_enrollment",
     },
     "Sales Invoice": {
         # finance.guard_sales_invoice chains the enrollment slice's
         # premature-billing guard first, then applies finance containment.
         "validate": "toefl_house.finance.guard_sales_invoice",
+        "before_cancel": "toefl_house.finance.guard_sales_invoice",
+        "before_update_after_submit": "toefl_house.finance.guard_sales_invoice",
     },
     "Fees": {
         "validate": "toefl_house.finance.guard_fees",
+        "before_cancel": "toefl_house.finance.guard_fees",
+        "before_update_after_submit": "toefl_house.finance.guard_fees",
     },
     "Student Group": {
         "validate": "toefl_house.teaching.guard_student_group",
+        "before_cancel": "toefl_house.teaching.guard_student_group",
+        "before_update_after_submit": "toefl_house.teaching.guard_student_group",
     },
     "Course Schedule": {
         "validate": "toefl_house.teaching.guard_course_schedule",
+        "before_cancel": "toefl_house.teaching.guard_course_schedule",
+        "before_update_after_submit": "toefl_house.teaching.guard_course_schedule",
     },
     "Student Attendance": {
         "validate": "toefl_house.teaching.guard_student_attendance",
+        "before_cancel": "toefl_house.teaching.guard_student_attendance",
+        "before_update_after_submit": "toefl_house.teaching.guard_student_attendance",
     },
 }

@@ -2587,6 +2587,114 @@ def main():
             return {'fees_billed':after['Fees'],'placement_invoices':after['Sales Invoice'],
                     'gl_voucher_types':sorted(vouchers),'academic_and_payroll_untouched':True}
         check('finance-write-containment',finance_containment)
+        # ---- A13 containment: native bypass-route negative proofs. Pinned
+        # frappe (988e54f3c4c2, document.py run_before_save_methods):
+        # "validate" fires only for save/submit; cancel runs "before_cancel"
+        # and post-submit edits run "before_update_after_submit" WITHOUT
+        # validate, so hooks.py pins the command-only guards on all three
+        # seams. Delete of submitted documents is natively denied even for
+        # Administrator (delete_doc check_permission_and_not_submitted);
+        # drafts cannot exist outside commands because insert is denied.
+        # db_set/direct SQL and the queue-worker seam remain documented
+        # governance boundaries (A13), not code claims.
+        probe_base=dict(gl=frappe.db.count('GL Entry'),fees=frappe.db.count('Fees'),si=frappe.db.count('Sales Invoice'),op=frappe.db.count(api.OP),audit=frappe.db.count(api.AUDIT))
+        def first_doc(dt):
+            name=frappe.db.get_value(dt,{},'name',order_by='creation asc')
+            assert name,(dt,'expected a command-created document to probe')
+            return name
+        cancel_targets=[('Fees',fees1['fees']),('Sales Invoice',httpinv['sales_invoice']),('Program Enrollment',enrolled['program_enrollment']),('Course Enrollment',first_doc('Course Enrollment')),('Student Group',first_doc('Student Group')),('Course Schedule',first_doc('Course Schedule')),('Student Attendance',attA['records'][stu1])]
+        def cancel_probes():
+            frappe.set_user('Administrator')
+            probed={}
+            for dt,name in cancel_targets:
+                before=frappe.db.get_value(dt,name,'docstatus')
+                try:
+                    frappe.get_doc(dt,name).cancel()
+                    raise AssertionError((dt,name,'cancel unexpectedly succeeded'))
+                except (frappe.ValidationError,frappe.PermissionError) as exc:
+                    assert 'requires an authorized' in str(exc),(dt,name,str(exc)[:200])
+                assert frappe.db.get_value(dt,name,'docstatus')==before,(dt,name,'docstatus changed by denied cancel')
+                probed[dt]=before
+            return {'cancel_denied_docstatus_intact':probed}
+        check('containment-admin-cancel-denied',traced(cancel_probes))
+        def probe_field(dt):
+            for df in frappe.get_meta(dt).fields:
+                if df.fieldtype in ('Data','Small Text','Text') and df.fieldname not in ('naming_series','amended_from'):
+                    return df.fieldname
+            raise AssertionError((dt,'no text probe field found'))
+        def edit_probes():
+            frappe.set_user('Administrator')
+            probed={}
+            for dt,name in (('Fees',fees1['fees']),('Sales Invoice',httpinv['sales_invoice'])):
+                field=probe_field(dt)
+                doc=frappe.get_doc(dt,name);doc.update({field:'SYN-PROBE'})
+                try:
+                    doc.save()
+                    raise AssertionError((dt,name,field,'post-submit edit unexpectedly succeeded'))
+                except (frappe.ValidationError,frappe.PermissionError) as exc:
+                    assert 'requires an authorized' in str(exc),(dt,name,field,str(exc)[:200])
+                assert frappe.db.get_value(dt,name,field)!='SYN-PROBE',(dt,name,field,'denied edit persisted')
+                probed[dt]=field
+            return {'post_submit_edit_denied':probed}
+        check('containment-post-submit-edit-denied',traced(edit_probes))
+        def rpc_probes():
+            frappe.set_user('Administrator')
+            client_insert=frappe.get_attr('frappe.client.insert');client_set_value=frappe.get_attr('frappe.client.set_value');client_delete=frappe.get_attr('frappe.client.delete')
+            try:
+                client_insert(doc=dict(doctype='Fees',naming_series='EDU-FEE-.YYYY.-',student=second['student'],program_enrollment=second['program_enrollment'],company='TOEFL House',posting_date='2026-09-01',due_date='2026-09-30',fee_structure=fin['fee_structure'],receivable_account=fin['receivable'],components=[dict(fees_category='SYN-Tuition',amount=1)]))
+                raise AssertionError('frappe.client.insert unexpectedly succeeded')
+            except (frappe.ValidationError,frappe.PermissionError) as exc:
+                assert 'requires an authorized' in str(exc),str(exc)[:200]
+            field=probe_field('Fees')
+            try:
+                client_set_value(doctype='Fees',name=fees1['fees'],fieldname=field,value='SYN-PROBE')
+                raise AssertionError('frappe.client.set_value unexpectedly succeeded')
+            except (frappe.ValidationError,frappe.PermissionError) as exc:
+                assert 'requires an authorized' in str(exc),str(exc)[:200]
+            assert frappe.db.get_value('Fees',fees1['fees'],field)!='SYN-PROBE','denied RPC set_value persisted'
+            try:
+                client_delete(doctype='Fees',name=fees1['fees'])
+                raise AssertionError('frappe.client.delete unexpectedly succeeded')
+            except Exception:
+                assert frappe.db.exists('Fees',fees1['fees']),'submitted Fees deleted through RPC'
+            return {'rpc_insert_denied':True,'rpc_set_value_denied':field,'rpc_delete_denied_natively':True}
+        check('containment-rpc-routes-denied',traced(rpc_probes))
+        def rest_probes():
+            # Guard-layer proof at the web seam needs a live session with
+            # native Fees write; the Finance Officer revocation above has
+            # already proven old-session denial, so Accounts User is
+            # re-granted for these probes and the restore is reported.
+            frappe.set_user('Administrator')
+            u=frappe.get_doc('User',users['finance_officer'])
+            if not any(r.role=='Accounts User' for r in u.roles):u.append('roles',{'role':'Accounts User'})
+            u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            s=sessions['finance_officer'];field=probe_field('Fees')
+            obs={'rest_insert':http_denied(s.post(base+'/api/resource/Fees',json=dict(naming_series='EDU-FEE-.YYYY.-',student=second['student'],program_enrollment=second['program_enrollment'],company='TOEFL House',posting_date='2026-09-01',due_date='2026-09-30',fee_structure=fin['fee_structure'],receivable_account=fin['receivable'],components=[dict(fees_category='SYN-Tuition',amount=1)]),timeout=40))}
+            obs['rest_update']=http_denied(s.put(base+'/api/resource/Fees/'+quote(fees1['fees'],safe=''),json={field:'SYN-PROBE'},timeout=40))
+            assert frappe.db.get_value('Fees',fees1['fees'],field)!='SYN-PROBE','denied REST update persisted'
+            obs['desk_cancel_route']=http_denied(s.post(base+'/api/method/runserverobj',json={'method':'cancel','dt':'Fees','dn':fees1['fees'],'args':'[]'},timeout=40))
+            obs['rest_delete']=http_denied(s.delete(base+'/api/resource/Fees/'+quote(fees1['fees'],safe=''),timeout=40))
+            obs['roles_restored_for_probe']='Accounts User'
+            return obs
+        check('containment-rest-routes-denied',rest_probes)
+        def amend_copy_probes():
+            frappe.set_user('Administrator')
+            for dt,name in (('Fees',fees1['fees']),('Sales Invoice',httpinv['sales_invoice'])):
+                copy=frappe.copy_doc(frappe.get_doc(dt,name))
+                try:
+                    copy.insert(ignore_permissions=True)
+                    raise AssertionError((dt,'copy/amend insert unexpectedly succeeded'))
+                except (frappe.ValidationError,frappe.PermissionError) as exc:
+                    assert 'requires an authorized' in str(exc),(dt,str(exc)[:200])
+            return {'copy_insert_denied':['Fees','Sales Invoice'],'amend_route':'unreachable while cancel is denied'}
+        check('containment-amend-copy-denied',traced(amend_copy_probes))
+        def probe_side_effects():
+            now=dict(gl=frappe.db.count('GL Entry'),fees=frappe.db.count('Fees'),si=frappe.db.count('Sales Invoice'),op=frappe.db.count(api.OP),audit=frappe.db.count(api.AUDIT))
+            assert now==probe_base,(probe_base,now)
+            for dt,name in cancel_targets:
+                assert frappe.db.exists(dt,name),(dt,name,'command-created document missing after probes')
+            return {'no_writes_from_probes':True,'targets_intact':[dt for dt,_ in cancel_targets]}
+        check('containment-no-side-effects-from-probes',probe_side_effects)
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}
