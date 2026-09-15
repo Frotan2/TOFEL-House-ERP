@@ -47,13 +47,39 @@ untouched.
 <!-- Filled from actual execution output only; no inferred or relabeled results. -->
 
 - Local pure unit tests, executed in the session workspace on 2026-09-15
-  (this commit):
+  (qualifying commit `a98871a`):
   - `python3 -m unittest discover -s tests/placement -v`: **119/119 OK**
     (115 increment 1–6 tests retained, plus 4 finalize tests).
   - `python3 -m unittest discover -s tests/foundation -v`: **44/44 OK**.
 - Hosted qualification (`.github/workflows/placement-content.yml`):
-  **not yet executed for this increment.** Increment 6 remains independently
-  qualified by run `34929427505` (252/252 native checks, commit `0f1b286`).
+  - Run `34930396690` (commit `a98871a7f20977e0dcb0fdee93a058dfcd2e41a5` on
+    `arena/01a0a13b-tofel-house-erp`): **PASSED**.
+    - Pinned runner probe, pinned installs (Frappe/ERPNext/Education/
+      Payments/HRMS + foundation_security + toefl_house at pinned refs), both
+      synthetic site installations and migrations: **all 86 runner steps exit
+      0** (`runtime_complete: true`, `production: REJECT`; runner report
+      SHA-256 `95d5d6cc9fd773cf720d413b772797689b78f2f558dbd6a412af1b28c3ff063f`).
+    - Native qualification: **285/285 checks pass** — increment 1–6
+      item/key, blueprint/policy, allocation, staff-supervised Digital
+      delivery, objective scoring and independent review plus increment 7
+      independent finalization of reviewed Digital attempts
+      (Reviewer-only `finalize_attempt`, Review→Finalized CAS,
+      finalizer≠scorer and ≠reviewer, no Decision/release/composite,
+      rollback, transient retry, HTTP CSRF/races/revocation, two-site
+      isolation, no student/enrollment/academic/finance/payroll writes;
+      native report SHA-256
+      `59a139a8f1b8745f5e0044994ecd614f4a3ae5429606431e5533bcffdafc18a1`).
+    `native-acceptance` 14.515 s. Unique `check(` names in
+    `tools/placement/native_checks.py` are **283**; hosted **285** includes
+    the two fixture-site checks. Increments 1–2 remain independently
+    qualified by run `34865327509` (85/85 native checks, commit `c0048dc`).
+    Increment 3 remains independently qualified by run `34888352524`
+    (135/135 native checks, commit `c7277a4`). Increment 4 remains
+    independently qualified by run `34923752045` (188/188 native checks,
+    commit `8b66bcb`). Increment 5 remains independently qualified by run
+    `34927594996` (221/221 native checks, commit `4ef4488`). Increment 6
+    remains independently qualified by run `34929427505` (252/252 native
+    checks, commit `0f1b286`).
 
 ## 4. Known limitations (unchanged outer boundary)
 
