@@ -3,9 +3,9 @@
 Date: 2026-09-15 · Session branch: `arena/01a0a13b-tofel-house-erp`
 · Predecessor: increment 6 qualified in hosted run `34929427505` (commit `0f1b286`).
 
-**Status: IMPLEMENTED — bounded increment-7 slice coded and covered by local
-unit tests; hosted synthetic qualification is the remaining runtime gate.
-Synthetic-data implementation only. Production remains REJECT.
+**Status: COMPLETE — bounded increment-7 slice implemented and qualified on the
+hosted synthetic runner (see Evidence). Synthetic-data implementation only,
+authorized for the bounded isolated build. Production remains REJECT.
 F01–F05 remain CLOSED/APPROVED; no policy value is invented or reopened.**
 
 This records increment 7 of the vertical-increment sequence in
