@@ -329,6 +329,24 @@ def validate_admission_text(value, field):
         raise ValueError(f"{field} must be {lo} to {hi} characters")
     return text
 
+
+def enrollment_is_eligible(status, accepted, native_student, existing_student="", conditions=""):
+    """Pure predicate: native Program Enrollment is allowed only after convert.
+
+    Returning-student and Conditional paths remain denied in this slice.
+    """
+    if status != "Approved":
+        raise ValueError("Only an Approved admission can enroll")
+    if not int(accepted or 0):
+        raise ValueError("Offer acceptance is required before enrollment")
+    if not native_student:
+        raise ValueError("Native Student conversion is required before enrollment")
+    if existing_student:
+        raise ValueError("Returning-student enrollment is not part of this slice")
+    if conditions:
+        raise ValueError("Conditional admission is not permission to enroll")
+    return True
+
 CONFIG_VALIDATORS = {"blueprint": validate_blueprint, "policy": validate_policy,
                      "course_map": validate_course_map}
 
@@ -360,7 +378,7 @@ def can_read(kind, roles, actor, owner, status=None):
         return bool(roles & {"Admission Officer", "Admission Reviewer",
                              "Admission Approver", "Admission Auditor"})
     if kind in ("audit", "operation"):
-        return bool(roles & {"Placement Auditor", "Admission Auditor"})
+        return bool(roles & {"Placement Auditor", "Admission Auditor", "Enrollment Auditor"})
     if "Placement Publisher" in roles:
         return True
     # Invigilator may operate the Digital session and read the operational

@@ -16,10 +16,14 @@ on commit `4571e6c`: 332/332 native checks, 86/86 runner steps, production
 [ERP-CAPABILITY-MAP.md](docs/domain/ERP-CAPABILITY-MAP.md) classifies every
 major domain as NATIVE, CONFIGURATION, TOEFL HOUSE EXTENSION or DEFERRED.
 The strategy remains reuse of Frappe/ERPNext/Education/HRMS. Thin Admission
-(`TH Admission Decision` over native Student Applicant/Student) is implemented
-on this branch and is **not hosted-qualified until the synthetic runner
-passes**. See [ADMISSION-CLOSURE.md](docs/domain/ADMISSION-CLOSURE.md). Do not
-start Enrollment. Do not deploy. Production remains **REJECT**.
+(`TH Admission Decision` over native Student Applicant/Student) is CLOSED /
+QUALIFIED (`4da6f1b`, hosted run `34941341845`). See
+[ADMISSION-CLOSURE.md](docs/domain/ADMISSION-CLOSURE.md). Thin Enrollment
+(`toefl_house.enrollment.enroll_in_program` over native Program Enrollment)
+is implemented on this branch and is **not hosted-qualified until the
+synthetic runner passes**. See
+[ENROLLMENT-CLOSURE.md](docs/domain/ENROLLMENT-CLOSURE.md). Do not start the
+next domain. Do not deploy. Production remains **REJECT**.
 
 **Phase 3 domain architecture is ready for review:**
 [TOEFL House domain design package](docs/domain/README.md) covers native entity ownership,

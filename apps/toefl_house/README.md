@@ -1,10 +1,16 @@
-# TOEFL House Placement (closed) and thin Admission
+# TOEFL House Placement (closed), thin Admission, thin Enrollment
+
+**Enrollment** is a thin command over native Education Program Enrollment.
+`toefl_house.enrollment.enroll_in_program` (Enrollment Officer) submits PE
+and allows PE `on_submit` Course Enrollment. No TH Enrollment ledger, no
+invoice/attendance/payroll. Hosted qualification status: see
+`docs/domain/ENROLLMENT-CLOSURE.md`. Do not start the next domain.
 
 **Admission** is a thin owned `TH Admission Decision` over native Student
 Applicant / Student. Commands live in `toefl_house.admission`. Approval and
 conversion must not create Program Enrollment, invoices, payments, attendance
 or payroll. Hosted qualification status: see
-`docs/domain/ADMISSION-CLOSURE.md`. Do not start Enrollment.
+`docs/domain/ADMISSION-CLOSURE.md`.
 
 # TOEFL House Placement — increments 1–7 plus closure slice
 

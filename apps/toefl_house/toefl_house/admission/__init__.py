@@ -148,29 +148,6 @@ def deny_enroll_student(source_name=None):
         "Native enroll_student is contained; enrollment is not part of Admission")
 
 
-def deny_program_enrollment(doc, method=None):
-    from toefl_house.security import require_synthetic
-    require_synthetic()
-    raise frappe.ValidationError("Program Enrollment is not part of the Admission domain")
-
-
-def deny_course_enrollment(doc, method=None):
-    from toefl_house.security import require_synthetic
-    require_synthetic()
-    raise frappe.ValidationError("Course Enrollment is not part of the Admission domain")
-
-
-def deny_premature_invoice(doc, method=None):
-    from toefl_house.security import require_synthetic
-    require_synthetic()
-    customer = getattr(doc, "customer", None)
-    if not customer:
-        return
-    students = frappe.get_all(STUDENT, filters={"customer": customer}, pluck="name")
-    if students and frappe.db.exists(DECISION_DT, {"native_student": ["in", students]}):
-        raise frappe.ValidationError("Premature billing is denied for admission-converted students")
-
-
 @frappe.whitelist(methods=["POST"])
 def record_applicant(request_key, placement_decision, first_name, program, academic_year):
     def work(actor):

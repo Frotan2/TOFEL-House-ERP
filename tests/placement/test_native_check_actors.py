@@ -60,6 +60,10 @@ ADMISSION_AUTHOR_ONLY_CHECKS = (
     "http-admission-wrong-role-denied",
     "http-admission-other-role-read-denied",
 )
+ENROLLMENT_AUTHOR_ONLY_CHECKS = (
+    "enrollment-author-denied",
+    "http-enrollment-wrong-role-denied",
+)
 
 
 def _kind_roles():
@@ -150,6 +154,14 @@ class Increment3ActorGuardTests(unittest.TestCase):
             self.src,
             r"'admissions_auditor'\s*:\s*\[\s*'Admission Auditor'\s*\]",
         )
+        self.assertRegex(
+            self.src,
+            r"'enrollment_officer'\s*:\s*\[\s*'Enrollment Officer'\s*\]",
+        )
+        self.assertRegex(
+            self.src,
+            r"'enrollment_auditor'\s*:\s*\[\s*'Enrollment Auditor'\s*\]",
+        )
 
     def test_operational_commands_are_publisher_without_extra_sod(self):
         roles = _kind_roles()
@@ -174,12 +186,13 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertEqual(roles["revoke_admission"], "Admission Approver")
         self.assertEqual(roles["expire_admission"], "Admission Officer")
         self.assertEqual(roles["convert_applicant"], "Admission Approver")
+        self.assertEqual(roles["enroll_in_program"], "Enrollment Officer")
 
     def test_inc3_author_denials_use_author_only_fixtures(self):
         for name in (INC3_AUTHOR_ONLY_CHECKS + INC4_AUTHOR_ONLY_CHECKS
                      + INC5_AUTHOR_ONLY_CHECKS + INC6_AUTHOR_ONLY_CHECKS
                      + INC7_AUTHOR_ONLY_CHECKS + DECISION_AUTHOR_ONLY_CHECKS
-                     + ADMISSION_AUTHOR_ONLY_CHECKS):
+                     + ADMISSION_AUTHOR_ONLY_CHECKS + ENROLLMENT_AUTHOR_ONLY_CHECKS):
             with self.subTest(check=name):
                 body = _check_call_source(self.src, name)
                 self.assertNotIn("'%s'" % DUAL_ROLE, body.replace("check('%s'" % name, ""))
@@ -336,12 +349,13 @@ class Increment3ActorGuardTests(unittest.TestCase):
 
     def test_http_sessions_include_invigilator(self):
         start = self.src.index("sessions={label:login")
-        blob = self.src[start:start + 360]
+        blob = self.src[start:start + 520]
         self.assertIn("'invigilator'", blob)
         self.assertIn("'assessor'", blob)
         self.assertIn("'reviewer'", blob)
         self.assertIn("'reviewer2'", blob)
         self.assertIn("'releaser'", blob)
+        self.assertIn("'enrollment_officer'", blob)
 
     def test_http_session_keys_match_whitelist_signature(self):
         api_src = (ROOT / "apps/toefl_house/toefl_house/api.py").read_text(encoding="utf-8")
@@ -386,6 +400,8 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertNotIn("Placement Author", roles)
         self.assertNotIn("Placement Publisher", roles)
         self.assertNotIn("Placement Releaser", roles)
+        self.assertNotIn("Enrollment Officer", roles)
+        self.assertNotIn("Enrollment Auditor", roles)
 
     def test_http_admission_keys_match_whitelist_signature(self):
         adm_src = (ROOT / "apps/toefl_house/toefl_house/admission/__init__.py").read_text(
@@ -423,6 +439,29 @@ class Increment3ActorGuardTests(unittest.TestCase):
         blob = self.src[start:start + 900]
         self.assertIn("program_enrollment", blob)
         self.assertIn("native_application_status", blob)
+
+    def test_http_enrollment_keys_match_whitelist_signature(self):
+        enr_src = (ROOT / "apps/toefl_house/toefl_house/enrollment/__init__.py").read_text(
+            encoding="utf-8")
+        tree = ast.parse(enr_src)
+        args = None
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "enroll_in_program":
+                args = [a.arg for a in node.args.args]
+        self.assertEqual(args, ["request_key", "admission_decision"])
+        self.assertIn("http_enr_payload=dict(", self.src)
+        blob = self.src[self.src.index("http_enr_payload=dict("):
+                        self.src.index("http_enr_payload=dict(") + 220]
+        self.assertIn("request_key=", blob)
+        self.assertIn("admission_decision=", blob)
+
+    def test_no_th_enrollment_ledger_doctype(self):
+        root = ROOT / "apps/toefl_house/toefl_house"
+        folders = {p.parent.name for p in root.rglob("*.json") if p.parent.name.startswith("th_")}
+        self.assertNotIn("th_enrollment_request", folders)
+        self.assertNotIn("th_enrollment", folders)
+        self.assertNotIn("th_program_enrollment", folders)
+        self.assertTrue((root / "admission/doctype/th_admission_decision").is_dir())
 
     def test_increment3_pins_its_own_published_policy(self):
         # Do not capture increment-2's `pol` across the second-site hop.

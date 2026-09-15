@@ -1,13 +1,13 @@
 app_name = "toefl_house"
 app_title = "TOEFL House Placement (Synthetic Qualification)"
 app_publisher = "TOEFL House"
-app_description = "Synthetic-only governed placement and thin admission; no enrollment engine"
+app_description = "Synthetic-only governed placement, thin admission, and native Program Enrollment"
 app_email = "validation@example.test"
 app_license = "MIT"
 required_apps = ["erpnext", "education", "foundation_security"]
 after_install = "toefl_house.install.after_install"
 after_migrate = "toefl_house.install.after_migrate"
-fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor"]]]}]
+fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor"]]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"
     for name in ("TH Placement Item Revision", "TH Placement Key Revision", "TH Placement Audit Event",
@@ -37,12 +37,12 @@ override_whitelisted_methods = {
 }
 doc_events = {
     "Program Enrollment": {
-        "validate": "toefl_house.admission.deny_program_enrollment",
+        "validate": "toefl_house.enrollment.guard_program_enrollment",
     },
     "Course Enrollment": {
-        "validate": "toefl_house.admission.deny_course_enrollment",
+        "validate": "toefl_house.enrollment.guard_course_enrollment",
     },
     "Sales Invoice": {
-        "validate": "toefl_house.admission.deny_premature_invoice",
+        "validate": "toefl_house.enrollment.deny_premature_invoice",
     },
 }

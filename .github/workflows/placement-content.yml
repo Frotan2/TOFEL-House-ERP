@@ -7,6 +7,7 @@ on:
       - apps/toefl_house/**
       - tests/placement/**
       - tests/admission/**
+      - tests/enrollment/**
       - tools/placement/native_checks.py
       - tools/placement/run_native.py
       - tools/foundation/runner_probe.py
@@ -36,6 +37,8 @@ jobs:
           mkdir -p .foundation/placement-evidence
           set -o pipefail
           python3 -m unittest discover -s tests/placement -v 2>&1 | tee .foundation/placement-evidence/unit-tests.txt
+          python3 -m unittest discover -s tests/admission -v 2>&1 | tee .foundation/placement-evidence/admission-unit-tests.txt
+          python3 -m unittest discover -s tests/enrollment -v 2>&1 | tee .foundation/placement-evidence/enrollment-unit-tests.txt
           python3 -m unittest discover -s tests/foundation -v 2>&1 | tee .foundation/placement-evidence/foundation-unit-tests.txt
           node tests/foundation/test_realtime_guard.cjs 2>&1 | tee .foundation/placement-evidence/realtime-unit-tests.txt
       - name: Pinned runner dependencies

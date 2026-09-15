@@ -17,11 +17,12 @@ def main():
     import requests
     from toefl_house import api
     from toefl_house import admission as adm
+    from toefl_house import enrollment as enr
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
     report={'scope':'Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
-            'note':'Thin admission over native Applicant/Student; no enrollment engine'}
+            'note':'Thin admission and native Program Enrollment; no TH Enrollment ledger'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
            'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',
@@ -38,7 +39,9 @@ def main():
            'officer':'synthetic-officer@example.test',
            'admissions_reviewer':'synthetic-admissions-reviewer@example.test',
            'approver':'synthetic-approver@example.test',
-           'admissions_auditor':'synthetic-admissions-auditor@example.test'}
+           'admissions_auditor':'synthetic-admissions-auditor@example.test',
+           'enrollment_officer':'synthetic-enrollment-officer@example.test',
+           'enrollment_auditor':'synthetic-enrollment-auditor@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
@@ -104,7 +107,9 @@ def main():
                          'officer':['Admission Officer'],
                          'admissions_reviewer':['Admission Reviewer'],
                          'approver':['Admission Approver'],
-                         'admissions_auditor':['Admission Auditor']}
+                         'admissions_auditor':['Admission Auditor'],
+                         'enrollment_officer':['Enrollment Officer'],
+                         'enrollment_auditor':['Enrollment Auditor']}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -1341,6 +1346,91 @@ def main():
             return {'admission_absent_on_second_site':True}
         check('second-site-no-first-site-admission-record',adm_second_site)
         frappe.destroy();connect('placement-test.localhost')
+
+        # --- Enrollment: native Program Enrollment after converted admission ---
+        def enrollment_catalog():
+            frappe.set_user('Administrator')
+            if not frappe.db.exists('Course','SYN-COURSE-CORE'):
+                frappe.get_doc(dict(doctype='Course',course_name='SYN-COURSE-CORE')).insert()
+            program=frappe.get_doc('Program','SYN-PROGRAM-GENERAL')
+            if not any((row.course=='SYN-COURSE-CORE') for row in (program.get('courses') or [])):
+                program.append('courses',dict(course='SYN-COURSE-CORE',required=1))
+                program.save()
+            return {'course':'SYN-COURSE-CORE','program':'SYN-PROGRAM-GENERAL'}
+        enr_cat=check('enrollment-native-catalog',enrollment_catalog)
+        check('enrollment-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:enr.enroll_in_program('enr_out_key_00000001',dec['name']))))
+        check('enrollment-author-denied',lambda:denied(lambda:as_user('second_author',lambda:enr.enroll_in_program('enr_auth_key_0000001',dec['name']))))
+        check('enrollment-admission-officer-denied',lambda:denied(lambda:as_user('officer',lambda:enr.enroll_in_program('enr_off_key_00000001',dec['name']))))
+        check('enrollment-approver-denied',lambda:denied(lambda:as_user('approver',lambda:enr.enroll_in_program('enr_appr_key_0000001',dec['name']))))
+        check('enrollment-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:enr.enroll_in_program('enr_pub_key_00000001',dec['name']))))
+        check('enrollment-withdrawn-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_withdraw_key_0001',dec6['name']))))
+        check('enrollment-rejected-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_reject_key_000001',dec7['name']))))
+        check('enrollment-expired-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_expire_key_000001',dec8['name']))))
+        def enroll_rollback_proof():
+            frappe.set_user(users['enrollment_officer']);frappe.db.savepoint('enr_atomic')
+            old={dt:frappe.db.count(dt) for dt in (enr.PE,enr.CE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic enrollment audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):
+                    enr.enroll_in_program('enr_atomic_key_00001',dec['name'])
+            except RuntimeError:frappe.db.rollback(save_point='enr_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            return {'real_database_rollback':True,'injected_boundary':'enrollment audit'}
+        check('enrollment-atomic-enrollment-rollback',enroll_rollback_proof)
+        enrolled=check('enrollment-happy-path',lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_enroll_key_00001',dec['name'])))
+        assert enrolled['docstatus']==1 and enrolled['student']==converted['native_student']
+        assert enrolled['program']==cat['program'] and enrolled['course_enrollments']==1
+        assert enrolled['sales_invoice']==0
+        assert frappe.db.count('Sales Invoice')==before_counts['Sales Invoice']
+        assert frappe.db.count('GL Entry')==before_counts['GL Entry']
+        assert frappe.db.count('Salary Slip')==before_counts['Salary Slip']
+        assert frappe.db.count('Assessment Result')==before_counts['Assessment Result']
+        def enroll_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_enroll_key_00001',dec['name']))
+            assert value==enrolled and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count(enr.PE,{'student':converted['native_student']})==1
+            return {'same_result':True,'one_enrollment':True}
+        check('enrollment-idempotent-replay',enroll_replay)
+        check('enrollment-duplicate-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_dup_key_00000001',dec['name']))))
+        def enroll_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Program Enrollment',student=converted['native_student'],
+                program=cat['program'],academic_year=cat['academic_year'],enrollment_date=frappe.utils.today())).insert(ignore_permissions=True))
+        check('enrollment-direct-pe-still-denied',enroll_direct_denied)
+        def enroll_contained():
+            return denied(lambda:adm.deny_enroll_student(app['name']))
+        check('enrollment-enroll-student-still-contained',enroll_contained)
+        def enroll_reads():
+            frappe.set_user(users['enrollment_officer'])
+            try:listed=frappe.get_list('Program Enrollment')
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            try:listed=frappe.get_list('Course Enrollment')
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            frappe.set_user(users['enrollment_auditor'])
+            assert frappe.get_list(api.OP) and frappe.get_list(api.AUDIT)
+            try:listed=frappe.get_list(adm.DECISION_DT)
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            frappe.set_user(users['officer'])
+            try:listed=frappe.get_list('Program Enrollment')
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            return {'enrollment_officer_no_pe_crud':True,'auditor_receipts_only':True}
+        check('enrollment-role-and-list-parity',enroll_reads)
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def enr_second_site():
+            assert frappe.db.count(enr.PE)==0 and frappe.db.count(enr.CE)==0
+            return {'enrollment_absent_on_second_site':True}
+        check('second-site-no-first-site-enrollment-record',enr_second_site)
+        frappe.destroy();connect('placement-test.localhost')
         base='http://127.0.0.1:18000'
         for _ in range(60):
             try:
@@ -1358,9 +1448,10 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def apost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.admission.'+method,json=payload,timeout=40)
+        def epost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.enrollment.'+method,json=payload,timeout=40)
         def http_denied(response,csrf=False):
             assert response.status_code in (400,403,404,405,409,417),f'Unexpected HTTP {response.status_code}'
             data=response.json()
@@ -1758,6 +1849,42 @@ def main():
             assert frappe.db.count('Student',{'student_applicant':app6['name']})==1
             return {'http_statuses':[200,200],'one_student':True}
         check('http-admission-concurrent-idempotency',http_adm_idem)
+        http_enr_payload=dict(request_key='http_enr_enroll_00001',admission_decision=httpadm['name'])
+        def http_enroll():
+            r=epost('enrollment_officer','enroll_in_program',http_enr_payload);assert r.status_code==200,f'enroll HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpenrolled=check('http-enrollment-positive',http_enroll)
+        assert httpenrolled['docstatus']==1 and httpenrolled['student']==httpconverted['native_student']
+        assert httpenrolled['course_enrollments']==1 and httpenrolled['sales_invoice']==0
+        check('http-enrollment-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.enrollment.enroll_in_program',headers={'Host':'placement-test.localhost'},json=http_enr_payload,timeout=30)))
+        check('http-enrollment-unrelated-role-denied',lambda:http_denied(epost('outsider','enroll_in_program',dict(http_enr_payload,request_key='http_enr_out_0000001'))))
+        check('http-enrollment-wrong-role-denied',lambda:http_denied(epost('second_author','enroll_in_program',dict(http_enr_payload,request_key='http_enr_author_0001'))))
+        check('http-enrollment-admission-officer-denied',lambda:http_denied(epost('officer','enroll_in_program',dict(http_enr_payload,request_key='http_enr_off_0000001'))))
+        check('http-enrollment-approver-denied',lambda:http_denied(epost('approver','enroll_in_program',dict(http_enr_payload,request_key='http_enr_appr_000001'))))
+        check('http-enrollment-get-cannot-mutate',lambda:http_denied(sessions['enrollment_officer'].get(base+'/api/method/toefl_house.enrollment.enroll_in_program',params={'request_key':'http_enr_get_0000001'},timeout=30)))
+        def http_enr_csrf():
+            s=sessions['enrollment_officer'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.enrollment.enroll_in_program',json=dict(http_enr_payload,request_key='http_enr_csrf_0000001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-enrollment-csrf-negative-with-positive-control',http_enr_csrf)
+        pe_url=base+'/api/resource/'+quote('Program Enrollment',safe='')+'/'+httpenrolled['program_enrollment']
+        check('http-enrollment-direct-crud-mutation-denied',lambda:http_denied(sessions['enrollment_officer'].put(pe_url,json={'program':'forged'},timeout=30)))
+        def http_enr_idem():
+            r0=epost('enrollment_officer','enroll_in_program',http_enr_payload)
+            assert r0.status_code==200,f'enroll replay HTTP {r0.status_code} {r0.text[:200]}'
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['enrollment_officer'].headers);s.cookies.update(sessions['enrollment_officer'].cookies)
+                return s.post(base+'/api/method/toefl_house.enrollment.enroll_in_program',json=http_enr_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type'),'message':(r.json().get('exception') or r.text)[:240]} for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count('Program Enrollment',{'student':httpconverted['native_student']})==1
+            return {'http_statuses':[200,200],'one_enrollment':True}
+        check('http-enrollment-concurrent-idempotency',http_enr_idem)
+        def enrollment_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['enrollment_officer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(epost('enrollment_officer','enroll_in_program',dict(http_enr_payload,request_key='http_enr_revoked_0001')))
+        check('http-enrollment-revoked-officer-old-session-denied',enrollment_revoke)
         def admission_revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['officer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(apost('officer','create_admission',dict(http_adm_payload,request_key='http_adm_revoked_0001')))
@@ -1796,12 +1923,15 @@ def main():
         check('http-config-revoked-publisher-old-session-denied',cfg_revoke)
         def no_side_effects():
             after={dt:frappe.db.count(dt) for dt in before_counts}
-            for dt in ('Program Enrollment','Course Enrollment','Assessment Result','Sales Invoice','GL Entry','Salary Slip'):
+            for dt in ('Assessment Result','Sales Invoice','GL Entry','Salary Slip'):
                 assert after[dt]==before_counts[dt],(dt,before_counts[dt],after[dt])
+            assert after['Program Enrollment']>=2 and after['Course Enrollment']>=2
             assert after['Student']>=1 and after['Student Applicant']>=1
-            return {'enrollment_academic_finance_payroll_unchanged':True,
+            return {'academic_finance_payroll_unchanged':True,
+                    'native_program_enrollments':after['Program Enrollment'],
+                    'native_course_enrollments':after['Course Enrollment'],
                     'native_students':after['Student'],'native_applicants':after['Student Applicant']}
-        check('no-enrollment-academic-finance-payroll-writes',no_side_effects)
+        check('no-academic-finance-payroll-writes',no_side_effects)
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}

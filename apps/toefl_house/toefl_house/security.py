@@ -42,6 +42,7 @@ KIND_ROLES = {
     "revoke_admission": "Admission Approver",
     "expire_admission": "Admission Officer",
     "convert_applicant": "Admission Approver",
+    "enroll_in_program": "Enrollment Officer",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -93,3 +94,8 @@ def require_command(doctype):
         raise frappe.PermissionError("Protected records require an authorized domain command")
     authorize(KIND_ROLES[context[0]])
     return context
+
+
+def enrollment_command_active():
+    context = _CONTEXT.get()
+    return bool(context and context[0] == "enroll_in_program" and context[1] == frappe.session.user)

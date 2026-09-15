@@ -91,6 +91,11 @@
       "role": "Admission Auditor",
       "read": 1,
       "select": 1
+    },
+    {
+      "role": "Enrollment Auditor",
+      "read": 1,
+      "select": 1
     }
   ],
   "sort_field": "creation",

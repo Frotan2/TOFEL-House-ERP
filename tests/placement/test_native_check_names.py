@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 NATIVE = ROOT / "tools/placement/native_checks.py"
 API = ROOT / "apps/toefl_house/toefl_house/api.py"
 ADMISSION = ROOT / "apps/toefl_house/toefl_house/admission/__init__.py"
+ENROLLMENT = ROOT / "apps/toefl_house/toefl_house/enrollment/__init__.py"
 
 
 def _module_level_names(tree):
@@ -64,6 +65,17 @@ class NativeCheckNameGuardTests(unittest.TestCase):
             missing,
             [],
             "native_checks.py references admission names not defined: %s" % missing,
+        )
+
+    def test_native_check_enrollment_references_resolve(self):
+        used = _api_attribute_uses(ast.parse(NATIVE.read_text(encoding="utf-8")), "enr")
+        defined = _module_level_names(ast.parse(ENROLLMENT.read_text(encoding="utf-8")))
+        self.assertTrue(used, "expected enr.* references in native_checks.py")
+        missing = sorted(used - defined)
+        self.assertEqual(
+            missing,
+            [],
+            "native_checks.py references enrollment names not defined: %s" % missing,
         )
 
 
