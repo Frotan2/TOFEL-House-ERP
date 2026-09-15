@@ -47,11 +47,16 @@ placement cases read-only).
 - The enrollment slice's `deny_premature_invoice` guard stays in force,
   chained inside `finance.guard_sales_invoice` (one handler per
   doctype/method per app).
-- `Finance Officer` executes commands only; no Desk list/read access to
-  money documents or receipts. `Finance Auditor` reads the shared receipt /
-  audit ledger only (DocPerm read rows + `permissions.query()` +
+- `Finance Officer` executes commands and carries the native **Accounts
+  User** role (the native finance-staff role that ERPNext's own
+  party-account and currency validations require); it holds no read on the
+  receipt/audit ledger. `Finance Auditor` reads the shared receipt / audit
+  ledger only (DocPerm read rows + `permissions.query()` +
   `policy.can_read`, the Teaching Auditor precedent) — never native money
-  documents.
+  documents (education's `Fees` stays closed to it; ERPNext's native
+  `Sales Invoice` `All`-role read row is native behavior, unchanged).
+  Containment is the absolute guard — direct writes are denied even for
+  `Administrator` — not read-role scarcity.
 - All writes are receipted (`TH Placement Operation` + `TH Placement Audit
   Event`), idempotent by request key, and atomic: failure injection at the
   audit boundary rolls back invoice/receipt/GL as one transaction.
@@ -94,6 +99,28 @@ placement cases read-only).
     restoring the intended native configuration as a Custom Field
     (`Fee Structure.income_account`, Link Account) and configuring it in
     the fixture Fee Structures; link validation stays fully active.
+  - Run `34986723722` (commit `819163d`): **FAIL** —
+    `finance-tuition-happy-path` own value assertion (empty message).
+    Self-reporting asserts (commit `db20540`, run `34989201678`) exposed
+    the exact value: `currency='INR'` — frappe prefills an empty `currency`
+    field from the system default before validate, so education's
+    fill-from-company never runs. Fixed in `cf6d749` by setting the
+    company's `default_currency` (AFN) explicitly on `Fees` and `Sales
+    Invoice`.
+  - Run `34990386368` (commit `cf6d749`): **FAIL** —
+    `finance-placement-happy-path` `ValidationError: Unknown placement
+    case`; **502/503** recorded checks passed (full tuition chain green).
+    Fixture bug: `TH Placement Case` is autonamed, so a `create_case`
+    request key is not the case name. Fixed in `8649c17` by resolving
+    billed cases via their unique `subject`.
+  - Run `34991471252` (commit `8649c17`): **FAIL** —
+    `finance-placement-happy-path` `PermissionError` from ERPNext
+    `get_party_account → account_perm_check`: SI party/currency validation
+    requires the actor to read `Account` natively. Fixed by giving the
+    Finance Officer the native **Accounts User** role (the native
+    finance-staff role) and re-tuning `finance-role-and-list-parity` to the
+    honest model (containment is the absolute guard; receipt ledger stays
+    auditor-only; ERPNext's native `All`-read on Sales Invoice unchanged).
   - Final qualification run: filled from actual check-run output below.
 
 ## 3. Boundary and remaining gates

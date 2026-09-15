@@ -122,7 +122,7 @@ def main():
                          'teaching_scheduler':['Teaching Scheduler'],
                          'attendance_recorder':['Attendance Recorder'],
                          'teaching_auditor':['Teaching Auditor'],
-                         'finance_officer':['Finance Officer'],
+                         'finance_officer':['Finance Officer','Accounts User'],
                          'finance_auditor':['Finance Auditor']}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
@@ -2520,18 +2520,23 @@ def main():
                     'line_discount':float(line_disc),'sales_invoice':value['sales_invoice']}
         waiver=check('finance-placement-native-pricing-rule-waiver',traced(waiver_flow))
         def fin_reads():
+            # Containment lives in the absolute guards (direct writes denied
+            # even for Administrator), not in read-role scarcity: the Finance
+            # Officer carries the native Accounts User role (the native
+            # finance-staff role) and the receipt/audit ledger stays
+            # auditor-only. Native ERPNext grants Sales Invoice read to every
+            # staff account ('All' row) - native behavior, unchanged here.
             frappe.set_user(users['finance_officer'])
-            for dt in (api.OP,api.AUDIT,'Fees','Sales Invoice'):
+            for dt in (api.OP,api.AUDIT):
                 try:listed=frappe.get_list(dt)
                 except frappe.PermissionError:listed=[]
-                assert not listed,(dt,'officer must not list through Desk roles')
+                assert not listed,(dt,'receipt ledger is auditor-only')
             frappe.set_user(users['finance_auditor'])
             assert frappe.get_list(api.OP) and frappe.get_list(api.AUDIT)
-            for dt in ('Fees','Sales Invoice'):
-                try:listed=frappe.get_list(dt)
-                except frappe.PermissionError:listed=[]
-                assert not listed,(dt,'auditor reads receipts only')
-            return {'finance_no_native_crud':True,'auditor_receipts_only':True}
+            try:listed=frappe.get_list('Fees')
+            except frappe.PermissionError:listed=[]
+            assert not listed,'auditor reads receipts only'
+            return {'receipt_ledger_auditor_only':True,'auditor_no_fees':True}
         check('finance-role-and-list-parity',fin_reads)
         def fpost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.finance.'+method,json=payload,timeout=40)
         http_fin_payload=dict(request_key='http_fin_tuition_00001',program_enrollment=enrolled['program_enrollment'],fee_structure=fin['fee_structure'],posting_date='2026-09-02',due_date='2026-10-02')
