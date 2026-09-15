@@ -2715,6 +2715,65 @@ def main():
                 assert frappe.db.exists(dt,name),(dt,name,'command-created document missing after probes')
             return {'no_writes_from_probes':True,'targets_intact':[dt for dt,_ in cancel_targets]}
         check('containment-no-side-effects-from-probes',probe_side_effects)
+        # ---- R1 release surface: role-scoped staff workspaces (native
+        # configuration). Workspaces are navigation only - pinned frappe
+        # (988e54f3c4c2, desk/desktop.py get_workspaces -> is_permitted):
+        # visible iff the user holds one of the workspace Has Role rows;
+        # they grant no document read. Probes use never-revoked sessions.
+        ws_spec={'TH Placement':('Placement',{'Placement Author','Placement Publisher','Placement Invigilator','Placement Assessor','Placement Reviewer','Placement Releaser'}),
+                 'TH Admission':('Admission',{'Admission Officer','Admission Reviewer','Admission Approver'}),
+                 'TH Enrollment':('Enrollment',{'Enrollment Officer'}),
+                 'TH Teaching':('Teaching',{'Teaching Scheduler','Attendance Recorder'}),
+                 'TH Finance':('Finance',{'Finance Officer'}),
+                 'TH Receipts':('Placement',{'Placement Auditor','Admission Auditor','Enrollment Auditor','Teaching Auditor','Finance Auditor'})}
+        def ws_configured():
+            frappe.set_user('Administrator')
+            for ws_name,(module,roles) in ws_spec.items():
+                ws=frappe.get_doc('Workspace',ws_name)
+                assert int(ws.public)==1 and not ws.for_user,(ws_name,'must be a public workspace')
+                assert ws.module==module,(ws_name,ws.module,module)
+                assert {r.role for r in ws.roles}==roles,(ws_name,sorted(r.role for r in ws.roles),sorted(roles))
+                cards={l.label for l in ws.links if l.type=='Card Break'}
+                for l in ws.links:
+                    if l.type=='Link':
+                        assert l.link_type=='DocType' and frappe.db.exists('DocType',l.link_to),(ws_name,l.label,l.link_to)
+                content=json.loads(ws.content)
+                referenced={b['data']['card_name'] for b in content if b.get('type')=='card'}
+                assert referenced and referenced<=cards,(ws_name,sorted(referenced),sorted(cards))
+            return {'workspaces_configured':sorted(ws_spec)}
+        check('release-workspaces-configured',ws_configured)
+        def ws_visibility():
+            get_ws=frappe.get_attr('frappe.desk.desktop.get_workspaces')
+            def visible(label):
+                frappe.set_user(users[label])
+                return {p['name'] for p in get_ws()['pages']}
+            probe={'invigilator':('TH Placement','TH Receipts'),
+                   'finance_auditor':('TH Receipts','TH Finance'),
+                   'teaching_scheduler':('TH Teaching','TH Placement'),
+                   'admissions_auditor':('TH Receipts','TH Admission')}
+            observed={}
+            for label,(must,must_not) in probe.items():
+                seen=visible(label)
+                assert must in seen,(label,must,'workspace not visible to its role')
+                assert must_not not in seen,(label,must_not,'workspace leaked to a non-member role')
+                observed[label]=must
+            frappe.set_user('Administrator')
+            return {'role_scoped_visibility':observed}
+        check('release-workspace-role-visibility',ws_visibility)
+        def ws_no_privilege_escalation():
+            # Navigation grants no read: the document permission model stays
+            # authoritative after the workspace fixtures are installed.
+            frappe.set_user(users['finance_auditor'])
+            try:listed=frappe.get_list('Fees')
+            except frappe.PermissionError:listed=[]
+            assert not listed,'workspace visibility must not grant Fees read'
+            frappe.set_user(users['invigilator'])
+            try:listed=frappe.get_list(api.OP)
+            except frappe.PermissionError:listed=[]
+            assert not listed,'workspace visibility must not grant receipt read'
+            frappe.set_user('Administrator')
+            return {'no_read_granted_by_workspaces':True}
+        check('release-workspace-no-privilege-escalation',ws_no_privilege_escalation)
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}

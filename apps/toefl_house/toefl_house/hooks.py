@@ -8,7 +8,11 @@ required_apps = ["erpnext", "education", "foundation_security"]
 after_install = "toefl_house.install.after_install"
 after_migrate = "toefl_house.install.after_migrate"
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor"]]]},
-            {"dt": "Custom Field", "filters": [["dt", "=", "Sales Invoice"], ["fieldname", "=", "th_placement_case"]]}]
+            {"dt": "Custom Field", "filters": [["dt", "=", "Sales Invoice"], ["fieldname", "=", "th_placement_case"]]},
+            # R1 release surface: role-scoped staff navigation. Workspaces are
+            # pure native configuration (navigation only); they grant no read
+            # permission - the document permission model stays authoritative.
+            {"dt": "Workspace", "filters": [["name", "in", ["TH Placement", "TH Admission", "TH Enrollment", "TH Teaching", "TH Finance", "TH Receipts"]]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"
     for name in ("TH Placement Item Revision", "TH Placement Key Revision", "TH Placement Audit Event",

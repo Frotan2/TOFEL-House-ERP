@@ -1,2 +1,5 @@
 Placement
 Admission
+Enrollment
+Teaching
+Finance
