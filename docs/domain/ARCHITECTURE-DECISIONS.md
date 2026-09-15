@@ -39,7 +39,7 @@ This record, [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md) and [IMPLEMENTATION-READIN
 | A10 | Admission approval semantics | **DECIDED** | Explicit admission decision; placement, offer acceptance and registration remain distinct |
 | A11 | Enrollment cancellation | **BLOCKED** | No destructive cancellation as a transfer/repeat shortcut; safe history-preserving path must be proven |
 | A12 | Reporting and derived data | **DECIDED** | Source-owned metrics with separated grains, provenance, permissions and rebuildable projections |
-| A13 | Backend containment of native bypass routes | **CONDITIONAL** | Server invariants plus contained native entry points; coverage must be demonstrated |
+| A13 | Backend containment of native bypass routes | **CONDITIONAL** | Server invariants plus contained native entry points; coverage must be demonstrated. Implemented-slice coverage now demonstrated: hosted negative route proofs for the seven command-only doctypes (cancel/post-submit-edit/RPC/REST/Desk-cancel/copy-amend seams, run `35008705885`, 523/523) — see [CONTAINMENT-A13.md](CONTAINMENT-A13.md). Full writer/side-effect inventory for unimplemented domains (B10/B11/B13) remains open |
 
 ## Evidence register
 

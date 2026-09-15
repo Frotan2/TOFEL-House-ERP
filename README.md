@@ -36,6 +36,16 @@ hosted run `34999987969`, 517/517 native checks) — see
 (B04/B05, owner-deferred) and payroll (A09) remain gated. Do not start the
 next domain. Do not deploy. Production remains **REJECT**.
 
+**A13 bypass-route containment is demonstrated for the implemented
+slices** (`5b5a044`, hosted run `35008705885`, 523/523 native checks): the
+command-only guards on the seven guarded doctypes are pinned on all three
+lifecycle seams (`validate`, `before_cancel`, `before_update_after_submit`
+— pinned frappe fires `validate` only on save/submit), with hosted negative
+proofs across cancel, post-submit edit, RPC, REST, Desk-cancel and
+copy/amend routes and a no-side-effects invariant. See
+[CONTAINMENT-A13.md](docs/domain/CONTAINMENT-A13.md); A13 remains
+CONDITIONAL for unimplemented domains.
+
 **Phase 3 domain architecture is ready for review:**
 [TOEFL House domain design package](docs/domain/README.md) covers native entity ownership,
 placement/admission/academic/finance/HR workflows, permissions, integration boundaries
