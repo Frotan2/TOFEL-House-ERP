@@ -2399,7 +2399,8 @@ def main():
                 try:return fn()
                 except Exception as exc:
                     import traceback as _tb
-                    frames=" <- ".join(f.filename.split('/')[-1]+':'+str(f.lineno)+':'+f.name for f in _tb.extract_tb(exc.__traceback__)[-5:])
+                    frames=[f for f in _tb.extract_tb(exc.__traceback__) if f.filename.split('/')[-1] not in ('database.py','cursors.py','connections.py','base.py')]
+                    frames=" <- ".join(f.filename.split('/')[-1]+':'+str(f.lineno)+':'+f.name for f in frames[-6:])
                     raise AssertionError(f'{type(exc).__name__}: {exc} @ {frames}') from exc
             return wrapped
         fin=check('finance-native-catalog',traced(finance_catalog))
