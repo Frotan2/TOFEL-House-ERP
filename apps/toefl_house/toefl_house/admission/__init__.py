@@ -399,34 +399,35 @@ def convert_applicant(request_key, name, expected_version):
             raise frappe.PermissionError("Reviewer cannot convert this admission")
         row = _placement_row(doc.placement_decision)
         _unexpired(row)
-        applicant = frappe.get_doc(APPLICANT, doc.student_applicant)
-        if (applicant.application_status or "Applied") != "Applied":
-            raise frappe.ValidationError("Applicant is not in Applied status")
-        if frappe.db.exists(STUDENT, {"student_applicant": applicant.name}):
-            raise frappe.ValidationError("A native Student already exists for this applicant")
+        # Native Student.on_update inserts Customer without ignore_permissions.
+        # Frappe v16 has_permission does not honor frappe.flags.ignore_permissions,
+        # and Admission Approver has no Customer/Applicant CRUD. The command is
+        # already authorized; switch only for the native Student write.
+        previous_user = frappe.session.user
         try:
-            frappe.db.set_single_value("Education Settings", "user_creation_skip", 1)
-        except Exception:
-            pass
-        student = frappe.get_doc(dict(
-            doctype=STUDENT,
-            first_name=applicant.first_name,
-            last_name=applicant.last_name,
-            student_email_id=applicant.student_email_id,
-            student_applicant=applicant.name,
-            joining_date=frappe.utils.today(),
-            naming_series="EDU-STU-.YYYY.-",
-            enabled=1,
-        ))
-        # Native Student.on_update creates a Customer without ignore_permissions,
-        # and Link checks still require Student Applicant read. This command is
-        # already authorized; do not grant Approver Customer/Applicant CRUD.
-        previous_ignore = frappe.flags.ignore_permissions
-        frappe.flags.ignore_permissions = True
-        try:
+            frappe.set_user("Administrator")
+            applicant = frappe.get_doc(APPLICANT, doc.student_applicant)
+            if (applicant.application_status or "Applied") != "Applied":
+                raise frappe.ValidationError("Applicant is not in Applied status")
+            if frappe.db.exists(STUDENT, {"student_applicant": applicant.name}):
+                raise frappe.ValidationError("A native Student already exists for this applicant")
+            try:
+                frappe.db.set_single_value("Education Settings", "user_creation_skip", 1)
+            except Exception:
+                pass
+            student = frappe.get_doc(dict(
+                doctype=STUDENT,
+                first_name=applicant.first_name,
+                last_name=applicant.last_name,
+                student_email_id=applicant.student_email_id,
+                student_applicant=applicant.name,
+                joining_date=frappe.utils.today(),
+                naming_series="EDU-STU-.YYYY.-",
+                enabled=1,
+            ))
             student.insert(ignore_permissions=True)
         finally:
-            frappe.flags.ignore_permissions = previous_ignore
+            frappe.set_user(previous_user)
         if frappe.db.exists("Program Enrollment", {"student": student.name}):
             raise frappe.ValidationError("Student conversion must not create Program Enrollment")
         customer = student.customer or frappe.db.get_value(STUDENT, student.name, "customer")
