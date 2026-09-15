@@ -1,4 +1,5 @@
 """Thin TOEFL House admission commands over native Education Applicant/Student."""
+from contextlib import contextmanager
 import frappe
 from frappe.utils import get_datetime
 from toefl_house.api import ATTEMPT, DECISION, _execute, _now
@@ -87,6 +88,35 @@ def _unexpired(row, now=None):
     now = now or _now()
     if get_datetime(row.expires_at) <= now:
         raise frappe.ValidationError("Placement decision has expired")
+
+
+@contextmanager
+def _native_student_write():
+    """Permit nested native Customer insert without persisting a session change.
+
+    frappe.set_user rewrites the Redis SID and breaks later HTTP replay as the
+    Approver. Frappe v16 has_permission ignores frappe.flags.ignore_permissions
+    unless session.user is Administrator. Keep this thread-local only.
+    """
+    session = frappe.local.session
+    previous_user = session.user
+    previous_local_user = getattr(frappe.local, "user", previous_user)
+    data = session.get("data") if hasattr(session, "get") else None
+    previous_data_user = data.get("user") if isinstance(data, dict) else None
+    previous_ignore = frappe.flags.ignore_permissions
+    session.user = "Administrator"
+    frappe.local.user = "Administrator"
+    if isinstance(data, dict):
+        data["user"] = "Administrator"
+    frappe.flags.ignore_permissions = True
+    try:
+        yield
+    finally:
+        session.user = previous_user
+        frappe.local.user = previous_local_user
+        if isinstance(data, dict) and previous_data_user is not None:
+            data["user"] = previous_data_user
+        frappe.flags.ignore_permissions = previous_ignore
 
 
 def _active_duplicate(applicant_name):
