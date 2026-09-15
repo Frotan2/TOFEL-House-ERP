@@ -5,9 +5,12 @@ Date: 2026-09-15 · Session branch: `arena/01a0a13b-tofel-house-erp`
 
 **Purpose:** prevent TOEFL House from becoming a second ERP on top of ERPNext.
 This is a product-capability review, not production approval. Thin Admission
-implementation on this branch is recorded in
-[ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md). Production remains **REJECT**.
-Do not deploy. Do not reopen Placement. Do not start Enrollment.
+is recorded in [ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md), thin Enrollment
+in [ENROLLMENT-CLOSURE.md](ENROLLMENT-CLOSURE.md) and thin Teaching
+Operations (Scheduling & Attendance) in
+[TEACHING-CLOSURE.md](TEACHING-CLOSURE.md). Production remains **REJECT**.
+Do not deploy. Do not reopen closed domains. Do not start a gated domain
+without its business gate resolved.
 
 **Foundation strategy (unchanged):** Frappe → ERPNext → Education → HRMS/Payments
 are the systems of record for identity, CRM, students, catalog, enrollment,
@@ -42,11 +45,11 @@ or Payroll inside `toefl_house`.
 | Domain | Primary classification | Custom code now? |
 |---|---|---|
 | Applicants / CRM | **NATIVE** | No |
-| Admission | **TOEFL HOUSE EXTENSION** (thin decision only) | Not started — next authorized *design* slice |
+| Admission | **TOEFL HOUSE EXTENSION** (thin decision only) | **CLOSED / QUALIFIED** ([ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md)) |
 | Students | **NATIVE** | No |
 | Courses / Programs | **NATIVE** | No (placement course-map is mapping, not catalog) |
-| Batches / Scheduling | **NATIVE** | No |
-| Attendance | **NATIVE** | No |
+| Batches / Scheduling | **NATIVE** | No custom ledger; thin command containment CLOSED ([TEACHING-CLOSURE.md](TEACHING-CLOSURE.md)) |
+| Attendance | **NATIVE** | No custom ledger; thin command containment CLOSED ([TEACHING-CLOSURE.md](TEACHING-CLOSURE.md)) |
 | Academic assessment | **NATIVE** | No |
 | Teachers | **NATIVE** | No |
 | Finance / billing / payments | **NATIVE** | No |
@@ -57,11 +60,13 @@ or Payroll inside `toefl_house`.
 | Placement | **TOEFL HOUSE EXTENSION** | **CLOSED / QUALIFIED** (synthetic). Do not reopen |
 | Integrations | **CONFIGURATION** / external adapters **DEFERRED** | No second bus |
 
-**Recommended next domain after Admission is hosted-qualified:** native
-**Enrollment** (Program Enrollment as authority) — **do not start it in this
-close**. Admission remains a *thin* owned `TH Admission Decision` on native
-**Student Applicant**, consuming a released **TH Placement Decision**. Not CRM.
-Not a second Student master. Not a portal. Not finance.
+**Closed thin slices:** Admission (`TH Admission Decision` on native **Student
+Applicant**), Enrollment (native **Program Enrollment** authority) and Teaching
+Operations — Scheduling & Attendance (native **Student Group / Course Schedule /
+Student Attendance**, no new DocType). The remaining lifecycle domains
+(finance/B07, academic assessment/B04-B05, payroll/A09) stay gated on their
+business decisions; see §7. Not CRM. Not a second Student master. Not a
+portal. Not finance.
 
 ---
 
@@ -86,8 +91,12 @@ Installed and synthetically qualified Placement: item/key bank, blueprint/policy
 revisions, case/attempt/manifest/exposure/response/score, `TH Placement Decision`,
 operation receipts, placement roles.
 
-Thin Admission (this branch, hosted qualification pending): `TH Admission Decision`
-plus native Applicant/Student conversion commands. **No** TH Student, TH Applicant,
+Thin Admission (CLOSED): `TH Admission Decision`
+plus native Applicant/Student conversion commands. Thin Enrollment (CLOSED):
+`enroll_in_program` over native Program Enrollment with PE/CE guards. Thin
+Teaching Operations (CLOSED): scheduling/attendance commands over native
+Student Group / Course Schedule / Student Attendance with deny-by-default
+guards. **No** TH Student, TH Applicant,
 TH Enrollment, Course catalog, Invoice, Attendance, HR or portal code.
 
 Synthetic limitation (do not “fix” by reopening Placement): case `subject` is a
@@ -131,7 +140,7 @@ person master.
 | Configuration only | Intake programs/years on Student Admission; Desk Workflow *may* assist routing but cannot be the durable institutional decision (A10 option W rejected because Applicant “Admitted” is a Student-creation side effect). |
 | Custom code | **`TH Admission Decision` only:** references native Applicant (or verified existing Student), released valid **TH Placement Decision**, target Program/year/term, conditions, approver, offer acceptance/expiry. Logical states Draft → Review → Conditional / Approved / Deferred / Rejected. `convert_applicant` creates a **native** Student after accepted Approved; it does **not** create Program Enrollment, invoice, payment or placement edits. Returning-student conversion is recorded and denied in this slice. |
 | Must NOT rebuild | Application form platform, admissions CRM, auto-enrollment from recommendation, payment-as-admission, “Admitted” status as proof of registration, applicant portal as the first slice. |
-| Status | **Implemented; hosted qualification pending** ([ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md)). A10 boundary held. B06 (eligibility, scholarships, named offer rules) is still a business input and is not invented. A13 containment of HTTP `enroll_student` plus PE/CE/invoice hooks is in the synthetic suite — not a claim that every Python import path is wrapped. |
+| Status | **CLOSED / QUALIFIED** (hosted run `34941341845`; [ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md)). A10 boundary held. B06 (eligibility, scholarships, named offer rules) is still a business input and is not invented. A13 containment of HTTP `enroll_student` plus PE/CE/invoice hooks is in the synthetic suite — not a claim that every Python import path is wrapped. |
 | Dependencies | Closed Placement (released decision). Native Program + Academic Year (Applicant requires them). Identity A02 for conversion. **Enrollment is a later native step, not part of this slice.** |
 
 **Challenge:** native Student Admission looks like “admissions” but is an intake catalog. Native Applicant.Admitted looks like approval but is set when a Student is created (S2). That is why a small owned decision is justified — and why anything larger is a rebuild.
@@ -171,7 +180,7 @@ person master.
 | Configuration only | Groups, rooms, instructor assignment on native schedules. |
 | Custom code | None. Do not add `TH Class` / `TH Course Offering` unless a proven invariant cannot be expressed natively (domain-architecture §2). Proposed **TH Placement Sitting** (if ever) coordinates capacity with native Room/Schedule; it must not own a second timetable. |
 | Must NOT rebuild | Custom calendar, duplicate roster, batch-as-enrollment. |
-| Status | Not implemented. Physical placement sitting **DEFERRED**. |
+| Status | **CLOSED / QUALIFIED (synthetic)** as thin commands over native Student Group / Course Schedule with deny-by-default containment; no new DocType. See [TEACHING-CLOSURE.md](TEACHING-CLOSURE.md). Physical placement sitting **DEFERRED**. |
 | Dependencies | Native catalog and groups; A05 BLOCKED for same-term repeat representation. |
 
 ### 3.6 Attendance — **NATIVE**
@@ -183,7 +192,7 @@ person master.
 | Configuration only | Leave types, naming, instructor roles. |
 | Custom code | None for recording attendance. Typed **TH Academic Change Request** only later, if native amend/cancel cannot express approved corrections — coordination, not a second attendance table. |
 | Must NOT rebuild | `TH Attendance`; using this as **Employee Attendance** or payroll input. |
-| Status | Not implemented. |
+| Status | **CLOSED / QUALIFIED (synthetic)** as `toefl_house.teaching.record_attendance` over submitted native Student Attendance; the committing bulk tool path (S8) is not used and single-transaction rollback is proven. See [TEACHING-CLOSURE.md](TEACHING-CLOSURE.md). |
 | Dependencies | Native groups/schedules; A13 if using the committing bulk path. |
 
 ### 3.7 Academic assessment — **NATIVE**
@@ -363,23 +372,28 @@ Blocked or conditional gates that **do not** stop a thin Admission *design* but 
 
 ## 7. Recommended next domain
 
-**Enrollment — native Program Enrollment as authority. Do not start it until
-Admission is hosted-qualified and explicitly closed.** See
-[ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md).
+**Closed thin slices (in dependency order):** Admission
+([ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md)) → Enrollment
+([ENROLLMENT-CLOSURE.md](ENROLLMENT-CLOSURE.md)) → **Teaching Operations —
+Scheduling & Attendance** ([TEACHING-CLOSURE.md](TEACHING-CLOSURE.md)):
+native Student Group roster from submitted Program Enrollments, native Course
+Schedule sessions with serialized native overlap validation, submitted native
+Student Attendance. No new DocType; assessment, finance and payroll untouched.
 
-Admission in-scope (this slice):
+**No further domain may start without its business gate resolved.** The
+remaining lifecycle domains are all gated, and none may be unblocked by
+inventing values:
 
-- Reuse Student Applicant + native Program/Academic Year.
-- `TH Admission Decision` that requires a released internal Placement Decision.
-- Native Student conversion after accepted Approved; no enrollment/billing.
-
-Out of scope (still):
-
-- Reopening Placement
-- TH Enrollment Request / native enroll_student as “admission success”
-- Applicant or candidate portal
-- TH Student/Course/Invoice DocTypes
-- Invented B06 cutoffs, scholarships, or exemptions
+- **Finance / tuition invoicing (P3.6, A08 DECIDED route):** requires the B07
+  finance policy (legal entity, jurisdiction, currency/tax/fiscal rules,
+  prices, deposit/installment/credit limits, refund terms). Not invented here.
+- **Academic assessment / progression:** requires approved B04/B05 grading,
+  weights, pass/completion and correction rules; placement thresholds cannot
+  substitute.
+- **Workforce / payroll (P3.7):** A09 BLOCKED until pay basis and exactly one
+  native input path per basis are proven.
+- Reopening Placement, TH Enrollment Request, applicant/candidate portals and
+  TH Student/Course/Invoice/Attendance DocTypes remain out of scope.
 
 **Still not production.** Isolated synthetic work remains REJECT for deployment.
 

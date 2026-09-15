@@ -21,8 +21,13 @@ QUALIFIED (`4da6f1b`, hosted run `34941341845`). See
 [ADMISSION-CLOSURE.md](docs/domain/ADMISSION-CLOSURE.md). Thin Enrollment
 (`toefl_house.enrollment.enroll_in_program` over native Program Enrollment)
 is CLOSED / QUALIFIED (`756614e`, hosted run `34946981784`, 425/425 native
-checks). See [ENROLLMENT-CLOSURE.md](docs/domain/ENROLLMENT-CLOSURE.md). Do
-not start the next domain. Do not deploy. Production remains **REJECT**.
+checks). See [ENROLLMENT-CLOSURE.md](docs/domain/ENROLLMENT-CLOSURE.md).
+Thin **Teaching Operations** (Scheduling & Attendance: native Student Group
+roster, native Course Schedule sessions, submitted native Student Attendance;
+no new DocType) is CLOSED / QUALIFIED (`6ba5663`, hosted run `34966681820`,
+483/483 native checks). See
+[TEACHING-CLOSURE.md](docs/domain/TEACHING-CLOSURE.md). Do not start the
+next domain. Do not deploy. Production remains **REJECT**.
 
 **Phase 3 domain architecture is ready for review:**
 [TOEFL House domain design package](docs/domain/README.md) covers native entity ownership,

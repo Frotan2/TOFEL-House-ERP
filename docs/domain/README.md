@@ -14,8 +14,14 @@ Every major domain is classified **NATIVE / CONFIGURATION / TOEFL HOUSE EXTENSIO
 DEFERRED**. Placement is the only large justified extension and is closed.
 Thin Admission is implemented as `TH Admission Decision` over native Student
 Applicant / Student; hosted qualification is recorded in
-[ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md). Do not start Enrollment.
-Production remains **REJECT**.
+[ADMISSION-CLOSURE.md](ADMISSION-CLOSURE.md). Thin Enrollment over native
+Program Enrollment is recorded in
+[ENROLLMENT-CLOSURE.md](ENROLLMENT-CLOSURE.md). Thin **Teaching Operations**
+(Scheduling & Attendance) over native Student Group / Course Schedule /
+Student Attendance — no new DocType — is recorded in
+[TEACHING-CLOSURE.md](TEACHING-CLOSURE.md). Assessment/progression (B04/B05),
+finance (B07) and payroll (A09) remain gated and unimplemented. Do not start
+the next domain. Production remains **REJECT**.
 
 ## Current placement revision
 

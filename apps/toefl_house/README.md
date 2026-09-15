@@ -1,10 +1,20 @@
-# TOEFL House Placement (closed), thin Admission, thin Enrollment
+# TOEFL House Placement (closed), thin Admission, thin Enrollment, thin Teaching Operations
+
+**Teaching Operations (Scheduling & Attendance)** are thin commands over
+native Education authorities — Student Group roster (derived only from
+submitted Program Enrollments), Course Schedule sessions (native
+calendar-window and group/instructor/room overlap validation, serialized
+under row locks) and submitted Student Attendance (native Present/Absent/
+Leave statuses only). Deny-by-default guards confine all three doctypes to
+the authorized commands; the roles hold no native CRUD. No new DocType; no
+grading, fees or payroll. Hosted qualification status: see
+`docs/domain/TEACHING-CLOSURE.md`. Do not start the next domain.
 
 **Enrollment** is a thin command over native Education Program Enrollment.
 `toefl_house.enrollment.enroll_in_program` (Enrollment Officer) submits PE
 and allows PE `on_submit` Course Enrollment. No TH Enrollment ledger, no
 invoice/attendance/payroll. Hosted qualification status: see
-`docs/domain/ENROLLMENT-CLOSURE.md`. Do not start the next domain.
+`docs/domain/ENROLLMENT-CLOSURE.md`.
 
 **Admission** is a thin owned `TH Admission Decision` over native Student
 Applicant / Student. Commands live in `toefl_house.admission`. Approval and
