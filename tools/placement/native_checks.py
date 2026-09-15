@@ -18,7 +18,7 @@ def main():
     from toefl_house import api
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
-    report={'scope':'Synthetic content-governance, blueprint/policy configuration, allocation, staff-supervised digital delivery, objective scoring, independent review and finalization increments (1-7); not full T01-T20','status':'running','checks':[],
+    report={'scope':'Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
@@ -27,8 +27,10 @@ def main():
            'assessor':'synthetic-assessor@example.test',
            'reviewer':'synthetic-reviewer@example.test',
            'reviewer2':'synthetic-reviewer2@example.test',
+           'releaser':'synthetic-releaser@example.test',
            'candidate':'synthetic-candidate@example.test','candidate2':'synthetic-candidate2@example.test',
-           'candidate3':'synthetic-candidate3@example.test','candidate4':'synthetic-candidate4@example.test'}
+           'candidate3':'synthetic-candidate3@example.test','candidate4':'synthetic-candidate4@example.test',
+           'candidate5':'synthetic-candidate5@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
@@ -70,6 +72,8 @@ def main():
     good_pol=dict(result_validity_days=90,retest_wait_days=14,
                   release_working_days=2,appeal_working_days=5,retention_years=3)
     bad_pol=dict(good_pol,retention_years=11)
+    good_map=dict(algorithm='course-map-v1',entries=[dict(internal_level='SYN-LEVEL-GENERAL',course_code='SYN-COURSE-GENERAL',match='any_correct')])
+    bad_map=dict(algorithm='course-map-v1',entries=[dict(internal_level='B1',course_code='SYN-COURSE-GENERAL',match='any_correct')])
     try:
         for site in ('placement-test.localhost','placement-second.localhost'):
             connect(site)
@@ -86,7 +90,8 @@ def main():
                          'assessor':['Placement Assessor'],
                          'reviewer':['Placement Reviewer'],
                          'reviewer2':['Placement Reviewer'],
-                         'candidate':[],'candidate2':[],'candidate3':[],'candidate4':[]}
+                         'releaser':['Placement Releaser'],
+                         'candidate':[],'candidate2':[],'candidate3':[],'candidate4':[],'candidate5':[]}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -1036,6 +1041,134 @@ def main():
             return {'finalize_absent_on_second_site':True}
         check('second-site-no-first-site-finalize-record',finalize_second_site)
         frappe.destroy();connect('placement-test.localhost')
+
+        # --- Placement closure: course map + internal decision + controlled release ---
+        def correct_answer(item_name):
+            key=frappe.db.get_value(api.ITEM,item_name,'key_revision')
+            return frappe.db.get_value(api.KEY,key,'answer')
+        def digital_finalize(case_name,prefix,bp_name=None,bp_ver=3):
+            bp_name=bp_name or cfgx['small_bp']
+            alloc=as_user('publisher',lambda:api.allocate_attempt(prefix+'_alloc01',case_name,bp_name,bp_ver,pol_name,3))
+            as_user('invigilator',lambda:api.verify_attempt(prefix+'_ver0001',alloc['attempt'],1))
+            as_user('invigilator',lambda:api.deliver_attempt(prefix+'_del0001',alloc['attempt'],2))
+            form=json.loads(frappe.db.get_value(api.MANIFEST,{'attempt':alloc['attempt']},'form_json'))
+            for entry in form['items']:
+                occ=entry['order'];answer=correct_answer(entry['item'])
+                as_user('invigilator',lambda occ=occ,answer=answer:api.save_response(prefix+'_save%03d'%occ,alloc['attempt'],3,occ,0,answer,0))
+            as_user('invigilator',lambda:api.seal_attempt(prefix+'_seal001',alloc['attempt'],3,'Submitted'))
+            scored=as_user('assessor',lambda:api.score_attempt(prefix+'_score01',alloc['attempt'],4))
+            assert scored['correct']>=1 and scored['missing']==0,scored
+            as_user('reviewer',lambda:api.review_attempt(prefix+'_rev0001',alloc['attempt'],5))
+            fin=as_user('reviewer2',lambda:api.finalize_attempt(prefix+'_fin0001',alloc['attempt'],6))
+            assert fin['status']=='Finalized' and fin['version']==7
+            return alloc
+        check('decision-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.release_decision('decision_pub_key_00001',alloc2['attempt'],7))))
+        check('decision-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.release_decision('decision_auth_key_0001',alloc2['attempt'],7))))
+        check('decision-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.release_decision('decision_out_key_00001',alloc2['attempt'],7))))
+        check('decision-invigilator-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.release_decision('decision_inv_key_0001',alloc2['attempt'],7))))
+        check('decision-assessor-denied',lambda:denied(lambda:as_user('assessor',lambda:api.release_decision('decision_as_key_000001',alloc2['attempt'],7))))
+        check('decision-reviewer-denied',lambda:denied(lambda:as_user('reviewer',lambda:api.release_decision('decision_rev_key_00001',alloc2['attempt'],7))))
+        check('decision-finalizer-denied',lambda:denied(lambda:as_user('reviewer2',lambda:api.release_decision('decision_fin_key_00001',alloc2['attempt'],7))))
+        check('decision-before-finalize-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_before_fin_001',alloc['attempt'],6))))
+        check('decision-missing-course-map-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_nomap_key001',alloc2['attempt'],7))))
+        check('decision-invalid-course-map-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('decision_bad_map_0001','course_map','SYN-CM-BAD-1',1,bad_map))))
+        cmap=check('decision-course-map-published',lambda:publish_config_flow('SYN-CM-ALLOC-1',good_map,'course_map'))
+        assert cmap['status']=='Published' and cmap['config']=='course_map'
+        cmap2=check('decision-second-course-map-published',lambda:publish_config_flow('SYN-CM-ALLOC-2',good_map,'course_map'))
+        check('decision-two-published-maps-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_twomap_key001',alloc2['attempt'],7))))
+        check('decision-retire-second-course-map',lambda:as_user('publisher2',lambda:api.retire_config('decision_retire_map_001','course_map',cmap2['name'],3)))
+        check('decision-all-missing-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_missing_ev001',alloc4['attempt'],7))))
+        case5=check('decision-create-case',lambda:as_user('publisher',lambda:api.create_case('decision_case_key_0001',users['candidate5'])))
+        alloc_dec=check('decision-digital-pipeline',lambda:digital_finalize(case5['name'],'decision_pipe_a'))
+        released=check('decision-happy-path',lambda:as_user('releaser',lambda:api.release_decision('decision_release_key001',alloc_dec['attempt'],7)))
+        assert released['status']=='Finalized' and released['version']==7
+        assert released['internal_level']=='SYN-LEVEL-GENERAL' and released['course_code']=='SYN-COURSE-GENERAL'
+        assert released['released_by']==users['releaser'] and released['validity_days']==90
+        assert 'percent' not in released and 'cefr' not in released and 'toefl' not in released and 'composite' not in released
+        assert frappe.get_doc(api.ATTEMPT,alloc_dec['attempt']).status=='Finalized'
+        assert frappe.get_doc(api.CASE,case5['name']).status=='Open'
+        def decision_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('releaser',lambda:api.release_decision('decision_release_key001',alloc_dec['attempt'],7))
+            assert value==released and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count(api.DECISION,{'attempt':alloc_dec['attempt']})==1
+            return {'same_result':True,'one_decision':True}
+        check('decision-idempotent-replay',decision_replay)
+        check('decision-stale-version-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_stale_key_0001',alloc_dec['attempt'],6))))
+        check('decision-second-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_second_key_001',alloc_dec['attempt'],7))))
+        def decision_reads():
+            frappe.set_user(users['releaser'])
+            for dt in (api.CASE,api.ATTEMPT,api.RESPONSE,api.SCORE,api.DECISION):
+                assert frappe.get_list(dt),dt
+            assert cannot_list(api.MANIFEST) and cannot_list(api.GUARD) and cannot_list(api.KEY)
+            frappe.set_user(users['reviewer']);assert cannot_list(api.DECISION)
+            frappe.set_user(users['assessor']);assert cannot_list(api.DECISION)
+            frappe.set_user(users['invigilator']);assert cannot_list(api.DECISION)
+            frappe.set_user(users['second_author']);assert cannot_list(api.DECISION) and cannot_list(api.ATTEMPT)
+            frappe.set_user(users['publisher']);assert frappe.get_list(api.DECISION)
+            frappe.set_user(users['auditor']);assert frappe.get_list(api.DECISION)
+            return {'releaser_no_manifest_or_key':True,'staff_decision_readable':True}
+        check('decision-role-and-list-parity',decision_reads)
+        def decision_generic_write():
+            frappe.set_user(users['releaser']);doc=frappe.get_doc(api.DECISION,released['decision']);doc.released_by='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('decision-ignore-permissions-does-not-bypass-controller',decision_generic_write)
+        check('decision-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.DECISION,released['decision']).db_set('result_hash','f'*64)))
+        check('decision-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.DECISION,released['decision'],ignore_permissions=True)))
+        check('decision-post-finalize-attempt-mutation-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.seal_attempt('decision_reseal_key_001',alloc_dec['attempt'],7,'Submitted'))))
+        alloc_dec2=check('decision-second-digital-pipeline',lambda:digital_finalize(case5['name'],'decision_pipe_b'))
+        def decision_rollback_proof():
+            frappe.set_user(users['releaser']);frappe.db.savepoint('decision_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.DECISION,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.DECISION:
+                    raise RuntimeError('synthetic decision insert failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.release_decision('decision_atomic_key_001',alloc_dec2['attempt'],7)
+            except RuntimeError:frappe.db.rollback(save_point='decision_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            assert frappe.get_doc(api.ATTEMPT,alloc_dec2['attempt']).status=='Finalized'
+            assert frappe.db.count(api.DECISION,{'attempt':alloc_dec2['attempt']})==0
+            return {'real_database_rollback':True,'injected_boundary':'decision insert'}
+        check('decision-atomic-decision-rollback',decision_rollback_proof)
+        def decision_transient(exhaust=False):
+            frappe.set_user(users['releaser']);frappe.db.commit()
+            if exhaust:
+                extra=digital_finalize(case5['name'],'decision_pipe_c')
+                frappe.set_user(users['releaser']);frappe.db.commit()
+                target,version,key=extra['attempt'],7,'decision_exhaust_key001'
+            else:
+                target,version,key=alloc_dec2['attempt'],7,'decision_retry_key_0001'
+            calls=[];original=api._now
+            def flaky():
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic decision deadlock')
+                return original()
+            with patch.object(api,'_now',side_effect=flaky):
+                if exhaust:
+                    try:api.release_decision(key,target,version)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.release_decision(key,target,version)
+            assert len(calls)==(4 if exhaust else 2)
+            if exhaust:
+                assert frappe.get_doc(api.ATTEMPT,target).status=='Finalized'
+                assert frappe.db.count(api.DECISION,{'attempt':target})==0
+            else:
+                assert result['status']=='Finalized' and frappe.db.count(api.DECISION,{'attempt':target})==1
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('decision-whole-command-transient-recovery',lambda:decision_transient(False))
+        check('decision-retry-exhaustion-bounded',lambda:decision_transient(True))
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def decision_second_site():
+            assert frappe.db.count(api.DECISION)==0
+            assert frappe.db.count(api.COURSE_MAP)==0
+            return {'decision_absent_on_second_site':True}
+        check('second-site-no-first-site-decision-record',decision_second_site)
+        frappe.destroy();connect('placement-test.localhost')
         base='http://127.0.0.1:18000'
         for _ in range(60):
             try:
@@ -1053,7 +1186,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def http_denied(response,csrf=False):
             assert response.status_code in (400,403,404,405,409,417),f'Unexpected HTTP {response.status_code}'
@@ -1353,6 +1486,52 @@ def main():
             assert frappe.get_doc(api.ATTEMPT,httpalloc['attempt']).status=='Finalized'
             return {'http_statuses':[200,200],'one_finalize':True}
         check('http-finalize-concurrent-idempotency',http_finalize_idem)
+
+        # --- Closure over HTTP: release_decision, CSRF, containment, races, revocation ---
+        def http_decision_setup():
+            alloc=digital_finalize(case5['name'],'decision_http_a')
+            frappe.db.commit()
+            return alloc
+        httpdec=check('http-decision-setup-finalized',http_decision_setup)
+        http_decision_payload=dict(request_key='http_decision_key_0001',attempt=httpdec['attempt'],expected_version=7)
+        def http_decision():
+            r=post('releaser','release_decision',http_decision_payload);assert r.status_code==200,f'decision HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpdecision=check('http-decision-positive',http_decision)
+        assert httpdecision['status']=='Finalized' and httpdecision['version']==7
+        assert httpdecision['internal_level']=='SYN-LEVEL-GENERAL' and httpdecision['course_code']=='SYN-COURSE-GENERAL'
+        assert 'percent' not in httpdecision and 'cefr' not in httpdecision
+        check('http-decision-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.release_decision',headers={'Host':'placement-test.localhost'},json=http_decision_payload,timeout=30)))
+        check('http-decision-unrelated-role-denied',lambda:http_denied(post('outsider','release_decision',dict(http_decision_payload,request_key='http_decision_out_0001'))))
+        check('http-decision-wrong-role-denied',lambda:http_denied(post('second_author','release_decision',dict(http_decision_payload,request_key='http_decision_author_01'))))
+        check('http-decision-invigilator-denied',lambda:http_denied(post('invigilator','release_decision',dict(http_decision_payload,request_key='http_decision_inv_0001'))))
+        check('http-decision-publisher-denied',lambda:http_denied(post('publisher','release_decision',dict(http_decision_payload,request_key='http_decision_pub_0001'))))
+        check('http-decision-assessor-denied',lambda:http_denied(post('assessor','release_decision',dict(http_decision_payload,request_key='http_decision_as_00001'))))
+        check('http-decision-reviewer-denied',lambda:http_denied(post('reviewer','release_decision',dict(http_decision_payload,request_key='http_decision_rev_0001'))))
+        check('http-decision-finalizer-denied',lambda:http_denied(post('reviewer2','release_decision',dict(http_decision_payload,request_key='http_decision_fin_0001'))))
+        check('http-decision-get-cannot-mutate',lambda:http_denied(sessions['releaser'].get(base+'/api/method/toefl_house.api.release_decision',params={'request_key':'http_decision_get_0001'},timeout=30)))
+        def http_decision_csrf():
+            s=sessions['releaser'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.release_decision',json=dict(http_decision_payload,request_key='http_decision_csrf_0001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-decision-csrf-negative-with-positive-control',http_decision_csrf)
+        decision_url=base+'/api/resource/'+quote(api.DECISION,safe='')+'/'+httpdecision['decision']
+        check('http-decision-direct-crud-mutation-denied',lambda:http_denied(sessions['releaser'].put(decision_url,json={'released_by':'forged@example.test'},timeout=30)))
+        check('http-decision-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(decision_url,timeout=30)))
+        def http_decision_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['releaser'].headers);s.cookies.update(sessions['releaser'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.release_decision',json=http_decision_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count(api.DECISION,{'attempt':httpdec['attempt']})==1
+            return {'http_statuses':[200,200],'one_decision':True}
+        check('http-decision-concurrent-idempotency',http_decision_idem)
+        def decision_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['releaser']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('releaser','release_decision',dict(http_decision_payload,request_key='http_decision_revoked_01')))
+        check('http-decision-revoked-releaser-old-session-denied',decision_revoke)
         def finalize_revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['reviewer2']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(post('reviewer2','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_revoked_01')))

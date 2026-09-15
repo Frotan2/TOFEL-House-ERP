@@ -1,6 +1,6 @@
 {
   "doctype": "DocType",
-  "name": "TH Placement Score",
+  "name": "TH Placement Decision",
   "module": "Placement",
   "autoname": "hash",
   "engine": "InnoDB",
@@ -9,13 +9,17 @@
   "field_order": [
     "attempt",
     "revision",
-    "scorer_version",
-    "form_hash",
-    "response_digest",
-    "key_digest",
+    "status",
+    "score",
+    "course_map",
+    "course_map_hash",
+    "internal_level",
+    "course_code",
     "result_json",
     "result_hash",
-    "scored_by",
+    "released_by",
+    "released_at",
+    "expires_at",
     "synthetic"
   ],
   "fields": [
@@ -33,26 +37,41 @@
       "reqd": 1
     },
     {
-      "fieldname": "scorer_version",
-      "label": "Scorer Version",
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "options": "Released",
+      "reqd": 1
+    },
+    {
+      "fieldname": "score",
+      "label": "Score",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Score"
+    },
+    {
+      "fieldname": "course_map",
+      "label": "Course Map",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Course Map Revision"
+    },
+    {
+      "fieldname": "course_map_hash",
+      "label": "Course Map Hash",
       "fieldtype": "Data",
       "reqd": 1
     },
     {
-      "fieldname": "form_hash",
-      "label": "Form Hash",
+      "fieldname": "internal_level",
+      "label": "Internal Level",
       "fieldtype": "Data",
       "reqd": 1
     },
     {
-      "fieldname": "response_digest",
-      "label": "Response Digest",
-      "fieldtype": "Data",
-      "reqd": 1
-    },
-    {
-      "fieldname": "key_digest",
-      "label": "Key Digest",
+      "fieldname": "course_code",
+      "label": "Course Code",
       "fieldtype": "Data",
       "reqd": 1
     },
@@ -70,9 +89,21 @@
       "reqd": 1
     },
     {
-      "fieldname": "scored_by",
-      "label": "Scored By",
+      "fieldname": "released_by",
+      "label": "Released By",
       "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "released_at",
+      "label": "Released At",
+      "fieldtype": "Datetime",
+      "reqd": 1
+    },
+    {
+      "fieldname": "expires_at",
+      "label": "Expires At",
+      "fieldtype": "Datetime",
       "reqd": 1
     },
     {
@@ -91,16 +122,6 @@
     },
     {
       "role": "Placement Auditor",
-      "read": 1,
-      "select": 1
-    },
-    {
-      "role": "Placement Assessor",
-      "read": 1,
-      "select": 1
-    },
-    {
-      "role": "Placement Reviewer",
       "read": 1,
       "select": 1
     },

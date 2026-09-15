@@ -145,6 +145,70 @@ def validate_policy(value):
     return value
 
 
+COURSE_MAP_MATCHES = ("any_correct",)
+
+
+def validate_course_map(value):
+    """Bounded structural validation of a synthetic course/level map.
+
+    Fixture entries are not approved Academic Owner operational policy
+    (P1/P4 remain owner deliverables). No percent, cutoff, CEFR or
+    official TOEFL fields are accepted.
+    """
+    if not isinstance(value, dict) or set(value) != {"algorithm", "entries"}:
+        raise ValueError("Course map must contain exactly algorithm, entries")
+    if value["algorithm"] != "course-map-v1":
+        raise ValueError("Unsupported course map algorithm")
+    entries = value["entries"]
+    if not isinstance(entries, list) or not 1 <= len(entries) <= 32:
+        raise ValueError("Supply one to thirty-two course map entries")
+    seen = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {"internal_level", "course_code", "match"}:
+            raise ValueError("Entry must contain exactly internal_level, course_code, match")
+        if not isinstance(entry["internal_level"], str) or not SYNTHETIC_CODE.fullmatch(entry["internal_level"]):
+            raise ValueError("Synthetic internal_level required")
+        if not isinstance(entry["course_code"], str) or not SYNTHETIC_CODE.fullmatch(entry["course_code"]):
+            raise ValueError("Synthetic course_code required")
+        if entry["match"] not in COURSE_MAP_MATCHES:
+            raise ValueError("Unsupported course map match")
+        key = (entry["internal_level"], entry["course_code"], entry["match"])
+        if key in seen:
+            raise ValueError("Duplicate course map entry")
+        seen.append(key)
+    return value
+
+
+def recommend_course(score, course_map):
+    """Map sealed objective evidence to a synthetic internal course.
+
+    Missing evidence is never treated as zero. No composite, percent,
+    cutoff, CEFR or official TOEFL output. Unmatched evidence fails closed.
+    """
+    if not isinstance(score, dict):
+        raise ValueError("Score projection required")
+    for forbidden in ("percent", "cutoff", "cefr", "toefl", "composite"):
+        if forbidden in score:
+            raise ValueError("Score must not carry a composite or external claim")
+    presented, correct, incorrect, missing = (score.get("presented"), score.get("correct"),
+                                              score.get("incorrect"), score.get("missing"))
+    if not all(type(value) is int for value in (presented, correct, incorrect, missing)):
+        raise ValueError("Score completeness required")
+    if presented < 1 or presented != correct + incorrect + missing:
+        raise ValueError("Score completeness mismatch")
+    course_map = validate_course_map(course_map)
+    for entry in course_map["entries"]:
+        if entry["match"] == "any_correct" and correct >= 1:
+            return {
+                "algorithm": "course-map-v1",
+                "internal_level": entry["internal_level"],
+                "course_code": entry["course_code"],
+                "rationale": ("Synthetic non-operational fixture mapping from observed "
+                              "correct evidence; not an approved academic policy."),
+            }
+    raise ValueError("No eligible course mapping for this evidence")
+
+
 def attempt_deadline(started_at, total_minutes):
     """Overall candidate-work deadline from the pinned blueprint budget.
 
@@ -229,7 +293,8 @@ ATTEMPT_TRANSITIONS = {
     ("Review", "Finalized"),
 }
 
-CONFIG_VALIDATORS = {"blueprint": validate_blueprint, "policy": validate_policy}
+CONFIG_VALIDATORS = {"blueprint": validate_blueprint, "policy": validate_policy,
+                     "course_map": validate_course_map}
 
 # Draft -> Reviewed -> Published -> Retired. Retired is terminal.
 CONFIG_STATUSES = ("Draft", "Reviewed", "Published", "Retired")
@@ -271,14 +336,18 @@ def can_read(kind, roles, actor, owner, status=None):
     # seed-bearing manifest stay off this role.
     if kind in ("case", "attempt", "response", "score") and "Placement Reviewer" in roles:
         return True
-    # Case/attempt/manifest/exposure/response/score are staff-only operational
-    # records (the manifest carries the seed and the full form, never
-    # candidate feedback).
-    if kind in ("case", "attempt", "manifest", "exposure", "response", "score"):
+    # Releaser publishes the internal decision; keys and the seed-bearing
+    # manifest stay off this role.
+    if kind in ("case", "attempt", "response", "score", "decision") and "Placement Releaser" in roles:
+        return True
+    # Case/attempt/manifest/exposure/response/score/decision are staff-only
+    # operational records (the manifest carries the seed and the full form,
+    # never candidate feedback).
+    if kind in ("case", "attempt", "manifest", "exposure", "response", "score", "decision"):
         return "Placement Auditor" in roles
-    if kind in ("item", "blueprint", "policy") and "Placement Auditor" in roles:
+    if kind in ("item", "blueprint", "policy", "course_map") and "Placement Auditor" in roles:
         return status == "Published"
-    if kind in ("item", "blueprint", "policy"):
+    if kind in ("item", "blueprint", "policy", "course_map"):
         return "Placement Author" in roles and (owner == actor or status == "Published")
     if kind == "key":
         return "Placement Author" in roles and owner == actor

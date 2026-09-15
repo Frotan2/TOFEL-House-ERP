@@ -5,9 +5,10 @@ import frappe
 from toefl_house import allocation, scoring
 from frappe.utils import get_datetime
 from toefl_house.policy import (attempt_deadline, canonical, deadline_reached, digest,
-                                project_form, request_digest, validate_blueprint,
-                                validate_config_code, validate_content, validate_family,
-                                validate_policy, validate_request_key)
+                                project_form, recommend_course, request_digest,
+                                validate_blueprint, validate_config_code, validate_content,
+                                validate_course_map, validate_family, validate_policy,
+                                validate_request_key)
 from toefl_house.security import KIND_ROLES, authorize, command
 from toefl_house.transactions import run_with_retry
 
@@ -24,6 +25,8 @@ EXPOSURE = "TH Placement Exposure"
 GUARD = "TH Placement Allocation Guard"
 RESPONSE = "TH Placement Response"
 SCORE = "TH Placement Score"
+COURSE_MAP = "TH Placement Course Map Revision"
+DECISION = "TH Placement Decision"
 
 # Synthetic-only purpose marker; other purposes are a later activation config,
 # not something this increment accepts or invents.
@@ -32,7 +35,9 @@ SYNTHETIC_PURPOSE = "synthetic-placement"
 CONFIG = {
     "blueprint": (BLUEPRINT, validate_blueprint),
     "policy": (POLICY, validate_policy),
+    "course_map": (COURSE_MAP, validate_course_map),
 }
+CONFIG_LABELS = {BLUEPRINT: "blueprint", POLICY: "policy", COURSE_MAP: "course_map"}
 
 
 def _content(value):
@@ -203,8 +208,12 @@ def _definition(config, definition):
 
 
 def _config_result(doc):
-    return {"name": doc.name, "config": "blueprint" if doc.doctype == BLUEPRINT else "policy",
-            "version": doc.version, "status": doc.status, "content_hash": doc.content_hash}
+    try:
+        label = CONFIG_LABELS[doc.doctype]
+    except KeyError:
+        raise frappe.ValidationError("Unsupported configuration type")
+    return {"name": doc.name, "config": label, "version": doc.version,
+            "status": doc.status, "content_hash": doc.content_hash}
 
 
 def _locked_config(doctype, name, expected_version):
@@ -824,4 +833,112 @@ def finalize_attempt(request_key, attempt, expected_version):
         return result, dict(target=doc.name, after_hash=digest([doc.name, "Finalized", actor]))
 
     return _execute("finalize_attempt", request_key,
+                    {"attempt": attempt, "expected_version": expected_version}, work)
+
+
+def _exactly_one_published_course_map():
+    """Fail closed unless exactly one published course map is frozen and valid."""
+    rows = frappe.db.sql(
+        "select name from `tabTH Placement Course Map Revision` where status=%s for update",
+        ("Published",), as_dict=True)
+    if len(rows) != 1:
+        raise frappe.ValidationError("Exactly one published course map is required")
+    try:
+        doc = frappe.get_doc(COURSE_MAP, rows[0].name, for_update=True)
+    except frappe.DoesNotExistError as exc:
+        raise frappe.ValidationError("Exactly one published course map is required") from exc
+    if doc.status != "Published":
+        raise frappe.ValidationError("Exactly one published course map is required")
+    stored = json.loads(doc.definition_json)
+    validate_course_map(stored)
+    if digest(stored) != doc.content_hash:
+        raise frappe.ValidationError("Stored definition integrity mismatch")
+    return doc, stored
+
+
+def _pinned_attempt_policy(attempt):
+    """Re-verify the attempt's pinned policy; missing or retired policy fails closed."""
+    try:
+        pol = frappe.get_doc(POLICY, attempt.policy, for_update=True)
+    except frappe.DoesNotExistError as exc:
+        raise frappe.ValidationError("Pinned policy is no longer valid") from exc
+    if (pol.status != "Published" or pol.version != attempt.policy_version
+            or pol.content_hash != attempt.policy_hash):
+        raise frappe.ValidationError("Pinned policy is no longer valid")
+    stored = json.loads(pol.definition_json)
+    validate_policy(stored)
+    if digest(stored) != attempt.policy_hash:
+        raise frappe.ValidationError("Pinned policy integrity mismatch")
+    return stored
+
+
+@frappe.whitelist(methods=["POST"])
+def release_decision(request_key, attempt, expected_version):
+    def work(actor):
+        doc = _locked_session(attempt, expected_version)
+        if doc.mode != "Digital":
+            raise frappe.ValidationError("Only digital internal release is implemented in this increment")
+        if doc.status != "Finalized":
+            raise frappe.ValidationError("Attempt is not finalized for release")
+        score_row = frappe.db.get_value(
+            SCORE, {"attempt": doc.name},
+            ["name", "revision", "result_json", "result_hash", "scored_by"], as_dict=True)
+        if not score_row:
+            raise frappe.ValidationError("Attempt has no score to release")
+        if actor == score_row.scored_by:
+            raise frappe.PermissionError("Scorer cannot independently release this decision")
+        if actor == doc.reviewed_by:
+            raise frappe.PermissionError("Reviewer cannot independently release this decision")
+        if actor == doc.finalized_by:
+            raise frappe.PermissionError("Finalizer cannot independently release this decision")
+        if frappe.db.exists(DECISION, {"attempt": doc.name}):
+            raise frappe.ValidationError("Attempt already has a released decision")
+        try:
+            score = json.loads(score_row.result_json)
+        except ValueError as exc:
+            raise frappe.ValidationError("Score result_json must be valid JSON") from exc
+        if digest(score) != score_row.result_hash:
+            raise frappe.ValidationError("Stored score integrity mismatch")
+        pol_def = _pinned_attempt_policy(doc)
+        map_doc, map_def = _exactly_one_published_course_map()
+        try:
+            recommendation = recommend_course(score, map_def)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        released_at = _now()
+        expires_at = frappe.utils.add_days(released_at, pol_def["result_validity_days"])
+        revision = frappe.db.sql(
+            "select coalesce(max(revision), 0) + 1 from `tabTH Placement Decision` "
+            "where attempt = %s for update",
+            (doc.name,))[0][0]
+        projection = dict(
+            algorithm=recommendation["algorithm"],
+            internal_level=recommendation["internal_level"],
+            course_code=recommendation["course_code"],
+            rationale=recommendation["rationale"],
+            score_hash=score_row.result_hash,
+            course_map=map_doc.name,
+            course_map_version=map_doc.version,
+            course_map_hash=map_doc.content_hash,
+            validity_days=pol_def["result_validity_days"],
+        )
+        result_hash = digest(projection)
+        row = frappe.get_doc(dict(
+            doctype=DECISION, attempt=doc.name, revision=revision, status="Released",
+            score=score_row.name, course_map=map_doc.name, course_map_hash=map_doc.content_hash,
+            internal_level=projection["internal_level"], course_code=projection["course_code"],
+            result_json=canonical(projection), result_hash=result_hash,
+            released_by=actor, released_at=released_at, expires_at=expires_at, synthetic=1))
+        row.insert(ignore_permissions=True)
+        # Attempt remains Finalized; the case stays a FrozenRecord with no pointer.
+        result = {"attempt": doc.name, "status": doc.status, "version": doc.version,
+                  "decision": row.name, "revision": revision,
+                  "internal_level": projection["internal_level"],
+                  "course_code": projection["course_code"],
+                  "released_by": actor, "released_at": _iso(released_at),
+                  "expires_at": _iso(expires_at),
+                  "validity_days": pol_def["result_validity_days"]}
+        return result, dict(target=row.name, after_hash=result_hash)
+
+    return _execute("release_decision", request_key,
                     {"attempt": attempt, "expected_version": expected_version}, work)

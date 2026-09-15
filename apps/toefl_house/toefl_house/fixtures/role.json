@@ -40,5 +40,12 @@
     "role_name": "Placement Reviewer",
     "desk_access": 1,
     "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Placement Releaser",
+    "role_name": "Placement Releaser",
+    "desk_access": 1,
+    "disabled": 0
   }
 ]

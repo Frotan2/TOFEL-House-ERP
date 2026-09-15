@@ -12,6 +12,8 @@ KINDS = {
     "TH Placement Allocation Guard": "guard",
     "TH Placement Response": "response",
     "TH Placement Score": "score",
+    "TH Placement Course Map Revision": "course_map",
+    "TH Placement Decision": "decision",
 }
 TABLES = {
     "item": "`tabTH Placement Item Revision`",
@@ -25,9 +27,11 @@ TABLES = {
     "guard": "`tabTH Placement Allocation Guard`",
     "response": "`tabTH Placement Response`",
     "score": "`tabTH Placement Score`",
+    "course_map": "`tabTH Placement Course Map Revision`",
+    "decision": "`tabTH Placement Decision`",
 }
-LISTED_KINDS = ("item", "blueprint", "policy")
-STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score")
+LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
+STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score", "decision")
 
 
 def has_permission(doc, ptype=None, user=None, **kwargs):
@@ -58,6 +62,8 @@ def query(kind, user=None):
         return "1=1"
     if kind in ("case", "attempt", "response", "score") and "Placement Reviewer" in roles:
         return "1=1"
+    if kind in ("case", "attempt", "response", "score", "decision") and "Placement Releaser" in roles:
+        return "1=1"
     if kind in STAFF_ONLY_KINDS:
         return "1=1" if "Placement Auditor" in roles else "1=0"
     table = TABLES[kind]
@@ -82,3 +88,5 @@ def query_exposure(user=None): return query("exposure", user)
 def query_guard(user=None): return query("guard", user)
 def query_response(user=None): return query("response", user)
 def query_score(user=None): return query("score", user)
+def query_course_map(user=None): return query("course_map", user)
+def query_decision(user=None): return query("decision", user)

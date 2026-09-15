@@ -65,6 +65,11 @@
       "role": "Placement Reviewer",
       "read": 1,
       "select": 1
+    },
+    {
+      "role": "Placement Releaser",
+      "read": 1,
+      "select": 1
     }
   ],
   "sort_field": "creation",

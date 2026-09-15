@@ -190,3 +190,32 @@ class ScoreRecord(FrozenRecord):
                 raise frappe.ValidationError("Score completeness mismatch")
             if type(result.get("missing")) is not int or result["missing"] < 0:
                 raise frappe.ValidationError("Missing evidence must be an explicit non-negative count")
+
+
+class DecisionRecord(FrozenRecord):
+    """Released placement decisions are created exactly once and self-verify
+    that the stored hash binds an internal course recommendation with no
+    composite, CEFR or official TOEFL claim."""
+
+    def validate(self):
+        super().validate()
+        if not self.get_doc_before_save():
+            try:
+                result = json.loads(self.result_json)
+            except ValueError as exc:
+                raise frappe.ValidationError("Decision result_json must be valid JSON") from exc
+            if self.result_hash != digest(result):
+                raise frappe.ValidationError("Decision hash mismatch")
+            if self.status != "Released":
+                raise frappe.ValidationError("Only released decisions are implemented in this increment")
+            if type(self.revision) is not int or self.revision < 1:
+                raise frappe.ValidationError("Decision revision must be a positive integer")
+            if not (self.released_by and self.internal_level and self.course_code):
+                raise frappe.ValidationError("Released decision requires actor, level and course")
+            forbidden = ("percent", "cutoff", "cefr", "toefl", "composite", "seed", "answer")
+            if any(field in result for field in forbidden):
+                raise frappe.ValidationError("Decision must not include composite or external claims")
+            if result.get("algorithm") != "course-map-v1":
+                raise frappe.ValidationError("Unsupported decision algorithm")
+            if result.get("internal_level") != self.internal_level or result.get("course_code") != self.course_code:
+                raise frappe.ValidationError("Decision projection mismatch")

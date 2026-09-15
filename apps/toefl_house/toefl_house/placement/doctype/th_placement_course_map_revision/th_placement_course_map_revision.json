@@ -1,0 +1,91 @@
+{
+  "doctype": "DocType",
+  "name": "TH Placement Course Map Revision",
+  "module": "Placement",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "code",
+    "revision",
+    "version",
+    "status",
+    "definition_json",
+    "content_hash",
+    "review_actor",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "code",
+      "label": "Code",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "revision",
+      "label": "Revision",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "version",
+      "label": "Version",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "options": "Draft\nReviewed\nPublished\nRetired",
+      "reqd": 1
+    },
+    {
+      "fieldname": "definition_json",
+      "label": "Definition Json",
+      "fieldtype": "Code",
+      "options": "JSON",
+      "reqd": 1
+    },
+    {
+      "fieldname": "content_hash",
+      "label": "Content Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "review_actor",
+      "label": "Review Actor",
+      "fieldtype": "Link",
+      "options": "User"
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Placement Author",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Publisher",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

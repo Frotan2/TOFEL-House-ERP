@@ -50,6 +50,11 @@ INC7_AUTHOR_ONLY_CHECKS = (
     "http-finalize-wrong-role-denied",
     "http-finalize-other-role-read-denied",
 )
+DECISION_AUTHOR_ONLY_CHECKS = (
+    "decision-author-denied",
+    "http-decision-wrong-role-denied",
+    "http-decision-other-role-read-denied",
+)
 
 
 def _kind_roles():
@@ -120,6 +125,10 @@ class Increment3ActorGuardTests(unittest.TestCase):
             self.src,
             r"'reviewer2'\s*:\s*\[\s*'Placement Reviewer'\s*\]",
         )
+        self.assertRegex(
+            self.src,
+            r"'releaser'\s*:\s*\[\s*'Placement Releaser'\s*\]",
+        )
 
     def test_operational_commands_are_publisher_without_extra_sod(self):
         roles = _kind_roles()
@@ -132,11 +141,14 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertEqual(roles["score_attempt"], "Placement Assessor")
         self.assertEqual(roles["review_attempt"], "Placement Reviewer")
         self.assertEqual(roles["finalize_attempt"], "Placement Reviewer")
+        self.assertEqual(roles["release_decision"], "Placement Releaser")
+        self.assertEqual(roles["create_course_map"], "Placement Author")
+        self.assertEqual(roles["publish_course_map"], "Placement Publisher")
 
     def test_inc3_author_denials_use_author_only_fixtures(self):
         for name in (INC3_AUTHOR_ONLY_CHECKS + INC4_AUTHOR_ONLY_CHECKS
                      + INC5_AUTHOR_ONLY_CHECKS + INC6_AUTHOR_ONLY_CHECKS
-                     + INC7_AUTHOR_ONLY_CHECKS):
+                     + INC7_AUTHOR_ONLY_CHECKS + DECISION_AUTHOR_ONLY_CHECKS):
             with self.subTest(check=name):
                 body = _check_call_source(self.src, name)
                 self.assertNotIn("'%s'" % DUAL_ROLE, body.replace("check('%s'" % name, ""))
@@ -220,6 +232,25 @@ class Increment3ActorGuardTests(unittest.TestCase):
             data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
             self.assertNotIn("Placement Reviewer",
                              {row["role"] for row in data["permissions"]}, folder)
+        for folder in ("th_placement_case", "th_placement_attempt",
+                       "th_placement_response", "th_placement_score"):
+            data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
+            self.assertIn("Placement Releaser",
+                          {row["role"] for row in data["permissions"]}, folder)
+        decision = json.loads((root / "th_placement_decision" / "th_placement_decision.json")
+                              .read_text(encoding="utf-8"))
+        decision_roles = {row["role"] for row in decision["permissions"]}
+        self.assertIn("Placement Releaser", decision_roles)
+        self.assertIn("Placement Auditor", decision_roles)
+        self.assertNotIn("Placement Author", decision_roles)
+        self.assertNotIn("Placement Invigilator", decision_roles)
+        self.assertNotIn("Placement Assessor", decision_roles)
+        self.assertNotIn("Placement Reviewer", decision_roles)
+        for folder in ("th_placement_form_manifest", "th_placement_exposure",
+                       "th_placement_key_revision"):
+            data = json.loads((root / folder / (folder + ".json")).read_text(encoding="utf-8"))
+            self.assertNotIn("Placement Releaser",
+                             {row["role"] for row in data["permissions"]}, folder)
 
     def test_alloc_read_parity_treats_permissionerror_as_denial(self):
         body = _function_source(self.src, "cannot_list") + _function_source(self.src, "cannot_read_doc")
@@ -279,6 +310,7 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertIn("'assessor'", blob)
         self.assertIn("'reviewer'", blob)
         self.assertIn("'reviewer2'", blob)
+        self.assertIn("'releaser'", blob)
 
     def test_http_session_keys_match_whitelist_signature(self):
         api_src = (ROOT / "apps/toefl_house/toefl_house/api.py").read_text(encoding="utf-8")
@@ -290,6 +322,9 @@ class Increment3ActorGuardTests(unittest.TestCase):
                               "occurrence", "expected_revision", "option_id", "missing"],
             "seal_attempt": ["request_key", "attempt", "expected_version", "reason"],
             "score_attempt": ["request_key", "attempt", "expected_version"],
+            "review_attempt": ["request_key", "attempt", "expected_version"],
+            "finalize_attempt": ["request_key", "attempt", "expected_version"],
+            "release_decision": ["request_key", "attempt", "expected_version"],
         }
         found = {}
         for node in tree.body:

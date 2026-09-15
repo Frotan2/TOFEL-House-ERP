@@ -27,6 +27,12 @@ KIND_ROLES = {
     "score_attempt": "Placement Assessor",
     "review_attempt": "Placement Reviewer",
     "finalize_attempt": "Placement Reviewer",
+    "create_course_map": "Placement Author",
+    "revise_course_map": "Placement Author",
+    "review_course_map": "Placement Publisher",
+    "publish_course_map": "Placement Publisher",
+    "retire_course_map": "Placement Publisher",
+    "release_decision": "Placement Releaser",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -36,8 +42,10 @@ DOCTYPES = {
     "TH Placement Case", "TH Placement Attempt", "TH Placement Form Manifest",
     "TH Placement Exposure", "TH Placement Allocation Guard",
     "TH Placement Response", "TH Placement Score",
+    "TH Placement Course Map Revision", "TH Placement Decision",
 }
-CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision")
+CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision",
+                   "TH Placement Course Map Revision")
 
 
 def require_synthetic():
