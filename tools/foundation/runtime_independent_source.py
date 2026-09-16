@@ -28,8 +28,8 @@ sys.path.insert(0, str(ROOT / "tools" / "foundation"))
 from bench_bootstrap import (  # noqa: E402
     MARIADB_CONTAINER, REDIS_CACHE_CONTAINER, REDIS_QUEUE_CONTAINER,
     Probe, build_bench, cleanup, clone_pinned_sources, install_apps,
-    load_components, machine_identity, new_site, require_hosted_runner,
-    start_services, wait_mariadb_healthy,
+    install_mariadb_client, load_components, machine_identity, new_site,
+    require_hosted_runner, start_services, wait_mariadb_healthy,
 )
 
 SITE = "source.localhost"
@@ -87,6 +87,7 @@ def main() -> int:
     try:
         start_services(probe, components, secret_file)
         report["mariadb_health"] = wait_mariadb_healthy(probe)
+        install_mariadb_client(probe)
         report["source_revisions"] = clone_pinned_sources(
             probe, components, source_dir, ("frappe", "erpnext"))
         bench = build_bench(probe, components, lab, source_dir, bench_dir, python_bin)
@@ -116,6 +117,11 @@ def main() -> int:
             json.dumps(manifest, sort_keys=True).encode()).hexdigest()
         report["manifest_run_tag"] = manifest["run_tag"]
 
+        # cwd MUST be the bench directory. frappe builds archive members from a
+        # sites-relative site path (sites/<site>/public/files/...), and `bench
+        # restore` later untars with --strip 2. Running from anywhere else would
+        # bake an absolute path into the archive and the restore would extract
+        # into the wrong place.
         probe.run("backup-with-files",
                   [str(bench), "--site", SITE, "backup", "--with-files"],
                   cwd=bench_dir, timeout=1200)

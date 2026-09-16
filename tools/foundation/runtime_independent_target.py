@@ -46,9 +46,9 @@ sys.path.insert(0, str(ROOT / "tools" / "foundation"))
 
 from bench_bootstrap import (  # noqa: E402
     MARIADB_CONTAINER, REDIS_CACHE_CONTAINER, REDIS_QUEUE_CONTAINER,
-    Probe, build_bench, cleanup, clone_pinned_sources, load_components,
-    machine_identity, new_site, require_hosted_runner, sha256_file,
-    start_services, wait_mariadb_healthy,
+    Probe, build_bench, cleanup, clone_pinned_sources, install_mariadb_client,
+    load_components, machine_identity, new_site, require_hosted_runner,
+    sha256_file, start_services, wait_mariadb_healthy,
 )
 
 SITE = "recovered.localhost"
@@ -226,6 +226,7 @@ def main() -> int:
 
         start_services(probe, components, secret_file)
         report["mariadb_health"] = wait_mariadb_healthy(probe)
+        install_mariadb_client(probe)
         report["target_revisions"] = clone_pinned_sources(
             probe, components, source_dir, ("frappe", "erpnext"))
         if report["target_revisions"] != identity["source_revisions"]:
@@ -236,6 +237,10 @@ def main() -> int:
         new_site(probe, bench, bench_dir, SITE, root_password, db_password, admin_password,
                  label="new-empty-site-on-independent-system")
 
+        # cwd MUST be the bench directory, matching the backup. frappe's
+        # extract_files untars with --strip 2 into sites/<this site>, so the
+        # archive's sites/<source site>/... prefix is stripped and the files land
+        # under the recovered site even though its name differs from the source's.
         probe.run("restore-database-and-files",
                   [str(bench), "--site", SITE, "restore", str(PAYLOAD / "database.sql.gz"),
                    "--db-root-password", root_password, "--admin-password", admin_password,

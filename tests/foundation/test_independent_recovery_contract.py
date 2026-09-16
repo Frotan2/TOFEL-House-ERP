@@ -386,6 +386,15 @@ class NativeCommandContractTests(unittest.TestCase):
     def test_public_archive_glob_excludes_the_private_one(self):
         self.assertIn('"-private-files" not in p.name', SOURCE)
 
+    def test_the_bench_directory_is_the_working_directory_for_dump_and_restore(self):
+        """Archive members are sites-relative, which is what --strip 2 assumes."""
+        for label, text, step in (("source", SOURCE, '"backup-with-files"'),
+                                  ("target", TARGET, '"restore-database-and-files"')):
+            start = text.index(step)
+            self.assertIn("cwd=bench_dir", text[start:start + 700], label)
+        self.assertIn("--strip 2", TARGET)
+        self.assertIn("cwd MUST be the bench directory", SOURCE)
+
     def test_both_halves_use_the_same_native_site_commands(self):
         for flag in ('"--db-type", "mariadb"', '"--mariadb-user-host-login-scope", "%"',
                      '"--db-root-password"', '"--admin-password"'):
@@ -394,6 +403,45 @@ class NativeCommandContractTests(unittest.TestCase):
     def test_restore_receives_both_file_archives(self):
         self.assertIn('"--with-public-files", str(PAYLOAD / "public-files.tar")', TARGET)
         self.assertIn('"--with-private-files", str(PAYLOAD / "private-files.tar")', TARGET)
+
+
+class MariaDbClientTests(unittest.TestCase):
+    """Ubuntu's Oracle ``mysqldump`` queries ``COLUMN_STATISTICS``, MariaDB lacks it.
+
+    Hosted run 35142455523 failed at ``backup-with-files`` with MySQL error 1109
+    for exactly this reason, after everything through ``create-synthetic-state``
+    had passed.
+    """
+
+    def test_both_halves_install_mariadb_client(self):
+        for label, text in (("source", SOURCE), ("target", TARGET)):
+            self.assertIn("install_mariadb_client(probe)", text, label)
+
+    def test_the_client_is_installed_before_the_dump_and_before_the_restore(self):
+        self.assertLess(SOURCE.index("install_mariadb_client(probe)"),
+                        SOURCE.index('"backup-with-files"'))
+        self.assertLess(TARGET.index("install_mariadb_client(probe)"),
+                        TARGET.index('"restore-database-and-files"'))
+
+    def test_installation_matches_the_proven_harness(self):
+        proven = (ROOT / "tools/foundation/runtime_install.py").read_text(encoding="utf-8")
+        for package in ('"mariadb-client"', '"file"'):
+            self.assertIn(package, BOOTSTRAP)
+            self.assertIn(package, proven)
+        self.assertIn("--no-install-recommends", BOOTSTRAP)
+
+    def test_a_missing_dump_binary_fails_closed_with_the_reason(self):
+        self.assertIn('shutil.which("mariadb-dump")', BOOTSTRAP)
+        self.assertIn("error 1109", BOOTSTRAP)
+        self.assertIn("COLUMN_STATISTICS", BOOTSTRAP)
+
+    def test_the_reason_is_recorded_in_the_evidence(self):
+        self.assertIn('"preferred_over_mysqldump_because"', BOOTSTRAP)
+        self.assertIn('probe.report["mariadb_client"]', BOOTSTRAP)
+
+    def test_frappe_resolution_order_is_what_makes_this_necessary(self):
+        """Documented from frappe/database/__init__.py at the pinned commit."""
+        self.assertIn('which("mariadb-dump") or which("mysqldump")', BOOTSTRAP)
 
 
 class EncryptedFieldLimitationTests(unittest.TestCase):

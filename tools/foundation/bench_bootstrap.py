@@ -20,6 +20,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import shutil
 import socket
 import subprocess
 import time
@@ -186,6 +187,35 @@ def start_services(probe, components, secret_file):
         "redis": {"image_digest": redis,
                   "selected_version": components["redis"]["selected_version"]},
     }
+
+
+def install_mariadb_client(probe):
+    """Install MariaDB's own client tools before any dump or restore.
+
+    The runner image ships the Oracle MySQL client, whose ``mysqldump`` queries
+    ``information_schema.COLUMN_STATISTICS`` - a table MariaDB does not have - so a
+    backup of the pinned MariaDB container fails with error 1109. Frappe resolves
+    ``which("mariadb-dump") or which("mysqldump")``, so installing mariadb-client
+    makes both the dump and the restore use MariaDB's tools. This is the same step
+    the proven installation harness performs before its backup.
+
+    Fail closed here rather than letting a later dump produce a confusing error.
+    """
+    probe.run("mariadb-client-install",
+              ["sudo", "apt-get", "install", "-y", "--no-install-recommends",
+               "mariadb-client", "file"])
+    version = probe.run("mariadb-client-version", ["mariadb", "--version"])
+    dump_binary = shutil.which("mariadb-dump")
+    if not dump_binary:
+        raise RuntimeError(
+            "mariadb-dump is not on PATH after installing mariadb-client; frappe would fall back "
+            "to the Oracle mysqldump, which fails against MariaDB with error 1109")
+    probe.report["mariadb_client"] = {
+        "version": version, "dump_binary": dump_binary,
+        "preferred_over_mysqldump_because": ("MariaDB has no information_schema.COLUMN_STATISTICS, "
+                                            "which the Oracle client queries unconditionally"),
+    }
+    return version
 
 
 def wait_mariadb_healthy(probe, timeout=240):
