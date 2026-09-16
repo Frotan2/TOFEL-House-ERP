@@ -112,3 +112,21 @@ Every answer is executed as a scoped slice with hosted proof through
 the existing 533-check suite — no domain reopening, no parallel
 masters, production stays REJECT until D8-class gates are
 independently satisfied.
+
+---
+
+## Owner answers (received 2026-09-16, recorded verbatim in effect)
+
+| Gate | Answer | Consequence |
+|---|---|---|
+| D1 | **Defer** | A06 stays unstarted |
+| D2 | **Unlocked — contract-driven teaching compensation** (full business+technical requirement received; rates/terms remain owner configuration) | T1–T3 slices opened; design: TEACHING-COMPENSATION-DESIGN.md |
+| D3 | **Framework approved; exact terms later** | Guarded correction/refund command framework with configurable approval terms; no windows/partial-policy invented |
+| D4 | **Defer advanced policy** | Narrow hosted-proven remedy stands; SEC-GUARDIAN-01 full closure stays deferred with portals |
+| D5 | **Native basic lifecycle; advanced policy later** | A05/A11 stay unstarted |
+| D6a | **Tax not configured yet** | No tax configuration anywhere; recorded as decision, not omission |
+| D6b | **No gateway at launch** | Gateway closed as 'none'; payments app stays pinned-but-unapproved |
+| D7 | **Defer; raw reports now** | Registers stay raw-facts-only (matches shipped state) |
+| D8 | **Define role-based operational ownership** | Operational ownership charter (roles/responsibilities) to be produced; named human/contractual assignment remains with the owner; production stays REJECT until satisfied |
+| D9 | **(d) No separate register** | Gate CLOSED at status quo; attendance facts via guarded APIs only |
+| D10 | **(ii) Role-based report/page surfaces** | Staff navigation via report/page surfaces; containment boundary unchanged (no native reads granted) |
