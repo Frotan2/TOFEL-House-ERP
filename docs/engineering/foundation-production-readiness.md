@@ -16,7 +16,12 @@ probes passed. The published runtime and remaining-gate reports (Checks `1047621
 `b03a2678f7d8a296a90adf8ce1b567b326431d5bcdaca6d808ee0874cf731afe`) therefore
 set both `phase2_gate_passed` and `security_gate_passed` to false. The dependency audit
 is not a claim of exploitability/reachability, OS-package or container-CVE coverage,
-a complete SBOM, remediation, or production approval.
+a complete SBOM, remediation, or production approval. The official-input candidate
+review rejects any fabricated remediation build: newer Frappe/ERPNext releases and
+Education's newer branch head retain the reviewed dependency inputs, while pdfkit
+has no listed patched release and Bench prevents the listed setuptools fix. See
+[`dependency-remediation-candidate-assessment-2026-09-16.json`](evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json).
+No candidate runtime result is claimed.
 
 At `ebe7767`, separate hosted run `35076449739` additionally passed 542/542 product
 native checks and a disposable Bench SQL/public/private-files backup → separately

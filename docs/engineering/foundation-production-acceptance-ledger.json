@@ -85,6 +85,14 @@
       "closure": "A coherent maintained migration of the affected pinned upstream stack, clean relevant resolved-tree re-runs, and separately selected OS/container dependency coverage where required."
     },
     {
+      "id": "official-dependency-remediation-candidate",
+      "status": "rejected_no_credible_official_candidate",
+      "evidence": "evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json",
+      "observed": "Current official Frappe v16.34.0 and ERPNext v16.35.0 dependency source files are byte-identical to current pins; Education has no newer release and its version-16 head has byte-identical reviewed manifests/locks. Frappe retains pdfkit~=1.0.0, pypdf==6.15.0 and WeasyPrint==68.0. pdfkit has no listed patched version; Bench v5.31.0 constrains setuptools <82.0.0 while the listed patched version is 83.0.0.",
+      "limits": "No candidate Bench was built because no official input changes the known fail conditions. No candidate security, audit, lifecycle, recovery, worker, scheduler, realtime, upgrade, restart or browser pass is claimed.",
+      "closure": "Wait for the smallest official compatible source bundle that changes the direct Python and frozen Node dependency inputs, then create a separate immutable candidate matrix and require every unchanged gate before any baseline adoption decision."
+    },
+    {
       "id": "public-deployment-boundary",
       "status": "not_qualified",
       "closure": "Approved hostname/proxy topology/certificates; TLS, Secure cookies, origin/header spoofing, CSRF, private-file routing and realtime authentication tests on that deployment."

@@ -85,7 +85,11 @@ only.
    built both profiles but both audits failed. Its frozen baseline has 57 advisory
    matches across 21 packages; its isolated candidate has 23 matches across 6
    packages, removes 35 baseline matches, and introduces one. The candidate is not
-   adopted. This is rejection evidence, not a partial pass or a waiver.
+   adopted. The official-candidate review found no credible released input to
+   test without unsafe overrides; exact blockers and the smallest viable
+   upstream change are retained in
+   [`dependency-remediation-candidate-assessment-2026-09-16.json`](evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json).
+   This is rejection evidence, not a partial pass or a waiver.
 4. `SEC-GUARDIAN-01` and `SEC-RT-TASK-01` remain tracked by the acceptance ledger;
    D8 does not convert their bounded evidence into production authorization.
 5. The synthetic-only application guard remains enabled and must not be relaxed

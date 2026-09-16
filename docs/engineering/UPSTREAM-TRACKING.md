@@ -90,6 +90,38 @@ $ grep -rn "publish_realtime\|realtime_subscribe\|frappe.realtime\|socketio" \
   approval. These findings make `SEC-DEPS-01` a whole-resolved-stack REJECT
   gate, not merely an Education frontend observation.
 
+### Current official-remediation candidate decision
+
+**Rejected before build — no credible official input exists.** The retained
+assessment ([`dependency-remediation-candidate-assessment-2026-09-16.json`](evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json))
+compares every currently newer official v16 input that could change this
+resolved tree. It is a verified *rejection*, not a candidate pass:
+
+- Frappe `v16.34.0` and ERPNext `v16.35.0` are newer official releases, but
+  their reviewed `pyproject.toml`, `package.json`, and `yarn.lock` SHA-256
+  values are identical to the current pins. Frappe continues to require
+  `pdfkit~=1.0.0`, `pypdf==6.15.0`, and `WeasyPrint==68.0`.
+- Education has no later v16 release. Its official `version-16` branch head is
+  ten commits ahead, but the reviewed root/frontend manifests and frozen locks
+  are byte-identical to the release; a moving branch must not replace a
+  released input merely to create candidate activity.
+- The recorded `pdfkit` advisory has no provider-listed patched version;
+  current Frappe retains it. Frappe retains `pypdf==6.15.0` where the listed
+  fixes start at 6.16.0/6.16.1, and `WeasyPrint==68.0` where listed affected
+  ranges include `<70.0` and `<=68.1`.
+- Bench `v5.31.0` constrains `setuptools` to `<82.0.0`; the provider-listed
+  fixed version for the recorded finding is 83.0.0. An override would violate
+  the reviewed upstream constraint. The unchanged Node locks leave all 97
+  current npm entries in place.
+
+Consequently, no disposable Bench was built and no full-stack/security/native
+lifecycle/recovery/realtime/upgrade/browser result is claimed for a candidate.
+A forced lock or resolver override would be an unsupported fork, fail the
+clean-audit requirement, and constitute evidence theater. The smallest viable
+input is an officially released compatible bundle that changes those direct
+Python and frozen Node inputs; only then should an isolated immutable matrix be
+built and subjected to every unchanged required gate.
+
 ## 3. Upgrade-path note
 
 Pinned bundle (foundation-version-matrix.json, reviewed 2026-09-13,

@@ -115,6 +115,12 @@ invent business rules.
   patching the pinned upstream bundle in-repo would invent a fork. The audit
   explicitly does not cover OS packages or container image CVEs, and does not
   establish exploitability/reachability, an SBOM, or production acceptance.
+  Official newer Frappe/ERPNext v16 releases and Education's official
+  `version-16` head retain byte-identical reviewed dependency inputs, while
+  current Python findings include a no-fixed-version pdfkit advisory and a
+  Bench-constrained setuptools fix. No credible official candidate can pass
+  this gate yet; the verified rejection and smallest viable upstream input are
+  in [`dependency-remediation-candidate-assessment-2026-09-16.json`](evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json).
 - **SEC-GUARDIAN-01**: fail-closed Guardian isolation requires D4 policy;
   the narrow explicit-User-Permissions remedy already passes hosted.
 - **SEC-RT-TASK-01**: upstream realtime task-room behavior. Product-side

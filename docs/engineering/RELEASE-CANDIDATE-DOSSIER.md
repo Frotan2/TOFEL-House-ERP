@@ -68,7 +68,7 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
 
 | Suite | Tests |
 |---|---|
-| tests/foundation | 74 |
+| tests/foundation | 77 |
 | tests/placement | 148 |
 | tests/admission | 6 |
 | tests/enrollment | 10 |
@@ -127,8 +127,14 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
    4 low / 0 critical); its isolated candidate has 23 matches across 6
    packages, removes 35, and introduces one. Both audits failed and the
    candidate is not adopted. A maintained upstream migration and clean scoped
-   re-runs are required. Also open: SEC-RT-TASK-01 (upstream realtime task
-   room; product-side exposure proven nil — UPSTREAM-TRACKING.md §1).
+   re-runs are required. An evidence review of all current newer official v16
+   inputs rejects a fabricated candidate before build: Frappe/ERPNext's
+   dependency inputs are byte-identical, Education has no newer release and
+   unchanged branch locks, pdfkit has no listed patch, and Bench constrains
+   setuptools below its fixed version. See
+   [`dependency-remediation-candidate-assessment-2026-09-16.json`](evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json).
+   Also open: SEC-RT-TASK-01 (upstream realtime task room; product-side
+   exposure proven nil — UPSTREAM-TRACKING.md §1).
 3. **Deployment-scope operations** — independent-host DR, measured restart
    downtime, HA, full-bundle upgrade/rollback, public TLS/proxy qualification,
    capacity, and monitoring operation (D8). The current branch additionally
