@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main() -> int:
-    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("GITHUB_REF") != "refs/heads/arena/01a09bf3-tofel-house-erp":
+    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("GITHUB_REF") != "refs/heads/arena/01a0a942-tofel-house-erp":
         raise SystemExit("Run only on the authorized branch in an ephemeral Actions runner")
     profile = os.environ.get("FOUNDATION_PROFILE", "forensic")
     if profile not in ("forensic", "hardened"):
@@ -250,7 +250,7 @@ def main() -> int:
         # only our app into the disposable lab; never initialize/move repo .git.
         export = lab / "extension-source" / "foundation_security"
         shutil.copytree(extension, export, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        run("security-export-git-init", ["git", "init", "--initial-branch", "arena/01a09bf3-tofel-house-erp", export])
+        run("security-export-git-init", ["git", "init", "--initial-branch", "arena/01a0a942-tofel-house-erp", export])
         run("security-export-git-add", ["git", "-C", export, "add", "."])
         run("security-export-git-snapshot", ["git", "-C", export, "-c", "user.name=Foundation validation", "-c", "user.email=validation@example.test", "commit", "-m", "Exact security app export from " + os.environ["GITHUB_SHA"]])
         bench("get-security-extension", "get-app", "--soft-link", "--skip-assets", str(export))
