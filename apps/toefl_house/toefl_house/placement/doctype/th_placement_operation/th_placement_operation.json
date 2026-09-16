@@ -79,7 +79,12 @@
     {
       "role": "Finance Auditor",
       "read": 1,
-      "select": 1
+      "select": 1,
+      "report": 1
+    },
+    {
+      "role": "Finance Officer",
+      "report": 1
     }
   ],
   "sort_field": "creation",

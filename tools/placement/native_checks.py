@@ -2774,6 +2774,78 @@ def main():
             frappe.set_user('Administrator')
             return {'no_read_granted_by_workspaces':True}
         check('release-workspace-no-privilege-escalation',ws_no_privilege_escalation)
+        # --- R2: factual operations registers (native Query Reports, raw facts
+        # only). Access is native: the Report Has-Role table gates execution
+        # (pinned Report.is_permitted) and the ref-doctype `report` permission
+        # gates the query surface (pinned query_report._run). The registers
+        # state billing facts; denominators/thresholds stay an A12 owner
+        # deliverable and never ship inside SQL.
+        REGISTERS={
+            'TH Tuition Billing Register':{'ref':'Fees','module':'Finance',
+                'roles':['Finance Officer'],
+                'columns':['fees','student','program_enrollment','academic_year','posting_date','due_date','grand_total','outstanding_amount','docstatus'],
+                'permitted':['finance_officer'],
+                'denied':['finance_auditor','invigilator','teaching_scheduler']},
+            'TH Placement Billing Register':{'ref':api.OP,'module':'Finance',
+                'roles':['Finance Officer','Finance Auditor'],
+                'columns':['sales_invoice','customer','placement_case','posting_date','due_date','grand_total','outstanding_amount','docstatus'],
+                'permitted':['finance_officer','finance_auditor'],
+                'denied':['invigilator','teaching_scheduler']},
+        }
+        run_report=frappe.get_attr('frappe.desk.query_report.run')
+        def register_rows(name):
+            out=run_report(name)
+            cols=[c['fieldname'] if isinstance(c,dict) else str(c) for c in out['columns']]
+            return cols,[dict(zip(cols,r)) if isinstance(r,(list,tuple)) else r for r in out['result']]
+        def registers_configured():
+            observed={}
+            for name,spec in REGISTERS.items():
+                doc=frappe.get_doc('Report',name)
+                assert doc.report_type=='Query Report' and doc.is_standard=='Yes' and not doc.disabled,(name,'must be a standard Query Report')
+                assert doc.ref_doctype==spec['ref'] and doc.module==spec['module'],(name,doc.ref_doctype,doc.module)
+                assert sorted(r.role for r in doc.roles)==sorted(spec['roles']),(name,'role table must match the designed audience exactly')
+                cols,_=register_rows(name)
+                assert cols==spec['columns'],(name,cols)
+                observed[name]=cols
+            _,tuition=register_rows('TH Tuition Billing Register')
+            row=next((r for r in tuition if r['fees']==fees1['fees']),None)
+            assert row and float(row['grand_total'])==25000.0,(fees1['fees'],row)
+            assert all(int(r['docstatus']) in (0,1,2) for r in tuition),'docstatus must be a fact column'
+            _,placement=register_rows('TH Placement Billing Register')
+            inv=next((r for r in placement if r['sales_invoice']==inv1['sales_invoice']),None)
+            wai=next((r for r in placement if r['sales_invoice']==waiver['sales_invoice']),None)
+            assert inv and inv['placement_case']==CASE9 and float(inv['grand_total'])==4000.0,(inv1['sales_invoice'],inv)
+            assert wai and wai['placement_case']==case_of('candidate6') and float(wai['grand_total'])==0.0,(waiver['sales_invoice'],wai)
+            assert all(r['placement_case'] for r in placement),'register only holds placement-linked invoices'
+            frappe.set_user('Administrator')
+            return observed
+        check('release-registers-configured',registers_configured)
+        def registers_role_access():
+            observed={}
+            for name,spec in REGISTERS.items():
+                for key in spec['permitted']:
+                    as_user(key,lambda:run_report(name))
+                    frappe.set_user('Administrator')
+                for key in spec['denied']:
+                    assert denied(lambda:as_user(key,lambda:run_report(name))),(key,name,'register leaked to a non-audience role')
+                    frappe.set_user('Administrator')
+                observed[name]={'permitted':spec['permitted'],'denied':spec['denied']}
+            return observed
+        check('release-registers-role-access',registers_role_access)
+        def registers_facts_only():
+            observed={}
+            for name,spec in REGISTERS.items():
+                q=frappe.db.get_value('Report',name,'query')
+                assert q.strip().lower().startswith('select') and ';' not in q,(name,'single select statement only')
+                low=' '+q.lower()+' '
+                for agg in ('count(','sum(','avg(','min(','max(','group by'):
+                    assert agg not in low,(name,agg,'aggregates are metrics, not facts')
+                cols,_=register_rows(name)
+                assert cols==spec['columns'],(name,'column contract drift')
+                observed[name]=cols
+            frappe.set_user('Administrator')
+            return observed
+        check('release-registers-facts-only',registers_facts_only)
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}

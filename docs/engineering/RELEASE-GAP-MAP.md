@@ -51,7 +51,7 @@ runs, which exercised these authorities directly.
 | ID | Item | Treatment | Status |
 |---|---|---|---|
 | R1 | Role-scoped staff Desk workspaces (navigation; grants no read — pinned frappe `get_workspaces → is_permitted` Has-Role intersection) | Native `Workspace` module files (`<module>/workspace/…`), 6 workspaces, explicit roles | **In execution this turn**; hosted checks `release-*` |
-| R2 | Factual operations registers (tuition billing, placement billing, attendance coverage) as role-restricted native Query Reports — raw facts only, no denominators/thresholds (metrics layer is A12, owner stewards) | Native `Report` fixtures | Next |
+| R2 | Factual operations registers (tuition billing, placement billing) as role-restricted native Query Reports — raw facts only, no denominators/thresholds (metrics layer is A12, owner stewards). Native access model: Report Has-Role table gates execution (pinned `Report.is_permitted`), ref-doctype `report` permission gates the query surface (pinned `query_report._run`). Attendance-coverage register awaits D9 (no narrow teaching role holds the native `report` flag on Student Attendance; widening options are owner decisions) | Native `Report` module files (`finance/report/…`) + minimal report-only grants on the TH operations doctype | **In execution this turn**; hosted checks `release-registers-*` |
 | R3 | Export/attachment/print-path containment proofs for the guarded doctypes (addresses ledger "broad roles/attachment/export/print paths" for implemented slices) + native health/error-observability probes | Hosted negative checks | Next after R2 |
 
 ### 1.3 Genuinely requires further implementation (only behind owner decisions)
@@ -73,6 +73,7 @@ invent business rules.
 | D6 = B07 remainder/B12 | Tax configuration policy; payment-gateway selection (or explicit none) | Tax setup, payments |
 | D7 = A12 stewards | Named metric stewards; denominators/disclosure/retention rules | Reporting metrics layer (over R2 registers) |
 | D8 | Deployment topology ownership: independent-host DR, capacity/monitoring ownership, TLS/proxy/session policy | Phase 2 production acceptance |
+| D9 | Attendance-coverage register access anchor: native `report` flag on Student Attendance belongs to Academics User/Student/Guardian only. Options (owner picks): (a) grant teaching roles native Academics User — widens direct write access beyond the guarded teaching API; (b) Custom DocPerm replication on Student Attendance — invasive, replaces native permission rows wholesale; (c) new TH anchor doctype for teaching facts; (d) no register (current state — teaching facts reachable via guarded APIs only) | TH Attendance Coverage Register (R2 remainder) |
 
 ### 1.5 Security gates (non-owner parts vs upstream/owner parts)
 - **Closed here:** A13 implemented-slice containment (523/523).
@@ -104,7 +105,7 @@ platform/warehouse (prohibited), any new ERP-adjacent platform.
 | # | Work | Depends on | Parallel-safe? |
 |---|---|---|---|
 | R1 | Workspaces + hosted proof (this turn) | — | yes (native module files + own check block) |
-| R2 | Query-Report registers + hosted proof | R1 merged (shares suite) | yes (disjoint fixture) |
+| R2 | Query-Report registers + hosted proof | R1 merged (shares suite) | yes (disjoint module files) |
 | R3 | Export/attachment containment proofs + observability probes | R2 merged | yes (own check block) |
 | R4 | Owner decision packet (D1–D8 one-page asks, current state per gate) | — | yes |
 | R5 | Upstream tracking evidence: realtime non-exposure grep, dependency advisory triage summary, upgrade-path note | — | yes |
