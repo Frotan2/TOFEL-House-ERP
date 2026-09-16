@@ -2765,7 +2765,25 @@ def main():
             for label,(must,must_not) in probe.items():
                 seen=visible(label)
                 for m in sorted(must):
-                    assert m in seen,(label,m,'workspace not visible to its role')
+                    if m in seen:continue
+                    # self-diagnosing failure: dump the decisive gate facts so
+                    # the hosted report names the exact failing link
+                    diag={'label':label,'missing':m,'roles':sorted(frappe.get_roles()),
+                          'seen':sorted(seen)[:6],'seen_n':len(seen),
+                          'si_perm':frappe.db.get_value('DocPerm',{'parent':'Sales Invoice','role':'Accounts User'},'read'),
+                          'si_custom':frappe.db.count('Custom DocPerm',{'parent':'Sales Invoice'})}
+                    try:
+                        up=frappe.get_user()
+                        if not up.allow_modules:up.build_permissions()
+                        diag['allow_modules']=sorted(set(up.allow_modules or []))
+                        diag['si_readable']='Sales Invoice' in (up.can_read+up.can_write+up.can_create)
+                    except Exception as exc:diag['perm_err']=repr(exc)[:90]
+                    try:
+                        wsx=frappe.get_attr('frappe.desk.desktop.Workspace')({'name':m},True)
+                        diag['is_permitted']=bool(wsx.is_permitted())
+                        diag['doc_module']=wsx.doc.module
+                    except Exception as exc:diag['ws_init_err']=repr(exc)[:90]
+                    raise AssertionError(json.dumps(diag,default=str)[:590])
                 for m in sorted(must_not):
                     assert m not in seen,(label,m,'workspace leaked to a non-member role')
                 observed[label]=sorted(must)
