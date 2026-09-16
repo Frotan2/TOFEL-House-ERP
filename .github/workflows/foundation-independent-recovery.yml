@@ -1,0 +1,117 @@
+name: Foundation independent-system recovery
+
+# Recovers a destroyed site onto a genuinely independent execution environment.
+# Two separate jobs means two separate ephemeral virtual machines: their own
+# filesystems, their own containers, their own volumes. The only shared channel is
+# the uploaded backup artifact, and the target job fails closed if the host
+# identity it observes matches the source's.
+on:
+  push:
+    branches: [arena/01a0aafe-tofel-house-erp]
+    paths:
+      - .github/workflows/foundation-independent-recovery.yml
+      - tools/foundation/bench_bootstrap.py
+      - tools/foundation/runtime_independent_source.py
+      - tools/foundation/runtime_independent_target.py
+      - tools/foundation/runtime_independent_data.py
+      - tools/foundation/runtime_independent_usability.py
+      - tests/foundation/test_independent_recovery_contract.py
+      - docs/engineering/foundation-version-matrix.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: foundation-independent-recovery-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source:
+    if: github.ref == 'refs/heads/arena/01a0aafe-tofel-house-erp'
+    name: Independent recovery - source system
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Test independent-recovery contract guards
+        run: python3 -m unittest tests.foundation.test_independent_recovery_contract -q
+      - name: Install pinned Yarn CLI
+        run: npm install --global yarn@1.22.22
+      - name: Establish fresh compatible Python and services
+        run: python3 tools/foundation/runner_probe.py
+      - name: Build, back up, then destroy the source site
+        run: python3 tools/foundation/runtime_independent_source.py
+      - name: Publish sanitized source evidence
+        if: always() && hashFiles('.foundation/independent-source-evidence/source-result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/foundation/publish_evidence.py
+          .foundation/independent-source-evidence/source-result.json
+          --name 'Foundation independent recovery - source system'
+      - name: Hand the backup to an independent system
+        if: always() && hashFiles('.foundation/independent-recovery/payload/database.sql.gz') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: independent-recovery-payload-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/independent-recovery/payload/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain source evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: foundation-independent-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/independent-source-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  target:
+    if: github.ref == 'refs/heads/arena/01a0aafe-tofel-house-erp'
+    name: Independent recovery - target system
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Install pinned Yarn CLI
+        run: npm install --global yarn@1.22.22
+      - name: Establish fresh compatible Python and services
+        run: python3 tools/foundation/runner_probe.py
+      - name: Receive the backup on this independent system
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: independent-recovery-payload-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/independent-recovery/payload/
+      - name: Recover onto this independent system and prove usability
+        run: python3 tools/foundation/runtime_independent_target.py
+      - name: Publish sanitized target evidence
+        if: always() && hashFiles('.foundation/independent-target-evidence/target-result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/foundation/publish_evidence.py
+          .foundation/independent-target-evidence/target-result.json
+          --name 'Foundation independent recovery - independent target system'
+      - name: Retain target evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: foundation-independent-target-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/independent-target-evidence/
+          if-no-files-found: error
+          retention-days: 14
