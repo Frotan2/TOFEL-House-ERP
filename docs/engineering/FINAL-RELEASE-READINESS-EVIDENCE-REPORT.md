@@ -141,11 +141,13 @@ the deployed production architecture required by the owner-selected D8 contract.
 
 ## 7. Final independent audit of PR #2
 
-Audit target: PR [#2](https://github.com/Frotan2/TOFEL-House-ERP/pull/2), exact
-head `16d0d2ac97390999ed4a5ff54fc38b6d2d5ce2dc`, base `main` at
-`9eccff957cadf036a3ac6f8208540a110148e67b`. This section is an independent
-review record; it does not replace the owner-decision record or turn scoped
-qualification into production evidence.
+Audit target: PR [#2](https://github.com/Frotan2/TOFEL-House-ERP/pull/2), audited
+application head `95c19eec2edb658fde62c1240c57374e367bc6cb`, base `main` at
+`9eccff957cadf036a3ac6f8208540a110148e67b`. The final report amendment is a
+follow-on documentation-only commit; it does not alter the audited application
+or test behavior. This section is an independent review record; it does not
+replace the owner-decision record or turn scoped qualification into production
+evidence.
 
 ### Diff provenance, scope, and repository hygiene
 
@@ -239,12 +241,19 @@ Independent local results after the audit fix:
 | D10 command-page and native-dialog smoke | **PASS** |
 | Secret, generated-content, duplicate-authority and scope scans | **PASS within repository/static scope** |
 
-Exact GitHub Actions results for the audited head at the time of this report:
-D8 operations contract run `35101709220` completed **SUCCESS**. Foundation runtime
-run `35101709287` was still **IN_PROGRESS** when this audit record was written;
-its final result is not represented as a pass. The runtime workflow's completed
-pre-install steps passed, but the pinned foundation installation gate remained
-pending. The exact head and run IDs must be rechecked after any subsequent commit.
+Exact GitHub Actions results for the audited application head at the time of
+this report: D8 operations contract run `35101709220` on the immediately prior
+closure head `16d0d2ac97390999ed4a5ff54fc38b6d2d5ce2dc` completed **SUCCESS**;
+the D8 paths were unchanged by the administration fix. Current-head Foundation
+runtime run `35104267675` targets `95c19eec2edb658fde62c1240c57374e367bc6cb` and
+was **PENDING**. Earlier exact-head runtime run `35101709287` remained
+**IN_PROGRESS** with no updated job state and blocked the same concurrency group;
+an attempted cancellation returned GitHub **403**, so it was not treated as a
+pass or silently discarded. The completed pre-install steps of that earlier
+run passed, but its pinned foundation installation gate had no final result at
+this audit. Current local D8 validation is passing structurally while reporting
+the required BLOCKED/REJECT state. The final documentation-only amendment does
+not change these application conclusions.
 
 ### Independent audit conclusion
 
