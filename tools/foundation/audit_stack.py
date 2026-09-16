@@ -89,6 +89,27 @@ def npm_advisories(packages: dict[str, list[str]]) -> dict[str, Any]:
     return findings
 
 
+def npm_finding_summary(advisories: dict[str, Any]) -> list[dict[str, Any]]:
+    """Normalize npm's advisory response into non-secret, portable triage facts."""
+    findings: list[dict[str, Any]] = []
+    for package, matches in sorted(advisories.items()):
+        if not isinstance(package, str) or not isinstance(matches, list):
+            raise RuntimeError("npm advisory response is malformed")
+        for advisory in matches:
+            if not isinstance(advisory, dict) or advisory.get("id") is None:
+                raise RuntimeError("npm returned an advisory without an identifier")
+            findings.append({
+                "package": package,
+                "id": advisory["id"],
+                "url": advisory.get("url"),
+                "title": advisory.get("title"),
+                "severity": advisory.get("severity"),
+                "vulnerable_versions": advisory.get("vulnerable_versions"),
+                "cwe": sorted(str(cwe) for cwe in advisory.get("cwe", []) if cwe),
+            })
+    return findings
+
+
 def _osv_finding(package: str, version: str, vulnerability: dict[str, Any]) -> dict[str, Any]:
     """Retain stable identifying information, avoiding needlessly large raw reports."""
     database = vulnerability.get("database_specific") or {}
@@ -144,8 +165,9 @@ def report_for(args: argparse.Namespace) -> dict[str, Any]:
     python_packages = installed_python_inventory()
     node_packages, node_roots = combined_node_inventory(args.node_modules)
     npm = npm_advisories(node_packages)
+    npm_findings = npm_finding_summary(npm)
     osv = osv_pypi_advisories(python_packages)
-    npm_entries = sum(len(value) for value in npm.values())
+    npm_entries = len(npm_findings)
     report = {
         "scope": "Resolved Bench Python and supplied installed Node dependency trees plus pinned container references; advisory matches only, not exploit/reachability, full SBOM, OS packages, container CVE scan, or production approval",
         "checked_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -163,6 +185,7 @@ def report_for(args: argparse.Namespace) -> dict[str, Any]:
             "packages_with_advisories": len(npm),
             "advisory_entries": npm_entries,
             "advisories": npm,
+            "finding_summary": npm_findings,
         },
         "containers": {
             "pinned_references": parse_images(args.image),

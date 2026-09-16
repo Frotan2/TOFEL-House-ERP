@@ -207,9 +207,9 @@ def main() -> int:
         report["stack_dependency_audit"] = {
             "status": stack_audit["status"], "scope": stack_audit["scope"],
             "python_package_names": stack_audit["python"]["package_names"],
-            "python_osv_findings": len(stack_audit["python"]["osv"]["findings"]),
+            "python_osv_findings": stack_audit["python"]["osv"]["findings"],
             "node_package_names": stack_audit["node"]["package_names"],
-            "node_advisory_entries": stack_audit["node"]["advisory_entries"],
+            "node_npm_findings": stack_audit["node"]["finding_summary"],
             "container_status": stack_audit["containers"]["status"],
         }
         report["site_apps"] = bench("site-app-list", "--site", site, "list-apps", "--format", "json")
@@ -470,9 +470,9 @@ http {{
             "status": stack_audit["status"],
             "scope": stack_audit["scope"],
             "python_packages": stack_audit["python"]["package_names"],
-            "python_osv_findings": len(stack_audit["python"]["osv"]["findings"]),
+            "python_osv_findings": stack_audit["python"]["osv"]["findings"],
             "node_packages": stack_audit["node"]["package_names"],
-            "node_advisory_entries": stack_audit["node"]["advisory_entries"],
+            "node_npm_findings": stack_audit["node"]["finding_summary"],
             "container_status": stack_audit["containers"]["status"],
         }
         if stack_audit["status"] != "pass": continuation["status"] = "fail"

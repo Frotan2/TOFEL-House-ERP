@@ -53,8 +53,18 @@ class RuntimeDependencyAuditTests(unittest.TestCase):
                 report = audit_stack.report_for(args)
         self.assertEqual(report["status"], "fail")
         self.assertEqual(report["node"]["advisory_entries"], 1)
+        self.assertEqual(report["node"]["finding_summary"], [{
+            "package": "example", "id": 7, "url": "https://example.test/advisory",
+            "title": None, "severity": None, "vulnerable_versions": None, "cwe": [],
+        }])
         self.assertEqual(report["python"]["osv"]["findings"][0]["id"], "PYSEC-1")
         self.assertEqual(report["containers"]["status"], "inventory_only")
+
+    def test_malformed_npm_advisory_response_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "malformed"):
+            audit_stack.npm_finding_summary({"example": {"id": 7}})
+        with self.assertRaisesRegex(RuntimeError, "identifier"):
+            audit_stack.npm_finding_summary({"example": [{}]})
 
     def test_images_require_digest_pins(self):
         with self.assertRaisesRegex(ValueError, "sha256"):
@@ -65,6 +75,7 @@ class RuntimeDependencyAuditTests(unittest.TestCase):
         self.assertIn('ROOT / "tools/foundation/audit_stack.py"', runtime)
         self.assertIn('"hosted-full-stack-dependency-audit"', runtime)
         self.assertIn('"resolved_stack_dependencies"', runtime)
+        self.assertIn('"node_npm_findings"', runtime)
         self.assertLess(runtime.index('bench("asset-build"'), runtime.index('"hosted-full-stack-dependency-audit"'))
         self.assertIn('components[name]["image_digest"]', runtime)
 
