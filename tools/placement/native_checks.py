@@ -3045,17 +3045,10 @@ def main():
             assert denied(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
                 'tc_overlap_000000001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
                 'SYN basis','Monthly','2026-06-01'))),('overlapping active contract accepted')
-            # supersession: history stays reproducible
-            rev=as_user('finance_officer',lambda:tcomp.revise_teaching_contract(
-                'tc_revise_one_000001',r1['name'],'Skill-Based','SYN class skill coverage',
-                'Monthly','2026-10-01','',
-                'SYN fixture conditions',[dict(skill=SK1,unit_of_payment='SYN Session',rate=13,
-                                               payable_quantity=40)],[]))
+            # supersession is exercised in the calculation phase, AFTER facts
+            # are recorded against the Active contracts (run 35060611969:
+            # assigning against a superseded contract is correctly refused)
             frappe.set_user('Administrator')
-            old=frappe.get_doc(CON,r1['name'])
-            assert old.status=='Superseded',(old.status,)
-            assert float(old.skill_terms[0].rate)==12.5,(float(old.skill_terms[0].rate),)
-            assert frappe.get_doc(CON,rev['name']).supersedes==r1['name']
             # in-place tampering is denied even for Administrator
             assert denied(lambda:(lambda d:(d.__setattr__('conditions','tamper'),d.save()))(
                 frappe.get_doc(CON,r1['name']))),('contract edited outside a command')
@@ -3068,9 +3061,8 @@ def main():
             frappe.set_user('Administrator')
             assert frappe.db.count('Salary Slip')==slips_before
             frappe.db.commit()
-            return {'contracts':{'one':r1['name'],'two':r2['name'],'fixed':fixed['name'],
-                                 'revised':rev['name']},
-                    'supersession_reproducible':True,'scheduler_contract_denied':True,
+            return {'contracts':{'one':r1['name'],'two':r2['name'],'fixed':fixed['name']},
+                    'scheduler_contract_denied':True,
                     'outsider_contract_denied':True,'tamper_denied':True,
                     'scheduler_contract_read_denied':True}
         cauth=check('teaching-compensation-contract-authority',contract_authority)
@@ -3126,6 +3118,30 @@ def main():
             slips_before=frappe.db.count('Salary Slip')
             ads_before=frappe.db.count(ADS)
             a=afacts['assignments']
+            # supersession AFTER the facts were recorded against the then-Active
+            # contracts; September payability must still resolve from them
+            rev1=as_user('finance_officer',lambda:tcomp.revise_teaching_contract(
+                'tc_revise_one_000001',cauth['contracts']['one'],'Skill-Based',
+                'SYN class skill coverage','Monthly','2026-10-01','',
+                'SYN fixture conditions',[dict(skill=SK1,unit_of_payment='SYN Session',rate=13,
+                                               payable_quantity=40)],[]))
+            rev2=as_user('finance_officer',lambda:tcomp.revise_teaching_contract(
+                'tc_revise_two_000001',cauth['contracts']['two'],'Skill-Based',
+                'SYN class skill coverage','Monthly','2027-01-01','',
+                '',[dict(skill=SK3,unit_of_payment='SYN Session',rate=16,payable_quantity=20)],[]))
+            frappe.set_user('Administrator')
+            old=frappe.get_doc(CON,cauth['contracts']['one'])
+            assert old.status=='Superseded',(old.status,)
+            assert float(old.skill_terms[0].rate)==12.5,(float(old.skill_terms[0].rate),)
+            assert frappe.get_doc(CON,rev1['name']).supersedes==cauth['contracts']['one']
+            # regressions (run 35060611969): a superseded (inactive) contract
+            # and a future-effective contract must not anchor assignments
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_supsd_00001','SYN-GRP-MAIN-2',SK1,cfx['ins']['One'],
+                cauth['contracts']['one'],'2026-11-01'))),('superseded contract accepted an assignment')
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_future_00001','SYN-GRP-MAIN-1',SK3,cfx['ins']['Two'],
+                rev2['name'],'2026-09-01'))),('future-effective contract accepted an assignment')
             # deductions require the explicit owner-provided deduction component
             assert denied(lambda:as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
                 'tc_calc_nodeduct_0001','2026-09-01','2026-09-30',cfx['company'],cfx['earning']))),('deduction posted without a deduction component')
@@ -3176,7 +3192,9 @@ def main():
             frappe.db.commit()
             return {'payroll_inputs':5,'amounts':{'a1':500.0,'a2':400.0,'a3':300.0,
                     'bonus':50.0,'deduction':25.0},
-                    'pre_revision_rate_used':True,'duplicate_pay_prevented':True,
+                    'pre_revision_rate_used':True,'supersession_reproducible':True,
+                    'superseded_contract_assign_denied':True,
+                    'future_contract_assign_denied':True,'duplicate_pay_prevented':True,
                     'receipt_idempotent':True,'salary_slips_untouched':True,
                     'audit_chain_ref_fields':True}
         check('teaching-compensation-calculation',compensation_calculation)

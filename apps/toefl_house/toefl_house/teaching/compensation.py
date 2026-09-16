@@ -259,11 +259,15 @@ def assign_teaching_skill(request_key, student_group, skill, instructor, contrac
             if not row or row.student_group != group_name:
                 raise frappe.ValidationError("Course schedule does not belong to the assigned class")
         terms = frappe.db.get_value(CONTRACT, contract_name,
-                                    ["instructor", "status", "compensation_model"], as_dict=True)
+                                    ["instructor", "status", "compensation_model",
+                                     "effective_start", "effective_end"], as_dict=True)
         if terms.instructor != instructor_name:
             raise frappe.ValidationError("Contract does not belong to the assigned instructor")
         if terms.status != "Active":
             raise frappe.ValidationError("Assignments require an active contract")
+        if not windows_overlap(start, end, str(terms.effective_start),
+                               str(terms.effective_end) if terms.effective_end else None):
+            raise frappe.ValidationError("Contract is not effective for the assignment window")
         if terms.compensation_model == "Fixed Salary":
             raise frappe.ValidationError("Fixed-salary contracts are not assigned per skill")
         frappe.db.sql("select name from `tabTH Teaching Assignment` "

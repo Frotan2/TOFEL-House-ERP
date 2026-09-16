@@ -165,6 +165,19 @@ class WiringTests(unittest.TestCase):
                 seen[node.name] = True
         self.assertEqual(set(seen), set(COMMANDS))
 
+    def test_assign_enforces_active_and_effective_contract(self):
+        """Regression (run 35060611969): assignment is refused unless the
+        contract is Active AND effective for the assignment window."""
+        source = COMPENSATION.read_text()
+        self.assertIn("Assignments require an active contract", source)
+        self.assertIn("Contract is not effective for the assignment window", source)
+        tree = ast.parse(source)
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "assign_teaching_skill")
+        body = ast.dump(fn)
+        self.assertIn("windows_overlap", body)
+        self.assertIn("status", body)
+
     def test_calculation_path_is_native_additional_salary_only(self):
         """The only doctypes the module ever creates are the two TH facts and
         the native Additional Salary payroll input — no slip/engine writes."""
