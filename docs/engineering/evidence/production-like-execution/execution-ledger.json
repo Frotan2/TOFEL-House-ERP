@@ -1115,7 +1115,7 @@
     "evidence_retrieval": "gh api repos/Frotan2/TOFEL-House-ERP/check-runs/<check_id> --jq .output.text  (gzip+base64 transport decoded when >58000 bytes)"
   },
   "integrity": {
-    "generated_at_utc": "2026-09-16T18:46:27.278721+00:00",
+    "generated_at_utc": "2026-09-16T19:03:02.717244+00:00",
     "archived_evidence_sha256": {
       "hosted-frontend-35122242647.json": "17d40562f62cddc6168bef34838f128d6dbaa2257a0ab0048739c2c28c6abfb1",
       "hosted-placement-native-checks-35122242728.json": "094111f63a8f4b44e483bfd534a71b404c14b0e87c093477e0a633390ff42251",
@@ -1136,7 +1136,9 @@
       "local-unittest-313.txt": "6d95cec0565e3ae2ea04e63dec3ecfad6c4076bb61c772c87a081c465d615562",
       "hosted-runtime-35133062884.json": "fa799c1b259b42750bef2bd7b660f914690eacfe6b389fbcd290a7ea8f5e2780",
       "hosted-remaining-gates-35133062884.json": "981ac18610ae0fb9c744645123922cd7ea78882969f8316ee3416d9ad99a2dda",
-      "hosted-durability-35135793802.json": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65"
+      "hosted-durability-35135793802.json": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65",
+      "hosted-durability-35137645608.json": "6f9b379d132ed131d38e68647397b9b9f197312fe5312990e75c191fd0da408b",
+      "hosted-runtime-35135793582.json": "6cfb435d86f3ba0dcb04c8a939cfaf850b4317d00eff3f0442eb6e13e2ad77d5"
     },
     "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED.",
     "regenerated_at_utc": "2026-09-16T17:36:45.589585+00:00"
@@ -1313,7 +1315,7 @@
     "None outstanding for the site_encryption_key_restored=false defect: CLOSED with genuine hosted evidence at run 35133062884 / commit 58bd4d1 on both restore cycles.",
     "Container-level durability is now genuinely EXECUTED: run 35135793802 at 866396a passed real MariaDB and Redis graceful restart, SIGKILL crash-recovery and container destruction with recreation from the same named volume, plus a negative control. Commit 699ad7e then made the binary-log rotation an enforced invariant and required server-side crash-log corroboration; that stricter probe still needs its own hosted PASS.",
     "Standing release blockers, updated. CLOSED: site_encryption_key_restored=false. EXECUTED but gate still BLOCKED: container-level MariaDB/Redis durability. UNCHANGED: restore has never reached a genuinely independent system and no destructive trigger has been run; versioned encrypted backup with external key custody and rotation is bounded-only, and the site encryption key is still generated and copied by the same ephemeral runner rather than held under separate custody; configuration, private/public file and encryption-key durability are unproven; deployed monitoring, alert delivery and retention are untested; no TLS or Tailscale boundary has been exercised; rollback has never been rehearsed; the owner durability references required by D8-DURABLE-STATE are NOT SELECTED; SEC-DEPS-01 needs a coherent maintained upstream stack migration and has failed at three commits on this branch (d7df9ca, c891949, 58bd4d1); and the owner has selected no numeric capacity/availability objective.",
-    "BLOCKED ON GITHUB CREDENTIALS: the GH_TOKEN in this sandbox expired mid-session (gh auth status reports 'The github.com token in GH_TOKEN is no longer valid'; the API returns 'Bad credentials'). Commit 699ad7e is complete locally but could not be pushed, so the stricter durability probe has not been re-run on a hosted runner. Everything through 866396a is pushed. No evidence was inferred, fabricated or backdated to cover this gap."
+    "RESOLVED: the GitHub credential outage ended and commits 699ad7e and 9b96199 were pushed; the stricter durability probe then produced its own hosted PASS at run 35137645608. A further evidence-labelling defect found by that run is fixed in commit e92c66e, which still needs its own hosted durability PASS."
   ],
   "pr_2_update": {
     "action": "comment posted (the only update available from this session)",
@@ -1426,7 +1428,30 @@
     },
     "secret_hygiene": "Only SHA-256 fingerprints and byte lengths are reported. The key itself and the synthetic secret never appear in any artifact: the fingerprint file is 0600 inside the unpublished runner lab, the harness redaction list already covers encryption_key values, and the probe refuses to run outside a disposable hosted runner.",
     "regression_coverage": "tests/foundation/test_encryption_key_recovery.py, 31 tests. The pure helpers fingerprint_key, restore_key_into_config, stored_representations and assert_no_plaintext_at_rest are imported by the hosted harness rather than re-implemented, so the tests exercise the same code that runs on the runner.",
-    "does_not_upgrade": "This closes one named recovery defect on the same disposable hosted runner. It is not production qualification. Restore still runs on the same host as the source, no destructive trigger has been exercised, external key custody and rotation remain bounded-only, and the recovery and backup-restore gates remain BLOCKED."
+    "does_not_upgrade": "This closes one named recovery defect on the same disposable hosted runner. It is not production qualification. Restore still runs on the same host as the source, no destructive trigger has been exercised, external key custody and rotation remain bounded-only, and the recovery and backup-restore gates remain BLOCKED.",
+    "independent_reproduction": {
+      "run_id": "35135793582",
+      "workflow": "Foundation runtime validation",
+      "profile": "hardened",
+      "commit": "866396a127164090c41db9ff1bc310ade555409f",
+      "check_run": "104934304007",
+      "overall_conclusion": "failure",
+      "overall_conclusion_reason": "SEC-DEPS-01 only, identical failure profile to run 35133062884: of 121 checks the only failures are hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit.",
+      "archived_evidence": "hosted-runtime-35135793582.json",
+      "archived_evidence_sha256": "6cfb435d86f3ba0dcb04c8a939cfaf850b4317d00eff3f0442eb6e13e2ad77d5",
+      "observed": {
+        "site_encryption_key_initialized": true,
+        "site_encryption_key_sha256": "566c8f5c06ac19a29c556fa146a2095f6fb2447eebf55155b07d2000dd6b55bf",
+        "site_encryption_key_restored": true,
+        "site_encryption_key_restored_hardened": true,
+        "source_db_credentials_copied": false,
+        "restore_separate_database": true,
+        "storage_location": "__Auth.password",
+        "first_cycle_ciphertext_sha256": "c8bc1cc141c4fb12944068d4fffa0bfe03f03a2559662be1cda61058a57f776a",
+        "hardened_cycle_ciphertext_sha256": "d8f34687db6c4bf749bebaf3aa49a230dee82017c270d958d77e00d746cb5b44"
+      },
+      "why_this_is_a_genuine_reproduction": "Different run, different commit, and freshly generated key material - the key fingerprint 566c8f5c... differs from run 35133062884's 0b0a2acd..., and both ciphertext digests differ, because the key is generated per run and Fernet output is randomized per encryption. The outcome is nonetheless identical on every material field, which is what makes this a reproduction rather than a repeat of the same bytes."
+    }
   },
   "durability_probe_execution": {
     "status": "EXECUTED-HOSTED",
@@ -1521,6 +1546,34 @@
       "Any owner-selected durability reference or retention objective"
     ],
     "recorded_at_utc": "2026-09-16T18:46:27.278721+00:00",
-    "commit_note": "Resolved with `git rev-parse 866396a`; not transcribed by hand."
+    "commit_note": "Resolved with `git rev-parse 866396a`; not transcribed by hand.",
+    "stricter_probe_rerun": {
+      "run_id": "35137645608",
+      "commit": "9b96199839dea77569bbbaf8321953af9fd43815",
+      "check_run": "104934194163",
+      "conclusion": "success",
+      "report_status": "pass",
+      "archived_evidence": "hosted-durability-35137645608.json",
+      "archived_evidence_sha256": "6f9b379d132ed131d38e68647397b9b9f197312fe5312990e75c191fd0da408b",
+      "binlog_rotation_progression": {
+        "pre_state": 2,
+        "graceful restart": 3,
+        "crash recovery": 4,
+        "volume persistence after container destruction": 5
+      },
+      "enforced_invariant_now_passing": "assert_binlog_rotated() made binary-log rotation a hard requirement rather than an incidental observation.",
+      "all_scenarios_survived_identically": {
+        "committed_row_count": 25,
+        "payload_crc32_sum": 51945241053,
+        "uncommitted_visible": "0",
+        "redis_queue_length": 25
+      },
+      "negative_control": {
+        "table_present_after_volume_loss": "0",
+        "confirms_data_lived_in_the_volume": true
+      },
+      "evidence_quality_defect_found_by_this_run": "innodb_recovery_messages contained exactly one line, '[Entrypoint]: Starting temporary server'. That is container startup noise, not InnoDB crash recovery, so the non-empty check was satisfied while the label overstated the evidence. Commit e92c66e separates crash markers from startup markers, records SHOW ENGINE INNODB STATUS's LOG section as the authoritative native source, and requires innodb_force_recovery=0 so recovery cannot be silently bypassed.",
+      "note": "The substantive durability proof was never affected: identical CRC32 checksum, identical row count, rolled-back uncommitted transaction and enforced binlog rotation were all present. The defect was in how one corroborating field was labelled, and it is recorded here rather than quietly corrected."
+    }
   }
 }

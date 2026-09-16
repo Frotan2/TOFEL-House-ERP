@@ -554,6 +554,20 @@ Hardened backup digests from the same run: database 1158728 bytes
 files 10240 bytes `85bea42b7307a6dc3943bd6380f5e5907388f47bd180a8e6a305329dc553425d`,
 public files 10240 bytes `9c543b407e134d7d27d9720d99ff0fe2298ce7587e1aa463bd826675c36e3c53`.
 
+**Independently reproduced.** Run `35135793582` at commit `866396a` (check
+`104934304007`) repeats the result on a different commit in a different run:
+`site_encryption_key_restored=true` and
+`site_encryption_key_restored_hardened=true`, `storage_location` again
+`__Auth.password`, `source_db_credentials_copied=false`, all three proof
+conditions true on both cycles, 121 checks with the identical SEC-DEPS-01-only
+failure profile. The key fingerprint (`566c8f5c06ac19a29c556fa146a2095f6fb2447eebf55155b07d2000dd6b55bf`)
+and both ciphertext digests (`c8bc1cc141c4fb12…`, `d8f34687db6c4bf7…`) **differ**
+from the first run, because the key is generated per run and Fernet output is
+randomized per encryption. Identical outcomes on freshly generated key material
+is what makes this a reproduction rather than a replay of the same bytes.
+Archived as `hosted-runtime-35135793582.json`, SHA-256
+`6cfb435d86f3ba0dcb04c8a939cfaf850b4317d00eff3f0442eb6e13e2ad77d5`.
+
 **Retrieved and archived** (Checks API, the only transport that works from this
 host): `evidence/production-like-execution/hosted-runtime-35133062884.json`
 SHA-256 `fa799c1b259b42750bef2bd7b660f914690eacfe6b389fbcd290a7ea8f5e2780` and
@@ -643,8 +657,44 @@ passing-but-thin** (commit `699ad7e`):
    the whole container history and the post-crash start is at the end), and an
    empty result now fails the run.
 
-That stricter probe has **not yet produced its own hosted PASS** — see §9.4. The
-`35135793802` result is retained as provenance and is not relabelled.
+**The stricter probe has now produced its own hosted PASS.** Run `35137645608`
+at commit `9b96199`, check `104934194163`, conclusion **success**, report status
+**pass**. The enforced binary-log invariant held across the whole progression
+(`pre_state 2 → graceful restart 3 → crash recovery 4 → volume persistence 5`),
+all three scenarios again preserved row count 25 and CRC32 checksum 51945241053
+exactly, the uncommitted transaction stayed invisible, and the negative control
+again confirmed the data lived in the volume. Archived as
+`evidence/production-like-execution/hosted-durability-35137645608.json`, SHA-256
+`6f9b379d132ed131d38e68647397b9b9f197312fe5312990e75c191fd0da408b`. Run
+`35135793802` is retained as provenance and is not relabelled.
+
+**That re-run then exposed a third defect, in the evidence rather than the
+probe's behaviour.** The broadened log filter captured exactly one line:
+`[Entrypoint]: Starting temporary server`. That is container startup noise, not
+InnoDB crash recovery, so the non-empty check was satisfied while the field name
+`innodb_recovery_messages` overstated what had been proven. The substantive
+durability proof was never affected — the checksum, rollback and binlog evidence
+were all present — but a misleading label in an evidence ledger is itself a
+defect. Commit `e92c66e` fixes it:
+
+1. Crash markers (`innodb`, `recovery`, `crash`, `redo`, `rollback`,
+   `roll back`) and startup markers (`ready for connections`, `shutdown`,
+   `starting`, `entrypoint`) are recorded in **separate** fields and never merged.
+2. `SHOW ENGINE INNODB STATUS` is captured and its `LOG` section recorded as the
+   authoritative native source for recovery position, because MariaDB does not
+   reliably emit crash-recovery lines at default verbosity. A log grep was never
+   the right primary source.
+3. The run fails closed only when there is neither a genuine InnoDB log line nor
+   an `INNODB STATUS` LOG section.
+4. `innodb_force_recovery` is read back and must be `0`; any other value would
+   make crash recovery skip work and silently void the scenario.
+5. `extract_innodb_section()` moved to module level so it is executed against a
+   realistic fixture. That test immediately caught a real defect: the first
+   implementation stopped on the dash rule that *closes* the header and returned
+   only `['LOG']`.
+
+Commit `e92c66e` still needs its own hosted durability PASS, recorded here as
+outstanding rather than assumed.
 
 `tests/foundation/test_durability_contract.py`, 27 tests, guards the contract,
 including an executed check that the probe refuses to run outside an ephemeral
@@ -676,28 +726,28 @@ not downgraded. Historical provenance is preserved unchanged — the new run is
 recorded alongside the prior runs, never relabelled over them. PR #2 remains
 **OPEN** and unmerged.
 
-### 9.4 Open blocker: GitHub credentials expired mid-session
+### 9.4 GitHub credential outage — opened and RESOLVED
 
 The `GH_TOKEN` in this sandbox expired while gap-closure work was in flight.
-`gh auth status` reports *"The github.com token in GH_TOKEN is no longer valid"*
-and the REST API returns `Bad credentials`, so `git push` fails with *"could not
-read Username for 'https://github.com': terminal prompts disabled"*.
+`gh auth status` reported *"The github.com token in GH_TOKEN is no longer valid"*
+and the REST API returned `Bad credentials`, so `git push` failed with *"could not
+read Username for 'https://github.com': terminal prompts disabled"*. Commits
+`699ad7e` and `9b96199` were complete locally but could not be pushed.
 
-Consequences, stated plainly rather than worked around:
+**Resolved.** Credentials were restored on the following turn; both commits were
+pushed (`866396a..9b96199`) and the stricter durability probe then produced its
+own hosted PASS at run `35137645608`.
 
-- Everything through commit `866396a` **is pushed**, and both hosted results
-  above were retrieved before the outage, so the P1 closure and the P2
-  container-durability PASS are fully evidenced and archived.
-- Commit `699ad7e` (the stricter durability probe) is **complete locally but not
-  pushed**. Its hosted re-run therefore has not happened.
-- No evidence was inferred, fabricated or backdated to cover this gap, and the
-  missing re-run is recorded as a blocker in `execution-ledger.json` under
-  `outstanding_actions` rather than reported as done.
+While the outage was open the local remote-tracking reference was also found to
+be stale at `251eb8d` with no upstream configured — a residue of the earlier
+sandbox re-clone. It was corrected to `866396a` on the strength of API evidence
+(`gh api .../commits/866396a/check-runs` had returned runs, which only exist for
+commits on that branch), **not** by assumption. The subsequent push fast-forwarded
+from exactly `866396a`, confirming the correction was right.
 
-A credential outage occurred once earlier in this session and resolved on the
-following turn; the same recovery is expected here. Pushing `699ad7e` will
-re-trigger both the durability and runtime workflows, which will additionally
-provide a second reproducibility data point for the P1 fix.
+No evidence was inferred, fabricated or backdated at any point during the outage,
+and the missing re-run was recorded as a blocker in `execution-ledger.json`
+rather than reported as done.
 
 ### 9.5 Evidence-integrity self-check performed during this pass
 

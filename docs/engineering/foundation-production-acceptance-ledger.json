@@ -287,7 +287,28 @@
         "proof_basis": "Fingerprint match against the source, real get_decrypted_password() of content encrypted before the backup, and a byte-identical ciphertext digest - on both restore.localhost and recovery.localhost. Presence of a key string alone is no longer accepted."
       },
       "gate_effect": "NONE. recovery and backup-restore remain BLOCKED, durability remains BLOCKED, SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT, production_state remains REJECT and production_enabled remains false. Restore still runs on the same ephemeral host as the source, no destructive trigger has been exercised, and the site key is still generated and copied by that same runner rather than held under separately controlled custody.",
-      "regression_coverage": "tests/foundation/test_encryption_key_recovery.py, 31 tests; full suite 369 tests pass locally; d8_validate.py exits 0 with no gate drift."
+      "regression_coverage": "tests/foundation/test_encryption_key_recovery.py, 31 tests; full suite 369 tests pass locally; d8_validate.py exits 0 with no gate drift.",
+      "independent_reproduction": {
+        "run": "35135793582",
+        "head_sha": "866396a127164090c41db9ff1bc310ade555409f",
+        "runtime_check": "104934304007",
+        "runtime_report_sha256": "6cfb435d86f3ba0dcb04c8a939cfaf850b4317d00eff3f0442eb6e13e2ad77d5",
+        "evidence_archive": "evidence/production-like-execution/hosted-runtime-35135793582.json",
+        "status": "fail_reject",
+        "conclusion_reason": "SEC-DEPS-01 only; identical failure profile, 121 checks, same two failing audits.",
+        "observed": {
+          "site_encryption_key_initialized": true,
+          "site_encryption_key_sha256": "566c8f5c06ac19a29c556fa146a2095f6fb2447eebf55155b07d2000dd6b55bf",
+          "site_encryption_key_restored": true,
+          "site_encryption_key_restored_hardened": true,
+          "source_db_credentials_copied": false,
+          "storage_location": "__Auth.password",
+          "first_cycle_ciphertext_sha256": "c8bc1cc141c4fb12944068d4fffa0bfe03f03a2559662be1cda61058a57f776a",
+          "hardened_cycle_ciphertext_sha256": "d8f34687db6c4bf749bebaf3aa49a230dee82017c270d958d77e00d746cb5b44"
+        },
+        "why_genuine": "Different run, different commit and freshly generated key material - the fingerprint and both ciphertext digests differ from run 35133062884 because the key is generated per run and Fernet output is randomized per encryption. Every material outcome is nonetheless identical.",
+        "recorded_at_utc": "2026-09-16T19:03:25.194944+00:00"
+      }
     },
     "durability_probe_execution": {
       "date": "2026-09-16",
@@ -345,11 +366,35 @@
         "mariadb": "12e831ef68ca -> c081c5c03e39",
         "redis": "c25b3f0c1c9e -> 0b72e4d5ec16"
       },
-      "known_evidence_gap_in_this_run": "innodb_recovery_messages was empty because the log filter matched only 'recovery'/'crash'. Commit 699ad7e broadens the filter, keeps the post-crash tail, and fails the run if no server-side corroboration is captured; it also makes binary-log rotation an enforced invariant. That stricter probe has not yet produced its own hosted PASS.",
+      "known_evidence_gap_in_this_run": "SUPERSEDED: innodb_recovery_messages was empty in run 35135793802 because the log filter matched only 'recovery'/'crash'. Commit 699ad7e broadened it and run 35137645608 then showed the broadened filter matching only startup noise, which commit e92c66e corrects by separating the two and adding INNODB STATUS as the authoritative source.",
       "gate_effect": "NONE. The durability gate remains BLOCKED. Its area also covers configuration, private/public file and encryption-key durability, none of which is proven; host or region loss, storage-array failure, off-site replication, HA and failover are unproven; application-level workflow correctness after recovery is unproven; and the owner durability references required by D8-DURABLE-STATE remain NOT SELECTED and are not invented here. production_state remains REJECT and production_enabled remains false.",
       "regression_coverage": "tests/foundation/test_durability_contract.py, 27 tests; full suite 371 tests pass locally; d8_validate.py exits 0 with no gate drift.",
-      "blocked_on": "GitHub credentials expired in this sandbox before commit 699ad7e could be pushed, so the stricter durability probe has not been re-run on a hosted runner. Recorded as a blocker rather than inferred or backfilled.",
-      "recorded_at_utc": "2026-09-16T18:48:44.369211+00:00"
+      "blocked_on": "RESOLVED. Credentials were restored; 699ad7e and 9b96199 were pushed and run 35137645608 passed. Commit e92c66e still needs its own hosted durability PASS.",
+      "recorded_at_utc": "2026-09-16T18:48:44.369211+00:00",
+      "stricter_probe_rerun": {
+        "run": "35137645608",
+        "head_sha": "9b96199839dea77569bbbaf8321953af9fd43815",
+        "check_run": "104934194163",
+        "conclusion": "success",
+        "report_status": "pass",
+        "report_sha256": "6f9b379d132ed131d38e68647397b9b9f197312fe5312990e75c191fd0da408b",
+        "evidence_archive": "evidence/production-like-execution/hosted-durability-35137645608.json",
+        "binlog_rotation_progression": {
+          "pre_state": 2,
+          "graceful_restart": 3,
+          "crash_recovery": 4,
+          "volume_persistence_after_container_destruction": 5
+        },
+        "all_scenarios_survived_identically": {
+          "committed_row_count": 25,
+          "payload_crc32_sum": 51945241053,
+          "uncommitted_visible": "0",
+          "redis_queue_length": 25
+        },
+        "negative_control_confirms_data_lived_in_the_volume": true,
+        "evidence_quality_defect_found_and_fixed": "innodb_recovery_messages held one line, '[Entrypoint]: Starting temporary server' - startup noise, not InnoDB recovery. Commit e92c66e separates crash from startup markers, records SHOW ENGINE INNODB STATUS's LOG section as the authoritative native source, and requires innodb_force_recovery=0. The substantive durability proof was never affected.",
+        "recorded_at_utc": "2026-09-16T19:03:25.194944+00:00"
+      }
     }
   },
   "prior_active_branch_provenance": {
