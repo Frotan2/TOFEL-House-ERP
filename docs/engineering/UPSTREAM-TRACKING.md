@@ -103,7 +103,11 @@ release metadata lists Frappe `v16.34.0` (`c1f1e8ec3708750d7254f7f99d869ffb9886f
 published 2026-09-15) and ERPNext `v16.35.0`
 (`12cd563fb9a79731f75ae2a45b1446a0a2dd9e74`; published 2026-09-15).
 Education and HRMS have no newer non-prerelease v16 release than their current
-pins. These two releases are **not adopted**: no five-app compatibility,
+pins. The dependency-bearing source inputs checked for those new Frappe/ERPNext
+tags (`pyproject.toml`, `package.json`, and `yarn.lock`) have the same SHA-256
+values already pinned in the current matrix. They therefore are not a credible
+clean-audit remediation candidate for the observed dependency findings by
+inspection alone. Neither release is adopted: no five-app compatibility,
 dependency, migration, native lifecycle, or production qualification has been
 performed on that combination.
 
