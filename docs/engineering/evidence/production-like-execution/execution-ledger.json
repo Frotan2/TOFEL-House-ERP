@@ -1136,7 +1136,7 @@
       "local-unittest-313.txt": "6d95cec0565e3ae2ea04e63dec3ecfad6c4076bb61c772c87a081c465d615562"
     },
     "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED.",
-    "regenerated_at_utc": "2026-09-16T17:33:28.633776+00:00"
+    "regenerated_at_utc": "2026-09-16T17:36:45.589585+00:00"
   },
   "corroborating_reruns_at_evidence_commit": {
     "commit": "c891949e7a30267f34a3365eaf9103d925dc42eb",
@@ -1280,6 +1280,13 @@
           "phase2_gate_passed": false,
           "product_implementation_authorized": false
         }
+      },
+      "35129123172": {
+        "workflow": "D8 operations contract validation",
+        "conclusion": "success",
+        "check": null,
+        "commit": "080ea906 (Retrieve the c891949 runtime conclusion and close out the credential outage)",
+        "note": "Re-triggered because docs/engineering/foundation-production-acceptance-ledger.json is in the workflow path filter. Confirms the rotated boundary, the re-pinned ACTIVE_RUNTIME_RUN and the preserved prior-provenance pin all validate on the runner. No runtime, placement, runner or frontend workflow re-triggered, because none of their path filters were touched - so no hosted evidence was churned unnecessarily."
       }
     },
     "reproduction_finding": "Run 35125669370 at c891949 reproduces run 35122242581 at d7df9ca field for field on every outcome that matters: same SEC-DEPS-01 failure (both dependency audits exit 1), same 114/116 restricted checks, same four sites and four installed apps, same readiness 54 / realtime 4 / upgrade 33 / guardian browser 6 passes, same 57 npm advisory findings across 21 packages and 14 PyPI/OSV findings across pdfkit, pypdf, setuptools and weasyprint, and the same site_encryption_key_restored=false defect. Two independent executions at two commits therefore agree, which strengthens the REJECT conclusion rather than weakening it.",
@@ -1300,7 +1307,25 @@
     }
   ],
   "outstanding_actions": [
-    "None from the credential outage; all three items were completed once authentication was restored.",
-    "Standing release blockers are unchanged and are engineering/owner work, not tooling: MariaDB and Redis restart persistence and durability probes do not exist in the harness; restore has never reached a genuinely independent system and no destructive trigger has been run; versioned encrypted backup with external key custody and rotation is bounded-only and the foundation restore reports site_encryption_key_restored=false; deployed monitoring, alert delivery and retention are untested; no TLS or Tailscale boundary has been exercised; rollback has never been rehearsed; SEC-DEPS-01 needs a coherent maintained upstream stack migration; and the owner has selected no numeric capacity/availability objective."
-  ]
+    "None. The credential outage is fully closed out: the c891949 runtime conclusion was retrieved and archived, all local commits are pushed, and the PR #2 comment was posted verbatim.",
+    "Standing release blockers are unchanged and are engineering/owner work, not tooling: MariaDB and Redis restart persistence and durability probes do not exist in the harness; restore has never reached a genuinely independent system and no destructive trigger has been run; versioned encrypted backup with external key custody and rotation is bounded-only, and both foundation runtime runs report site_encryption_key_restored=false; deployed monitoring, alert delivery and retention are untested; no TLS or Tailscale boundary has been exercised; rollback has never been rehearsed; SEC-DEPS-01 needs a coherent maintained upstream stack migration and has now failed at two commits on this branch; and the owner has selected no numeric capacity/availability objective."
+  ],
+  "pr_2_update": {
+    "action": "comment posted (the only update available from this session)",
+    "comment_id": "5701819534",
+    "comment_url": "https://github.com/Frotan2/TOFEL-House-ERP/pull/2#issuecomment-5701819534",
+    "posted_at_utc": "2026-09-16T17:35:38Z",
+    "body_bytes": 10383,
+    "body_source": "docs/engineering/evidence/production-like-execution/PR2-COMMENT.body.md (posted verbatim, not paraphrased)",
+    "pr_state_after": {
+      "number": 2,
+      "state": "OPEN",
+      "merged_at": null,
+      "merge_state_status": "UNSTABLE",
+      "head_ref": "arena/01a0a9f7-tofel-house-erp",
+      "head_sha": "60c777e81c679b7b7940c01045247102d51db024",
+      "base_ref": "main"
+    },
+    "constraint": "PR #2's head branch is arena/01a0a9f7-tofel-house-erp while this session is fixed to arena/01a0aafe-tofel-house-erp, so no commit could be pushed to PR #2's head branch and the PR's head SHA is unchanged at 60c777e. A comment is the only form of update available. The PR was NOT merged and production was NOT enabled."
+  }
 }
