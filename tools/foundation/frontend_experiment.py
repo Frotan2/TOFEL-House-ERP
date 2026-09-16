@@ -37,7 +37,7 @@ def seed(lock, mirror):
 
 
 def main():
-    if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('GITHUB_REF') != 'refs/heads/arena/01a09bf3-tofel-house-erp':
+    if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('GITHUB_REF') != 'refs/heads/arena/01a0a942-tofel-house-erp':
         raise SystemExit('Authorized hosted branch only')
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     lab = Path(os.environ['RUNNER_TEMP']) / 'foundation-frontend-experiment'

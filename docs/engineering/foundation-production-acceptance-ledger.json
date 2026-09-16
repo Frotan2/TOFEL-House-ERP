@@ -5,8 +5,34 @@
   "security_gate_passed": false,
   "product_implementation_authorized": false,
   "production_candidate_adopted": false,
-  "scope": "Current foundation acceptance; architecture remains candidate. No product or TOEFL implementation.",
+  "scope": "Current foundation acceptance; architecture remains candidate. Bounded synthetic product evidence is recorded separately; no production implementation or deployment authorization.",
   "verification": "evidence/phase-2/dependency-operations-hosted-verification.json",
+  "current_branch_requalification": {
+    "date": "2026-09-16",
+    "branch": "arena/01a0a942-tofel-house-erp",
+    "foundation_runtime": {
+      "run": "35084695840",
+      "commit": "955e4cd5eedc34b90f4fbfce047339e18558f1f2",
+      "check": "104762158723",
+      "report_sha256": "f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc",
+      "remaining_gate_check": "104762162219",
+      "remaining_gate_report_sha256": "b03a2678f7d8a296a90adf8ce1b567b326431d5bcdaca6d808ee0874cf731afe",
+      "status": "fail",
+      "observed": "116 restricted checks ran; 114 passed. The post-asset-build resolved-stack audit inventoried 161 Bench-Python package names and 572 supplied installed Node package names; it recorded 14 PyPI/OSV finding records across four packages and 97 npm advisory entries across 36 packages (2 critical, 49 high, 39 moderate, 7 low). Exact IDs, queried versions and provider ranges are retained in evidence/phase-2/resolved-stack-advisory-2026-09-16.json. The pinned MariaDB/Redis references are inventory-only. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed; both full-stack and Education frontend advisory audits failed.",
+      "limits": "Current REJECT evidence: phase2_gate_passed and security_gate_passed remain false. The audit does not establish exploitability/reachability, a complete SBOM, OS-package or container-image CVE coverage, remediation, or production approval."
+    },
+    "product_restore_rehearsal": {
+      "run": "35076449739",
+      "commit": "ebe77676fffb3e2e1f0b49cac8e18c5e7763180a",
+      "runner_check": "104733077969",
+      "native_check": "104733073877",
+      "runner_report_sha256": "970bef76b54814e8ed7fd26de89417a7d3b83875791538babe792c7ce0d33598",
+      "native_report_sha256": "e1ff7050e10830ae651766b838488a6c90bbe8c7fae679617a250a6f8f58d08f",
+      "status": "pass_scoped",
+      "observed": "542/542 native checks passed. Bench SQL/public/private-file backup restored to a separate synthetic site/database; representative count/name digests across 14 doctypes and a private File SHA-256 passed. Source database credentials were not copied; the site encryption key was restored for encrypted content.",
+      "limits": "One disposable hosted runner only; not full Placement requalification, offsite backup, independent-host disaster recovery, production topology, key custody, RPO/RTO, SLA, or availability proof. Production remains REJECT."
+    }
+  },
   "items": [
     {
       "id": "education-dependencies",
@@ -51,9 +77,20 @@
       "limits": "Same controlled runner/Bench; not an independent-host disaster recovery or approved offsite key/backup retention process."
     },
     {
-      "id": "other-dependency-trees",
-      "status": "not_fully_qualified",
-      "closure": "Audit all relevant Frappe/ERPNext/HRMS/Payments, Node/server, Python and container dependency surfaces. Education-only results are not a whole-stack SBOM/security pass."
+      "id": "resolved-dependency-trees",
+      "status": "fail",
+      "evidence": "Foundation runtime 35084695840, check 104762158723, report SHA-256 f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc; evidence/phase-2/resolved-stack-advisory-2026-09-16.json",
+      "observed": "After actual asset build, the Bench interpreter inventory held 161 PyPI package names and supplied installed Frappe/ERPNext/Education/Payments/HRMS plus Education frontend Node roots held 572 package names. OSV returned 14 finding records across pdfkit 1.0.0, pypdf 6.15.0, setuptools 80.9.0 and weasyprint 68.0. npm returned 97 advisory entries across 36 packages (2 critical, 49 high, 39 moderate, 7 low), with exact IDs and versions preserved in the evidence record. The audit correctly failed on these matches.",
+      "limits": "No exploitability/reachability or remediation conclusion; no complete SBOM, host-OS-package or container-image CVE coverage. MariaDB/Redis digest references are inventory-only.",
+      "closure": "A coherent maintained migration of the affected pinned upstream stack, clean relevant resolved-tree re-runs, and separately selected OS/container dependency coverage where required."
+    },
+    {
+      "id": "official-dependency-remediation-candidate",
+      "status": "rejected_no_credible_official_candidate",
+      "evidence": "evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json",
+      "observed": "Current official Frappe v16.34.0 and ERPNext v16.35.0 dependency source files are byte-identical to current pins; Education has no newer release and its version-16 head has byte-identical reviewed manifests/locks. Frappe retains pdfkit~=1.0.0, pypdf==6.15.0 and WeasyPrint==68.0. pdfkit has no listed patched version; Bench v5.31.0 constrains setuptools <82.0.0 while the listed patched version is 83.0.0.",
+      "limits": "No candidate Bench was built because no official input changes the known fail conditions. No candidate security, audit, lifecycle, recovery, worker, scheduler, realtime, upgrade, restart or browser pass is claimed.",
+      "closure": "Wait for the smallest official compatible source bundle that changes the direct Python and frozen Node dependency inputs, then create a separate immutable candidate matrix and require every unchanged gate before any baseline adoption decision."
     },
     {
       "id": "public-deployment-boundary",

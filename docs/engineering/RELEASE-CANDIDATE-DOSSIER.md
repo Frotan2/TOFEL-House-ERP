@@ -1,14 +1,13 @@
 # TOEFL House ERP — Release Candidate Dossier
 
-Date: 2026-09-16 · Branch: `arena/01a0a496-tofel-house-erp`
+Date: 2026-09-16 · Active branch: `arena/01a0a942-tofel-house-erp`
 **Production: REJECT.** This dossier consolidates the evidence index
 for Release Candidate status of the *implemented* product surface.
 RC definition (from the Release Gap Map): every engineer-executable gap
 closed with hosted evidence; owner decision packet delivered; upstream
-and operational items precisely tracked. Owner gates (D1–D10) and
-deployment-scope operations remain the only outstanding classes —
-production stays REJECT until D8-class gates are independently
-satisfied.
+and operational items precisely tracked. Deferred owner policy gates,
+upstream items and D8 deployment-scope operations remain outstanding —
+production stays REJECT until D8-class gates are independently satisfied.
 
 ## 1. Verdict
 
@@ -17,7 +16,7 @@ satisfied.
 | Domains closed with runtime proof? | **YES** (5/5) | §2 domain runs |
 | Bypass routes contained (implemented slices)? | **YES** | A13 run + R3 |
 | Read-side paths (attachment/export/print) contained? | **YES** | R3, run 35053305607 |
-| Role-scoped navigation shipped? | **YES** (auditor + finance officer) | R1, run 35049742120 |
+| Role-scoped navigation shipped? | **YES** (2 Workspaces plus 13 D10 Pages) | R1 + T3, current run 35073376790 |
 | Factual registers shipped? | **YES** (tuition + placement billing) | R2, run 35049742120 |
 | Observability probes green? | **YES** (Error Log roundtrip, scheduler, ping) | R3 |
 | Owner decision packet delivered? | **YES** | OWNER-DECISIONS.md (D1–D10) |
@@ -41,12 +40,16 @@ gates). Each row is a full green run of the entire suite at that point:
 | R1+R2 release surfaces | 35049742120 | `69a8a95` | 530/530 | Workspaces (visibility model, no-escalation), query-report registers, probe-user restoration |
 | R3 read-side + observability | 35053305607 | `46e5040` | 533/533 | Attachment parent-gate, list/export/print denial, Error Log/scheduler/ping probes |
 | D2 teaching compensation | 35066349129 | `fa02137` | 536/536 | Contract authority, skill-area assignment facts, native Additional Salary calculation path |
-| **D3 correction framework (current)** | **35069740378** | **`ed2d81d`** | **539/539** | Fail-closed policy carrier, SoD/window/dual-key denials, native credit-note posting with GL proof |
+| D3 correction framework | 35069740378 | `ed2d81d` | 539/539 | Fail-closed policy carrier, SoD/window/dual-key denials, native credit-note posting with GL proof |
+| **T3 D10(ii) command Pages (current branch)** | **35073376790** | **`3587700`** | **542/542** | 13 role-gated Page records/assets; 12 member audiences + 7 non-members; `app_home`; native no-escalation proof (report SHA-256 `54112b38…`) |
 
-All release/D2/D3 check IDs in the current suite (16):
+All release/D2/D3/T3 check IDs in the current suite (19):
 `release-probe-users-restored`, `release-workspaces-configured`,
 `release-workspace-role-visibility`,
 `release-workspace-no-privilege-escalation`,
+`release-command-pages-configured`,
+`release-command-page-role-visibility`,
+`release-command-pages-no-privilege-escalation`,
 `release-registers-configured`, `release-registers-role-access`,
 `release-registers-facts-only`, `release-attachment-paths-guarded`,
 `release-read-export-print-paths-denied`, `release-observability-probes`,
@@ -65,19 +68,28 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
 
 | Suite | Tests |
 |---|---|
-| tests/foundation | 61 |
+| tests/foundation | 77 |
 | tests/placement | 148 |
 | tests/admission | 6 |
 | tests/enrollment | 10 |
 | tests/teaching | 17 |
 | tests/finance | 15 |
+| D10 command-page contract + native-dialog client smoke (Node) | 1 script |
 
 ## 4. Shipped configuration surface (no parallel masters)
 
 - 2 Desk workspaces as native module files: **TH Receipts** (module
   Placement; five auditor roles) and **TH Finance** (module Accounts;
-  Finance Officer; Registers card). Staff workspaces removed per D10
-  gate — zero-read roles cannot pass the pinned module-visibility gate.
+  Finance Officer; Registers card). They remain the only Workspaces.
+- 13 standard native **Page** exports: the role-filtered **TH Command
+  Centre** and 12 one-role command Pages for Placement Author/Publisher/
+  Invigilator/Assessor/Reviewer/Releaser, Admission Officer/Reviewer/
+  Approver, Enrollment Officer, Teaching Scheduler and Attendance Recorder.
+  Page Has-Role authorization (not a Workspace/module gate) is proven in
+  run 35073376790; all use one native Dialog client that calls only existing
+  guarded endpoints and no document/list/read API. Finance Officer remains
+  on its qualified Workspace/report surface by scope, not by a Page authority
+  denial.
 - 2 role-restricted Query Reports (raw facts only, no derived
   metrics): **TH Tuition Billing Register** (ref Fees), **TH Placement
   Billing Register** (ref TH Placement Operation) + minimal
@@ -92,23 +104,44 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
 
 ## 5. Outstanding classes (the only remaining ones)
 
-1. **Owner gates D1–D10** — precise asks in OWNER-DECISIONS.md. No
-   engineering workaround exists that would not invent business rules
-   or breach containment. Status: D2 executed & qualified (536/536);
-   D6a/D6b/D9 closed; D1/D4/D5/D7 deferred; D3 framework in execution;
-   D8 charter and D10(ii) surfaces pending.
-2. **Upstream items** — SEC-DEPS-01 (education frontend advisory set:
-   57 entries / 21 packages at pinned v16.1.0, independently re-scanned
-   and exactly reproduced 2026-09-16 via GitHub advisory API — 27 high /
-   26 medium / 4 low / 0 critical; runtime exploitability untested,
-   upstream toolchain migration required) and SEC-RT-TASK-01
-   (upstream realtime task room; product-side exposure proven nil —
-   UPSTREAM-TRACKING.md §1).
-3. **Deployment-scope operations** — independent-host DR, measured
-   restart downtime, HA, full-bundle upgrade/rollback, public
-   TLS/proxy qualification, capacity/monitoring ownership (D8). Scoped
-   hosted passes exist (ledger 2026-09-14); running them "somewhere
-   else" would be evidence theater.
+1. **Owner/deployment gates** — precise asks are isolated in the
+   [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md),
+   OWNER-DECISIONS.md, and the Operational Ownership Charter. No engineering
+   workaround exists that would invent business rules or breach containment.
+   Status: D2, D3 and D10(ii) executed & qualified; D6a/D6b/D9 closed;
+   D1/D4/D5/D7 deferred; D8 charter delivered but accountable authority,
+   selected topology/controls, and operating evidence remain open.
+2. **Upstream items** — SEC-DEPS-01 remains REJECT. The current Foundation
+   runtime `35084695840` at `955e4cd` ran a post-build resolved-stack audit:
+   161 Bench-Python names yielded 14 PyPI/OSV finding records across four
+   packages and 572 supplied installed Node names yielded 97 npm advisory
+   entries across 36 packages (2 critical / 49 high / 39 moderate / 7 low).
+   Exact IDs and versions are in
+   [`resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
+   Its full runtime evidence is check `104762158723`, SHA-256
+   `f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc`.
+   The diagnostic failed as intended; it has no OS-package/container-CVE,
+   exploitability/reachability, full-SBOM, remediation, or production claim.
+   Separately, the Education frontend comparison `35075532676` at `d84f1c9`
+   reproduced a 57-entry / 21-package frozen baseline (27 high / 26 medium /
+   4 low / 0 critical); its isolated candidate has 23 matches across 6
+   packages, removes 35, and introduces one. Both audits failed and the
+   candidate is not adopted. A maintained upstream migration and clean scoped
+   re-runs are required. An evidence review of all current newer official v16
+   inputs rejects a fabricated candidate before build: Frappe/ERPNext's
+   dependency inputs are byte-identical, Education has no newer release and
+   unchanged branch locks, pdfkit has no listed patch, and Bench constrains
+   setuptools below its fixed version. See
+   [`dependency-remediation-candidate-assessment-2026-09-16.json`](evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json).
+   Also open: SEC-RT-TASK-01 (upstream realtime task room; product-side
+   exposure proven nil — UPSTREAM-TRACKING.md §1).
+3. **Deployment-scope operations** — independent-host DR, measured restart
+   downtime, HA, full-bundle upgrade/rollback, public TLS/proxy qualification,
+   capacity, and monitoring operation (D8). The current branch additionally
+   proved a disposable product SQL/files backup and separate-site restore in
+   `35076449739` at `ebe7767`, with 542/542 native checks. It is explicitly
+   not independent-host, production, RPO/RTO, SLA, or availability evidence;
+   running production claims "somewhere else" would be evidence theater.
 4. **SEC-GUARDIAN-01** — fail-closed Guardian isolation awaits D4;
    narrow explicit-User-Permissions remedy already passes hosted.
 5. **Explicit deferrals (do not affect RC):** portals/self-service,
@@ -121,7 +154,7 @@ Every gap classified as engineer-executable in the Release Gap Map
 (§1.2 config-assembly and the non-owner parts of §1.5 security) is
 closed with a green hosted run. The product surface shipped is
 exactly: five closed domains + A13 containment + release navigation/
-registers/read-side containment/observability — all natively carried,
-no rewrite, no parallel authorities, no invented policy. **Release
-Candidate status of the implemented surface: QUALIFIED. Production:
-REJECT** pending D8-class operational gates and owner answers.
+registers/read-side containment/observability + T3 role-gated command Pages —
+all natively carried, no rewrite, no parallel authorities, no invented policy.
+**Release Candidate status of the implemented surface: QUALIFIED. Production:
+REJECT** pending D8-class operational gates and deferred owner policy answers.

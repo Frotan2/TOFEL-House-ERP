@@ -2,7 +2,7 @@ name: Foundation runner qualification
 
 on:
   push:
-    branches: [arena/01a09bf3-tofel-house-erp]
+    branches: [arena/01a0a942-tofel-house-erp]
     paths:
       - .github/workflows/foundation-runner.yml
       - tools/foundation/runner_probe.py
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   runner:
-    if: github.ref == 'refs/heads/arena/01a09bf3-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0a942-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

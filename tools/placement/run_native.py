@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shlex
 import shutil
 import signal
 import subprocess
@@ -12,7 +13,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-BRANCH = 'refs/heads/arena/01a0a496-tofel-house-erp'
+BRANCH = 'refs/heads/arena/01a0a942-tofel-house-erp'
 
 
 def main():
@@ -24,10 +25,22 @@ def main():
     matrix = json.loads((ROOT / 'docs/engineering/foundation-version-matrix.json').read_text())
     parts = {p['name']:p for p in matrix['components']}
     py = Path(os.environ['RUNNER_TEMP']) / 'foundation-runner-probe/python/bin/python3'
-    secrets_ = [secrets.token_urlsafe(32) for _ in range(4)]
-    rootpw, adminpw, dbpw, userpw = secrets_
+    secrets_ = [secrets.token_urlsafe(32) for _ in range(5)]
+    rootpw, adminpw, dbpw, userpw, restorepw = secrets_
     for s in secrets_:print('::add-mask::'+s, flush=True)
     secretfile = lab/'db-password';secretfile.write_text(rootpw);secretfile.chmod(0o600)
+    # The hosted image can supply a MySQL client while this qualification pins
+    # MariaDB. MySQL 8's default histogram query is not implemented by MariaDB;
+    # disable only that client-side optional metadata request, when supported.
+    # Keep the wrapper ahead of Bench's PATH rather than changing the pinned DB.
+    dump_binary = shutil.which('mysqldump')
+    if not dump_binary:
+        raise RuntimeError('Hosted runner has no mysqldump client for Bench backup')
+    dump_help = subprocess.run([dump_binary, '--help'], text=True, capture_output=True, check=False).stdout
+    dump_wrapper = lab/'tools/bin/mysqldump'; dump_wrapper.parent.mkdir(parents=True, exist_ok=True)
+    dump_option = ' --column-statistics=0' if '--column-statistics' in dump_help else ''
+    dump_wrapper.write_text('#!/bin/sh\nexec ' + shlex.quote(dump_binary) + dump_option + ' "$@"\n')
+    dump_wrapper.chmod(0o700)
     env = dict(os.environ, PATH=str(lab/'tools/bin')+os.pathsep+os.environ['PATH'], UV_PYTHON_DOWNLOADS='never',
                UV_NATIVE_TLS='true', PYTHONUNBUFFERED='1', CI='1', PLACEMENT_TEST_PASSWORD=userpw,
                PLACEMENT_REPORT=str(evidence/'native-checks.json'))
@@ -81,7 +94,7 @@ def main():
         for name in ('erpnext','education','payments','hrms'):bench('get-'+name,'get-app','--skip-assets',str(sources/name))
         for name in ('foundation_security','toefl_house'):
             export=lab/'owned'/name;shutil.copytree(ROOT/'apps'/name,export,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
-            run('export-init-'+name,['git','init','--initial-branch','arena/01a0a496-tofel-house-erp',export])
+            run('export-init-'+name,['git','init','--initial-branch','arena/01a0a942-tofel-house-erp',export])
             run('export-add-'+name,['git','-C',export,'add','.'])
             run('export-commit-'+name,['git','-C',export,'-c','user.name=Synthetic qualification','-c','user.email=validation@example.test','commit','-m','Exact app export '+os.environ['GITHUB_SHA']])
             bench('get-'+name,'get-app','--soft-link','--skip-assets',str(export))
@@ -95,6 +108,40 @@ def main():
         server=subprocess.Popen([str(benchdir/'env/bin/gunicorn'),'--bind','127.0.0.1:18000','--workers','2','frappe.app:application'],cwd=benchdir/'sites',env=env,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
         processes.append((server,stream,log))
         run('native-acceptance',[benchdir/'env/bin/python',ROOT/'tools/placement/native_checks.py'],benchdir/'sites')
+        # D8-scoped product persistence rehearsal. This is a true Bench backup
+        # plus files and a restore into a separately created DB/site. It is not
+        # an offsite backup, production recovery objective, or topology claim.
+        expectation=lab/'product-restore-expectation.json'
+        env['PLACEMENT_RESTORE_EXPECTATION']=str(expectation)
+        env['PLACEMENT_RESTORE_REPORT']=str(expectation)
+        run('capture-product-restore-snapshot',[benchdir/'env/bin/python',ROOT/'tools/placement/runtime_restore.py','capture','placement-test.localhost'],benchdir/'sites')
+        bench('backup-placement-test-with-files','--site','placement-test.localhost','backup','--with-files')
+        backup_dir=benchdir/'sites'/'placement-test.localhost'/'private/backups'
+        database=max(backup_dir.glob('*-database.sql.gz'),key=lambda p:p.stat().st_mtime_ns)
+        private_files=max(backup_dir.glob('*-private-files.tar'),key=lambda p:p.stat().st_mtime_ns)
+        public_files=max((p for p in backup_dir.glob('*-files.tar') if '-private-files' not in p.name),key=lambda p:p.stat().st_mtime_ns)
+        report['product_backup']={label:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for label,p in
+                                  (('database',database),('private_files',private_files),('public_files',public_files))}
+        restore_site='placement-restore.localhost'
+        bench('new-placement-restore-site','new-site',restore_site,'--db-type','mariadb','--db-host','127.0.0.1','--db-port','13306','--db-root-username','root','--db-root-password',rootpw,'--admin-password',adminpw,'--db-password',restorepw,'--no-mariadb-socket')
+        for name in ('erpnext','education','payments','hrms','foundation_security','toefl_house'):bench('install-'+restore_site+'-'+name,'--site',restore_site,'install-app',name)
+        for key in ('allow_tests','toefl_house_synthetic_only','disable_website_cache'):bench('enable-'+restore_site+'-'+key,'--site',restore_site,'set-config',key,'1','--parse')
+        bench('restore-placement-test-with-files','--site',restore_site,'restore',str(database),'--db-root-password',rootpw,'--admin-password',adminpw,'--with-public-files',str(public_files),'--with-private-files',str(private_files))
+        source_config=json.loads((benchdir/'sites'/'placement-test.localhost'/'site_config.json').read_text())
+        restore_config_file=benchdir/'sites'/restore_site/'site_config.json'
+        restore_config=json.loads(restore_config_file.read_text())
+        assert source_config['db_name'] != restore_config['db_name']
+        assert source_config.get('db_password') != restore_config.get('db_password')
+        assert source_config.get('encryption_key')
+        restore_config['encryption_key'] = source_config['encryption_key']
+        for key in ('allow_tests','toefl_house_synthetic_only','disable_website_cache'):restore_config[key]=source_config[key]
+        restore_config_file.write_text(json.dumps(restore_config,indent=2)+'\n');restore_config_file.chmod(0o600)
+        report['product_restore_context']={'separate_database':True,'source_db_credentials_copied':False,
+                                           'site_encryption_key_restored':True,'site':restore_site}
+        bench('migrate-placement-restore-site','--site',restore_site,'migrate')
+        product_restore=evidence/'product-restore-result.json';env['PLACEMENT_RESTORE_REPORT']=str(product_restore)
+        run('verify-product-restore-snapshot',[benchdir/'env/bin/python',ROOT/'tools/placement/runtime_restore.py','verify',restore_site],benchdir/'sites')
+        report['product_restore']=json.loads(product_restore.read_text())
         report['runtime_complete']=True
         report['installed_apps']=bench('list-apps','--site','placement-test.localhost','list-apps','--format','json')
         for name in ('frappe','erpnext','education','payments','hrms'):

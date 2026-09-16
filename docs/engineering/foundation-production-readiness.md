@@ -1,5 +1,38 @@
 # Phase 2 security and production-readiness continuation
 
+## Current-branch reconciliation — 2026-09-16
+
+**REJECT remains current.** The historical checkpoints below are retained evidence,
+not current-branch production approval. At `955e4cd`, hosted Foundation runtime run
+`35084695840` executed 116 restricted checks; 114 passed. Its post-build resolved-stack
+audit inventoried 161 Bench-Python and 572 supplied installed Node package names,
+recording 14 PyPI/OSV finding records across four packages and 97 npm advisory entries
+across 36 packages (2 critical / 49 high / 39 moderate / 7 low); its full-stack and
+Education frontend advisory diagnostics failed. Exact IDs, versions and provider ranges
+are retained in [`resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
+Readiness, realtime, upgrade, Guardian browser, frontend-graph, restart, and remaining-gate
+probes passed. The published runtime and remaining-gate reports (Checks `104762158723` / `104762162219`; SHA-256
+`f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc` /
+`b03a2678f7d8a296a90adf8ce1b567b326431d5bcdaca6d808ee0874cf731afe`) therefore
+set both `phase2_gate_passed` and `security_gate_passed` to false. The dependency audit
+is not a claim of exploitability/reachability, OS-package or container-CVE coverage,
+a complete SBOM, remediation, or production approval. The official-input candidate
+review rejects any fabricated remediation build: newer Frappe/ERPNext releases and
+Education's newer branch head retain the reviewed dependency inputs, while pdfkit
+has no listed patched release and Bench prevents the listed setuptools fix. See
+[`dependency-remediation-candidate-assessment-2026-09-16.json`](evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json).
+No candidate runtime result is claimed.
+
+At `ebe7767`, separate hosted run `35076449739` additionally passed 542/542 product
+native checks and a disposable Bench SQL/public/private-files backup → separately
+created-site restore verifier. The verifier compared representative records from 14
+doctypes and private File bytes, kept a distinct restore database credential, and
+reapplied the site encryption key. It is evidence of that synthetic code path only,
+not independent-host DR, production backup/key custody, RPO/RTO/SLA, topology, or
+availability. The canonical current record is the
+[acceptance ledger](foundation-production-acceptance-ledger.json), and owner inputs
+remain isolated in the [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md).
+
 ## Subsequent dependency and operations qualification — 2026-09-14
 
 **REJECT remains current.** See [final qualification review](foundation-final-qualification.md)

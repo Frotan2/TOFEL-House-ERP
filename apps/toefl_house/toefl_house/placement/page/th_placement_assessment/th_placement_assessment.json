@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Placement",
+  "name": "th-placement-assessment",
+  "page_name": "th-placement-assessment",
+  "roles": [
+    {
+      "role": "Placement Assessor"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Placement Assessment"
+}
