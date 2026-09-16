@@ -378,24 +378,44 @@ report losslessly. Each retrieved report is archived under
 
 Pushing the evidence commit `c891949` re-triggered the hosted gates because
 `tools/session_branch.py` and `tools/foundation/d8_validate.py` are in their path
-filters. Conclusions actually observed before a GitHub credential expiry: D8
-`35125669493` **success**, runner `35125669408` **success**, placement
-`35125669475` **success**, frontend `35125669372` **failure**. Foundation runtime
-`35125669370` was still `in_progress` at the last successful poll and is recorded
-as **NOT RETRIEVED** — it is not assumed to be a failure merely because every
-prior runtime run failed, and it is not counted in either direction. These
-re-runs are corroboration only; `session_branch.ACTIVE_RUNTIME_RUN` stays pinned
-to `35122242581`, whose complete report is archived.
+filters. All five conclusions were retrieved from the GitHub API:
 
-`gh auth status` then reported *"The github.com token in GH_TOKEN is no longer
-valid"*; `api.github.com` returned 401 while `github.com` returned 200, so this
-is an authentication failure rather than a network outage. The PR #2 comment was
-therefore queued as
-[`evidence/production-like-execution/PR2-COMMENT.md`](evidence/production-like-execution/PR2-COMMENT.md)
-(with a ready-to-post
-[`PR2-COMMENT.body.md`](evidence/production-like-execution/PR2-COMMENT.body.md))
-instead of being paraphrased or silently dropped. Credentials were never
-requested or stored. Outstanding actions are listed in the execution ledger.
+| Run | Workflow | Conclusion |
+|---:|---|---|
+| `35125669493` | D8 operations contract validation | **success** |
+| `35125669408` | Foundation runner qualification | **success** — 18/18, MariaDB healthy in 4 polls, identical pinned digests |
+| `35125669475` | Placement synthetic content qualification | **success** |
+| `35125669372` | Foundation frontend candidate review | **failure** — not adopted |
+| `35125669370` | Foundation runtime validation | **failure** — step 7, SEC-DEPS-01 |
+
+**Reproduction finding.** Run `35125669370` at `c891949` reproduces run
+`35122242581` at `d7df9ca` field for field on every outcome that matters: the
+same SEC-DEPS-01 failure with both dependency audits exiting 1, the same
+114/116 restricted checks, the same four sites and four installed apps, the same
+readiness 54 / realtime 4 / upgrade 33 / guardian-browser 6 passes, the same 57
+npm advisory findings across 21 packages and 14 PyPI/OSV findings across
+`pdfkit`, `pypdf`, `setuptools` and `weasyprint`, and the same
+`site_encryption_key_restored=false` defect. Two independent executions at two
+commits agree, which strengthens the REJECT conclusion rather than weakening it.
+Its full reports are archived as
+[`hosted-runtime-35125669370.json`](evidence/production-like-execution/hosted-runtime-35125669370.json)
+and
+[`hosted-remaining-gates-35125669370.json`](evidence/production-like-execution/hosted-remaining-gates-35125669370.json).
+These re-runs are corroboration; `session_branch.ACTIVE_RUNTIME_RUN` stays pinned
+to `35122242581`, whose complete report the probe classifications cite.
+
+**Credential outage, and how it was handled.** Partway through the pass
+`gh auth status` reported *"The github.com token in GH_TOKEN is no longer valid"*;
+`api.github.com` returned 401 while `github.com` returned 200, so this was an
+authentication failure rather than a network outage, and `git push` failed the
+same way. While it was invalid, the runtime conclusion at `c891949` was recorded
+as **NOT RETRIEVED** and was explicitly *not* assumed to be a failure merely
+because every prior runtime run had failed; the PR #2 comment was queued verbatim
+rather than paraphrased or silently dropped. No result was invented during the
+outage and credentials were never requested or stored. Authentication was
+restored on the following turn and all three outstanding items were then
+completed: the runtime conclusion was retrieved and archived, the commit was
+pushed, and the PR #2 comment was posted.
 
 ### 8.4 Probe-by-probe classification
 

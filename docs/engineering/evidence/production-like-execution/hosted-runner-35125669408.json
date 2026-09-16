@@ -1,0 +1,284 @@
+{
+ "scope": "Runner/download/service qualification only; NOT Frappe installation or ERP workflow proof",
+ "run_id": "35125669408",
+ "run_attempt": "1",
+ "commit": "c891949e7a30267f34a3365eaf9103d925dc42eb",
+ "ref": "refs/heads/arena/01a0aafe-tofel-house-erp",
+ "runner_image": "ubuntu24",
+ "runner_image_version": "20260907.300.1",
+ "checks": [
+  {
+   "name": "os",
+   "command": [
+    "cat",
+    "/etc/os-release"
+   ],
+   "exit_code": 0,
+   "seconds": 0.002,
+   "status": "pass"
+  },
+  {
+   "name": "docker-version",
+   "command": [
+    "docker",
+    "version",
+    "--format",
+    "{{.Client.Version}} {{.Server.Version}}"
+   ],
+   "exit_code": 0,
+   "seconds": 0.088,
+   "status": "pass"
+  },
+  {
+   "name": "compose-version",
+   "command": [
+    "docker",
+    "compose",
+    "version",
+    "--short"
+   ],
+   "exit_code": 0,
+   "seconds": 0.194,
+   "status": "pass"
+  },
+  {
+   "name": "apt-update",
+   "command": [
+    "sudo",
+    "apt-get",
+    "update",
+    "-o",
+    "APT::Update::Error-Mode=any"
+   ],
+   "exit_code": 0,
+   "seconds": 5.568,
+   "status": "pass"
+  },
+  {
+   "name": "native-libraries",
+   "command": [
+    "sudo",
+    "apt-get",
+    "install",
+    "-y",
+    "--no-install-recommends",
+    "pkg-config",
+    "libmariadb-dev",
+    "libffi-dev",
+    "libssl-dev",
+    "libjpeg-dev",
+    "zlib1g-dev",
+    "liblcms2-dev",
+    "libpango-1.0-0",
+    "libharfbuzz0b",
+    "libpangoft2-1.0-0",
+    "libcups2-dev"
+   ],
+   "exit_code": 0,
+   "seconds": 5.454,
+   "status": "pass"
+  },
+  {
+   "name": "python-download",
+   "command": [
+    "curl",
+    "--fail",
+    "--location",
+    "--retry",
+    "3",
+    "--max-time",
+    "180",
+    "--output",
+    "/home/runner/work/_temp/foundation-runner-probe/python.tar.gz",
+    "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.14.7%2B20260901-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
+   ],
+   "exit_code": 0,
+   "seconds": 0.251,
+   "status": "pass"
+  },
+  {
+   "name": "python-extract",
+   "command": [
+    "tar",
+    "-xzf",
+    "/home/runner/work/_temp/foundation-runner-probe/python.tar.gz",
+    "-C",
+    "/home/runner/work/_temp/foundation-runner-probe"
+   ],
+   "exit_code": 0,
+   "seconds": 0.731,
+   "status": "pass"
+  },
+  {
+   "name": "python-version",
+   "command": [
+    "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+    "--version"
+   ],
+   "exit_code": 0,
+   "seconds": 0.002,
+   "status": "pass"
+  },
+  {
+   "name": "python-ssl",
+   "command": [
+    "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+    "-c",
+    "import ssl; print(ssl.OPENSSL_VERSION)"
+   ],
+   "exit_code": 0,
+   "seconds": 0.075,
+   "status": "pass"
+  },
+  {
+   "name": "mariadb-pull",
+   "command": [
+    "docker",
+    "pull",
+    "mariadb:11.8.9"
+   ],
+   "exit_code": 0,
+   "seconds": 4.945,
+   "status": "pass"
+  },
+  {
+   "name": "mariadb-digests",
+   "command": [
+    "docker",
+    "image",
+    "inspect",
+    "mariadb:11.8.9",
+    "--format",
+    "{{json .RepoDigests}}"
+   ],
+   "exit_code": 0,
+   "seconds": 0.014,
+   "status": "pass"
+  },
+  {
+   "name": "redis-pull",
+   "command": [
+    "docker",
+    "pull",
+    "redis:8.6.6-alpine"
+   ],
+   "exit_code": 0,
+   "seconds": 1.133,
+   "status": "pass"
+  },
+  {
+   "name": "redis-digests",
+   "command": [
+    "docker",
+    "image",
+    "inspect",
+    "redis:8.6.6-alpine",
+    "--format",
+    "{{json .RepoDigests}}"
+   ],
+   "exit_code": 0,
+   "seconds": 0.014,
+   "status": "pass"
+  },
+  {
+   "name": "mariadb-start",
+   "command": [
+    "docker",
+    "run",
+    "--detach",
+    "--name",
+    "foundation-probe-db",
+    "--mount",
+    "type=bind,source=/home/runner/work/_temp/foundation-runner-probe/db-password,target=/run/secrets/db-password,readonly",
+    "--env",
+    "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password",
+    "--health-cmd",
+    "healthcheck.sh --connect --innodb_initialized",
+    "--health-interval",
+    "2s",
+    "--health-retries",
+    "30",
+    "mariadb:11.8.9",
+    "--character-set-server=utf8mb4",
+    "--collation-server=utf8mb4_unicode_ci"
+   ],
+   "exit_code": 0,
+   "seconds": 0.185,
+   "status": "pass"
+  },
+  {
+   "name": "mariadb-transaction",
+   "command": [
+    "docker",
+    "exec",
+    "--interactive",
+    "--env",
+    "MYSQL_PWD",
+    "foundation-probe-db",
+    "mariadb",
+    "--user=root",
+    "--batch",
+    "--skip-column-names"
+   ],
+   "exit_code": 0,
+   "seconds": 0.102,
+   "status": "pass"
+  },
+  {
+   "name": "redis-start",
+   "command": [
+    "docker",
+    "run",
+    "--detach",
+    "--name",
+    "foundation-probe-redis",
+    "redis:8.6.6-alpine"
+   ],
+   "exit_code": 0,
+   "seconds": 0.139,
+   "status": "pass"
+  },
+  {
+   "name": "redis-ping",
+   "command": [
+    "docker",
+    "exec",
+    "foundation-probe-redis",
+    "redis-cli",
+    "PING"
+   ],
+   "exit_code": 0,
+   "seconds": 0.053,
+   "status": "pass"
+  },
+  {
+   "name": "redis-version",
+   "command": [
+    "docker",
+    "exec",
+    "foundation-probe-redis",
+    "redis-server",
+    "--version"
+   ],
+   "exit_code": 0,
+   "seconds": 0.055,
+   "status": "pass"
+  }
+ ],
+ "phase2_gate_passed": false,
+ "status": "pass",
+ "python_artifact_sha256": "3959f92825141e04adf44982d3a83ee57af0877e893b0796e04c1468749d9b04",
+ "image_digests": {
+  "mariadb": [
+   "mariadb@sha256:8b5f33ebd85d1775657e974ed10434128bb493c80e826ceaa54074fd1a92a112"
+  ],
+  "redis": [
+   "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+  ]
+ },
+ "mariadb_health": {
+  "healthy": true,
+  "last_state": "healthy",
+  "polls": 4
+ }
+}

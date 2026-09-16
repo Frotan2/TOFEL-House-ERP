@@ -7,9 +7,10 @@ gh pr comment 2 --repo Frotan2/TOFEL-House-ERP \
   --body-file docs/engineering/evidence/production-like-execution/PR2-COMMENT.body.md
 ```
 
-The body is below the marker. This file exists because the GitHub credential
-expired mid-pass, so the comment could not be posted. It must be posted, not
-paraphrased, once the connection is restored.
+The body is below the marker. This file was created because the GitHub credential
+expired mid-pass, so the comment could not be posted at the time. Authentication
+was restored and the body was posted verbatim to PR #2; this file is retained as
+the audit record of exactly what was published.
 
 ---BODY---
 

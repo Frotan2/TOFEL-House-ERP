@@ -211,7 +211,38 @@
       "capability_probe_sha256": "d42a00f281fc5a95c5aceef9d4567bc2b8191ad0941c6dab7a14061e64bbadb4",
       "probes_executed_on_docker_runner": "11 requested probes classified: 2 PASS (EXECUTED)/SCOPED, 6 PARTIAL, 3 BLOCKED or BLOCKED/NOT SELECTED",
       "observed": "Every classification cites a real run and check identifier. MariaDB startup/health and Redis startup were really executed and passed; MariaDB/Redis restart persistence and durability were never executed. Native runtime, authorization containment, integrity before/after restore, session revocation and artifact upgrade were really executed and passed within their stated scopes. Independent-system restore, destructive trigger, versioned encrypted backup with external key custody and rotation, deployed monitoring/alert delivery/retention, TLS and Tailscale boundaries, and rollback rehearsal remain BLOCKED. No numeric capacity/availability SLO was invented.",
-      "limits": "Local preflight, static and bounded results are recorded separately and are never counted as execution evidence."
+      "limits": "Local preflight, static and bounded results are recorded separately and are never counted as execution evidence.",
+      "corroboration": "Two independent executions at d7df9ca and c891949 agree on every material outcome, including the SEC-DEPS-01 failure and the site_encryption_key_restored=false defect."
+    },
+    "corroborating_rerun_at_evidence_commit": {
+      "commit": "c891949e7a30267f34a3365eaf9103d925dc42eb",
+      "why": "Pushing the evidence commit re-triggered all five hosted gates because tools/session_branch.py and tools/foundation/d8_validate.py are in their path filters.",
+      "runs": {
+        "d8_contract": "35125669493 success",
+        "foundation_runner": "35125669408 success",
+        "placement": "35125669475 success",
+        "frontend_candidate": "35125669372 failure",
+        "foundation_runtime": "35125669370 failure"
+      },
+      "foundation_runtime": {
+        "run": "35125669370",
+        "head_branch": "arena/01a0aafe-tofel-house-erp",
+        "head_sha": "c891949e7a30267f34a3365eaf9103d925dc42eb",
+        "status": "fail_reject",
+        "failed_step": "7 - Install and validate the pinned foundation",
+        "runtime_check": "104901059475",
+        "runtime_report_sha256": "4a3836f01222e66555ec1799d2b6b57d438532658f2140948be9f6462714b8c0",
+        "remaining_gate_check": "104901062866",
+        "remaining_gate_report_sha256": "75d7df6680b49e9ab924bf36a30346c960cf2eae7f75080272dc759186e3ebbc",
+        "restricted_checks": "116 total; 114 pass; hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail",
+        "observed": "Reproduces run 35122242581 field for field on every material outcome: same SEC-DEPS-01 failure, same 114/116 restricted checks, same four sites (foundation, restore, recovery, upstream-tests) and four installed apps (erpnext, education, payments, hrms) on Docker 28.0.4 / Compose 2.38.2, same readiness 54 / realtime 4 / upgrade 33 / guardian browser 6 passes, same 57 npm advisory findings across 21 of 255 queried packages and 14 PyPI/OSV findings across pdfkit, pypdf, setuptools and weasyprint, and the same site_encryption_key_restored=false with restore_separate_database=true. Foundation runner corroboration 35125669408 passed 18/18 with MariaDB healthy in 4 polls and identical pinned MariaDB/Redis image digests.",
+        "retrieval_note": "This conclusion was initially recorded as NOT RETRIEVED during a GitHub credential outage and was retrieved only after authentication was restored. It was never assumed to be a failure while unobserved.",
+        "phase2_gate_passed": false,
+        "security_gate_passed": false,
+        "product_implementation_authorized": false,
+        "limits": "Corroboration only. It does not change any gate state, does not authorize production, and does not cure the observed site_encryption_key_restored=false defect. Two independent executions agreeing strengthens the REJECT conclusion. SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT."
+      },
+      "authoritative_evidence": "The probe classifications in evidence/production-like-execution/execution-ledger.json remain bound to commit d7df9ca and runs 35122242676 / 35122242728 / 35122242581 / 35122242647 / 35122242888, whose complete reports are archived. session_branch.ACTIVE_RUNTIME_RUN stays pinned to 35122242581 for that reason."
     }
   },
   "prior_active_branch_provenance": {

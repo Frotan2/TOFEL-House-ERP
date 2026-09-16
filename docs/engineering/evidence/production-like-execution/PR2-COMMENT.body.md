@@ -107,23 +107,41 @@ is not enabled**.
 ever reports a passing Foundation runtime or a true phase2/security/product flag
 while SEC-DEPS-01 is open. No gate was weakened, waived or reinterpreted.
 
-### Outstanding, caused by a GitHub credential expiry mid-pass
+### Corroboration at the evidence commit, and a credential outage that was handled honestly
 
-`gh auth status` reports *"The github.com token in GH_TOKEN is no longer
-valid"*; `api.github.com` returns 401 while `github.com` returns 200, so this is
-authentication, not network. Consequences, recorded rather than papered over:
+Pushing the evidence commit `c891949` re-triggered all five gates. Retrieved
+conclusions: D8 `35125669493` **success**, runner `35125669408` **success**
+(18/18, MariaDB healthy in 4 polls, identical pinned digests), placement
+`35125669475` **success**, frontend `35125669372` **failure**, runtime
+[`35125669370`](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/35125669370)
+**failure** at step 7 — SEC-DEPS-01.
 
-1. This comment could not be posted at the time and had to be queued.
-2. Foundation runtime run
-   [`35125669370`](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/35125669370)
-   at `c891949` was still `in_progress` at the last successful poll; its
-   conclusion is **NOT RETRIEVED** and is **not** assumed to be a failure just
-   because every earlier runtime run failed. The other four `c891949`
-   corroboration runs were observed as: D8 `35125669493` success, runner
-   `35125669408` success, placement `35125669475` success, frontend `35125669372`
-   failure.
-3. Any local commits made after the expiry still need pushing.
+**Reproduction finding:** runtime `35125669370` at `c891949` reproduces
+`35122242581` at `d7df9ca` field for field on every outcome that matters — same
+SEC-DEPS-01 failure with both dependency audits exiting 1, same 114/116
+restricted checks, same four sites and four apps, same readiness 54 / realtime 4
+/ upgrade 33 / guardian-browser 6 passes, same 57 npm advisory findings across
+21 packages and 14 PyPI/OSV findings across `pdfkit`, `pypdf`, `setuptools` and
+`weasyprint`, and the same `site_encryption_key_restored=false` defect. Two
+independent executions at two commits agree, which strengthens the REJECT
+conclusion rather than weakening it.
 
-None of these changes the release conclusion: the authoritative execution
-evidence is the fully archived `d7df9ca` set, and production authorization is
-**REJECT** either way.
+Partway through the pass the GitHub credential expired (`gh auth status`: *"The
+github.com token in GH_TOKEN is no longer valid"*; `api.github.com` 401 while
+`github.com` 200, so authentication rather than network). While it was invalid,
+the runtime conclusion at `c891949` was recorded as **NOT RETRIEVED** and was
+explicitly **not** assumed to be a failure merely because every prior runtime run
+had failed, and this comment was queued verbatim rather than paraphrased or
+dropped. No result was invented during the outage and credentials were never
+requested or stored. Authentication was restored afterwards and all three
+outstanding items were completed: the run conclusion was retrieved and archived,
+the commit was pushed, and this comment was posted.
+
+### Conclusion
+
+Fresh genuine execution on a Docker-capable runner materially increased the real
+evidence and independently reproduced the native runtime, authorization
+containment, backup/restore mechanics and integrity verification. It closed no
+D8 gate. Production authorization remains **REJECT**, `production_enabled`
+remains **false**, SEC-DEPS-01 remains **UPSTREAM-BLOCKED / REJECT**, and this PR
+is **not merged**.

@@ -1122,46 +1122,168 @@
       "hosted-placement-runner-35122242728.json": "1fc72a2420f96f9727d80346c00670b73c8d4ae43cef6e010319ef36e6e911f9",
       "hosted-remaining-gates-35106268963-prior-head.json": "87bcbb769b2b7bfe35844c29c1b2c2dd57a2a6cc981cd868ccfb8d73edab067a",
       "hosted-remaining-gates-35122242581.json": "a1ac7cd78d0ddb5dbd4888f459f38232850083c34562f4b1cd29fec509e6025b",
+      "hosted-remaining-gates-35125669370.json": "75d7df6680b49e9ab924bf36a30346c960cf2eae7f75080272dc759186e3ebbc",
       "hosted-runner-35106268946-prior-head.json": "012f41c676510b3a3d5a868b993b70a69b5af58684d00c82fd8ea82125957996",
       "hosted-runner-35122242676.json": "4f1ad7b9bb09a2c5d5933d5ed8490eb42b2ef0e513d1235a4378165d536e5963",
+      "hosted-runner-35125669408.json": "dd26445b964cf9fb887961df916e89cf3effadafce4c88cae8233016d1440aa4",
       "hosted-runtime-35106268963-prior-head.json": "3464276d1770341c19268cae13518175fab8bf70c47d85f6de905c9c2999b2d4",
       "hosted-runtime-35122242581.json": "e3964eb242e1bb467725e7a194ff3a7b76535d3afedbc9c5a0c8c77629eb984b",
+      "hosted-runtime-35125669370.json": "4a3836f01222e66555ec1799d2b6b57d438532658f2140948be9f6462714b8c0",
       "local-bounded-encrypted-restore-manifest.json": "82529b6749f67e77a056231d970a59c6b49eaadfb4209680cd638205b02aabbb",
       "local-bounded-release-readiness-evidence.json": "1b88d8341eef8668c84362e048470fd77c61198b59840b397d193d16429342cc",
       "local-d8-validate.json": "e39c9fad0ce393541af0a21ab193e8768db4f31d597a74d98e00cc283022d32e",
       "local-runner-capability-probe.json": "d42a00f281fc5a95c5aceef9d4567bc2b8191ad0941c6dab7a14061e64bbadb4",
       "local-unittest-313.txt": "6d95cec0565e3ae2ea04e63dec3ecfad6c4076bb61c772c87a081c465d615562"
     },
-    "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED."
+    "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED.",
+    "regenerated_at_utc": "2026-09-16T17:33:28.633776+00:00"
   },
   "corroborating_reruns_at_evidence_commit": {
-    "commit": "c891949e (Record production-like execution on the active branch and classify every probe)",
-    "note": "Pushing the evidence commit re-triggered the hosted gates because tools/session_branch.py and tools/foundation/d8_validate.py are in their path filters. Conclusions below are only those actually observed through the GitHub API before the credential outage; nothing is inferred or assumed for a run that was still in progress.",
+    "commit": "c891949e7a30267f34a3365eaf9103d925dc42eb",
+    "note": "Pushing the evidence commit re-triggered the hosted gates because tools/session_branch.py and tools/foundation/d8_validate.py are in their path filters. All five conclusions below were retrieved from the GitHub API after authentication was restored; none is inferred. The runtime conclusion was initially recorded as NOT RETRIEVED during a credential outage and has now been retrieved and archived rather than assumed.",
+    "runner": "ubuntu24 / 20260907.300.1 \u00b7 Docker 28.0.4 28.0.4 \u00b7 Compose 2.38.2",
     "runs": {
       "35125669493": {
         "workflow": "D8 operations contract validation",
-        "observed_conclusion": "success"
+        "conclusion": "success",
+        "check": "104893974058"
       },
       "35125669408": {
         "workflow": "Foundation runner qualification",
-        "observed_conclusion": "success"
+        "conclusion": "success",
+        "check": "104894151523",
+        "report_sha256": "dd26445b964cf9fb887961df916e89cf3effadafce4c88cae8233016d1440aa4",
+        "evidence": "hosted-runner-35125669408.json",
+        "observed": {
+          "status": "pass",
+          "checks": 18,
+          "all_exit_zero": true,
+          "mariadb_health": {
+            "healthy": true,
+            "last_state": "healthy",
+            "polls": 4
+          },
+          "image_digests": {
+            "mariadb": [
+              "mariadb@sha256:8b5f33ebd85d1775657e974ed10434128bb493c80e826ceaa54074fd1a92a112"
+            ],
+            "redis": [
+              "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+            ]
+          }
+        },
+        "reproduction_note": "Identical pinned MariaDB and Redis digests to run 35122242676; MariaDB reached healthy in 4 polls instead of 5. Independent reproduction of the real Docker service probes at a second commit."
       },
       "35125669475": {
         "workflow": "Placement synthetic content qualification",
-        "observed_conclusion": "success"
+        "conclusion": "success",
+        "checks": [
+          "104897656162",
+          "104897660106"
+        ],
+        "retrieval": "gh api repos/Frotan2/TOFEL-House-ERP/check-runs/<id> --jq .output.text",
+        "archived": false,
+        "archive_note": "Conclusion and check identifiers recorded; the full report is not duplicated here because the identical 542/542 native suite at the parent commit d7df9ca is already archived in full (hosted-placement-native-checks-35122242728.json)."
       },
       "35125669372": {
         "workflow": "Foundation frontend candidate review",
-        "observed_conclusion": "failure"
+        "conclusion": "failure",
+        "check": "104894332206",
+        "archived": false,
+        "archive_note": "Conclusion recorded; the full advisory comparison at d7df9ca is already archived (hosted-frontend-35122242647.json)."
       },
       "35125669370": {
         "workflow": "Foundation runtime validation",
-        "observed_conclusion": null,
-        "status": "NOT RETRIEVED",
-        "reason": "Still in_progress at the last successful API poll, then GitHub authentication failed. The conclusion was never observed, so it is recorded as NOT RETRIEVED. It is NOT assumed to be failure merely because every prior runtime run failed, and it is NOT counted as evidence in either direction."
+        "conclusion": "failure",
+        "failed_step": "7 - Install and validate the pinned foundation",
+        "checks": [
+          "104901059475",
+          "104901062866"
+        ],
+        "runtime_report_sha256": "4a3836f01222e66555ec1799d2b6b57d438532658f2140948be9f6462714b8c0",
+        "remaining_gate_report_sha256": "75d7df6680b49e9ab924bf36a30346c960cf2eae7f75080272dc759186e3ebbc",
+        "evidence": [
+          "hosted-runtime-35125669370.json",
+          "hosted-remaining-gates-35125669370.json"
+        ],
+        "previously": "NOT RETRIEVED during a GitHub credential outage; now retrieved and archived. It was never assumed to be a failure while unobserved.",
+        "observed": {
+          "status": "fail",
+          "failure_verbatim": "Restricted policy regressions failed: hosted-full-stack-dependency-audit: exit 1; hosted-frontend-advisory-audit: exit 1",
+          "restricted_diagnostic_failures": [
+            "hosted-full-stack-dependency-audit: exit 1",
+            "hosted-frontend-advisory-audit: exit 1"
+          ],
+          "restricted_checks": {
+            "total": 116,
+            "pass": 114,
+            "fail": [
+              "hosted-full-stack-dependency-audit",
+              "hosted-frontend-advisory-audit"
+            ]
+          },
+          "created_sites": [
+            "foundation.localhost",
+            "restore.localhost",
+            "recovery.localhost",
+            "upstream-tests.localhost"
+          ],
+          "installed_apps": [
+            "erpnext",
+            "education",
+            "payments",
+            "hrms"
+          ],
+          "restore_separate_database": true,
+          "site_encryption_key_restored": false,
+          "process_liveness": {
+            "worker": true,
+            "scheduler": true,
+            "socketio": true
+          },
+          "remaining_gates": {
+            "readiness": "pass 54",
+            "realtime": "pass 4",
+            "upgrade": "pass 33",
+            "guardian_browser": "pass 6",
+            "restart": "pass",
+            "restart_limitations": [
+              "No Redis or database restart",
+              "No host crash or failover",
+              "No exactly-once or in-flight job claim",
+              "No pre-existing browser-session continuity claim"
+            ]
+          },
+          "npm_advisories": {
+            "status": "fail",
+            "packages": 21,
+            "findings": 57,
+            "by_severity": {
+              "moderate": 26,
+              "low": 4,
+              "high": 27
+            }
+          },
+          "resolved_stack": {
+            "status": "fail",
+            "python_package_names": 161,
+            "node_package_names": 572,
+            "python_osv_findings": 14,
+            "affected": [
+              "pdfkit",
+              "pypdf",
+              "setuptools",
+              "weasyprint"
+            ]
+          },
+          "security_gate_passed": false,
+          "phase2_gate_passed": false,
+          "product_implementation_authorized": false
+        }
       }
     },
-    "authoritative_execution_evidence": "The probe classifications in this ledger remain bound to commit d7df9ca766cd3039d68051ca83cdc8be5e834452 and runs 35122242676 / 35122242728 / 35122242581 / 35122242647 / 35122242888, whose complete sanitized reports are archived here with SHA-256 values. The c891949e re-runs are corroboration only and are not substituted for that archived evidence. session_branch.ACTIVE_RUNTIME_RUN stays pinned to 35122242581 for that reason."
+    "reproduction_finding": "Run 35125669370 at c891949 reproduces run 35122242581 at d7df9ca field for field on every outcome that matters: same SEC-DEPS-01 failure (both dependency audits exit 1), same 114/116 restricted checks, same four sites and four installed apps, same readiness 54 / realtime 4 / upgrade 33 / guardian browser 6 passes, same 57 npm advisory findings across 21 packages and 14 PyPI/OSV findings across pdfkit, pypdf, setuptools and weasyprint, and the same site_encryption_key_restored=false defect. Two independent executions at two commits therefore agree, which strengthens the REJECT conclusion rather than weakening it.",
+    "authoritative_execution_evidence": "The probe classifications in this ledger remain bound to commit d7df9ca766cd3039d68051ca83cdc8be5e834452 and runs 35122242676 / 35122242728 / 35122242581 / 35122242647 / 35122242888, whose complete sanitized reports are archived here with SHA-256 values. The c891949 re-runs are corroboration and are archived where they add information. session_branch.ACTIVE_RUNTIME_RUN stays pinned to 35122242581 because that is the run whose full report the ledger's probe classifications cite."
   },
   "evidence_retrieval_limitations": [
     {
@@ -1171,18 +1293,14 @@
       "effect_on_conclusions": "None. Full sanitized reports were obtained for all five d7df9ca runs."
     },
     {
-      "limitation": "GitHub credential expiry mid-pass",
-      "observed": "gh auth status reports 'The github.com token in GH_TOKEN is no longer valid'; api.github.com returns HTTP 401 while github.com returns 200, so this is an authentication failure and not a network outage. git ls-remote also fails with 'could not read Username'.",
-      "detected_at_utc": "2026-09-16T17:24:26.633809+00:00",
-      "mitigation": "None available inside the sandbox; credentials must never be requested or stored in chat. The GitHub connection has to be re-established in Arena.",
-      "effect_on_conclusions": "PR #2 could not be updated with a comment, and the Foundation runtime conclusion at c891949e (run 35125669370) could not be retrieved. Both are recorded as outstanding. git push also fails ('could not read Username for https://github.com'), so the final local commit - the one recording corroboration, the credential-expiry limitations and the queued PR #2 update - is committed locally but NOT on GitHub. The remote tip of arena/01a0aafe-tofel-house-erp is c891949, confirmed by the successful push output 'd7df9ca..c891949'. No release conclusion depends on any of this: the authoritative execution evidence is the fully archived d7df9ca set, and production authorization is REJECT either way."
+      "limitation": "GitHub credential expiry mid-pass (RESOLVED)",
+      "observed": "gh auth status reported 'The github.com token in GH_TOKEN is no longer valid'; api.github.com returned HTTP 401 while github.com returned 200, so this was an authentication failure and not a network outage. git push and git ls-remote failed with \"could not read Username for 'https://github.com'\".",
+      "resolution": "Authentication was restored on the following turn. The previously outstanding items are now complete: the Foundation runtime conclusion at c891949 (run 35125669370) was retrieved and archived, the queued PR #2 comment was posted, and the local commit was pushed.",
+      "discipline_applied": "While the credential was invalid the runtime conclusion was recorded as NOT RETRIEVED and was explicitly not assumed to be a failure merely because every prior runtime run had failed. No result was invented during the outage. Credentials were never requested or stored in chat."
     }
   ],
   "outstanding_actions": [
-    "Re-establish GitHub authentication in Arena (the GH_TOKEN is no longer valid; credentials must never be requested or stored in chat).",
-    "git push origin arena/01a0aafe-tofel-house-erp  # publishes the final local commit; remote tip is currently c891949",
-    "Post the prepared PR #2 comment: gh pr comment 2 --repo Frotan2/TOFEL-House-ERP --body-file docs/engineering/evidence/production-like-execution/PR2-COMMENT.body.md",
-    "Retrieve and record the conclusion of Foundation runtime run 35125669370 at c891949e; do not assume it.",
-    "Optionally re-run the five workflows at the final commit once it is pushed, and archive those reports the same way."
+    "None from the credential outage; all three items were completed once authentication was restored.",
+    "Standing release blockers are unchanged and are engineering/owner work, not tooling: MariaDB and Redis restart persistence and durability probes do not exist in the harness; restore has never reached a genuinely independent system and no destructive trigger has been run; versioned encrypted backup with external key custody and rotation is bounded-only and the foundation restore reports site_encryption_key_restored=false; deployed monitoring, alert delivery and retention are untested; no TLS or Tailscale boundary has been exercised; rollback has never been rehearsed; SEC-DEPS-01 needs a coherent maintained upstream stack migration; and the owner has selected no numeric capacity/availability objective."
   ]
 }

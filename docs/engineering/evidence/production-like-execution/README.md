@@ -66,6 +66,9 @@ repository's own lossless Checks-API transport (`tools/foundation/publish_eviden
 | [`local-unittest-313.txt`](local-unittest-313.txt) | PASS / LOCAL | `6d95cec0565e3ae2ea04e63dec3ecfad6c4076bb61c772c87a081c465d615562` | 455 | Full local Python suite: 313 tests, OK. |
 | [`PR2-COMMENT.body.md`](PR2-COMMENT.body.md) | QUEUED | `eb65deef7f66b00b54d7f451f2a72a89085aaef8dd59330292779f3d456358f2` | 9202 | Ready-to-post body for the PR #2 update. Queued because the GitHub credential expired mid-pass. |
 | [`PR2-COMMENT.md`](PR2-COMMENT.md) | QUEUED | `d7a9a4d9daa1ba965085ff31cbe4314551bd93573a3d6da9a741640210046a14` | 9602 | Posting instructions plus the PR #2 update text, and the two premise corrections (nonexistent commit d3705e6, ENVIRONMENT-BLOCKED local host). |
+| [`hosted-runner-35125669408.json`](hosted-runner-35125669408.json) | EXECUTED | `dd26445b964cf9fb887961df916e89cf3effadafce4c88cae8233016d1440aa4` | 5555 | Corroboration at c891949: Foundation runner qualification 18/18, MariaDB healthy in 4 polls, identical pinned MariaDB/Redis digests. |
+| [`hosted-runtime-35125669370.json`](hosted-runtime-35125669370.json) | EXECUTED / FAIL | `4a3836f01222e66555ec1799d2b6b57d438532658f2140948be9f6462714b8c0` | 120438 | Corroboration at c891949: Foundation runtime reproduces run 35122242581 exactly - SEC-DEPS-01 failure, 114/116 restricted checks, site_encryption_key_restored=false. Initially NOT RETRIEVED during a credential outage, then retrieved; never assumed. |
+| [`hosted-remaining-gates-35125669370.json`](hosted-remaining-gates-35125669370.json) | EXECUTED / FAIL | `75d7df6680b49e9ab924bf36a30346c960cf2eae7f75080272dc759186e3ebbc` | 128353 | Corroboration at c891949: readiness 54, realtime 4, upgrade 33, guardian browser 6 pass; resolved-stack and npm advisory audits fail. |
 
 ## Release state after this pass
 
@@ -80,19 +83,24 @@ executed-versus-blocked breakdown.
 
 ## Outstanding
 
-The GitHub credential expired mid-pass (`gh auth status`: *"The github.com token
-in GH_TOKEN is no longer valid"*; `api.github.com` 401 while `github.com` 200).
-Two things are therefore queued rather than claimed:
+Nothing is outstanding from the GitHub credential expiry that interrupted this
+pass. `gh auth status` had reported *"The github.com token in GH_TOKEN is no
+longer valid"* (`api.github.com` 401 while `github.com` 200, so authentication
+rather than network). While it was invalid, the Foundation runtime conclusion at
+`c891949` was recorded as **NOT RETRIEVED** and was explicitly not assumed to be
+a failure merely because every prior runtime run had failed, and the PR #2
+comment was queued verbatim rather than paraphrased or dropped. No result was
+invented during the outage and credentials were never requested or stored.
 
-1. Post [`PR2-COMMENT.body.md`](PR2-COMMENT.body.md) to PR #2 — see the command
-   in [`PR2-COMMENT.md`](PR2-COMMENT.md).
-2. Retrieve the conclusion of Foundation runtime run `35125669370` at `c891949`.
-   It is recorded as **NOT RETRIEVED** and is not assumed to be a failure.
-3. Push the final local commit. The remote tip of
-   `arena/01a0aafe-tofel-house-erp` is `c891949` (confirmed by the push output
-   `d7df9ca..c891949`); the commit recording these limitations is local-only
-   because `git push` fails with *"could not read Username for
-   'https://github.com'"*.
+After authentication was restored all three items were completed:
 
-Neither affects the release conclusion: the authoritative execution evidence is
-the archived `d7df9ca` run set above, and production authorization is **REJECT**.
+1. Run `35125669370` was retrieved — **failure** at step 7, SEC-DEPS-01 — and
+   archived above with its remaining-gate report. It reproduces run `35122242581`
+   field for field, including `site_encryption_key_restored=false`.
+2. The local commit was pushed to `arena/01a0aafe-tofel-house-erp`.
+3. The PR #2 comment was posted from
+   [`PR2-COMMENT.body.md`](PR2-COMMENT.body.md).
+
+The standing release blockers are unchanged and are engineering/owner work, not
+tooling. See [`FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md`](../../FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md)
+§8 and [`RELEASE-GAP-MAP.md`](../../RELEASE-GAP-MAP.md) §1.6.
