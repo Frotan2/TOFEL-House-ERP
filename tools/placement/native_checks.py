@@ -3141,7 +3141,7 @@ def main():
                 cauth['contracts']['one'],'2026-11-01'))),('superseded contract accepted an assignment')
             assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
                 'tc_assign_future_00001','SYN-GRP-MAIN-1',SK3,cfx['ins']['Two'],
-                rev2['name'],'2026-09-01'))),('future-effective contract accepted an assignment')
+                rev2['name'],'2026-09-01','2026-09-30'))),('future-effective contract accepted an assignment')
             # deductions require the explicit owner-provided deduction component
             assert denied(lambda:as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
                 'tc_calc_nodeduct_0001','2026-09-01','2026-09-30',cfx['company'],cfx['earning']))),('deduction posted without a deduction component')
