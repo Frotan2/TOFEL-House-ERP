@@ -85,6 +85,96 @@ def restore_key_into_config(source_config, restore_config):
     return updated
 
 
+def stored_representations(db, doctype, name, fieldname, preferred=None):
+    """Enumerate every native storage representation of a Password field.
+
+    Frappe has stored encrypted Password fields in different places across
+    releases - the model column via ``AES_ENCRYPT`` and/or the ``__Auth`` table -
+    and a model column can legitimately be NULL while ``get_decrypted_password``
+    still works. Reading only the column is therefore not a valid way to observe
+    ciphertext; this enumerates the supported locations instead.
+
+    Returns a deterministic ``[(location, value)]`` list of non-empty values.
+    ``preferred`` moves a known location to the front so a restored site is
+    compared against the same representation its source used.
+    """
+    found = []
+    try:
+        rows = db.sql(
+            "SELECT `password` FROM `__Auth`"
+            " WHERE `doctype`=%s AND `name`=%s AND `fieldname`=%s",
+            (doctype, name, fieldname))
+    except Exception:
+        rows = []
+    for row in rows or []:
+        value = row[0] if isinstance(row, (list, tuple)) else row
+        if value not in (None, "", b""):
+            found.append(("__Auth.password", value))
+    try:
+        column = db.get_value(doctype, name, fieldname)
+    except Exception:
+        column = None
+    if column not in (None, "", b""):
+        found.append(("tab" + doctype + "." + fieldname, column))
+    if preferred:
+        found.sort(key=lambda item: 0 if item[0] == preferred else 1)
+    return found
+
+
+def as_bytes(value):
+    """Normalize a database-returned value to bytes without decoding lossily."""
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value)
+    return str(value).encode()
+
+
+def storage_layout(db, doctype, fieldname):
+    """Describe Password-field storage locations for diagnosis only.
+
+    Returns column names, never values, so it is safe to publish. It exists so a
+    layout surprise is identifiable from the evidence instead of requiring
+    guesswork and another full hosted run.
+    """
+    layout = {}
+    for label, query in (
+        ("auth_columns", "SHOW COLUMNS FROM `__Auth`"),
+        ("model_column", "SHOW COLUMNS FROM `tab" + doctype + "` LIKE '" + fieldname + "'"),
+    ):
+        try:
+            rows = db.sql(query) or []
+            layout[label] = [r[0] if isinstance(r, (list, tuple)) else r for r in rows]
+        except Exception as exc:
+            layout[label] = "unavailable: " + type(exc).__name__
+    return layout
+
+
+def assert_no_plaintext_at_rest(located, secret):
+    """Prove an encrypted Password field is never stored in the clear.
+
+    ``located`` is a deterministic ``[(location, value)]`` list of every native
+    storage representation found for the field. Frappe has moved Password-field
+    storage between releases (model column vs. the ``__Auth`` table), so the
+    probe enumerates the supported locations instead of assuming one - a value
+    read straight from the model column can legitimately be NULL.
+
+    Returns a fingerprint of the stored ciphertext so a restored site can be
+    compared byte-for-byte. Raises if nothing was stored or if any location
+    holds the plaintext.
+    """
+    if not located:
+        raise AssertionError("no native storage representation found for the encrypted field")
+    encoded_secret = secret.encode()
+    for location, value in located:
+        if as_bytes(value) == encoded_secret:
+            raise AssertionError("encrypted field is stored in plaintext at " + location)
+    location, value = located[0]
+    return {
+        "storage_location": location,
+        "storage_locations_found": [loc for loc, _ in located],
+        "ciphertext_sha256": hashlib.sha256(as_bytes(value)).hexdigest(),
+    }
+
+
 def main():
     action = sys.argv[1] if len(sys.argv) > 1 else ""
     site = sys.argv[2] if len(sys.argv) > 2 else ""
@@ -166,18 +256,22 @@ def main():
                 assert not frappe.db.get_value("User", "Administrator", "api_key")
                 set_encrypted_password("User", "Administrator", secret, "api_secret")
                 frappe.db.commit()
-                stored = frappe.db.get_value("User", "Administrator", "api_secret")
-                if not stored or stored == secret:
-                    raise AssertionError("Password field was not stored as ciphertext")
+                located = stored_representations(frappe.db, "User", "Administrator", "api_secret")
+                if not located:
+                    raise AssertionError("no native storage representation found for "
+                                         "User.Administrator.api_secret; layout="
+                                         + json.dumps(storage_layout(frappe.db, "User", "api_secret")))
+                stored_proof = assert_no_plaintext_at_rest(located, secret)
                 if get_decrypted_password("User", "Administrator", "api_secret") != secret:
                     raise AssertionError("source site cannot decrypt its own encrypted field")
-                ciphertext = hashlib.sha256(str(stored).encode()).hexdigest()
+                ciphertext = stored_proof["ciphertext_sha256"]
                 # Record the ciphertext digest privately so `verify` can prove the
                 # exact encrypted bytes survived the round trip - not merely that
                 # some ciphertext happens to decrypt. Fernet output is randomized
                 # per encryption, so a re-encrypted value would not match.
                 fingerprint_file.write_text(json.dumps({
                     "source_site": site, **digest, "ciphertext_sha256": ciphertext,
+                    "storage_location": stored_proof["storage_location"],
                 }) + "\n")
                 fingerprint_file.chmod(0o600)
                 return {
@@ -185,6 +279,8 @@ def main():
                     "encrypted_field": "User.Administrator.api_secret",
                     "stored_as_ciphertext": True,
                     "ciphertext_sha256": ciphertext,
+                    "storage_location": stored_proof["storage_location"],
+                    "storage_locations_found": stored_proof["storage_locations_found"],
                     "source_decrypts_before_backup": True,
                 }
 
@@ -201,8 +297,14 @@ def main():
                 if get_decrypted_password("User", "Administrator", "api_secret") != secret:
                     raise AssertionError(
                         "restored site cannot decrypt content encrypted before the backup")
-                stored = frappe.db.get_value("User", "Administrator", "api_secret")
-                ciphertext = hashlib.sha256(str(stored).encode()).hexdigest()
+                located = stored_representations(
+                    frappe.db, "User", "Administrator", "api_secret",
+                    preferred=recorded.get("storage_location"))
+                stored_proof = assert_no_plaintext_at_rest(located, secret)
+                ciphertext = stored_proof["ciphertext_sha256"]
+                if stored_proof["storage_location"] != recorded.get("storage_location"):
+                    raise AssertionError(
+                        "encrypted field was stored in a different location after restore")
                 if ciphertext != recorded.get("ciphertext_sha256"):
                     raise AssertionError(
                         "restored ciphertext is not the ciphertext written before the backup")
@@ -217,6 +319,7 @@ def main():
                     "encrypted_content_decrypts_after_restore": True,
                     "ciphertext_sha256": ciphertext,
                     "ciphertext_matches_source": True,
+                    "storage_location": stored_proof["storage_location"],
                 }
 
             check("encryption-key-and-ciphertext-survived-restore", _verify)

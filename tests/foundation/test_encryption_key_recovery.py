@@ -25,7 +25,13 @@ import json
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "foundation"))
 
-from runtime_encryption_key import fingerprint_key, restore_key_into_config  # noqa: E402
+from runtime_encryption_key import (  # noqa: E402
+    assert_no_plaintext_at_rest,
+    as_bytes,
+    fingerprint_key,
+    restore_key_into_config,
+    stored_representations,
+)
 
 PROBE = (ROOT / "tools/foundation/runtime_encryption_key.py").read_text(encoding="utf-8")
 HARNESS = (ROOT / "tools/foundation/runtime_install.py").read_text(encoding="utf-8")
@@ -92,6 +98,118 @@ class NativeEncryptionKeyHelperTests(unittest.TestCase):
         self.assertEqual(restore_copy, RESTORE)
 
 
+class StubDB:
+    """Minimal stand-in for ``frappe.db``.
+
+    Used only to exercise the control flow of our own enumeration helper. This
+    is contract coverage of repository logic, not evidence about Frappe's
+    storage layout; the hosted runtime run supplies that.
+    """
+
+    def __init__(self, auth_rows=None, column=None, auth_raises=False, column_raises=False):
+        self.auth_rows = auth_rows or []
+        self.column = column
+        self.auth_raises = auth_raises
+        self.column_raises = column_raises
+        self.queries = []
+
+    def sql(self, query, values=None):
+        self.queries.append(query)
+        if self.auth_raises:
+            raise RuntimeError("__Auth is not available")
+        return self.auth_rows
+
+    def get_value(self, doctype, name, fieldname):
+        if self.column_raises:
+            raise RuntimeError("column is not readable")
+        return self.column
+
+
+class EncryptedFieldStorageTests(unittest.TestCase):
+    """Regression coverage for the failure observed in hosted run 35131838300.
+
+    The first hosted attempt at this fix asserted on the raw model column and
+    died with ``Password field was not stored as ciphertext``: Frappe left
+    ``tabUser.api_secret`` empty while the encrypted value lived elsewhere, so
+    ``not stored`` was true even though encryption had succeeded. The probe now
+    enumerates supported storage locations instead of assuming one.
+    """
+
+    def test_locates_ciphertext_when_the_model_column_is_null(self):
+        token = b"gAAAAABm-ciphertext-token"
+        located = stored_representations(
+            StubDB(auth_rows=[(token,)], column=None), "User", "Administrator", "api_secret")
+        self.assertEqual(located, [("__Auth.password", token)])
+
+    def test_locates_ciphertext_held_in_the_model_column(self):
+        located = stored_representations(
+            StubDB(auth_rows=[], column="AESBLOB"), "User", "Administrator", "api_secret")
+        self.assertEqual(located, [("tabUser.api_secret", "AESBLOB")])
+
+    def test_locates_both_and_orders_auth_first(self):
+        located = stored_representations(
+            StubDB(auth_rows=[("auth-token",)], column="column-token"),
+            "User", "Administrator", "api_secret")
+        self.assertEqual([loc for loc, _ in located], ["__Auth.password", "tabUser.api_secret"])
+
+    def test_preferred_location_is_moved_to_the_front(self):
+        located = stored_representations(
+            StubDB(auth_rows=[("auth-token",)], column="column-token"),
+            "User", "Administrator", "api_secret", preferred="tabUser.api_secret")
+        self.assertEqual(located[0], ("tabUser.api_secret", "column-token"))
+
+    def test_returns_nothing_when_no_representation_is_stored(self):
+        for db in (StubDB(), StubDB(auth_rows=[(None,)], column=""),
+                   StubDB(auth_rows=[("",)], column=b"")):
+            self.assertEqual(
+                stored_representations(db, "User", "Administrator", "api_secret"), [])
+
+    def test_survives_a_missing_auth_table_or_unreadable_column(self):
+        self.assertEqual(
+            stored_representations(StubDB(auth_raises=True, column="ct"),
+                                   "User", "Administrator", "api_secret"),
+            [("tabUser.api_secret", "ct")])
+        self.assertEqual(
+            stored_representations(StubDB(auth_rows=[("tok",)], column_raises=True),
+                                   "User", "Administrator", "api_secret"),
+            [("__Auth.password", "tok")])
+        self.assertEqual(
+            stored_representations(StubDB(auth_raises=True, column_raises=True),
+                                   "User", "Administrator", "api_secret"), [])
+
+    def test_plaintext_at_rest_is_rejected_in_any_location(self):
+        secret = "synthetic-masked-secret"
+        for located in (
+            [("__Auth.password", secret)],
+            [("tabUser.api_secret", secret)],
+            [("__Auth.password", b"cipher"), ("tabUser.api_secret", secret)],
+            [("tabUser.api_secret", secret.encode())],
+        ):
+            with self.assertRaises(AssertionError):
+                assert_no_plaintext_at_rest(located, secret)
+
+    def test_plaintext_at_rest_check_requires_a_location(self):
+        with self.assertRaises(AssertionError):
+            assert_no_plaintext_at_rest([], "synthetic-masked-secret")
+
+    def test_ciphertext_proof_is_fingerprint_only_and_deterministic(self):
+        secret = "synthetic-masked-secret"
+        located = [("__Auth.password", b"gAAAAABm-token")]
+        proof = assert_no_plaintext_at_rest(located, secret)
+        self.assertEqual(proof["storage_location"], "__Auth.password")
+        self.assertEqual(proof["storage_locations_found"], ["__Auth.password"])
+        self.assertEqual(len(proof["ciphertext_sha256"]), 64)
+        self.assertEqual(proof, assert_no_plaintext_at_rest(located, secret))
+        serialized = json.dumps(proof)
+        self.assertNotIn(secret, serialized)
+        self.assertNotIn("gAAAAABm-token", serialized)
+
+    def test_as_bytes_treats_bytes_and_str_equivalently(self):
+        self.assertEqual(as_bytes(b"abc"), as_bytes("abc"))
+        self.assertEqual(as_bytes(bytearray(b"abc")), b"abc")
+        self.assertNotEqual(as_bytes(b"abc"), as_bytes("abd"))
+
+
 class ProbeContainmentTests(unittest.TestCase):
     def test_probe_refuses_to_run_outside_a_hosted_runner(self):
         """Executed: the guard must fail closed on any non-Actions machine."""
@@ -120,6 +238,10 @@ class ProbeContainmentTests(unittest.TestCase):
         self.assertNotIn('"encryption_key": key', PROBE)
         self.assertNotIn('print(native_key', PROBE)
         self.assertIn("native_key = get_encryption_key()", PROBE)
+        # The raw-column-only check that failed in hosted run 35131838300 must
+        # not come back: an empty model column does not mean encryption failed.
+        self.assertNotIn("Password field was not stored as ciphertext", PROBE)
+        self.assertIn("assert_no_plaintext_at_rest(located, secret)", PROBE)
         self.assertIn("get_decrypted_password(", PROBE)
         self.assertIn("set_encrypted_password(", PROBE)
 
