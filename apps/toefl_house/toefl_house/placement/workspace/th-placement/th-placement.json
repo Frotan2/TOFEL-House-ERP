@@ -1,0 +1,109 @@
+{
+	"app": "toefl_house",
+	"content": "[{\"id\":\"Thoeo39PBq\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>TH Placement</b></span>\",\"col\":12}},{\"id\":\"N0NLmuOioT\",\"type\":\"card\",\"data\":{\"card_name\":\"Governed Content\",\"col\":4}},{\"id\":\"6pDKR3IQ08\",\"type\":\"card\",\"data\":{\"card_name\":\"Cases & Attempts\",\"col\":4}}]",
+	"docstatus": 0,
+	"doctype": "Workspace",
+	"for_user": "",
+	"is_hidden": 0,
+	"label": "TH Placement",
+	"links": [
+		{
+			"label": "Governed Content",
+			"type": "Card Break"
+		},
+		{
+			"label": "Item Revisions",
+			"link_to": "TH Placement Item Revision",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Answer Key Revisions",
+			"link_to": "TH Placement Key Revision",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Blueprint Revisions",
+			"link_to": "TH Placement Blueprint Revision",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Policy Revisions",
+			"link_to": "TH Placement Policy Revision",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Course Map Revisions",
+			"link_to": "TH Placement Course Map Revision",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Cases & Attempts",
+			"type": "Card Break"
+		},
+		{
+			"label": "Placement Cases",
+			"link_to": "TH Placement Case",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Attempts",
+			"link_to": "TH Placement Attempt",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Form Manifests",
+			"link_to": "TH Placement Form Manifest",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Responses",
+			"link_to": "TH Placement Response",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Scores",
+			"link_to": "TH Placement Score",
+			"link_type": "DocType",
+			"type": "Link"
+		},
+		{
+			"label": "Decisions",
+			"link_to": "TH Placement Decision",
+			"link_type": "DocType",
+			"type": "Link"
+		}
+	],
+	"module": "Placement",
+	"name": "TH Placement",
+	"public": 1,
+	"roles": [
+		{
+			"role": "Placement Author"
+		},
+		{
+			"role": "Placement Publisher"
+		},
+		{
+			"role": "Placement Invigilator"
+		},
+		{
+			"role": "Placement Assessor"
+		},
+		{
+			"role": "Placement Reviewer"
+		},
+		{
+			"role": "Placement Releaser"
+		}
+	],
+	"title": "TH Placement"
+}

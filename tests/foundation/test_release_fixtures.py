@@ -1,11 +1,14 @@
-"""Static validation of the R1 release-surface fixture (role-scoped
-workspaces). Pure JSON/AST; imports nothing from the app.
+"""Static validation of the R1 release surface (role-scoped workspaces).
+Pure JSON/AST; imports nothing from the app.
 
-Guards the invariant that workspaces are pure native navigation
-configuration: every role row exists in the role fixture, every link
-target is a known native or TH doctype, the content canvas is valid JSON
-whose card blocks match Card Break labels, and modules exist in
-modules.txt. Hosted proof of import + role visibility lives in
+The workspaces ship as native module files
+(<module>/workspace/<slug>/<slug>.json, the upstream-canonical route used by
+ERPNext itself) and import via module sync. This suite guards the invariant
+that they are pure native navigation configuration: every role row exists in
+the role fixture, every link target is a known native or TH doctype, the
+content canvas is valid JSON whose card blocks match Card Break labels,
+modules exist in modules.txt, and the files sit at the exact paths module
+sync scans. Hosted proof of import + role visibility lives in
 tools/placement/native_checks.py (release-* checks).
 """
 import json
@@ -14,7 +17,6 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "apps/toefl_house/toefl_house"
-WORKSPACES = APP / "fixtures/workspace.json"
 ROLES = APP / "fixtures/role.json"
 MODULES = APP / "modules.txt"
 HOOKS = APP / "hooks.py"
@@ -44,12 +46,31 @@ KNOWN_DOCTYPES = {
 class ReleaseFixtureTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.workspaces = json.loads(WORKSPACES.read_text())
+        cls.workspaces = []
+        for module_file in sorted(APP.glob("*/workspace/*/*.json")):
+            cls.workspaces.append(json.loads(module_file.read_text()))
+        cls.module_files = sorted(APP.glob("*/workspace/*/*.json"))
         cls.role_names = {r["name"] for r in json.loads(ROLES.read_text())}
         cls.modules = {m.strip() for m in MODULES.read_text().splitlines() if m.strip()}
 
     def test_expected_workspace_set(self):
         self.assertEqual({w["name"] for w in self.workspaces}, EXPECTED)
+
+    def test_module_file_layout(self):
+        # exact paths frappe.model.sync.get_doc_files scans for each module
+        for path in self.module_files:
+            ws = json.loads(path.read_text())
+            slug = ws["name"].lower().replace(" ", "-")
+            expected = APP / ws["module"].lower() / "workspace" / slug / f"{slug}.json"
+            self.assertEqual(path.resolve(), expected.resolve(), ws["name"])
+            self.assertEqual(path.stem, path.parent.name, ws["name"])
+
+    def test_app_field_set(self):
+        # module sync imports with ignore_validate=True, so the controller's
+        # `self.app = get_module_app(self.module)` backfill never runs - the
+        # native module-file format must carry the app explicitly.
+        for ws in self.workspaces:
+            self.assertEqual(ws["app"], "toefl_house", ws["name"])
 
     def test_roles_exist_and_are_explicit(self):
         for ws in self.workspaces:
@@ -85,11 +106,13 @@ class ReleaseFixtureTests(unittest.TestCase):
             self.assertEqual(ws["name"], ws["label"], ws["name"])
             self.assertEqual(ws["name"], ws["title"], ws["name"])
 
-    def test_hooks_fixture_entry_covers_all(self):
+    def test_no_duplicate_import_route(self):
+        # workspaces must not also be listed as fixtures: the fixture route
+        # (data_import=True) would re-import them force=True on every migrate
+        # and duplicate the module-sync route.
         text = HOOKS.read_text()
-        self.assertIn('"dt": "Workspace"', text)
-        for name in EXPECTED:
-            self.assertIn('"%s"' % name, text, (name, "missing from hooks fixture filter"))
+        self.assertNotIn('"dt": "Workspace"', text)
+        self.assertFalse((APP / "fixtures/workspace.json").exists())
 
 
 if __name__ == "__main__":

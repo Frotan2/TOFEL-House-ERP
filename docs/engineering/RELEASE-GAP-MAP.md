@@ -50,7 +50,7 @@ runs, which exercised these authorities directly.
 ### 1.2 Configuration / assembly only (engineer-executable now)
 | ID | Item | Treatment | Status |
 |---|---|---|---|
-| R1 | Role-scoped staff Desk workspaces (navigation; grants no read — pinned frappe `get_workspaces → is_permitted` Has-Role intersection) | Native `Workspace` fixtures, 6 workspaces, explicit roles | **In execution this turn**; hosted checks `release-*` |
+| R1 | Role-scoped staff Desk workspaces (navigation; grants no read — pinned frappe `get_workspaces → is_permitted` Has-Role intersection) | Native `Workspace` module files (`<module>/workspace/…`), 6 workspaces, explicit roles | **In execution this turn**; hosted checks `release-*` |
 | R2 | Factual operations registers (tuition billing, placement billing, attendance coverage) as role-restricted native Query Reports — raw facts only, no denominators/thresholds (metrics layer is A12, owner stewards) | Native `Report` fixtures | Next |
 | R3 | Export/attachment/print-path containment proofs for the guarded doctypes (addresses ledger "broad roles/attachment/export/print paths" for implemented slices) + native health/error-observability probes | Hosted negative checks | Next after R2 |
 
@@ -103,7 +103,7 @@ platform/warehouse (prohibited), any new ERP-adjacent platform.
 
 | # | Work | Depends on | Parallel-safe? |
 |---|---|---|---|
-| R1 | Workspaces + hosted proof (this turn) | — | yes (fixtures + own check block) |
+| R1 | Workspaces + hosted proof (this turn) | — | yes (native module files + own check block) |
 | R2 | Query-Report registers + hosted proof | R1 merged (shares suite) | yes (disjoint fixture) |
 | R3 | Export/attachment containment proofs + observability probes | R2 merged | yes (own check block) |
 | R4 | Owner decision packet (D1–D8 one-page asks, current state per gate) | — | yes |

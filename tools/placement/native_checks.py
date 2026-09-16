@@ -2762,7 +2762,7 @@ def main():
         check('release-workspace-role-visibility',ws_visibility)
         def ws_no_privilege_escalation():
             # Navigation grants no read: the document permission model stays
-            # authoritative after the workspace fixtures are installed.
+            # authoritative after the workspace module files are synced at install.
             frappe.set_user(users['finance_auditor'])
             try:listed=frappe.get_list('Fees')
             except frappe.PermissionError:listed=[]

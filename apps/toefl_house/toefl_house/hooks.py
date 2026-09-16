@@ -7,12 +7,14 @@ app_license = "MIT"
 required_apps = ["erpnext", "education", "foundation_security"]
 after_install = "toefl_house.install.after_install"
 after_migrate = "toefl_house.install.after_migrate"
+# R1 release surface note: the six role-scoped staff workspaces (TH Placement,
+# TH Admission, TH Enrollment, TH Teaching, TH Finance, TH Receipts) ship as
+# native module files (<module>/workspace/<slug>/<slug>.json) and import via
+# module sync - the upstream-canonical route ERPNext itself uses. They are pure
+# navigation configuration; they grant no read permission - the document
+# permission model stays authoritative.
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor"]]]},
-            {"dt": "Custom Field", "filters": [["dt", "=", "Sales Invoice"], ["fieldname", "=", "th_placement_case"]]},
-            # R1 release surface: role-scoped staff navigation. Workspaces are
-            # pure native configuration (navigation only); they grant no read
-            # permission - the document permission model stays authoritative.
-            {"dt": "Workspace", "filters": [["name", "in", ["TH Placement", "TH Admission", "TH Enrollment", "TH Teaching", "TH Finance", "TH Receipts"]]]}]
+            {"dt": "Custom Field", "filters": [["dt", "=", "Sales Invoice"], ["fieldname", "=", "th_placement_case"]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"
     for name in ("TH Placement Item Revision", "TH Placement Key Revision", "TH Placement Audit Event",
