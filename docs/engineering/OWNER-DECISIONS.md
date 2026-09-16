@@ -68,14 +68,18 @@ state:** R2 registers ship **raw facts only** (hosted-proven, run
 35049742120); no derived metric exists anywhere. **Unblocks:**
 reporting metrics layer above the registers.
 
-## D8 — Deployment topology ownership
-**Decide:** independent-host DR, capacity/monitoring ownership,
-TLS/proxy/session policy; who operates each.
-**Why owner-only:** operational and contractual. **Current state:**
-Phase 2 production acceptance ledger (2026-09-14) = REJECT with scoped
-passes (web/worker restart, scheduler, framework patch upgrade,
-hardened restore). **Unblocks:** Phase 2 production acceptance; this is
-the last class before production may leave REJECT.
+## D8 — Production-operation inputs
+**Decide:** accountable operating/recovery/escalation authority; approved
+topology and public trust boundary; persistence, file-storage, backup/key-custody
+and recovery objectives; monitoring/incident, capacity/availability, and
+change/rollback controls. The exact minimal fields and evidence are in the
+[D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md).
+**Why owner-only:** operational and contractual. **Current state:** the
+Phase 2 ledger remains REJECT with only scoped hosted passes. A current
+synthetic product SQL/files backup and separately created-site restore verifier
+exists but cannot establish independent-host DR or production operations.
+**Unblocks:** owner-selected production-operation engineering and evidence;
+it does not itself remove REJECT or waive any acceptance-ledger/security gate.
 
 ## D9 — Attendance-coverage register access anchor (R2 remainder)
 **Decide (pick one):**
@@ -135,6 +139,6 @@ independently satisfied.
 | D6a | **Tax not configured yet** | No tax configuration anywhere; recorded as decision, not omission |
 | D6b | **No gateway at launch** | Gateway closed as 'none'; payments app stays pinned-but-unapproved |
 | D7 | **Defer; raw reports now** | Registers stay raw-facts-only (matches shipped state) |
-| D8 | **Define role-based operational ownership** | **T5 DELIVERED** — [Operational Ownership Charter](OPERATIONAL-OWNERSHIP-CHARTER.md) derives the shipped role matrix and D8 responsibility slots. Named human/contractual assignments, topology and operating evidence remain owner work; production stays REJECT. |
+| D8 | **Define role-based operational ownership** | **T5 DELIVERED** — [Operational Ownership Charter](OPERATIONAL-OWNERSHIP-CHARTER.md) derives the shipped role matrix and D8 responsibility slots. The [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md) requests only accountable authorities, selected topology/controls, and required evidence — no names, credentials, or commitments are invented. Production stays REJECT. |
 | D9 | **(d) No separate register** | Gate CLOSED at status quo; attendance facts via guarded APIs only |
 | D10 | **(ii) Role-based report/page surfaces** | **T3 EXECUTED & QUALIFIED** — 13 native Pages (role-filtered command centre + 12 one-role action Pages), no new native Education/ERPNext authority; run 35073376790 @ 3587700, **542/542**. |

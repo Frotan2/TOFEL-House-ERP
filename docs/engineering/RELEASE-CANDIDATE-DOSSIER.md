@@ -104,24 +104,28 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
 
 ## 5. Outstanding classes (the only remaining ones)
 
-1. **Owner/deployment gates** — precise asks in OWNER-DECISIONS.md and
-   the Operational Ownership Charter. No engineering workaround exists that
-   would invent business rules or breach containment. Status: D2, D3 and
-   D10(ii) executed & qualified; D6a/D6b/D9 closed; D1/D4/D5/D7 deferred;
-   D8 charter delivered but named assignments/topology/operating evidence
-   remain pending.
-2. **Upstream items** — SEC-DEPS-01 (education frontend advisory set:
-   57 entries / 21 packages at pinned v16.1.0, independently re-scanned
-   and exactly reproduced 2026-09-16 via GitHub advisory API — 27 high /
-   26 medium / 4 low / 0 critical; runtime exploitability untested,
-   upstream toolchain migration required) and SEC-RT-TASK-01
-   (upstream realtime task room; product-side exposure proven nil —
-   UPSTREAM-TRACKING.md §1).
-3. **Deployment-scope operations** — independent-host DR, measured
-   restart downtime, HA, full-bundle upgrade/rollback, public
-   TLS/proxy qualification, capacity/monitoring ownership (D8). Scoped
-   hosted passes exist (ledger 2026-09-14); running them "somewhere
-   else" would be evidence theater.
+1. **Owner/deployment gates** — precise asks are isolated in the
+   [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md),
+   OWNER-DECISIONS.md, and the Operational Ownership Charter. No engineering
+   workaround exists that would invent business rules or breach containment.
+   Status: D2, D3 and D10(ii) executed & qualified; D6a/D6b/D9 closed;
+   D1/D4/D5/D7 deferred; D8 charter delivered but accountable authority,
+   selected topology/controls, and operating evidence remain open.
+2. **Upstream items** — SEC-DEPS-01 remains REJECT. The active-branch
+   frontend comparison `35075532676` at `d84f1c9` reproduced a 57-entry /
+   21-package frozen baseline (27 high / 26 medium / 4 low / 0 critical);
+   its isolated candidate has 23 matches across 6 packages, removes 35, and
+   introduces one. Both audits failed and the candidate is not adopted. A
+   maintained upstream migration and complete evidence are required. Also
+   open: SEC-RT-TASK-01 (upstream realtime task room; product-side exposure
+   proven nil — UPSTREAM-TRACKING.md §1).
+3. **Deployment-scope operations** — independent-host DR, measured restart
+   downtime, HA, full-bundle upgrade/rollback, public TLS/proxy qualification,
+   capacity, and monitoring operation (D8). The current branch additionally
+   proved a disposable product SQL/files backup and separate-site restore in
+   `35076449739` at `ebe7767`, with 542/542 native checks. It is explicitly
+   not independent-host, production, RPO/RTO, SLA, or availability evidence;
+   running production claims "somewhere else" would be evidence theater.
 4. **SEC-GUARDIAN-01** — fail-closed Guardian isolation awaits D4;
    narrow explicit-User-Permissions remedy already passes hosted.
 5. **Explicit deferrals (do not affect RC):** portals/self-service,

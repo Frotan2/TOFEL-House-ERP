@@ -1,5 +1,24 @@
 # Phase 2 security and production-readiness continuation
 
+## Current-branch reconciliation — 2026-09-16
+
+**REJECT remains current.** The historical checkpoints below are retained evidence,
+not current-branch production approval. At `d84f1c9`, hosted Foundation runtime run
+`35075532781` executed 114 restricted checks and its readiness, realtime, upgrade,
+Guardian browser, frontend-graph, restart, and remaining-gate probes passed; its
+frontend advisory audit failed. The published runtime and remaining-gate reports
+therefore set both `phase2_gate_passed` and `security_gate_passed` to false.
+
+At `ebe7767`, separate hosted run `35076449739` additionally passed 542/542 product
+native checks and a disposable Bench SQL/public/private-files backup → separately
+created-site restore verifier. The verifier compared representative records from 14
+doctypes and private File bytes, kept a distinct restore database credential, and
+reapplied the site encryption key. It is evidence of that synthetic code path only,
+not independent-host DR, production backup/key custody, RPO/RTO/SLA, topology, or
+availability. The canonical current record is the
+[acceptance ledger](foundation-production-acceptance-ledger.json), and owner inputs
+remain isolated in the [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md).
+
 ## Subsequent dependency and operations qualification — 2026-09-14
 
 **REJECT remains current.** See [final qualification review](foundation-final-qualification.md)

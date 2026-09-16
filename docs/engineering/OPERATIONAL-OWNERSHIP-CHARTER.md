@@ -112,8 +112,11 @@ selects that role nor supplies a window, amount, tax treatment or refund term.
 
 The application code has no production deployment, host, monitoring, backup or
 identity-operations role. The following are the operational ownership slots
-that remain to be assigned by the owner/contract holder. They are restatements
+that remain to be selected by the owner/contract holder. They are restatements
 of D8 and the existing foundation production-acceptance ledger, not new policy.
+The exact minimal response and the required production evidence are in the
+[D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md); it requests no
+names, credentials, or invented service commitments.
 
 | Responsibility slot needing an accountable owner | Required decision/evidence already recorded | Current state |
 |---|---|---|
@@ -127,8 +130,9 @@ of D8 and the existing foundation production-acceptance ledger, not new policy.
 T5 surfaced no new business-policy question. The genuine unresolved owner work
 is precise:
 
-1. assign a named person, internal function or contractual provider to each
-   D8 responsibility slot above, including the authority to operate it;
+1. select an accountable authority for each D8 responsibility slot above,
+   including the authority to operate, recover, and escalate; this document
+   does not name one;
 2. provide the D8 topology, recovery, capacity/monitoring and TLS/proxy/session
    decisions/targets needed to design and rehearse production operations; and
 3. separately decide the already-open policy gates recorded in
