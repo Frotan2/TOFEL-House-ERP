@@ -1,6 +1,6 @@
 # TOEFL House ERP — Upstream Tracking Evidence (R5)
 
-Date: 2026-09-16 · Branch: `arena/01a0a496-tofel-house-erp`
+Date: 2026-09-16 · Branch: `arena/01a0a942-tofel-house-erp`
 Scope: evidence that upstream/external risk items are precisely
 tracked, with the product-side boundary verified here and the upstream
 remainder stated exactly. **Production remains REJECT.**
@@ -54,7 +54,7 @@ $ grep -rn "publish_realtime\|realtime_subscribe\|frappe.realtime\|socketio" \
   toolchain migration — upstream scope; not patchable in-repo without
   inventing a fork. Tracked here with the exact pin so the triage can
   be re-run against any future upstream release.
-- **Dated re-scan (2026-09-16, this branch):** the pinned lockfile
+- **Dated Education re-scan (2026-09-16, this branch):** the pinned lockfile
   (`frappe/education@93bc7075` `frontend/yarn.lock`, fetched via GitHub
   contents API) parses to **279 unique resolved packages**; all six
   recorded top-level pins match it exactly. Full scan via the GitHub
@@ -68,6 +68,22 @@ $ grep -rn "publish_realtime\|realtime_subscribe\|frappe.realtime\|socketio" \
   build/dev toolchain; runtime exploitability remains **not tested**.
   Full machine-readable result:
   `docs/engineering/evidence/phase-2/education-frontend-advisory-rescan-2026-09-16.json`.
+- **Current resolved-stack audit (2026-09-16, this branch):** hosted Foundation
+  run `35080305713` at `53f867ae67ef6fbaebe595b470abeab081f33f24` ran the
+  collector after the actual Bench asset build. It used the Bench interpreter's
+  installed distributions (161 package names, queried against OSV/PyPI) and
+  supplied installed Frappe/ERPNext/Education/Payments/HRMS Node roots plus
+  Education frontend (572 package names, queried against npm bulk advisories).
+  It recorded **14 PyPI/OSV finding records** and **97 npm advisory entries**,
+  so its diagnostic check failed as intended. The entire runtime report is
+  `Foundation runtime evidence` check `104748126767`, SHA-256
+  `ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde`;
+  the detailed `stack-dependency-audit.json` was retained as restricted
+  workflow evidence. The checker records MariaDB and Redis digest references
+  only as inventory; it is not an OS-package or container-image CVE scanner,
+  full SBOM, exploit/reachability assessment, remediation, or production
+  approval. These findings make `SEC-DEPS-01` a whole-resolved-stack REJECT
+  gate, not merely an Education frontend observation.
 
 ## 3. Upgrade-path note
 
@@ -80,8 +96,8 @@ python 3.14.7, node 24.21.0, mariadb 11.8.9, redis 8.6.6.
 **Upgrade procedure (when authorized):**
 1. Bump one app at a time to the newest non-prerelease tag in the same
    major line (`bench update --app <app>`), run migrations.
-2. Gate: the full hosted suite (currently **533 checks**, run
-   35053305607 @ `46e5040`) must pass green before the bump is
+2. Gate: the full hosted suite (currently **542 checks**, run
+   35073376790 @ `3587700`) must pass green before the bump is
    accepted — this suite directly exercises pinned framework behavior
    (permission model, workspace visibility, File/print paths), so it
    is the regression gate for framework upgrades by construction.

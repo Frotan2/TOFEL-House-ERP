@@ -68,7 +68,7 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
 
 | Suite | Tests |
 |---|---|
-| tests/foundation | 61 |
+| tests/foundation | 73 |
 | tests/placement | 148 |
 | tests/admission | 6 |
 | tests/enrollment | 10 |
@@ -111,14 +111,21 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
    Status: D2, D3 and D10(ii) executed & qualified; D6a/D6b/D9 closed;
    D1/D4/D5/D7 deferred; D8 charter delivered but accountable authority,
    selected topology/controls, and operating evidence remain open.
-2. **Upstream items** — SEC-DEPS-01 remains REJECT. The active-branch
-   frontend comparison `35075532676` at `d84f1c9` reproduced a 57-entry /
-   21-package frozen baseline (27 high / 26 medium / 4 low / 0 critical);
-   its isolated candidate has 23 matches across 6 packages, removes 35, and
-   introduces one. Both audits failed and the candidate is not adopted. A
-   maintained upstream migration and complete evidence are required. Also
-   open: SEC-RT-TASK-01 (upstream realtime task room; product-side exposure
-   proven nil — UPSTREAM-TRACKING.md §1).
+2. **Upstream items** — SEC-DEPS-01 remains REJECT. The current Foundation
+   runtime `35080305713` at `53f867a` ran a post-build resolved-stack audit:
+   161 Bench-Python names yielded 14 PyPI/OSV finding records and 572 supplied
+   installed Node names yielded 97 npm advisory entries. Its full runtime
+   evidence is check `104748126767`, SHA-256
+   `ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde`.
+   The diagnostic failed as intended; it has no OS-package/container-CVE,
+   exploitability/reachability, full-SBOM, remediation, or production claim.
+   Separately, the Education frontend comparison `35075532676` at `d84f1c9`
+   reproduced a 57-entry / 21-package frozen baseline (27 high / 26 medium /
+   4 low / 0 critical); its isolated candidate has 23 matches across 6
+   packages, removes 35, and introduces one. Both audits failed and the
+   candidate is not adopted. A maintained upstream migration and clean scoped
+   re-runs are required. Also open: SEC-RT-TASK-01 (upstream realtime task
+   room; product-side exposure proven nil — UPSTREAM-TRACKING.md §1).
 3. **Deployment-scope operations** — independent-host DR, measured restart
    downtime, HA, full-bundle upgrade/rollback, public TLS/proxy qualification,
    capacity, and monitoring operation (D8). The current branch additionally

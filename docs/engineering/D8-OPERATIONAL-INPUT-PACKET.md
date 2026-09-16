@@ -28,7 +28,7 @@ T3, or T5 scope.
 
 | Evidence | Actual observation | Limit that remains |
 |---|---|---|
-| Foundation runtime, `35076449577` at `ebe77676fffb3e2e1f0b49cac8e18c5e7763180a` | 115 restricted checks ran; 114 passed. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart, encrypted backup/restore and the remaining-gate probes ran; the one failing restricted check was the frontend advisory audit. | The workflow and its `Foundation runtime evidence` / `Foundation remaining gate evidence` Checks are **failure/REJECT** evidence; `phase2_gate_passed` and `security_gate_passed` are both false. It is not a production deployment. |
+| Foundation runtime, `35080305713` at `53f867ae67ef6fbaebe595b470abeab081f33f24` | **116** restricted checks ran; **114** passed. The current post-build full-stack audit inventoried 161 Bench-Python package names and 572 supplied installed Node package names, and recorded 14 PyPI/OSV and 97 npm advisory entries. It records the digest-pinned MariaDB/Redis references as inventory-only. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart, encrypted backup/restore and remaining-gate probes passed; both the full-stack and Education frontend advisory checks failed on matches. | The workflow and its `Foundation runtime evidence` / `Foundation remaining gate evidence` Checks are **failure/REJECT** evidence; SHA-256 `ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde` / `2af4fef7c2db78e0daa9b6c83aaeed3a3b92c72da41bc19e58a2f4beabec4e6c`; `phase2_gate_passed` and `security_gate_passed` are both false. This audit is not an exploit/reachability, OS-package, container-CVE, full-SBOM, or production-deployment claim. |
 | Product backup/restore, `35076449739` at `ebe77676fffb3e2e1f0b49cac8e18c5e7763180a` | Native acceptance re-ran **542/542**. `bench backup --with-files` captured SQL, public files, and private files; restoration into `placement-restore.localhost` used a distinct database and credential, then reapplied the site encryption key and non-database test flags. The restore verifier passed representative record count/name-digest comparisons across 14 doctypes and a private File byte SHA-256 check. | The runner report itself says `production: REJECT` and scopes this as disposable synthetic product recovery, **not** full Placement requalification, an offsite backup, real production DR, an RPO/RTO, or availability proof. |
 | First product rehearsal, `35075532675` at `d84f1c9bdcfe704a2fdcde213e4891b8f49f090b` | The 542 native checks passed, then Bench backup failed before restoration because the hosted MySQL client attempted its optional `information_schema.COLUMN_STATISTICS` query against pinned MariaDB. | The failure is retained as REJECT evidence. The retry added a local hosted-only `mysqldump` wrapper which adds `--column-statistics=0` only when that client supports the option; it does not change the pinned database or suppress any backup failure. |
 
@@ -73,12 +73,16 @@ only.
    accountable operational authority is present in the repository.
 2. No separate-infrastructure production-like backup/restore, host-loss, rollback,
    alert-delivery, capacity, or public-edge evidence exists.
-3. `SEC-DEPS-01` remains a failure: the active-branch frontend comparison run
-   `35075532676` at `d84f1c9bdcfe704a2fdcde213e4891b8f49f090b` built both profiles
-   but both audits failed. The frozen baseline has 57 advisory matches across 21
-   packages; its isolated candidate has 23 matches across 6 packages, removes 35
-   baseline matches, and introduces one. The candidate is not adopted. This is
-   rejection evidence, not a partial pass or a waiver.
+3. `SEC-DEPS-01` remains a failure. Current full-stack hosted runtime run
+   `35080305713` at `53f867ae67ef6fbaebe595b470abeab081f33f24` has a failed
+   post-build resolved-tree audit: 14 PyPI/OSV finding records and 97 npm advisory
+   entries across its full supplied installed trees. It covers neither OS packages
+   nor container CVEs and establishes no exploitability/reachability. Separately,
+   the active-branch Education frontend comparison `35075532676` at `d84f1c9bdcfe704a2fdcde213e4891b8f49f090b`
+   built both profiles but both audits failed. Its frozen baseline has 57 advisory
+   matches across 21 packages; its isolated candidate has 23 matches across 6
+   packages, removes 35 baseline matches, and introduces one. The candidate is not
+   adopted. This is rejection evidence, not a partial pass or a waiver.
 4. `SEC-GUARDIAN-01` and `SEC-RT-TASK-01` remain tracked by the acceptance ledger;
    D8 does not convert their bounded evidence into production authorization.
 5. The synthetic-only application guard remains enabled and must not be relaxed

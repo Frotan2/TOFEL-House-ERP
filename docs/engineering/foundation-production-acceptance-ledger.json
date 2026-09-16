@@ -11,15 +11,15 @@
     "date": "2026-09-16",
     "branch": "arena/01a0a942-tofel-house-erp",
     "foundation_runtime": {
-      "run": "35076449577",
-      "commit": "ebe77676fffb3e2e1f0b49cac8e18c5e7763180a",
-      "check": "104738320609",
-      "report_sha256": "0707017064e157226de8ef99738e031e4479ac9ae98b511c790cfa9375b65947",
-      "remaining_gate_check": "104738323273",
-      "remaining_gate_report_sha256": "fe1bea0a51f9828f29250fd9728fc568c336c72854278ea0371b822b62f28771",
+      "run": "35080305713",
+      "commit": "53f867ae67ef6fbaebe595b470abeab081f33f24",
+      "check": "104748126767",
+      "report_sha256": "ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde",
+      "remaining_gate_check": "104748129346",
+      "remaining_gate_report_sha256": "2af4fef7c2db78e0daa9b6c83aaeed3a3b92c72da41bc19e58a2f4beabec4e6c",
       "status": "fail",
-      "observed": "115 restricted checks ran; 114 passed. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed. The hosted frontend advisory audit failed.",
-      "limits": "The failure is current REJECT evidence; phase2_gate_passed and security_gate_passed remain false. This is not production deployment evidence."
+      "observed": "116 restricted checks ran; 114 passed. The post-asset-build resolved-stack audit inventoried 161 Bench-Python package names and 572 supplied installed Node package names; it recorded 14 PyPI/OSV finding records and 97 npm advisory entries. The pinned MariaDB/Redis references are inventory-only. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed; both full-stack and Education frontend advisory audits failed.",
+      "limits": "Current REJECT evidence: phase2_gate_passed and security_gate_passed remain false. The audit does not establish exploitability/reachability, a complete SBOM, OS-package or container-image CVE coverage, remediation, or production approval."
     },
     "product_restore_rehearsal": {
       "run": "35076449739",
@@ -77,9 +77,12 @@
       "limits": "Same controlled runner/Bench; not an independent-host disaster recovery or approved offsite key/backup retention process."
     },
     {
-      "id": "other-dependency-trees",
-      "status": "not_fully_qualified",
-      "closure": "Audit all relevant Frappe/ERPNext/HRMS/Payments, Node/server, Python and container dependency surfaces. Education-only results are not a whole-stack SBOM/security pass."
+      "id": "resolved-dependency-trees",
+      "status": "fail",
+      "evidence": "Foundation runtime 35080305713, check 104748126767, report SHA-256 ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde",
+      "observed": "After actual asset build, the Bench interpreter inventory held 161 PyPI package names and supplied installed Frappe/ERPNext/Education/Payments/HRMS plus Education frontend Node roots held 572 package names. OSV returned 14 PyPI finding records; npm returned 97 advisory entries. The audit correctly failed on these matches.",
+      "limits": "No exploitability/reachability or remediation conclusion; no complete SBOM, host-OS-package or container-image CVE coverage. MariaDB/Redis digest references are inventory-only.",
+      "closure": "A coherent maintained migration of the affected pinned upstream stack, clean relevant resolved-tree re-runs, and separately selected OS/container dependency coverage where required."
     },
     {
       "id": "public-deployment-boundary",

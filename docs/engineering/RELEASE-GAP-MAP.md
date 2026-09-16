@@ -35,9 +35,12 @@ is invented anywhere in this plan.**
   foundation-production-acceptance-ledger.json): REJECT; scoped passes
   for web/worker restart, scheduler, framework patch upgrade, hardened
   restore; open items SEC-DEPS-01, SEC-GUARDIAN-01, SEC-RT-TASK-01 and
-  deployment-scope operations. Current-branch Foundation run `35076449577`
-  at `ebe7767` ran 115 restricted checks; 114 passed and the advisory audit
-  failed, so both Phase 2 and security gates remain false.
+  deployment-scope operations. Current-branch Foundation run `35080305713`
+  at `53f867a` ran 116 restricted checks; 114 passed. Its new post-build
+  full-stack resolved-tree audit recorded 14 PyPI/OSV and 97 npm advisory
+  entries, while the Education frontend audit also failed. Both Phase 2 and
+  security gates remain false; this is not OS-package, container-CVE,
+  exploitability/reachability, full-SBOM, or production evidence.
 - D8 engineering now has a hosted disposable product SQL/public-files/private-files
   backup and distinct-site restore rehearsal: run `35076449739` at `ebe7767`
   passed its 542 native checks and restore verifier. This does not reopen a
@@ -98,9 +101,15 @@ invent business rules.
 
 ### 1.5 Security gates (non-owner parts vs upstream/owner parts)
 - **Closed here:** A13 implemented-slice containment (523/523).
-- **SEC-DEPS-01** (frontend dependency advisories): requires coherent
-  maintained upstream toolchain migration — upstream scope, tracked; not
-  patchable in-repo without inventing a fork.
+- **SEC-DEPS-01** (resolved dependency advisories): current hosted runtime
+  inventory covers 161 Bench-Python names plus 572 supplied installed Node names
+  and reports 14 PyPI/OSV finding records plus 97 npm advisory entries (run
+  `35080305713`, check `104748126767`, SHA-256
+  `ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde`). A
+  coherent maintained upstream stack migration and clean re-run are required;
+  patching the pinned upstream bundle in-repo would invent a fork. The audit
+  explicitly does not cover OS packages or container image CVEs, and does not
+  establish exploitability/reachability, an SBOM, or production acceptance.
 - **SEC-GUARDIAN-01**: fail-closed Guardian isolation requires D4 policy;
   the narrow explicit-User-Permissions remedy already passes hosted.
 - **SEC-RT-TASK-01**: upstream realtime task-room behavior. Product-side

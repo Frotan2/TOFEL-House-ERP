@@ -3,11 +3,18 @@
 ## Current-branch reconciliation — 2026-09-16
 
 **REJECT remains current.** The historical checkpoints below are retained evidence,
-not current-branch production approval. At `ebe7767`, hosted Foundation runtime run
-`35076449577` executed 115 restricted checks; 114 passed and its readiness, realtime, upgrade,
-Guardian browser, frontend-graph, restart, and remaining-gate probes passed; its
-frontend advisory audit failed. The published runtime and remaining-gate reports
-therefore set both `phase2_gate_passed` and `security_gate_passed` to false.
+not current-branch production approval. At `53f867a`, hosted Foundation runtime run
+`35080305713` executed 116 restricted checks; 114 passed. Its post-build resolved-stack
+audit inventoried 161 Bench-Python and 572 supplied installed Node package names,
+recording 14 PyPI/OSV finding records and 97 npm advisory entries; its full-stack and
+Education frontend advisory diagnostics failed. Readiness, realtime, upgrade, Guardian
+browser, frontend-graph, restart, and remaining-gate probes passed. The published runtime
+and remaining-gate reports (Checks `104748126767` / `104748129346`; SHA-256
+`ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde` /
+`2af4fef7c2db78e0daa9b6c83aaeed3a3b92c72da41bc19e58a2f4beabec4e6c`) therefore
+set both `phase2_gate_passed` and `security_gate_passed` to false. The dependency audit
+is not a claim of exploitability/reachability, OS-package or container-CVE coverage,
+a complete SBOM, remediation, or production approval.
 
 At `ebe7767`, separate hosted run `35076449739` additionally passed 542/542 product
 native checks and a disposable Bench SQL/public/private-files backup → separately
