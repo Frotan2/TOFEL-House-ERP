@@ -111,27 +111,25 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
    Status: D2, D3 and D10(ii) executed & qualified; D6a/D6b/D9 closed;
    D1/D4/D5/D7 deferred; D8 charter delivered but accountable authority,
    selected topology/controls, and operating evidence remain open.
-2. **Upstream items** — SEC-DEPS-01 remains REJECT. The current Foundation
-   runtime `35084695840` at `955e4cd` ran a post-build resolved-stack audit:
-   161 Bench-Python names yielded 14 PyPI/OSV finding records across four
-   packages and 572 supplied installed Node names yielded 97 npm advisory
-   entries across 36 packages (2 critical / 49 high / 39 moderate / 7 low).
-   Exact IDs and versions are in
-   [`resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
-   Its full runtime evidence is check `104762158723`, SHA-256
-   `f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc`.
+2. **Upstream items** — SEC-DEPS-01 remains **UPSTREAM-BLOCKED / REJECT**. The
+   latest Foundation runtime `35090904508` at
+   `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` ran 116 restricted checks; 114
+   passed. Its post-build resolved-stack audit recorded 14 PyPI/OSV finding
+   records across four packages and 97 npm advisory findings; both the full-stack
+   and Education frontend advisory checks failed. Runtime/remaining-gate Checks
+   `104787576338` / `104787579362` have SHA-256
+   `08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f` /
+   `3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa`.
    The diagnostic failed as intended; it has no OS-package/container-CVE,
    exploitability/reachability, full-SBOM, remediation, or production claim.
-   Separately, the Education frontend comparison `35075532676` at `d84f1c9`
-   reproduced a 57-entry / 21-package frozen baseline (27 high / 26 medium /
-   4 low / 0 critical); its isolated candidate has 23 matches across 6
-   packages, removes 35, and introduces one. Both audits failed and the
-   candidate is not adopted. A maintained upstream migration and clean scoped
-   re-runs are required. An evidence review of all current newer official v16
-   inputs rejects a fabricated candidate before build: Frappe/ERPNext's
-   dependency inputs are byte-identical, Education has no newer release and
-   unchanged branch locks, pdfkit has no listed patch, and Bench constrains
-   setuptools below its fixed version. See
+   The active-branch Education frontend comparison `35090760597` had 57 baseline
+   advisory entries across 21 packages and 23 isolated-candidate entries across
+   six; both audits failed and the candidate is not adopted. A maintained
+   upstream migration and clean scoped re-runs are required. An evidence review
+   of all current newer official v16 inputs rejects a fabricated candidate before
+   build: Frappe/ERPNext's dependency inputs are byte-identical, Education has
+   no newer release and unchanged branch locks, pdfkit has no listed patch, and
+   Bench constrains setuptools below its fixed version. See
    [`dependency-remediation-candidate-assessment-2026-09-16.json`](evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json).
    Also open: SEC-RT-TASK-01 (upstream realtime task room; product-side
    exposure proven nil — UPSTREAM-TRACKING.md §1).

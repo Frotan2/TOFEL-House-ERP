@@ -1,5 +1,5 @@
 {
-  "date": "2026-09-14",
+  "date": "2026-09-16",
   "recommendation": "REJECT",
   "phase2_gate_passed": false,
   "security_gate_passed": false,
@@ -7,33 +7,6 @@
   "production_candidate_adopted": false,
   "scope": "Current foundation acceptance; architecture remains candidate. Bounded synthetic product evidence is recorded separately; no production implementation or deployment authorization.",
   "verification": "evidence/phase-2/dependency-operations-hosted-verification.json",
-  "current_branch_requalification": {
-    "date": "2026-09-16",
-    "foundation_runtime": {
-      "run": "35084695840",
-      "commit": "955e4cd5eedc34b90f4fbfce047339e18558f1f2",
-      "check": "104762158723",
-      "report_sha256": "f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc",
-      "remaining_gate_check": "104762162219",
-      "remaining_gate_report_sha256": "b03a2678f7d8a296a90adf8ce1b567b326431d5bcdaca6d808ee0874cf731afe",
-      "status": "fail",
-      "observed": "116 restricted checks ran; 114 passed. The post-asset-build resolved-stack audit inventoried 161 Bench-Python package names and 572 supplied installed Node package names; it recorded 14 PyPI/OSV finding records across four packages and 97 npm advisory entries across 36 packages (2 critical, 49 high, 39 moderate, 7 low). Exact IDs, queried versions and provider ranges are retained in evidence/phase-2/resolved-stack-advisory-2026-09-16.json. The pinned MariaDB/Redis references are inventory-only. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed; both full-stack and Education frontend advisory audits failed.",
-      "limits": "Current REJECT evidence: phase2_gate_passed and security_gate_passed remain false. The audit does not establish exploitability/reachability, a complete SBOM, OS-package or container-image CVE coverage, remediation, or production approval."
-    },
-    "product_restore_rehearsal": {
-      "run": "35076449739",
-      "commit": "ebe77676fffb3e2e1f0b49cac8e18c5e7763180a",
-      "runner_check": "104733077969",
-      "native_check": "104733073877",
-      "runner_report_sha256": "970bef76b54814e8ed7fd26de89417a7d3b83875791538babe792c7ce0d33598",
-      "native_report_sha256": "e1ff7050e10830ae651766b838488a6c90bbe8c7fae679617a250a6f8f58d08f",
-      "status": "pass_scoped",
-      "observed": "542/542 native checks passed. Bench SQL/public/private-file backup restored to a separate synthetic site/database; representative count/name digests across 14 doctypes and a private File SHA-256 passed. Source database credentials were not copied; the site encryption key was restored for encrypted content.",
-      "limits": "One disposable hosted runner only; not full Placement requalification, offsite backup, independent-host disaster recovery, production topology, key custody, RPO/RTO, SLA, or availability proof. Production remains REJECT."
-    },
-    "active_branch": "arena/01a0a9f7-tofel-house-erp",
-    "evidence_branch": "arena/01a0a942-tofel-house-erp"
-  },
   "items": [
     {
       "id": "education-dependencies",
@@ -80,9 +53,9 @@
     {
       "id": "resolved-dependency-trees",
       "status": "fail",
-      "evidence": "Foundation runtime 35084695840, check 104762158723, report SHA-256 f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc; evidence/phase-2/resolved-stack-advisory-2026-09-16.json",
-      "observed": "After actual asset build, the Bench interpreter inventory held 161 PyPI package names and supplied installed Frappe/ERPNext/Education/Payments/HRMS plus Education frontend Node roots held 572 package names. OSV returned 14 finding records across pdfkit 1.0.0, pypdf 6.15.0, setuptools 80.9.0 and weasyprint 68.0. npm returned 97 advisory entries across 36 packages (2 critical, 49 high, 39 moderate, 7 low), with exact IDs and versions preserved in the evidence record. The audit correctly failed on these matches.",
-      "limits": "No exploitability/reachability or remediation conclusion; no complete SBOM, host-OS-package or container-image CVE coverage. MariaDB/Redis digest references are inventory-only.",
+      "evidence": "Latest Foundation runtime 35090904508 at 6e7ccb99fc9d5f80fe550aa187787c56d72fea47; runtime Check 104787576338 (SHA-256 08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f); remaining-gate Check 104787579362 (SHA-256 3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa)",
+      "observed": "After the actual asset build, the retained active-branch report recorded 14 Python OSV finding records across four packages and 97 npm advisory findings in the supplied installed trees. The full-stack and Education frontend advisory checks failed; the restricted run had 116 checks with 114 passing. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and scoped recovery probes passed.",
+      "limits": "No exploitability/reachability or remediation conclusion; no complete SBOM, host-OS-package or container-image CVE coverage. MariaDB/Redis digest references are inventory-only. Both phase2_gate_passed and security_gate_passed remain false; SEC-DEPS-01 is UPSTREAM-BLOCKED / REJECT.",
       "closure": "A coherent maintained migration of the affected pinned upstream stack, clean relevant resolved-tree re-runs, and separately selected OS/container dependency coverage where required."
     },
     {
@@ -121,5 +94,138 @@
   ],
   "architecture_decision": "foundation-architecture-decision.json",
   "risk_acceptance_granted": false,
-  "architecture_release_boundary": "Option 2 selected as maintenance direction; baseline is qualification-only and all current release gates remain unchanged."
+  "architecture_release_boundary": "Option 2 selected as maintenance direction; baseline is qualification-only and all current release gates remain unchanged.",
+  "historical_branch_requalification": {
+    "date": "2026-09-16",
+    "foundation_runtime": {
+      "run": "35084695840",
+      "commit": "955e4cd5eedc34b90f4fbfce047339e18558f1f2",
+      "check": "104762158723",
+      "report_sha256": "f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc",
+      "remaining_gate_check": "104762162219",
+      "remaining_gate_report_sha256": "b03a2678f7d8a296a90adf8ce1b567b326431d5bcdaca6d808ee0874cf731afe",
+      "status": "fail",
+      "observed": "116 restricted checks ran; 114 passed. The post-asset-build resolved-stack audit inventoried 161 Bench-Python package names and 572 supplied installed Node package names; it recorded 14 PyPI/OSV finding records across four packages and 97 npm advisory entries across 36 packages (2 critical, 49 high, 39 moderate, 7 low). Exact IDs, queried versions and provider ranges are retained in evidence/phase-2/resolved-stack-advisory-2026-09-16.json. The pinned MariaDB/Redis references are inventory-only. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed; both full-stack and Education frontend advisory audits failed.",
+      "limits": "Current REJECT evidence: phase2_gate_passed and security_gate_passed remain false. The audit does not establish exploitability/reachability, a complete SBOM, OS-package or container-image CVE coverage, remediation, or production approval."
+    },
+    "product_restore_rehearsal": {
+      "run": "35076449739",
+      "commit": "ebe77676fffb3e2e1f0b49cac8e18c5e7763180a",
+      "runner_check": "104733077969",
+      "native_check": "104733073877",
+      "runner_report_sha256": "970bef76b54814e8ed7fd26de89417a7d3b83875791538babe792c7ce0d33598",
+      "native_report_sha256": "e1ff7050e10830ae651766b838488a6c90bbe8c7fae679617a250a6f8f58d08f",
+      "status": "pass_scoped",
+      "observed": "542/542 native checks passed. Bench SQL/public/private-file backup restored to a separate synthetic site/database; representative count/name digests across 14 doctypes and a private File SHA-256 passed. Source database credentials were not copied; the site encryption key was restored for encrypted content.",
+      "limits": "One disposable hosted runner only; not full Placement requalification, offsite backup, independent-host disaster recovery, production topology, key custody, RPO/RTO, SLA, or availability proof. Production remains REJECT."
+    },
+    "active_branch": "arena/01a0a9f7-tofel-house-erp",
+    "evidence_branch": "arena/01a0a942-tofel-house-erp",
+    "classification": "historical_provenance"
+  },
+  "active_branch_qualification": {
+    "date": "2026-09-16",
+    "branch": "arena/01a0a9f7-tofel-house-erp",
+    "qualification_commit": "6e7ccb99fc9d5f80fe550aa187787c56d72fea47",
+    "latest_branch_head_at_reconciliation": "6e7ccb99fc9d5f80fe550aa187787c56d72fea47",
+    "classification": "hosted_synthetic_qualification_only",
+    "placement": {
+      "run": "35090760614",
+      "head_branch": "arena/01a0a9f7-tofel-house-erp",
+      "head_sha": "33b86aed6f8ea4b5997c50f0d1173f4f85af6dea",
+      "status": "pass_scoped",
+      "runner_check": "104779440466",
+      "runner_report_sha256": "9b3348ba2084039c8aec681b4ba4984bdf337fe2acbf772727ce8b35f278675a",
+      "native_check": "104779438124",
+      "native_report_sha256": "4c1e79f14c0d2c070bba58fb3d403ac95f60d3ea87af402ab7d8caa6d0caf1d3",
+      "observed": "Hosted native Placement run passed 542/542 checks; runner report passed 101 recorded setup/runtime checks. The report explicitly states production REJECT and scope is synthetic content-governance through controlled internal decision release, not full T01-T20 or production qualification.",
+      "limits": "Artifact ZIP retrieval is unavailable from this environment (artifact/results host returned EOF); the sanitized Checks reports and SHA-256 values are the preserved transport evidence. No production claim follows."
+    },
+    "foundation_runner": {
+      "run": "35090760595",
+      "head_branch": "arena/01a0a9f7-tofel-house-erp",
+      "head_sha": "33b86aed6f8ea4b5997c50f0d1173f4f85af6dea",
+      "status": "pass_scoped",
+      "check": "104776388441",
+      "report_sha256": "2a434dbd90874b96464f1d054b56bd136f85bb067454882fb9a9be0bbdec800d",
+      "observed": "Controlled hosted runner, Python artifact, Docker/Compose, MariaDB transaction/rollback, Redis health and version probes passed.",
+      "limits": "Runner/download/service qualification only; no ERP workflow or production approval."
+    },
+    "foundation_runtime": {
+      "run": "35090904508",
+      "head_branch": "arena/01a0a9f7-tofel-house-erp",
+      "head_sha": "6e7ccb99fc9d5f80fe550aa187787c56d72fea47",
+      "status": "fail_reject",
+      "runtime_check": "104787576338",
+      "runtime_report_sha256": "08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f",
+      "remaining_gate_check": "104787579362",
+      "remaining_gate_report_sha256": "3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa",
+      "restricted_checks": "116 total; 114 pass; hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail",
+      "observed": "The latest active-branch runtime failed at the pinned-foundation validation step after the hosted policy checks. Its retained report again records 14 Python OSV findings across four packages and 97 npm advisory findings, with the dependency and frontend advisory gates failing; remaining readiness, realtime, upgrade, Guardian browser, frontend graph, restart and scoped recovery probes passed.",
+      "phase2_gate_passed": false,
+      "security_gate_passed": false,
+      "product_implementation_authorized": false,
+      "limits": "Advisory matches are not exploitability/reachability proof, a full SBOM, OS/container CVE coverage or remediation. SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; no override or candidate adoption is authorized. This is hosted qualification evidence only and does not authorize production."
+    },
+    "frontend_candidate": {
+      "run": "35090760597",
+      "head_branch": "arena/01a0a9f7-tofel-house-erp",
+      "head_sha": "33b86aed6f8ea4b5997c50f0d1173f4f85af6dea",
+      "status": "fail_reject_not_adopted",
+      "check": "104776513232",
+      "report_sha256": "5fbd79f48e7264bef20e9294fcff049e3641a775bdb91ef85f92b5c105003466",
+      "observed": "Frozen baseline and isolated candidate both built and passed dependency constraints/API/module checks, but both audits failed. Baseline: 57 advisory entries across 21 packages; candidate: 23 entries across 6 packages. Production pins were unchanged.",
+      "limits": "Candidate is not adopted and is not a remediation or production approval."
+    },
+    "evidence_recovery": {
+      "run": "35090760612",
+      "head_branch": "arena/01a0a9f7-tofel-house-erp",
+      "head_sha": "33b86aed6f8ea4b5997c50f0d1173f4f85af6dea",
+      "status": "fail_evidence_retrieval",
+      "job": "104776240129",
+      "source_run": "34850654470",
+      "source_branch": "arena/01a09bf3-tofel-house-erp",
+      "observed": "Manual recovery did not publish recovered evidence because the historical artifact/results host returned EOF. No result was re-labeled or treated as recovered.",
+      "limits": "Recovery remains manual-only and is not a qualification gate."
+    },
+    "foundation_runtime_history": [
+      {
+        "run": "35090761035",
+        "head_branch": "arena/01a0a9f7-tofel-house-erp",
+        "head_sha": "33b86aed6f8ea4b5997c50f0d1173f4f85af6dea",
+        "status": "fail_reject",
+        "runtime_check": "104781844050",
+        "runtime_report_sha256": "00eba6adaae7466023ca8793f719a929d6fed948a5afe21820167893ce78c248",
+        "remaining_gate_check": "104781847090",
+        "remaining_gate_report_sha256": "3ba703f01e0a3125a94d3ce026e9b1173afea0ace764db3d5ed1fa69e988527f",
+        "restricted_checks": "116 total; 114 pass; hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail",
+        "observed": "Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed. The resolved-stack audit found 14 Python OSV findings across pdfkit 1.0.0, pypdf 6.15.0, setuptools 80.9.0 and weasyprint 68.0, plus 97 npm advisory findings across 21 package names in the supplied installed trees.",
+        "phase2_gate_passed": false,
+        "security_gate_passed": false,
+        "product_implementation_authorized": false,
+        "limits": "Advisory matches are not exploitability/reachability proof, a full SBOM, OS/container CVE coverage or remediation. SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; no override or candidate adoption is authorized."
+      },
+      {
+        "run": "35090904508",
+        "head_branch": "arena/01a0a9f7-tofel-house-erp",
+        "head_sha": "6e7ccb99fc9d5f80fe550aa187787c56d72fea47",
+        "status": "fail_reject",
+        "runtime_check": "104787576338",
+        "runtime_report_sha256": "08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f",
+        "remaining_gate_check": "104787579362",
+        "remaining_gate_report_sha256": "3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa",
+        "restricted_checks": "116 total; 114 pass; hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail",
+        "observed": "The latest active-branch runtime failed at the pinned-foundation validation step after the hosted policy checks. Its retained report again records 14 Python OSV findings across four packages and 97 npm advisory findings, with the dependency and frontend advisory gates failing; remaining readiness, realtime, upgrade, Guardian browser, frontend graph, restart and scoped recovery probes passed.",
+        "phase2_gate_passed": false,
+        "security_gate_passed": false,
+        "product_implementation_authorized": false,
+        "limits": "Advisory matches are not exploitability/reachability proof, a full SBOM, OS/container CVE coverage or remediation. SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; no override or candidate adoption is authorized. This is hosted qualification evidence only and does not authorize production."
+      }
+    ],
+    "latest_completed_runtime_run": "35090904508",
+    "latest_completed_runtime_commit": "6e7ccb99fc9d5f80fe550aa187787c56d72fea47",
+    "latest_completed_runtime_status": "fail_reject",
+    "prior_qualification_commit": "33b86aed6f8ea4b5997c50f0d1173f4f85af6dea",
+    "qualification_scope": "Latest Foundation runtime is qualified at the latest branch head; Placement, Foundation runner, frontend candidate and evidence-recovery records remain bound to their recorded earlier active-branch commit."
+  }
 }

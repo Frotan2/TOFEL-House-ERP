@@ -35,14 +35,15 @@ is invented anywhere in this plan.**
   foundation-production-acceptance-ledger.json): REJECT; scoped passes
   for web/worker restart, scheduler, framework patch upgrade, hardened
   restore; open items SEC-DEPS-01, SEC-GUARDIAN-01, SEC-RT-TASK-01 and
-  deployment-scope operations. Current-branch Foundation run `35084695840`
-  at `955e4cd` ran 116 restricted checks; 114 passed. Its new post-build
-  full-stack resolved-tree audit recorded 14 PyPI/OSV findings across four
-  packages and 97 npm advisory entries across 36 packages (2 critical / 49 high /
-  39 moderate / 7 low), while the Education frontend audit also failed. Both
-  Phase 2 and security gates remain false; this is not OS-package, container-CVE,
-  exploitability/reachability, full-SBOM, or production evidence. Exact matches:
-  [`resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
+  deployment-scope operations. Latest active-branch Foundation run `35090904508`
+  at `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` ran 116 restricted checks; 114
+  passed. Its post-build full-stack resolved-tree audit recorded 14 PyPI/OSV
+  findings across four packages and 97 npm advisory findings; the full-stack and
+  Education frontend audits failed. Both Phase 2 and security gates remain false;
+  this is not OS-package, container-CVE, exploitability/reachability, full-SBOM,
+  or production evidence. Runtime/remaining-gate Checks `104787576338` /
+  `104787579362` have SHA-256 `08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f` /
+  `3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa`.
 - D8 engineering now has a hosted disposable product SQL/public-files/private-files
   backup and distinct-site restore rehearsal: run `35076449739` at `ebe7767`
   passed its 542 native checks and restore verifier. This does not reopen a
@@ -103,14 +104,14 @@ invent business rules.
 
 ### 1.5 Security gates (non-owner parts vs upstream/owner parts)
 - **Closed here:** A13 implemented-slice containment (523/523).
-- **SEC-DEPS-01** (resolved dependency advisories): current hosted runtime
-  inventory covers 161 Bench-Python names plus 572 supplied installed Node names
-  and reports 14 PyPI/OSV finding records across four packages plus 97 npm
-  advisory entries across 36 packages (2 critical / 49 high / 39 moderate /
-  7 low; run `35084695840`, check `104762158723`, SHA-256
-  `f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc`).
-  Exact IDs and versions are retained in
-  [`resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
+- **SEC-DEPS-01** (resolved dependency advisories): latest hosted runtime
+  `35090904508` at `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` reports 14
+  PyPI/OSV finding records across four packages plus 97 npm advisory findings;
+  both the full-stack and Education frontend advisory checks fail (runtime Check
+  `104787576338`, SHA-256
+  `08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f`).
+  Remaining-gate Check `104787579362` has SHA-256
+  `3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa`.
   A coherent maintained upstream stack migration and clean re-run are required;
   patching the pinned upstream bundle in-repo would invent a fork. The audit
   explicitly does not cover OS packages or container image CVEs, and does not

@@ -68,27 +68,21 @@ $ grep -rn "publish_realtime\|realtime_subscribe\|frappe.realtime\|socketio" \
   build/dev toolchain; runtime exploitability remains **not tested**.
   Full machine-readable result:
   `docs/engineering/evidence/phase-2/education-frontend-advisory-rescan-2026-09-16.json`.
-- **Current resolved-stack audit (2026-09-16, this branch):** hosted Foundation
-  run `35084695840` at `955e4cd5eedc34b90f4fbfce047339e18558f1f2` ran the
-  collector after the actual Bench asset build. It used the Bench interpreter's
-  installed distributions (161 package names, queried against OSV/PyPI) and
-  supplied installed Frappe/ERPNext/Education/Payments/HRMS Node roots plus
-  Education frontend (572 package names, queried against npm bulk advisories).
-  It recorded **14 PyPI/OSV finding records across four packages** and **97 npm
-  advisory entries across 36 packages** (2 critical / 49 high / 39 moderate /
-  7 low), so its diagnostic check failed as intended. Exact advisory IDs,
-  queried versions, provider ranges, and the validated report provenance are
-  retained in
-  [`evidence/phase-2/resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
-  The entire runtime report is `Foundation runtime evidence` check
-  `104762158723`, SHA-256
-  `f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc`;
-  the detailed `stack-dependency-audit.json` was retained as restricted
-  workflow evidence. The checker records MariaDB and Redis digest references
-  only as inventory; it is not an OS-package or container-image CVE scanner,
-  full SBOM, exploit/reachability assessment, remediation, or production
-  approval. These findings make `SEC-DEPS-01` a whole-resolved-stack REJECT
-  gate, not merely an Education frontend observation.
+- **Latest resolved-stack audit (2026-09-16, this branch):** hosted Foundation
+  run `35090904508` at `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` ran the collector
+  after the actual Bench asset build. It recorded **14 PyPI/OSV finding records
+  across four packages** and **97 npm advisory findings** in the supplied installed
+  trees; both the full-stack and Education frontend advisory checks failed. The
+  runtime evidence Check is `104787576338`, SHA-256
+  `08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f`; the
+  remaining-gate Check is `104787579362`, SHA-256
+  `3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa`.
+  The detailed stack report was retained as restricted workflow evidence. The
+  checker records MariaDB and Redis digest references only as inventory; it is
+  not an OS-package or container-image CVE scanner, full SBOM,
+  exploit/reachability assessment, remediation, or production approval. These
+  findings keep `SEC-DEPS-01` a whole-resolved-stack REJECT check, not merely an
+  Education frontend observation.
 
 ### Current official-remediation candidate decision
 
