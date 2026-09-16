@@ -3209,10 +3209,13 @@ def main():
         def corr_fixtures():
             frappe.set_user('Administrator')
             si=frappe.db.get_value('Sales Invoice',{'th_placement_case':['is','set'],
-                'is_return':0,'docstatus':1},'name',order_by='creation asc')
-            assert si,('no TH placement invoice available for correction checks')
+                'is_return':0,'docstatus':1,'grand_total':['>',0]},
+                'name',order_by='creation asc')
+            assert si,('no chargeable TH placement invoice available for correction checks')
             si2=frappe.db.get_value('Sales Invoice',{'th_placement_case':['is','set'],
-                'is_return':0,'docstatus':1,'name':['!=',si]},'name',order_by='creation asc')
+                'is_return':0,'docstatus':1,'name':['!=',si],'grand_total':['>',0]},
+                'name',order_by='creation asc')
+            assert si2,('no second chargeable TH placement invoice for correction checks')
             if not frappe.db.exists('User',users['correction_probe']):
                 frappe.get_doc(dict(doctype='User',email=users['correction_probe'],
                     first_name='Synthetic correction_probe',enabled=1,send_welcome_email=0,
