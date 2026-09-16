@@ -1,6 +1,6 @@
 {
 	"app": "toefl_house",
-	"content": "[{\"id\":\"aZ5TIJcuwi\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>TH Finance</b></span>\",\"col\":12}},{\"id\":\"nzApgnA1oh\",\"type\":\"card\",\"data\":{\"card_name\":\"Billing\",\"col\":4}},{\"id\":\"91pPTEfLKc\",\"type\":\"card\",\"data\":{\"card_name\":\"Configuration\",\"col\":4}}]",
+	"content": "[{\"id\": \"aZ5TIJcuwi\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>TH Finance</b></span>\", \"col\": 12}}, {\"id\": \"nzApgnA1oh\", \"type\": \"card\", \"data\": {\"card_name\": \"Billing\", \"col\": 4}}, {\"id\": \"91pPTEfLKc\", \"type\": \"card\", \"data\": {\"card_name\": \"Configuration\", \"col\": 4}}, {\"id\": \"thRegCard01\", \"type\": \"card\", \"data\": {\"card_name\": \"Registers\", \"col\": 4}}]",
 	"docstatus": 0,
 	"doctype": "Workspace",
 	"for_user": "",
@@ -74,9 +74,27 @@
 			"link_to": "Company",
 			"link_type": "DocType",
 			"type": "Link"
+		},
+		{
+			"label": "Registers",
+			"type": "Card Break"
+		},
+		{
+			"is_query_report": 1,
+			"label": "TH Tuition Billing Register",
+			"link_to": "TH Tuition Billing Register",
+			"link_type": "Report",
+			"type": "Link"
+		},
+		{
+			"is_query_report": 1,
+			"label": "TH Placement Billing Register",
+			"link_to": "TH Placement Billing Register",
+			"link_type": "Report",
+			"type": "Link"
 		}
 	],
-	"module": "Finance",
+	"module": "Accounts",
 	"name": "TH Finance",
 	"public": 1,
 	"roles": [

@@ -2720,12 +2720,18 @@ def main():
         # (988e54f3c4c2, desk/desktop.py get_workspaces -> is_permitted):
         # visible iff the user holds one of the workspace Has Role rows;
         # they grant no document read. Probes use never-revoked sessions.
-        ws_spec={'TH Placement':('Placement',{'Placement Author','Placement Publisher','Placement Invigilator','Placement Assessor','Placement Reviewer','Placement Releaser'}),
-                 'TH Admission':('Admission',{'Admission Officer','Admission Reviewer','Admission Approver'}),
-                 'TH Enrollment':('Enrollment',{'Enrollment Officer'}),
-                 'TH Teaching':('Teaching',{'Teaching Scheduler','Attendance Recorder'}),
-                 'TH Finance':('Finance',{'Finance Officer'}),
-                 'TH Receipts':('Placement',{'Placement Auditor','Admission Auditor','Enrollment Auditor','Teaching Auditor','Finance Auditor'})}
+        # Pinned visibility model (frappe 988e54f3c4c2 desktop.py Workspace.__init__
+        # + utils/user.py allow_modules): a workspace is reachable only when its
+        # module holds at least one doctype the user can natively read/write/
+        # create, then the Has-Role table scopes it. Under A13 containment the
+        # API-first operational roles (invigilator, author, admission/enrollment/
+        # teaching staff) hold zero document permissions, so no workspace is
+        # visible to them by design (owner gate D10 covers any future Desk
+        # surface). Shipped surfaces: auditors (read the TH operations ledger,
+        # module Placement) and the finance officer (native Accounts User reads,
+        # module Accounts).
+        ws_spec={'TH Receipts':('Placement',{'Placement Auditor','Admission Auditor','Enrollment Auditor','Teaching Auditor','Finance Auditor'}),
+                 'TH Finance':('Accounts',{'Finance Officer'})}
         def ws_configured():
             frappe.set_user('Administrator')
             for ws_name,(module,roles) in ws_spec.items():
@@ -2736,7 +2742,10 @@ def main():
                 cards={l.label for l in ws.links if l.type=='Card Break'}
                 for l in ws.links:
                     if l.type=='Link':
-                        assert l.link_type=='DocType' and frappe.db.exists('DocType',l.link_to),(ws_name,l.label,l.link_to)
+                        if l.link_type=='DocType':
+                            assert frappe.db.exists('DocType',l.link_to),(ws_name,l.label,l.link_to)
+                        else:
+                            assert l.link_type=='Report' and frappe.db.exists('Report',l.link_to) and int(l.is_query_report or 0)==1,(ws_name,l.label,'report links must reference query reports')
                 content=json.loads(ws.content)
                 referenced={b['data']['card_name'] for b in content if b.get('type')=='card'}
                 assert referenced and referenced<=cards,(ws_name,sorted(referenced),sorted(cards))
@@ -2747,16 +2756,19 @@ def main():
             def visible(label):
                 frappe.set_user(users[label])
                 return {p['name'] for p in get_ws()['pages']}
-            probe={'invigilator':('TH Placement','TH Receipts'),
-                   'finance_auditor':('TH Receipts','TH Finance'),
-                   'teaching_scheduler':('TH Teaching','TH Placement'),
-                   'admissions_auditor':('TH Receipts','TH Admission')}
+            probe={'finance_auditor':({'TH Receipts'},{'TH Finance'}),
+                   'admissions_auditor':({'TH Receipts'},{'TH Finance'}),
+                   'finance_officer':({'TH Finance'},{'TH Receipts'}),
+                   'invigilator':(set(),{'TH Receipts','TH Finance'}),
+                   'teaching_scheduler':(set(),{'TH Receipts','TH Finance'})}
             observed={}
             for label,(must,must_not) in probe.items():
                 seen=visible(label)
-                assert must in seen,(label,must,'workspace not visible to its role')
-                assert must_not not in seen,(label,must_not,'workspace leaked to a non-member role')
-                observed[label]=must
+                for m in sorted(must):
+                    assert m in seen,(label,m,'workspace not visible to its role')
+                for m in sorted(must_not):
+                    assert m not in seen,(label,m,'workspace leaked to a non-member role')
+                observed[label]=sorted(must)
             frappe.set_user('Administrator')
             return {'role_scoped_visibility':observed}
         check('release-workspace-role-visibility',ws_visibility)

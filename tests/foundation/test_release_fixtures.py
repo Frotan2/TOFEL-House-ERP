@@ -22,9 +22,13 @@ MODULES = APP / "modules.txt"
 HOOKS = APP / "hooks.py"
 
 EXPECTED = {
-    "TH Placement", "TH Admission", "TH Enrollment",
-    "TH Teaching", "TH Finance", "TH Receipts",
+    "TH Receipts", "TH Finance",
 }
+# Native module anchors: the pinned visibility model requires a workspace's
+# module to hold a doctype the audience can read; TH Finance anchors to the
+# native Accounts module (finance officer = Accounts User).
+NATIVE_MODULES = {"Accounts"}
+KNOWN_REPORTS = {"TH Tuition Billing Register", "TH Placement Billing Register"}
 KNOWN_DOCTYPES = {
     # native (education/erpnext) targets used by the workspaces
     "Student Applicant", "Student", "Program Enrollment", "Course Enrollment",
@@ -57,13 +61,19 @@ class ReleaseFixtureTests(unittest.TestCase):
         self.assertEqual({w["name"] for w in self.workspaces}, EXPECTED)
 
     def test_module_file_layout(self):
-        # exact paths frappe.model.sync.get_doc_files scans for each module
+        # exact paths frappe.model.sync.get_doc_files scans for each module;
+        # the shipping folder is an app module from modules.txt (the `module`
+        # field may anchor to a native module instead - see NATIVE_MODULES)
+        shipping = set()
         for path in self.module_files:
             ws = json.loads(path.read_text())
             slug = ws["name"].lower().replace(" ", "-")
-            expected = APP / ws["module"].lower() / "workspace" / slug / f"{slug}.json"
-            self.assertEqual(path.resolve(), expected.resolve(), ws["name"])
-            self.assertEqual(path.stem, path.parent.name, ws["name"])
+            shipping.add(path.parents[2].name)
+            self.assertEqual(path.stem, slug, ws["name"])
+            self.assertEqual(path.parent.name, slug, ws["name"])
+            self.assertEqual(path.name, f"{slug}.json", ws["name"])
+        self.assertTrue(shipping <= {m.lower() for m in self.modules},
+                        sorted(shipping - {m.lower() for m in self.modules}))
 
     def test_app_field_set(self):
         # module sync imports with ignore_validate=True, so the controller's
@@ -81,14 +91,18 @@ class ReleaseFixtureTests(unittest.TestCase):
 
     def test_modules_exist(self):
         for ws in self.workspaces:
-            self.assertIn(ws["module"], self.modules, ws["name"])
+            self.assertIn(ws["module"], self.modules | NATIVE_MODULES, ws["name"])
 
     def test_links_resolve_to_known_doctypes(self):
         for ws in self.workspaces:
             for link in ws["links"]:
                 if link["type"] == "Link":
-                    self.assertEqual(link["link_type"], "DocType", (ws["name"], link))
-                    self.assertIn(link["link_to"], KNOWN_DOCTYPES, (ws["name"], link))
+                    if link["link_type"] == "DocType":
+                        self.assertIn(link["link_to"], KNOWN_DOCTYPES, (ws["name"], link))
+                    else:
+                        self.assertEqual(link["link_type"], "Report", (ws["name"], link))
+                        self.assertIn(link["link_to"], KNOWN_REPORTS, (ws["name"], link))
+                        self.assertEqual(link.get("is_query_report"), 1, (ws["name"], link))
 
     def test_content_canvas_matches_cards(self):
         for ws in self.workspaces:
