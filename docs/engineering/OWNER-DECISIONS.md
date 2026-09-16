@@ -1,6 +1,6 @@
 # TOEFL House ERP — Owner Decision Packet (R4)
 
-Date: 2026-09-16 · Branch: `arena/01a0a496-tofel-house-erp`
+Date: 2026-09-16 · Active branch: `arena/01a0a942-tofel-house-erp`
 **Production remains REJECT.** Nothing here invents a business rule —
 every gate below is a decision that only the owner may make; engineering
 state is stated exactly as evidenced in the Release Gap Map.
@@ -92,18 +92,23 @@ guarded APIs only.
 option (d) is the enforced status quo. **Unblocks:** TH Attendance
 Coverage Register.
 
-## D10 — Desk workspaces for API-first staff roles (R1 remainder)
+## D10 — Staff Page/report navigation (R1 remainder)
 **Decide:** whether staff roles (invigilator, placement
-author/publisher, admission, enrollment, teaching) receive native
-document reads (a containment change), a report/page-based surface per
-role, or no Desk navigation.
-**Why owner-only:** granting native reads changes the A13 containment
-boundary — a security decision. **Current state:** pinned frappe
-module-visibility gate means no workspace can surface for zero-read
-roles (run 35048606232 diagnostic: roles resolve to `["All","Guest"]`,
-no workspace module eligible). Auditor and Finance Officer surfaces are
-shipped and hosted-proven (run 35049742120). **Unblocks:** staff-facing
-Desk workspaces.
+author/publisher, admission, enrollment, teaching) receive a native
+read/Workspace change, a report/Page surface per role, or no Desk
+navigation.
+**Why owner-only:** adding native reads would change the A13 containment
+boundary. **Selected answer:** option (ii), a role-based Page/report
+surface with **no new authority**. The factual record is more precise
+than the former “zero document permissions” shorthand: these roles
+already have limited, existing TH-DocType read scopes, narrowed again
+by `policy.can_read`; no native Education/ERPNext CRUD role is being
+added. The pinned Workspace/module-gate composition nevertheless did
+not yield a compliant staff Workspace (diagnostic run 35048606232).
+Auditor and Finance Officer Workspace/report surfaces remain shipped and
+hosted-proven (run 35049742120). **Unblocks:** a separately role-gated
+native Page command surface, whose client can call only existing guarded
+commands and must receive fresh hosted proof before it is qualified.
 
 ---
 
@@ -127,6 +132,6 @@ independently satisfied.
 | D6a | **Tax not configured yet** | No tax configuration anywhere; recorded as decision, not omission |
 | D6b | **No gateway at launch** | Gateway closed as 'none'; payments app stays pinned-but-unapproved |
 | D7 | **Defer; raw reports now** | Registers stay raw-facts-only (matches shipped state) |
-| D8 | **Define role-based operational ownership** | Operational ownership charter (roles/responsibilities) to be produced; named human/contractual assignment remains with the owner; production stays REJECT until satisfied |
+| D8 | **Define role-based operational ownership** | **T5 DELIVERED** — [Operational Ownership Charter](OPERATIONAL-OWNERSHIP-CHARTER.md) derives the shipped role matrix and D8 responsibility slots. Named human/contractual assignments, topology and operating evidence remain owner work; production stays REJECT. |
 | D9 | **(d) No separate register** | Gate CLOSED at status quo; attendance facts via guarded APIs only |
-| D10 | **(ii) Role-based report/page surfaces** | Staff navigation via report/page surfaces; containment boundary unchanged (no native reads granted) |
+| D10 | **(ii) Role-based report/page surfaces** | T3 Page implementation is authorized only as a no-new-authority command surface. Existing scoped TH reads are documented; no native Education/ERPNext read is granted. Qualification remains required. |
