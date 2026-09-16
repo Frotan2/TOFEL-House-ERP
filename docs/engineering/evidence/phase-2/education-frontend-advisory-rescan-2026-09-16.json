@@ -1,0 +1,342 @@
+{
+ "scan_date": "2026-09-16",
+ "method": "GitHub global advisory API /advisories?affects=name@version&ecosystem=npm",
+ "pin": "frappe/education@93bc7075 frontend/yarn.lock",
+ "packages_scanned": 279,
+ "affected_packages": 21,
+ "total_entries": 57,
+ "entries_by_severity": {
+  "medium": 26,
+  "low": 4,
+  "high": 27
+ },
+ "affected": {
+  "vite@2.9.17": [
+   {
+    "ghsa": "GHSA-v6wh-96g9-6wx3",
+    "cve": "CVE-2026-53632",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-fx2h-pf6j-xcff",
+    "cve": "CVE-2026-53571",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-c27g-q93r-2cwf",
+    "cve": "CVE-2024-52011",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-4w7w-66w2-5vf9",
+    "cve": "CVE-2026-39365",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-g4jq-h2w9-997c",
+    "cve": "CVE-2025-58751",
+    "sev": "low"
+   },
+   {
+    "ghsa": "GHSA-jqfw-vq24-v9c3",
+    "cve": "CVE-2025-58752",
+    "sev": "low"
+   },
+   {
+    "ghsa": "GHSA-859w-5945-r5v3",
+    "cve": "CVE-2025-46565",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-356w-63v5-8wf4",
+    "cve": "CVE-2025-32395",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-xcj6-pq6g-qj4x",
+    "cve": "CVE-2025-31486",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-4r4m-qw57-chr8",
+    "cve": "CVE-2025-31125",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-x574-m823-4x7w",
+    "cve": "CVE-2025-30208",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-vg6x-rcgg-rjx6",
+    "cve": "CVE-2025-24010",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-64vr-g452-qvp3",
+    "cve": "CVE-2024-45812",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-9cwx-2883-4wfx",
+    "cve": "CVE-2024-45811",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-8jhw-289h-jh2g",
+    "cve": "CVE-2024-31207",
+    "sev": "medium"
+   }
+  ],
+  "brace-expansion@2.0.1": [
+   {
+    "ghsa": "GHSA-rgw5-rvv9-x895",
+    "cve": "CVE-2026-69152",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-mh99-v99m-4gvg",
+    "cve": "CVE-2026-14257",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-3jxr-9vmj-r5cp",
+    "cve": "CVE-2026-13149",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-f886-m6hf-6m8v",
+    "cve": "CVE-2026-33750",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-v6h2-p8h4-qcjw",
+    "cve": "CVE-2025-5889",
+    "sev": "low"
+   }
+  ],
+  "nanoid@3.3.7": [
+   {
+    "ghsa": "GHSA-xwg4-73v4-xw9w",
+    "cve": "CVE-2026-73086",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-28wg-ghj8-5hjv",
+    "cve": "CVE-2026-67214",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-2v37-7h3g-55p8",
+    "cve": "CVE-2026-67213",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-mwcw-c2x4-8c55",
+    "cve": "CVE-2024-55565",
+    "sev": "medium"
+   }
+  ],
+  "postcss@8.4.35": [
+   {
+    "ghsa": "GHSA-fxqj-rqcc-2cmp",
+    "cve": "CVE-2026-69153",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-r28c-9q8g-f849",
+    "cve": "CVE-2026-73646",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-6g55-p6wh-862q",
+    "cve": "CVE-2026-45623",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-qx2v-qp2m-jg93",
+    "cve": "CVE-2026-41305",
+    "sev": "medium"
+   }
+  ],
+  "minimatch@9.0.3": [
+   {
+    "ghsa": "GHSA-7r86-cg39-jmmj",
+    "cve": "CVE-2026-27903",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-23c5-xmqv-rm74",
+    "cve": "CVE-2026-27904",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-3ppc-4f35-3m26",
+    "cve": "CVE-2026-26996",
+    "sev": "high"
+   }
+  ],
+  "showdown@2.1.0": [
+   {
+    "ghsa": "GHSA-22g5-r2x5-97cx",
+    "cve": "CVE-2026-59710",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-cr32-g25g-vxjj",
+    "cve": "CVE-2026-59711",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-rmmh-p597-ppvv",
+    "cve": "CVE-2024-1899",
+    "sev": "medium"
+   }
+  ],
+  "ws@8.11.0": [
+   {
+    "ghsa": "GHSA-96hv-2xvq-fx4p",
+    "cve": "CVE-2026-48779",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-58qx-3vcg-4xpx",
+    "cve": "CVE-2026-45736",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-3h5v-q93c-6h6q",
+    "cve": "CVE-2024-37890",
+    "sev": "high"
+   }
+  ],
+  "browserslist@4.23.0": [
+   {
+    "ghsa": "GHSA-c83g-rgw3-j3cx",
+    "cve": "CVE-2026-73089",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-73wf-gq98-2v4g",
+    "cve": "CVE-2026-73088",
+    "sev": "high"
+   }
+  ],
+  "linkify-it@5.0.0": [
+   {
+    "ghsa": "GHSA-v245-v573-v5vm",
+    "cve": "CVE-2026-59887",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-22p9-wv53-3rq4",
+    "cve": "CVE-2026-48801",
+    "sev": "high"
+   }
+  ],
+  "markdown-it@14.0.0": [
+   {
+    "ghsa": "GHSA-6v5v-wf23-fmfq",
+    "cve": "CVE-2026-48988",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-38c4-r59v-3vqw",
+    "cve": "CVE-2026-2327",
+    "sev": "medium"
+   }
+  ],
+  "picomatch@2.3.1": [
+   {
+    "ghsa": "GHSA-3v7f-55p6-f55p",
+    "cve": "CVE-2026-33672",
+    "sev": "medium"
+   },
+   {
+    "ghsa": "GHSA-c2c7-rcm5-vvqj",
+    "cve": "CVE-2026-33671",
+    "sev": "high"
+   }
+  ],
+  "rollup@2.77.3": [
+   {
+    "ghsa": "GHSA-mw96-cpmx-2vgc",
+    "cve": "CVE-2026-27606",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-gcx4-mw62-g8wm",
+    "cve": "CVE-2024-47068",
+    "sev": "high"
+   }
+  ],
+  "socket.io-parser@4.2.4": [
+   {
+    "ghsa": "GHSA-2m8v-j782-fhvr",
+    "cve": "CVE-2026-69185",
+    "sev": "high"
+   },
+   {
+    "ghsa": "GHSA-677m-j7p3-52f9",
+    "cve": "CVE-2026-33151",
+    "sev": "high"
+   }
+  ],
+  "@tiptap/core@2.2.3": [
+   {
+    "ghsa": "GHSA-cp6q-959q-f8rh",
+    "cve": null,
+    "sev": "medium"
+   }
+  ],
+  "@tiptap/extension-link@2.2.3": [
+   {
+    "ghsa": "GHSA-vhrc-hgrq-x75r",
+    "cve": "CVE-2025-14284",
+    "sev": "low"
+   }
+  ],
+  "braces@3.0.2": [
+   {
+    "ghsa": "GHSA-grv7-fg5c-xmjg",
+    "cve": "CVE-2024-4068",
+    "sev": "high"
+   }
+  ],
+  "cross-spawn@7.0.3": [
+   {
+    "ghsa": "GHSA-3xgq-45jj-v275",
+    "cve": "CVE-2024-21538",
+    "sev": "high"
+   }
+  ],
+  "esbuild@0.14.54": [
+   {
+    "ghsa": "GHSA-67mh-4wv8-2f99",
+    "cve": null,
+    "sev": "medium"
+   }
+  ],
+  "glob@10.3.10": [
+   {
+    "ghsa": "GHSA-5j98-mcp5-4vw2",
+    "cve": "CVE-2025-64756",
+    "sev": "high"
+   }
+  ],
+  "micromatch@4.0.5": [
+   {
+    "ghsa": "GHSA-952p-6rrq-rcjv",
+    "cve": "CVE-2024-4067",
+    "sev": "medium"
+   }
+  ],
+  "yaml@2.3.4": [
+   {
+    "ghsa": "GHSA-48c2-rrv3-qjmp",
+    "cve": "CVE-2026-33532",
+    "sev": "medium"
+   }
+  ]
+ }
+}

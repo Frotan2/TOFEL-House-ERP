@@ -90,8 +90,10 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
    engineering workaround exists that would not invent business rules
    or breach containment.
 2. **Upstream items** — SEC-DEPS-01 (education frontend advisory set:
-   57 entries / 21 packages at pinned v16.1.0, runtime exploitability
-   untested, upstream toolchain migration required) and SEC-RT-TASK-01
+   57 entries / 21 packages at pinned v16.1.0, independently re-scanned
+   and exactly reproduced 2026-09-16 via GitHub advisory API — 27 high /
+   26 medium / 4 low / 0 critical; runtime exploitability untested,
+   upstream toolchain migration required) and SEC-RT-TASK-01
    (upstream realtime task room; product-side exposure proven nil —
    UPSTREAM-TRACKING.md §1).
 3. **Deployment-scope operations** — independent-host DR, measured

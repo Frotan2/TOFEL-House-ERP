@@ -54,6 +54,20 @@ $ grep -rn "publish_realtime\|realtime_subscribe\|frappe.realtime\|socketio" \
   toolchain migration — upstream scope; not patchable in-repo without
   inventing a fork. Tracked here with the exact pin so the triage can
   be re-run against any future upstream release.
+- **Dated re-scan (2026-09-16, this branch):** the pinned lockfile
+  (`frappe/education@93bc7075` `frontend/yarn.lock`, fetched via GitHub
+  contents API) parses to **279 unique resolved packages**; all six
+  recorded top-level pins match it exactly. Full scan via the GitHub
+  global advisory API (`GET /advisories?affects=name@version&
+  ecosystem=npm`, 279 queries, 0 failures): **57 advisory entries
+  across 21 packages** — exactly reproducing the historical record.
+  Severity split: **27 high / 26 medium / 4 low / 0 critical**. Top
+  carriers: `vite@2.9.17` (15), `brace-expansion@2.0.1` (5),
+  `nanoid@3.3.7` (4), `postcss@8.4.35` (4), `minimatch@9.0.3` (3),
+  `showdown@2.1.0` (3), `ws@8.11.0` (3). Most carriers sit in the
+  build/dev toolchain; runtime exploitability remains **not tested**.
+  Full machine-readable result:
+  `docs/engineering/evidence/phase-2/education-frontend-advisory-rescan-2026-09-16.json`.
 
 ## 3. Upgrade-path note
 
