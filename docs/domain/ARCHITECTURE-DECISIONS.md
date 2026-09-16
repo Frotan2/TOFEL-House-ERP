@@ -10,7 +10,7 @@
 > it conflicts. No implementation authorization or production approval is granted.
 
 
-Date: 2026-09-14. Scope: architecture only. **No implementation, architecture sign-off, deployment or production approval is granted. Production acceptance remains REJECT.**
+Date: 2026-09-16 · Active branch: `arena/01a0a9f7-tofel-house-erp`. Scope: architecture and business-boundary reconciliation only. **No production approval is granted; production acceptance remains REJECT.** The canonical business input is the [owner-decision record](../engineering/canonical-owner-decision-record.json); engineering mechanism choices remain implementation work, not invented owner policy.
 
 ## Authority, status and business invariant
 
@@ -35,7 +35,7 @@ This record, [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md) and [IMPLEMENTATION-READIN
 | A06 | Placement and academic scoring | **CONDITIONAL** | Internal level policy and section results separated from native academic results; academic policy required |
 | A07 | Official TOEFL / CEFR claims | **DECIDED** | No official/mock TOEFL output; no CEFR output in baseline placement contract |
 | A08 | Single canonical billing flow | **DECIDED** | ERPNext invoice/payment/GL authority; one native enrollment-generated tuition invoice chain |
-| A09 | Teacher compensation/payroll inputs | **BLOCKED** | HRMS owns payroll; pay basis and qualifying native input path not selected without business rules |
+| A09 | Teacher compensation/payroll inputs | **CONDITIONAL / FRAMEWORK SELECTED** | Configurable fixed, skill-based and combined teacher compensation feeds the single native HRMS/payroll authority; rates, statutory rules and exact payable policy remain configurable/blocked where unsupplied |
 | A10 | Admission approval semantics | **DECIDED** | Explicit admission decision; placement, offer acceptance and registration remain distinct |
 | A11 | Enrollment cancellation | **BLOCKED** | No destructive cancellation as a transfer/repeat shortcut; safe history-preserving path must be proven |
 | A12 | Reporting and derived data | **DECIDED** | Source-owned metrics with separated grains, provenance, permissions and rebuildable projections |
@@ -56,6 +56,18 @@ All source references below resolve to exact commits, paths and SHA-256 records 
 - **R1:** [Retained qualification](../engineering/foundation-final-qualification.md) and [acceptance ledger](../engineering/foundation-production-acceptance-ledger.json): baseline 57 frontend matches; unadopted experimental candidate 23; scoped native/security/restart passes; production REJECT. None qualifies a future domain implementation.
 
 Frappe supplies native document/identity/permission/transaction mechanisms throughout; application-specific APIs and bypasses must be inspected. HRMS has no ownership of learner placement or academic results. Conversely, Education does not own payroll or GL. No support guarantee is inferred from a declared field or release.
+
+**Owner boundary:** Course Owner is system/strategic final authority; General
+Manager owns routine administration/operations; Academic Manager owns academic
+operations/progress; Finance Manager owns finance/payroll; Reception owns intake.
+Role-based access, auditability, offboarding with historical preservation,
+multi-branch authorization/data isolation, configurable business policy, and
+controlled owner administration/health visibility are required. Current operation
+is local/server-based through Tailscale with local database/files. Future internet
+hosting, provider/hostname/DNS/public edge, and off-site backup destination are
+not selected. Automated encrypted multi-version backup and alternate-system
+recovery are required, with data preservation prioritized. Portal and online
+payments are not launch scope.
 
 ## A01 — Pre-program placement
 

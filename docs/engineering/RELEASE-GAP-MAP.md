@@ -27,7 +27,7 @@ is invented anywhere in this plan.**
   frappe v16.33.1 `988e54f3c4c2`, erpnext v16.34.2 `4048fb70e14d`,
   education v16.1.0 `93bc7075`, hrms v16.18.1.
 - App assembly: 15 TH placement doctypes + `TH Admission Decision` +
-  shared receipt/audit ledger; 18 role fixtures; 2 Custom Fields;
+  shared receipt/audit ledger; 23 role fixtures (18 operational/auditor roles plus five governance roles); 2 Custom Fields;
   command-only guards pinned on three lifecycle seams for seven
   doctypes; command surfaces for all five domains; owned indexes at
   install. No parallel masters, ledgers or UI stack.
@@ -98,7 +98,7 @@ invent business rules.
 | D5 = B03 | Real intake calendars, same-term repeat requirement, transfer/withdrawal semantics with history preservation | A05/A11 |
 | D6 = B07 remainder/B12 | Tax configuration policy; payment-gateway selection (or explicit none) | Tax setup, payments |
 | D7 = A12 stewards | Named metric stewards; denominators/disclosure/retention rules | Reporting metrics layer (over R2 registers) |
-| D8 | [Canonical D8 decision matrix](d8-production-operations-decision-matrix.json) and [operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md): accountable authority; selected topology/trust boundary, durable state/file storage, backup/key custody/recovery objectives, monitoring/incident, capacity, and change/rollback controls | Provider-neutral contract/schema/harness work can proceed now; selected-operation engineering and evidence remain owner-gated. D8 is **BLOCKED** and is not production acceptance by itself |
+| D8 | [Canonical D8 decision matrix](d8-production-operations-decision-matrix.json), [canonical owner-decision record](canonical-owner-decision-record.json), and [operational qualification packet](D8-OPERATIONAL-INPUT-PACKET.md): selected authority roles, current local/Tailscale boundary, local state, encrypted versioned backup/recovery requirement, preservation priority, audit/health visibility, and change responsibility; numeric capacity/availability remains unresolved | Business policy is recorded. Engineering must continue implementation autonomously; selected-operation implementation and independent evidence remain **BLOCKED**. D8 is not production acceptance by itself; production remains **REJECT** |
 | D9 | Attendance-coverage register access anchor: native `report` flag on Student Attendance belongs to Academics User/Student/Guardian only. Options (owner picks): (a) grant teaching roles native Academics User — widens direct write access beyond the guarded teaching API; (b) Custom DocPerm replication on Student Attendance — invasive, replaces native permission rows wholesale; (c) new TH anchor doctype for teaching facts; (d) no register (current state — teaching facts reachable via guarded APIs only) | TH Attendance Coverage Register (R2 remainder) |
 | D10 | Desk workspaces for API-first staff roles (invigilator, placement author/publisher, admission, enrollment, teaching): the pinned frappe module-visibility gate makes workspaces reachable only for users with at least one native document read in the workspace's module. Their existing TH-DocType reads remain narrowly contained by `policy.can_read`, and no native Education/ERPNext read should be added. The pinned Workspace/module-gate composition did not yield a compliant staff Workspace; D10(ii) selects a role-gated native Page surface per role with no authority change. **T3 is shipped and qualified** in run `35073376790` @ `3587700` (542/542): Page roles/assets, 12 member audiences + seven non-members, and no native-read escalation. | Staff-facing native Page navigation |
 
@@ -157,15 +157,19 @@ platform/warehouse (prohibited), any new ERP-adjacent platform.
 | RC | Release Candidate dossier: consolidated evidence index (runs, SHAs, gates, deferrals) | R1–R5 | **DONE** — docs/engineering/RELEASE-CANDIDATE-DOSSIER.md (implemented surface QUALIFIED; production REJECT) |
 | T1 | D2 teaching compensation: `TH Instructor Contract` (+skill-term/adjustment children) + `TH Teaching Assignment` doctypes, fixtures, guarded command surface | Owner answer 2026-09-16 | **DONE** — shipped @ 8c92e2f; qualified in run 35066349129 |
 | T2 | D2 hosted checks: multi-instructor/skill facts, effective dating, duplicate-payable prevention, idempotent calc, fixed-salary exclusion, audit chain | T1 merged (shares suite) | **DONE** — run 35066349129 @ fa02137, **536/536**; checks `teaching-compensation-contract-authority`, `teaching-assignment-facts`, `teaching-compensation-calculation` |
-| T3 | D10 (ii): role-based native Page surfaces for API-first staff roles (no **additional** native reads; containment unchanged) | T5 charter + D10(ii) answer | **DONE** — 13 standard Pages + shared guarded-command client, current-branch run 35073376790 @ 3587700, **542/542**; checks `release-command-pages-*` |
+| T3 | D10 (ii): role-based native Page surfaces for API-first staff roles (no **additional** native reads; containment unchanged) | T5 charter + D10(ii) answer | **DONE** — 13 qualified standard command Pages + shared guarded-command client, current-branch run 35073376790 @ 3587700, **542/542**; the additional Course Owner/General Manager control-centre Page is locally contract-tested and adds no business-document authority; checks `release-command-pages-*` |
 | T4 | D3 framework: guarded correction/refund command framework, approval terms configurable (owner terms pending) | T1 done | **DONE** — run 35069740378 @ ed2d81d, **539/539**; checks `finance-correction-*` (fail-closed, SoD/window/dual-key, native credit-note posting). v1 scope: full-amount corrections of TH placement invoices; partials + Fees-side await owner exact terms (refused fail-closed) |
-| T5 | D8: code-derived operational ownership charter (roles/responsibilities; humans/contracts remain owner's) | — | **DONE** — [OPERATIONAL-OWNERSHIP-CHARTER.md](OPERATIONAL-OWNERSHIP-CHARTER.md); D8 assignments/topology/evidence remain open, production REJECT |
+| T5 | D8: code-derived operational ownership charter and canonical owner-authority reconciliation | Owner decision record 2026-09-16 | **DONE** — [OPERATIONAL-OWNERSHIP-CHARTER.md](OPERATIONAL-OWNERSHIP-CHARTER.md) and [canonical-owner-decision-record.json](canonical-owner-decision-record.json); selected engineering implementation/evidence remain blocked, production REJECT |
 
 Owner gate dispositions (2026-09-16): D1 defer · D2 unlocked (T1/T2) ·
 D3 framework (T4) · D4 defer · D5 defer · D6a no tax · D6b no gateway ·
-D7 defer · D8 role-based charter (T5; operations still owner-gated) · D9 CLOSED at (d) ·
-D10 (ii) **EXECUTED & QUALIFIED** (T3, run 35073376790). Details: OWNER-DECISIONS.md answers table;
-TEACHING-COMPENSATION-DESIGN.md.
+D7 defer · D8 owner/business requirements recorded in the canonical record
+(charter delivered; implementation and evidence remain D8-blocked; numeric
+capacity/availability target not supplied) · D9 CLOSED at (d) · D10 (ii)
+**EXECUTED & QUALIFIED** (T3, run 35073376790). Details:
+[OWNER-DECISIONS.md](OWNER-DECISIONS.md),
+[canonical-owner-decision-record.json](canonical-owner-decision-record.json), and
+[TEACHING-COMPENSATION-DESIGN.md](TEACHING-COMPENSATION-DESIGN.md).
 
 Parallelization note: this environment executes sequentially; R2/R3/R5
 are marked parallel-safe because they touch disjoint files (separate

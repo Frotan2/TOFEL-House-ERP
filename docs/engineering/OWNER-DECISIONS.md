@@ -1,14 +1,16 @@
 # TOEFL House ERP — Owner Decision Packet (R4)
 
 Date: 2026-09-16 · Active branch: `arena/01a0a9f7-tofel-house-erp`
-**Production remains REJECT.** Nothing here invents a business rule —
-every gate below is a decision that only the owner may make; engineering
-state is stated exactly as evidenced in the Release Gap Map.
+**Production remains REJECT.** Nothing here invents a business rule. This
+file is the human-readable projection and navigation document for the canonical
+[`canonical-owner-decision-record.json`](canonical-owner-decision-record.json);
+that record is authoritative for the owner decisions supplied on 2026-09-16.
+Engineering state is stated exactly as evidenced in the Release Gap Map.
 
-Each gate: what is decided, why engineering cannot decide it, current
-verified state, and what the decision unblocks. Answering a gate does
-not auto-approve any deployment — D8-class operational gates stay
-independent.
+Each gate records what is decided, why business policy cannot be invented by
+engineering, current verified state, and what the decision unblocks. Selecting a
+business requirement does not auto-approve deployment — D8-class operational
+evidence gates and SEC-DEPS-01 remain independent.
 
 ---
 
@@ -69,25 +71,36 @@ state:** R2 registers ship **raw facts only** (hosted-proven, run
 reporting metrics layer above the registers.
 
 ## D8 — Production-operation inputs
-**Decide:** the seven minimum owner decisions in the canonical
-[D8 production-operations decision matrix](d8-production-operations-decision-matrix.json):
-accountable operating/recovery/escalation authority; approved topology and
-public trust boundary; persistence/file/key custody; backup destination,
-retention, restoration authority and RPO/RTO; monitoring/incident/retention;
-capacity/availability; and change/upgrade/rollback control. The matrix records
-exact fields, engineering work that may proceed before selection, evidence after
-selection, acceptance conditions, and current states. It does not select a
-provider, cloud/VPS, hostname, DNS, storage, monitoring vendor, target, person,
-or waiver.
-**Why owner-only:** operational and contractual. **Current state:** the
-Phase 2 ledger remains REJECT with only scoped hosted passes. A current
-synthetic product SQL/files backup and separately created-site restore verifier
-exists but cannot establish independent-host DR or production operations.
+**Authoritative decision:** the owner requirements are recorded in the
+[canonical owner-decision record](canonical-owner-decision-record.json). They
+select Course Owner as system/strategic final authority; General Manager for
+routine administration and operations; Academic Manager for academic operations
+and progress; Finance Manager for finance/payroll; Reception for intake; role-based
+access, auditability, and offboarding; multi-branch architecture with branch-level
+operational isolation; current local/server operation through Tailscale with local
+database/files; automated multi-version encrypted backup and recovery onto another
+system with data preservation prioritized; configurable business policy and teacher
+compensation; controlled role/permission administration and health/attention
+visibility. Student/guardian portal and online payments are not launch scope.
+
+**Engineering boundary:** authentication/MFA, RBAC mechanics, network/session
+controls, encryption/secrets, backup rotation/recovery, monitoring, configuration
+versioning, rollback, CI/CD, and deployment hardening are engineering-owned.
+Future internet provider/hostname/DNS/public edge, future off-site destination,
+numeric capacity/availability, and numeric RPO/RTO are not supplied and are not
+invented. The [D8 production-operations decision matrix](d8-production-operations-decision-matrix.json)
+records selected business requirements separately from technical evidence.
 The provider-neutral contract template and fail-closed validator are
-[`d8-operational-contract.template.json`](d8-operational-contract.template.json)
+[`d8-operational-contract.template.json`](d8-operational-contract.template.json),
+[`PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md`](PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md)
 and [`d8_validate.py`](../../tools/foundation/d8_validate.py).
-**Unblocks:** owner-selected production-operation engineering and evidence;
-it does not itself remove REJECT or waive any acceptance-ledger/security gate.
+
+**Current state:** owner policy is reconciled, but selected operational areas
+remain **BLOCKED** pending implementation and independent evidence. The current
+synthetic SQL/files backup and separately created-site restore verifier cannot
+establish independent-host DR or production operations. Capacity/availability
+remains the only unresolved numeric business objective. Selecting D8 requirements
+does not remove production **REJECT** or waive any acceptance-ledger/security gate.
 
 ## D9 — Attendance-coverage register access anchor (R2 remainder)
 **Decide (pick one):**
@@ -127,11 +140,11 @@ seven non-members, and no native-read escalation.
 
 ---
 
-**How to answer:** reply per gate ID with the chosen option/values.
-Every answer is executed as a scoped slice with hosted proof through
-the existing 533-check suite — no domain reopening, no parallel
-masters, production stays REJECT until D8-class gates are
-independently satisfied.
+**How this packet is used:** business decisions are recorded once in the
+canonical JSON record and projected here. Engineering executes only the scope
+that those decisions unlocks, with narrow then broad validation; no domain
+reopening, no parallel masters, and production stays REJECT until D8-class
+technical gates are independently satisfied.
 
 ---
 
@@ -147,6 +160,6 @@ independently satisfied.
 | D6a | **Tax not configured yet** | No tax configuration anywhere; recorded as decision, not omission |
 | D6b | **No gateway at launch** | Gateway closed as 'none'; payments app stays pinned-but-unapproved |
 | D7 | **Defer; raw reports now** | Registers stay raw-facts-only (matches shipped state) |
-| D8 | **Define role-based operational ownership** | **T5 DELIVERED** — [Operational Ownership Charter](OPERATIONAL-OWNERSHIP-CHARTER.md) derives the shipped role matrix and D8 responsibility slots. The [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md) requests only accountable authorities, selected topology/controls, and required evidence — no names, credentials, or commitments are invented. Production stays REJECT. |
+| D8 | **Owner requirements selected and recorded in the canonical owner-decision record** | Authority roles, role-based access/auditability/offboarding, branch isolation, current local/Tailscale deployment, local state, encrypted versioned backup/recovery, preservation priority, configurable policy, compensation models, controlled administration, and health/attention visibility are now business inputs. Future provider/hostname/DNS/public edge, off-site destination, numeric capacity/availability, and numeric RPO/RTO remain unselected. Engineering implementation and independent evidence remain D8-BLOCKED; production stays REJECT. |
 | D9 | **(d) No separate register** | Gate CLOSED at status quo; attendance facts via guarded APIs only |
-| D10 | **(ii) Role-based report/page surfaces** | **T3 EXECUTED & QUALIFIED** — 13 native Pages (role-filtered command centre + 12 one-role action Pages), no new native Education/ERPNext authority; run 35073376790 @ 3587700, **542/542**. |
+| D10 | **(ii) Role-based report/page surfaces** | **T3 EXECUTED & QUALIFIED** — 13 native command Pages (role-filtered command centre + 12 one-role action Pages), no new native Education/ERPNext authority; run 35073376790 @ 3587700, **542/542**. The separate Course Owner/General Manager control-centre Page is a locally contract-tested governance surface and not a replacement for the qualified command evidence. |

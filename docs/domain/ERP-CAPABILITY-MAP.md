@@ -1,6 +1,6 @@
 # TOEFL House ERP capability map
 
-Date: 2026-09-15 · Session branch: `arena/01a0a13b-tofel-house-erp`
+Date: 2026-09-16 · Active branch: `arena/01a0a9f7-tofel-house-erp`
 · Placement predecessor: [PLACEMENT-CLOSURE.md](PLACEMENT-CLOSURE.md) (CLOSED / QUALIFIED, hosted run `34932512626`).
 
 **Purpose:** prevent TOEFL House from becoming a second ERP on top of ERPNext.
@@ -11,6 +11,24 @@ Operations (Scheduling & Attendance) in
 [TEACHING-CLOSURE.md](TEACHING-CLOSURE.md). Production remains **REJECT**.
 Do not deploy. Do not reopen closed domains. Do not start a gated domain
 without its business gate resolved.
+
+**Owner-decision alignment (2026-09-16):** The canonical record is
+[`../engineering/canonical-owner-decision-record.json`](../engineering/canonical-owner-decision-record.json).
+It selects Course Owner as system/strategic final authority; General Manager for
+routine administration/operations; Academic Manager for academic operations and
+progress; Finance Manager for finance/payroll; Reception for intake; role-based
+access, auditable important activity, and offboarding access revocation with
+historical preservation; multi-branch architecture with branch-level operational
+isolation; current local/server operation through Tailscale with local
+database/files; automated multi-version encrypted backup and recovery onto
+another system with data preservation prioritized; configurable fees, discounts,
+courses, levels, skills, terms and fixed/skill-based compensation; and controlled
+owner role/permission administration with high-level health/attention visibility.
+Native ERPNext/Education/HRMS authorities remain authoritative. Branch isolation
+is an authorization/data-scope concern, not an assumption that Company or Branch
+alone supplies tenancy. Student/guardian portal and online payments are not launch
+scope. Future internet hosting and future off-site backup are supported directions
+without a selected provider, hostname, DNS, public edge, or destination.
 
 **Foundation strategy (unchanged):** Frappe → ERPNext → Education → HRMS/Payments
 are the systems of record for identity, CRM, students, catalog, enrollment,
@@ -243,17 +261,17 @@ person master.
 | Status | App installed on synthetic sites; no TOEFL House HR code. |
 | Dependencies | B08 classification; A04 accounts. |
 
-### 3.11 Payroll — **NATIVE** (custom teaching-pay **BLOCKED**)
+### 3.11 Payroll — **NATIVE** (configurable teaching-compensation framework; posting **BLOCKED**)
 
 | Question | Answer |
 |---|---|
 | Foundation already provides | HRMS Salary Component/Structure/Assignment, Salary Slip, Payroll Entry, Additional Salary; native accounting/payment (S6). |
 | Reuse unchanged | **HRMS is the sole payroll calculation authority.** |
-| Configuration only | Structures and assignments after employment terms exist. |
-| Custom code | **Do not implement.** A09 is BLOCKED until pay basis and exactly one native input path are proven. Conditional **TH Teaching Work Approval** only after a documented native gap — evidence + native input reference, never a second salary amount. |
+| Configuration only | Structures, assignments, fixed/skill-based/combined compensation models and effective dates after employment terms exist; rates and statutory policy remain owner configuration. |
+| Custom code | Existing thin compensation framework may carry approved teaching facts and calculate configurable inputs, but native HRMS/payroll remains the sole posting authority. Conditional **TH Teaching Work Approval** is allowed only after a documented native gap — evidence + native input reference, never a second salary amount. |
 | Must NOT rebuild | Custom payslip, dual Timesheet + Additional Salary for the same basis, fee-to-salary offset. |
-| Status | Not implemented. Full payroll posting remains an open foundation/domain gate. |
-| Dependencies | B08; native path proof. |
+| Status | Compensation framework selected and bounded; full payroll posting/statutory policy remains an open foundation/domain gate. |
+| Dependencies | B08 classification and native path proof. |
 
 ### 3.12 Reporting — **CONFIGURATION**
 

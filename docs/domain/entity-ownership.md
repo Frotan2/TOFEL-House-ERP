@@ -6,15 +6,18 @@
 > [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md).
 > A01–A13 supersede earlier alternatives; old D01–D13 references are legacy questions
 > mapped in the decision record. Nothing here authorizes implementation or production.
+> Business authority and deployment requirements are canonical in
+> [`../engineering/canonical-owner-decision-record.json`](../engineering/canonical-owner-decision-record.json).
 
-
-**All `TH` names and `th_*` fields are proposals, not installed schema.** Physical field types, indexes and migrations require review. Source-confirmed facts are catalogued in [pinned-source-review.json](pinned-source-review.json); other designs below are not claims of existing functionality.
+**All future `TH` names and `th_*` fields are proposals, not installed schema.**
+Existing thin-slice records are exceptions documented by the closure artifacts; they
+must still preserve native authorities. Physical field types, indexes and migrations require review. Source-confirmed facts are catalogued in [pinned-source-review.json](pinned-source-review.json); other designs below are not claims of existing functionality.
 
 ## A. Native authorities: configure or extend, never duplicate
 
 | Domain | Canonical native entities / owner | Proposed extension or boundary |
 |---|---|---|
-| Tenant/security | Frappe Site, User, Role, User Permission, File, native sharing | Exact business links; preserve generic security extension. Branch and Company are not site isolation |
+| Organization/security | Frappe Site, User, Role, User Permission, File, native sharing; native Company/Branch where applicable | Exact business links; preserve generic security extension. Branch-level operational isolation requires explicit authorization/data scope; Company/Branch is not site/tenant isolation by itself |
 | Inquiry | ERPNext Lead; Contact/Address where appropriate | Controlled application provenance, consent purpose and branch assignment; no `TH Applicant` master |
 | Admissions | Education Student Admission, Student Applicant | Student Admission is intake publication/configuration, not one person's case. Applicant requires Program/year; link proposed `th_lead` and approved decision |
 | Student/guardian | Education Student, Guardian, Student Guardian child rows | Native Applicant/User/Customer links; explicit Guardian.user relationships and access-safe activation |
@@ -86,7 +89,7 @@ An offer's price and payment schedule are authoritative in its linked native com
 
 ## D. Conditional extensions and technical records
 
-- **TH Teaching Work Approval (conditional):** only if native Timesheet/HRMS approval cannot express the approved teaching-pay policy. Links Employee, Instructor, actual Course Schedule/substitution, native work evidence, approved units and native payroll-input result. Unique source work occurrence/pay basis; cannot mirror general attendance or calculate the statutory payroll. A09 blocks selection of salary-based versus time-based input until B08 and native-path evidence are supplied; no payroll-input route is selected here.
+- **TH Teaching Work Approval (conditional):** only if native Timesheet/HRMS approval cannot express the approved teaching-pay policy. Links Employee, Instructor, actual Course Schedule/substitution, native work evidence, approved units and native payroll-input result. Unique source work occurrence/pay basis; cannot mirror general attendance or calculate the statutory payroll. The owner has selected configurable fixed, skill-based and combined compensation models; rates, statutory rules and exact payable inputs remain business configuration, and native HRMS/payroll remains the sole posting authority.
 - **External examination evidence: excluded by A07.** `TH External Result Evidence` is not an active Phase 3 entity. Do not create official/mock TOEFL result fields or default CEFR mapping.
 - **TH Domain Operation (technical proposal):** operation kind, tenant/actor scope, idempotency key, request hash, source references, status, native result references and restricted failure detail. Atomic uniqueness on tenant/operation/key; no reusable arbitrary-DocType CRUD endpoint.
 - **TH Integration Receipt / dispatch intent (conditional technical proposals):** reuse native integration/Email Queue facilities if they meet uniqueness, retention, access and retry guarantees; add only the missing durable inbox/outbox capability. Provider/event identity is unique; sensitive payloads are minimized. These records are not ledgers, business masters or a new event platform.

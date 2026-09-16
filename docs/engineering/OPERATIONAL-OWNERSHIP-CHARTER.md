@@ -15,8 +15,8 @@ decision.
 
 The authoritative executable sources are:
 
-- `apps/toefl_house/toefl_house/fixtures/role.json` — the 18 installed custom
-  role names;
+- `apps/toefl_house/toefl_house/fixtures/role.json` — the 23 installed custom
+  role names, including the five canonical governance roles;
 - `security.py:KIND_ROLES` and the `authorize` / non-serializable `command`
   context — command authority;
 - `hooks.py` and the native-document guards — alternate-write containment;
@@ -31,7 +31,32 @@ on a production site. Direct document write/create/submit authority is not
 assigned to any custom role; commands create their own short-lived context and
 are the only supported writer route for guarded records.
 
-## 2. Application operating-role matrix
+## 2. Canonical business-authority overlay
+
+The following governance roles are installed as controlled role names and are
+aligned to the canonical owner-decision record. A role fixture alone grants no
+native document permission, branch scope, accounting authority, payroll
+authority, or production authorization. Permission changes must use the native
+Frappe/ERPNext/HRMS authorities and remain auditable; the governance control
+centre is a role-gated navigation and attention surface, not a parallel master.
+
+| Governance role | Business responsibility | Controlled application surface |
+|---|---|---|
+| Course Owner | System owner; final strategic and ownership authority; management of role/permission policy and high-level health/attention | `th-administration-control-centre`; native User, Role, User Permission, Company and Branch routes remain authoritative |
+| General Manager | Overall administrative and routine operational management; routine operations must not be unnecessarily approval-blocked | `th-administration-control-centre` for operational attention; native operational documents and role permissions remain authoritative |
+| Academic Manager | Academic operations and student academic progress | Native Education authorities, with role-scoped access selected through the control centre; no parallel student/academic ledger |
+| Finance Manager | Finance and payroll operations; sensitive financial decisions retain management controls | Native ERPNext Accounts and HRMS payroll authorities; no parallel finance/payroll ledger |
+| Reception | Student intake and reception operations | Native Lead/Student Applicant/Student intake authorities; no duplicate applicant or student master |
+
+The role names express business scope without naming people. Branch-level
+operational isolation is enforced as authorization/data scope, using native
+Company/Branch/User Permission mechanisms plus server-side checks where a
+custom command crosses a branch boundary; Company/Branch is not assumed to be
+tenant isolation by itself. Course Owner and appropriately authorized senior
+management may receive aggregate organization-level visibility without bypassing
+branch isolation.
+
+## 3. Application operating-role matrix
 
 “Own” and “all” below describe the current code, not an organizational job
 assignment. A listed command is a necessary role check, not a guarantee that a
@@ -108,47 +133,47 @@ The last control is deliberately fail-closed until its already-defined policy
 carrier has an approver role and correction window. This charter neither
 selects that role nor supplies a window, amount, tax treatment or refund term.
 
-## 5. Deployment-operation ownership slots (D8 remains open)
+## 5. Deployment-operation ownership and evidence (D8)
 
-The application code has no production deployment, host, monitoring, backup or
-identity-operations role. The following are the operational ownership slots
-that remain to be selected by the owner/contract holder. They are restatements
-of D8 and the existing foundation production-acceptance ledger, not new policy.
-The exact minimal response, engineering-allowed work, acceptance conditions,
-and required production evidence are in the canonical
+Business authority is selected; technical implementation and production evidence
+remain engineering work and remain fail-closed. The current deployment phase is
+local/server-based with authorized staff reaching it through Tailscale. Future
+internet hosting is a direction only: provider, hostname, DNS and public-edge
+values are not selected. The exact evidence contract is in the canonical
 [D8 production-operations decision matrix](d8-production-operations-decision-matrix.json)
-and [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md); they request
-no names, credentials, or invented service commitments.
+and [D8 operational qualification packet](D8-OPERATIONAL-INPUT-PACKET.md).
 
-| Responsibility slot needing an accountable owner | Required decision/evidence already recorded | Current state |
+| Responsibility | Selected business owner/scope | Evidence state |
 |---|---|---|
-| Deployment/change control | Approved production bundle/topology and a full-bundle upgrade/rollback or restore-based rollback rehearsal | No production topology or operator assigned |
-| Data recovery and key custody | Independent-host encrypted recovery, key availability, session revocation, and owner-defined RPO/RTO | Scoped hosted restore evidence exists; independent-host recovery and targets are not proven |
-| Edge, secrets and session security | TLS/reverse-proxy/session policy and controlled secret handling | No production edge or policy configuration is in this repository |
-| Capacity, monitoring and incident handling | Representative capacity/availability objectives, queue/DB/web proof, alert delivery and audit/log retention/rotation recovery | No accountable monitor/operator or measured production capacity evidence |
+| Routine operation and administration | General Manager; Course Owner retains strategic/final authority | Role fixture and control-centre surface exist; live production authorization and incident evidence are not proven |
+| Academic operation and learner progress | Academic Manager through native Education authorities | No parallel academic ledger; applicable production scope remains deferred/blocked |
+| Finance and payroll | Finance Manager through native ERPNext Accounts/HRMS authorities | No parallel finance/payroll ledger; statutory/configuration policy remains configurable |
+| Student intake/reception | Reception through native Lead/Student Applicant/Student authorities | No duplicate person/applicant master; current application remains synthetic-only |
+| Strategic/ownership decisions and control centre | Course Owner; management-sensitive controls remain protected | Role-gated control centre exists; native permission/branch configuration and audit evidence remain to be proven |
+| Branch isolation and aggregate visibility | Role/data scope; Course Owner/senior management only for authorized aggregates | Native Company/Branch/User Permission path selected; branch enforcement evidence is not yet production proof |
+| Backup, recovery, keys, monitoring, rollback | Engineering implementation; operational escalation follows Course Owner/General Manager scopes | Automated encrypted versioning/recovery, monitoring, and rollback are requirements; independent evidence is BLOCKED |
 
-## 6. Genuine owner decisions still required
+No role fixture assigns a person, creates a shift or contract, selects a vendor,
+or authorizes production. Offboarding must revoke active access while preserving
+historical records. The control centre links to native authorities rather than
+creating parallel roles, branches, accounting, payroll, student, or audit
+masters.
 
-T5 surfaced no new business-policy question. The genuine unresolved owner work
-is precise:
+## 6. Remaining business-policy inputs
 
-1. select an accountable authority for each D8 responsibility slot above,
-   including the authority to operate, recover, and escalate; this document
-   does not name one;
-2. provide the D8 topology, recovery, capacity/monitoring and TLS/proxy/session
-   decisions/targets needed to design and rehearse production operations; and
-3. separately decide the already-open policy gates recorded in
-   `OWNER-DECISIONS.md` (for example academic/guardian policy). They are not
-   implied by this charter.
-
-Naming a role in the application fixture does **not** assign a human, create a
-contract, define a shift pattern, authorize a production operator or satisfy a
-separation-of-duty staffing decision. No such policy has been invented here.
+The latest canonical owner record resolves the D8 business requirements. It does
+not supply numeric capacity/availability targets, a future internet provider or
+hostname/DNS/public edge, a future off-site backup destination, numeric RPO/RTO,
+or the deferred academic/guardian/calendar/tax/refund/metrics policies already
+listed in `OWNER-DECISIONS.md`. Engineering must not treat those absences as
+permission to invent values; it may implement provider-neutral contracts,
+configuration controls, baselines and evidence harnesses.
 
 ## 7. Completion and release effect
 
-**T5 is complete:** a canonical, code-derived role/responsibility matrix and
-the D8 ownership slots now exist. **D8 is not closed:** the owner must still
-make the assignments and production-operation decisions above, and the
-foundation production gates must be independently proven. The application is
-synthetic-only; every production verdict remains **REJECT**.
+**T5 and owner-authority reconciliation are complete:** the canonical record,
+role overlay, code-derived operational matrix and D8 evidence slots are aligned.
+**D8 is not closed:** selected technical implementation, branch isolation,
+backup/recovery, observability, capacity, rollback and foundation production
+gates must still be independently proven. The application remains
+synthetic-only and every production verdict remains **REJECT**.

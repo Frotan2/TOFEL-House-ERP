@@ -1,5 +1,12 @@
 # Phase 3 — architecture review and decision lock
 
+The canonical owner/business input for this package is
+[`../engineering/canonical-owner-decision-record.json`](../engineering/canonical-owner-decision-record.json).
+It is projected by [DOMAIN-CONTRACT.md](DOMAIN-CONTRACT.md),
+[ERP-CAPABILITY-MAP.md](ERP-CAPABILITY-MAP.md), and the supporting architecture
+documents below. Current production remains **REJECT**; technical evidence gates
+are not relaxed by selecting business requirements.
+
 ## Placement domain status (synthetic isolated build)
 
 **CLOSED / QUALIFIED** for the bounded synthetic isolated build on 2026-09-15.
@@ -24,15 +31,17 @@ native `Fees`, placement billing via native `Sales Invoice` with
 configuration-driven chargeability) under the owner-approved R05/B07
 framework ([FINANCE-POLICY-APPROVAL.md](FINANCE-POLICY-APPROVAL.md)) is
 recorded in [FINANCE-CLOSURE.md](FINANCE-CLOSURE.md). Assessment/progression
-(B04/B05 — owner-deferred) and payroll (A09) remain gated and unimplemented.
-Do not start the next domain. Production remains **REJECT**.
+(B04/B05 — owner-deferred) remains gated. Teacher compensation has a selected
+configurable fixed/skill-based framework feeding native HRMS/payroll; rates,
+statutory rules and exact payable policy remain configuration/gates. Do not
+start a deferred academic domain. Production remains **REJECT**.
 
 ## Current placement revision
 
 [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md) is the authoritative revised placement model: managed bank, constrained randomized blueprints, six skills, digital/physical/hybrid delivery and objective/manual marking. It supersedes earlier narrow placement-slice restrictions, not native ownership or the production REJECT. M01–M05 consolidate remaining business policy approvals. Implementation is not authorized. Earlier architecture/source-review metadata records historical snapshots, not a new validation of this revision.
 
 
-Date: 2026-09-14. **Review record, not architecture sign-off or implementation authorization.** Selected Frappe + ERPNext + Education + HRMS/payroll foundation unchanged. Production acceptance remains **REJECT**.
+Date: 2026-09-16 · Active branch: `arena/01a0a9f7-tofel-house-erp`. **Review record, not production authorization.** Selected Frappe + ERPNext + Education + HRMS/payroll foundation unchanged. Production acceptance remains **REJECT**.
 
 ## Mandatory placement meaning
 
@@ -52,7 +61,8 @@ TOEFL House is a language-training center. Placement is an **internal entrance a
 |---|---|
 | **DECIDED** | A01 pre-program placement; A07 official/CEFR exclusions; A08 canonical invoice billing; A10 admission separation; A12 reporting ownership |
 | **CONDITIONAL** | A02 identity; A03 guardians; A04 mixed-role accounts; A06 internal level/scoring policy; A13 backend containment |
-| **BLOCKED** | A05 unsupported same-term repeat representation; A09 compensation/native input path; A11 history-affecting cancellation |
+| **BLOCKED** | A05 unsupported same-term repeat representation; A11 history-affecting cancellation |
+| **CONDITIONAL / FRAMEWORK SELECTED** | A09 configurable fixed/skill-based teacher compensation through native HRMS; rates, statutory rules and exact payable policy remain open |
 
 DECIDED means the architectural boundary is explicit, **not** that the user has approved implementation or that all policy parameters/native behavior are proven. The package is decision-complete in coverage but not unconditionally implementation-ready. The 2026-09-14 architecture-gate snapshot did not include product code; Placement was implemented later and is now CLOSED. This capability review adds documentation only — no Admission/Student/finance/HR code, no foundation pin change, no deployment.
 

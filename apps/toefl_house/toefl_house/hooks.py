@@ -17,6 +17,7 @@ after_migrate = "toefl_house.install.after_migrate"
 # every individual page remains independently Page-role-gated server-side.
 app_home = "/app/th-command-centre"
 _COMMAND_PAGES = (
+    "th-administration-control-centre",
     "th-command-centre",
     "th-placement-author", "th-placement-publisher", "th-placement-invigilation",
     "th-placement-assessment", "th-placement-review", "th-placement-release",
@@ -24,7 +25,7 @@ _COMMAND_PAGES = (
     "th-enrollment", "th-teaching-scheduling", "th-attendance-recording",
 )
 page_js = {name: "public/js/th_command_pages.js" for name in _COMMAND_PAGES}
-fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor"]]]},
+fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception"]]]},
             {"dt": "Custom Field", "filters": [["dt", "=", "Sales Invoice"], ["fieldname", "=", "th_placement_case"]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"

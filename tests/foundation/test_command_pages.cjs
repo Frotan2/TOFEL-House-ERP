@@ -12,6 +12,7 @@ const SECURITY = path.join(APP, "security.py");
 const PYPROJECT = path.join(ROOT, "apps/toefl_house/pyproject.toml");
 
 const expected = {
+	"th-administration-control-centre": { module: "Placement", roles: ["Course Owner", "General Manager"] },
 	"th-command-centre": { module: "Placement", roles: ["Placement Author", "Placement Publisher", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Enrollment Officer", "Teaching Scheduler", "Attendance Recorder"] },
 	"th-placement-author": { module: "Placement", roles: ["Placement Author"] },
 	"th-placement-publisher": { module: "Placement", roles: ["Placement Publisher"] },
@@ -62,7 +63,7 @@ for (const [name, shape] of Object.entries(expected)) {
 	for (const role of shape.roles) assert(roleFixture.has(role), `${name} references unshipped role ${role}`);
 	const surface = surfaces[name];
 	assert(surface, `${name} missing client surface`);
-	if (surface.landing) assert.deepStrictEqual(Array.from(surface.roles), shape.roles, name);
+	if (surface.landing || surface.admin) assert.deepStrictEqual(Array.from(surface.roles), shape.roles, name);
 	else assert.strictEqual(surface.role, shape.roles[0], name);
 }
 
@@ -85,8 +86,8 @@ const kindRoleSource = fs.readFileSync(SECURITY, "utf8").split("KINDS = set(KIND
 for (const [, kind, role] of kindRoleSource.matchAll(/^\s+"([a-z_]+)":\s+"([^"]+)",/gm)) kindRoles[kind] = role;
 const pageRoles = new Set(Object.values(expected).flatMap((entry) => entry.roles).filter((role) => role !== undefined));
 for (const [name, surface] of Object.entries(surfaces)) {
-	if (surface.landing) {
-		assert(!surface.commands, "landing page may navigate but may not dispatch commands");
+	if (surface.landing || surface.admin) {
+		assert(!surface.commands, "navigation/admin page may not dispatch business commands");
 		continue;
 	}
 	assert(Array.isArray(surface.commands) && surface.commands.length, `${name} needs command forms`);
@@ -122,7 +123,7 @@ function endpointSignature(method) {
 	return found[1].split(",").map((arg) => arg.trim().split("=")[0]).filter(Boolean);
 }
 for (const [name, surface] of Object.entries(surfaces)) {
-	if (surface.landing) continue;
+	if (surface.landing || surface.admin) continue;
 	for (const command of surface.commands) {
 		const signature = endpointSignature(command.method);
 		assert.strictEqual(signature[0], "request_key", `${command.method} must be idempotent`);

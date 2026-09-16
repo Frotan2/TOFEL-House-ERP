@@ -3,11 +3,13 @@
 **Date:** 2026-09-16
 **Status:** **OPEN — production remains REJECT.**
 
-This is the smallest owner/infrastructure packet required to turn the repository's
-synthetic evidence into a proposed production-operation plan. It is deliberately a
-request for decisions and evidence, not an operating procedure, approval, or
-assignment. Do not put credentials, private keys, backups, customer data, or named
-people in this repository.
+This is the operational qualification packet for turning the repository's
+synthetic evidence into a proposed production-operation plan. The owner/business
+requirements have now been recorded in the canonical
+[`canonical-owner-decision-record.json`](canonical-owner-decision-record.json).
+This packet projects those requirements into D8 evidence gates; it is not an
+operating procedure, approval, assignment, or production authorization. Do not put
+credentials, private keys, backups, customer data, or named people in this repository.
 
 It complements the code-derived [Operational Ownership Charter](OPERATIONAL-OWNERSHIP-CHARTER.md)
 and the [production acceptance ledger](foundation-production-acceptance-ledger.json).
@@ -43,12 +45,13 @@ encryption key and non-database flags, migrates, and verifies counts/name digest
 private-file bytes. This proves that exact disposable code path only; it is not an
 offsite or real-infrastructure recovery claim.
 
-## Inputs required from the owner/contract holder
+## Owner decision record boundary
 
-For every row, the response may identify an accountable organization, contract role,
-or approved authority reference; a person name is neither requested nor inferred.
-Values that are not yet selected can be marked **not selected**. That leaves the
-related gate open.
+The owner/business requirements are not repeated as a second decision list here.
+The canonical [`canonical-owner-decision-record.json`](canonical-owner-decision-record.json)
+is authoritative. Engineering may implement technical mechanisms autonomously, but
+must not invent a provider, hostname, destination, person, numeric capacity target,
+availability target, or numeric RPO/RTO.
 
 ## Canonical actionable D8 decision matrix
 
@@ -63,11 +66,17 @@ create a second competing matrix.
 The explicit current summary is:
 
 - `D8-OWNERSHIP-CHARTER`: **SELECTED / DELIVERED**, scoped **PASS** only.
-- `D8-OPS-AUTHORITY`, `D8-TOPOLOGY-EDGE`, `D8-DURABLE-STATE`,
-  `D8-BACKUP-RECOVERY`, `D8-OBSERVABILITY-INCIDENT`,
-  `D8-CAPACITY-AVAILABILITY`, and `D8-CHANGE-ROLLBACK`: **NOT SELECTED** and
-  **BLOCKED**. Engineering contract/schema/harness work may proceed, but no
-  production operation may be enabled.
+- `D8-OPS-AUTHORITY`: **SELECTED / BUSINESS INPUT**; the authority roles are
+  resolved, but live authorization, incident, recovery, and escalation evidence is
+  still **BLOCKED**.
+- `D8-TOPOLOGY-EDGE`: **SELECTED / PHASED** for current local/server operation
+  through Tailscale; future public hosting values remain unselected and evidence is
+  **BLOCKED**.
+- `D8-DURABLE-STATE`, `D8-BACKUP-RECOVERY`, `D8-OBSERVABILITY-INCIDENT`, and
+  `D8-CHANGE-ROLLBACK`: selected business requirements with implementation/evidence
+  **BLOCKED**.
+- `D8-CAPACITY-AVAILABILITY`: numeric objective remains **NOT SELECTED** and is
+  **BLOCKED**; engineering may baseline without claiming a target.
 - `D8-SECURITY-DEPENDENCY`: **UPSTREAM-BLOCKED / REJECT**. No waiver or owner
   override is requested or accepted.
 
@@ -103,11 +112,14 @@ only.
 
 ## Current D8 blockers
 
-1. No approved production topology, edge/trust boundary, durable-state/file-storage
-   design, key custody, backup destination/retention, recovery objectives, or
-   accountable operational authority is present in the repository.
+1. The current local/server and Tailscale deployment decision, role authority map,
+   data-preservation priority, encrypted multi-version backup requirement, recovery
+   requirement, auditability, and health/attention visibility are recorded. The
+   provider-neutral future internet topology and future off-site destination remain
+   unselected by design; engineering must not invent them.
 2. No separate-infrastructure production-like backup/restore, host-loss, rollback,
-   alert-delivery, capacity, or public-edge evidence exists.
+   alert-delivery, capacity, branch-isolation, or public-edge evidence exists. All
+   selected D8 operational areas therefore remain evidence-gated and BLOCKED.
 3. `SEC-DEPS-01` remains **UPSTREAM-BLOCKED / REJECT**. Latest active-branch runtime
    `35090904508` at `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` has a failed
    post-build resolved-tree audit: 14 Python OSV finding records across four

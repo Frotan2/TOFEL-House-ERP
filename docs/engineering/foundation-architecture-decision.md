@@ -1,7 +1,8 @@
 # Foundation architecture decision — maintenance and production risk
 
-**Decision date:** 2026-09-14  
-**Status:** Recommended architecture direction; production release remains blocked  
+**Decision date:** 2026-09-16
+**Active branch:** `arena/01a0a9f7-tofel-house-erp`
+**Status:** Recommended architecture direction; production release remains blocked
 **Production / Phase 2 recommendation:** **REJECT current acceptance**  
 **Selected strategy:** **Controlled upstream-aligned frontend upgrade path (option 2)**
 
@@ -13,7 +14,36 @@ Choose a **coordinated upstream-aligned maintenance path**, not an accumulation 
 
 Use option 1 only as a **temporary qualification bridge**, not an indefinite production strategy. If option 2 is infeasible, evaluate option 3 as **contracted upstream-aligned maintenance with a bounded patch queue**. Do not default to a permanent private fork, parallel portal or ERP replacement.
 
-This selects the architectural direction; it does **not** approve production, grant risk acceptance, pass Phase 2 or authorize TOEFL-specific development. No dependency upgrades or runtime changes are made by this decision.
+This selects the architectural direction; it does **not** approve production, grant
+risk acceptance, pass Phase 2 or authorize TOEFL-specific development. No
+dependency upgrades or runtime changes are made by this decision.
+
+## 1.1 Owner deployment and authority alignment
+
+The canonical [`canonical-owner-decision-record.json`](canonical-owner-decision-record.json)
+selects Course Owner as system/strategic final authority; General Manager for
+routine administration/operations; Academic Manager for academic operations and
+student progress; Finance Manager for finance/payroll; and Reception for intake.
+It requires role-based access, auditable important activity, offboarding with
+historical preservation, multi-branch architecture with branch-level operational
+isolation, configurable business policy, controlled owner role/permission
+administration, and high-level health/attention reporting.
+
+The current deployment phase is local/server-based with authorized staff using
+Tailscale; the current database and files are local. Future internet hosting is a
+separate phase with no selected provider, hostname, DNS, public edge, or public
+TLS value. Automated multi-version encrypted backup and recovery onto another
+system are required, data preservation outranks minimizing recovery time, and
+future off-site backup is a direction without a selected destination. Engineering
+selects the technical mechanisms for MFA, RBAC, sessions, encryption/secrets,
+backup rotation, monitoring, recovery, rollback, CI/CD, and hardening. These
+requirements are implementation inputs, not evidence; production remains
+REJECT until the D8 and security gates close.
+
+Native ERPNext/Education/HRMS remain authorities for students, courses,
+enrollment, attendance, finance, employees and payroll. No portal or online
+payment gateway is unlocked at launch. Company/Branch is not treated as tenant
+isolation without authorization/data-scope proof.
 
 ## 2. Evidence and uncertainty
 
@@ -102,7 +132,7 @@ The selected strategy does not eliminate these current blockers:
 5. **Operational and business completeness:** representative capacity, alert delivery, audit/retention processes, full payroll posting and wider business-role coverage remain open.
 6. **Sustained maintenance:** accountable staffing, support coverage, response expectations and licensing/distribution decisions need resolution before depending on them in production.
 
-**Final foundation decision:** proceed with option 2 as the architecture and maintenance direction; preserve option 1 as a time-bounded qualification bridge; reserve option 3a as a gated fallback. **REJECT current production/Phase 2 acceptance.** Neither risk acceptance nor monitoring has been approved or implemented by this decision. No TOEFL-specific implementation begins.
+**Final foundation decision:** proceed with option 2 as the architecture and maintenance direction; preserve option 1 as a time-bounded qualification bridge; reserve option 3a as a gated fallback. **REJECT current production/Phase 2 acceptance.** Neither risk acceptance nor monitoring has been approved or implemented by this decision. No additional TOEFL-specific implementation is authorized by this ADR; current engineering work remains subordinate to the canonical owner record and native-authority boundary.
 
 ## References
 
@@ -120,4 +150,5 @@ All prior failed evidence is retained. This architecture-only decision introduce
 The user has authorized [TOEFL House domain architecture and planning](../domain/README.md)
 for review on this unchanged foundation. That permits domain **design**, not schema/API/UI
 implementation or deployment. The maintenance strategy, failed production acceptance,
-absence of risk acceptance and all retained evidence remain unchanged.
+absence of risk acceptance and all retained evidence remain unchanged. This ADR
+still does not authorize production or replace the canonical owner-decision record.

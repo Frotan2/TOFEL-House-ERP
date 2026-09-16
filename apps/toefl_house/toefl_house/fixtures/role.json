@@ -124,5 +124,40 @@
     "role_name": "Finance Auditor",
     "desk_access": 1,
     "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Course Owner",
+    "role_name": "Course Owner",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "General Manager",
+    "role_name": "General Manager",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Academic Manager",
+    "role_name": "Academic Manager",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Finance Manager",
+    "role_name": "Finance Manager",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Reception",
+    "role_name": "Reception",
+    "desk_access": 1,
+    "disabled": 0
   }
 ]

@@ -29,22 +29,28 @@ product native checks and a disposable Bench SQL/public/private-files backup →
 separately created-site restore verifier. That verifier is evidence of the synthetic
 code path only, not independent-host DR, production backup/key custody, RPO/RTO/SLA,
 topology, or availability. The canonical current record is the
-[acceptance ledger](foundation-production-acceptance-ledger.json), and owner inputs
-remain isolated in the [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md).
+[acceptance ledger](foundation-production-acceptance-ledger.json), and owner
+requirements are authoritative in the [canonical owner-decision record](canonical-owner-decision-record.json),
+with D8 evidence projection in the [D8 operational qualification packet](D8-OPERATIONAL-INPUT-PACKET.md).
 
 ## D8 engineering qualification framework
 
 The canonical, provider-neutral D8 matrix is
 [`d8-production-operations-decision-matrix.json`](d8-production-operations-decision-matrix.json).
-Its seven minimum owner selections remain `NOT SELECTED` / `BLOCKED`; the
-role-based ownership charter is `SELECTED / DELIVERED` as a scoped `PASS`, and
-SEC-DEPS-01 remains `UPSTREAM-BLOCKED / REJECT`. Engineering has completed the
-contract/schema, environment-separation, secret-hygiene, release-provenance,
-synthetic-hard-stop, and fail-closed production-enable checks. Topology,
-backup/recovery, observability, capacity, edge/security, and rollback harness
-contracts are structurally ready but cannot become deployment evidence until the
-owner-selected architecture exists. The executable contract template and CI
-check are [`d8-operational-contract.template.json`](d8-operational-contract.template.json),
+The canonical owner record now resolves the business requirements for authority,
+role-based access/auditability/offboarding, branch isolation, current local/server
+operation through Tailscale, local database/files, encrypted multi-version backup,
+recovery onto another system, preservation priority, configurable policy, and
+health/attention visibility. The role-based ownership charter is
+`SELECTED / DELIVERED` as a scoped `PASS`; `D8-CAPACITY-AVAILABILITY` remains the
+only unresolved numeric business objective. SEC-DEPS-01 remains
+`UPSTREAM-BLOCKED / REJECT`. Engineering has completed the contract/schema,
+environment-separation, secret-hygiene, release-provenance, synthetic-hard-stop,
+and fail-closed production-enable checks. Selected topology, backup/recovery,
+observability, branch-isolation, durability, capacity, edge/security, and rollback
+areas remain BLOCKED until their implementation and independent evidence exist;
+future public hosting/provider values are intentionally not selected. The
+executable contract template and CI check are [`d8-operational-contract.template.json`](d8-operational-contract.template.json),
 [`d8_validate.py`](../../tools/foundation/d8_validate.py), and
 `.github/workflows/d8-operations-contract.yml`.
 

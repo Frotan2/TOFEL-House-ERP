@@ -45,8 +45,8 @@ class D8ContractTests(unittest.TestCase):
 
     def test_not_selected_owner_values_are_rejected(self):
         invalid = copy.deepcopy(self.template)
-        invalid["owner_selections"]["D8-OPS-AUTHORITY"]["values"] = {
-            "operating_authority_reference": "invented-value"
+        invalid["owner_selections"]["D8-CAPACITY-AVAILABILITY"]["values"] = {
+            "concurrency_profile_reference": "invented-value"
         }
         with tempfile.NamedTemporaryFile("w", suffix=".json") as handle:
             json.dump(invalid, handle)

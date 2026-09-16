@@ -1,42 +1,30 @@
 {
   "schema_version": 1,
   "matrix_id": "D8-PRODUCTION-OPERATIONS",
-  "status": "NOT_SELECTED",
+  "status": "SELECTED",
   "active_branch": "arena/01a0a9f7-tofel-house-erp",
   "source_commit": "NOT_SELECTED",
   "production_enabled": false,
   "production_state": "REJECT",
   "synthetic_only_guard": "REQUIRED",
+  "owner_decision_record": "canonical-owner-decision-record.json",
+  "selected_business_requirements": {
+    "authority": "Course Owner is final strategic/system authority; General Manager owns routine administration and operations; Academic Manager owns academic operations/progress; Finance Manager owns finance/payroll; Reception owns intake/reception.",
+    "access_and_audit": "Role-based staff access, auditable important activity, and offboarding access revocation with historical-record preservation are required.",
+    "branch_isolation": "Multi-branch architecture and branch-level operational isolation are required; native Company/Branch remains an authority where applicable and is not assumed to be tenant isolation by itself.",
+    "current_deployment": "Local/server-based database and files, accessed by authorized staff through Tailscale.",
+    "future_deployment": "Internet-hosted deployment is a future phase; provider, hostname, DNS, public edge, and public TLS values are not selected.",
+    "backup_recovery": "Automated multi-version encrypted backup and recovery onto another system are required; data preservation has priority over minimizing recovery time; future off-site support is desired.",
+    "configurable_policy": "Fees, discounts, courses, levels, skills, terms, and fixed/skill-based teacher compensation remain configurable and use native authorities where applicable.",
+    "control_center": "Course Owner requires controlled role/permission administration and a high-level health/attention dashboard; General Manager receives role-appropriate operational visibility.",
+    "deferred_scope": "Student/guardian portal and online payment gateway are not launch scope."
+  },
   "owner_selections": {
-    "D8-OPS-AUTHORITY": {
-      "status": "NOT_SELECTED",
-      "values": {}
-    },
-    "D8-TOPOLOGY-EDGE": {
-      "status": "NOT_SELECTED",
-      "values": {}
-    },
-    "D8-DURABLE-STATE": {
-      "status": "NOT_SELECTED",
-      "values": {}
-    },
-    "D8-BACKUP-RECOVERY": {
-      "status": "NOT_SELECTED",
-      "values": {}
-    },
-    "D8-OBSERVABILITY-INCIDENT": {
-      "status": "NOT_SELECTED",
-      "values": {}
-    },
     "D8-CAPACITY-AVAILABILITY": {
-      "status": "NOT_SELECTED",
-      "values": {}
-    },
-    "D8-CHANGE-ROLLBACK": {
       "status": "NOT_SELECTED",
       "values": {}
     }
   },
   "evidence": [],
-  "notes": "Template only. No provider, hostname, topology, storage, backup destination, RPO/RTO, monitoring vendor, capacity target, availability target, person, or waiver is selected. Production must remain disabled and REJECT."
+  "notes": "Owner business requirements are selected in the canonical record and are not production evidence. Numeric capacity/availability targets, future provider/hostname/DNS/public-edge values, future off-site destination, and numeric RPO/RTO are not supplied. Production must remain disabled and REJECT; current D8 gates remain BLOCKED until independently proven."
 }

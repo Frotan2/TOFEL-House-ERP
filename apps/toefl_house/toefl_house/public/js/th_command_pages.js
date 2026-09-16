@@ -37,8 +37,23 @@ frappe.provide("toefl_house.command_pages");
 	const ADMISSION_OUTCOMES = ["Approved", "Conditional", "Deferred", "Rejected"];
 	const TEACHING_SKILLS = ["Speaking & Listening", "Writing & Grammar", "Reading & Vocabulary"];
 	const COMPENSATION_MODELS = ["Fixed Salary", "Skill-Based", "Hybrid"];
+	const ADMIN_MANAGED_ROLES = [
+		"General Manager", "Academic Manager", "Finance Manager", "Reception",
+		"Placement Author", "Placement Publisher", "Placement Auditor",
+		"Placement Invigilator", "Placement Assessor", "Placement Reviewer",
+		"Placement Releaser", "Admission Officer", "Admission Reviewer",
+		"Admission Approver", "Admission Auditor", "Enrollment Officer",
+		"Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder",
+		"Teaching Auditor", "Finance Officer", "Finance Auditor",
+	];
 
 	const PAGE_SURFACES = Object.freeze({
+		"th-administration-control-centre": {
+			admin: true,
+			roles: ["Course Owner", "General Manager"],
+			title: "TOEFL House Administration Control Centre",
+			description: "Review fail-closed release attention and navigate to native identity, role, branch and permission authorities. This surface grants no permission and creates no parallel ledger.",
+		},
 		"th-command-centre": {
 			title: "TOEFL House Command Centre",
 			landing: true,
@@ -234,6 +249,36 @@ frappe.provide("toefl_house.command_pages");
 		});
 	}
 
+	function manageAdminRole() {
+		const dialog = new frappe.ui.Dialog({
+			title: text("Manage TOEFL role assignment"),
+			fields: [
+				requestKeyField(),
+				data("user", "User", { reqd: 1, description: "Native User name or email; no user search is performed." }),
+				select("role", "Managed role", ADMIN_MANAGED_ROLES, { reqd: 1 }),
+				{ fieldname: "enabled", label: "Assign role", fieldtype: "Check", default: 1 },
+			],
+			primary_action_label: text("Apply native role change"),
+			primary_action(values) {
+				frappe.call({
+					method: "toefl_house.administration.set_managed_role",
+					args: {
+						request_key: values.request_key,
+						user: values.user,
+						role: values.role,
+						enabled: values.enabled ? 1 : 0,
+					},
+					freeze: true,
+					callback(response) {
+						dialog.hide();
+						resultMessage("Role change", response.message);
+					},
+				});
+			},
+		});
+		dialog.show();
+	}
+
 	function resultMessage(label, result) {
 		const message = $("<pre class='small mb-0'></pre>").text(JSON.stringify(result, null, 2)).prop("outerHTML");
 		frappe.msgprint({ title: text(label + " result"), message, wide: true });
@@ -290,17 +335,59 @@ frappe.provide("toefl_house.command_pages");
 		});
 	}
 
+	function renderAdminPage(wrapper, surface) {
+		const page = frappe.ui.make_app_page({ parent: wrapper, title: text(surface.title), single_column: true });
+		addDescription(page, surface.description);
+		const attention = $("<div class='mb-4'></div>").appendTo(page.body);
+		$("<h4></h4>").text(text("System attention")).appendTo(attention);
+		$("<p class='text-muted'></p>").text(text("Loading the role-scoped readiness projection...")).appendTo(attention);
+		frappe.call({
+			method: "toefl_house.administration.get_control_center_snapshot",
+			callback(response) {
+				attention.empty();
+				$("<h4></h4>").text(text("System attention")).appendTo(attention);
+				const snapshot = response.message || {};
+				$("<p class='mb-2'></p>").text(text(`Production: ${snapshot.production_state || "REJECT"} · Deployment: ${snapshot.deployment_phase || "UNVERIFIED"}`)).appendTo(attention);
+				(snapshot.operational_attention || []).forEach((item) => {
+					$("<div class='alert alert-warning py-2 mb-2'></div>").text(text(`${item.id}: ${item.state} — ${item.detail}`)).appendTo(attention);
+				});
+			},
+		});
+		const controls = $("<div class='row'></div>").appendTo(page.body);
+		$("<h4 class='col-12'></h4>").text(text("Native control routes")).appendTo(controls);
+		const routes = [
+			["Users", ["List", "User"]], ["Roles", ["List", "Role"]],
+			["User Permissions", ["List", "User Permission"]],
+			["Companies", ["List", "Company"]], ["Branches", ["List", "Branch"]],
+			["System Settings", ["Form", "System Settings"]],
+		];
+		routes.forEach(([label, route]) => {
+			$("<button type='button' class='btn btn-secondary btn-sm m-1'></button>")
+				.text(text(label))
+				.on("click", () => frappe.set_route(...route))
+				.appendTo(controls);
+		});
+		$("<button type='button' class='btn btn-primary btn-sm m-1'></button>")
+			.text(text("Manage TOEFL role assignment"))
+			.on("click", manageAdminRole)
+			.appendTo(controls);
+	}
+
 	function renderLandingPage(wrapper, surface) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: text(surface.title), single_column: true });
 		addDescription(page, surface.description);
 		const actions = $("<div class='row'></div>").appendTo(page.body);
 		Object.entries(PAGE_SURFACES)
-			.filter(([, candidate]) => !candidate.landing && frappe.user.has_role(candidate.role))
+			.filter(([, candidate]) => !candidate.landing && (
+				candidate.admin
+					? candidate.roles.some((role) => frappe.user.has_role(role))
+					: candidate.role && frappe.user.has_role(candidate.role)
+			))
 			.forEach(([name, candidate]) => {
 				const column = $("<div class='col-sm-6 col-lg-4 mb-3'></div>").appendTo(actions);
 				const card = $("<div class='border rounded p-3 h-100'></div>").appendTo(column);
 				$("<h5 class='mb-2'></h5>").text(text(candidate.title)).appendTo(card);
-				$("<p class='small text-muted'></p>").text(text(candidate.role)).appendTo(card);
+				$("<p class='small text-muted'></p>").text(text(candidate.admin ? candidate.roles.join(" / ") : candidate.role)).appendTo(card);
 				$("<button type='button' class='btn btn-primary btn-sm'></button>")
 					.text(text("Open page"))
 					.on("click", () => frappe.set_route(name))
@@ -312,7 +399,9 @@ frappe.provide("toefl_house.command_pages");
 	Object.entries(PAGE_SURFACES).forEach(([name, surface]) => {
 		frappe.pages[name] = frappe.pages[name] || {};
 		frappe.pages[name].on_page_load = (wrapper) => {
-			if (surface.landing) {
+			if (surface.admin) {
+				renderAdminPage(wrapper, surface);
+			} else if (surface.landing) {
 				renderLandingPage(wrapper, surface);
 			} else {
 				renderActionPage(wrapper, surface);

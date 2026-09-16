@@ -239,5 +239,12 @@
   "d8_decision_matrix": "d8-production-operations-decision-matrix.json",
   "d8_contract_template": "d8-operational-contract.template.json",
   "d8_gate_state": "BLOCKED",
-  "d8_validator": "tools/foundation/d8_validate.py"
+  "d8_validator": "tools/foundation/d8_validate.py",
+  "owner_decision_record": "canonical-owner-decision-record.json",
+  "owner_business_policy_state": {
+    "status": "RECORDED / IMPLEMENTATION-EVIDENCE PENDING",
+    "selected": "Authority roles, role-based access/auditability/offboarding, multi-branch isolation, current local/Tailscale deployment, local database/files, encrypted multi-version backup/recovery, preservation priority, configurable business policy, controlled administration, and health/attention visibility.",
+    "unresolved": "Numeric capacity/availability objective, future internet provider/hostname/DNS/public edge, future off-site backup destination, numeric RPO/RTO, and separately deferred domain policies.",
+    "does_not_authorize_production": true
+  }
 }

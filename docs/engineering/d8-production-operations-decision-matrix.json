@@ -6,7 +6,7 @@
   "production_state": "REJECT",
   "overall_gate_state": "BLOCKED",
   "security_dependency_state": "UPSTREAM-BLOCKED / REJECT",
-  "authority_boundary": "This matrix distinguishes owner selections from engineering contracts and evidence. It does not select a provider, cloud/VPS, hostname, DNS, topology, storage, backup destination, RPO, RTO, monitoring vendor, capacity target, availability target, person, or security waiver.",
+  "authority_boundary": "This matrix applies the canonical business decisions without inventing future provider, cloud/VPS, hostname, DNS, public edge, off-site destination, numeric capacity, availability, or recovery-time values. Current local/server operation through Tailscale and current local database/files are selected; future internet hosting remains a later deployment phase.",
   "allowed_states": [
     "PASS",
     "BLOCKED",
@@ -17,7 +17,7 @@
       "id": "D8-OWNERSHIP-CHARTER",
       "area": "Role-based operational ownership charter",
       "current_disposition": "SELECTED / DELIVERED",
-      "owner_decision_required": "No further selection is required for the code-derived role/responsibility model. The owner must separately select accountable operational and recovery authorities in D8-OPS-AUTHORITY; the charter does not assign people, providers, contracts, or production authority.",
+      "owner_decision_required": "The code-derived role/responsibility model is selected and delivered. It is aligned to the canonical authority map; it does not assign named people, providers, contracts, or production authority.",
       "required_owner_fields": [],
       "engineering_can_proceed_without_it": true,
       "engineering_work_already_completed_or_allowed": [
@@ -34,8 +34,8 @@
     {
       "id": "D8-OPS-AUTHORITY",
       "area": "Accountable production operation, recovery, security incident, and escalation authority",
-      "current_disposition": "NOT SELECTED",
-      "owner_decision_required": "Select an accountable organization, contract role, or approved authority reference for production change approval, routine service operation, security incident disposition, recovery authorization, and escalation. A person name is not required.",
+      "current_disposition": "SELECTED / BUSINESS INPUT",
+      "owner_decision_required": "The canonical business authority map is selected: Course Owner is system/strategic final authority; General Manager owns overall administrative operations; Academic Manager owns academic operations/progress; Finance Manager owns finance/payroll operations; Reception owns intake/reception. Engineering must implement role separation, approvals, offboarding, and auditability without assigning a person.",
       "required_owner_fields": [
         "operating_authority_reference",
         "recovery_authority_reference",
@@ -44,22 +44,22 @@
       ],
       "engineering_can_proceed_without_it": true,
       "engineering_work_already_completed_or_allowed": [
-        "Validate that the authority contract has explicit NOT_SELECTED values and cannot authorize production by omission.",
-        "Prepare role-based approval and escalation evidence contracts without naming a person or provider.",
-        "Keep production enablement fail-closed while the fields are absent."
+        "Implement the selected role separation, approval, escalation, audit, and offboarding contracts without naming a person or provider.",
+        "Prepare role-based authority and escalation evidence contracts; preserve Course Owner final strategic authority and General Manager routine operational ownership.",
+        "Keep production enablement fail-closed while live authorization, incident, recovery, and escalation evidence is absent."
       ],
       "evidence_required_after_decision": [
         "Approved non-secret authority and escalation record.",
         "Tested change, incident, recovery, and escalation exercises that identify the selected roles."
       ],
-      "acceptance_condition": "All four authority references are selected, approved, traceable to the owner/contract holder, and exercised in the selected operating architecture.",
+      "acceptance_condition": "The selected role authority map is represented in controlled role configuration, sensitive actions have appropriate approval/audit controls, offboarding revokes access while preserving records, and operational evidence passes.",
       "current_gate_state": "BLOCKED"
     },
     {
       "id": "D8-TOPOLOGY-EDGE",
       "area": "Production hostname, topology, trust boundary, edge, TLS, session, and realtime",
-      "current_disposition": "NOT SELECTED",
-      "owner_decision_required": "Select the production hostname/DNS ownership, public and private trust boundaries, reverse-proxy placement, TLS custody/renewal authority, allowed origins, and service placement for application, database, Redis, workers, scheduler, realtime, and files. No value is presumed.",
+      "current_disposition": "SELECTED / PHASED",
+      "owner_decision_required": "Current deployment is selected as local/server-based access for authorized staff through Tailscale. Future internet hosting is selected only as a direction; provider, hostname, DNS, public edge, and public TLS values remain future-phase inputs. Engineering owns the network/session/TLS mechanisms and must not invent those future values.",
       "required_owner_fields": [
         "hostname_and_dns_authority",
         "trust_boundary_reference",
@@ -70,22 +70,22 @@
       ],
       "engineering_can_proceed_without_it": true,
       "engineering_work_already_completed_or_allowed": [
-        "Validate a topology document against a provider-neutral schema with required fields remaining NOT_SELECTED.",
-        "Prepare edge, TLS, Secure-cookie, origin/header, CSRF, private-file, and realtime test harnesses with no target values.",
-        "Reject production configuration when topology or edge fields are missing."
+        "Implement current local/server plus Tailscale boundary contracts without a public hostname or provider.",
+        "Select and implement engineering-owned MFA/session/TLS/network controls appropriate to the current boundary.",
+        "Prepare provider-neutral future internet-edge, origin, CSRF, private-file, and realtime harnesses; reject public enablement until future values exist."
       ],
       "evidence_required_after_decision": [
         "Approved topology and trust-boundary record.",
         "Deployed edge tests for TLS, Secure cookies/session behavior, origin/header spoofing, CSRF, private-file routing, and realtime authentication."
       ],
-      "acceptance_condition": "The selected deployment matches the approved topology and every required edge/session/realtime negative and positive test passes without synthetic flags.",
+      "acceptance_condition": "Current local/Tailscale separation, session security, branch isolation, and access controls are implemented and evidenced; future public deployment is not enabled until its separately selected topology and edge evidence pass.",
       "current_gate_state": "BLOCKED"
     },
     {
       "id": "D8-DURABLE-STATE",
       "area": "Durable state, files, configuration, encryption keys, and persistence responsibility",
-      "current_disposition": "NOT SELECTED",
-      "owner_decision_required": "Select the persistence and durability responsibilities for MariaDB, Redis queues/cache, site configuration, encryption keys, private files, and public assets. Do not infer a storage service or custody model.",
+      "current_disposition": "SELECTED / CURRENT STATE",
+      "owner_decision_required": "Current database and files are selected as local/server-based. Engineering owns encryption, secrets, persistence, archival, and deletion mechanics; future storage/provider custody is not inferred.",
       "required_owner_fields": [
         "mariadb_durability_reference",
         "redis_durability_reference",
@@ -96,22 +96,22 @@
       ],
       "engineering_can_proceed_without_it": true,
       "engineering_work_already_completed_or_allowed": [
-        "Validate that required durable-state fields are explicit and that credentials/keys are never accepted in repository configuration.",
-        "Define loss/restart and file-integrity test contracts without selecting a storage location.",
-        "Keep a production configuration with absent durability fields disabled."
+        "Implement configuration/secret hygiene and external secret injection contracts without placing keys in source.",
+        "Define current local database/file persistence, encryption, archival, deletion, and branch-isolation contracts.",
+        "Prepare loss/restart and file-integrity evidence for the current local/server architecture."
       ],
       "evidence_required_after_decision": [
         "Approved state/file/key custody record and configuration review.",
         "Controlled database, Redis, configuration, key, and file loss/restart evidence against the selected design."
       ],
-      "acceptance_condition": "Every durable state class has selected custody and persistence behavior, and controlled failure evidence proves the deployed configuration matches it.",
+      "acceptance_condition": "Local state/file/key boundaries are documented, encrypted secrets stay outside source, branch isolation is enforced, and loss/restart/file-integrity evidence passes for the current architecture.",
       "current_gate_state": "BLOCKED"
     },
     {
       "id": "D8-BACKUP-RECOVERY",
       "area": "Backup, key retrieval, restoration authority, RPO, and RTO",
-      "current_disposition": "NOT SELECTED",
-      "owner_decision_required": "Select backup destination and retention authority, encryption/key retrieval authority, restoration authorization, and the recovery-point and recovery-time objectives. No destination, retention, RPO, or RTO is invented.",
+      "current_disposition": "SELECTED / REQUIREMENT",
+      "owner_decision_required": "Automated multi-version encrypted backup is required; recovery onto another system is required; preservation of data has priority over minimizing recovery time; future off-site backup support is required as a direction. Engineering selects retention/rotation, encryption, verification, and recovery mechanics without inventing a provider or numeric RPO/RTO.",
       "required_owner_fields": [
         "backup_destination_reference",
         "backup_retention_reference",
@@ -123,22 +123,22 @@
       ],
       "engineering_can_proceed_without_it": true,
       "engineering_work_already_completed_or_allowed": [
-        "Validate backup/recovery contract completeness and reject a production recovery plan with NOT_SELECTED objectives.",
+        "Implement a versioned encrypted backup contract with deterministic rotation and restore verification.",
         "Maintain disposable synthetic backup/restore checks as bounded code-path evidence only.",
-        "Prepare separate-infrastructure recovery, key retrieval, file verification, and copied-session revocation harnesses."
+        "Prepare recovery onto another system and future off-site destination adapters without selecting a provider or destination."
       ],
       "evidence_required_after_decision": [
         "Actual encrypted backup in the selected destination and retention model.",
         "Separate-infrastructure recovery rehearsal with key retrieval, data/file verification, session revocation, and measured RPO/RTO results."
       ],
-      "acceptance_condition": "The selected backup/key/recovery design is exercised in the selected architecture and measured results meet the owner-selected RPO/RTO without relying on synthetic-only flags.",
+      "acceptance_condition": "The current implementation produces verifiable encrypted versions, supports recovery onto another system, preserves records/files, and measures actual results; no numeric recovery claim is made without an owner-selected target and evidence.",
       "current_gate_state": "BLOCKED"
     },
     {
       "id": "D8-OBSERVABILITY-INCIDENT",
       "area": "Monitoring, logging, audit retention, alerting, incident, and recovery operations",
-      "current_disposition": "NOT SELECTED",
-      "owner_decision_required": "Select monitoring and log/audit retention responsibilities, alert receiver/escalation authority, retention/rotation expectations, and the incident/recovery decision path. No monitoring vendor is presumed.",
+      "current_disposition": "SELECTED / REQUIREMENT",
+      "owner_decision_required": "Important activities must be auditable. Course Owner requires a high-level health/attention view; General Manager requires routine operational visibility. Engineering selects logging, monitoring, alerting, retention, dashboard, and incident mechanics without a vendor selection.",
       "required_owner_fields": [
         "monitoring_responsibility_reference",
         "log_audit_retention_reference",
@@ -148,22 +148,22 @@
       ],
       "engineering_can_proceed_without_it": true,
       "engineering_work_already_completed_or_allowed": [
-        "Validate an observability contract without selecting a vendor or endpoint.",
-        "Define health, queue, database, worker, scheduler, realtime, file, backup, audit, and synthetic-guard telemetry requirements.",
-        "Prepare alert-delivery and failure-detection harnesses that fail closed when no receiver is selected."
+        "Implement role-scoped health/attention and audit-readiness contracts for Course Owner and General Manager.",
+        "Define engineering-owned logs, metrics, alerts, retention, sensitive-data redaction, and incident evidence.",
+        "Keep alerts fail closed when no receiver is configured and preserve important activity history."
       ],
       "evidence_required_after_decision": [
         "Approved monitoring, retention, and incident responsibility record.",
         "Failure detection, alert delivery, retention/rotation, and incident/recovery exercise evidence."
       ],
-      "acceptance_condition": "Required signals are retained as selected, alerts reach the selected receiver, and an incident/recovery exercise demonstrates accountable response.",
+      "acceptance_condition": "Important actions are auditable, Course Owner and General Manager views are role-scoped, health/attention signals are actionable, alerts and retention are tested, and sensitive data is not exposed by dashboards.",
       "current_gate_state": "BLOCKED"
     },
     {
       "id": "D8-CAPACITY-AVAILABILITY",
       "area": "Capacity, workload scale, concurrency, and availability objectives",
       "current_disposition": "NOT SELECTED",
-      "owner_decision_required": "Select representative concurrency, data scale, workload mix, and availability expectation. No numeric capacity or availability target is presumed.",
+      "owner_decision_required": "No numeric capacity or availability target was supplied. Engineering must create a baseline/workload harness and avoid claiming a target; future numeric objectives remain the only unresolved business input in this area.",
       "required_owner_fields": [
         "concurrency_profile_reference",
         "data_scale_reference",
@@ -180,14 +180,14 @@
         "Approved workload and availability objective record.",
         "Measured database/web/queue/worker/realtime capacity and overload/failure handling against those objectives."
       ],
-      "acceptance_condition": "Measured results meet the selected workload and availability objectives, including overload and failure handling, with no unsupported extrapolation.",
+      "acceptance_condition": "A measured baseline exists and no availability/capacity claim is made until a business objective is selected; overload and failure behavior must be evidenced before production authorization.",
       "current_gate_state": "BLOCKED"
     },
     {
       "id": "D8-CHANGE-ROLLBACK",
       "area": "Release provenance, change approval, upgrade, rollback, and communications",
-      "current_disposition": "NOT SELECTED",
-      "owner_decision_required": "Select release approval authority, immutable build/provenance and configuration-promotion method, maintenance/communication authority, rollback decision criteria, and supported restore-based fallback.",
+      "current_disposition": "SELECTED / RESPONSIBILITY",
+      "owner_decision_required": "Course Owner is final authority for strategic/ownership changes; General Manager manages routine operational change and communications without unnecessary bottleneck. Engineering owns immutable provenance, configuration versioning, rollback implementation, and deployment hardening; sensitive financial/strategic changes retain management/owner controls.",
       "required_owner_fields": [
         "release_approver_reference",
         "build_provenance_reference",
@@ -198,15 +198,15 @@
       ],
       "engineering_can_proceed_without_it": true,
       "engineering_work_already_completed_or_allowed": [
-        "Validate release branch/ref/commit provenance and reject a production release from an unknown branch or missing evidence.",
-        "Validate a rollback contract without claiming that rollback is supported or selecting a mechanism.",
-        "Prepare full-bundle upgrade and restore-based rollback harnesses for the selected architecture."
+        "Validate release branch/ref/commit provenance and configuration versioning.",
+        "Implement role-appropriate change approval/audit contracts and restore-based rollback mechanics.",
+        "Prepare full-bundle upgrade and rollback harnesses without claiming support before evidence."
       ],
       "evidence_required_after_decision": [
         "Approved release/change/rollback record and immutable build provenance.",
         "Controlled full-bundle upgrade and supported rollback or restore-based rollback rehearsal with measured result and communication record."
       ],
-      "acceptance_condition": "A selected approver authorizes an immutable release whose upgrade and supported rollback evidence meet the selected criteria; absent evidence remains BLOCKED.",
+      "acceptance_condition": "Role-appropriate change approval, auditability, configuration versioning, immutable provenance, and tested rollback/recovery are demonstrated without bypassing native authorities.",
       "current_gate_state": "BLOCKED"
     },
     {
@@ -230,13 +230,7 @@
     }
   ],
   "minimum_owner_decisions_blocking_production_operations": [
-    "D8-OPS-AUTHORITY",
-    "D8-TOPOLOGY-EDGE",
-    "D8-DURABLE-STATE",
-    "D8-BACKUP-RECOVERY",
-    "D8-OBSERVABILITY-INCIDENT",
-    "D8-CAPACITY-AVAILABILITY",
-    "D8-CHANGE-ROLLBACK"
+    "D8-CAPACITY-AVAILABILITY"
   ],
   "release_invariants": {
     "production_state": "REJECT",
@@ -244,7 +238,8 @@
     "synthetic_only_guard_must_remain_enforced": true,
     "active_branch": "arena/01a0a9f7-tofel-house-erp",
     "historical_evidence_may_not_be_relabelled_as_active": true,
-    "no_owner_waiver_for_sec_deps": true
+    "no_owner_waiver_for_sec_deps": true,
+    "owner_decision_record": "canonical-owner-decision-record.json"
   },
   "upstream_reopen_trigger": {
     "status": "WATCH_ONLY",
@@ -289,7 +284,7 @@
       "id": "recovery",
       "area": "Separate-infrastructure recovery and host-loss",
       "state": "BLOCKED",
-      "scope": "Synthetic separate-site restore exists; independent-host recovery, key retrieval, host-loss and measured objectives are unproven.",
+      "scope": "Recovery onto another system is required and data preservation has priority over recovery speed. No selected architecture rehearsal or measured result exists.",
       "evidence": "D8-OPERATIONAL-INPUT-PACKET.md; D8-BACKUP-RECOVERY",
       "production_closure": true
     },
@@ -297,7 +292,7 @@
       "id": "backup-restore",
       "area": "Backup destination, retention, files, keys, and restore verification",
       "state": "BLOCKED",
-      "scope": "Disposable synthetic backup/restore is not production backup custody or retention evidence.",
+      "scope": "Automated multi-version encrypted backup and recovery onto another system are selected requirements; future off-site support is desired. Destination and measured recovery evidence are not yet available.",
       "evidence": "D8-BACKUP-RECOVERY; foundation-production-acceptance-ledger.json",
       "production_closure": true
     },
@@ -321,7 +316,7 @@
       "id": "observability",
       "area": "Monitoring, logs, audit retention, alert delivery, and incident response",
       "state": "BLOCKED",
-      "scope": "Local/synthetic probes do not prove selected production alerting, retention, or incident operation.",
+      "scope": "Important activities must be auditable; Course Owner health/attention and General Manager operational visibility are selected requirements. Monitoring/alerting/retention evidence remains incomplete.",
       "evidence": "D8-OBSERVABILITY-INCIDENT",
       "production_closure": true
     },
@@ -329,7 +324,7 @@
       "id": "ownership",
       "area": "Operational role/responsibility ownership",
       "state": "PASS",
-      "scope": "Code-derived charter delivered; accountable operating authority remains NOT SELECTED.",
+      "scope": "Business authority map selected: Course Owner final authority; General Manager routine operations; Academic/Finance/Reception role scopes. Code-derived charter is delivered; role implementation and production evidence remain bounded.",
       "evidence": "OPERATIONAL-OWNERSHIP-CHARTER.md; D8-OWNERSHIP-CHARTER / D8-OPS-AUTHORITY",
       "production_closure": true
     },
@@ -337,7 +332,7 @@
       "id": "topology-edge-session",
       "area": "Production topology, public edge, TLS, cookies, CSRF, private files, and session boundary",
       "state": "BLOCKED",
-      "scope": "No production hostname, topology, edge custody, or deployed edge evidence is selected.",
+      "scope": "Current local/server deployment and authorized-staff Tailscale access are selected. Future internet-hosted provider/hostname/public edge remain unselected; current and future edge/session evidence is not yet production-qualified.",
       "evidence": "D8-TOPOLOGY-EDGE",
       "production_closure": true
     },
@@ -345,7 +340,7 @@
       "id": "capacity-availability",
       "area": "Capacity, workload scale, overload handling, and availability",
       "state": "BLOCKED",
-      "scope": "No owner-selected workload or availability objective exists; no target is inferred.",
+      "scope": "No numeric capacity or availability objective is selected. Engineering may baseline and test, but must not claim a target.",
       "evidence": "D8-CAPACITY-AVAILABILITY",
       "production_closure": true
     },
@@ -353,7 +348,7 @@
       "id": "durability",
       "area": "Datastore, queue, configuration, file, and key durability",
       "state": "BLOCKED",
-      "scope": "No selected persistence or custody architecture exists.",
+      "scope": "Current database and files are selected as local/server state. Encryption, secrets, archival, deletion, and branch-isolation implementation/evidence remain incomplete.",
       "evidence": "D8-DURABLE-STATE",
       "production_closure": true
     },
@@ -361,7 +356,7 @@
       "id": "change-control",
       "area": "Release approval, provenance, communications, and rollback decision control",
       "state": "BLOCKED",
-      "scope": "No release approver, promotion method, maintenance authority, or rollback criterion is selected.",
+      "scope": "Course Owner is final strategic authority; General Manager owns routine operations; engineering owns provenance/versioning/rollback mechanics. End-to-end evidence remains incomplete.",
       "evidence": "D8-CHANGE-ROLLBACK; d8_validate.py",
       "production_closure": true
     },
@@ -373,5 +368,7 @@
       "evidence": "foundation-production-acceptance-ledger.json; d8_validate.py",
       "production_closure": true
     }
-  ]
+  ],
+  "owner_decision_record": "canonical-owner-decision-record.json",
+  "engineering_implementation_contract": "PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md"
 }

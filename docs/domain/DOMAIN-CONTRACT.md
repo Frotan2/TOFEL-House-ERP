@@ -10,7 +10,43 @@
 > it conflicts. No implementation authorization or production approval is granted.
 
 
-Date: 2026-09-14. Contract status: **architecture specification for review; not implementation authorization**. Decision authority: [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md). CONDITIONAL/BLOCKED decisions and unsupplied business policy are not implemented defaults. Selected foundation, pins, upstream source and production REJECT are unchanged.
+Date: 2026-09-16 · Active branch: `arena/01a0a9f7-tofel-house-erp`. Contract status: **authoritative architecture specification; not production authorization**. Decision authority: [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md) plus the canonical [owner-decision record](../engineering/canonical-owner-decision-record.json). CONDITIONAL/BLOCKED decisions and unsupplied business policy are not implemented defaults. Selected foundation, pins, upstream source and production REJECT are unchanged.
+
+## Owner-decision alignment and deployment phases
+
+The canonical owner record selects Course Owner as system owner and final
+strategic/ownership authority; General Manager for overall administrative and
+routine operations; Academic Manager for academic operations and student progress;
+Finance Manager for finance and payroll; and Reception for student intake and
+reception operations. Staff access is role-based, important activity is auditable,
+and offboarding revokes active access while preserving historical records.
+
+Multi-branch architecture and branch-level operational isolation are required.
+Use native ERPNext Company/Branch and User Permission authorities where applicable,
+with server-side branch scope checks for custom commands; Company/Branch is not
+assumed to be tenant isolation by itself. Course Owner and authorized senior
+management may view permitted organization-level aggregates without bypassing
+branch-level operational isolation.
+
+The current deployment phase is local/server-based, with authorized staff
+accessing the local database and files through Tailscale. Future internet hosting
+is a separate phase; no provider, hostname, DNS, public edge or public TLS value
+is selected here. Automated multi-version encrypted backup and recovery onto
+another system are requirements; preserving data has priority over minimizing
+recovery time, and future off-site backup support is a direction rather than a
+selected destination. Engineering owns MFA, RBAC mechanics, network/session
+controls, encryption/secrets, backup rotation, monitoring, recovery, rollback,
+configuration versioning, CI/CD and deployment hardening.
+
+Fees, discounts, courses, levels, skills, semesters/terms, teacher compensation
+models, and other business values remain configurable policy. Native
+Frappe/ERPNext/Education/HRMS remain authorities for identity, students,
+academics, accounting, employees and payroll. The student/guardian portal is
+future scope and online payment gateway integration is not required at launch.
+Course Owner requires a controlled role/permission administration surface and a
+high-level system health/attention view; these do not create parallel masters or
+ledgers. Production remains **REJECT** until technical evidence closes the
+applicable release gates.
 
 ## 1. Mandatory meaning and lifecycle
 
@@ -52,7 +88,8 @@ No official CEFR certification is generated. No CEFR mapping is enabled in the b
 
 | Boundary | Canonical entities / ownership | Cardinality and restrictions |
 |---|---|---|
-| Authentication/tenant | Frappe Site/User/Role/User Permission/File and native operational facilities | Site is tenant; Company/Branch is not tenant isolation. User is authentication, not a learner master |
+| Authentication/organization scope | Frappe Site/User/Role/User Permission/File and native operational facilities; native Company/Branch where applicable | Site is the deployment boundary; Company/Branch is operational scope, not tenant isolation by itself. Branch-level access requires native permission plus custom-command enforcement. User is authentication, not a learner master |
+| Governance and operational authority | Native User/Role/User Permission plus controlled TOEFL House administration Page; Course Owner, General Manager, Academic Manager, Finance Manager and Reception are role scopes, not person records | Role assignment is auditable and fail-closed. Offboarding revokes access without deleting history. Sensitive financial/strategic changes retain management/Course Owner controls. |
 | Prospect/application | ERPNext Lead; Education Student Applicant and Student Admission intake configuration | One verified person may have genuine applications over time; dedup is not email equality. No parallel applicant/person master |
 | Placement governance | Owned TH Placement Policy Revision; rubric/form/component definitions; item/key revisions only if objective/item-based delivery is approved | Published policy/content meaning frozen. Internal level vocabulary and native course mappings have explicit versions; no external-exam scale assumed |
 | Placement execution | Owned TH Placement Case, Attempt, Responses/evidence, assigned Ratings and Review Requests as required | Case has exactly one original Lead/Applicant/Student subject. Multiple attempts allowed; each references exact inputs. Private evidence never implies broad bank/learner access |
@@ -113,7 +150,7 @@ A05 blocks unsupported same-term repeats; A11 blocks unsafe history-affecting ca
 
 ## 5. Permission boundary
 
-Each transition requires active native User, trusted site, permitted role/action, branch/company where applicable, verified subject or current assignment, allowed state and field/evidence visibility. Native access and domain policy are conjunctive. Role unions and client flags cannot override denials.
+Each transition requires active native User, trusted site, permitted role/action, branch/company scope where applicable, verified subject or current assignment, allowed state and field/evidence visibility. Native access and domain policy are conjunctive. Role unions and client flags cannot override denials. Multi-branch isolation is enforced as authorization/data scope; aggregate views are separately authorized and cannot become a branch-operational bypass. Offboarding must revoke active sessions/roles while preserving historical records.
 
 - Prospect/applicant access is subject-specific; placement entry does not grant Student or academic-group access.
 - Guardian access uses explicit native Student membership after conversion. Pre-admission proxy authority remains A03 conditional; contact/payer status is not permission. No fake Student for login.
@@ -143,6 +180,12 @@ Native Employee/Instructor links preserve employment versus teaching identities.
 HRMS remains the **single canonical payroll calculation/input authority** with native accounting/payment effects. Exactly one approved native input path applies per employee/pay-component/period/source basis. An owned work approval may contribute a uniquely referenced authorized input only if a native gap is proven; it cannot own a second salary amount or ingest the same basis through both Timesheet and Additional Salary.
 
 A09 blocks choosing/implementing that path until employment classification, pay basis, payable work, leave/overtime/statutory rules and actual native behavior are established. Supplier contractors, if approved, use native supplier/purchasing/payment semantics rather than fake Employee payroll. No jurisdiction is inferred from the user's location.
+
+The owner requirement is that teacher compensation support configurable fixed,
+skill-based, and combined models. Rates, effective dates, skill vocabulary,
+statutory rules and approval policy remain configuration/business inputs; the
+implementation must feed the single native HRMS/payroll authority and must not
+create a parallel compensation or payroll ledger.
 
 ## 7. Integration, transaction and retry contract
 
@@ -181,4 +224,9 @@ Aggregate and drill-down permissions apply before pagination/aggregation; downlo
 
 The contract covers all required boundaries, but conditional identities/guardians/accounts/scoring/enforcement and blocked repeat/pay/cancellation capabilities prevent **unconditional implementation readiness**. Detailed status and explicit approvals are in [IMPLEMENTATION-READINESS.md](IMPLEMENTATION-READINESS.md).
 
-No app code, DocType/schema, API, UI, dependencies, foundation pins, upstream source, deployment configuration or infrastructure is changed. No new official-exam integration, offline protocol, parser upgrade, payroll engine, ledger or parallel learner master is authorized. Current Phase 2 failed evidence and production **REJECT** remain unchanged. Internal consistency is a review result, not architecture sign-off.
+This contract does not itself authorize an app code, DocType/schema, API, UI,
+dependency, deployment or infrastructure change. No new official-exam integration,
+offline protocol, parser upgrade, payroll engine, parallel ledger or parallel
+learner master is authorized. Current Phase 2 failed evidence and production
+**REJECT** remain unchanged. Internal consistency is a review result, not
+production sign-off.

@@ -23,6 +23,7 @@ from session_branch import ACTIVE_BRANCH  # noqa: E402
 
 MATRIX_PATH = ROOT / "docs/engineering/d8-production-operations-decision-matrix.json"
 TEMPLATE_PATH = ROOT / "docs/engineering/d8-operational-contract.template.json"
+OWNER_RECORD_PATH = ROOT / "docs/engineering/canonical-owner-decision-record.json"
 LEDGER_PATH = ROOT / "docs/engineering/foundation-production-acceptance-ledger.json"
 SECURITY_PATH = ROOT / "apps/toefl_house/toefl_house/security.py"
 
@@ -45,6 +46,8 @@ REQUIRED_CONTRACT_KEYS = {
     "production_enabled",
     "production_state",
     "synthetic_only_guard",
+    "owner_decision_record",
+    "selected_business_requirements",
     "owner_selections",
     "evidence",
     "notes",
@@ -92,6 +95,39 @@ def git_branch() -> str:
     if result.returncode != 0:
         raise ContractError("cannot determine checkout branch")
     return result.stdout.strip()
+
+
+def validate_owner_record() -> None:
+    record = load_json(OWNER_RECORD_PATH)
+    if record.get("record_id") != "TOFEL-HOUSE-OWNER-DECISIONS":
+        raise ContractError("canonical owner-decision record id changed")
+    if record.get("active_branch") != ACTIVE_BRANCH:
+        raise ContractError("canonical owner-decision record is not on the session branch")
+    if record.get("production_state") != "REJECT":
+        raise ContractError("canonical owner-decision record must keep production_state REJECT")
+    authorities = record.get("business_authorities")
+    if not isinstance(authorities, dict) or authorities.get("system_owner") != "Course Owner":
+        raise ContractError("canonical owner-decision record lacks Course Owner authority")
+    deployment = record.get("deployment_and_state")
+    if not isinstance(deployment, dict) or "Tailscale" not in deployment.get("current_deployment", ""):
+        raise ContractError("canonical owner-decision record lacks current Tailscale deployment decision")
+    continuity = record.get("continuity_and_recovery")
+    if not isinstance(continuity, dict) or continuity.get("backup") != "Automated multi-version encrypted backup is REQUIRED.":
+        raise ContractError("canonical owner-decision record lacks encrypted multi-version backup decision")
+    d8_requirements = record.get("d8_business_requirements")
+    required_d8 = {
+        "D8-OPS-AUTHORITY", "D8-TOPOLOGY-EDGE", "D8-DURABLE-STATE",
+        "D8-BACKUP-RECOVERY", "D8-OBSERVABILITY-INCIDENT",
+        "D8-CAPACITY-AVAILABILITY", "D8-CHANGE-ROLLBACK",
+    }
+    if not isinstance(d8_requirements, dict) or not required_d8 <= d8_requirements.keys():
+        raise ContractError("canonical owner-decision record lacks D8 field projections")
+    for ident in required_d8 - {"D8-CAPACITY-AVAILABILITY"}:
+        if not isinstance(d8_requirements[ident], dict) or any(
+            not isinstance(value, str) or not value
+            for value in d8_requirements[ident].values()
+        ):
+            raise ContractError(f"canonical owner-decision record has an empty {ident} projection")
 
 
 def validate_matrix(matrix: dict) -> tuple[dict[str, dict], list[str]]:
@@ -211,6 +247,14 @@ def validate_contract(contract: dict, decisions: dict[str, dict]) -> tuple[str, 
         raise ContractError("contract schema or matrix id mismatch")
     if _contains_secret_like_key(contract):
         raise ContractError("contract contains a secret-bearing key; store references, never secret material")
+    if contract.get("owner_decision_record") != OWNER_RECORD_PATH.name:
+        raise ContractError("contract must reference the canonical owner-decision record")
+    requirements = contract.get("selected_business_requirements")
+    if not isinstance(requirements, dict) or not requirements or any(
+        not isinstance(key, str) or not isinstance(value, str) or not value
+        for key, value in requirements.items()
+    ):
+        raise ContractError("selected business requirements must be non-empty text projections")
     if contract.get("active_branch") != ACTIVE_BRANCH:
         raise ContractError("contract active branch is not the session branch")
     if contract.get("production_state") != "REJECT":
@@ -257,6 +301,7 @@ def validate_contract(contract: dict, decisions: dict[str, dict]) -> tuple[str, 
 
 
 def run(contract_path: Path) -> dict:
+    validate_owner_record()
     matrix = load_json(MATRIX_PATH)
     decisions, minimum = validate_matrix(matrix)
     validate_ledger()

@@ -16,7 +16,7 @@ production stays REJECT until D8-class gates are independently satisfied.
 | Domains closed with runtime proof? | **YES** (5/5) | §2 domain runs |
 | Bypass routes contained (implemented slices)? | **YES** | A13 run + R3 |
 | Read-side paths (attachment/export/print) contained? | **YES** | R3, run 35053305607 |
-| Role-scoped navigation shipped? | **YES** (2 Workspaces plus 13 D10 Pages) | R1 + T3, current run 35073376790 |
+| Role-scoped navigation shipped? | **YES** (2 Workspaces plus 14 Pages: 13 qualified command Pages plus owner/GM control centre) | R1 + T3 run 35073376790; local governance contract test |
 | Factual registers shipped? | **YES** (tuition + placement billing) | R2, run 35049742120 |
 | Observability probes green? | **YES** (Error Log roundtrip, scheduler, ping) | R3 |
 | Owner decision packet delivered? | **YES** | OWNER-DECISIONS.md (D1–D10) |
@@ -81,15 +81,17 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
 - 2 Desk workspaces as native module files: **TH Receipts** (module
   Placement; five auditor roles) and **TH Finance** (module Accounts;
   Finance Officer; Registers card). They remain the only Workspaces.
-- 13 standard native **Page** exports: the role-filtered **TH Command
-  Centre** and 12 one-role command Pages for Placement Author/Publisher/
+- 14 standard native **Page** exports: the role-filtered **TH Command
+  Centre**, 12 qualified one-role command Pages for Placement Author/Publisher/
   Invigilator/Assessor/Reviewer/Releaser, Admission Officer/Reviewer/
-  Approver, Enrollment Officer, Teaching Scheduler and Attendance Recorder.
-  Page Has-Role authorization (not a Workspace/module gate) is proven in
-  run 35073376790; all use one native Dialog client that calls only existing
-  guarded endpoints and no document/list/read API. Finance Officer remains
-  on its qualified Workspace/report surface by scope, not by a Page authority
-  denial.
+  Approver, Enrollment Officer, Teaching Scheduler and Attendance Recorder, and
+  the Course Owner/General Manager administration control centre. Page Has-Role
+  authorization (not a Workspace/module gate) is proven for the 13 command Pages
+  in run 35073376790; the administration page is locally contract-tested and
+  adds only native-authority navigation plus a sanitized attention projection.
+  All use one reviewed client; command Pages call only existing guarded endpoints
+  and no document/list/read API. Finance Officer remains on its qualified
+  Workspace/report surface by scope, not by a Page authority denial.
 - 2 role-restricted Query Reports (raw facts only, no derived
   metrics): **TH Tuition Billing Register** (ref Fees), **TH Placement
   Billing Register** (ref TH Placement Operation) + minimal
@@ -104,16 +106,7 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
 
 ## 5. Outstanding classes (the only remaining ones)
 
-1. **Owner/deployment gates** — the canonical [D8 production-operations
-   decision matrix](d8-production-operations-decision-matrix.json) and
-   [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md) isolate the
-   seven minimum owner decisions and their post-selection evidence. The
-   provider-neutral contract validator and fail-closed template are already
-   executable; no engineering workaround exists that would invent business
-   rules or infrastructure. Status: D2, D3 and D10(ii) executed & qualified;
-   D6a/D6b/D9 closed; D1/D4/D5/D7 deferred; D8 charter delivered but
-   authority, selected topology/controls, and operating evidence remain open
-   with D8 **BLOCKED** and production **REJECT**.
+1. **Owner/deployment gates** — the canonical [owner-decision record](canonical-owner-decision-record.json), [D8 production-operations decision matrix](d8-production-operations-decision-matrix.json), and [D8 operational qualification packet](D8-OPERATIONAL-INPUT-PACKET.md) distinguish selected business policy from technical evidence. Course Owner/General Manager/Academic Manager/Finance Manager/Reception authority, role-based access/auditability/offboarding, branch isolation, current local/Tailscale operation, local state, encrypted versioned backup/recovery, preservation priority, configurable policy, and health/attention requirements are recorded. Numeric capacity/availability remains unresolved; selected implementation and independent evidence remain D8 **BLOCKED**. Status: D2, D3 and D10(ii) executed & qualified; D6a/D6b/D9 closed; D1/D4/D5/D7 deferred; production **REJECT**.
 2. **Upstream items** — SEC-DEPS-01 remains **UPSTREAM-BLOCKED / REJECT**. The
    latest Foundation runtime `35090904508` at
    `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` ran 116 restricted checks; 114
@@ -136,13 +129,16 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
    [`dependency-remediation-candidate-assessment-2026-09-16.json`](evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json).
    Also open: SEC-RT-TASK-01 (upstream realtime task room; product-side
    exposure proven nil — UPSTREAM-TRACKING.md §1).
-3. **Deployment-scope operations** — independent-host DR, measured restart
-   downtime, HA, full-bundle upgrade/rollback, public TLS/proxy qualification,
-   capacity, and monitoring operation (D8). The recorded hosted qualification additionally
-   proved a disposable product SQL/files backup and separate-site restore in
-   `35076449739` at `ebe7767`, with 542/542 native checks. It is explicitly
-   not independent-host, production, RPO/RTO, SLA, or availability evidence;
-   running production claims "somewhere else" would be evidence theater.
+3. **Deployment-scope operations** — current local/server operation through
+   Tailscale is the selected deployment phase; future internet hosting has no
+   selected provider, hostname, DNS, or public edge. Independent-host DR,
+   measured restart downtime, HA, full-bundle upgrade/rollback, public
+   TLS/proxy qualification, branch isolation, capacity, and monitoring operation
+   (D8) remain unproven. The recorded hosted qualification additionally proved a
+   disposable product SQL/files backup and separate-site restore in
+   `35076449739` at `ebe7767`, with 542/542 native checks. It is explicitly not
+   independent-host, production, RPO/RTO, SLA, or availability evidence; running
+   production claims "somewhere else" would be evidence theater.
 4. **SEC-GUARDIAN-01** — fail-closed Guardian isolation awaits D4;
    narrow explicit-User-Permissions remedy already passes hosted.
 5. **Explicit deferrals (do not affect RC):** portals/self-service,

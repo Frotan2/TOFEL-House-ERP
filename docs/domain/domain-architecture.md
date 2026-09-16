@@ -8,8 +8,27 @@
 > (challenges a custom enrollment ledger; do not treat the Enrollment Request
 > coordinator below as authorized). A01–A13 supersede earlier alternatives; old
 > D01–D13 references are legacy questions mapped in the decision record. Nothing
-> here authorizes implementation or production. Placement is CLOSED. Admission is
-> not started. Production remains REJECT.
+> here authorizes production. Placement, thin Admission, native Enrollment,
+> Teaching Operations and the bounded Finance slice are CLOSED/QUALIFIED for
+> synthetic evidence; deferred policy remains deferred. Production remains
+> REJECT.
+
+**Owner-decision alignment (2026-09-16):** The canonical
+[`canonical-owner-decision-record.json`](../engineering/canonical-owner-decision-record.json)
+selects Course Owner as system/strategic final authority; General Manager for
+routine administration/operations; Academic Manager for academic operations and
+progress; Finance Manager for finance/payroll; and Reception for intake. Staff
+access is role-based, important activity is auditable, offboarding revokes access
+without deleting historical records, and multi-branch isolation is an
+authorization/data-scope concern rather than a Company/Branch tenant assumption.
+Current deployment is local/server-based through Tailscale with local database and
+files. Future internet hosting is a separate unselected topology phase.
+Automated multi-version encrypted backup and alternate-system recovery are
+required, preservation outranks recovery speed, and future off-site backup is a
+direction without a selected destination. Fees, discounts, academic/catalog
+vocabulary, terms, skills and compensation models remain configurable. Portal and
+online payments remain out of launch scope. Engineering owns the technical
+mechanisms and evidence gates.
 
 
 ## 1. Architectural shape
@@ -37,9 +56,10 @@ Arrows are references or business transitions, **not** automatic permission gran
 
 ## 2. Organizational and time model
 
-- **Site:** institution/tenant boundary. A site database contains all installed apps. Cross-site identifiers, cookies, jobs and files confer no authority. Stronger trust separation may require separate deployments; Company/Branch is not a tenant boundary.
+- **Site:** deployment/data boundary. A site database contains all installed apps. Cross-site identifiers, cookies, jobs and files confer no authority. Stronger trust separation may require separate deployments; Company/Branch is not tenant isolation by itself.
 - **Company:** legal/accounting employer and ledger scope. Do not treat an academic branch as a legal company unless finance approves that structure.
-- **Branch:** operational location; link native resources and relevant owned records using reviewed `th_branch` fields where no native field exists. Multi-branch permissions require explicit scoped queries and writes, not a cosmetic filter.
+- **Branch:** operational location; use native Branch/Company fields where applicable and reviewed links only where a native field is absent. Multi-branch permissions require explicit scoped queries and writes, not a cosmetic filter; aggregate visibility is separately authorized and cannot bypass branch isolation.
+- **Deployment phases:** current local/server database/files are accessed by authorized staff through Tailscale; future internet hosting requires a separately selected provider-neutral edge/session/topology contract and evidence.
 - **Department / Cost Center:** HR and accounting dimensions, mapped explicitly to branches; do not infer a universal one-to-one relationship.
 - **Academic Year/Term:** actual institutional calendar periods. Program is a curriculum/path; Course is a subject/module; Student Group is the teaching roster. Student Batch Name is a cohort label, not a replacement class aggregate.
 - **Offering:** a logical view over Program/year/term, course-based Student Groups and schedules. Start without a duplicate `TH Class` or `TH Course Offering` table. A future coordination document is justified only if native relationships cannot express an approved invariant; it must not own a second roster.
