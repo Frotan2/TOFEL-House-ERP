@@ -2897,6 +2897,69 @@ def main():
             frappe.set_user('Administrator')
             return observed
         check('release-registers-facts-only',registers_facts_only)
+        # --- R3: read-side path containment for the guarded ledgers
+        # (attachments, list/export reads, print) + native observability
+        # probes. A13 covered the write seams; these prove the passive
+        # surfaces grant nothing to non-member roles: pinned core
+        # File.has_permission falls back to parent-document access, get_list
+        # runs through the db_query permission layer, and download_pdf
+        # validates print permission (pinned 988e54f3c4c2).
+        op_name=digest(['allocate_attempt','alloc_attempt_key_001'])
+        def attachment_paths():
+            frappe.set_user('Administrator')
+            assert frappe.db.exists(api.OP,op_name),('operation fixture missing',op_name)
+            f=frappe.get_doc(dict(doctype='File',file_name='syn-attach-probe.txt',
+                attached_to_doctype=api.OP,attached_to_name=op_name,
+                is_private=1,content='synthetic attachment probe')).insert()
+            frappe.db.commit()
+            try:
+                # the auditor reads the parent ledger -> private attachment reachable
+                content=as_user('finance_auditor',lambda:frappe.get_doc('File',f.name).get_content())
+                assert 'synthetic attachment probe' in str(content),str(content)[:120]
+                frappe.set_user('Administrator')
+                # non-member roles get no attachment authority through the parent
+                for label in ('invigilator','outsider'):
+                    assert not as_user(label,lambda:frappe.has_permission('File','read',frappe.get_doc('File',f.name))),(label,'attachment readable without parent access')
+                    assert not as_user(label,lambda:frappe.get_doc('File',f.name).is_downloadable()),(label,'attachment downloadable without parent access')
+                    frappe.set_user('Administrator')
+                return {'attachment_parent_gated':['invigilator','outsider'],'auditor_read_verified':True}
+            finally:
+                frappe.set_user('Administrator')
+                frappe.delete_doc('File',f.name);frappe.db.commit()
+        check('release-attachment-paths-guarded',attachment_paths)
+        def read_export_print_paths():
+            observed={}
+            for label in ('invigilator','outsider'):
+                for dt in (api.OP,api.AUDIT):
+                    try:rows=as_user(label,lambda:frappe.get_list(dt,fields=['name']))
+                    except frappe.PermissionError:rows=[]
+                    frappe.set_user('Administrator')
+                    assert not rows,(label,dt,'guarded ledger leaked rows on the list/export read path')
+                assert denied(lambda:as_user(label,lambda:frappe.get_attr('frappe.utils.print_format.download_pdf')(api.OP,op_name))),(label,'guarded ledger printable without print authority')
+                frappe.set_user('Administrator')
+                observed[label]={'list_denied':[api.OP,api.AUDIT],'print_denied':api.OP}
+            return observed
+        check('release-read-export-print-paths-denied',read_export_print_paths)
+        def observability_probes():
+            frappe.set_user('Administrator')
+            observed={}
+            # native error-log pipeline persists and returns failures
+            marker='SYN-observability-probe'
+            entry=frappe.log_error(marker)
+            frappe.db.commit()
+            row=frappe.get_doc('Error Log',entry.name)
+            assert marker in ((row.title or '')+(row.error or '')),(row.title,str(row.error)[:120])
+            frappe.delete_doc('Error Log',entry.name,ignore_permissions=True)
+            frappe.db.commit()
+            observed['error_log_roundtrip']=entry.name
+            # scheduler job registry active
+            assert frappe.get_all('Scheduled Job Type',filters={'stopped':0},limit_page_length=1),'no active scheduled job types'
+            observed['scheduler_jobs_active']=True
+            # health ping
+            assert frappe.ping()=='pong'
+            observed['ping']='pong'
+            return observed
+        check('release-observability-probes',observability_probes)
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}
