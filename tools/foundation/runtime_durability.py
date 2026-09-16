@@ -353,6 +353,20 @@ def main() -> int:
                 raise RuntimeError(label + ": Redis queue contents changed")
             return True
 
+        # Each MariaDB server start rotates a new binary log, so a strictly
+        # increasing count is independent proof that the server really restarted
+        # rather than merely being queried again. Enforced, not just recorded.
+        binlog_counts = {"pre_state": len(pre["mariadb"]["binlog_files"])}
+
+        def assert_binlog_rotated(label, state):
+            count = len(state["mariadb"]["binlog_files"])
+            previous = max(binlog_counts.values())
+            binlog_counts[label] = count
+            if count <= previous:
+                raise RuntimeError(
+                    label + ": binary log did not rotate, so the server may not have restarted")
+            return count
+
         # Scenario 1: graceful restart of both live servers.
         run("restart-mariadb", ["docker", "restart", "--time", "30", MARIADB_CONTAINER], timeout=180)
         run("restart-redis", ["docker", "restart", "--time", "30", REDIS_CONTAINER], timeout=180)
@@ -370,6 +384,7 @@ def main() -> int:
             "post_state": state, "survived": assert_survived("graceful restart", state),
             "uncommitted_row_absent_after_recovery":
                 state["mariadb"]["uncommitted_visible"] == "0",
+            "binlog_rotations_observed": assert_binlog_rotated("graceful restart", state),
         }
 
         # Re-open the uncommitted transaction so the crash scenario tests it too.
@@ -403,16 +418,26 @@ def main() -> int:
         state["containers"] = {"mariadb": container_state(MARIADB_CONTAINER),
                                "redis": container_state(REDIS_CONTAINER)}
         crash_log = run("mariadb-crash-recovery-log",
-                        ["docker", "logs", "--tail", "400", MARIADB_CONTAINER],
+                        ["docker", "logs", "--tail", "600", MARIADB_CONTAINER],
                         allow_failure=True)
+        # `docker logs` returns the whole container history, so the LAST matching
+        # lines are the post-crash start. A narrow "recovery"/"crash" filter
+        # matched nothing on the first successful run, which left the crash
+        # scenario without any server-side log corroboration.
+        markers = ("innodb", "recovery", "crash", "redo", "rollback", "roll back",
+                   "ready for connections", "shutdown", "starting")
+        innodb_lines = [line.strip()[:220] for line in crash_log.splitlines()
+                        if any(marker in line.lower() for marker in markers)][-30:]
         report["scenario_2_sigkill_crash_recovery"] = {
             "post_state": state, "survived": assert_survived("crash recovery", state),
             "uncommitted_row_absent_after_crash":
                 state["mariadb"]["uncommitted_visible"] == "0",
-            "innodb_recovery_messages": [
-                line for line in crash_log.splitlines()
-                if "recovery" in line.lower() or "crash" in line.lower()][:25],
+            "binlog_rotations_observed": assert_binlog_rotated("crash recovery", state),
+            "innodb_recovery_messages": innodb_lines,
+            "log_lines_captured": len(crash_log.splitlines()),
         }
+        if not innodb_lines:
+            raise RuntimeError("Crash scenario captured no MariaDB server log corroboration")
 
         # Scenario 3: destroy both containers outright and recreate new ones from
         # the same named volumes. This is what distinguishes real volume
@@ -449,6 +474,8 @@ def main() -> int:
             # Distinct container IDs prove genuinely new containers were created,
             # so survival is attributable to the named volume and not to the
             # original container still being alive.
+            "binlog_rotations_observed": assert_binlog_rotated(
+                "volume persistence after container destruction", state),
             "new_containers_created": (
                 state["containers"]["mariadb"]["container_id"]
                 != report["pre_state"]["containers"]["mariadb"]["container_id"]
@@ -482,6 +509,7 @@ def main() -> int:
         if control != "0":
             raise RuntimeError("Negative control failed: data survived complete volume loss")
 
+        report["binlog_rotation_progression"] = binlog_counts
         report["status"] = "pass"
         report["durability_executed"] = True
         report["not_proven_by_this_probe"] = [

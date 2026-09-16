@@ -110,6 +110,29 @@ class ScenarioCoverageTests(unittest.TestCase):
         self.assertIn("confirms_data_lived_in_the_volume", PROBE)
         self.assertIn('raise RuntimeError("Negative control failed: data survived complete volume loss")', PROBE)
 
+    def test_binlog_rotation_is_enforced_not_merely_recorded(self):
+        """Each MariaDB start rotates a new binary log, so a strictly increasing
+        count independently proves the server really restarted. Observed on the
+        first successful run as 000001 -> 000002 -> 000003 -> 000004 -> 000005."""
+        self.assertIn("def assert_binlog_rotated(label, state):", PROBE)
+        self.assertIn('raise RuntimeError(\n                    label + ": binary log did not rotate', PROBE)
+        self.assertEqual(PROBE.count('"binlog_rotations_observed"'), 3,
+                         "one enforced call per disruption scenario")
+        self.assertEqual(PROBE.count("assert_binlog_rotated("), 4,
+                         "definition plus one enforced call per scenario")
+        self.assertIn("binlog_rotation_progression", PROBE)
+
+    def test_crash_scenario_requires_server_side_log_corroboration(self):
+        """The first successful run captured no InnoDB log lines because the
+        filter was too narrow; the scenario must not pass on data integrity
+        alone without any server-side evidence that recovery happened."""
+        self.assertIn('"docker", "logs", "--tail", "600", MARIADB_CONTAINER', PROBE)
+        for marker in ('"innodb"', '"recovery"', '"redo"', '"rollback"',
+                       '"ready for connections"', '"shutdown"'):
+            self.assertIn(marker, PROBE)
+        self.assertIn('raise RuntimeError("Crash scenario captured no MariaDB server log corroboration")', PROBE)
+        self.assertIn('"log_lines_captured"', PROBE)
+
     def test_recreation_is_proven_to_produce_new_containers(self):
         self.assertIn("{{.Id}}", PROBE)
         self.assertIn("new_containers_created", PROBE)
