@@ -151,14 +151,18 @@ evidence.
 
 ### Diff provenance, scope, and repository hygiene
 
-GitHub reports **352 files changed, 63,852 additions, and 1 deletion**. This is
-explained by repository history, not by a 63k-line product feature diff:
-`origin/main` is an unrelated one-commit history containing only `README.md`, and
-`git merge-base origin/main HEAD` returns no merge base. The PR comparison
-therefore presents the active repository baseline as additions. The active tree
-contains 352 tracked files: 142 Python, 116 JSON, 53 Markdown, 12 curated
-execution logs, 9 text, 6 YAML, 5 CommonJS, 3 ESM, 2 TOML, 2 JavaScript, one
-`.gitignore`, and one reviewed evidence lockfile.
+At the initial closure head `16d0d2ac97390999ed4a5ff54fc38b6d2d5ce2dc`,
+GitHub reported **352 files changed, 63,852 additions, and 1 deletion**. The
+final PR head `092b73aef894b78755d813a3a37720c190d4251e` reports **353 files,
+64,126 additions, and 1 deletion** after adding the executable administration
+coverage and final audit record. Both figures are explained by repository
+history, not by a 63k-line product feature diff: `origin/main` is an unrelated
+one-commit history containing only `README.md`, and `git merge-base
+origin/main HEAD` returns no merge base. The PR comparison therefore presents
+the active repository baseline as additions. The final active tree contains 353
+tracked files: 143 Python, 116 JSON, 53 Markdown, 12 curated execution logs, 9
+text, 6 YAML, 5 CommonJS, 3 ESM, 2 TOML, 2 JavaScript, one `.gitignore`, and one
+reviewed evidence lockfile.
 
 The file-by-file review found no `node_modules`, vendored source, build/dist or
 coverage tree, bytecode, database/archive artifact, or duplicate repository
@@ -251,9 +255,11 @@ was **PENDING**. Earlier exact-head runtime run `35101709287` remained
 an attempted cancellation returned GitHub **403**, so it was not treated as a
 pass or silently discarded. The completed pre-install steps of that earlier
 run passed, but its pinned foundation installation gate had no final result at
-this audit. Current local D8 validation is passing structurally while reporting
-the required BLOCKED/REJECT state. The final documentation-only amendment does
-not change these application conclusions.
+this audit. The final PR head `092b73aef894b78755d813a3a37720c190d4251e` is a
+report-only descendant and currently has **no checks reported**, so no CI result
+is implied for that head. Current local D8 validation is passing structurally
+while reporting the required BLOCKED/REJECT state. The final documentation-only
+amendment does not change these application conclusions.
 
 ### Independent audit conclusion
 
