@@ -57,7 +57,16 @@ def combined_node_inventory(roots: list[Path]) -> tuple[dict[str, list[str]], li
         if not root.is_dir():
             root_results.append({"path": str(root), "status": "missing"})
             continue
-        discovered = installed_node_inventory(root)
+        try:
+            discovered = installed_node_inventory(root)
+        except ValueError as exc:
+            # A built app may legitimately have an empty node_modules directory.
+            # Preserve that coverage fact, but do not prevent later supplied roots
+            # from being inventoried. Other malformed-manifest errors remain fatal.
+            if str(exc) != "No installed package manifests found; refusing an empty audit":
+                raise
+            root_results.append({"path": str(root), "status": "empty"})
+            continue
         root_results.append({"path": str(root), "status": "collected", "package_names": len(discovered)})
         for name, versions in discovered.items():
             packages[name].update(versions)

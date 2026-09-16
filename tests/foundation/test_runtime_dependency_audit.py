@@ -26,10 +26,11 @@ class RuntimeDependencyAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
             first = self.node_root(directory / "one", "example", "1.0.0")
+            empty = directory / "empty" / "node_modules"; empty.mkdir(parents=True)
             second = self.node_root(directory / "two", "example", "2.0.0")
-            inventory, roots = audit_stack.combined_node_inventory([first, directory / "absent", second])
+            inventory, roots = audit_stack.combined_node_inventory([first, directory / "absent", empty, second])
         self.assertEqual(inventory, {"example": ["1.0.0", "2.0.0"]})
-        self.assertEqual([root["status"] for root in roots], ["collected", "missing", "collected"])
+        self.assertEqual([root["status"] for root in roots], ["collected", "missing", "empty", "collected"])
 
     def test_osv_rejects_response_not_aligned_to_each_requested_package_version(self):
         with patch.object(audit_stack, "post_json", return_value={"results": []}):
