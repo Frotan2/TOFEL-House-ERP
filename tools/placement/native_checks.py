@@ -3198,6 +3198,113 @@ def main():
                     'receipt_idempotent':True,'salary_slips_untouched':True,
                     'audit_chain_ref_fields':True}
         check('teaching-compensation-calculation',compensation_calculation)
+        # --- D3 correction framework (owner: "framework approved; exact
+        # terms later"). Fail-closed until a policy exists; approval terms
+        # are fixture configuration, not invented policy. The money
+        # artifact is only the native credit note.
+        from toefl_house.finance import corrections as corr
+        POLICY='TH Correction Policy';CREQ='TH Correction Request'
+        if 'correction_probe' not in users:
+            users['correction_probe']='synthetic-correction-probe@example.test'
+        def corr_fixtures():
+            frappe.set_user('Administrator')
+            si=frappe.db.get_value('Sales Invoice',{'th_placement_case':['is','set'],
+                'is_return':0,'docstatus':1},'name',order_by='creation asc')
+            assert si,('no TH placement invoice available for correction checks')
+            si2=frappe.db.get_value('Sales Invoice',{'th_placement_case':['is','set'],
+                'is_return':0,'docstatus':1,'name':['!=',si]},'name',order_by='creation asc')
+            if not frappe.db.exists('User',users['correction_probe']):
+                frappe.get_doc(dict(doctype='User',email=users['correction_probe'],
+                    first_name='Synthetic correction_probe',enabled=1,send_welcome_email=0,
+                    new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
+                    roles=[{'role':'Finance Officer'}])).insert()
+            frappe.db.commit()
+            return {'si':si,'si2':si2}
+        cfx2=corr_fixtures()
+        def correction_fail_closed():
+            frappe.set_user('Administrator')
+            assert not frappe.db.exists(POLICY,{'status':'Active'}),('a policy exists before configuration')
+            gt=float(frappe.db.get_value('Sales Invoice',cfx2['si'],'grand_total'))
+            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_nopolicy_00001',cfx2['si'],'SYN fixture correction',gt))),('request accepted with no policy')
+            return {'no_policy_fail_closed':True}
+        check('finance-correction-fail-closed',correction_fail_closed)
+        def correction_sod_and_window():
+            frappe.set_user('Administrator')
+            pol=as_user('finance_officer',lambda:corr.configure_correction_policy(
+                'fc_policy_0000000001','Accounts User',30))
+            assert pol['approver_role']=='Accounts User' and pol['correction_window_days']==30
+            gt=float(frappe.db.get_value('Sales Invoice',cfx2['si'],'grand_total'))
+            # role containment around the framework commands
+            assert denied(lambda:as_user('outsider',lambda:corr.request_invoice_correction(
+                'fc_req_outsider_0001',cfx2['si'],'SYN fixture correction',gt))),('outsider requested a correction')
+            assert denied(lambda:as_user('teaching_scheduler',lambda:corr.request_invoice_correction(
+                'fc_req_sched_0000001',cfx2['si'],'SYN fixture correction',gt))),('scheduler requested a correction')
+            # partial amounts are refused until owner terms exist
+            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_partial_000001',cfx2['si'],'SYN partial attempt',round(gt-1,2)))),('partial correction accepted')
+            # window enforcement from the owner-configured policy
+            original=frappe.db.get_value('Sales Invoice',cfx2['si'],'posting_date')
+            frappe.db.set_value('Sales Invoice',cfx2['si'],'posting_date','2020-01-01')
+            try:
+                assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                    'fc_req_window_000001',cfx2['si'],'SYN late correction',gt))),('expired-window correction accepted')
+            finally:
+                frappe.db.set_value('Sales Invoice',cfx2['si'],'posting_date',original)
+                frappe.db.commit()
+            # dual key: command access alone (Finance Officer without the
+            # configured approver role) cannot approve; the approver role
+            # alone (Finance Auditor without command access) cannot either
+            req=as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_ok_00000000001',cfx2['si'],'SYN fixture correction',gt))
+            assert denied(lambda:as_user('correction_probe',lambda:corr.approve_invoice_correction(
+                'fc_appr_probe_0000001',req['name']))),('non-approver Finance Officer approved')
+            assert denied(lambda:as_user('finance_auditor',lambda:corr.approve_invoice_correction(
+                'fc_appr_auditor_00001',req['name']))),('Finance Auditor approved without command access')
+            frappe.db.commit()
+            return {'policy':pol['name'],'request':req['name'],
+                    'outsider_denied':True,'scheduler_denied':True,'partial_denied':True,
+                    'expired_window_denied':True,'dual_key_enforced':True}
+        csod=check('finance-correction-sod-and-window',correction_sod_and_window)
+        def correction_posting():
+            frappe.set_user('Administrator')
+            si=cfx2['si']
+            gt=float(frappe.db.get_value('Sales Invoice',si,'grand_total'))
+            cn_before=frappe.db.count('Sales Invoice',{'is_return':1})
+            posted=as_user('finance_officer',lambda:corr.approve_invoice_correction(
+                'fc_appr_post_00000001',csod['request']))
+            frappe.set_user('Administrator')
+            assert posted['status']=='Posted'
+            note=frappe.db.get_value('Sales Invoice',posted['credit_note'],
+                ['name','is_return','return_against','grand_total','docstatus'],as_dict=True)
+            assert int(note.is_return)==1 and note.return_against==si and int(note.docstatus)==1
+            assert round(float(note.grand_total),2)==-round(gt,2),(float(note.grand_total),gt)
+            assert frappe.db.exists('GL Entry',{'voucher_no':note.name}),('credit note posted no GL rows')
+            req=frappe.db.get_value(CREQ,csod['request'],['status','approved_by','credit_note'],as_dict=True)
+            assert req.status=='Posted' and req.credit_note==note.name and req.approved_by==users['finance_officer']
+            # one-shot decisions; no second correction on a corrected invoice
+            assert denied(lambda:as_user('finance_officer',lambda:corr.approve_invoice_correction(
+                'fc_appr_again_0000001',csod['request']))),('request approved twice')
+            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_second_0000001',si,'SYN second attempt',gt))),('second correction on corrected invoice')
+            # denial path posts nothing
+            gt2=float(frappe.db.get_value('Sales Invoice',cfx2['si2'],'grand_total'))
+            req2=as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_deny_000000001',cfx2['si2'],'SYN fixture denial path',gt2))
+            denied_req=as_user('finance_officer',lambda:corr.deny_invoice_correction(
+                'fc_deny_post_000000001',req2['name']))
+            frappe.set_user('Administrator')
+            assert denied_req['status']=='Denied'
+            assert not frappe.db.exists('Sales Invoice',{'return_against':cfx2['si2'],'docstatus':('!=',2)})
+            assert frappe.db.count('Sales Invoice',{'is_return':1})==cn_before+1
+            # request facts are immutable even for Administrator
+            assert denied(lambda:(lambda d:(d.__setattr__('reason','tamper'),d.save()))(
+                frappe.get_doc(CREQ,csod['request']))),('request edited outside a command')
+            frappe.db.commit()
+            return {'credit_note':note.name,'credit_total':round(float(note.grand_total),2),
+                    'gl_posted':True,'one_shot_decision':True,'denial_posts_nothing':True,
+                    'facts_immutable':True}
+        check('finance-correction-posting',correction_posting)
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}

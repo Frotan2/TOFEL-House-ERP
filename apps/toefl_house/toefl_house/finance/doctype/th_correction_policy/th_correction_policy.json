@@ -1,0 +1,59 @@
+{
+  "doctype": "DocType",
+  "name": "TH Correction Policy",
+  "module": "Finance",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "approver_role",
+    "correction_window_days",
+    "status",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "approver_role",
+      "label": "Approver Role",
+      "fieldtype": "Link",
+      "options": "Role",
+      "reqd": 1
+    },
+    {
+      "fieldname": "correction_window_days",
+      "label": "Correction Window Days",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Data",
+      "default": "Active",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Finance Officer",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Finance Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

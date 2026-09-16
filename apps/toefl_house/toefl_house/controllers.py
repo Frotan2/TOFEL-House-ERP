@@ -33,6 +33,10 @@ class ProtectedRecord(Document):
             self._validate_contract(before)
         if before and self.doctype == "TH Teaching Assignment":
             self._validate_assignment(before)
+        if before and self.doctype == "TH Correction Policy":
+            self._validate_correction_policy(before)
+        if before and self.doctype == "TH Correction Request":
+            self._validate_correction_request(before)
         if before and self.doctype in CONFIG_DOCTYPES:
             self._validate_config(before)
 
@@ -75,6 +79,31 @@ class ProtectedRecord(Document):
             raise frappe.PermissionError("A recorded assignment end date is final")
         if self.effective_end and str(self.effective_end) < str(self.effective_start):
             raise frappe.ValidationError("Assignment end precedes assignment start")
+
+    def _validate_correction_policy(self, before):
+        """Owner-configured approval terms are immutable; reconfigure via a
+        superseding policy (Active -> Retired is the only legal change)."""
+        if self.status == before.status:
+            raise frappe.PermissionError("Correction policies are immutable; reconfigure instead")
+        if not (before.status == "Active" and self.status == "Retired"):
+            raise frappe.PermissionError("Illegal correction policy status transition")
+        if (before.approver_role != self.approver_role
+                or int(before.correction_window_days) != int(self.correction_window_days)):
+            raise frappe.PermissionError("Only the policy status may change on retirement")
+
+    def _validate_correction_request(self, before):
+        """Request facts are immutable; the decision is one-shot."""
+        for field in ("sales_invoice", "reason", "requested_amount"):
+            if before.get(field) != self.get(field):
+                raise frappe.PermissionError("Correction request facts are immutable")
+        if before.status == self.status:
+            raise frappe.PermissionError("Correction request decisions are one-shot")
+        if not (before.status == "Requested" and self.status in ("Posted", "Denied")):
+            raise frappe.PermissionError("Illegal correction request transition")
+        if before.approved_by and self.approved_by != before.approved_by:
+            raise frappe.PermissionError("Recorded decision actor is immutable")
+        if before.credit_note and self.credit_note != before.credit_note:
+            raise frappe.PermissionError("Posted credit note reference is immutable")
 
     def _validate_config(self, before):
         if before.code != self.code or before.revision != self.revision or before.owner != self.owner:

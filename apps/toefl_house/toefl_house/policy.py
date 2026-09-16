@@ -482,6 +482,8 @@ def can_read(kind, roles, actor, owner, status=None):
     if kind == "assignment":
         return bool(roles & {"Teaching Scheduler", "Teaching Auditor",
                              "Finance Officer", "Finance Auditor"})
+    if kind in ("correction_policy", "correction_request"):
+        return bool(roles & {"Finance Officer", "Finance Auditor"})
     if "Placement Publisher" in roles:
         return True
     # Invigilator may operate the Digital session and read the operational
@@ -590,3 +592,17 @@ def compute_skill_payable(quantity, rate, minimum=None, maximum=None):
     if maximum is not None and amount > maximum:
         amount = round(float(maximum), 2)
     return amount
+
+
+# --- D3 correction framework (owner: "framework approved; exact terms
+# later", 2026-09-16). The policy doctype carries owner-entered approval
+# terms; with no Active policy every correction command fails closed.
+# No window, approver or partial-refund rule is invented here.
+CORRECTION_POLICY_STATUSES = ("Active", "Retired")
+CORRECTION_REQUEST_STATUSES = ("Requested", "Posted", "Denied")
+
+
+def validate_correction_window_days(value):
+    if isinstance(value, bool) or not isinstance(value, int) or not (0 <= value <= 3650):
+        raise ValueError("Correction window must be an integer number of days (0-3650)")
+    return value

@@ -24,7 +24,8 @@ has_permission = {
                  "TH Placement Response", "TH Placement Score",
                  "TH Placement Course Map Revision", "TH Placement Decision",
                  "TH Admission Decision", "TH Instructor Contract",
-                 "TH Teaching Assignment")
+                 "TH Teaching Assignment", "TH Correction Policy",
+                 "TH Correction Request")
 }
 permission_query_conditions = {
     name: "toefl_house.permissions.query_" + suffix
@@ -40,7 +41,9 @@ permission_query_conditions = {
         ("TH Placement Decision", "decision"),
         ("TH Admission Decision", "admission_decision"),
         ("TH Instructor Contract", "contract"),
-        ("TH Teaching Assignment", "assignment"))
+        ("TH Teaching Assignment", "assignment"),
+        ("TH Correction Policy", "correction_policy"),
+        ("TH Correction Request", "correction_request"))
 }
 override_whitelisted_methods = {
     "education.education.api.enroll_student": "toefl_house.admission.deny_enroll_student",

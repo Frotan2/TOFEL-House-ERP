@@ -55,6 +55,13 @@ KIND_ROLES = {
     "assign_teaching_skill": "Teaching Scheduler",
     "end_teaching_assignment": "Teaching Scheduler",
     "calculate_teaching_compensation": "Finance Officer",
+    # D3 correction framework: command access is Finance Officer; the
+    # approve/deny commands additionally require the policy-configured
+    # approver role (checked in-command, dual key).
+    "configure_correction_policy": "Finance Officer",
+    "request_invoice_correction": "Finance Officer",
+    "approve_invoice_correction": "Finance Officer",
+    "deny_invoice_correction": "Finance Officer",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -67,6 +74,7 @@ DOCTYPES = {
     "TH Placement Course Map Revision", "TH Placement Decision",
     "TH Admission Decision",
     "TH Instructor Contract", "TH Teaching Assignment",
+    "TH Correction Policy", "TH Correction Request",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision",
                    "TH Placement Course Map Revision")
@@ -131,6 +139,9 @@ def teaching_command_active(doctype):
 FINANCE_COMMANDS = {
     "issue_tuition_fees": "Fees",
     "issue_placement_fee": "Sales Invoice",
+    # the approval command posts the native credit note (a Sales Invoice
+    # with is_return=1) inside the guarded context
+    "approve_invoice_correction": "Sales Invoice",
 }
 
 

@@ -17,6 +17,8 @@ KINDS = {
     "TH Admission Decision": "admission_decision",
     "TH Instructor Contract": "contract",
     "TH Teaching Assignment": "assignment",
+    "TH Correction Policy": "correction_policy",
+    "TH Correction Request": "correction_request",
 }
 TABLES = {
     "item": "`tabTH Placement Item Revision`",
@@ -35,6 +37,8 @@ TABLES = {
     "admission_decision": "`tabTH Admission Decision`",
     "contract": "`tabTH Instructor Contract`",
     "assignment": "`tabTH Teaching Assignment`",
+    "correction_policy": "`tabTH Correction Policy`",
+    "correction_request": "`tabTH Correction Request`",
 }
 LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
 STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score", "decision")
@@ -71,6 +75,8 @@ def query(kind, user=None):
     if kind == "assignment":
         return "1=1" if roles & {"Teaching Scheduler", "Teaching Auditor",
                                  "Finance Officer", "Finance Auditor"} else "1=0"
+    if kind in ("correction_policy", "correction_request"):
+        return "1=1" if roles & {"Finance Officer", "Finance Auditor"} else "1=0"
     if "Placement Publisher" in roles:
         return "1=1"
     if kind in ("case", "attempt", "exposure", "response") and "Placement Invigilator" in roles:
@@ -110,3 +116,5 @@ def query_decision(user=None): return query("decision", user)
 def query_admission_decision(user=None): return query("admission_decision", user)
 def query_contract(user=None): return query("contract", user)
 def query_assignment(user=None): return query("assignment", user)
+def query_correction_policy(user=None): return query("correction_policy", user)
+def query_correction_request(user=None): return query("correction_request", user)

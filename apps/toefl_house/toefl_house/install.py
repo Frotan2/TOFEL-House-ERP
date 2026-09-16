@@ -36,6 +36,9 @@ def after_migrate():
     frappe.db.add_index("TH Teaching Assignment", ["student_group", "skill"], "th_assignment_group_skill")
     frappe.db.add_index("TH Teaching Assignment", ["contract"], "th_assignment_contract")
     frappe.db.add_index("TH Teaching Assignment", ["instructor", "effective_start"], "th_assignment_instructor_start")
+    # D3 correction framework lookups.
+    frappe.db.add_index("TH Correction Policy", ["status"], "th_correction_policy_status")
+    frappe.db.add_index("TH Correction Request", ["sales_invoice"], "th_correction_request_invoice")
 
 
 def after_install():
