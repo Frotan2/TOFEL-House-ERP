@@ -1,0 +1,5360 @@
+{
+  "background-secured_result": {
+    "cache_round_trip": true,
+    "job_seconds": 1.004,
+    "job_status": "finished",
+    "result_type": "str",
+    "scope": "Actual Redis cache and RQ processing; not all scheduler/realtime behavior",
+    "status": "pass"
+  },
+  "background_result": {
+    "cache_round_trip": true,
+    "job_seconds": 1.004,
+    "job_status": "finished",
+    "result_type": "str",
+    "scope": "Actual Redis cache and RQ processing; not all scheduler/realtime behavior",
+    "status": "pass"
+  },
+  "backup": {
+    "database": {
+      "bytes": 1155497,
+      "sha256": "20a1a70a9cf9f5fdacb4adea8beb67f98182a5e1d1b5312ce0c633257dc81a5c"
+    },
+    "private_files": {
+      "bytes": 10240,
+      "sha256": "85bea42b7307a6dc3943bd6380f5e5907388f47bd180a8e6a305329dc553425d"
+    },
+    "public_files": {
+      "bytes": 10240,
+      "sha256": "9c543b407e134d7d27d9720d99ff0fe2298ce7587e1aa463bd826675c36e3c53"
+    }
+  },
+  "browser_result": {
+    "browser_version": "145.0.7632.6",
+    "checks": [
+      {
+        "name": "alpha-native-login-and-portal",
+        "observation": {
+          "mobile_render_only": true,
+          "native_login": true,
+          "portal_rendered": true,
+          "tampered_student_selection_isolated": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "beta-native-login-and-portal",
+        "observation": {
+          "mobile_render_only": true,
+          "native_login": true,
+          "portal_rendered": true,
+          "tampered_student_selection_isolated": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "alpha-browser-rest-rpc-and-file-isolation",
+        "observation": {
+          "file_http": 200,
+          "other_http": 403,
+          "own_http": 200,
+          "rpc_http": 403
+        },
+        "status": "pass"
+      },
+      {
+        "name": "beta-browser-rest-rpc-and-file-isolation",
+        "observation": {
+          "file_http": 403,
+          "other_http": 403,
+          "own_http": 200,
+          "rpc_http": 403
+        },
+        "status": "pass"
+      },
+      {
+        "name": "browser-cross-site-session-replay-denied",
+        "observation": {
+          "cross_site_sid_rejected": true
+        },
+        "status": "pass"
+      }
+    ],
+    "phase2_gate_passed": false,
+    "scope": "Chromium; native portal behind loopback Nginx; synthetic data",
+    "status": "pass"
+  },
+  "browser_test_tool": {
+    "lock_sha256": "74df7d011ffd6f1b83f307ff9047d6e31b0e0664e5105fee86dc693c5ab7b8c5",
+    "playwright": "1.58.2"
+  },
+  "business_result": {
+    "active_check": "private-attachment",
+    "app_versions": {
+      "education": "16.0.1",
+      "erpnext": "16.34.2",
+      "frappe": "16.33.1",
+      "hrms": "16.18.1",
+      "payments": "0.0.1"
+    },
+    "checks": [
+      {
+        "name": "company-chart-and-branch",
+        "observation": {
+          "account_count": 97,
+          "branch": "Validation Branch",
+          "company": "Validation Institute",
+          "setup_complete": true
+        },
+        "seconds": 11.621,
+        "status": "pass"
+      },
+      {
+        "name": "academic-context-and-employee-link",
+        "observation": {
+          "group": "Validation Class",
+          "instructor_employee": "HR-EMP-00001",
+          "student_count": 0
+        },
+        "seconds": 0.525,
+        "status": "pass"
+      },
+      {
+        "name": "assessment-plan-before-students",
+        "observation": {
+          "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result",
+          "plan": "EDU-ASP-2026-00001",
+          "students_at_plan_creation": 0
+        },
+        "seconds": 0.251,
+        "status": "pass"
+      },
+      {
+        "name": "result-without-student-rejected",
+        "observation": {
+          "exception": "StudentNotInGroupError",
+          "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+        },
+        "seconds": 0.023,
+        "status": "pass"
+      },
+      {
+        "name": "applicant-student-customer-enrollment-group",
+        "observation": {
+          "applicants": [
+            "EDU-APP-2026-00001",
+            "EDU-APP-2026-00002"
+          ],
+          "enrollments": [
+            "EDU-ENR-2026-00001",
+            "EDU-ENR-2026-00002"
+          ],
+          "students": [
+            "EDU-STU-2026-00001",
+            "EDU-STU-2026-00002"
+          ],
+          "user_link_observations": [
+            {
+              "automatic_existing_user_link": null,
+              "student": "EDU-STU-2026-00001"
+            },
+            {
+              "automatic_existing_user_link": null,
+              "student": "EDU-STU-2026-00002"
+            }
+          ]
+        },
+        "seconds": 0.575,
+        "status": "pass"
+      },
+      {
+        "name": "applicant-cannot-own-academic-result",
+        "observation": {
+          "exception": "LinkValidationError",
+          "message": "Could not find Student: EDU-APP-2026-00001"
+        },
+        "seconds": 0.005,
+        "status": "pass"
+      },
+      {
+        "name": "schedule-attendance-submitted-assessment",
+        "observation": {
+          "attendance": "EDU-ATT-2026-00001",
+          "grade": "B",
+          "result": "EDU-RES-2026-00001",
+          "score": 75.0
+        },
+        "seconds": 0.067,
+        "status": "pass"
+      },
+      {
+        "name": "fee-invoice-discount-payment-ledger",
+        "observation": {
+          "discounted_total": 90.0,
+          "gl_credit": 180.0,
+          "gl_debit": 180.0,
+          "gl_rows": 4,
+          "invoice": "ACC-SINV-2026-00001",
+          "outstanding": 0.0,
+          "payment": "ACC-PAY-2026-00001"
+        },
+        "seconds": 0.952,
+        "status": "pass"
+      },
+      {
+        "name": "private-attachment",
+        "observation": {
+          "file": "42cd36a6d8",
+          "private": 1,
+          "public_file": "30e142b240",
+          "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b"
+        },
+        "seconds": 0.026,
+        "status": "pass"
+      }
+    ],
+    "not_tested": [
+      "refunds",
+      "legacy Fees duplication",
+      "payroll posting",
+      "authorization",
+      "portal browser UI"
+    ],
+    "phase2_gate_passed": false,
+    "records": {
+      "academic_term": "Validation 2026 (Validation Term)",
+      "academic_year": "Validation 2026",
+      "admission": "Validation Admission",
+      "applicants": [
+        "EDU-APP-2026-00001",
+        "EDU-APP-2026-00002"
+      ],
+      "assessment_group": "Validation Assessments",
+      "assessment_plan": "EDU-ASP-2026-00001",
+      "assessment_result": "EDU-RES-2026-00001",
+      "attendance": "EDU-ATT-2026-00001",
+      "batch": "Validation Batch",
+      "branch": "Validation Branch",
+      "company": "Validation Institute",
+      "course": "Validation Course",
+      "course_schedule": "EDU-CSH-2026-00001",
+      "criterion": "Validation Criterion",
+      "employee": "HR-EMP-00001",
+      "enrollments": [
+        "EDU-ENR-2026-00001",
+        "EDU-ENR-2026-00002"
+      ],
+      "fee_schedule": "EDU-FSH-2026-00001",
+      "fee_structure": "EDU-FST-2026-00001",
+      "fiscal_year": "2026",
+      "grading_scale": "Validation Scale",
+      "group": "Validation Class",
+      "guardian": "EDU-GRD-2026-00001",
+      "guardian_other_file_name": "ec18efef53",
+      "guardian_other_file_url": "/private/files/guardian-other.txt",
+      "holiday_date": "2026-01-01",
+      "holiday_list": "Validation Calendar 2026",
+      "instructor": "Validation Instructor",
+      "invoice": "ACC-SINV-2026-00001",
+      "payment": "ACC-PAY-2026-00001",
+      "private_file": "42cd36a6d8",
+      "private_file_sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+      "private_file_url": "/private/files/foundation-proof.txt",
+      "program": "Validation Program",
+      "public_file": "30e142b240",
+      "public_file_sha256": "020620652b12b1daa793c1487a7f8a0d0a9781a97064f43bc5310e79140dd06d",
+      "room": "HTL-ROOM-2026-00001",
+      "source_only_todo": "b8nuc3142o",
+      "students": [
+        "EDU-STU-2026-00001",
+        "EDU-STU-2026-00002"
+      ],
+      "unprovisioned_email": "validation-unprovisioned@example.test",
+      "unprovisioned_student": "EDU-STU-2026-00003"
+    },
+    "scope": "Synthetic upstream data and explicitly enumerated assertions",
+    "status": "pass"
+  },
+  "checks": [
+    {
+      "command": [
+        "docker",
+        "version",
+        "--format",
+        "{{.Client.Version}} {{.Server.Version}}"
+      ],
+      "exit_code": 0,
+      "name": "docker-version",
+      "seconds": 0.015,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "docker",
+        "compose",
+        "version",
+        "--short"
+      ],
+      "exit_code": 0,
+      "name": "compose-version",
+      "seconds": 0.042,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+        "--version"
+      ],
+      "exit_code": 0,
+      "name": "python-version",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "node",
+        "--version"
+      ],
+      "exit_code": 0,
+      "name": "node-version",
+      "seconds": 0.003,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "yarn",
+        "--version"
+      ],
+      "exit_code": 0,
+      "name": "yarn-version",
+      "seconds": 0.157,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+        "-m",
+        "venv",
+        "/home/runner/work/_temp/foundation-runtime/tools"
+      ],
+      "exit_code": 0,
+      "name": "bench-tools-venv",
+      "seconds": 2.445,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "frappe-bench==5.31.0",
+        "uv==0.11.6"
+      ],
+      "exit_code": 0,
+      "name": "bench-tools-install",
+      "seconds": 3.622,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe"
+      ],
+      "exit_code": 0,
+      "name": "clone-frappe",
+      "seconds": 0.003,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/frappe"
+      ],
+      "exit_code": 0,
+      "name": "origin-frappe",
+      "seconds": 0.054,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "988e54f3c4c291e2077a83809663f123731abe76"
+      ],
+      "exit_code": 0,
+      "name": "fetch-frappe",
+      "seconds": 10.708,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "name": "checkout-frappe",
+      "seconds": 0.283,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "verify-frappe",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext"
+      ],
+      "exit_code": 0,
+      "name": "clone-erpnext",
+      "seconds": 0.003,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/erpnext"
+      ],
+      "exit_code": 0,
+      "name": "origin-erpnext",
+      "seconds": 0.094,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd"
+      ],
+      "exit_code": 0,
+      "name": "fetch-erpnext",
+      "seconds": 7.953,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "name": "checkout-erpnext",
+      "seconds": 0.382,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "verify-erpnext",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/sources/education"
+      ],
+      "exit_code": 0,
+      "name": "clone-education",
+      "seconds": 0.003,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/education",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/education"
+      ],
+      "exit_code": 0,
+      "name": "origin-education",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/education",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "93bc7075753369457919720690f80c6d2207b5f2"
+      ],
+      "exit_code": 0,
+      "name": "fetch-education",
+      "seconds": 1.578,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/education",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "name": "checkout-education",
+      "seconds": 0.054,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/education",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "verify-education",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments"
+      ],
+      "exit_code": 0,
+      "name": "clone-payments",
+      "seconds": 0.003,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/payments"
+      ],
+      "exit_code": 0,
+      "name": "origin-payments",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "cca07d9f9392e2ea0e521c5975151db9e4b6c321"
+      ],
+      "exit_code": 0,
+      "name": "fetch-payments",
+      "seconds": 0.568,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "name": "checkout-payments",
+      "seconds": 0.007,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "verify-payments",
+      "seconds": 0.001,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms"
+      ],
+      "exit_code": 0,
+      "name": "clone-hrms",
+      "seconds": 0.003,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/hrms"
+      ],
+      "exit_code": 0,
+      "name": "origin-hrms",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "a4768b441cff346def505e27f2a2229ee1e05b9b"
+      ],
+      "exit_code": 0,
+      "name": "fetch-hrms",
+      "seconds": 2.781,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "name": "checkout-hrms",
+      "seconds": 0.118,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "verify-hrms",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-mariadb",
+        "--publish",
+        "127.0.0.1:13306:3306",
+        "--mount",
+        "type=bind,source=/home/runner/work/_temp/foundation-runtime/db-password,target=/run/secrets/db-password,readonly",
+        "--env",
+        "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password",
+        "--env",
+        "MARIADB_ROOT_HOST=%",
+        "--health-cmd",
+        "healthcheck.sh --connect --innodb_initialized",
+        "--health-interval",
+        "2s",
+        "--health-retries",
+        "30",
+        "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+        "--character-set-server=utf8mb4",
+        "--collation-server=utf8mb4_unicode_ci"
+      ],
+      "exit_code": 0,
+      "name": "start-mariadb",
+      "seconds": 10.199,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-redis-queue",
+        "--publish",
+        "127.0.0.1:11379:6379",
+        "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+      ],
+      "exit_code": 0,
+      "name": "start-redis-queue",
+      "seconds": 0.274,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-redis-cache",
+        "--publish",
+        "127.0.0.1:12379:6379",
+        "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+      ],
+      "exit_code": 0,
+      "name": "start-redis-cache",
+      "seconds": 0.457,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "init",
+        "/home/runner/work/_temp/foundation-runtime/bench",
+        "--frappe-path",
+        "/home/runner/work/_temp/foundation-runtime/sources/frappe",
+        "--python",
+        "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+        "--no-backups",
+        "--skip-redis-config-generation",
+        "--no-procfile",
+        "--skip-assets",
+        "--verbose"
+      ],
+      "exit_code": 0,
+      "name": "bench-init",
+      "seconds": 33.662,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_cache",
+        "redis://127.0.0.1:12379"
+      ],
+      "exit_code": 0,
+      "name": "config-redis_cache",
+      "seconds": 1.091,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_queue",
+        "redis://127.0.0.1:11379"
+      ],
+      "exit_code": 0,
+      "name": "config-redis_queue",
+      "seconds": 0.357,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_socketio",
+        "redis://127.0.0.1:11379"
+      ],
+      "exit_code": 0,
+      "name": "config-redis_socketio",
+      "seconds": 0.362,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "get-app",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-runtime/sources/erpnext"
+      ],
+      "exit_code": 0,
+      "name": "get-app-erpnext",
+      "seconds": 26.35,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "get-app",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-runtime/sources/education"
+      ],
+      "exit_code": 0,
+      "name": "get-app-education",
+      "seconds": 10.294,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "get-app",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-runtime/sources/payments"
+      ],
+      "exit_code": 0,
+      "name": "get-app-payments",
+      "seconds": 1.25,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "get-app",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-runtime/sources/hrms"
+      ],
+      "exit_code": 0,
+      "name": "get-app-hrms",
+      "seconds": 39.772,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/frappe",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "installed-revision-frappe",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/erpnext",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "installed-revision-erpnext",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/education",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "installed-revision-education",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/payments",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "installed-revision-payments",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/hrms",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "installed-revision-hrms",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/uv",
+        "pip",
+        "check",
+        "--python",
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python"
+      ],
+      "exit_code": 0,
+      "name": "python-dependency-check",
+      "seconds": 0.015,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/uv",
+        "pip",
+        "freeze",
+        "--python",
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python"
+      ],
+      "exit_code": 0,
+      "name": "python-resolved-dependencies",
+      "seconds": 0.009,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "new-site",
+        "foundation.localhost",
+        "--db-type",
+        "mariadb",
+        "--db-host",
+        "127.0.0.1",
+        "--db-port",
+        "13306",
+        "--db-root-password",
+        "[REDACTED]",
+        "--db-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--mariadb-user-host-login-scope",
+        "%",
+        "--set-default"
+      ],
+      "exit_code": 0,
+      "name": "new-site",
+      "seconds": 27.093,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "install-app",
+        "erpnext"
+      ],
+      "exit_code": 0,
+      "name": "install-site-erpnext",
+      "seconds": 42.828,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "install-app",
+        "education"
+      ],
+      "exit_code": 0,
+      "name": "install-site-education",
+      "seconds": 7.804,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "install-app",
+        "payments"
+      ],
+      "exit_code": 0,
+      "name": "install-site-payments",
+      "seconds": 3.893,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "install-app",
+        "hrms"
+      ],
+      "exit_code": 0,
+      "name": "install-site-hrms",
+      "seconds": 30.485,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "migrate"
+      ],
+      "exit_code": 0,
+      "name": "migrate-first",
+      "seconds": 13.08,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "migrate"
+      ],
+      "exit_code": 0,
+      "name": "migrate-replay",
+      "seconds": 11.614,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_encryption_key.py",
+        "initialize",
+        "foundation.localhost"
+      ],
+      "exit_code": 0,
+      "name": "initialize-native-site-encryption-key",
+      "seconds": 0.336,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "build"
+      ],
+      "exit_code": 0,
+      "name": "asset-build",
+      "seconds": 35.782,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/audit_stack.py",
+        "--node-modules",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/frappe/node_modules",
+        "--node-modules",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/erpnext/node_modules",
+        "--node-modules",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/education/node_modules",
+        "--node-modules",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/payments/node_modules",
+        "--node-modules",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/hrms/node_modules",
+        "--node-modules",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/education/frontend/node_modules",
+        "--image",
+        "mariadb=mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+        "--image",
+        "redis=redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+        "--output",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/.foundation/runtime-evidence/stack-dependency-audit.json"
+      ],
+      "exit_code": 1,
+      "name": "hosted-full-stack-dependency-audit",
+      "seconds": 0.786,
+      "status": "fail"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "list-apps",
+        "--format",
+        "json"
+      ],
+      "exit_code": 0,
+      "name": "site-app-list",
+      "seconds": 0.798,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_smoke.py",
+        "foundation.localhost"
+      ],
+      "exit_code": 0,
+      "name": "business-smoke",
+      "seconds": 14.981,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "sudo",
+        "apt-get",
+        "install",
+        "-y",
+        "--no-install-recommends",
+        "mariadb-client",
+        "file"
+      ],
+      "exit_code": 0,
+      "name": "mariadb-client-install",
+      "seconds": 3.924,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "mariadb",
+        "--version"
+      ],
+      "exit_code": 0,
+      "name": "mariadb-client-version",
+      "seconds": 0.004,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_encryption_key.py",
+        "prepare",
+        "foundation.localhost"
+      ],
+      "exit_code": 0,
+      "name": "prepare-native-encrypted-fixture-before-backup",
+      "seconds": 0.654,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "backup",
+        "--with-files"
+      ],
+      "exit_code": 0,
+      "name": "backup-with-files",
+      "seconds": 2.645,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "new-site",
+        "restore.localhost",
+        "--db-type",
+        "mariadb",
+        "--db-host",
+        "127.0.0.1",
+        "--db-port",
+        "13306",
+        "--db-root-password",
+        "[REDACTED]",
+        "--db-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--mariadb-user-host-login-scope",
+        "%"
+      ],
+      "exit_code": 0,
+      "name": "new-restore-site",
+      "seconds": 19.01,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "restore.localhost",
+        "restore",
+        "/home/runner/work/_temp/foundation-runtime/bench/sites/foundation.localhost/private/backups/20260916_182024-foundation_localhost-database.sql.gz",
+        "--db-root-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--with-public-files",
+        "/home/runner/work/_temp/foundation-runtime/bench/sites/foundation.localhost/private/backups/20260916_182024-foundation_localhost-files.tar",
+        "--with-private-files",
+        "/home/runner/work/_temp/foundation-runtime/bench/sites/foundation.localhost/private/backups/20260916_182024-foundation_localhost-private-files.tar"
+      ],
+      "exit_code": 0,
+      "name": "restore-with-files",
+      "seconds": 10.79,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "restore.localhost",
+        "migrate"
+      ],
+      "exit_code": 0,
+      "name": "restore-migrate",
+      "seconds": 11.958,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_encryption_key.py",
+        "verify",
+        "restore.localhost"
+      ],
+      "exit_code": 0,
+      "name": "verify-encryption-key-survived-restore",
+      "seconds": 0.661,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_restore.py",
+        "restore.localhost"
+      ],
+      "exit_code": 0,
+      "name": "restore-verification",
+      "seconds": 1.146,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "enable-scheduler"
+      ],
+      "exit_code": 0,
+      "name": "enable-scheduler",
+      "seconds": 1.059,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_background.py",
+        "foundation.localhost"
+      ],
+      "exit_code": 0,
+      "name": "background-cache-job",
+      "seconds": 1.393,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_permissions.py",
+        "foundation.localhost"
+      ],
+      "exit_code": 0,
+      "name": "native-user-permission-configuration",
+      "seconds": 3.405,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_permissions.py",
+        "restore.localhost"
+      ],
+      "exit_code": 0,
+      "name": "restore-native-permission-configuration",
+      "seconds": 2.179,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "init",
+        "--initial-branch",
+        "arena/01a0aafe-tofel-house-erp",
+        "/home/runner/work/_temp/foundation-runtime/extension-source/foundation_security"
+      ],
+      "exit_code": 0,
+      "name": "security-export-git-init",
+      "seconds": 0.004,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/extension-source/foundation_security",
+        "add",
+        "."
+      ],
+      "exit_code": 0,
+      "name": "security-export-git-add",
+      "seconds": 0.004,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-runtime/extension-source/foundation_security",
+        "-c",
+        "user.name=Foundation validation",
+        "-c",
+        "user.email=validation@example.test",
+        "commit",
+        "-m",
+        "Exact security app export from 58bd4d12f0c755e2f83c4c35eb206db40dfeafd7"
+      ],
+      "exit_code": 0,
+      "name": "security-export-git-snapshot",
+      "seconds": 0.007,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "get-app",
+        "--soft-link",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-runtime/extension-source/foundation_security"
+      ],
+      "exit_code": 0,
+      "name": "get-security-extension",
+      "seconds": 0.758,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "set-config",
+        "disable_website_cache",
+        "1",
+        "--parse"
+      ],
+      "exit_code": 0,
+      "name": "disable-website-html-cache-foundation.localhost",
+      "seconds": 0.402,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "install-app",
+        "foundation_security"
+      ],
+      "exit_code": 0,
+      "name": "install-security-extension-foundation.localhost",
+      "seconds": 2.616,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "restore.localhost",
+        "set-config",
+        "disable_website_cache",
+        "1",
+        "--parse"
+      ],
+      "exit_code": 0,
+      "name": "disable-website-html-cache-restore.localhost",
+      "seconds": 0.424,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "restore.localhost",
+        "install-app",
+        "foundation_security"
+      ],
+      "exit_code": 0,
+      "name": "install-security-extension-restore.localhost",
+      "seconds": 2.28,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_background.py",
+        "foundation.localhost"
+      ],
+      "exit_code": 0,
+      "name": "secured-background-cache-job",
+      "seconds": 1.454,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_http.py"
+      ],
+      "exit_code": 0,
+      "name": "http-isolation-with-native-user-permissions",
+      "seconds": 2.214,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "sudo",
+        "apt-get",
+        "install",
+        "-y",
+        "--no-install-recommends",
+        "nginx"
+      ],
+      "exit_code": 0,
+      "name": "nginx-install",
+      "seconds": 3.885,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "nginx",
+        "-t",
+        "-c",
+        "/home/runner/work/_temp/foundation-runtime/nginx.conf"
+      ],
+      "exit_code": 0,
+      "name": "nginx-config-check",
+      "seconds": 0.005,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_isolation.py"
+      ],
+      "exit_code": 0,
+      "name": "expanded-restricted-http-isolation",
+      "seconds": 2.806,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "npm",
+        "install",
+        "--prefix",
+        "/home/runner/work/_temp/foundation-runtime/browser",
+        "--save-exact",
+        "--ignore-scripts",
+        "playwright@1.58.2"
+      ],
+      "exit_code": 0,
+      "name": "browser-package-install",
+      "seconds": 1.347,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/browser/node_modules/.bin/playwright",
+        "install",
+        "--with-deps",
+        "chromium"
+      ],
+      "exit_code": 0,
+      "name": "chromium-install",
+      "seconds": 13.163,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "node",
+        "/home/runner/work/_temp/foundation-runtime/browser/check.mjs"
+      ],
+      "exit_code": 0,
+      "name": "browser-native-portal-isolation",
+      "seconds": 5.288,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_recovery_session.py",
+        "capture"
+      ],
+      "exit_code": 0,
+      "name": "capture-source-session-before-security-backup",
+      "seconds": 0.169,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_recovery_secret.py",
+        "prepare",
+        "foundation.localhost"
+      ],
+      "exit_code": 0,
+      "name": "prepare-native-encrypted-recovery-fixture",
+      "seconds": 0.79,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_encryption_key.py",
+        "prepare",
+        "foundation.localhost"
+      ],
+      "exit_code": 0,
+      "name": "prepare-native-encrypted-fixture-before-hardened-backup",
+      "seconds": 0.618,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "foundation.localhost",
+        "backup",
+        "--with-files"
+      ],
+      "exit_code": 0,
+      "name": "hardened-backup-with-files",
+      "seconds": 3.401,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "new-site",
+        "recovery.localhost",
+        "--db-type",
+        "mariadb",
+        "--db-host",
+        "127.0.0.1",
+        "--db-port",
+        "13306",
+        "--db-root-password",
+        "[REDACTED]",
+        "--db-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--mariadb-user-host-login-scope",
+        "%"
+      ],
+      "exit_code": 0,
+      "name": "new-hardened-recovery-site",
+      "seconds": 21.971,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "recovery.localhost",
+        "restore",
+        "/home/runner/work/_temp/foundation-runtime/bench/sites/foundation.localhost/private/backups/20260916_182157-foundation_localhost-database.sql.gz",
+        "--db-root-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--with-public-files",
+        "/home/runner/work/_temp/foundation-runtime/bench/sites/foundation.localhost/private/backups/20260916_182157-foundation_localhost-files.tar",
+        "--with-private-files",
+        "/home/runner/work/_temp/foundation-runtime/bench/sites/foundation.localhost/private/backups/20260916_182157-foundation_localhost-private-files.tar"
+      ],
+      "exit_code": 0,
+      "name": "hardened-restore-with-files",
+      "seconds": 8.893,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "recovery.localhost",
+        "migrate"
+      ],
+      "exit_code": 0,
+      "name": "hardened-recovery-migrate",
+      "seconds": 12.149,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_recovery_secret.py",
+        "verify",
+        "recovery.localhost"
+      ],
+      "exit_code": 0,
+      "name": "verify-native-encrypted-credential-recovery",
+      "seconds": 0.579,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_encryption_key.py",
+        "verify",
+        "recovery.localhost"
+      ],
+      "exit_code": 0,
+      "name": "verify-encryption-key-survived-hardened-recovery",
+      "seconds": 0.696,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_restore.py",
+        "recovery.localhost"
+      ],
+      "exit_code": 0,
+      "name": "hardened-recovery-invariants",
+      "seconds": 1.342,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_recovery_session.py",
+        "verify"
+      ],
+      "exit_code": 0,
+      "name": "copied-session-revocation-http-proof",
+      "seconds": 0.145,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_isolation.py"
+      ],
+      "exit_code": 0,
+      "name": "recovered-security-regressions",
+      "seconds": 4.128,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "setup",
+        "requirements",
+        "--dev",
+        "frappe"
+      ],
+      "exit_code": 0,
+      "name": "upstream-security-test-dependencies",
+      "seconds": 0.469,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/uv",
+        "pip",
+        "check",
+        "--python",
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python"
+      ],
+      "exit_code": 0,
+      "name": "upstream-test-python-consistency",
+      "seconds": 0.016,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/uv",
+        "pip",
+        "freeze",
+        "--python",
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python"
+      ],
+      "exit_code": 0,
+      "name": "upstream-test-python-freeze",
+      "seconds": 0.009,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "new-site",
+        "upstream-tests.localhost",
+        "--db-type",
+        "mariadb",
+        "--db-host",
+        "127.0.0.1",
+        "--db-port",
+        "13306",
+        "--db-root-password",
+        "[REDACTED]",
+        "--db-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--mariadb-user-host-login-scope",
+        "%"
+      ],
+      "exit_code": 0,
+      "name": "new-upstream-security-test-site",
+      "seconds": 22.871,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "upstream-tests.localhost",
+        "set-config",
+        "allow_tests",
+        "1",
+        "--parse"
+      ],
+      "exit_code": 0,
+      "name": "upstream-test-allow-tests",
+      "seconds": 0.362,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "upstream-tests.localhost",
+        "set-config",
+        "developer_mode",
+        "1",
+        "--parse"
+      ],
+      "exit_code": 0,
+      "name": "upstream-test-developer-mode",
+      "seconds": 0.367,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "upstream-tests.localhost",
+        "run-tests",
+        "--module",
+        "frappe.core.doctype.user_permission.test_user_permission"
+      ],
+      "exit_code": 0,
+      "name": "upstream-security-user_permission",
+      "seconds": 8.644,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/tools/bin/bench",
+        "--site",
+        "upstream-tests.localhost",
+        "run-tests",
+        "--module",
+        "frappe.core.doctype.docshare.test_docshare"
+      ],
+      "exit_code": 0,
+      "name": "upstream-security-docshare",
+      "seconds": 6.025,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_restart_probe.py",
+        "prepare"
+      ],
+      "exit_code": 0,
+      "name": "restart-prepare-native-queued-job",
+      "seconds": 0.718,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_restart_probe.py",
+        "verify"
+      ],
+      "exit_code": 0,
+      "name": "restart-verify-native-state-and-job",
+      "seconds": 0.949,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_isolation.py"
+      ],
+      "exit_code": 0,
+      "name": "restarted-security-regressions",
+      "seconds": 2.972,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_readiness.py",
+        "foundation.localhost"
+      ],
+      "exit_code": 0,
+      "name": "remaining-role-and-operational-checks",
+      "seconds": 28.426,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "npm",
+        "install",
+        "--prefix",
+        "/home/runner/work/_temp/foundation-runtime/browser",
+        "--save-exact",
+        "--ignore-scripts",
+        "socket.io-client@4.8.1"
+      ],
+      "exit_code": 0,
+      "name": "realtime-client-dependency",
+      "seconds": 0.834,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "node",
+        "/home/runner/work/_temp/foundation-runtime/browser/guardian.mjs"
+      ],
+      "exit_code": 0,
+      "name": "guardian-browser-authorization",
+      "seconds": 2.87,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "node",
+        "/home/runner/work/_temp/foundation-runtime/browser/realtime.mjs"
+      ],
+      "exit_code": 0,
+      "name": "actual-realtime-authorization",
+      "seconds": 9.525,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/audit_frontend.py",
+        "/home/runner/work/_temp/foundation-runtime/bench/apps/education/frontend/node_modules",
+        "--output",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/.foundation/runtime-evidence/frontend-advisories.json"
+      ],
+      "exit_code": 1,
+      "name": "hosted-frontend-advisory-audit",
+      "seconds": 0.206,
+      "status": "fail"
+    },
+    {
+      "command": [
+        "node",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_frontend_graph.cjs"
+      ],
+      "exit_code": 0,
+      "name": "production-frontend-module-graph",
+      "seconds": 4.748,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runtime/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_upgrade.py"
+      ],
+      "exit_code": 0,
+      "name": "isolated-controlled-patch-upgrade",
+      "seconds": 518.355,
+      "status": "pass"
+    }
+  ],
+  "commit": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
+  "compose_version": "2.38.2",
+  "created_sites": [
+    "foundation.localhost",
+    "restore.localhost",
+    "recovery.localhost",
+    "upstream-tests.localhost"
+  ],
+  "docker_version": "28.0.4 28.0.4",
+  "encrypted_fixture_before_backup": {
+    "ciphertext_sha256": "9f771296df54e4c6cd16dead00b62b5993d8d450569ffd0de38b0b21f11caafd",
+    "encrypted_field": "User.Administrator.api_secret",
+    "encryption_key_sha256": "0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585",
+    "key_length": 44,
+    "source_decrypts_before_backup": true,
+    "storage_location": "__Auth.password",
+    "storage_locations_found": [
+      "__Auth.password"
+    ],
+    "stored_as_ciphertext": true
+  },
+  "encryption_key_restore_proof": {
+    "ciphertext_matches_source": true,
+    "ciphertext_sha256": "9f771296df54e4c6cd16dead00b62b5993d8d450569ffd0de38b0b21f11caafd",
+    "encrypted_content_decrypts_after_restore": true,
+    "fingerprint_matches_source": true,
+    "key_length": 44,
+    "restored_encryption_key_sha256": "0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585",
+    "restored_site_is_not_source": true,
+    "source_encryption_key_sha256": "0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585",
+    "storage_location": "__Auth.password"
+  },
+  "failure": "Restricted policy regressions failed: hosted-full-stack-dependency-audit: exit 1; hosted-frontend-advisory-audit: exit 1",
+  "failure_output_tail": "Queried 255 package names; 21 returned advisory entries\n",
+  "hardened_backup": {
+    "database": {
+      "bytes": 1158728,
+      "sha256": "0d799d4097a5670fd3a3fc509b88a4d8cfd0aaee0179669c61e55c4d83cb5360"
+    },
+    "private_files": {
+      "bytes": 10240,
+      "sha256": "85bea42b7307a6dc3943bd6380f5e5907388f47bd180a8e6a305329dc553425d"
+    },
+    "public_files": {
+      "bytes": 10240,
+      "sha256": "9c543b407e134d7d27d9720d99ff0fe2298ce7587e1aa463bd826675c36e3c53"
+    }
+  },
+  "hardened_encryption_key_restore_proof": {
+    "ciphertext_matches_source": true,
+    "ciphertext_sha256": "029f68b1876ddd0532d1b4e1798faa6e06e458f4b11714f08fe8f2ed8a5ae5c3",
+    "encrypted_content_decrypts_after_restore": true,
+    "fingerprint_matches_source": true,
+    "key_length": 44,
+    "restored_encryption_key_sha256": "0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585",
+    "restored_site_is_not_source": true,
+    "source_encryption_key_sha256": "0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585",
+    "storage_location": "__Auth.password"
+  },
+  "http-restricted_result": {
+    "checks": [
+      {
+        "name": "realtime-transport-handshake",
+        "observation": {
+          "event_authorization_validated": false,
+          "handshake": true,
+          "protocol": "Engine.IO 4"
+        },
+        "seconds": 0.006,
+        "status": "pass"
+      },
+      {
+        "name": "foundation.localhost-admin-login-and-student",
+        "observation": {
+          "authenticated_identity": "Administrator",
+          "site": "foundation.localhost",
+          "student_read": true
+        },
+        "seconds": 0.762,
+        "status": "pass"
+      },
+      {
+        "name": "restore.localhost-admin-login-and-student",
+        "observation": {
+          "authenticated_identity": "Administrator",
+          "site": "restore.localhost",
+          "student_read": true
+        },
+        "seconds": 0.413,
+        "status": "pass"
+      },
+      {
+        "name": "alpha-student-login",
+        "observation": {
+          "identity": "validation-alpha@example.test"
+        },
+        "seconds": 0.108,
+        "status": "pass"
+      },
+      {
+        "name": "beta-student-login",
+        "observation": {
+          "identity": "validation-beta@example.test"
+        },
+        "seconds": 0.071,
+        "status": "pass"
+      },
+      {
+        "name": "student-own-record-allowed",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "student-other-record-denied",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.025,
+        "status": "pass"
+      },
+      {
+        "name": "student-other-portal-context-denied",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.016,
+        "status": "pass"
+      },
+      {
+        "name": "student-own-private-file-allowed",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.029,
+        "status": "pass"
+      },
+      {
+        "name": "student-other-private-file-denied",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      }
+    ],
+    "other_student_private_file_disclosed": false,
+    "other_student_record_disclosed": false,
+    "phase2_gate_passed": false,
+    "scope": "Real HTTP on synthetic loopback-only sites",
+    "startup_readiness_polls": 1,
+    "status": "pass"
+  },
+  "installed_apps": [
+    "erpnext",
+    "education",
+    "payments",
+    "hrms"
+  ],
+  "isolation-recovered_result": {
+    "checks": [
+      {
+        "name": "recovery.localhost-validation-alpha@example.test-portal-csrf-present",
+        "observation": {
+          "nonempty_token": true,
+          "page_http_status": 200,
+          "token_assignment_present": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "recovery.localhost-validation-beta@example.test-portal-csrf-present",
+        "observation": {
+          "nonempty_token": true,
+          "page_http_status": 200,
+          "token_assignment_present": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "recovery.localhost-Administrator-portal-csrf-present",
+        "observation": {
+          "nonempty_token": true,
+          "page_http_status": 200,
+          "token_assignment_present": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "restore.localhost-Administrator-portal-csrf-present",
+        "observation": {
+          "nonempty_token": true,
+          "page_http_status": 200,
+          "token_assignment_present": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "resource-alpha-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.01,
+        "status": "pass"
+      },
+      {
+        "name": "resource-alpha-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "resource-beta-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "resource-beta-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "v2/document-alpha-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.007,
+        "status": "pass"
+      },
+      {
+        "name": "v2/document-alpha-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.016,
+        "status": "pass"
+      },
+      {
+        "name": "v2/document-beta-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "v2/document-beta-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "assessment_result-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "assessment_result-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "attendance-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "attendance-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "invoice-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.037,
+        "status": "pass"
+      },
+      {
+        "name": "invoice-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.011,
+        "status": "pass"
+      },
+      {
+        "name": "get_student_context-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "get_student_context-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.014,
+        "status": "pass"
+      },
+      {
+        "name": "get_student_invoices-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.023,
+        "status": "pass"
+      },
+      {
+        "name": "get_student_invoices-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "alpha-rest-list",
+        "observation": {
+          "own_only": true
+        },
+        "seconds": 0.007,
+        "status": "pass"
+      },
+      {
+        "name": "alpha-rpc-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.007,
+        "status": "pass"
+      },
+      {
+        "name": "beta-rest-list",
+        "observation": {
+          "own_only": true
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "beta-rpc-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.007,
+        "status": "pass"
+      },
+      {
+        "name": "generic-rpc-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.01,
+        "status": "pass"
+      },
+      {
+        "name": "rest-other-write-denied",
+        "observation": {
+          "http_status": 403,
+          "permission_not_csrf_denial": true
+        },
+        "seconds": 0.01,
+        "status": "pass"
+      },
+      {
+        "name": "rpc-other-write-denied",
+        "observation": {
+          "http_status": 403,
+          "permission_not_csrf_denial": true
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "other-student-unchanged",
+        "observation": {
+          "unchanged": true
+        },
+        "seconds": 0.003,
+        "status": "pass"
+      },
+      {
+        "name": "proxy-private-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.019,
+        "status": "pass"
+      },
+      {
+        "name": "proxy-private-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.007,
+        "status": "pass"
+      },
+      {
+        "name": "proxy-private-guest",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.003,
+        "status": "pass"
+      },
+      {
+        "name": "guest-student-denied",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.005,
+        "status": "pass"
+      },
+      {
+        "name": "cross-site-session-replay-denied",
+        "observation": {
+          "source_sid_rejected_on_restore": true
+        },
+        "seconds": 0.005,
+        "status": "pass"
+      },
+      {
+        "name": "source-only-marker-positive",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.004,
+        "status": "pass"
+      },
+      {
+        "name": "source-only-marker-absent-on-restore",
+        "observation": {
+          "http_status": 404
+        },
+        "seconds": 0.005,
+        "status": "pass"
+      },
+      {
+        "name": "proxy-site-header-fixed-to-host",
+        "observation": {
+          "untrusted_site_header_overwritten": true
+        },
+        "seconds": 0.003,
+        "status": "pass"
+      },
+      {
+        "name": "student-cannot-share-own-record-to-peer",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "public-rpc-rejects-permission-bypass-flags",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.007,
+        "status": "pass"
+      },
+      {
+        "name": "private-file-still-isolated-after-share-attempts",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.007,
+        "status": "pass"
+      },
+      {
+        "name": "public-signup-disabled",
+        "observation": {
+          "native_signup_disabled": true
+        },
+        "seconds": 0.004,
+        "status": "pass"
+      },
+      {
+        "name": "unprovisioned-student-denied-to-alpha",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "no-automatic-unscoped-student-login",
+        "observation": {
+          "http_status": 401
+        },
+        "seconds": 0.012,
+        "status": "pass"
+      },
+      {
+        "name": "csrf-negative-and-positive-write-controls",
+        "observation": {
+          "missing_and_invalid_tokens_denied": true,
+          "valid_token_positive_control": true
+        },
+        "seconds": 0.286,
+        "status": "pass"
+      },
+      {
+        "name": "recovery.localhost-validation-alpha@example.test-portal-csrf-present",
+        "observation": {
+          "nonempty_token": true,
+          "page_http_status": 200,
+          "token_assignment_present": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "native-policy-removal-fails-closed-and-recovers",
+        "observation": {
+          "existing_session_revoked": true,
+          "restored_policy_usable": true,
+          "student_cannot_edit_policy": true,
+          "unscoped_login_denied": true
+        },
+        "seconds": 1.068,
+        "status": "pass"
+      }
+    ],
+    "phase2_gate_passed": false,
+    "primary_site": "recovery.localhost",
+    "scope": "Restricted native policy; real HTTP, synthetic data only",
+    "secondary_site": "restore.localhost",
+    "status": "pass"
+  },
+  "isolation_result": {
+    "checks": [
+      {
+        "name": "foundation.localhost-validation-alpha@example.test-portal-csrf-present",
+        "observation": {
+          "nonempty_token": true,
+          "page_http_status": 200,
+          "token_assignment_present": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "foundation.localhost-validation-beta@example.test-portal-csrf-present",
+        "observation": {
+          "nonempty_token": true,
+          "page_http_status": 200,
+          "token_assignment_present": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "foundation.localhost-Administrator-portal-csrf-present",
+        "observation": {
+          "nonempty_token": true,
+          "page_http_status": 200,
+          "token_assignment_present": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "restore.localhost-Administrator-portal-csrf-present",
+        "observation": {
+          "nonempty_token": true,
+          "page_http_status": 200,
+          "token_assignment_present": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "resource-alpha-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.011,
+        "status": "pass"
+      },
+      {
+        "name": "resource-alpha-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.012,
+        "status": "pass"
+      },
+      {
+        "name": "resource-beta-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "resource-beta-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "v2/document-alpha-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "v2/document-alpha-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "v2/document-beta-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "v2/document-beta-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "assessment_result-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.022,
+        "status": "pass"
+      },
+      {
+        "name": "assessment_result-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "attendance-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.015,
+        "status": "pass"
+      },
+      {
+        "name": "attendance-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "invoice-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.258,
+        "status": "pass"
+      },
+      {
+        "name": "invoice-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.011,
+        "status": "pass"
+      },
+      {
+        "name": "get_student_context-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "get_student_context-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "get_student_invoices-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.026,
+        "status": "pass"
+      },
+      {
+        "name": "get_student_invoices-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.01,
+        "status": "pass"
+      },
+      {
+        "name": "alpha-rest-list",
+        "observation": {
+          "own_only": true
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "alpha-rpc-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "beta-rest-list",
+        "observation": {
+          "own_only": true
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "beta-rpc-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "generic-rpc-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.009,
+        "status": "pass"
+      },
+      {
+        "name": "rest-other-write-denied",
+        "observation": {
+          "http_status": 403,
+          "permission_not_csrf_denial": true
+        },
+        "seconds": 0.012,
+        "status": "pass"
+      },
+      {
+        "name": "rpc-other-write-denied",
+        "observation": {
+          "http_status": 403,
+          "permission_not_csrf_denial": true
+        },
+        "seconds": 0.011,
+        "status": "pass"
+      },
+      {
+        "name": "other-student-unchanged",
+        "observation": {
+          "unchanged": true
+        },
+        "seconds": 0.004,
+        "status": "pass"
+      },
+      {
+        "name": "proxy-private-own",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.01,
+        "status": "pass"
+      },
+      {
+        "name": "proxy-private-other",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "proxy-private-guest",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.003,
+        "status": "pass"
+      },
+      {
+        "name": "guest-student-denied",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.005,
+        "status": "pass"
+      },
+      {
+        "name": "cross-site-session-replay-denied",
+        "observation": {
+          "source_sid_rejected_on_restore": true
+        },
+        "seconds": 0.018,
+        "status": "pass"
+      },
+      {
+        "name": "source-only-marker-positive",
+        "observation": {
+          "http_status": 200
+        },
+        "seconds": 0.011,
+        "status": "pass"
+      },
+      {
+        "name": "source-only-marker-absent-on-restore",
+        "observation": {
+          "http_status": 404
+        },
+        "seconds": 0.011,
+        "status": "pass"
+      },
+      {
+        "name": "proxy-site-header-fixed-to-host",
+        "observation": {
+          "untrusted_site_header_overwritten": true
+        },
+        "seconds": 0.003,
+        "status": "pass"
+      },
+      {
+        "name": "student-cannot-share-own-record-to-peer",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "public-rpc-rejects-permission-bypass-flags",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.007,
+        "status": "pass"
+      },
+      {
+        "name": "private-file-still-isolated-after-share-attempts",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.007,
+        "status": "pass"
+      },
+      {
+        "name": "public-signup-disabled",
+        "observation": {
+          "native_signup_disabled": true
+        },
+        "seconds": 0.004,
+        "status": "pass"
+      },
+      {
+        "name": "unprovisioned-student-denied-to-alpha",
+        "observation": {
+          "http_status": 403
+        },
+        "seconds": 0.008,
+        "status": "pass"
+      },
+      {
+        "name": "no-automatic-unscoped-student-login",
+        "observation": {
+          "http_status": 401
+        },
+        "seconds": 0.04,
+        "status": "pass"
+      },
+      {
+        "name": "csrf-negative-and-positive-write-controls",
+        "observation": {
+          "missing_and_invalid_tokens_denied": true,
+          "valid_token_positive_control": true
+        },
+        "seconds": 0.11,
+        "status": "pass"
+      },
+      {
+        "name": "foundation.localhost-validation-alpha@example.test-portal-csrf-present",
+        "observation": {
+          "nonempty_token": true,
+          "page_http_status": 200,
+          "token_assignment_present": true
+        },
+        "status": "pass"
+      },
+      {
+        "name": "native-policy-removal-fails-closed-and-recovers",
+        "observation": {
+          "existing_session_revoked": true,
+          "restored_policy_usable": true,
+          "student_cannot_edit_policy": true,
+          "unscoped_login_denied": true
+        },
+        "seconds": 1.149,
+        "status": "pass"
+      }
+    ],
+    "phase2_gate_passed": false,
+    "primary_site": "foundation.localhost",
+    "scope": "Restricted native policy; real HTTP, synthetic data only",
+    "secondary_site": "restore.localhost",
+    "status": "pass"
+  },
+  "mariadb_client_version": "mariadb  Ver 15.1 Distrib 10.11.14-MariaDB, for debian-linux-gnu (x86_64) using  EditLine wrapper",
+  "node_version": "v24.21.0",
+  "phase2_gate_passed": false,
+  "process_liveness": {
+    "scheduler": true,
+    "socketio": true,
+    "worker": true
+  },
+  "product_implementation_authorized": false,
+  "profile": "hardened",
+  "python_version": "Python 3.14.7",
+  "ref": "refs/heads/arena/01a0aafe-tofel-house-erp",
+  "restore-secured_result": {
+    "checks": [
+      {
+        "name": "student-applicant-customer-enrollment-links",
+        "status": "pass"
+      },
+      {
+        "name": "submitted-attendance-grade-invoice-payment",
+        "status": "pass"
+      },
+      {
+        "name": "private-file-restored",
+        "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+        "status": "pass"
+      },
+      {
+        "name": "public-file-restored",
+        "sha256": "020620652b12b1daa793c1487a7f8a0d0a9781a97064f43bc5310e79140dd06d",
+        "status": "pass"
+      },
+      {
+        "name": "copied-live-session-found-and-revoked-with-native-session-api",
+        "status": "pass"
+      },
+      {
+        "name": "security-app-settings-and-native-permission-scopes-restored",
+        "status": "pass"
+      },
+      {
+        "exception": "LinkExistsError",
+        "name": "referenced-student-deletion-rejected",
+        "status": "pass"
+      }
+    ],
+    "database": [
+      "11.8.9-MariaDB-ubu2404",
+      "utf8mb4",
+      "utf8mb4_unicode_ci"
+    ],
+    "schema": {
+      "Assessment Result": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 26,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "modified",
+            "name": "modified",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Course Enrollment": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 17,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "modified",
+            "name": "modified",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Employee": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 89,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "attendance_device_id",
+            "name": "attendance_device_id",
+            "non_unique": 0
+          },
+          {
+            "column": "status",
+            "name": "status",
+            "non_unique": 1
+          },
+          {
+            "column": "designation",
+            "name": "designation",
+            "non_unique": 1
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "lft",
+            "name": "lft_rgt_index",
+            "non_unique": 1
+          },
+          {
+            "column": "rgt",
+            "name": "lft_rgt_index",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Payment Entry": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 74,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "party_type",
+            "name": "party_type",
+            "non_unique": 1
+          },
+          {
+            "column": "reference_date",
+            "name": "reference_date",
+            "non_unique": 1
+          },
+          {
+            "column": "is_opening",
+            "name": "is_opening",
+            "non_unique": 1
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Payroll Entry": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 37,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Program Enrollment": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 23,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "modified",
+            "name": "modified",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Salary Slip": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 73,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "employee",
+            "name": "employee",
+            "non_unique": 1
+          },
+          {
+            "column": "start_date",
+            "name": "start_date",
+            "non_unique": 1
+          },
+          {
+            "column": "end_date",
+            "name": "end_date",
+            "non_unique": 1
+          },
+          {
+            "column": "salary_structure",
+            "name": "salary_structure",
+            "non_unique": 1
+          },
+          {
+            "column": "payroll_entry",
+            "name": "payroll_entry",
+            "non_unique": 1
+          },
+          {
+            "column": "current_payroll_period",
+            "name": "current_payroll_period",
+            "non_unique": 1
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "employee",
+            "name": "employee_start_date_end_date_index",
+            "non_unique": 1
+          },
+          {
+            "column": "start_date",
+            "name": "employee_start_date_end_date_index",
+            "non_unique": 1
+          },
+          {
+            "column": "end_date",
+            "name": "employee_start_date_end_date_index",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Sales Invoice": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 158,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "customer",
+            "name": "customer",
+            "non_unique": 1
+          },
+          {
+            "column": "posting_date",
+            "name": "posting_date",
+            "non_unique": 1
+          },
+          {
+            "column": "return_against",
+            "name": "return_against",
+            "non_unique": 1
+          },
+          {
+            "column": "project",
+            "name": "project",
+            "non_unique": 1
+          },
+          {
+            "column": "debit_to",
+            "name": "debit_to",
+            "non_unique": 1
+          },
+          {
+            "column": "inter_company_invoice_reference",
+            "name": "inter_company_invoice_reference",
+            "non_unique": 1
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Student": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 38,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "student_email_id",
+            "name": "student_email_id",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "modified",
+            "name": "modified",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Student Applicant": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 38,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "student_email_id",
+            "name": "student_email_id",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "modified",
+            "name": "modified",
+            "non_unique": 1
+          }
+        ]
+      }
+    },
+    "scope": "Actual restored synthetic site; no production data",
+    "status": "pass"
+  },
+  "restore_result": {
+    "checks": [
+      {
+        "name": "student-applicant-customer-enrollment-links",
+        "status": "pass"
+      },
+      {
+        "name": "submitted-attendance-grade-invoice-payment",
+        "status": "pass"
+      },
+      {
+        "name": "private-file-restored",
+        "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+        "status": "pass"
+      },
+      {
+        "name": "public-file-restored",
+        "sha256": "020620652b12b1daa793c1487a7f8a0d0a9781a97064f43bc5310e79140dd06d",
+        "status": "pass"
+      },
+      {
+        "exception": "LinkExistsError",
+        "name": "referenced-student-deletion-rejected",
+        "status": "pass"
+      }
+    ],
+    "database": [
+      "11.8.9-MariaDB-ubu2404",
+      "utf8mb4",
+      "utf8mb4_unicode_ci"
+    ],
+    "schema": {
+      "Assessment Result": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 26,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "modified",
+            "name": "modified",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Course Enrollment": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 17,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "modified",
+            "name": "modified",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Employee": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 89,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "attendance_device_id",
+            "name": "attendance_device_id",
+            "non_unique": 0
+          },
+          {
+            "column": "status",
+            "name": "status",
+            "non_unique": 1
+          },
+          {
+            "column": "designation",
+            "name": "designation",
+            "non_unique": 1
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "lft",
+            "name": "lft_rgt_index",
+            "non_unique": 1
+          },
+          {
+            "column": "rgt",
+            "name": "lft_rgt_index",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Payment Entry": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 74,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "party_type",
+            "name": "party_type",
+            "non_unique": 1
+          },
+          {
+            "column": "reference_date",
+            "name": "reference_date",
+            "non_unique": 1
+          },
+          {
+            "column": "is_opening",
+            "name": "is_opening",
+            "non_unique": 1
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Payroll Entry": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 37,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Program Enrollment": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 23,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "modified",
+            "name": "modified",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Salary Slip": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 73,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "employee",
+            "name": "employee",
+            "non_unique": 1
+          },
+          {
+            "column": "start_date",
+            "name": "start_date",
+            "non_unique": 1
+          },
+          {
+            "column": "end_date",
+            "name": "end_date",
+            "non_unique": 1
+          },
+          {
+            "column": "salary_structure",
+            "name": "salary_structure",
+            "non_unique": 1
+          },
+          {
+            "column": "payroll_entry",
+            "name": "payroll_entry",
+            "non_unique": 1
+          },
+          {
+            "column": "current_payroll_period",
+            "name": "current_payroll_period",
+            "non_unique": 1
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "employee",
+            "name": "employee_start_date_end_date_index",
+            "non_unique": 1
+          },
+          {
+            "column": "start_date",
+            "name": "employee_start_date_end_date_index",
+            "non_unique": 1
+          },
+          {
+            "column": "end_date",
+            "name": "employee_start_date_end_date_index",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Sales Invoice": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 158,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "customer",
+            "name": "customer",
+            "non_unique": 1
+          },
+          {
+            "column": "posting_date",
+            "name": "posting_date",
+            "non_unique": 1
+          },
+          {
+            "column": "return_against",
+            "name": "return_against",
+            "non_unique": 1
+          },
+          {
+            "column": "project",
+            "name": "project",
+            "non_unique": 1
+          },
+          {
+            "column": "debit_to",
+            "name": "debit_to",
+            "non_unique": 1
+          },
+          {
+            "column": "inter_company_invoice_reference",
+            "name": "inter_company_invoice_reference",
+            "non_unique": 1
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Student": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 38,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "student_email_id",
+            "name": "student_email_id",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "modified",
+            "name": "modified",
+            "non_unique": 1
+          }
+        ]
+      },
+      "Student Applicant": {
+        "audit_fields": [
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus"
+        ],
+        "column_count": 38,
+        "indexes": [
+          {
+            "column": "name",
+            "name": "PRIMARY",
+            "non_unique": 0
+          },
+          {
+            "column": "student_email_id",
+            "name": "student_email_id",
+            "non_unique": 0
+          },
+          {
+            "column": "creation",
+            "name": "creation",
+            "non_unique": 1
+          },
+          {
+            "column": "modified",
+            "name": "modified",
+            "non_unique": 1
+          }
+        ]
+      }
+    },
+    "scope": "Actual restored synthetic site; no production data",
+    "status": "pass"
+  },
+  "restore_separate_database": true,
+  "restricted_diagnostic_failures": [
+    "hosted-full-stack-dependency-audit: exit 1",
+    "hosted-frontend-advisory-audit: exit 1"
+  ],
+  "run_attempt": "1",
+  "run_id": "35133062884",
+  "runner_image": "ubuntu24",
+  "runner_image_version": "20260907.300.1",
+  "scope": "Pinned foundation and enumerated security/recovery checks; not full Phase 2 acceptance",
+  "security_extension": {
+    "file_sha256": {
+      "README.md": "f862cd6e68a5e513bd5f7aec3b5a780931eda43a1c185856b4ea4bb8e900d161",
+      "foundation_security/__init__.py": "1df8d53aba539e667ec551426125665f9d045da050789b5e5071be3c3ea242cf",
+      "foundation_security/files.py": "e85811795f776a1e74ac6e05b81f5128c8e1caeaf68dc84ef5245f79294f9f49",
+      "foundation_security/guards.py": "2e7f0410b607269dd704c120e7beafbde4816eaef0543e7f8464ea1f6a9a85ce",
+      "foundation_security/hooks.py": "afb66e2a4d7541c5d14c675d554e0ee7d4eeb392d11d70220451cf9b7e432d03",
+      "foundation_security/modules.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "foundation_security/patches.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "foundation_security/realtime.py": "4641122b8200dbd27b0b6455abe4969c899806f0a9f859d33be758a16d916e3e",
+      "pyproject.toml": "4e4399387c218c062d1c2280022f9309337ed2277e7997d0d5ba7b9dae088961",
+      "realtime/handlers.js": "e0b60122c491671473591fc2e5cd0b2c58794ad21aa09022994d6533797dc266"
+    },
+    "name": "foundation_security",
+    "repository_commit": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
+    "version": "0.2.1"
+  },
+  "security_gate_passed": false,
+  "site_apps": "{\n \"foundation.localhost\": [\n  \"frappe\",\n  \"erpnext\",\n  \"education\",\n  \"payments\",\n  \"hrms\"\n ]\n}",
+  "site_encryption_key_initialized": true,
+  "site_encryption_key_restored": true,
+  "site_encryption_key_restored_hardened": true,
+  "site_encryption_key_sha256": "0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585",
+  "source_db_credentials_copied": false,
+  "source_revisions": {
+    "education": "93bc7075753369457919720690f80c6d2207b5f2",
+    "erpnext": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+    "frappe": "988e54f3c4c291e2077a83809663f123731abe76",
+    "hrms": "a4768b441cff346def505e27f2a2229ee1e05b9b",
+    "payments": "cca07d9f9392e2ea0e521c5975151db9e4b6c321"
+  },
+  "stack_dependency_audit": {
+    "container_status": "inventory_only",
+    "node_npm_findings": [
+      {
+        "cwe": [
+          "CWE-1321",
+          "CWE-79"
+        ],
+        "id": 1158508,
+        "installed_versions": [
+          "2.2.3"
+        ],
+        "package": "@tiptap/core",
+        "severity": "moderate",
+        "title": "Tiptap: mergeAttributes() turns an own __proto__ key into inherited executable DOM attributes",
+        "url": "https://github.com/advisories/GHSA-cp6q-959q-f8rh",
+        "vulnerable_versions": ">=2.0.0-alpha.0 <3.30.4"
+      },
+      {
+        "cwe": [
+          "CWE-79"
+        ],
+        "id": 1111311,
+        "installed_versions": [
+          "2.2.3"
+        ],
+        "package": "@tiptap/extension-link",
+        "severity": "low",
+        "title": "@tiptap/extension-link vulnerable to Cross-site Scripting (XSS)",
+        "url": "https://github.com/advisories/GHSA-vhrc-hgrq-x75r",
+        "vulnerable_versions": "<2.10.4"
+      },
+      {
+        "cwe": [
+          "CWE-400"
+        ],
+        "id": 1105443,
+        "installed_versions": [
+          "1.1.11",
+          "2.0.1"
+        ],
+        "package": "brace-expansion",
+        "severity": "low",
+        "title": "brace-expansion Regular Expression Denial of Service vulnerability",
+        "url": "https://github.com/advisories/GHSA-v6h2-p8h4-qcjw",
+        "vulnerable_versions": ">=1.0.0 <=1.1.11"
+      },
+      {
+        "cwe": [
+          "CWE-400"
+        ],
+        "id": 1105444,
+        "installed_versions": [
+          "1.1.11",
+          "2.0.1"
+        ],
+        "package": "brace-expansion",
+        "severity": "low",
+        "title": "brace-expansion Regular Expression Denial of Service vulnerability",
+        "url": "https://github.com/advisories/GHSA-v6h2-p8h4-qcjw",
+        "vulnerable_versions": ">=2.0.0 <=2.0.1"
+      },
+      {
+        "cwe": [
+          "CWE-400",
+          "CWE-770"
+        ],
+        "id": 1130588,
+        "installed_versions": [
+          "1.1.11",
+          "2.0.1"
+        ],
+        "package": "brace-expansion",
+        "severity": "high",
+        "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+        "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+        "vulnerable_versions": "<1.1.17"
+      },
+      {
+        "cwe": [
+          "CWE-400",
+          "CWE-770"
+        ],
+        "id": 1130589,
+        "installed_versions": [
+          "1.1.11",
+          "2.0.1"
+        ],
+        "package": "brace-expansion",
+        "severity": "high",
+        "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+        "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+        "vulnerable_versions": ">=2.0.0 <2.1.3"
+      },
+      {
+        "cwe": [
+          "CWE-400",
+          "CWE-770"
+        ],
+        "id": 1130736,
+        "installed_versions": [
+          "1.1.11",
+          "2.0.1"
+        ],
+        "package": "brace-expansion",
+        "severity": "high",
+        "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+        "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+        "vulnerable_versions": ">=2.0.0 <2.1.4"
+      },
+      {
+        "cwe": [
+          "CWE-400",
+          "CWE-770"
+        ],
+        "id": 1130737,
+        "installed_versions": [
+          "1.1.11",
+          "2.0.1"
+        ],
+        "package": "brace-expansion",
+        "severity": "high",
+        "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+        "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+        "vulnerable_versions": "<1.1.18"
+      },
+      {
+        "cwe": [
+          "CWE-400"
+        ],
+        "id": 1115540,
+        "installed_versions": [
+          "1.1.11",
+          "2.0.1"
+        ],
+        "package": "brace-expansion",
+        "severity": "moderate",
+        "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+        "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v",
+        "vulnerable_versions": "<1.1.13"
+      },
+      {
+        "cwe": [
+          "CWE-400"
+        ],
+        "id": 1115541,
+        "installed_versions": [
+          "1.1.11",
+          "2.0.1"
+        ],
+        "package": "brace-expansion",
+        "severity": "moderate",
+        "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+        "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v",
+        "vulnerable_versions": ">=2.0.0 <2.0.3"
+      },
+      {
+        "cwe": [
+          "CWE-400",
+          "CWE-407"
+        ],
+        "id": 1123896,
+        "installed_versions": [
+          "1.1.11",
+          "2.0.1"
+        ],
+        "package": "brace-expansion",
+        "severity": "high",
+        "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+        "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp",
+        "vulnerable_versions": ">=2.0.0 <2.1.2"
+      },
+      {
+        "cwe": [
+          "CWE-400",
+          "CWE-407"
+        ],
+        "id": 1123897,
+        "installed_versions": [
+          "1.1.11",
+          "2.0.1"
+        ],
+        "package": "brace-expansion",
+        "severity": "high",
+        "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+        "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp",
+        "vulnerable_versions": "<1.1.16"
+      },
+      {
+        "cwe": [
+          "CWE-1050",
+          "CWE-400"
+        ],
+        "id": 1098094,
+        "installed_versions": [
+          "3.0.2",
+          "3.0.3"
+        ],
+        "package": "braces",
+        "severity": "high",
+        "title": "Uncontrolled resource consumption in braces",
+        "url": "https://github.com/advisories/GHSA-grv7-fg5c-xmjg",
+        "vulnerable_versions": "<3.0.3"
+      },
+      {
+        "cwe": [
+          "CWE-770"
+        ],
+        "id": 1153171,
+        "installed_versions": [
+          "4.22.1",
+          "4.23.0"
+        ],
+        "package": "browserslist",
+        "severity": "high",
+        "title": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",
+        "url": "https://github.com/advisories/GHSA-c83g-rgw3-j3cx",
+        "vulnerable_versions": "<=4.28.6"
+      },
+      {
+        "cwe": [
+          "CWE-1321",
+          "CWE-248"
+        ],
+        "id": 1153172,
+        "installed_versions": [
+          "4.22.1",
+          "4.23.0"
+        ],
+        "package": "browserslist",
+        "severity": "high",
+        "title": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)",
+        "url": "https://github.com/advisories/GHSA-73wf-gq98-2v4g",
+        "vulnerable_versions": "<=4.28.6"
+      },
+      {
+        "cwe": [
+          "CWE-1333"
+        ],
+        "id": 1193675,
+        "installed_versions": [
+          "2.9.3"
+        ],
+        "package": "colord",
+        "severity": "moderate",
+        "title": "Colord: Slow rejection of oversized malformed color strings",
+        "url": "https://github.com/advisories/GHSA-2wm5-q62r-hmrv",
+        "vulnerable_versions": "<2.9.4"
+      },
+      {
+        "cwe": [
+          "CWE-74"
+        ],
+        "id": 1103907,
+        "installed_versions": [
+          "0.4.2",
+          "0.7.0"
+        ],
+        "package": "cookie",
+        "severity": "low",
+        "title": "cookie accepts cookie name, path, and domain with out of bounds characters",
+        "url": "https://github.com/advisories/GHSA-pxg6-pf52-xh8x",
+        "vulnerable_versions": "<0.7.0"
+      },
+      {
+        "cwe": [
+          "CWE-1333"
+        ],
+        "id": 1104664,
+        "installed_versions": [
+          "7.0.3"
+        ],
+        "package": "cross-spawn",
+        "severity": "high",
+        "title": "Regular Expression Denial of Service (ReDoS) in cross-spawn",
+        "url": "https://github.com/advisories/GHSA-3xgq-45jj-v275",
+        "vulnerable_versions": ">=7.0.0 <7.0.5"
+      },
+      {
+        "cwe": [
+          "CWE-1176",
+          "CWE-400",
+          "CWE-405",
+          "CWE-407"
+        ],
+        "id": 1147955,
+        "installed_versions": [
+          "0.2.2"
+        ],
+        "package": "decode-uri-component",
+        "severity": "moderate",
+        "title": "decode-uri-component: Denial of service via exponential decoding of malformed percent-encoded input",
+        "url": "https://github.com/advisories/GHSA-vcc3-ghjq-m6fr",
+        "vulnerable_versions": "<=0.4.2"
+      },
+      {
+        "cwe": [
+          "CWE-404"
+        ],
+        "id": 1123943,
+        "installed_versions": [
+          "6.5.4"
+        ],
+        "package": "engine.io",
+        "severity": "high",
+        "title": "Socket.IO: Engine.IO Polling Transport Connection Exhaustion",
+        "url": "https://github.com/advisories/GHSA-r635-g3xr-vw7x",
+        "vulnerable_versions": ">=4.1.0 <6.6.7"
+      },
+      {
+        "cwe": [
+          "CWE-20"
+        ],
+        "id": 1147953,
+        "installed_versions": [
+          "6.5.4"
+        ],
+        "package": "engine.io",
+        "severity": "high",
+        "title": "Socket.IO: Engine.IO WebTransport SID DoS",
+        "url": "https://github.com/advisories/GHSA-gr94-w7qr-f4j3",
+        "vulnerable_versions": ">=6.5.0 <6.6.7"
+      },
+      {
+        "cwe": [
+          "CWE-346"
+        ],
+        "id": 1102341,
+        "installed_versions": [
+          "0.14.54"
+        ],
+        "package": "esbuild",
+        "severity": "moderate",
+        "title": "esbuild enables any website to send any requests to the development server and read the response",
+        "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+        "vulnerable_versions": "<=0.24.2"
+      },
+      {
+        "cwe": [
+          "CWE-78"
+        ],
+        "id": 1109842,
+        "installed_versions": [
+          "10.3.10",
+          "7.2.3"
+        ],
+        "package": "glob",
+        "severity": "high",
+        "title": "glob CLI: Command injection via -c/--cmd executes matches with shell:true",
+        "url": "https://github.com/advisories/GHSA-5j98-mcp5-4vw2",
+        "vulnerable_versions": ">=10.2.0 <10.5.0"
+      },
+      {
+        "cwe": [
+          "CWE-835"
+        ],
+        "id": 1138808,
+        "installed_versions": [
+          "0.5.5"
+        ],
+        "package": "image-size",
+        "severity": "high",
+        "title": "image-size: ICNS parser allows denial of service through an infinite loop",
+        "url": "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr",
+        "vulnerable_versions": "<=2.0.2"
+      },
+      {
+        "cwe": [
+          "CWE-835"
+        ],
+        "id": 1138809,
+        "installed_versions": [
+          "0.5.5"
+        ],
+        "package": "image-size",
+        "severity": "high",
+        "title": "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
+        "url": "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq",
+        "vulnerable_versions": "<=2.0.2"
+      },
+      {
+        "cwe": [
+          "CWE-1321"
+        ],
+        "id": 1117067,
+        "installed_versions": [
+          "4.3.4"
+        ],
+        "package": "immutable",
+        "severity": "high",
+        "title": "Immutable is vulnerable to Prototype Pollution",
+        "url": "https://github.com/advisories/GHSA-wf6x-7x77-mvgw",
+        "vulnerable_versions": ">=4.0.0-rc.1 <4.3.8"
+      },
+      {
+        "cwe": [
+          "CWE-1284",
+          "CWE-190",
+          "CWE-400",
+          "CWE-835"
+        ],
+        "id": 1124008,
+        "installed_versions": [
+          "4.3.4"
+        ],
+        "package": "immutable",
+        "severity": "high",
+        "title": "Immutable.js `List` 32-bit trie overflow \u2192 unrecoverable DoS",
+        "url": "https://github.com/advisories/GHSA-v56q-mh7h-f735",
+        "vulnerable_versions": "<4.3.9"
+      },
+      {
+        "cwe": [
+          "CWE-400",
+          "CWE-407"
+        ],
+        "id": 1164796,
+        "installed_versions": [
+          "4.3.4"
+        ],
+        "package": "immutable",
+        "severity": "high",
+        "title": "Immutable: Hash-collision algorithmic complexity denial of service in Immutable.Map/Set",
+        "url": "https://github.com/advisories/GHSA-xvcm-6775-5m9r",
+        "vulnerable_versions": ">=4.0.0-beta.1 <4.3.9"
+      },
+      {
+        "cwe": [
+          "CWE-1321"
+        ],
+        "id": 1096543,
+        "installed_versions": [
+          "0.5.1"
+        ],
+        "package": "json5",
+        "severity": "high",
+        "title": "Prototype Pollution in JSON5 via Parse Method",
+        "url": "https://github.com/advisories/GHSA-9c47-m6qq-7p4h",
+        "vulnerable_versions": "<1.0.2"
+      },
+      {
+        "cwe": [
+          "CWE-77"
+        ],
+        "id": 1120062,
+        "installed_versions": [
+          "2.6.1"
+        ],
+        "package": "launch-editor",
+        "severity": "high",
+        "title": "launch-editor vulnerable to command injection via the crafted request on Windows",
+        "url": "https://github.com/advisories/GHSA-c27g-q93r-2cwf",
+        "vulnerable_versions": "<=2.8.2"
+      },
+      {
+        "cwe": [
+          "CWE-522",
+          "CWE-73"
+        ],
+        "id": 1120787,
+        "installed_versions": [
+          "2.6.1"
+        ],
+        "package": "launch-editor",
+        "severity": "moderate",
+        "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+        "url": "https://github.com/advisories/GHSA-v6wh-96g9-6wx3",
+        "vulnerable_versions": "<=2.14.0"
+      },
+      {
+        "cwe": [
+          "CWE-1333"
+        ],
+        "id": 1121797,
+        "installed_versions": [
+          "5.0.0"
+        ],
+        "package": "linkify-it",
+        "severity": "high",
+        "title": "LinkifyIt#match scan loop has quadratic algorithmic complexity",
+        "url": "https://github.com/advisories/GHSA-22p9-wv53-3rq4",
+        "vulnerable_versions": "<=5.0.0"
+      },
+      {
+        "cwe": [
+          "CWE-407"
+        ],
+        "id": 1124012,
+        "installed_versions": [
+          "5.0.0"
+        ],
+        "package": "linkify-it",
+        "severity": "high",
+        "title": "linkify-it: Quadratic-complexity DoS via the `mailto:` validator scan-loop on attacker text",
+        "url": "https://github.com/advisories/GHSA-v245-v573-v5vm",
+        "vulnerable_versions": "<=5.0.1"
+      },
+      {
+        "cwe": [
+          "CWE-1321"
+        ],
+        "id": 1094088,
+        "installed_versions": [
+          "0.2.17",
+          "3.2.1"
+        ],
+        "package": "loader-utils",
+        "severity": "critical",
+        "title": "Prototype pollution in webpack loader-utils",
+        "url": "https://github.com/advisories/GHSA-76p3-8jx3-jpfq",
+        "vulnerable_versions": "<1.4.1"
+      },
+      {
+        "cwe": [
+          "CWE-1321"
+        ],
+        "id": 1120370,
+        "installed_versions": [
+          "4.17.21"
+        ],
+        "package": "lodash",
+        "severity": "moderate",
+        "title": "Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions",
+        "url": "https://github.com/advisories/GHSA-xxjr-mmjv-4gpg",
+        "vulnerable_versions": ">=4.0.0 <=4.17.22"
+      },
+      {
+        "cwe": [
+          "CWE-94"
+        ],
+        "id": 1115806,
+        "installed_versions": [
+          "4.17.21"
+        ],
+        "package": "lodash",
+        "severity": "high",
+        "title": "lodash vulnerable to Code Injection via `_.template` imports key names",
+        "url": "https://github.com/advisories/GHSA-r5fr-rjxr-66jc",
+        "vulnerable_versions": ">=4.0.0 <=4.17.23"
+      },
+      {
+        "cwe": [
+          "CWE-1321"
+        ],
+        "id": 1115810,
+        "installed_versions": [
+          "4.17.21"
+        ],
+        "package": "lodash",
+        "severity": "moderate",
+        "title": "lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`",
+        "url": "https://github.com/advisories/GHSA-f23m-r3pf-42rh",
+        "vulnerable_versions": "<=4.17.23"
+      },
+      {
+        "cwe": [
+          "CWE-1321"
+        ],
+        "id": 1120368,
+        "installed_versions": [
+          "4.17.21"
+        ],
+        "package": "lodash-es",
+        "severity": "moderate",
+        "title": "Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions",
+        "url": "https://github.com/advisories/GHSA-xxjr-mmjv-4gpg",
+        "vulnerable_versions": ">=4.0.0 <=4.17.22"
+      },
+      {
+        "cwe": [
+          "CWE-94"
+        ],
+        "id": 1115805,
+        "installed_versions": [
+          "4.17.21"
+        ],
+        "package": "lodash-es",
+        "severity": "high",
+        "title": "lodash vulnerable to Code Injection via `_.template` imports key names",
+        "url": "https://github.com/advisories/GHSA-r5fr-rjxr-66jc",
+        "vulnerable_versions": ">=4.0.0 <=4.17.23"
+      },
+      {
+        "cwe": [
+          "CWE-1321"
+        ],
+        "id": 1115809,
+        "installed_versions": [
+          "4.17.21"
+        ],
+        "package": "lodash-es",
+        "severity": "moderate",
+        "title": "lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`",
+        "url": "https://github.com/advisories/GHSA-f23m-r3pf-42rh",
+        "vulnerable_versions": "<=4.17.23"
+      },
+      {
+        "cwe": [
+          "CWE-1333"
+        ],
+        "id": 1113190,
+        "installed_versions": [
+          "14.0.0"
+        ],
+        "package": "markdown-it",
+        "severity": "moderate",
+        "title": "markdown-it is has a Regular Expression Denial of Service (ReDoS)",
+        "url": "https://github.com/advisories/GHSA-38c4-r59v-3vqw",
+        "vulnerable_versions": ">=13.0.0 <14.1.1"
+      },
+      {
+        "cwe": [
+          "CWE-400",
+          "CWE-407"
+        ],
+        "id": 1120820,
+        "installed_versions": [
+          "14.0.0"
+        ],
+        "package": "markdown-it",
+        "severity": "moderate",
+        "title": "markdown-it: Quadratic complexity DoS in smartquotes rule via replaceAt string operations",
+        "url": "https://github.com/advisories/GHSA-6v5v-wf23-fmfq",
+        "vulnerable_versions": "<=14.1.1"
+      },
+      {
+        "cwe": [
+          "CWE-1333"
+        ],
+        "id": 1098681,
+        "installed_versions": [
+          "4.0.5",
+          "4.0.8"
+        ],
+        "package": "micromatch",
+        "severity": "moderate",
+        "title": "Regular Expression Denial of Service (ReDoS) in micromatch",
+        "url": "https://github.com/advisories/GHSA-952p-6rrq-rcjv",
+        "vulnerable_versions": "<4.0.8"
+      },
+      {
+        "cwe": [
+          "CWE-1333"
+        ],
+        "id": 1113459,
+        "installed_versions": [
+          "3.1.2",
+          "9.0.3"
+        ],
+        "package": "minimatch",
+        "severity": "high",
+        "title": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+        "url": "https://github.com/advisories/GHSA-3ppc-4f35-3m26",
+        "vulnerable_versions": "<3.1.3"
+      },
+      {
+        "cwe": [
+          "CWE-1333"
+        ],
+        "id": 1113465,
+        "installed_versions": [
+          "3.1.2",
+          "9.0.3"
+        ],
+        "package": "minimatch",
+        "severity": "high",
+        "title": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+        "url": "https://github.com/advisories/GHSA-3ppc-4f35-3m26",
+        "vulnerable_versions": ">=9.0.0 <9.0.6"
+      },
+      {
+        "cwe": [
+          "CWE-407"
+        ],
+        "id": 1113538,
+        "installed_versions": [
+          "3.1.2",
+          "9.0.3"
+        ],
+        "package": "minimatch",
+        "severity": "high",
+        "title": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+        "url": "https://github.com/advisories/GHSA-7r86-cg39-jmmj",
+        "vulnerable_versions": "<3.1.3"
+      },
+      {
+        "cwe": [
+          "CWE-407"
+        ],
+        "id": 1113544,
+        "installed_versions": [
+          "3.1.2",
+          "9.0.3"
+        ],
+        "package": "minimatch",
+        "severity": "high",
+        "title": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+        "url": "https://github.com/advisories/GHSA-7r86-cg39-jmmj",
+        "vulnerable_versions": ">=9.0.0 <9.0.7"
+      },
+      {
+        "cwe": [
+          "CWE-1333"
+        ],
+        "id": 1113546,
+        "installed_versions": [
+          "3.1.2",
+          "9.0.3"
+        ],
+        "package": "minimatch",
+        "severity": "high",
+        "title": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+        "url": "https://github.com/advisories/GHSA-23c5-xmqv-rm74",
+        "vulnerable_versions": "<3.1.4"
+      },
+      {
+        "cwe": [
+          "CWE-1333"
+        ],
+        "id": 1113552,
+        "installed_versions": [
+          "3.1.2",
+          "9.0.3"
+        ],
+        "package": "minimatch",
+        "severity": "high",
+        "title": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+        "url": "https://github.com/advisories/GHSA-23c5-xmqv-rm74",
+        "vulnerable_versions": ">=9.0.0 <9.0.7"
+      },
+      {
+        "cwe": [
+          "CWE-835"
+        ],
+        "id": 1109563,
+        "installed_versions": [
+          "3.3.7",
+          "3.3.8"
+        ],
+        "package": "nanoid",
+        "severity": "moderate",
+        "title": "Predictable results in nanoid generation when given non-integer values",
+        "url": "https://github.com/advisories/GHSA-mwcw-c2x4-8c55",
+        "vulnerable_versions": "<3.3.8"
+      },
+      {
+        "cwe": [
+          "CWE-835"
+        ],
+        "id": 1138811,
+        "installed_versions": [
+          "3.3.7",
+          "3.3.8"
+        ],
+        "package": "nanoid",
+        "severity": "high",
+        "title": "nanoid: non-secure generators can loop indefinitely with negative size",
+        "url": "https://github.com/advisories/GHSA-28wg-ghj8-5hjv",
+        "vulnerable_versions": "<3.3.16"
+      },
+      {
+        "cwe": [
+          "CWE-835"
+        ],
+        "id": 1139427,
+        "installed_versions": [
+          "3.3.7",
+          "3.3.8"
+        ],
+        "package": "nanoid",
+        "severity": "high",
+        "title": "nanoid: custom generators can loop indefinitely when size is zero",
+        "url": "https://github.com/advisories/GHSA-2v37-7h3g-55p8",
+        "vulnerable_versions": "<3.3.18"
+      },
+      {
+        "cwe": [
+          "CWE-190"
+        ],
+        "id": 1153189,
+        "installed_versions": [
+          "3.3.7",
+          "3.3.8"
+        ],
+        "package": "nanoid",
+        "severity": "high",
+        "title": "nanoid: Integer Overflow or Wraparound",
+        "url": "https://github.com/advisories/GHSA-xwg4-73v4-xw9w",
+        "vulnerable_versions": "<3.3.12"
+      },
+      {
+        "cwe": [
+          "CWE-1321"
+        ],
+        "id": 1115549,
+        "installed_versions": [
+          "2.3.1"
+        ],
+        "package": "picomatch",
+        "severity": "moderate",
+        "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+        "url": "https://github.com/advisories/GHSA-3v7f-55p6-f55p",
+        "vulnerable_versions": "<2.3.2"
+      },
+      {
+        "cwe": [
+          "CWE-1333"
+        ],
+        "id": 1115552,
+        "installed_versions": [
+          "2.3.1"
+        ],
+        "package": "picomatch",
+        "severity": "high",
+        "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+        "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj",
+        "vulnerable_versions": "<2.3.2"
+      },
+      {
+        "cwe": [
+          "CWE-144",
+          "CWE-74"
+        ],
+        "id": 1109574,
+        "installed_versions": [
+          "5.2.18",
+          "6.0.23",
+          "7.0.39",
+          "8.4.31",
+          "8.4.35"
+        ],
+        "package": "postcss",
+        "severity": "moderate",
+        "title": "PostCSS line return parsing error",
+        "url": "https://github.com/advisories/GHSA-7fh5-64p2-3v2j",
+        "vulnerable_versions": "<8.4.31"
+      },
+      {
+        "cwe": [
+          "CWE-400"
+        ],
+        "id": 1093539,
+        "installed_versions": [
+          "5.2.18",
+          "6.0.23",
+          "7.0.39",
+          "8.4.31",
+          "8.4.35"
+        ],
+        "package": "postcss",
+        "severity": "moderate",
+        "title": "Regular Expression Denial of Service in postcss",
+        "url": "https://github.com/advisories/GHSA-566m-qj78-rww5",
+        "vulnerable_versions": "<7.0.36"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-22"
+        ],
+        "id": 1130709,
+        "installed_versions": [
+          "5.2.18",
+          "6.0.23",
+          "7.0.39",
+          "8.4.31",
+          "8.4.35"
+        ],
+        "package": "postcss",
+        "severity": "moderate",
+        "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q \u2014 attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+        "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+        "vulnerable_versions": "<=8.5.22"
+      },
+      {
+        "cwe": [
+          "CWE-79"
+        ],
+        "id": 1117015,
+        "installed_versions": [
+          "5.2.18",
+          "6.0.23",
+          "7.0.39",
+          "8.4.31",
+          "8.4.35"
+        ],
+        "package": "postcss",
+        "severity": "moderate",
+        "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+        "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+        "vulnerable_versions": "<8.5.10"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-22"
+        ],
+        "id": 1124252,
+        "installed_versions": [
+          "5.2.18",
+          "6.0.23",
+          "7.0.39",
+          "8.4.31",
+          "8.4.35"
+        ],
+        "package": "postcss",
+        "severity": "high",
+        "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+        "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+        "vulnerable_versions": "<=8.5.11"
+      },
+      {
+        "cwe": [
+          "CWE-22"
+        ],
+        "id": 1139510,
+        "installed_versions": [
+          "5.2.18",
+          "6.0.23",
+          "7.0.39",
+          "8.4.31",
+          "8.4.35"
+        ],
+        "package": "postcss",
+        "severity": "high",
+        "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+        "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+        "vulnerable_versions": "<=8.5.17"
+      },
+      {
+        "cwe": [
+          "CWE-74",
+          "CWE-79"
+        ],
+        "id": 1116451,
+        "installed_versions": [
+          "1.3.7",
+          "2.0.3"
+        ],
+        "package": "quill",
+        "severity": "low",
+        "title": "Quill is vulnerable to XSS via HTML export feature",
+        "url": "https://github.com/advisories/GHSA-v3m3-f69x-jf25",
+        "vulnerable_versions": "=2.0.3"
+      },
+      {
+        "cwe": [
+          "CWE-79"
+        ],
+        "id": 1098574,
+        "installed_versions": [
+          "1.3.7",
+          "2.0.3"
+        ],
+        "package": "quill",
+        "severity": "moderate",
+        "title": "Cross-site Scripting in quill",
+        "url": "https://github.com/advisories/GHSA-4943-9vgg-gr5r",
+        "vulnerable_versions": "<=1.3.7"
+      },
+      {
+        "cwe": [
+          "CWE-79"
+        ],
+        "id": 1099757,
+        "installed_versions": [
+          "2.77.3"
+        ],
+        "package": "rollup",
+        "severity": "high",
+        "title": "DOM Clobbering Gadget found in rollup bundled scripts that leads to XSS",
+        "url": "https://github.com/advisories/GHSA-gcx4-mw62-g8wm",
+        "vulnerable_versions": "<2.79.2"
+      },
+      {
+        "cwe": [
+          "CWE-22"
+        ],
+        "id": 1113517,
+        "installed_versions": [
+          "2.77.3"
+        ],
+        "package": "rollup",
+        "severity": "high",
+        "title": "Rollup 4 has Arbitrary File Write via Path Traversal",
+        "url": "https://github.com/advisories/GHSA-mw96-cpmx-2vgc",
+        "vulnerable_versions": "<2.80.0"
+      },
+      {
+        "cwe": [
+          "CWE-77",
+          "CWE-78"
+        ],
+        "id": 1120422,
+        "installed_versions": [
+          "1.8.1"
+        ],
+        "package": "shell-quote",
+        "severity": "critical",
+        "title": "shell-quote quote() does not escape newlines in object .op values",
+        "url": "https://github.com/advisories/GHSA-w7jw-789q-3m8p",
+        "vulnerable_versions": ">=1.1.0 <=1.8.3"
+      },
+      {
+        "cwe": [
+          "CWE-407"
+        ],
+        "id": 1123944,
+        "installed_versions": [
+          "1.8.1"
+        ],
+        "package": "shell-quote",
+        "severity": "high",
+        "title": "shell-quote: Quadratic-complexity Denial of Service in `parse()` (CWE-407)",
+        "url": "https://github.com/advisories/GHSA-395f-4hp3-45gv",
+        "vulnerable_versions": "<=1.8.4"
+      },
+      {
+        "cwe": [
+          "CWE-674",
+          "CWE-777"
+        ],
+        "id": 1117038,
+        "installed_versions": [
+          "2.1.0"
+        ],
+        "package": "showdown",
+        "severity": "moderate",
+        "title": "Showdown vulnerable to Regular Expression Denial of Service (ReDoS) in link/anchor parsing",
+        "url": "https://github.com/advisories/GHSA-rmmh-p597-ppvv",
+        "vulnerable_versions": "<=2.1.0"
+      },
+      {
+        "cwe": [
+          "CWE-79"
+        ],
+        "id": 1138814,
+        "installed_versions": [
+          "2.1.0"
+        ],
+        "package": "showdown",
+        "severity": "moderate",
+        "title": "showdown metadata title handling allows cross-site scripting",
+        "url": "https://github.com/advisories/GHSA-cr32-g25g-vxjj",
+        "vulnerable_versions": "<=2.1.0"
+      },
+      {
+        "cwe": [
+          "CWE-79"
+        ],
+        "id": 1138815,
+        "installed_versions": [
+          "2.1.0"
+        ],
+        "package": "showdown",
+        "severity": "moderate",
+        "title": "showdown allows stored cross-site scripting through table header ID injection",
+        "url": "https://github.com/advisories/GHSA-22g5-r2x5-97cx",
+        "vulnerable_versions": "<=2.1.0"
+      },
+      {
+        "cwe": [
+          "CWE-20",
+          "CWE-754"
+        ],
+        "id": 1130713,
+        "installed_versions": [
+          "4.2.4"
+        ],
+        "package": "socket.io-parser",
+        "severity": "high",
+        "title": "Socket.IO: Zero-attachment Memory Exhaustion",
+        "url": "https://github.com/advisories/GHSA-2m8v-j782-fhvr",
+        "vulnerable_versions": ">=4.0.0 <4.2.7"
+      },
+      {
+        "cwe": [
+          "CWE-754"
+        ],
+        "id": 1115154,
+        "installed_versions": [
+          "4.2.4"
+        ],
+        "package": "socket.io-parser",
+        "severity": "high",
+        "title": "socket.io allows an unbounded number of binary attachments",
+        "url": "https://github.com/advisories/GHSA-677m-j7p3-52f9",
+        "vulnerable_versions": ">=4.0.0 <4.2.6"
+      },
+      {
+        "cwe": [
+          "CWE-776"
+        ],
+        "id": 1114152,
+        "installed_versions": [
+          "2.8.0"
+        ],
+        "package": "svgo",
+        "severity": "high",
+        "title": "SVGO DoS through entity expansion in DOCTYPE (Billion Laughs)",
+        "url": "https://github.com/advisories/GHSA-xpqw-6gx7-v673",
+        "vulnerable_versions": ">=2.1.0 <2.8.1"
+      },
+      {
+        "cwe": [
+          "CWE-184",
+          "CWE-79"
+        ],
+        "id": 1139520,
+        "installed_versions": [
+          "2.8.0"
+        ],
+        "package": "svgo",
+        "severity": "high",
+        "title": "SVGO removeScripts plugin leaves some executable scripts intact",
+        "url": "https://github.com/advisories/GHSA-2p49-hgcm-8545",
+        "vulnerable_versions": ">=1.0.0 <2.8.3"
+      },
+      {
+        "cwe": [
+          "CWE-184",
+          "CWE-79"
+        ],
+        "id": 1193737,
+        "installed_versions": [
+          "2.8.0"
+        ],
+        "package": "svgo",
+        "severity": "high",
+        "title": "SVGO: removeScripts allows executable links through namespace and control-character bypasses",
+        "url": "https://github.com/advisories/GHSA-w27v-7q3p-w38r",
+        "vulnerable_versions": ">=1.0.0 <2.8.4"
+      },
+      {
+        "cwe": [
+          "CWE-79"
+        ],
+        "id": 1193740,
+        "installed_versions": [
+          "2.8.0"
+        ],
+        "package": "svgo",
+        "severity": "moderate",
+        "title": "SVGO: removeScripts incompletely sanitizes executable HTML in SVG foreignObject elements",
+        "url": "https://github.com/advisories/GHSA-4vpr-x523-8j87",
+        "vulnerable_versions": ">=1.0.0 <2.8.4"
+      },
+      {
+        "cwe": [
+          "CWE-22"
+        ],
+        "id": 1120654,
+        "installed_versions": [
+          "0.2.4"
+        ],
+        "package": "tmp",
+        "severity": "high",
+        "title": "tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape",
+        "url": "https://github.com/advisories/GHSA-ph9p-34f9-6g65",
+        "vulnerable_versions": "<0.2.6"
+      },
+      {
+        "cwe": [
+          "CWE-79"
+        ],
+        "id": 1099690,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "Vite DOM Clobbering gadget found in vite bundled scripts that leads to XSS",
+        "url": "https://github.com/advisories/GHSA-64vr-g452-qvp3",
+        "vulnerable_versions": "<3.2.11"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-284"
+        ],
+        "id": 1099695,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "Vite's `server.fs.deny` is bypassed when using `?import&raw`",
+        "url": "https://github.com/advisories/GHSA-9cwx-2883-4wfx",
+        "vulnerable_versions": "<=3.2.10"
+      },
+      {
+        "cwe": [
+          "CWE-1385",
+          "CWE-346",
+          "CWE-350"
+        ],
+        "id": 1102436,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "Websites were able to send any requests to the development server and read the response in vite",
+        "url": "https://github.com/advisories/GHSA-vg6x-rcgg-rjx6",
+        "vulnerable_versions": "<=4.5.5"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-284"
+        ],
+        "id": 1103516,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "Vite bypasses server.fs.deny when using ?raw??",
+        "url": "https://github.com/advisories/GHSA-x574-m823-4x7w",
+        "vulnerable_versions": "<4.5.10"
+      },
+      {
+        "cwe": [
+          "CWE-200"
+        ],
+        "id": 1103883,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "Vite has an `server.fs.deny` bypass with an invalid `request-target`",
+        "url": "https://github.com/advisories/GHSA-356w-63v5-8wf4",
+        "vulnerable_versions": "<4.5.13"
+      },
+      {
+        "cwe": [
+          "CWE-22"
+        ],
+        "id": 1104172,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "Vite's server.fs.deny bypassed with /. for files under project root",
+        "url": "https://github.com/advisories/GHSA-859w-5945-r5v3",
+        "vulnerable_versions": "<=4.5.13"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-284"
+        ],
+        "id": 1104201,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "Vite allows server.fs.deny to be bypassed with .svg or relative paths",
+        "url": "https://github.com/advisories/GHSA-xcj6-pq6g-qj4x",
+        "vulnerable_versions": "<4.5.12"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-22",
+          "CWE-284"
+        ],
+        "id": 1107323,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "low",
+        "title": "Vite middleware may serve files starting with the same name with the public directory",
+        "url": "https://github.com/advisories/GHSA-g4jq-h2w9-997c",
+        "vulnerable_versions": "<=5.4.19"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-23",
+          "CWE-284"
+        ],
+        "id": 1107327,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "low",
+        "title": "Vite's `server.fs` settings were not applied to HTML files",
+        "url": "https://github.com/advisories/GHSA-jqfw-vq24-v9c3",
+        "vulnerable_versions": "<=5.4.19"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-284"
+        ],
+        "id": 1112510,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "Vite has a `server.fs.deny` bypassed for `inline` and `raw` with `?import` query",
+        "url": "https://github.com/advisories/GHSA-4r4m-qw57-chr8",
+        "vulnerable_versions": "<4.5.11"
+      },
+      {
+        "cwe": [
+          "CWE-77"
+        ],
+        "id": 1120061,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "high",
+        "title": "launch-editor vulnerable to command injection via the crafted request on Windows",
+        "url": "https://github.com/advisories/GHSA-c27g-q93r-2cwf",
+        "vulnerable_versions": "<=5.4.8"
+      },
+      {
+        "cwe": [
+          "CWE-522",
+          "CWE-73"
+        ],
+        "id": 1120784,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+        "url": "https://github.com/advisories/GHSA-v6wh-96g9-6wx3",
+        "vulnerable_versions": "<=6.4.2"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-22"
+        ],
+        "id": 1116229,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+        "url": "https://github.com/advisories/GHSA-4w7w-66w2-5vf9",
+        "vulnerable_versions": "<=6.4.1"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-284"
+        ],
+        "id": 1096897,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "moderate",
+        "title": "Vite's `server.fs.deny` did not deny requests for patterns with directories.",
+        "url": "https://github.com/advisories/GHSA-8jhw-289h-jh2g",
+        "vulnerable_versions": ">=2.7.0 <=2.9.17"
+      },
+      {
+        "cwe": [
+          "CWE-200",
+          "CWE-22"
+        ],
+        "id": 1123525,
+        "installed_versions": [
+          "2.9.17"
+        ],
+        "package": "vite",
+        "severity": "high",
+        "title": "vite: `server.fs.deny` bypass on Windows alternate paths",
+        "url": "https://github.com/advisories/GHSA-fx2h-pf6j-xcff",
+        "vulnerable_versions": "<=6.4.2"
+      },
+      {
+        "cwe": [
+          "CWE-476"
+        ],
+        "id": 1118728,
+        "installed_versions": [
+          "8.11.0"
+        ],
+        "package": "ws",
+        "severity": "high",
+        "title": "ws affected by a DoS when handling a request with many HTTP headers",
+        "url": "https://github.com/advisories/GHSA-3h5v-q93c-6h6q",
+        "vulnerable_versions": ">=8.0.0 <8.17.1"
+      },
+      {
+        "cwe": [
+          "CWE-908"
+        ],
+        "id": 1119108,
+        "installed_versions": [
+          "8.11.0"
+        ],
+        "package": "ws",
+        "severity": "moderate",
+        "title": "ws: Uninitialized memory disclosure",
+        "url": "https://github.com/advisories/GHSA-58qx-3vcg-4xpx",
+        "vulnerable_versions": ">=8.0.0 <8.20.1"
+      },
+      {
+        "cwe": [
+          "CWE-1050",
+          "CWE-400",
+          "CWE-770"
+        ],
+        "id": 1123259,
+        "installed_versions": [
+          "8.11.0"
+        ],
+        "package": "ws",
+        "severity": "high",
+        "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks",
+        "url": "https://github.com/advisories/GHSA-96hv-2xvq-fx4p",
+        "vulnerable_versions": ">=8.0.0 <8.21.0"
+      },
+      {
+        "cwe": [
+          "CWE-674"
+        ],
+        "id": 1115555,
+        "installed_versions": [
+          "1.10.2",
+          "2.3.4"
+        ],
+        "package": "yaml",
+        "severity": "moderate",
+        "title": "yaml is vulnerable to Stack Overflow via deeply nested YAML collections",
+        "url": "https://github.com/advisories/GHSA-48c2-rrv3-qjmp",
+        "vulnerable_versions": ">=1.0.0 <1.10.3"
+      },
+      {
+        "cwe": [
+          "CWE-674"
+        ],
+        "id": 1115556,
+        "installed_versions": [
+          "1.10.2",
+          "2.3.4"
+        ],
+        "package": "yaml",
+        "severity": "moderate",
+        "title": "yaml is vulnerable to Stack Overflow via deeply nested YAML collections",
+        "url": "https://github.com/advisories/GHSA-48c2-rrv3-qjmp",
+        "vulnerable_versions": ">=2.0.0 <2.8.3"
+      }
+    ],
+    "node_package_names": 572,
+    "python_osv_findings": [
+      {
+        "aliases": [],
+        "id": "GHSA-9g3x-6x24-vf9f",
+        "modified": "2026-07-13T16:43:38.165698Z",
+        "package": "pdfkit",
+        "severity": null,
+        "summary": null,
+        "version": "1.0.0"
+      },
+      {
+        "aliases": [],
+        "id": "PYSEC-2026-2860",
+        "modified": "2026-07-13T16:32:54.747129Z",
+        "package": "pdfkit",
+        "severity": null,
+        "summary": null,
+        "version": "1.0.0"
+      },
+      {
+        "aliases": [],
+        "id": "GHSA-23w6-3w8w-8484",
+        "modified": "2026-09-10T12:25:45.197931Z",
+        "package": "pypdf",
+        "severity": null,
+        "summary": null,
+        "version": "6.15.0"
+      },
+      {
+        "aliases": [],
+        "id": "GHSA-763m-79hh-57f2",
+        "modified": "2026-09-10T12:26:04.098858Z",
+        "package": "pypdf",
+        "severity": null,
+        "summary": null,
+        "version": "6.15.0"
+      },
+      {
+        "aliases": [],
+        "id": "GHSA-jp53-mhqp-8xcg",
+        "modified": "2026-09-10T12:25:36.667036Z",
+        "package": "pypdf",
+        "severity": null,
+        "summary": null,
+        "version": "6.15.0"
+      },
+      {
+        "aliases": [],
+        "id": "PYSEC-2026-3910",
+        "modified": "2026-09-10T12:15:11.754454Z",
+        "package": "pypdf",
+        "severity": null,
+        "summary": null,
+        "version": "6.15.0"
+      },
+      {
+        "aliases": [],
+        "id": "PYSEC-2026-3911",
+        "modified": "2026-09-10T12:15:12.053292Z",
+        "package": "pypdf",
+        "severity": null,
+        "summary": null,
+        "version": "6.15.0"
+      },
+      {
+        "aliases": [],
+        "id": "PYSEC-2026-3913",
+        "modified": "2026-09-10T12:15:12.765651Z",
+        "package": "pypdf",
+        "severity": null,
+        "summary": null,
+        "version": "6.15.0"
+      },
+      {
+        "aliases": [],
+        "id": "GHSA-h35f-9h28-mq5c",
+        "modified": "2026-09-10T03:50:52.323347Z",
+        "package": "setuptools",
+        "severity": null,
+        "summary": null,
+        "version": "80.9.0"
+      },
+      {
+        "aliases": [],
+        "id": "PYSEC-2026-3447",
+        "modified": "2026-07-14T10:56:37.948360Z",
+        "package": "setuptools",
+        "severity": null,
+        "summary": null,
+        "version": "80.9.0"
+      },
+      {
+        "aliases": [],
+        "id": "GHSA-jf6q-chmf-3h3v",
+        "modified": "2026-09-10T12:26:05.802944Z",
+        "package": "weasyprint",
+        "severity": null,
+        "summary": null,
+        "version": "68.0"
+      },
+      {
+        "aliases": [],
+        "id": "GHSA-jhhc-3hcp-qhm5",
+        "modified": "2026-07-13T16:42:26.449768Z",
+        "package": "weasyprint",
+        "severity": null,
+        "summary": null,
+        "version": "68.0"
+      },
+      {
+        "aliases": [],
+        "id": "PYSEC-2026-3412",
+        "modified": "2026-07-13T16:33:27.702295Z",
+        "package": "weasyprint",
+        "severity": null,
+        "summary": null,
+        "version": "68.0"
+      },
+      {
+        "aliases": [],
+        "id": "PYSEC-2026-3940",
+        "modified": "2026-09-10T12:15:15.627247Z",
+        "package": "weasyprint",
+        "severity": null,
+        "summary": null,
+        "version": "68.0"
+      }
+    ],
+    "python_package_names": 161,
+    "scope": "Resolved Bench Python and supplied installed Node dependency trees plus pinned container references; advisory matches only, not exploit/reachability, full SBOM, OS packages, container CVE scan, or production approval",
+    "status": "fail"
+  },
+  "status": "fail",
+  "unsafe_baseline": {
+    "executed": false,
+    "reason": "Separate hardened acceptance profile; historical failed baseline is preserved in run 34781717183"
+  },
+  "upstream_security_suites": [
+    {
+      "module": "frappe.core.doctype.user_permission.test_user_permission",
+      "site": "upstream-tests.localhost",
+      "status": "pass",
+      "tests_run": 10
+    },
+    {
+      "module": "frappe.core.doctype.docshare.test_docshare",
+      "site": "upstream-tests.localhost",
+      "status": "pass",
+      "tests_run": 15
+    }
+  ],
+  "upstream_test_dependency_freeze_sha256": "5ebefd4da4b82b7a355b76275621f0f6a0862cd39ab833cccc692332a966eea2",
+  "yarn_version": "1.22.22"
+}

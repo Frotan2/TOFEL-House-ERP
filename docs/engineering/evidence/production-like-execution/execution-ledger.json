@@ -1115,7 +1115,7 @@
     "evidence_retrieval": "gh api repos/Frotan2/TOFEL-House-ERP/check-runs/<check_id> --jq .output.text  (gzip+base64 transport decoded when >58000 bytes)"
   },
   "integrity": {
-    "generated_at_utc": "2026-09-16T16:54:38.131004+00:00",
+    "generated_at_utc": "2026-09-16T18:36:04.006220+00:00",
     "archived_evidence_sha256": {
       "hosted-frontend-35122242647.json": "17d40562f62cddc6168bef34838f128d6dbaa2257a0ab0048739c2c28c6abfb1",
       "hosted-placement-native-checks-35122242728.json": "094111f63a8f4b44e483bfd534a71b404c14b0e87c093477e0a633390ff42251",
@@ -1133,7 +1133,9 @@
       "local-bounded-release-readiness-evidence.json": "1b88d8341eef8668c84362e048470fd77c61198b59840b397d193d16429342cc",
       "local-d8-validate.json": "e39c9fad0ce393541af0a21ab193e8768db4f31d597a74d98e00cc283022d32e",
       "local-runner-capability-probe.json": "d42a00f281fc5a95c5aceef9d4567bc2b8191ad0941c6dab7a14061e64bbadb4",
-      "local-unittest-313.txt": "6d95cec0565e3ae2ea04e63dec3ecfad6c4076bb61c772c87a081c465d615562"
+      "local-unittest-313.txt": "6d95cec0565e3ae2ea04e63dec3ecfad6c4076bb61c772c87a081c465d615562",
+      "hosted-runtime-35133062884.json": "fa799c1b259b42750bef2bd7b660f914690eacfe6b389fbcd290a7ea8f5e2780",
+      "hosted-remaining-gates-35133062884.json": "981ac18610ae0fb9c744645123922cd7ea78882969f8316ee3416d9ad99a2dda"
     },
     "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED.",
     "regenerated_at_utc": "2026-09-16T17:36:45.589585+00:00"
@@ -1307,8 +1309,8 @@
     }
   ],
   "outstanding_actions": [
-    "None. The credential outage is fully closed out: the c891949 runtime conclusion was retrieved and archived, all local commits are pushed, and the PR #2 comment was posted verbatim.",
-    "Standing release blockers are unchanged and are engineering/owner work, not tooling: MariaDB and Redis restart persistence and durability probes do not exist in the harness; restore has never reached a genuinely independent system and no destructive trigger has been run; versioned encrypted backup with external key custody and rotation is bounded-only, and both foundation runtime runs report site_encryption_key_restored=false; deployed monitoring, alert delivery and retention are untested; no TLS or Tailscale boundary has been exercised; rollback has never been rehearsed; SEC-DEPS-01 needs a coherent maintained upstream stack migration and has now failed at two commits on this branch; and the owner has selected no numeric capacity/availability objective."
+    "None outstanding for the site_encryption_key_restored=false defect: it is CLOSED with genuine hosted evidence at run 35133062884 / commit 58bd4d1, on both the first restore cycle (restore.localhost) and the hardened recovery cycle (recovery.localhost).",
+    "Standing release blockers, updated. CLOSED: site_encryption_key_restored=false. COMMITTED BUT NOT YET EXECUTED, so still blocking: a real MariaDB and Redis restart, SIGKILL crash-recovery and named-volume persistence probe now exists (tools/foundation/runtime_durability.py plus .github/workflows/foundation-durability.yml) but has not yet produced a hosted PASS, and the durability gate remains BLOCKED until it does. UNCHANGED: restore has never reached a genuinely independent system and no destructive trigger has been run; versioned encrypted backup with external key custody and rotation is bounded-only; deployed monitoring, alert delivery and retention are untested; no TLS or Tailscale boundary has been exercised; rollback has never been rehearsed; SEC-DEPS-01 needs a coherent maintained upstream stack migration and has now failed at three commits on this branch (d7df9ca, c891949, 58bd4d1); and the owner has selected no numeric capacity/availability objective."
   ],
   "pr_2_update": {
     "action": "comment posted (the only update available from this session)",
@@ -1327,5 +1329,100 @@
       "base_ref": "main"
     },
     "constraint": "PR #2's head branch is arena/01a0a9f7-tofel-house-erp while this session is fixed to arena/01a0aafe-tofel-house-erp, so no commit could be pushed to PR #2's head branch and the PR's head SHA is unchanged at 60c777e. A comment is the only form of update available. The PR was NOT merged and production was NOT enabled."
+  },
+  "encryption_key_defect_closure": {
+    "defect": "site_encryption_key_restored=false",
+    "status": "CLOSED",
+    "classification": "EXECUTED-HOSTED",
+    "closed_at_utc": "2026-09-16T18:36:04.006248+00:00",
+    "root_cause": "Frappe writes encryption_key into sites/<site>/site_config.json lazily, on the first call to frappe.utils.password.get_encryption_key(); bench new-site does not create it. foundation.localhost installs only erpnext/education/payments/hrms, so nothing triggered key generation before the first backup. The harness then copied the key with `if \"encryption_key\" in original_config:` - a silent no-op - and reported the omission as a passive observation instead of failing the run. placement-test.localhost installs toefl_house, whose after_install() calls get_encryption_key(), which is why that path reported true and masked the defect.",
+    "fix_commits": [
+      {
+        "commit": "bd5ca02625adf1e21d544798247788ce093b974e",
+        "summary": "Initialize the key through the native mechanism before the first backup; fail closed on restore; verify by fingerprint plus real decryption."
+      },
+      {
+        "commit": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
+        "summary": "Observe encrypted Password fields across Frappe storage layouts (__Auth.password and the model column) instead of assuming the model column."
+      }
+    ],
+    "interim_failure_that_produced_the_second_fix": {
+      "run_id": "35131838300",
+      "commit": "bd5ca02625adf1e21d544798247788ce093b974e",
+      "check_run": "104916683776",
+      "failure": "prepare-native-encrypted-fixture-before-backup: exit 1 - AssertionError: Password field was not stored as ciphertext",
+      "already_proven_by_that_run": {
+        "site_encryption_key_initialized": true,
+        "site_encryption_key_sha256": "0aaefb5a94b3228aca1a2742d358a853225bd18990eb420059ee64e12c69965d",
+        "note": "The root-cause fix was confirmed working before the observation defect surfaced."
+      },
+      "diagnosis": "The probe read only the raw model column and treated an empty result as proof that encryption had not happened. The successful run confirms the real layout: storage_location is __Auth.password and the model column is empty. An empty model column is not evidence of plaintext storage."
+    },
+    "proof_run": {
+      "run_id": "35133062884",
+      "workflow": "Foundation runtime validation",
+      "profile": "hardened",
+      "commit": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
+      "branch": "arena/01a0aafe-tofel-house-erp",
+      "overall_conclusion": "failure",
+      "overall_conclusion_reason": "SEC-DEPS-01 only: hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit both exit 1. This is the standing UPSTREAM-BLOCKED / REJECT condition and is unchanged. No recovery or encryption check failed.",
+      "check_runs": {
+        "runtime_evidence": "104925371177",
+        "remaining_gate_evidence": "104925376227"
+      },
+      "archived_evidence": {
+        "hosted-runtime-35133062884.json": "fa799c1b259b42750bef2bd7b660f914690eacfe6b389fbcd290a7ea8f5e2780",
+        "hosted-remaining-gates-35133062884.json": "981ac18610ae0fb9c744645123922cd7ea78882969f8316ee3416d9ad99a2dda"
+      },
+      "executed_checks": 121,
+      "failed_checks": [
+        "hosted-full-stack-dependency-audit",
+        "hosted-frontend-advisory-audit"
+      ],
+      "observed": {
+        "site_encryption_key_initialized": true,
+        "site_encryption_key_sha256": "0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585",
+        "key_length": 44,
+        "encrypted_field": "User.Administrator.api_secret",
+        "storage_location": "__Auth.password",
+        "storage_locations_found": [
+          "__Auth.password"
+        ],
+        "source_decrypts_before_backup": true,
+        "restore_separate_database": true,
+        "source_db_credentials_copied": false,
+        "site_encryption_key_restored": true,
+        "site_encryption_key_restored_hardened": true
+      },
+      "restore_cycle_first": {
+        "site": "restore.localhost",
+        "ciphertext_sha256_before_backup": "9f771296df54e4c6cd16dead00b62b5993d8d450569ffd0de38b0b21f11caafd",
+        "ciphertext_sha256_after_restore": "9f771296df54e4c6cd16dead00b62b5993d8d450569ffd0de38b0b21f11caafd",
+        "fingerprint_matches_source": true,
+        "encrypted_content_decrypts_after_restore": true,
+        "ciphertext_matches_source": true,
+        "restored_site_is_not_source": true,
+        "verify_step": "verify-encryption-key-survived-restore (0.661s, pass)"
+      },
+      "restore_cycle_hardened": {
+        "site": "recovery.localhost",
+        "ciphertext_sha256_before_backup": "029f68b1876ddd0532d1b4e1798faa6e06e458f4b11714f08fe8f2ed8a5ae5c3",
+        "ciphertext_sha256_after_restore": "029f68b1876ddd0532d1b4e1798faa6e06e458f4b11714f08fe8f2ed8a5ae5c3",
+        "fingerprint_matches_source": true,
+        "encrypted_content_decrypts_after_restore": true,
+        "ciphertext_matches_source": true,
+        "restored_site_is_not_source": true,
+        "verify_step": "verify-encryption-key-survived-hardened-recovery (0.696s, pass)",
+        "note": "The hardened ciphertext digest differs from the first cycle because prepare-native-encrypted-recovery-fixture re-encrypts the same secret and Fernet output is randomized per encryption. The harness re-records the digest before that backup, so the comparison is against the bytes that actually went into it. This confirms the re-record step was necessary."
+      },
+      "hardened_backup_sha256": {
+        "database": "0d799d4097a5670fd3a3fc509b88a4d8cfd0aaee0179669c61e55c4d83cb5360",
+        "private_files": "85bea42b7307a6dc3943bd6380f5e5907388f47bd180a8e6a305329dc553425d",
+        "public_files": "9c543b407e134d7d27d9720d99ff0fe2298ce7587e1aa463bd826675c36e3c53"
+      }
+    },
+    "secret_hygiene": "Only SHA-256 fingerprints and byte lengths are reported. The key itself and the synthetic secret never appear in any artifact: the fingerprint file is 0600 inside the unpublished runner lab, the harness redaction list already covers encryption_key values, and the probe refuses to run outside a disposable hosted runner.",
+    "regression_coverage": "tests/foundation/test_encryption_key_recovery.py, 31 tests. The pure helpers fingerprint_key, restore_key_into_config, stored_representations and assert_no_plaintext_at_rest are imported by the hosted harness rather than re-implemented, so the tests exercise the same code that runs on the runner.",
+    "does_not_upgrade": "This closes one named recovery defect on the same disposable hosted runner. It is not production qualification. Restore still runs on the same host as the source, no destructive trigger has been exercised, external key custody and rotation remain bounded-only, and the recovery and backup-restore gates remain BLOCKED."
   }
 }

@@ -243,6 +243,51 @@
         "limits": "Corroboration only. It does not change any gate state, does not authorize production, and does not cure the observed site_encryption_key_restored=false defect. Two independent executions agreeing strengthens the REJECT conclusion. SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT."
       },
       "authoritative_evidence": "The probe classifications in evidence/production-like-execution/execution-ledger.json remain bound to commit d7df9ca and runs 35122242676 / 35122242728 / 35122242581 / 35122242647 / 35122242888, whose complete reports are archived. session_branch.ACTIVE_RUNTIME_RUN stays pinned to 35122242581 for that reason."
+    },
+    "encryption_key_defect_closure_run": {
+      "date": "2026-09-16",
+      "commit": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
+      "branch": "arena/01a0aafe-tofel-house-erp",
+      "why": "Closes the one named recovery defect carried by every prior runtime run on this branch: site_encryption_key_restored=false. Fix commits bd5ca02 (native key initialization before the first backup plus fail-closed restore) and 58bd4d1 (Frappe Password-field storage layout). Prior runs are preserved unchanged as historical provenance; this record does not relabel or supersede them.",
+      "foundation_runtime": {
+        "run": "35133062884",
+        "workflow": "Foundation runtime validation",
+        "profile": "hardened",
+        "head_sha": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
+        "status": "fail_reject",
+        "conclusion_reason": "SEC-DEPS-01 only. 121 checks executed; the only failures are hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit. No recovery, restore or encryption check failed.",
+        "runtime_check": "104925371177",
+        "runtime_report_sha256": "fa799c1b259b42750bef2bd7b660f914690eacfe6b389fbcd290a7ea8f5e2780",
+        "runtime_evidence_archive": "evidence/production-like-execution/hosted-runtime-35133062884.json",
+        "remaining_gate_check": "104925376227",
+        "remaining_gate_report_sha256": "981ac18610ae0fb9c744645123922cd7ea78882969f8316ee3416d9ad99a2dda",
+        "remaining_gate_evidence_archive": "evidence/production-like-execution/hosted-remaining-gates-35133062884.json"
+      },
+      "interim_run_that_drove_the_second_fix": {
+        "run": "35131838300",
+        "commit": "bd5ca02625adf1e21d544798247788ce093b974e",
+        "check": "104916683776",
+        "status": "fail",
+        "failed_check": "prepare-native-encrypted-fixture-before-backup",
+        "message": "AssertionError: Password field was not stored as ciphertext",
+        "value": "Confirmed the root-cause fix already worked (site_encryption_key_initialized=true, key fingerprint 0aaefb5a94b3228aca1a2742d358a853225bd18990eb420059ee64e12c69965d) and exposed that reading only the raw model column is not a valid way to observe ciphertext. The successful run confirms the value lives at __Auth.password."
+      },
+      "observed": {
+        "site_encryption_key_initialized": true,
+        "site_encryption_key_sha256": "0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585",
+        "key_length": 44,
+        "encrypted_field": "User.Administrator.api_secret",
+        "storage_location": "__Auth.password",
+        "restore_separate_database": true,
+        "source_db_credentials_copied": false,
+        "site_encryption_key_restored": true,
+        "site_encryption_key_restored_hardened": true,
+        "first_cycle_ciphertext_sha256": "9f771296df54e4c6cd16dead00b62b5993d8d450569ffd0de38b0b21f11caafd",
+        "hardened_cycle_ciphertext_sha256": "029f68b1876ddd0532d1b4e1798faa6e06e458f4b11714f08fe8f2ed8a5ae5c3",
+        "proof_basis": "Fingerprint match against the source, real get_decrypted_password() of content encrypted before the backup, and a byte-identical ciphertext digest - on both restore.localhost and recovery.localhost. Presence of a key string alone is no longer accepted."
+      },
+      "gate_effect": "NONE. recovery and backup-restore remain BLOCKED, durability remains BLOCKED, SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT, production_state remains REJECT and production_enabled remains false. Restore still runs on the same ephemeral host as the source, no destructive trigger has been exercised, and the site key is still generated and copied by that same runner rather than held under separately controlled custody.",
+      "regression_coverage": "tests/foundation/test_encryption_key_recovery.py, 31 tests; full suite 369 tests pass locally; d8_validate.py exits 0 with no gate drift."
     }
   },
   "prior_active_branch_provenance": {

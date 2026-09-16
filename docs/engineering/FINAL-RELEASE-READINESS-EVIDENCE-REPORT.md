@@ -470,3 +470,156 @@ ever reporting a passing Foundation runtime or a true phase2/security/product
 flag while SEC-DEPS-01 is open. No gate was weakened, waived or reinterpreted,
 no bounded or static result was relabelled as production evidence, and PR #2 was
 **not** merged.
+
+---
+
+## 9. Gap-closure execution on the active branch (2026-09-16)
+
+Work resumed from `251eb8d` after the sandbox was re-cloned at `60c777e` and
+reconciled by `git fetch` plus `git reset FETCH_HEAD`; the working tree was
+verified byte-identical to the pushed tip, so no completed work was repeated.
+This section records only the two priorities advanced so far.
+
+### 9.1 P1 — `site_encryption_key_restored=false` is CLOSED
+
+**Status: CLOSED with genuine hosted execution evidence. No gate changed state.**
+
+**Root cause, established from the executable code rather than inferred.** Frappe
+writes `encryption_key` into `sites/<site>/site_config.json` *lazily*, on the
+first call to `frappe.utils.password.get_encryption_key()`; `bench new-site`
+does not create it. `foundation.localhost` installs only erpnext, education,
+payments and hrms, so nothing triggered key generation before the first backup.
+The harness then copied the key across with
+`if "encryption_key" in original_config:` — a silent no-op — and reported the
+omission as a passive observation
+(`report["site_encryption_key_restored"] = "encryption_key" in original_config`)
+instead of failing. `placement-test.localhost` installs `toefl_house`, whose
+`after_install()` calls `get_encryption_key()`, which is why that path reported
+`true` and masked the defect.
+
+**Fix (`bd5ca02`, `58bd4d1`).** The key is now initialized through the same
+native call the application's own hook uses, before the first backup. An
+encrypted Password field is written before the backup so the restore has real
+ciphertext to prove against. The silent conditional is gone: both restore cycles
+call the shared pure helper `restore_key_into_config()`, which raises on a
+keyless source, a same-database restore, or reused source credentials. Survival
+is proven three ways — SHA-256 key-fingerprint match against the source, real
+`get_decrypted_password()` of content encrypted before the backup, and a
+byte-identical ciphertext digest. Presence of a key string alone is no longer
+accepted. Only fingerprints and byte lengths reach evidence; the fingerprint
+file is `0600` inside the unpublished runner lab.
+
+**The interim run that produced the second fix.** Run `35131838300` at `bd5ca02`
+(check `104916683776`) failed at `prepare-native-encrypted-fixture-before-backup`
+with `AssertionError: Password field was not stored as ciphertext`. That run had
+already confirmed the root-cause fix worked
+(`site_encryption_key_initialized=true`, key fingerprint
+`0aaefb5a94b3228aca1a2742d358a853225bd18990eb420059ee64e12c69965d`). The
+failure was in the new observation logic: it read only the raw model column and
+treated an empty result as proof that encryption had not happened. The
+successful run confirms the real layout — the value lives at `__Auth.password`
+and the model column is empty. An empty model column is not evidence of
+plaintext storage. `58bd4d1` replaced that assumption with
+`stored_representations()`, which enumerates the supported native locations and
+fails closed only on real plaintext or on nothing stored at all.
+
+**Proof run `35133062884`** — Foundation runtime validation, profile `hardened`,
+commit `58bd4d12f0c755e2f83c4c35eb206db40dfeafd7`, branch
+`arena/01a0aafe-tofel-house-erp`. Overall conclusion **failure**, for SEC-DEPS-01
+only: of 121 checks executed the sole failures are
+`hosted-full-stack-dependency-audit` and `hosted-frontend-advisory-audit`. No
+recovery, restore or encryption check failed.
+
+| Observation | First cycle (`restore.localhost`) | Hardened cycle (`recovery.localhost`) |
+| --- | --- | --- |
+| `site_encryption_key_initialized` | `true` (fingerprint `0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585`, length 44) | same key |
+| `storage_location` | `__Auth.password` | `__Auth.password` |
+| `source_db_credentials_copied` | `false` | `false` |
+| `fingerprint_matches_source` | `true` | `true` |
+| `encrypted_content_decrypts_after_restore` | `true` | `true` |
+| ciphertext SHA-256 before backup | `9f771296df54e4c6cd16dead00b62b5993d8d450569ffd0de38b0b21f11caafd` | `029f68b1876ddd0532d1b4e1798faa6e06e458f4b11714f08fe8f2ed8a5ae5c3` |
+| ciphertext SHA-256 after restore | `9f771296df54e4c6cd16dead00b62b5993d8d450569ffd0de38b0b21f11caafd` | `029f68b1876ddd0532d1b4e1798faa6e06e458f4b11714f08fe8f2ed8a5ae5c3` |
+| `site_encryption_key_restored` | **`true`** | **`true`** (`..._hardened`) |
+| verify step | `verify-encryption-key-survived-restore`, 0.661s, pass | `verify-encryption-key-survived-hardened-recovery`, 0.696s, pass |
+
+The two cycles legitimately have different ciphertext digests: the hardened path
+re-runs `prepare-native-encrypted-recovery-fixture`, which re-encrypts the same
+secret, and Fernet output is randomized per encryption. The harness therefore
+re-records the digest immediately before that backup so the comparison is
+against the bytes that actually went into it. The observed difference is direct
+confirmation that this re-record step was necessary rather than decorative.
+
+Hardened backup digests from the same run: database 1158728 bytes
+`0d799d4097a5670fd3a3fc509b88a4d8cfd0aaee0179669c61e55c4d83cb5360`, private
+files 10240 bytes `85bea42b7307a6dc3943bd6380f5e5907388f47bd180a8e6a305329dc553425d`,
+public files 10240 bytes `9c543b407e134d7d27d9720d99ff0fe2298ce7587e1aa463bd826675c36e3c53`.
+
+**Retrieved and archived** (Checks API, the only transport that works from this
+host): `evidence/production-like-execution/hosted-runtime-35133062884.json`
+SHA-256 `fa799c1b259b42750bef2bd7b660f914690eacfe6b389fbcd290a7ea8f5e2780` and
+`hosted-remaining-gates-35133062884.json` SHA-256
+`981ac18610ae0fb9c744645123922cd7ea78882969f8316ee3416d9ad99a2dda`.
+
+```bash
+gh api repos/Frotan2/TOFEL-House-ERP/check-runs/104925371177 --jq '.output.text'
+gh api repos/Frotan2/TOFEL-House-ERP/check-runs/104925376227 --jq '.output.text'
+```
+
+**Regression coverage.** `tests/foundation/test_encryption_key_recovery.py`, 31
+tests. `fingerprint_key`, `restore_key_into_config`,
+`stored_representations` and `assert_no_plaintext_at_rest` are imported by the
+hosted harness rather than re-implemented, so the tests exercise the same code
+that runs on the runner. Includes a direct regression for the observed failure:
+ciphertext located via `__Auth` while the model column is NULL. Full suite 369
+tests pass; `d8_validate.py` exits 0 with no gate drift.
+
+**What this does not do.** It closes one named recovery defect on the same
+disposable hosted runner. Restore still runs on the same ephemeral host as the
+source, no destructive trigger has been exercised, and the site encryption key
+is still generated on and copied by that same runner rather than held under
+separately controlled custody. `recovery` and `backup-restore` therefore remain
+**BLOCKED**, and this is not production qualification.
+
+### 9.2 P2 — real MariaDB and Redis durability probe
+
+**Status: committed, execution pending. Not yet evidence.**
+
+`tools/foundation/runtime_durability.py` and
+`.github/workflows/foundation-durability.yml` add what the durability gate
+records as never executed: a real restart, a real crash and real volume
+persistence for the actual pinned upstream containers. It runs the digest-pinned
+MariaDB 11.8.9 and Redis 8.6.6 images with named volumes and explicit durability
+settings (`innodb_flush_log_at_trx_commit=1`, `sync_binlog=1`, a binary log;
+`appendonly yes`, `appendfsync always`, an RDB policy), reads those settings back
+from the running servers, and refuses to continue if they did not take effect.
+
+Three disruption scenarios are executed against committed synthetic state whose
+exact row count and order-independent CRC32 checksum are captured beforehand,
+while a dedicated client session holds an open uncommitted transaction that must
+never become visible: `docker restart`; `docker kill --signal=KILL` followed by a
+cold start, exercising InnoDB crash recovery; and `docker rm --force` with
+recreation of brand-new containers from the *same* named volume, proven to be new
+containers by distinct container IDs. A negative control then removes the volume
+and requires the database to come back empty, so survival is attributable to the
+volume rather than to luck.
+
+`tests/foundation/test_durability_contract.py`, 25 tests, guards the contract:
+digest-pinned images only, no mocks or stubs imported, all three scenarios plus
+the negative control present and correctly ordered, exact before/after
+comparison, masked secret supplied through a `0600` bind-mounted file rather than
+a command-line flag, and an explicit statement of what the probe does not prove.
+
+Until a hosted run returns `pass`, the durability gate remains **BLOCKED** and no
+durability claim is made in this report.
+
+### 9.3 Hard stops preserved through gap closure
+
+`production_enabled=false`, production authorization **REJECT**, synthetic-only
+guard **REQUIRED**, SEC-DEPS-01 **UPSTREAM-BLOCKED / REJECT**, D8 overall
+**BLOCKED**, `capacity-availability` **NOT SELECTED** with no owner numeric
+objective invented. SEC-DEPS-01 has now failed at three commits on this branch
+(`d7df9ca`, `c891949`, `58bd4d1`); no dependency version was forced, no lock was
+overridden, no package was forked, no advisory was suppressed and the gate was
+not downgraded. Historical provenance is preserved unchanged — the new run is
+recorded alongside the prior runs, never relabelled over them. PR #2 remains
+**OPEN** and unmerged.
