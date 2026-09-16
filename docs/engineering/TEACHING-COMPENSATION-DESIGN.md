@@ -100,12 +100,23 @@ fixtures, no parallel masters.
 ## 5. Delivery plan (next slices, each hosted-proven)
 
 - **T1**: doctypes + fixtures (roles, guarded command surface,
-  permission rows) + local fixtures tests.
+  permission rows) + local fixtures tests. **DONE** — shipped @
+  `8c92e2f`; local teaching suite 17→35.
 - **T2**: hosted checks — assignment facts (1–3 instructors, ≤3
   skills), contract effective dating, duplicate-payable prevention,
-  idempotent calculation, fixed-salary exclusion, amend/disabled
-  handling, audit-chain assertions (expect suite growth beyond 533).
-- **T3**: gap-map/dossier updates with run evidence.
+  idempotent calculation, fixed-salary exclusion, supersession
+  reproducibility, audit-chain assertions. **DONE — QUALIFIED**: run
+  **35066349129** @ `fa02137`, **536/536**, sha256-verified envelope.
+  Failure closures on the way (evidence-based, no invariant weakened):
+  35058054173 (v16 Salary Component autoname `field:salary_component`),
+  35058898380 (Gender master absent on fresh sites), 35059623949
+  (series-named Instructor links), 35060611969 (fixture superseded the
+  contract before assigning — sequence fixed; superseded/future
+  contract assignment denials promoted to regression checks),
+  35065212627 (open-ended probe window genuinely overlaps — probe
+  bounded; overlap logic unchanged).
+- **T3**: gap-map/dossier updates with run evidence. **DONE** —
+  reconciled 2026-09-17.
 
 No qualified domain is reopened: Course Schedule/Student Attendance
 authorities and their guarded commands are untouched.

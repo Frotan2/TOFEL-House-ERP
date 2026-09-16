@@ -39,15 +39,18 @@ gates). Each row is a full green run of the entire suite at that point:
 | Finance closed | 34999987969 | `e73abef` | 517/517 | Finance money chain |
 | A13 containment | 35008705885 | `5b5a044` | 523/523 | Bypass-route containment (RPC/REST/edit/cancel/amend seams; report SHA-256 `a66a1b5d…`) |
 | R1+R2 release surfaces | 35049742120 | `69a8a95` | 530/530 | Workspaces (visibility model, no-escalation), query-report registers, probe-user restoration |
-| **R3 read-side + observability (current)** | **35053305607** | **`46e5040`** | **533/533** | Attachment parent-gate, list/export/print denial, Error Log/scheduler/ping probes |
+| R3 read-side + observability | 35053305607 | `46e5040` | 533/533 | Attachment parent-gate, list/export/print denial, Error Log/scheduler/ping probes |
+| **D2 teaching compensation (current)** | **35066349129** | **`fa02137`** | **536/536** | Contract authority, skill-area assignment facts, native Additional Salary calculation path |
 
-All release check IDs in the current suite (10):
+All release/D2 check IDs in the current suite (13):
 `release-probe-users-restored`, `release-workspaces-configured`,
 `release-workspace-role-visibility`,
 `release-workspace-no-privilege-escalation`,
 `release-registers-configured`, `release-registers-role-access`,
 `release-registers-facts-only`, `release-attachment-paths-guarded`,
-`release-read-export-print-paths-denied`, `release-observability-probes`.
+`release-read-export-print-paths-denied`, `release-observability-probes`,
+`teaching-compensation-contract-authority`,
+`teaching-assignment-facts`, `teaching-compensation-calculation`.
 
 Diagnostic runs kept for the record (failures that produced decisive
 evidence): 35046096047 (invigilator module-gate — D10 root cause),
@@ -88,7 +91,9 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
 
 1. **Owner gates D1–D10** — precise asks in OWNER-DECISIONS.md. No
    engineering workaround exists that would not invent business rules
-   or breach containment.
+   or breach containment. Status: D2 executed & qualified (536/536);
+   D6a/D6b/D9 closed; D1/D4/D5/D7 deferred; D3 framework in execution;
+   D8 charter and D10(ii) surfaces pending.
 2. **Upstream items** — SEC-DEPS-01 (education frontend advisory set:
    57 entries / 21 packages at pinned v16.1.0, independently re-scanned
    and exactly reproduced 2026-09-16 via GitHub advisory API — 27 high /
