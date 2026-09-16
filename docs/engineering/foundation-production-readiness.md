@@ -3,8 +3,8 @@
 ## Current-branch reconciliation — 2026-09-16
 
 **REJECT remains current.** The historical checkpoints below are retained evidence,
-not current-branch production approval. At `d84f1c9`, hosted Foundation runtime run
-`35075532781` executed 114 restricted checks and its readiness, realtime, upgrade,
+not current-branch production approval. At `ebe7767`, hosted Foundation runtime run
+`35076449577` executed 115 restricted checks; 114 passed and its readiness, realtime, upgrade,
 Guardian browser, frontend-graph, restart, and remaining-gate probes passed; its
 frontend advisory audit failed. The published runtime and remaining-gate reports
 therefore set both `phase2_gate_passed` and `security_gate_passed` to false.

@@ -35,9 +35,9 @@ is invented anywhere in this plan.**
   foundation-production-acceptance-ledger.json): REJECT; scoped passes
   for web/worker restart, scheduler, framework patch upgrade, hardened
   restore; open items SEC-DEPS-01, SEC-GUARDIAN-01, SEC-RT-TASK-01 and
-  deployment-scope operations. Current-branch Foundation run `35075532781`
-  at `d84f1c9` re-executed 114 restricted checks but failed the advisory
-  audit, so both Phase 2 and security gates remain false.
+  deployment-scope operations. Current-branch Foundation run `35076449577`
+  at `ebe7767` ran 115 restricted checks; 114 passed and the advisory audit
+  failed, so both Phase 2 and security gates remain false.
 - D8 engineering now has a hosted disposable product SQL/public-files/private-files
   backup and distinct-site restore rehearsal: run `35076449739` at `ebe7767`
   passed its 542 native checks and restore verifier. This does not reopen a

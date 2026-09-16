@@ -11,12 +11,14 @@
     "date": "2026-09-16",
     "branch": "arena/01a0a942-tofel-house-erp",
     "foundation_runtime": {
-      "run": "35075532781",
-      "commit": "d84f1c9bdcfe704a2fdcde213e4891b8f49f090b",
-      "check": "104732142759",
-      "report_sha256": "3e09cfe941d120d2293175b7a97959a57ecb5cb85a5e9a98e42054187bdd8908",
+      "run": "35076449577",
+      "commit": "ebe77676fffb3e2e1f0b49cac8e18c5e7763180a",
+      "check": "104738320609",
+      "report_sha256": "0707017064e157226de8ef99738e031e4479ac9ae98b511c790cfa9375b65947",
+      "remaining_gate_check": "104738323273",
+      "remaining_gate_report_sha256": "fe1bea0a51f9828f29250fd9728fc568c336c72854278ea0371b822b62f28771",
       "status": "fail",
-      "observed": "114 restricted checks passed; readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed. The hosted frontend advisory audit failed.",
+      "observed": "115 restricted checks ran; 114 passed. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed. The hosted frontend advisory audit failed.",
       "limits": "The failure is current REJECT evidence; phase2_gate_passed and security_gate_passed remain false. This is not production deployment evidence."
     },
     "product_restore_rehearsal": {
