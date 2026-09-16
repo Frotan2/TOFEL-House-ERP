@@ -54,6 +54,16 @@ runs, which exercised these authorities directly.
 | R2 | Factual operations registers (tuition billing, placement billing) as role-restricted native Query Reports — raw facts only, no denominators/thresholds (metrics layer is A12, owner stewards). Native access model: Report Has-Role table gates execution (pinned `Report.is_permitted`), ref-doctype `report` permission gates the query surface (pinned `query_report._run`). Attendance-coverage register awaits D9 (no narrow teaching role holds the native `report` flag on Student Attendance; widening options are owner decisions) | Native `Report` module files (`finance/report/…`) + minimal report-only grants on the TH operations doctype | **In execution this turn**; hosted checks `release-registers-*` |
 | R3 | Export/attachment/print-path containment proofs for the guarded doctypes (addresses ledger "broad roles/attachment/export/print paths" for implemented slices) + native health/error-observability probes | Hosted negative checks | Next after R2 |
 
+**Integration note (proven by hosted diagnostics, run 35048606232):** the
+education app's `after_install` creates Custom DocPerm rows on Sales Invoice
+(Student invoice access). Under the pinned `frappe.permissions.get_valid_perms`,
+any Custom DocPerm on a doctype replaces its standard permission rows entirely,
+so native Accounts-role reads on Sales Invoice are void site-wide after
+education installs. R2 register gates avoid the dependency (Fees and the TH
+operations doctype carry their own permission rows), and the TH Finance
+workspace's module gate is fed by the officer's untouched Payment Entry read.
+Any future surface that assumes native Sales Invoice reads must re-check this.
+
 ### 1.3 Genuinely requires further implementation (only behind owner decisions)
 Academic assessment & progression (B04/B05 → A06); payroll input path
 (B08 → A09); refund/credit-note command surface (owner refund terms);

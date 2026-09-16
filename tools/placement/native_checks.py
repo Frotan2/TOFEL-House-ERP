@@ -2732,6 +2732,25 @@ def main():
         # module Accounts).
         ws_spec={'TH Receipts':('Placement',{'Placement Auditor','Admission Auditor','Enrollment Auditor','Teaching Auditor','Finance Auditor'}),
                  'TH Finance':('Accounts',{'Finance Officer'})}
+        def restore_probe_users():
+            # The containment blocks strip roles from shared users as a
+            # fail-closed proof and never re-grant them; the release probes
+            # are only meaningful with the designed role sets restored.
+            # (The finance officer's Accounts User role also feeds the pinned
+            # module-visibility gate: allow_modules via native Accounts reads.)
+            frappe.set_user('Administrator')
+            grants={'finance_officer':['Finance Officer','Accounts User'],
+                    'invigilator':['Placement Invigilator'],
+                    'teaching_scheduler':['Teaching Scheduler']}
+            for label,roles in grants.items():
+                u=frappe.get_doc('User',users[label])
+                u.roles=[]
+                for r in roles:u.append('roles',{'role':r})
+                u.save()
+            frappe.db.commit()
+            for label in grants:frappe.clear_cache(user=users[label])
+            return {'restored':sorted(grants)}
+        check('release-probe-users-restored',restore_probe_users)
         def ws_configured():
             frappe.set_user('Administrator')
             for ws_name,(module,roles) in ws_spec.items():
@@ -2771,7 +2790,9 @@ def main():
                     diag={'label':label,'missing':m,'roles':sorted(frappe.get_roles()),
                           'seen':sorted(seen)[:6],'seen_n':len(seen),
                           'si_perm':frappe.db.get_value('DocPerm',{'parent':'Sales Invoice','role':'Accounts User'},'read'),
-                          'si_custom':frappe.db.count('Custom DocPerm',{'parent':'Sales Invoice'})}
+                          'si_custom':frappe.db.count('Custom DocPerm',{'parent':'Sales Invoice'}),
+                          'pe_perm':frappe.db.get_value('DocPerm',{'parent':'Payment Entry','role':'Accounts User'},'read'),
+                          'pe_custom':frappe.db.count('Custom DocPerm',{'parent':'Payment Entry'})}
                     try:
                         up=frappe.get_user()
                         if not up.allow_modules:up.build_permissions()
