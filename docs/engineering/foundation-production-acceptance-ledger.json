@@ -288,6 +288,68 @@
       },
       "gate_effect": "NONE. recovery and backup-restore remain BLOCKED, durability remains BLOCKED, SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT, production_state remains REJECT and production_enabled remains false. Restore still runs on the same ephemeral host as the source, no destructive trigger has been exercised, and the site key is still generated and copied by that same runner rather than held under separately controlled custody.",
       "regression_coverage": "tests/foundation/test_encryption_key_recovery.py, 31 tests; full suite 369 tests pass locally; d8_validate.py exits 0 with no gate drift."
+    },
+    "durability_probe_execution": {
+      "date": "2026-09-16",
+      "commit": "866396a127164090c41db9ff1bc310ade555409f",
+      "branch": "arena/01a0aafe-tofel-house-erp",
+      "why": "The durability gate recorded that no MariaDB or Redis restart, no crash or volume-loss probe and no RDB/AOF persistence verification had ever been executed; the only restart probe was Gunicorn/RQ and explicitly excluded the datastore. This is the first genuine execution of datastore durability.",
+      "workflow": "Foundation datastore durability",
+      "run": "35135793802",
+      "check_run": "104927987397",
+      "conclusion": "success",
+      "report_status": "pass",
+      "report_sha256": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65",
+      "evidence_archive": "evidence/production-like-execution/hosted-durability-35135793802.json",
+      "real_services_not_mocks": {
+        "mocks_or_simulations_used": false,
+        "docker_version": "28.0.4 28.0.4",
+        "mariadb": {
+          "index_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+          "server_reported_version": "11.8.9-MariaDB-ubu2404-log"
+        },
+        "redis": {
+          "index_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+          "server_reported_version": "8.6.6",
+          "mode": "standalone"
+        }
+      },
+      "effective_settings_read_back": {
+        "mariadb": {
+          "innodb_flush_log_at_trx_commit": "1",
+          "sync_binlog": "1",
+          "log_bin": "1"
+        },
+        "redis": {
+          "aof_enabled": "1",
+          "appendfsync": "always",
+          "aof_last_write_status": "ok",
+          "rdb_last_bgsave_status": "ok"
+        }
+      },
+      "pre_state": {
+        "mariadb_committed_rows": 25,
+        "mariadb_payload_crc32_sum": 51945241053,
+        "mariadb_uncommitted_visible": "0",
+        "redis_dbsize": 2,
+        "redis_queue_length": 25
+      },
+      "scenarios_passed": {
+        "graceful_restart": true,
+        "sigkill_crash_recovery": true,
+        "container_destruction_recreated_from_same_named_volume": true,
+        "negative_control_volume_removal_yields_empty_database": true
+      },
+      "independent_restart_proof": "Binary log rotated once per server start: mariadb-bin.000001 -> 000002 -> 000003 -> 000004 -> 000005.",
+      "new_container_ids_after_destruction": {
+        "mariadb": "12e831ef68ca -> c081c5c03e39",
+        "redis": "c25b3f0c1c9e -> 0b72e4d5ec16"
+      },
+      "known_evidence_gap_in_this_run": "innodb_recovery_messages was empty because the log filter matched only 'recovery'/'crash'. Commit 699ad7e broadens the filter, keeps the post-crash tail, and fails the run if no server-side corroboration is captured; it also makes binary-log rotation an enforced invariant. That stricter probe has not yet produced its own hosted PASS.",
+      "gate_effect": "NONE. The durability gate remains BLOCKED. Its area also covers configuration, private/public file and encryption-key durability, none of which is proven; host or region loss, storage-array failure, off-site replication, HA and failover are unproven; application-level workflow correctness after recovery is unproven; and the owner durability references required by D8-DURABLE-STATE remain NOT SELECTED and are not invented here. production_state remains REJECT and production_enabled remains false.",
+      "regression_coverage": "tests/foundation/test_durability_contract.py, 27 tests; full suite 371 tests pass locally; d8_validate.py exits 0 with no gate drift.",
+      "blocked_on": "GitHub credentials expired in this sandbox before commit 699ad7e could be pushed, so the stricter durability probe has not been re-run on a hosted runner. Recorded as a blocker rather than inferred or backfilled.",
+      "recorded_at_utc": "2026-09-16T18:48:44.369211+00:00"
     }
   },
   "prior_active_branch_provenance": {

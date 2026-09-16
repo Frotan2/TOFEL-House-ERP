@@ -1115,7 +1115,7 @@
     "evidence_retrieval": "gh api repos/Frotan2/TOFEL-House-ERP/check-runs/<check_id> --jq .output.text  (gzip+base64 transport decoded when >58000 bytes)"
   },
   "integrity": {
-    "generated_at_utc": "2026-09-16T18:36:04.006220+00:00",
+    "generated_at_utc": "2026-09-16T18:46:27.278721+00:00",
     "archived_evidence_sha256": {
       "hosted-frontend-35122242647.json": "17d40562f62cddc6168bef34838f128d6dbaa2257a0ab0048739c2c28c6abfb1",
       "hosted-placement-native-checks-35122242728.json": "094111f63a8f4b44e483bfd534a71b404c14b0e87c093477e0a633390ff42251",
@@ -1135,7 +1135,8 @@
       "local-runner-capability-probe.json": "d42a00f281fc5a95c5aceef9d4567bc2b8191ad0941c6dab7a14061e64bbadb4",
       "local-unittest-313.txt": "6d95cec0565e3ae2ea04e63dec3ecfad6c4076bb61c772c87a081c465d615562",
       "hosted-runtime-35133062884.json": "fa799c1b259b42750bef2bd7b660f914690eacfe6b389fbcd290a7ea8f5e2780",
-      "hosted-remaining-gates-35133062884.json": "981ac18610ae0fb9c744645123922cd7ea78882969f8316ee3416d9ad99a2dda"
+      "hosted-remaining-gates-35133062884.json": "981ac18610ae0fb9c744645123922cd7ea78882969f8316ee3416d9ad99a2dda",
+      "hosted-durability-35135793802.json": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65"
     },
     "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED.",
     "regenerated_at_utc": "2026-09-16T17:36:45.589585+00:00"
@@ -1309,8 +1310,10 @@
     }
   ],
   "outstanding_actions": [
-    "None outstanding for the site_encryption_key_restored=false defect: it is CLOSED with genuine hosted evidence at run 35133062884 / commit 58bd4d1, on both the first restore cycle (restore.localhost) and the hardened recovery cycle (recovery.localhost).",
-    "Standing release blockers, updated. CLOSED: site_encryption_key_restored=false. COMMITTED BUT NOT YET EXECUTED, so still blocking: a real MariaDB and Redis restart, SIGKILL crash-recovery and named-volume persistence probe now exists (tools/foundation/runtime_durability.py plus .github/workflows/foundation-durability.yml) but has not yet produced a hosted PASS, and the durability gate remains BLOCKED until it does. UNCHANGED: restore has never reached a genuinely independent system and no destructive trigger has been run; versioned encrypted backup with external key custody and rotation is bounded-only; deployed monitoring, alert delivery and retention are untested; no TLS or Tailscale boundary has been exercised; rollback has never been rehearsed; SEC-DEPS-01 needs a coherent maintained upstream stack migration and has now failed at three commits on this branch (d7df9ca, c891949, 58bd4d1); and the owner has selected no numeric capacity/availability objective."
+    "None outstanding for the site_encryption_key_restored=false defect: CLOSED with genuine hosted evidence at run 35133062884 / commit 58bd4d1 on both restore cycles.",
+    "Container-level durability is now genuinely EXECUTED: run 35135793802 at 866396a passed real MariaDB and Redis graceful restart, SIGKILL crash-recovery and container destruction with recreation from the same named volume, plus a negative control. Commit 699ad7e then made the binary-log rotation an enforced invariant and required server-side crash-log corroboration; that stricter probe still needs its own hosted PASS.",
+    "Standing release blockers, updated. CLOSED: site_encryption_key_restored=false. EXECUTED but gate still BLOCKED: container-level MariaDB/Redis durability. UNCHANGED: restore has never reached a genuinely independent system and no destructive trigger has been run; versioned encrypted backup with external key custody and rotation is bounded-only, and the site encryption key is still generated and copied by the same ephemeral runner rather than held under separate custody; configuration, private/public file and encryption-key durability are unproven; deployed monitoring, alert delivery and retention are untested; no TLS or Tailscale boundary has been exercised; rollback has never been rehearsed; the owner durability references required by D8-DURABLE-STATE are NOT SELECTED; SEC-DEPS-01 needs a coherent maintained upstream stack migration and has failed at three commits on this branch (d7df9ca, c891949, 58bd4d1); and the owner has selected no numeric capacity/availability objective.",
+    "BLOCKED ON GITHUB CREDENTIALS: the GH_TOKEN in this sandbox expired mid-session (gh auth status reports 'The github.com token in GH_TOKEN is no longer valid'; the API returns 'Bad credentials'). Commit 699ad7e is complete locally but could not be pushed, so the stricter durability probe has not been re-run on a hosted runner. Everything through 866396a is pushed. No evidence was inferred, fabricated or backdated to cover this gap."
   ],
   "pr_2_update": {
     "action": "comment posted (the only update available from this session)",
@@ -1424,5 +1427,100 @@
     "secret_hygiene": "Only SHA-256 fingerprints and byte lengths are reported. The key itself and the synthetic secret never appear in any artifact: the fingerprint file is 0600 inside the unpublished runner lab, the harness redaction list already covers encryption_key values, and the probe refuses to run outside a disposable hosted runner.",
     "regression_coverage": "tests/foundation/test_encryption_key_recovery.py, 31 tests. The pure helpers fingerprint_key, restore_key_into_config, stored_representations and assert_no_plaintext_at_rest are imported by the hosted harness rather than re-implemented, so the tests exercise the same code that runs on the runner.",
     "does_not_upgrade": "This closes one named recovery defect on the same disposable hosted runner. It is not production qualification. Restore still runs on the same host as the source, no destructive trigger has been exercised, external key custody and rotation remain bounded-only, and the recovery and backup-restore gates remain BLOCKED."
+  },
+  "durability_probe_execution": {
+    "status": "EXECUTED-HOSTED",
+    "conclusion": "Container-level MariaDB and Redis restart, crash-recovery and named-volume persistence are now genuinely executed and PASS. The durability gate remains BLOCKED because its area is broader than container restarts.",
+    "run_id": "35135793802",
+    "workflow": "Foundation datastore durability",
+    "commit": "866396a127164090c41db9ff1bc310ade555409f",
+    "check_run": "104927987397",
+    "overall_conclusion": "success",
+    "job_duration": "2026-09-16T18:39:52Z to 2026-09-16T18:40:40Z (48s)",
+    "archived_evidence": "hosted-durability-35135793802.json",
+    "archived_evidence_sha256": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65",
+    "docker_version": "28.0.4 28.0.4",
+    "mocks_or_simulations_used": false,
+    "images": {
+      "mariadb": {
+        "index_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+        "resolved_platform_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+        "version_reported_by_server": "11.8.9-MariaDB-ubu2404-log"
+      },
+      "redis": {
+        "index_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+        "resolved_platform_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+        "version_reported_by_server": "8.6.6",
+        "mode": "standalone"
+      },
+      "digest_note": "Pinned and run by index digest, so RepoDigests reports the same value. The runner probe's tag-based pull of mariadb:11.8.9 resolves to the platform-specific digest 8b5f33eb..., which is a different legitimate identifier for the same release rather than a mismatch."
+    },
+    "effective_settings_read_back_from_running_servers": {
+      "mariadb": {
+        "innodb_flush_log_at_trx_commit": "1",
+        "sync_binlog": "1",
+        "log_bin": "1"
+      },
+      "redis": {
+        "aof_enabled": "1",
+        "aof_last_write_status": "ok",
+        "aof_current_size": "322",
+        "rdb_last_bgsave_status": "ok",
+        "loading": "0"
+      }
+    },
+    "pre_state": {
+      "mariadb": {
+        "committed_row_count": 25,
+        "payload_crc32_sum": 51945241053,
+        "uncommitted_visible": "0",
+        "binlog_files": 2
+      },
+      "redis": {
+        "dbsize": 2,
+        "queue_length": 25,
+        "committed_value_sha256": "c9fce334cacb41026c170ef1c198a0753e76b732b3266f6c05cad3eede741227",
+        "queue_head_sha256": "01b1e00ebff5369fc4f92ba702bbc97dab1ee8784a3cda127f0f5bc7bd78038c"
+      }
+    },
+    "scenarios": {
+      "1_graceful_restart": {
+        "survived": true,
+        "uncommitted_row_absent_after_recovery": true,
+        "binlog_files_after": 3
+      },
+      "2_sigkill_crash_recovery": {
+        "survived": true,
+        "uncommitted_row_absent_after_crash": true,
+        "binlog_files_after": 4,
+        "crash_states_observed": "both containers exited/unhealthy after SIGKILL",
+        "evidence_gap_in_this_run": "innodb_recovery_messages came back empty because the log filter matched only 'recovery'/'crash'. Fixed in commit 699ad7e, which broadens the filter and fails the run if no server-side corroboration is captured."
+      },
+      "3_container_destruction_and_recreation_from_same_volume": {
+        "survived": true,
+        "binlog_files_after": 5,
+        "new_containers_created": true,
+        "mariadb_container_id": "12e831ef68ca -> c081c5c03e39",
+        "redis_container_id": "c25b3f0c1c9e -> 0b72e4d5ec16"
+      }
+    },
+    "independent_restart_proof": "Binary log rotated once per server start: mariadb-bin.000001 -> 000002 -> 000003 (graceful restart) -> 000004 (SIGKILL cold start) -> 000005 (recreation from volume). This proves the servers really restarted rather than merely being queried again.",
+    "negative_control": {
+      "table_present_after_volume_loss": "0",
+      "expected": "0",
+      "confirms_data_lived_in_the_volume": true,
+      "why_it_matters": "Without it, survival could be luck rather than durability."
+    },
+    "identity_of_committed_state_across_all_scenarios": "Row count 25 and order-independent SUM(CRC32) checksum 51945241053 identical before and after every disruption; Redis value digest and 25-item queue digest identical; the open uncommitted transaction was never visible to another session and was gone after each disruption.",
+    "does_not_prove": [
+      "Host or region loss, storage-array failure and off-site replication",
+      "High availability, failover and multi-node quorum behaviour",
+      "Application-level workflow correctness after recovery",
+      "Backup archive integrity, which is covered by the restore probes",
+      "Configuration, private/public file and encryption-key durability, which are part of the same gate area",
+      "Any owner-selected durability reference or retention objective"
+    ],
+    "recorded_at_utc": "2026-09-16T18:46:27.278721+00:00",
+    "commit_note": "Resolved with `git rev-parse 866396a`; not transcribed by hand."
   }
 }

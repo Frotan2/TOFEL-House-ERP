@@ -580,37 +580,89 @@ is still generated on and copied by that same runner rather than held under
 separately controlled custody. `recovery` and `backup-restore` therefore remain
 **BLOCKED**, and this is not production qualification.
 
-### 9.2 P2 — real MariaDB and Redis durability probe
+### 9.2 P2 — real MariaDB and Redis durability is EXECUTED
 
-**Status: committed, execution pending. Not yet evidence.**
+**Status: container-level durability genuinely executed and PASSING. The
+durability gate remains BLOCKED, because its area is wider than container
+restarts.**
 
-`tools/foundation/runtime_durability.py` and
-`.github/workflows/foundation-durability.yml` add what the durability gate
-records as never executed: a real restart, a real crash and real volume
-persistence for the actual pinned upstream containers. It runs the digest-pinned
-MariaDB 11.8.9 and Redis 8.6.6 images with named volumes and explicit durability
-settings (`innodb_flush_log_at_trx_commit=1`, `sync_binlog=1`, a binary log;
-`appendonly yes`, `appendfsync always`, an RDB policy), reads those settings back
-from the running servers, and refuses to continue if they did not take effect.
+The gate recorded that no MariaDB or Redis restart, no crash or volume-loss
+probe and no RDB/AOF persistence verification had ever been executed, and that
+the only restart probe was Gunicorn/RQ process replacement which explicitly
+excludes the datastore. `tools/foundation/runtime_durability.py` and
+`.github/workflows/foundation-durability.yml` close that gap with real
+containers. Nothing is mocked, simulated or substituted.
 
-Three disruption scenarios are executed against committed synthetic state whose
-exact row count and order-independent CRC32 checksum are captured beforehand,
-while a dedicated client session holds an open uncommitted transaction that must
-never become visible: `docker restart`; `docker kill --signal=KILL` followed by a
-cold start, exercising InnoDB crash recovery; and `docker rm --force` with
-recreation of brand-new containers from the *same* named volume, proven to be new
-containers by distinct container IDs. A negative control then removes the volume
-and requires the database to come back empty, so survival is attributable to the
-volume rather than to luck.
+**Run `35135793802`** — Foundation datastore durability, commit
+`866396a127164090c41db9ff1bc310ade555409f`, check `104927987397`, conclusion
+**success**, report status **pass**, Docker 28.0.4, job wall time 48s
+(18:39:52Z–18:40:40Z). Archived as
+`evidence/production-like-execution/hosted-durability-35135793802.json`, SHA-256
+`8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65`.
 
-`tests/foundation/test_durability_contract.py`, 25 tests, guards the contract:
-digest-pinned images only, no mocks or stubs imported, all three scenarios plus
-the negative control present and correctly ordered, exact before/after
-comparison, masked secret supplied through a `0600` bind-mounted file rather than
-a command-line flag, and an explicit statement of what the probe does not prove.
+The digest-pinned images reported their own versions from inside the running
+servers: `11.8.9-MariaDB-ubu2404-log` and Redis `8.6.6` standalone. Durability
+settings were configured explicitly and then **read back from the live servers**
+rather than assumed from the command line — `innodb_flush_log_at_trx_commit=1`,
+`sync_binlog=1`, `log_bin=1`; `aof_enabled=1`, `appendfsync always`,
+`aof_last_write_status=ok`, `rdb_last_bgsave_status=ok`. The probe aborts if
+they did not take effect.
 
-Until a hosted run returns `pass`, the durability gate remains **BLOCKED** and no
-durability claim is made in this report.
+Pre-state captured before any disruption: 25 committed rows with an
+order-independent `SUM(CRC32(...))` payload checksum of **51945241053**, a Redis
+value digest and a 25-item queue digest, and an open uncommitted transaction held
+in a separate client session.
+
+| Scenario | Real operation | Result |
+| --- | --- | --- |
+| 1. Graceful restart | `docker restart` both live servers | survived; CRC and row count identical; Redis digests identical; uncommitted transaction absent |
+| 2. Crash | `docker kill --signal=KILL`, both containers observed `exited`/`unhealthy`, then cold start | survived; identical CRC; uncommitted transaction rolled back by InnoDB recovery |
+| 3. Container destruction | `docker rm --force`, then new containers recreated from the **same** named volume | survived; identical CRC; new container IDs prove genuine replacement (mariadb `12e831ef68ca`→`c081c5c03e39`, redis `c25b3f0c1c9e`→`0b72e4d5ec16`) |
+| 4. Negative control | volume removed, fresh container started | table no longer exists — `confirms_data_lived_in_the_volume: true` |
+
+**Independent proof that the servers really restarted.** The binary log rotated
+once per server start: `mariadb-bin.000001` → `000002` → `000003` (graceful
+restart) → `000004` (SIGKILL cold start) → `000005` (recreation from volume).
+This is server-side evidence that four real restarts occurred, independent of
+the query results. The negative control is what makes the survival attributable
+to the volume rather than to luck.
+
+**Two weaknesses in that passing run were then fixed rather than left
+passing-but-thin** (commit `699ad7e`):
+
+1. The binlog progression was the strongest restart proof but was incidental —
+   recorded and never checked. `assert_binlog_rotated()` now fails the run if the
+   count does not strictly increase per scenario, and the whole progression is
+   reported.
+2. `innodb_recovery_messages` came back **empty**, because the filter matched
+   only `recovery` or `crash` and MariaDB 11.8 logged neither in the captured
+   window. The crash scenario therefore passed on data integrity alone with no
+   server-side corroboration that recovery ran. The filter now covers `innodb`,
+   `redo`, `rollback`, `roll back`, `ready for connections`, `shutdown` and
+   `starting`, keeps the **last** matching lines (because `docker logs` returns
+   the whole container history and the post-crash start is at the end), and an
+   empty result now fails the run.
+
+That stricter probe has **not yet produced its own hosted PASS** — see §9.4. The
+`35135793802` result is retained as provenance and is not relabelled.
+
+`tests/foundation/test_durability_contract.py`, 27 tests, guards the contract,
+including an executed check that the probe refuses to run outside an ephemeral
+Actions runner. Full suite 371 tests pass; `d8_validate.py` exits 0 with no gate
+drift.
+
+**Why the gate stays BLOCKED.** The probe itself states what it does not prove:
+host or region loss, storage-array failure and off-site replication; HA, failover
+and multi-node quorum behaviour; application-level workflow correctness after
+recovery; backup archive integrity; and any owner-selected durability reference
+or retention objective. The gate's area also covers configuration, private/public
+file and encryption-key durability, none of which is proven — the site encryption
+key is still generated and copied by the same ephemeral runner. The owner
+durability references required by `D8-DURABLE-STATE` (`mariadb_durability_reference`,
+`redis_durability_reference`, `site_configuration_custody_reference`,
+`encryption_key_custody_reference`, `private_file_storage_reference`,
+`public_asset_storage_reference`) remain **NOT SELECTED** and are not invented
+here.
 
 ### 9.3 Hard stops preserved through gap closure
 
@@ -623,3 +675,38 @@ overridden, no package was forked, no advisory was suppressed and the gate was
 not downgraded. Historical provenance is preserved unchanged — the new run is
 recorded alongside the prior runs, never relabelled over them. PR #2 remains
 **OPEN** and unmerged.
+
+### 9.4 Open blocker: GitHub credentials expired mid-session
+
+The `GH_TOKEN` in this sandbox expired while gap-closure work was in flight.
+`gh auth status` reports *"The github.com token in GH_TOKEN is no longer valid"*
+and the REST API returns `Bad credentials`, so `git push` fails with *"could not
+read Username for 'https://github.com': terminal prompts disabled"*.
+
+Consequences, stated plainly rather than worked around:
+
+- Everything through commit `866396a` **is pushed**, and both hosted results
+  above were retrieved before the outage, so the P1 closure and the P2
+  container-durability PASS are fully evidenced and archived.
+- Commit `699ad7e` (the stricter durability probe) is **complete locally but not
+  pushed**. Its hosted re-run therefore has not happened.
+- No evidence was inferred, fabricated or backdated to cover this gap, and the
+  missing re-run is recorded as a blocker in `execution-ledger.json` under
+  `outstanding_actions` rather than reported as done.
+
+A credential outage occurred once earlier in this session and resolved on the
+following turn; the same recovery is expected here. Pushing `699ad7e` will
+re-trigger both the durability and runtime workflows, which will additionally
+provide a second reproducibility data point for the P1 fix.
+
+### 9.5 Evidence-integrity self-check performed during this pass
+
+Every 40-hex identifier in the four canonical documents was verified
+programmatically. All seven commit SHAs resolve to real git objects via
+`git cat-file -t`. The remaining thirteen are pre-existing content: upstream
+application source revisions (frappe, erpnext, education, payments, hrms) and
+prior-run commits recorded in earlier sessions, all confirmed present in the
+`251eb8d` baseline. One full commit SHA was transcribed by hand during this pass
+and was **wrong**; it was detected by this check, replaced with the output of
+`git rev-parse 866396a`, and annotated as machine-resolved. Hand-transcribed
+identifiers are not acceptable in an evidence ledger.
