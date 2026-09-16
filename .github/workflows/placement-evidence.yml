@@ -1,8 +1,8 @@
 name: Placement evidence recovery
 on:
-  push:
-    branches: [arena/01a0a9f7-tofel-house-erp]
-    paths: [.github/workflows/placement-evidence.yml, tools/placement/recover_evidence.py, tools/session_branch.py]
+  # Historical artifact recovery is manual-only. It is not a qualification gate
+  # and must not fail every active-branch code push when the artifact host is
+  # unavailable.
   workflow_dispatch:
     inputs:
       source_run:

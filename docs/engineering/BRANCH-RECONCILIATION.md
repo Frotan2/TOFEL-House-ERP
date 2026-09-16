@@ -24,7 +24,11 @@ those are provenance fields, not current execution authorization.
 
 The evidence-recovery workflow runs on the active branch but accepts only its
 explicitly identified historical source run and source branch. Recovery copies
-sanitized evidence; it does not re-execute or re-label the original result.
+sanitized evidence; it does not re-execute or re-label the original result. It
+is manual-only, not a qualification gate: the migration push's recovery run
+`35090760612` failed before publication while retrieving the historical artifact
+(the artifact/results host returned `EOF`). No recovered evidence was claimed.
+The failure is retained as an infrastructure/evidence-retrieval limitation.
 
 ## Required review rule
 

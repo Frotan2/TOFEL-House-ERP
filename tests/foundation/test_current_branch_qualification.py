@@ -27,12 +27,17 @@ class CurrentBranchQualificationTests(unittest.TestCase):
             "foundation-runner.yml",
             "foundation-frontend-review.yml",
             "placement-content.yml",
-            "placement-evidence.yml",
         ):
             source = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
             self.assertIn(f"branches: [{BRANCH}]", source, workflow)
             self.assertIn(f"github.ref == '{REF}'", source, workflow)
             self.assertNotIn("arena/01a09bf3-tofel-house-erp", source, workflow)
+
+        recovery = (ROOT / ".github/workflows/placement-evidence.yml").read_text(encoding="utf-8")
+        self.assertNotIn("    push:", recovery)
+        self.assertIn("  workflow_dispatch:", recovery)
+        self.assertIn(f"github.ref == '{REF}'", recovery)
+        self.assertNotIn("arena/01a09bf3-tofel-house-erp", recovery)
 
     def test_hosted_tools_accept_only_the_active_ref_for_current_runs(self):
         runtime = (ROOT / "tools/foundation/runtime_install.py").read_text(encoding="utf-8")
