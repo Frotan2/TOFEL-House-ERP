@@ -2971,27 +2971,34 @@ def main():
             frappe.set_user('Administrator')
             comp='SYN Teaching House'
             for cname,ctype in (('SYN Teaching Pay','Earning'),('SYN Contract Deduction','Deduction')):
-                if not frappe.db.exists('Salary Component',{'salary_component_name':cname}):
-                    frappe.get_doc(dict(doctype='Salary Component',salary_component_name=cname,
+                # pinned HRMS a4768b44: Salary Component autoname is
+                # field:salary_component (the field labelled "Name")
+                if not frappe.db.exists('Salary Component',cname):
+                    frappe.get_doc(dict(doctype='Salary Component',salary_component=cname,
                         type=ctype)).insert()
             emps={}
+            cur=frappe.db.get_value('Company',comp,'default_currency') or 'USD'
             for label in ('One','Two'):
                 ename=frappe.db.get_value('Employee',{'employee_name':'SYN Employee '+label},'name')
                 if not ename:
-                    emp=frappe.get_doc(dict(doctype='Employee',first_name='SYN Employee '+label,
+                    # pinned erpnext 4048fb70: Employee autoname naming_series,
+                    # no default series value - pass the offered prefix
+                    emp=frappe.get_doc(dict(doctype='Employee',naming_series='HR-EMP-',
+                        first_name='SYN Employee '+label,
                         employee_name='SYN Employee '+label,company=comp,status='Active',
+                        gender='Other',date_of_birth='1990-01-01',
                         date_of_joining='2026-01-01')).insert()
                     ename=emp.name
                 emps[label]=ename
                 if not frappe.db.exists('Salary Structure','SYN Teaching Structure'):
                     frappe.get_doc(dict(doctype='Salary Structure',name='SYN Teaching Structure',
-                        company=comp,payroll_frequency='Monthly',
+                        company=comp,currency=cur,is_active='Yes',payroll_frequency='Monthly',
                         earnings=[dict(salary_component='SYN Teaching Pay',
                                        amount_based_on_formula=0,amount=1)])).insert()
                 if not frappe.db.get_value('Salary Structure Assignment',{'employee':ename,'docstatus':1},'name'):
                     ssa=frappe.get_doc(dict(doctype='Salary Structure Assignment',employee=ename,
                         salary_structure='SYN Teaching Structure',from_date='2026-01-01',
-                        company=comp,base=0))
+                        company=comp,currency=cur,base=0))
                     ssa.insert();ssa.submit()
             frappe.db.commit()
             return dict(company=comp,earning='SYN Teaching Pay',deduction='SYN Contract Deduction',

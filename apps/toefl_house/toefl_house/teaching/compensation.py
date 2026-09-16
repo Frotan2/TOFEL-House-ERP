@@ -366,6 +366,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
             raise frappe.ValidationError("Unknown salary component")
         if deduction and not frappe.db.exists("Salary Component", deduction):
             raise frappe.ValidationError("Unknown deduction salary component")
+        currency = frappe.db.get_value("Company", company_name, "default_currency")
         rows = frappe.db.sql(
             "select name, student_group, skill, instructor, contract, effective_start, effective_end "
             "from `tabTH Teaching Assignment` where effective_start <= %s "
@@ -399,7 +400,8 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
             salary = frappe.get_doc(dict(
                 doctype=ADDITIONAL_SALARY, employee=contract.employee,
                 salary_component=component, amount=amount, payroll_date=end,
-                company=company_name, ref_doctype=ASSIGNMENT, ref_docname=row.name))
+                company=company_name, currency=currency,
+                ref_doctype=ASSIGNMENT, ref_docname=row.name))
             salary.flags.ignore_permissions = True
             salary.flags.ignore_links = True
             salary.insert(ignore_permissions=True)
@@ -426,7 +428,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                     salary_component=(deduction if adjustment.adjustment_type == "Deduction"
                                       else component),
                     amount=float(adjustment.amount),
-                    payroll_date=end, company=company_name,
+                    payroll_date=end, company=company_name, currency=currency,
                     type="Earning" if adjustment.adjustment_type == "Bonus" else "Deduction",
                     ref_doctype=CONTRACT, ref_docname=contract.name))
                 salary.flags.ignore_permissions = True
