@@ -206,8 +206,9 @@ uncontrolled attribute error; and non-string role input could raise a type error
 The fix records no-op requests in native Version, locks the native User before
 receipt lookup, validates the decoded record and role type, returns the recorded
 `changed` state on replay, and blocks self-revocation of the acting operational
-role. No other independently reproducible Administration Control Centre defect
-was found.
+role. Executable tests cover no-op receipt/replay conflict, native row-lock
+ordering, malformed role input, and self-revocation denial. No other
+independently reproducible Administration Control Centre defect was found.
 
 This does not claim deployed offboarding, session revocation, branch runtime
 isolation, production backup custody, or unrestricted native permission safety;
@@ -231,8 +232,8 @@ Independent local results after the audit fix:
 
 | Validation | Result |
 |---|---|
-| Governance and bounded evidence tests | **4 passed** |
-| Full Python test discovery | **311 passed** |
+| Governance, idempotency, and bounded evidence tests | **6 passed** |
+| Full Python test discovery | **313 passed** |
 | D8 contract validator | **exit 0; intentional BLOCKED/REJECT report** |
 | Realtime guard | **PASS** |
 | D10 command-page and native-dialog smoke | **PASS** |
