@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shlex
 import shutil
 import signal
 import subprocess
@@ -28,6 +29,18 @@ def main():
     rootpw, adminpw, dbpw, userpw, restorepw = secrets_
     for s in secrets_:print('::add-mask::'+s, flush=True)
     secretfile = lab/'db-password';secretfile.write_text(rootpw);secretfile.chmod(0o600)
+    # The hosted image can supply a MySQL client while this qualification pins
+    # MariaDB. MySQL 8's default histogram query is not implemented by MariaDB;
+    # disable only that client-side optional metadata request, when supported.
+    # Keep the wrapper ahead of Bench's PATH rather than changing the pinned DB.
+    dump_binary = shutil.which('mysqldump')
+    if not dump_binary:
+        raise RuntimeError('Hosted runner has no mysqldump client for Bench backup')
+    dump_help = subprocess.run([dump_binary, '--help'], text=True, capture_output=True, check=False).stdout
+    dump_wrapper = lab/'tools/bin/mysqldump'; dump_wrapper.parent.mkdir(parents=True, exist_ok=True)
+    dump_option = ' --column-statistics=0' if '--column-statistics' in dump_help else ''
+    dump_wrapper.write_text('#!/bin/sh\nexec ' + shlex.quote(dump_binary) + dump_option + ' "$@"\n')
+    dump_wrapper.chmod(0o700)
     env = dict(os.environ, PATH=str(lab/'tools/bin')+os.pathsep+os.environ['PATH'], UV_PYTHON_DOWNLOADS='never',
                UV_NATIVE_TLS='true', PYTHONUNBUFFERED='1', CI='1', PLACEMENT_TEST_PASSWORD=userpw,
                PLACEMENT_REPORT=str(evidence/'native-checks.json'))

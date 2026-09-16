@@ -42,6 +42,12 @@ class ProductRestoreContractTests(unittest.TestCase):
         self.assertIn("assert source_config.get('db_password') != restore_config.get('db_password')", RUNNER)
         self.assertIn("restore_config['encryption_key'] = source_config['encryption_key']", RUNNER)
 
+    def test_runner_handles_hosted_mysql_client_to_mariadb_backup_compatibility(self):
+        self.assertIn("dump_binary = shutil.which('mysqldump')", RUNNER)
+        self.assertIn("' --column-statistics=0'", RUNNER)
+        self.assertIn("if '--column-statistics' in dump_help", RUNNER)
+        self.assertIn("lab/'tools/bin/mysqldump'", RUNNER)
+
 
 if __name__ == "__main__":
     unittest.main()
