@@ -116,7 +116,28 @@ input is an officially released compatible bundle that changes those direct
 Python and frozen Node inputs; only then should an isolated immutable matrix be
 built and subjected to every unchanged required gate.
 
-## 3. Upgrade-path note
+## 3. SEC-DEPS-01 re-evaluation trigger — watch only
+
+The canonical trigger contract is the `upstream_reopen_trigger` object in
+[`d8-production-operations-decision-matrix.json`](d8-production-operations-decision-matrix.json).
+No new dependency candidate evaluation is authorized until all three conditions
+hold:
+
+1. an official non-prerelease upstream release or reviewed official release input
+   is identified;
+2. the relevant dependency-bearing manifests or locks differ byte-for-byte from
+   the reviewed baseline; and
+3. the changed graph plausibly addresses at least one recorded finding while
+   preserving a coherent official compatibility path.
+
+A moving branch with unchanged inputs, local resolver output, forced lock,
+override, unsupported upgrade, fork-like patch, or advisory-count reduction by
+itself is insufficient. When the trigger is met, engineering may create one
+immutable isolated candidate record and run the unchanged dependency, native,
+security, recovery, realtime, upgrade, and browser gates. Until then the
+status is **UPSTREAM-BLOCKED / REJECT**, not an active remediation project.
+
+## 4. Upgrade-path note
 
 Pinned bundle (foundation-version-matrix.json, reviewed 2026-09-13,
 source SHAs + file hashes recorded there): frappe `v16.33.1`

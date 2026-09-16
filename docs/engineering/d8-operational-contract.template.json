@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "matrix_id": "D8-PRODUCTION-OPERATIONS",
+  "status": "NOT_SELECTED",
+  "active_branch": "arena/01a0a9f7-tofel-house-erp",
+  "source_commit": "NOT_SELECTED",
+  "production_enabled": false,
+  "production_state": "REJECT",
+  "synthetic_only_guard": "REQUIRED",
+  "owner_selections": {
+    "D8-OPS-AUTHORITY": {
+      "status": "NOT_SELECTED",
+      "values": {}
+    },
+    "D8-TOPOLOGY-EDGE": {
+      "status": "NOT_SELECTED",
+      "values": {}
+    },
+    "D8-DURABLE-STATE": {
+      "status": "NOT_SELECTED",
+      "values": {}
+    },
+    "D8-BACKUP-RECOVERY": {
+      "status": "NOT_SELECTED",
+      "values": {}
+    },
+    "D8-OBSERVABILITY-INCIDENT": {
+      "status": "NOT_SELECTED",
+      "values": {}
+    },
+    "D8-CAPACITY-AVAILABILITY": {
+      "status": "NOT_SELECTED",
+      "values": {}
+    },
+    "D8-CHANGE-ROLLBACK": {
+      "status": "NOT_SELECTED",
+      "values": {}
+    }
+  },
+  "evidence": [],
+  "notes": "Template only. No provider, hostname, topology, storage, backup destination, RPO/RTO, monitoring vendor, capacity target, availability target, person, or waiver is selected. Production must remain disabled and REJECT."
+}

@@ -1,0 +1,36 @@
+name: D8 operations contract validation
+
+on:
+  push:
+    branches: [arena/01a0a9f7-tofel-house-erp]
+    paths:
+      - .github/workflows/d8-operations-contract.yml
+      - tools/session_branch.py
+      - tools/foundation/d8_validate.py
+      - docs/engineering/d8-production-operations-decision-matrix.json
+      - docs/engineering/d8-operational-contract.template.json
+      - docs/engineering/foundation-production-acceptance-ledger.json
+      - apps/toefl_house/toefl_house/security.py
+      - tests/d8/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: d8-operations-contract-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/arena/01a0a9f7-tofel-house-erp'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Validate D8 contract and fail-closed release invariants
+        run: python3 tools/foundation/d8_validate.py --contract docs/engineering/d8-operational-contract.template.json
+      - name: Run D8 contract tests
+        run: python3 -m unittest tests.d8.test_contract -v

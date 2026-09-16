@@ -67,6 +67,14 @@
       "closure": "Wait for the smallest official compatible source bundle that changes the direct Python and frozen Node dependency inputs, then create a separate immutable candidate matrix and require every unchanged gate before any baseline adoption decision."
     },
     {
+      "id": "d8-production-operations-contract",
+      "status": "blocked",
+      "evidence": "d8-production-operations-decision-matrix.json; d8-operational-contract.template.json; tools/foundation/d8_validate.py; .github/workflows/d8-operations-contract.yml",
+      "observed": "Canonical provider-neutral D8 matrix records one selected/delivered role-charter area, seven NOT SELECTED / BLOCKED owner-operation decisions, and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT. The fail-closed validator passed matrix schema, ledger release state, synthetic hard stop, secret hygiene, contract schema, release provenance, and production-enable invariants without infrastructure probes.",
+      "limits": "A structural validator is not topology, deployment, backup/restore, RPO/RTO, monitoring, capacity, availability, edge/TLS/session, rollback, or production evidence. No provider, hostname, storage, target, person, or waiver is selected.",
+      "closure": "Select the seven minimum owner decisions, implement the selected architecture, and collect the matrix-defined evidence. Production remains REJECT until all applicable release gates pass."
+    },
+    {
       "id": "public-deployment-boundary",
       "status": "not_qualified",
       "closure": "Approved hostname/proxy topology/certificates; TLS, Secure cookies, origin/header spoofing, CSRF, private-file routing and realtime authentication tests on that deployment."
@@ -227,5 +235,9 @@
     "latest_completed_runtime_status": "fail_reject",
     "prior_qualification_commit": "33b86aed6f8ea4b5997c50f0d1173f4f85af6dea",
     "qualification_scope": "Latest Foundation runtime is qualified at the latest branch head; Placement, Foundation runner, frontend candidate and evidence-recovery records remain bound to their recorded earlier active-branch commit."
-  }
+  },
+  "d8_decision_matrix": "d8-production-operations-decision-matrix.json",
+  "d8_contract_template": "d8-operational-contract.template.json",
+  "d8_gate_state": "BLOCKED",
+  "d8_validator": "tools/foundation/d8_validate.py"
 }

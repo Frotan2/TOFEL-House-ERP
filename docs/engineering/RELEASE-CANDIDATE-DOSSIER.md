@@ -104,13 +104,16 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
 
 ## 5. Outstanding classes (the only remaining ones)
 
-1. **Owner/deployment gates** — precise asks are isolated in the
-   [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md),
-   OWNER-DECISIONS.md, and the Operational Ownership Charter. No engineering
-   workaround exists that would invent business rules or breach containment.
-   Status: D2, D3 and D10(ii) executed & qualified; D6a/D6b/D9 closed;
-   D1/D4/D5/D7 deferred; D8 charter delivered but accountable authority,
-   selected topology/controls, and operating evidence remain open.
+1. **Owner/deployment gates** — the canonical [D8 production-operations
+   decision matrix](d8-production-operations-decision-matrix.json) and
+   [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md) isolate the
+   seven minimum owner decisions and their post-selection evidence. The
+   provider-neutral contract validator and fail-closed template are already
+   executable; no engineering workaround exists that would invent business
+   rules or infrastructure. Status: D2, D3 and D10(ii) executed & qualified;
+   D6a/D6b/D9 closed; D1/D4/D5/D7 deferred; D8 charter delivered but
+   authority, selected topology/controls, and operating evidence remain open
+   with D8 **BLOCKED** and production **REJECT**.
 2. **Upstream items** — SEC-DEPS-01 remains **UPSTREAM-BLOCKED / REJECT**. The
    latest Foundation runtime `35090904508` at
    `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` ran 116 restricted checks; 114

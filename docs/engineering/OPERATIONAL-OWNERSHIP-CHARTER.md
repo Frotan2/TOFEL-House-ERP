@@ -114,9 +114,11 @@ The application code has no production deployment, host, monitoring, backup or
 identity-operations role. The following are the operational ownership slots
 that remain to be selected by the owner/contract holder. They are restatements
 of D8 and the existing foundation production-acceptance ledger, not new policy.
-The exact minimal response and the required production evidence are in the
-[D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md); it requests no
-names, credentials, or invented service commitments.
+The exact minimal response, engineering-allowed work, acceptance conditions,
+and required production evidence are in the canonical
+[D8 production-operations decision matrix](d8-production-operations-decision-matrix.json)
+and [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md); they request
+no names, credentials, or invented service commitments.
 
 | Responsibility slot needing an accountable owner | Required decision/evidence already recorded | Current state |
 |---|---|---|

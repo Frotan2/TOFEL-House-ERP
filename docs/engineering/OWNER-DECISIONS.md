@@ -69,15 +69,23 @@ state:** R2 registers ship **raw facts only** (hosted-proven, run
 reporting metrics layer above the registers.
 
 ## D8 — Production-operation inputs
-**Decide:** accountable operating/recovery/escalation authority; approved
-topology and public trust boundary; persistence, file-storage, backup/key-custody
-and recovery objectives; monitoring/incident, capacity/availability, and
-change/rollback controls. The exact minimal fields and evidence are in the
-[D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md).
+**Decide:** the seven minimum owner decisions in the canonical
+[D8 production-operations decision matrix](d8-production-operations-decision-matrix.json):
+accountable operating/recovery/escalation authority; approved topology and
+public trust boundary; persistence/file/key custody; backup destination,
+retention, restoration authority and RPO/RTO; monitoring/incident/retention;
+capacity/availability; and change/upgrade/rollback control. The matrix records
+exact fields, engineering work that may proceed before selection, evidence after
+selection, acceptance conditions, and current states. It does not select a
+provider, cloud/VPS, hostname, DNS, storage, monitoring vendor, target, person,
+or waiver.
 **Why owner-only:** operational and contractual. **Current state:** the
 Phase 2 ledger remains REJECT with only scoped hosted passes. A current
 synthetic product SQL/files backup and separately created-site restore verifier
 exists but cannot establish independent-host DR or production operations.
+The provider-neutral contract template and fail-closed validator are
+[`d8-operational-contract.template.json`](d8-operational-contract.template.json)
+and [`d8_validate.py`](../../tools/foundation/d8_validate.py).
 **Unblocks:** owner-selected production-operation engineering and evidence;
 it does not itself remove REJECT or waive any acceptance-ledger/security gate.
 

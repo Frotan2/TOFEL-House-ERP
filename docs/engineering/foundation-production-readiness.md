@@ -32,6 +32,31 @@ topology, or availability. The canonical current record is the
 [acceptance ledger](foundation-production-acceptance-ledger.json), and owner inputs
 remain isolated in the [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md).
 
+## D8 engineering qualification framework
+
+The canonical, provider-neutral D8 matrix is
+[`d8-production-operations-decision-matrix.json`](d8-production-operations-decision-matrix.json).
+Its seven minimum owner selections remain `NOT SELECTED` / `BLOCKED`; the
+role-based ownership charter is `SELECTED / DELIVERED` as a scoped `PASS`, and
+SEC-DEPS-01 remains `UPSTREAM-BLOCKED / REJECT`. Engineering has completed the
+contract/schema, environment-separation, secret-hygiene, release-provenance,
+synthetic-hard-stop, and fail-closed production-enable checks. Topology,
+backup/recovery, observability, capacity, edge/security, and rollback harness
+contracts are structurally ready but cannot become deployment evidence until the
+owner-selected architecture exists. The executable contract template and CI
+check are [`d8-operational-contract.template.json`](d8-operational-contract.template.json),
+[`d8_validate.py`](../../tools/foundation/d8_validate.py), and
+`.github/workflows/d8-operations-contract.yml`.
+
+## Upstream re-evaluation boundary
+
+SEC-DEPS-01 is watch-only. Do not run a candidate remediation cycle unless an
+official released input changes the dependency-bearing manifests or locks and
+plausibly addresses a recorded finding. The full trigger and non-sufficient
+conditions are canonical in the D8 matrix and
+[`UPSTREAM-TRACKING.md`](UPSTREAM-TRACKING.md); no local override, waiver,
+forced lock, unsupported upgrade, or fork-like patch is acceptable.
+
 ## Subsequent dependency and operations qualification — 2026-09-14
 
 **REJECT remains current.** See [final qualification review](foundation-final-qualification.md)

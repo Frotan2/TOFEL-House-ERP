@@ -50,30 +50,47 @@ or approved authority reference; a person name is neither requested nor inferred
 Values that are not yet selected can be marked **not selected**. That leaves the
 related gate open.
 
-## D8 disposition matrix
+## Canonical actionable D8 decision matrix
 
-| D8 decision area | Current disposition | Boundary |
-|---|---|---|
-| Role-based operational ownership charter | **SELECTED / DELIVERED** — owner decision D8 as recorded in `OWNER-DECISIONS.md`; T5 derives responsibility slots from shipped code | This selects a reviewable role/responsibility model only. It does not assign people, providers, contracts, service levels, or production authority. |
-| Accountable production operating/recovery authority | **NOT SELECTED** | No accountable authority or escalation authority has been supplied. |
-| Production hostname, topology and trust boundary | **NOT SELECTED** | No hostname, DNS, proxy, TLS custody, origin policy, or network placement has been approved. |
-| Durable state, files, backup destination and key custody | **NOT SELECTED** | No MariaDB/Redis/files/configuration/key storage or backup destination/retention model has been selected. |
-| RPO/RTO, capacity and availability objectives | **NOT SELECTED** | No recovery, concurrency, scale, availability, or capacity target has been supplied. |
-| Monitoring, alerting, incident and change/rollback controls | **NOT SELECTED** | No alert receiver, retention target, incident authority, release approver, or rollback criterion has been selected. |
+The single canonical decision matrix is the machine-readable
+[`d8-production-operations-decision-matrix.json`](d8-production-operations-decision-matrix.json).
+It is intentionally provider-neutral and records, for every D8 area, the current
+disposition, exact owner decision, whether engineering can proceed, work already
+allowed, evidence required after selection, acceptance condition, and current gate
+state. This document is the explanation and owner-input boundary; it must not
+create a second competing matrix.
 
-The detailed response/evidence contract remains below. **NOT SELECTED** is an
-explicit current disposition, not a default and not an engineering recommendation.
+The explicit current summary is:
 
-| Required input | Minimal response needed | Required evidence before the gate can close |
-|---|---|---|
-| Operational accountability | An accountable authority for production change approval, service operation, security incident decision, and recovery authorization; escalation authority may be the same or distinct. | A non-secret ownership/escalation record approved by that authority. |
-| Deployment and trust boundary | Approved production hostname/DNS ownership, network/reverse-proxy placement, TLS certificate custody/renewal authority, allowed origins, and the boundary between public, application, database, Redis, worker/scheduler, realtime, and file-storage services. | A topology/configuration record plus deployed edge tests for TLS, Secure-cookie/session behavior, origins/headers/CSRF, private-file routing, and realtime authentication. |
-| Durable-state and file-storage design | The selected persistence/storage locations and durability responsibility for MariaDB, Redis queues/cache, site configuration, encryption keys, private files, and public assets. | A deployed configuration review and controlled loss/restart evidence proving the selected durability behavior. |
-| Backup and key custody | Backup destination and retention authority; encryption/key-custody and retrieval authority; who may authorize restoration; and the intended recovery-point and recovery-time objectives. | An actual encrypted backup, a separate-infrastructure recovery rehearsal, key retrieval under the defined custody model, data/file verification, copied-session revocation check, and measured results against the owner-selected objectives. |
-| Service operation and failure detection | The selected monitoring/log/audit retention locations, alert receiver/escalation authority, and incident/recovery decision path for web, database, queues/workers, scheduler, realtime, files, and backup jobs. | Tested failure detection, alert delivery, log/audit retention and rotation/recovery, plus an incident/recovery exercise. |
-| Capacity and availability objectives | Representative concurrency, data scale, workload mix, and availability expectation. No numeric target is presumed here. | Controlled database/web/queue/worker/realtime tests measured against those selected objectives, including overload/failure handling. |
-| Change, upgrade, and rollback control | Release approver; immutable build/provenance and configuration-promotion method; maintenance/communication authority; rollback decision criteria and supported restore-based fallback. | A controlled full-bundle upgrade rehearsal and supported rollback or restore-based rollback rehearsal in the selected architecture. |
-| Security acceptance disposition | A decision on whether unresolved dependencies and security coverage may be remediated, accepted, or otherwise handled. This packet does **not** request a waiver. | Engineering evidence of a coherent maintained dependency migration, clean relevant audits/SBOM, exploit- and integration-specific regressions, plus closure of remaining security gates. |
+- `D8-OWNERSHIP-CHARTER`: **SELECTED / DELIVERED**, scoped **PASS** only.
+- `D8-OPS-AUTHORITY`, `D8-TOPOLOGY-EDGE`, `D8-DURABLE-STATE`,
+  `D8-BACKUP-RECOVERY`, `D8-OBSERVABILITY-INCIDENT`,
+  `D8-CAPACITY-AVAILABILITY`, and `D8-CHANGE-ROLLBACK`: **NOT SELECTED** and
+  **BLOCKED**. Engineering contract/schema/harness work may proceed, but no
+  production operation may be enabled.
+- `D8-SECURITY-DEPENDENCY`: **UPSTREAM-BLOCKED / REJECT**. No waiver or owner
+  override is requested or accepted.
+
+The provider-neutral fail-closed contract template is
+[`d8-operational-contract.template.json`](d8-operational-contract.template.json).
+Validate it locally with:
+
+```sh
+python3 tools/foundation/d8_validate.py \
+  --contract docs/engineering/d8-operational-contract.template.json
+```
+
+The validator performs release-provenance, branch, ledger, synthetic-hard-stop,
+secret-hygiene, contract-schema, and production-enable checks without connecting
+to infrastructure. A successful validator run can still report `BLOCKED` or
+`REJECT`; that is the intended result while inputs and release gates are open.
+The same check runs in `.github/workflows/d8-operations-contract.yml`.
+
+The matrix also contains the release-gate matrix required for final release
+review: scoped domain/authorization/realtime passes are explicitly bounded;
+recovery, backup/restore, upgrade/rollback, observability, topology/edge,
+capacity/availability, durability, and change-control are **BLOCKED**;
+SEC-DEPS-01 and overall production authorization are **REJECT**.
 
 ## Engineering work enabled by those inputs
 
