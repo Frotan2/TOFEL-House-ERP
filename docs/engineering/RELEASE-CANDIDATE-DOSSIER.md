@@ -68,7 +68,7 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
 
 | Suite | Tests |
 |---|---|
-| tests/foundation | 73 |
+| tests/foundation | 74 |
 | tests/placement | 148 |
 | tests/admission | 6 |
 | tests/enrollment | 10 |
@@ -112,11 +112,14 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
    D1/D4/D5/D7 deferred; D8 charter delivered but accountable authority,
    selected topology/controls, and operating evidence remain open.
 2. **Upstream items** — SEC-DEPS-01 remains REJECT. The current Foundation
-   runtime `35080305713` at `53f867a` ran a post-build resolved-stack audit:
-   161 Bench-Python names yielded 14 PyPI/OSV finding records and 572 supplied
-   installed Node names yielded 97 npm advisory entries. Its full runtime
-   evidence is check `104748126767`, SHA-256
-   `ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde`.
+   runtime `35084695840` at `955e4cd` ran a post-build resolved-stack audit:
+   161 Bench-Python names yielded 14 PyPI/OSV finding records across four
+   packages and 572 supplied installed Node names yielded 97 npm advisory
+   entries across 36 packages (2 critical / 49 high / 39 moderate / 7 low).
+   Exact IDs and versions are in
+   [`resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
+   Its full runtime evidence is check `104762158723`, SHA-256
+   `f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc`.
    The diagnostic failed as intended; it has no OS-package/container-CVE,
    exploitability/reachability, full-SBOM, remediation, or production claim.
    Separately, the Education frontend comparison `35075532676` at `d84f1c9`

@@ -69,15 +69,20 @@ $ grep -rn "publish_realtime\|realtime_subscribe\|frappe.realtime\|socketio" \
   Full machine-readable result:
   `docs/engineering/evidence/phase-2/education-frontend-advisory-rescan-2026-09-16.json`.
 - **Current resolved-stack audit (2026-09-16, this branch):** hosted Foundation
-  run `35080305713` at `53f867ae67ef6fbaebe595b470abeab081f33f24` ran the
+  run `35084695840` at `955e4cd5eedc34b90f4fbfce047339e18558f1f2` ran the
   collector after the actual Bench asset build. It used the Bench interpreter's
   installed distributions (161 package names, queried against OSV/PyPI) and
   supplied installed Frappe/ERPNext/Education/Payments/HRMS Node roots plus
   Education frontend (572 package names, queried against npm bulk advisories).
-  It recorded **14 PyPI/OSV finding records** and **97 npm advisory entries**,
-  so its diagnostic check failed as intended. The entire runtime report is
-  `Foundation runtime evidence` check `104748126767`, SHA-256
-  `ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde`;
+  It recorded **14 PyPI/OSV finding records across four packages** and **97 npm
+  advisory entries across 36 packages** (2 critical / 49 high / 39 moderate /
+  7 low), so its diagnostic check failed as intended. Exact advisory IDs,
+  queried versions, provider ranges, and the validated report provenance are
+  retained in
+  [`evidence/phase-2/resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
+  The entire runtime report is `Foundation runtime evidence` check
+  `104762158723`, SHA-256
+  `f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc`;
   the detailed `stack-dependency-audit.json` was retained as restricted
   workflow evidence. The checker records MariaDB and Redis digest references
   only as inventory; it is not an OS-package or container-image CVE scanner,
@@ -92,6 +97,15 @@ source SHAs + file hashes recorded there): frappe `v16.33.1`
 (`988e54f3c4c2`), erpnext `v16.34.2` (`4048fb70e14d`), education
 `v16.1.0` (`93bc7075`), hrms `v16.18.1` (`a4768b44`), bench `v5.31.0`,
 python 3.14.7, node 24.21.0, mariadb 11.8.9, redis 8.6.6.
+
+**Newer-release observation, not a selected candidate (2026-09-16):** GitHub
+release metadata lists Frappe `v16.34.0` (`c1f1e8ec3708750d7254f7f99d869ffb9886f19f`;
+published 2026-09-15) and ERPNext `v16.35.0`
+(`12cd563fb9a79731f75ae2a45b1446a0a2dd9e74`; published 2026-09-15).
+Education and HRMS have no newer non-prerelease v16 release than their current
+pins. These two releases are **not adopted**: no five-app compatibility,
+dependency, migration, native lifecycle, or production qualification has been
+performed on that combination.
 
 **Upgrade procedure (when authorized):**
 1. Bump one app at a time to the newest non-prerelease tag in the same

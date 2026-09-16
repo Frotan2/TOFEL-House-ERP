@@ -3,15 +3,17 @@
 ## Current-branch reconciliation — 2026-09-16
 
 **REJECT remains current.** The historical checkpoints below are retained evidence,
-not current-branch production approval. At `53f867a`, hosted Foundation runtime run
-`35080305713` executed 116 restricted checks; 114 passed. Its post-build resolved-stack
+not current-branch production approval. At `955e4cd`, hosted Foundation runtime run
+`35084695840` executed 116 restricted checks; 114 passed. Its post-build resolved-stack
 audit inventoried 161 Bench-Python and 572 supplied installed Node package names,
-recording 14 PyPI/OSV finding records and 97 npm advisory entries; its full-stack and
-Education frontend advisory diagnostics failed. Readiness, realtime, upgrade, Guardian
-browser, frontend-graph, restart, and remaining-gate probes passed. The published runtime
-and remaining-gate reports (Checks `104748126767` / `104748129346`; SHA-256
-`ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde` /
-`2af4fef7c2db78e0daa9b6c83aaeed3a3b92c72da41bc19e58a2f4beabec4e6c`) therefore
+recording 14 PyPI/OSV finding records across four packages and 97 npm advisory entries
+across 36 packages (2 critical / 49 high / 39 moderate / 7 low); its full-stack and
+Education frontend advisory diagnostics failed. Exact IDs, versions and provider ranges
+are retained in [`resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
+Readiness, realtime, upgrade, Guardian browser, frontend-graph, restart, and remaining-gate
+probes passed. The published runtime and remaining-gate reports (Checks `104762158723` / `104762162219`; SHA-256
+`f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc` /
+`b03a2678f7d8a296a90adf8ce1b567b326431d5bcdaca6d808ee0874cf731afe`) therefore
 set both `phase2_gate_passed` and `security_gate_passed` to false. The dependency audit
 is not a claim of exploitability/reachability, OS-package or container-CVE coverage,
 a complete SBOM, remediation, or production approval.

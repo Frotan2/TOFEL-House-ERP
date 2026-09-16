@@ -11,14 +11,14 @@
     "date": "2026-09-16",
     "branch": "arena/01a0a942-tofel-house-erp",
     "foundation_runtime": {
-      "run": "35080305713",
-      "commit": "53f867ae67ef6fbaebe595b470abeab081f33f24",
-      "check": "104748126767",
-      "report_sha256": "ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde",
-      "remaining_gate_check": "104748129346",
-      "remaining_gate_report_sha256": "2af4fef7c2db78e0daa9b6c83aaeed3a3b92c72da41bc19e58a2f4beabec4e6c",
+      "run": "35084695840",
+      "commit": "955e4cd5eedc34b90f4fbfce047339e18558f1f2",
+      "check": "104762158723",
+      "report_sha256": "f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc",
+      "remaining_gate_check": "104762162219",
+      "remaining_gate_report_sha256": "b03a2678f7d8a296a90adf8ce1b567b326431d5bcdaca6d808ee0874cf731afe",
       "status": "fail",
-      "observed": "116 restricted checks ran; 114 passed. The post-asset-build resolved-stack audit inventoried 161 Bench-Python package names and 572 supplied installed Node package names; it recorded 14 PyPI/OSV finding records and 97 npm advisory entries. The pinned MariaDB/Redis references are inventory-only. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed; both full-stack and Education frontend advisory audits failed.",
+      "observed": "116 restricted checks ran; 114 passed. The post-asset-build resolved-stack audit inventoried 161 Bench-Python package names and 572 supplied installed Node package names; it recorded 14 PyPI/OSV finding records across four packages and 97 npm advisory entries across 36 packages (2 critical, 49 high, 39 moderate, 7 low). Exact IDs, queried versions and provider ranges are retained in evidence/phase-2/resolved-stack-advisory-2026-09-16.json. The pinned MariaDB/Redis references are inventory-only. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed; both full-stack and Education frontend advisory audits failed.",
       "limits": "Current REJECT evidence: phase2_gate_passed and security_gate_passed remain false. The audit does not establish exploitability/reachability, a complete SBOM, OS-package or container-image CVE coverage, remediation, or production approval."
     },
     "product_restore_rehearsal": {
@@ -79,8 +79,8 @@
     {
       "id": "resolved-dependency-trees",
       "status": "fail",
-      "evidence": "Foundation runtime 35080305713, check 104748126767, report SHA-256 ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde",
-      "observed": "After actual asset build, the Bench interpreter inventory held 161 PyPI package names and supplied installed Frappe/ERPNext/Education/Payments/HRMS plus Education frontend Node roots held 572 package names. OSV returned 14 PyPI finding records; npm returned 97 advisory entries. The audit correctly failed on these matches.",
+      "evidence": "Foundation runtime 35084695840, check 104762158723, report SHA-256 f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc; evidence/phase-2/resolved-stack-advisory-2026-09-16.json",
+      "observed": "After actual asset build, the Bench interpreter inventory held 161 PyPI package names and supplied installed Frappe/ERPNext/Education/Payments/HRMS plus Education frontend Node roots held 572 package names. OSV returned 14 finding records across pdfkit 1.0.0, pypdf 6.15.0, setuptools 80.9.0 and weasyprint 68.0. npm returned 97 advisory entries across 36 packages (2 critical, 49 high, 39 moderate, 7 low), with exact IDs and versions preserved in the evidence record. The audit correctly failed on these matches.",
       "limits": "No exploitability/reachability or remediation conclusion; no complete SBOM, host-OS-package or container-image CVE coverage. MariaDB/Redis digest references are inventory-only.",
       "closure": "A coherent maintained migration of the affected pinned upstream stack, clean relevant resolved-tree re-runs, and separately selected OS/container dependency coverage where required."
     },

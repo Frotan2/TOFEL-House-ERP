@@ -35,12 +35,14 @@ is invented anywhere in this plan.**
   foundation-production-acceptance-ledger.json): REJECT; scoped passes
   for web/worker restart, scheduler, framework patch upgrade, hardened
   restore; open items SEC-DEPS-01, SEC-GUARDIAN-01, SEC-RT-TASK-01 and
-  deployment-scope operations. Current-branch Foundation run `35080305713`
-  at `53f867a` ran 116 restricted checks; 114 passed. Its new post-build
-  full-stack resolved-tree audit recorded 14 PyPI/OSV and 97 npm advisory
-  entries, while the Education frontend audit also failed. Both Phase 2 and
-  security gates remain false; this is not OS-package, container-CVE,
-  exploitability/reachability, full-SBOM, or production evidence.
+  deployment-scope operations. Current-branch Foundation run `35084695840`
+  at `955e4cd` ran 116 restricted checks; 114 passed. Its new post-build
+  full-stack resolved-tree audit recorded 14 PyPI/OSV findings across four
+  packages and 97 npm advisory entries across 36 packages (2 critical / 49 high /
+  39 moderate / 7 low), while the Education frontend audit also failed. Both
+  Phase 2 and security gates remain false; this is not OS-package, container-CVE,
+  exploitability/reachability, full-SBOM, or production evidence. Exact matches:
+  [`resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
 - D8 engineering now has a hosted disposable product SQL/public-files/private-files
   backup and distinct-site restore rehearsal: run `35076449739` at `ebe7767`
   passed its 542 native checks and restore verifier. This does not reopen a
@@ -103,10 +105,13 @@ invent business rules.
 - **Closed here:** A13 implemented-slice containment (523/523).
 - **SEC-DEPS-01** (resolved dependency advisories): current hosted runtime
   inventory covers 161 Bench-Python names plus 572 supplied installed Node names
-  and reports 14 PyPI/OSV finding records plus 97 npm advisory entries (run
-  `35080305713`, check `104748126767`, SHA-256
-  `ef3b9157efa9c0ec1e980c487de75bf4f3c8edb8dcf6f45b5d31e9a67ec4dbde`). A
-  coherent maintained upstream stack migration and clean re-run are required;
+  and reports 14 PyPI/OSV finding records across four packages plus 97 npm
+  advisory entries across 36 packages (2 critical / 49 high / 39 moderate /
+  7 low; run `35084695840`, check `104762158723`, SHA-256
+  `f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc`).
+  Exact IDs and versions are retained in
+  [`resolved-stack-advisory-2026-09-16.json`](evidence/phase-2/resolved-stack-advisory-2026-09-16.json).
+  A coherent maintained upstream stack migration and clean re-run are required;
   patching the pinned upstream bundle in-repo would invent a fork. The audit
   explicitly does not cover OS packages or container image CVEs, and does not
   establish exploitability/reachability, an SBOM, or production acceptance.
