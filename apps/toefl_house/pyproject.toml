@@ -9,7 +9,11 @@ description = "Synthetic-only TOEFL House placement and thin admission qualifica
 requires-python = ">=3.14"
 
 [tool.setuptools.package-data]
-toefl_house = ["modules.txt", "patches.txt", "fixtures/*.json", "placement/doctype/*/*.json", "admission/doctype/*/*.json"]
+toefl_house = [
+  "modules.txt", "patches.txt", "fixtures/*.json",
+  "*/doctype/*/*.json", "*/report/*/*.json", "*/workspace/*/*.json",
+  "*/page/*/*.json", "public/js/*.js"
+]
 
 [tool.setuptools.packages.find]
 include = ["toefl_house*"]

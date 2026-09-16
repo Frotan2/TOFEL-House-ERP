@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Enrollment",
+  "name": "th-enrollment",
+  "page_name": "th-enrollment",
+  "roles": [
+    {
+      "role": "Enrollment Officer"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Enrollment"
+}

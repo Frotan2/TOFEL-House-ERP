@@ -1,7 +1,7 @@
 name: Placement synthetic content qualification
 on:
   push:
-    branches: [arena/01a0a496-tofel-house-erp]
+    branches: [arena/01a0a942-tofel-house-erp]
     paths:
       - .github/workflows/placement-content.yml
       - apps/toefl_house/**
@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   content:
-    if: github.ref == 'refs/heads/arena/01a0a496-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0a942-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -45,6 +45,7 @@ jobs:
           python3 -m unittest discover -s tests/finance -v 2>&1 | tee .foundation/placement-evidence/finance-unit-tests.txt
           python3 -m unittest discover -s tests/foundation -v 2>&1 | tee .foundation/placement-evidence/foundation-unit-tests.txt
           node tests/foundation/test_realtime_guard.cjs 2>&1 | tee .foundation/placement-evidence/realtime-unit-tests.txt
+          node tests/foundation/test_command_pages.cjs 2>&1 | tee .foundation/placement-evidence/command-pages-unit-tests.txt
       - name: Pinned runner dependencies
         run: |
           npm install --global yarn@1.22.22

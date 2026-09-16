@@ -26,7 +26,8 @@ def main():
             "refs/heads/arena/01a09bf3-tofel-house-erp",
             "refs/heads/arena/01a0a055-tofel-house-erp",
             "refs/heads/arena/01a0a13b-tofel-house-erp",
-            "refs/heads/arena/01a0a496-tofel-house-erp"):
+            "refs/heads/arena/01a0a496-tofel-house-erp",
+            "refs/heads/arena/01a0a942-tofel-house-erp"):
         raise SystemExit("Evidence publication is restricted to the authorized branch")
     raw = args.report.read_bytes()
     report = json.loads(raw)

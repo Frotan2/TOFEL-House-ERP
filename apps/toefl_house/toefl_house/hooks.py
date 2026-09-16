@@ -7,12 +7,23 @@ app_license = "MIT"
 required_apps = ["erpnext", "education", "foundation_security"]
 after_install = "toefl_house.install.after_install"
 after_migrate = "toefl_house.install.after_migrate"
-# R1 release surface note: the six role-scoped staff workspaces (TH Placement,
-# TH Admission, TH Enrollment, TH Teaching, TH Finance, TH Receipts) ship as
-# native module files (<module>/workspace/<slug>/<slug>.json) and import via
-# module sync - the upstream-canonical route ERPNext itself uses. They are pure
-# navigation configuration; they grant no read permission - the document
-# permission model stays authoritative.
+# Release navigation is deliberately split by the native framework boundary.
+# Workspaces remain only TH Receipts and TH Finance.  They pass Frappe's
+# workspace module gate and do not grant document permission.  D10's
+# API-first roles receive native Page records instead: pinned Page.get checks
+# only the Page Has Role rows, so a page can launch an existing guarded command
+# without widening native document permissions or creating another Workspace.
+# `app_home` routes the TOEFL House app tile to the role-filtered command centre;
+# every individual page remains independently Page-role-gated server-side.
+app_home = "/app/th-command-centre"
+_COMMAND_PAGES = (
+    "th-command-centre",
+    "th-placement-author", "th-placement-publisher", "th-placement-invigilation",
+    "th-placement-assessment", "th-placement-review", "th-placement-release",
+    "th-admission-officer", "th-admission-review", "th-admission-approval",
+    "th-enrollment", "th-teaching-scheduling", "th-attendance-recording",
+)
+page_js = {name: "public/js/th_command_pages.js" for name in _COMMAND_PAGES}
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor"]]]},
             {"dt": "Custom Field", "filters": [["dt", "=", "Sales Invoice"], ["fieldname", "=", "th_placement_case"]]}]
 has_permission = {

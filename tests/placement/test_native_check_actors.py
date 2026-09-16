@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 NATIVE = ROOT / "tools/placement/native_checks.py"
 SECURITY = ROOT / "apps/toefl_house/toefl_house/security.py"
 
-SESSION_BRANCH = "arena/01a0a496-tofel-house-erp"
+SESSION_BRANCH = "arena/01a0a942-tofel-house-erp"
 SESSION_REF = "refs/heads/" + SESSION_BRANCH
 
 AUTHOR_ONLY = frozenset({"second_author", "other"})
@@ -457,7 +457,9 @@ class Increment3ActorGuardTests(unittest.TestCase):
 
     def test_no_th_enrollment_ledger_doctype(self):
         root = ROOT / "apps/toefl_house/toefl_house"
-        folders = {p.parent.name for p in root.rglob("*.json") if p.parent.name.startswith("th_")}
+        # Search only DocType exports: a native command Page named
+        # `th-enrollment` is not an invented TH enrollment ledger.
+        folders = {p.parent.name for p in root.glob("*/doctype/th_*/*.json")}
         self.assertNotIn("th_enrollment_request", folders)
         self.assertNotIn("th_enrollment", folders)
         self.assertNotIn("th_program_enrollment", folders)

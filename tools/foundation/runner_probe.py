@@ -24,6 +24,7 @@ AUTHORIZED_REFS = (
     "refs/heads/arena/01a0a055-tofel-house-erp",
     "refs/heads/arena/01a0a13b-tofel-house-erp",
     "refs/heads/arena/01a0a496-tofel-house-erp",
+    "refs/heads/arena/01a0a942-tofel-house-erp",
 )
 
 

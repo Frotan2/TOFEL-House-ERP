@@ -2724,10 +2724,11 @@ def main():
         # + utils/user.py allow_modules): a workspace is reachable only when its
         # module holds at least one doctype the user can natively read/write/
         # create, then the Has-Role table scopes it. Under A13 containment the
-        # API-first operational roles (invigilator, author, admission/enrollment/
-        # teaching staff) hold zero document permissions, so no workspace is
-        # visible to them by design (owner gate D10 covers any future Desk
-        # surface). Shipped surfaces: auditors (read the TH operations ledger,
+        # API-first operational roles have existing, narrowly scoped TH-DocType
+        # reads, further contained by policy.can_read; they receive no native
+        # Education/ERPNext CRUD authority. The Workspace module-gate composition
+        # does not supply a compliant staff workspace, hence D10(ii)'s separate
+        # Page surface. Shipped workspaces remain: auditors (read the TH operations ledger,
         # module Placement) and the finance officer (native Accounts User reads,
         # module Accounts).
         ws_spec={'TH Receipts':('Placement',{'Placement Auditor','Admission Auditor','Enrollment Auditor','Teaching Auditor','Finance Auditor'}),
@@ -2739,9 +2740,25 @@ def main():
             # (The finance officer's Accounts User role also feeds the pinned
             # module-visibility gate: allow_modules via native Accounts reads.)
             frappe.set_user('Administrator')
-            grants={'finance_officer':['Finance Officer','Accounts User'],
-                    'invigilator':['Placement Invigilator'],
-                    'teaching_scheduler':['Teaching Scheduler']}
+            grants={
+                # Full designed Page audience is restored after the role-revocation
+                # negatives. This makes the Page proof test real role memberships,
+                # not a cached or Administrator-only presentation.
+                'second_author':['Placement Author'],
+                'publisher':['Placement Publisher'],
+                'invigilator':['Placement Invigilator'],
+                'assessor':['Placement Assessor'],
+                'reviewer':['Placement Reviewer'],
+                'releaser':['Placement Releaser'],
+                'officer':['Admission Officer'],
+                'admissions_reviewer':['Admission Reviewer'],
+                'approver':['Admission Approver'],
+                'enrollment_officer':['Enrollment Officer'],
+                'teaching_scheduler':['Teaching Scheduler'],
+                'attendance_recorder':['Attendance Recorder'],
+                # The Finance workspace keeps its existing upstream module anchor.
+                'finance_officer':['Finance Officer','Accounts User'],
+            }
             for label,roles in grants.items():
                 u=frappe.get_doc('User',users[label])
                 u.roles=[]
@@ -2825,6 +2842,99 @@ def main():
             frappe.set_user('Administrator')
             return {'no_read_granted_by_workspaces':True}
         check('release-workspace-no-privilege-escalation',ws_no_privilege_escalation)
+        # ---- T3 / D10(ii): native role-scoped command Pages. Pinned Frappe
+        # Page.get checks the Page Has Role rows directly; unlike Workspace it
+        # has no module-visibility prerequisite. The Page client is a thin
+        # command launcher only. It makes no document-list/read request, and
+        # each server command still authorizes KIND_ROLES and its own state/SoD.
+        PAGE_SPEC={
+            'th-command-centre':('Placement',{'Placement Author','Placement Publisher','Placement Invigilator','Placement Assessor','Placement Reviewer','Placement Releaser','Admission Officer','Admission Reviewer','Admission Approver','Enrollment Officer','Teaching Scheduler','Attendance Recorder'}),
+            'th-placement-author':('Placement',{'Placement Author'}),
+            'th-placement-publisher':('Placement',{'Placement Publisher'}),
+            'th-placement-invigilation':('Placement',{'Placement Invigilator'}),
+            'th-placement-assessment':('Placement',{'Placement Assessor'}),
+            'th-placement-review':('Placement',{'Placement Reviewer'}),
+            'th-placement-release':('Placement',{'Placement Releaser'}),
+            'th-admission-officer':('Admission',{'Admission Officer'}),
+            'th-admission-review':('Admission',{'Admission Reviewer'}),
+            'th-admission-approval':('Admission',{'Admission Approver'}),
+            'th-enrollment':('Enrollment',{'Enrollment Officer'}),
+            'th-teaching-scheduling':('Teaching',{'Teaching Scheduler'}),
+            'th-attendance-recording':('Teaching',{'Attendance Recorder'}),
+        }
+        PAGE_PROBES={
+            'second_author':'th-placement-author',
+            'publisher':'th-placement-publisher',
+            'invigilator':'th-placement-invigilation',
+            'assessor':'th-placement-assessment',
+            'reviewer':'th-placement-review',
+            'releaser':'th-placement-release',
+            'officer':'th-admission-officer',
+            'admissions_reviewer':'th-admission-review',
+            'approver':'th-admission-approval',
+            'enrollment_officer':'th-enrollment',
+            'teaching_scheduler':'th-teaching-scheduling',
+            'attendance_recorder':'th-attendance-recording',
+        }
+        def pages_configured():
+            frappe.set_user('Administrator')
+            configured={}
+            for page_name,(module,roles) in PAGE_SPEC.items():
+                page=frappe.get_doc('Page',page_name)
+                assert page.standard=='Yes' and page.page_name==page_name,(page_name,page.standard,page.page_name)
+                assert page.module==module,(page_name,page.module,module)
+                assert {r.role for r in page.roles}==roles,(page_name,sorted(r.role for r in page.roles),sorted(roles))
+                page.load_assets()
+                assert 'toefl_house.command_pages' in page.script,(page_name,'shared command page script missing')
+                configured[page_name]=sorted(roles)
+            assert frappe.get_hooks('app_home',app_name='toefl_house')==['/app/th-command-centre']
+            return {'pages_configured':configured,'app_home':'/app/th-command-centre'}
+        check('release-command-pages-configured',pages_configured)
+        def page_role_visibility():
+            from frappe.desk.desk_page import get as get_page
+            from frappe.desk.desk_views import DeskViews
+            observed={}
+            for label,page_name in PAGE_PROBES.items():
+                frappe.clear_cache(user=users[label])
+                frappe.set_user(users[label])
+                allowed=DeskViews.get_allowed_pages(cache=False)
+                actual={name for name in PAGE_SPEC if name in allowed}
+                assert actual=={'th-command-centre',page_name},(label,sorted(actual),page_name)
+                loaded=get_page(page_name)
+                assert loaded.name==page_name and 'toefl_house.command_pages' in loaded.script,(label,page_name)
+                observed[label]=sorted(actual)
+            # Existing audit/finance Workspace audiences and an unrelated user
+            # do not receive a D10 command page simply because pages exist.
+            for label in ('auditor','admissions_auditor','enrollment_auditor','teaching_auditor','finance_auditor','finance_officer','outsider'):
+                frappe.clear_cache(user=users[label])
+                frappe.set_user(users[label])
+                allowed=DeskViews.get_allowed_pages(cache=False)
+                assert not ({name for name in PAGE_SPEC if name in allowed}),(label,sorted(set(allowed)&set(PAGE_SPEC)))
+                assert denied(lambda:get_page('th-placement-invigilation')),(label,'non-member Page must deny')
+            frappe.set_user('Administrator')
+            return {'role_scoped_pages':observed,'non_members_denied':7}
+        check('release-command-page-role-visibility',page_role_visibility)
+        def page_no_privilege_escalation():
+            from frappe.desk.desk_page import get as get_page
+            frappe.set_user(users['invigilator'])
+            native_doctypes=('Program Enrollment','Student Group','Course Schedule','Student Attendance','Fees','Sales Invoice')
+            before={dt:frappe.has_permission(dt,'read') for dt in native_doctypes}
+            assert not any(before.values()),before
+            loaded=get_page('th-placement-invigilation')
+            after={dt:frappe.has_permission(dt,'read') for dt in native_doctypes}
+            assert before==after,(before,after)
+            for dt in native_doctypes:
+                # Frappe's list path may deny by an empty result instead of an
+                # exception; either is containment, but any returned row fails.
+                try:
+                    listed=frappe.get_list(dt)
+                except frappe.PermissionError:
+                    listed=[]
+                assert not listed,(dt,'Page access must not unlock native reads')
+            frappe.set_user('Administrator')
+            return {'page_loaded':loaded.name,'native_read_permissions_unchanged':True,
+                    'native_direct_lists_empty_or_denied':list(native_doctypes)}
+        check('release-command-pages-no-privilege-escalation',page_no_privilege_escalation)
         # --- R2: factual operations registers (native Query Reports, raw facts
         # only). Access is native: the Report Has-Role table gates execution
         # (pinned Report.is_permitted) and the ref-doctype `report` permission

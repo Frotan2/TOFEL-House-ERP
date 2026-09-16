@@ -1,0 +1,47 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Placement",
+  "name": "th-command-centre",
+  "page_name": "th-command-centre",
+  "roles": [
+    {
+      "role": "Placement Author"
+    },
+    {
+      "role": "Placement Publisher"
+    },
+    {
+      "role": "Placement Invigilator"
+    },
+    {
+      "role": "Placement Assessor"
+    },
+    {
+      "role": "Placement Reviewer"
+    },
+    {
+      "role": "Placement Releaser"
+    },
+    {
+      "role": "Admission Officer"
+    },
+    {
+      "role": "Admission Reviewer"
+    },
+    {
+      "role": "Admission Approver"
+    },
+    {
+      "role": "Enrollment Officer"
+    },
+    {
+      "role": "Teaching Scheduler"
+    },
+    {
+      "role": "Attendance Recorder"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Command Centre"
+}
