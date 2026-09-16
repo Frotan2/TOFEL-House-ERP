@@ -1,0 +1,94 @@
+{
+  "id": "ADR-FND-001",
+  "date": "2026-09-14",
+  "scope": "Long-term foundation maintenance direction; not runtime qualification or release approval",
+  "selected_strategy": "controlled_upstream_aligned_frontend_upgrade",
+  "foundation_direction": {
+    "framework": "Frappe",
+    "business_authority": "ERPNext",
+    "academic_authority": "Education",
+    "database_default": "MariaDB",
+    "hrms": "Retained for the already-justified native HR/payroll scope",
+    "payments": "Retained where required by the qualified dependency bundle",
+    "owned_extension": "Small reversible security extension; requalify native contracts on change"
+  },
+  "production_recommendation": "REJECT",
+  "phase2_gate_passed": false,
+  "security_gate_passed": false,
+  "product_implementation_authorized": false,
+  "dependencies_changed": false,
+  "experimental_candidate_adopted": false,
+  "risk_acceptance_granted": false,
+  "new_runtime_evidence_claimed": false,
+  "baseline_use": "Immutable reference for isolated synthetic qualification; no production or real-data pilot authorization",
+  "options": [
+    {
+      "id": 1,
+      "strategy": "Stay pinned with documented risk acceptance and monitoring",
+      "decision": "Qualification bridge only; not indefinite production policy",
+      "benefit": "Low immediate change and preserved reproducible baseline",
+      "tradeoff": "Known findings and migration debt persist; monitoring is not prevention or remediation",
+      "risk_acceptance_status": "No exception granted; requires named business/security/operations approvals and a separate release decision"
+    },
+    {
+      "id": 2,
+      "strategy": "Controlled upstream-aligned frontend upgrade",
+      "decision": "Selected strategic path",
+      "benefit": "Preserves canonical native authorities and reduces long-term divergence",
+      "tradeoff": "Coordinated toolchain/UI/parser compatibility work, vendor timing uncertainty and recurring qualification cost"
+    },
+    {
+      "id": "3a",
+      "strategy": "Contracted upstream-aligned maintenance with bounded backports",
+      "decision": "Fallback only after feasibility and procurement review",
+      "benefit": "Potential accountable patch ownership without a wholesale rewrite",
+      "tradeoff": "Coverage, cost, provenance, licensing, response and exit obligations; no provider or contract verified"
+    },
+    {
+      "id": "3b",
+      "strategy": "Reduce or retire affected portal surface",
+      "decision": "Feasibility option only; no implementation authorized",
+      "benefit": "Potentially smaller exposure and maintenance footprint",
+      "tradeoff": "Reduced service must be approved; hidden pages do not remove dependencies or protect APIs/files/realtime"
+    },
+    {
+      "id": "3c",
+      "strategy": "Permanent fork, replacement portal or ERP replacement",
+      "decision": "Not recommended now",
+      "benefit": "Greater implementation control",
+      "tradeoff": "Highest recurring ownership and loss of reusable integration/security evidence; must not duplicate native authorities"
+    }
+  ],
+  "proposed_governance_not_implemented": {
+    "advisory_intake": "daily",
+    "human_triage": "at least weekly; immediate reassessment for relevant exploit/exposure/control changes",
+    "exception_expiry": "within 30 days, explicit review/renewal; no exception currently exists",
+    "feasibility_checkpoint": "within four weeks of funded kickoff, not an approved schedule or automatic production permission",
+    "accountable_people_assigned": false,
+    "vendor_support_verified": false
+  },
+  "reconsideration_triggers": [
+    "No funded maintenance owner",
+    "No credible maintained upstream or bounded supported backport path",
+    "Repeated security fixes incompatible with native contracts",
+    "Inability to preserve canonical authorities and authorization",
+    "No viable recovery and public deployment design"
+  ],
+  "required_release_evidence": [
+    "Exact supported candidate and full relevant dependency inventory",
+    "Per-advisory source/input/patch and exploit regression evidence",
+    "Hosted native browser/API/Guardian/files/realtime and supported-browser compatibility",
+    "Deployment TLS/proxy/origin/session boundary",
+    "Independent-host recovery, key handling and rollback",
+    "Database/Redis/host durability, capacity and monitoring",
+    "Wider roles/exports/attachments and native payroll/business coverage"
+  ],
+  "release_policy": "Keep raw failed audits unchanged. Any exception requires explicit separate governance and cannot close unrelated critical gates. No production approval based on monitoring or build smoke alone.",
+  "report": "foundation-architecture-decision.md",
+  "evidence": [
+    "foundation-final-qualification.md",
+    "foundation-production-acceptance-ledger.json",
+    "evidence/phase-2/frontend-advisory-compatibility-review.json",
+    "evidence/phase-2/dependency-operations-hosted-verification.json"
+  ]
+}

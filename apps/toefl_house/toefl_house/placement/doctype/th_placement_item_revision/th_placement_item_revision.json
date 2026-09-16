@@ -1,0 +1,122 @@
+{
+  "doctype": "DocType",
+  "name": "TH Placement Item Revision",
+  "module": "Placement",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "family",
+    "revision",
+    "version",
+    "status",
+    "skill",
+    "difficulty",
+    "question_type",
+    "prompt",
+    "options_json",
+    "key_revision",
+    "content_hash",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "family",
+      "label": "Family",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "revision",
+      "label": "Revision",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "version",
+      "label": "Version",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "options": "Draft\nPublished",
+      "reqd": 1
+    },
+    {
+      "fieldname": "skill",
+      "label": "Skill",
+      "fieldtype": "Select",
+      "options": "Vocabulary\nGrammar\nReading\nListening\nSpeaking\nWriting",
+      "reqd": 1
+    },
+    {
+      "fieldname": "difficulty",
+      "label": "Difficulty",
+      "fieldtype": "Select",
+      "options": "Entry\nCore\nStretch",
+      "reqd": 1
+    },
+    {
+      "fieldname": "question_type",
+      "label": "Question Type",
+      "fieldtype": "Select",
+      "options": "Single Choice\nTrue False",
+      "reqd": 1
+    },
+    {
+      "fieldname": "prompt",
+      "label": "Prompt",
+      "fieldtype": "Long Text",
+      "reqd": 1
+    },
+    {
+      "fieldname": "options_json",
+      "label": "Options Json",
+      "fieldtype": "Code",
+      "options": "JSON",
+      "reqd": 1
+    },
+    {
+      "fieldname": "key_revision",
+      "label": "Key Revision",
+      "fieldtype": "Link",
+      "options": "TH Placement Key Revision"
+    },
+    {
+      "fieldname": "content_hash",
+      "label": "Content Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Placement Author",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Publisher",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

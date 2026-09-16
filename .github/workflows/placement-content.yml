@@ -1,0 +1,75 @@
+name: Placement synthetic content qualification
+on:
+  push:
+    branches: [arena/01a0a9f7-tofel-house-erp]
+    paths:
+      - .github/workflows/placement-content.yml
+      - tools/session_branch.py
+      - apps/toefl_house/**
+      - tests/placement/**
+      - tests/admission/**
+      - tests/enrollment/**
+      - tests/teaching/**
+      - tests/finance/**
+      - tools/placement/native_checks.py
+      - tools/placement/run_native.py
+      - tools/foundation/runner_probe.py
+      - tools/foundation/publish_evidence.py
+  workflow_dispatch:
+permissions:
+  contents: read
+  checks: write
+concurrency:
+  group: placement-content-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  content:
+    if: github.ref == 'refs/heads/arena/01a0a9f7-tofel-house-erp'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Owned local tests (not native runtime qualification)
+        run: |
+          mkdir -p .foundation/placement-evidence
+          set -o pipefail
+          python3 -m unittest discover -s tests/placement -v 2>&1 | tee .foundation/placement-evidence/unit-tests.txt
+          python3 -m unittest discover -s tests/admission -v 2>&1 | tee .foundation/placement-evidence/admission-unit-tests.txt
+          python3 -m unittest discover -s tests/enrollment -v 2>&1 | tee .foundation/placement-evidence/enrollment-unit-tests.txt
+          python3 -m unittest discover -s tests/teaching -v 2>&1 | tee .foundation/placement-evidence/teaching-unit-tests.txt
+          python3 -m unittest discover -s tests/finance -v 2>&1 | tee .foundation/placement-evidence/finance-unit-tests.txt
+          python3 -m unittest discover -s tests/foundation -v 2>&1 | tee .foundation/placement-evidence/foundation-unit-tests.txt
+          node tests/foundation/test_realtime_guard.cjs 2>&1 | tee .foundation/placement-evidence/realtime-unit-tests.txt
+          node tests/foundation/test_command_pages.cjs 2>&1 | tee .foundation/placement-evidence/command-pages-unit-tests.txt
+      - name: Pinned runner dependencies
+        run: |
+          npm install --global yarn@1.22.22
+          python3 tools/foundation/runner_probe.py
+      - name: Pinned native apps and synthetic content scenarios
+        run: python3 tools/placement/run_native.py
+      - name: Publish native scenario evidence
+        if: always() && hashFiles('.foundation/placement-evidence/native-checks.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/foundation/publish_evidence.py .foundation/placement-evidence/native-checks.json --name 'Placement native checks'
+      - name: Publish installation and failure evidence
+        if: always() && hashFiles('.foundation/placement-evidence/result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/foundation/publish_evidence.py .foundation/placement-evidence/result.json --name 'Placement runner result'
+      - name: Retain failures and scoped evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: placement-content-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .foundation/placement-evidence/
+            .foundation/runner-evidence/
+          if-no-files-found: error
+          retention-days: 14

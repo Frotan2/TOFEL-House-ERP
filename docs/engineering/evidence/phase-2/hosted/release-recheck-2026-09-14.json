@@ -1,0 +1,36 @@
+{
+  "date": "2026-09-14",
+  "scope": "Latest stable v16 app / v5 Bench release returned by newest 20 GitHub releases; exact qualified source revisions remain unchanged in version matrix.",
+  "releases": [
+    {
+      "repository": "frappe/frappe",
+      "tag": "v16.33.1",
+      "published_at": "2026-09-08T17:06:48Z",
+      "url": "https://github.com/frappe/frappe/releases/tag/v16.33.1"
+    },
+    {
+      "repository": "frappe/erpnext",
+      "tag": "v16.34.2",
+      "published_at": "2026-09-08T13:23:39Z",
+      "url": "https://github.com/frappe/erpnext/releases/tag/v16.34.2"
+    },
+    {
+      "repository": "frappe/education",
+      "tag": "v16.1.0",
+      "published_at": "2026-06-29T14:06:57Z",
+      "url": "https://github.com/frappe/education/releases/tag/v16.1.0"
+    },
+    {
+      "repository": "frappe/hrms",
+      "tag": "v16.18.1",
+      "published_at": "2026-09-09T04:49:39Z",
+      "url": "https://github.com/frappe/hrms/releases/tag/v16.18.1"
+    },
+    {
+      "repository": "frappe/bench",
+      "tag": "v5.31.0",
+      "published_at": "2026-06-16T16:24:55Z",
+      "url": "https://github.com/frappe/bench/releases/tag/v5.31.0"
+    }
+  ]
+}

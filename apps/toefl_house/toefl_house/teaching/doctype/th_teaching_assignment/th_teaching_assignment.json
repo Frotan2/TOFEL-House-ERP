@@ -1,0 +1,97 @@
+{
+  "doctype": "DocType",
+  "name": "TH Teaching Assignment",
+  "module": "Teaching",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "student_group",
+    "skill",
+    "instructor",
+    "contract",
+    "course_schedule",
+    "effective_start",
+    "effective_end",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "student_group",
+      "label": "Student Group",
+      "fieldtype": "Link",
+      "options": "Student Group",
+      "reqd": 1
+    },
+    {
+      "fieldname": "skill",
+      "label": "Skill",
+      "fieldtype": "Select",
+      "options": "Speaking & Listening\nWriting & Grammar\nReading & Vocabulary",
+      "reqd": 1
+    },
+    {
+      "fieldname": "instructor",
+      "label": "Instructor",
+      "fieldtype": "Link",
+      "options": "Instructor",
+      "reqd": 1
+    },
+    {
+      "fieldname": "contract",
+      "label": "Contract",
+      "fieldtype": "Link",
+      "options": "TH Instructor Contract",
+      "reqd": 1
+    },
+    {
+      "fieldname": "course_schedule",
+      "label": "Course Schedule",
+      "fieldtype": "Link",
+      "options": "Course Schedule"
+    },
+    {
+      "fieldname": "effective_start",
+      "label": "Effective Start",
+      "fieldtype": "Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "effective_end",
+      "label": "Effective End",
+      "fieldtype": "Date"
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Teaching Scheduler",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Teaching Auditor",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Finance Officer",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Finance Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

@@ -1,0 +1,58 @@
+{
+  "doctype": "DocType",
+  "name": "TH Contract Adjustment",
+  "module": "Teaching",
+  "istable": 1,
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "adjustment_type",
+    "amount",
+    "effective_date",
+    "approver",
+    "reason"
+  ],
+  "fields": [
+    {
+      "fieldname": "adjustment_type",
+      "label": "Adjustment Type",
+      "fieldtype": "Select",
+      "options": "Bonus\nDeduction",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "amount",
+      "label": "Amount",
+      "fieldtype": "Currency",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "effective_date",
+      "label": "Effective Date",
+      "fieldtype": "Date",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "approver",
+      "label": "Approver",
+      "fieldtype": "Link",
+      "options": "User",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "reason",
+      "label": "Reason",
+      "fieldtype": "Data",
+      "reqd": 1,
+      "in_list_view": 1
+    }
+  ],
+  "permissions": [],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

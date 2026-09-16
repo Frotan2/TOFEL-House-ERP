@@ -1,0 +1,136 @@
+{
+  "doctype": "DocType",
+  "name": "TH Placement Decision",
+  "module": "Placement",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "attempt",
+    "revision",
+    "status",
+    "score",
+    "course_map",
+    "course_map_hash",
+    "internal_level",
+    "course_code",
+    "result_json",
+    "result_hash",
+    "released_by",
+    "released_at",
+    "expires_at",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "attempt",
+      "label": "Attempt",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Attempt"
+    },
+    {
+      "fieldname": "revision",
+      "label": "Revision",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "options": "Released",
+      "reqd": 1
+    },
+    {
+      "fieldname": "score",
+      "label": "Score",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Score"
+    },
+    {
+      "fieldname": "course_map",
+      "label": "Course Map",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Course Map Revision"
+    },
+    {
+      "fieldname": "course_map_hash",
+      "label": "Course Map Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "internal_level",
+      "label": "Internal Level",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "course_code",
+      "label": "Course Code",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "result_json",
+      "label": "Result Json",
+      "fieldtype": "Code",
+      "reqd": 1,
+      "options": "JSON"
+    },
+    {
+      "fieldname": "result_hash",
+      "label": "Result Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "released_by",
+      "label": "Released By",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "released_at",
+      "label": "Released At",
+      "fieldtype": "Datetime",
+      "reqd": 1
+    },
+    {
+      "fieldname": "expires_at",
+      "label": "Expires At",
+      "fieldtype": "Datetime",
+      "reqd": 1
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Placement Publisher",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Auditor",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Releaser",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

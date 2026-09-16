@@ -1,0 +1,39 @@
+{
+  "package": "frappe-ui",
+  "candidate_version": "0.1.278",
+  "decision": "Not adopted; coordinated upstream migration required",
+  "manifest_sha256": "7cc6285202860b614f4c82ac00a5350e5305b5d52c3415f54fbd3588885e6505",
+  "peer_conflict": {
+    "required_vue": ">=3.5.0",
+    "locked_vue": "3.4.19"
+  },
+  "deep_import_conflict": {
+    "education_callsite": "frontend/tailwind.config.js",
+    "current_require": "frappe-ui/src/utils/tailwind.config",
+    "candidate_exported_subpaths": [
+      ".",
+      "./frappe",
+      "./drive",
+      "./drive/*",
+      "./icons",
+      "./tailwind",
+      "./vite",
+      "./style.css",
+      "./editor-style.css",
+      "./tsconfig.base.json"
+    ],
+    "required_subpath_exported": false
+  },
+  "parser_changes": {
+    "old": "showdown ^2.1.0",
+    "candidate": "marked ^15.0.12 and dompurify ^3.2.6",
+    "semantics_and_new_dependency_audit": "unqualified"
+  },
+  "tiptap_change": {
+    "old": "2.2.3",
+    "candidate_declared_core": "^3.11.0",
+    "advisory_floor": "3.30.4",
+    "note": "^3.11.0 permits vulnerable releases too; exact coherent reviewed lock still required"
+  },
+  "resource_and_component_api_note": "Input/Card/frappeRequest exports remain; resources are re-exported from another file. No removal of resourcesPlugin claimed from top-level token search. Component/resource behavior not qualified."
+}

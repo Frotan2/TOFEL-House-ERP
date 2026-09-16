@@ -1,0 +1,28 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Package libcups2-dev is not available, but is referred to by another package.
+This may mean that the package is missing, has been obsoleted, or
+is only available from another source
+
+E: Unable to locate package mariadb-server
+E: Unable to locate package mariadb-client
+E: Unable to locate package redis-server
+E: Unable to locate package pkg-config
+E: Unable to locate package libmariadb-dev
+E: Unable to locate package libffi-dev
+E: Unable to locate package libssl-dev
+E: Unable to locate package libjpeg-dev
+E: Unable to locate package zlib1g-dev
+E: Unable to locate package liblcms2-dev
+E: Unable to locate package libpango-1.0-0
+E: Couldn't find any package by glob 'libpango-1.0-0'
+E: Couldn't find any package by regex 'libpango-1.0-0'
+E: Unable to locate package libharfbuzz0b
+E: Unable to locate package libpangoft2-1.0-0
+E: Couldn't find any package by glob 'libpangoft2-1.0-0'
+E: Couldn't find any package by regex 'libpangoft2-1.0-0'
+E: Package 'libcups2-dev' has no installation candidate
+E: Unable to locate package docker.io
+E: Couldn't find any package by glob 'docker.io'
+E: Couldn't find any package by regex 'docker.io'

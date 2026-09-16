@@ -1,0 +1,61 @@
+{
+  "doctype": "DocType",
+  "name": "TH Contract Skill Term",
+  "module": "Teaching",
+  "istable": 1,
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "skill",
+    "unit_of_payment",
+    "rate",
+    "payable_quantity",
+    "minimum_amount",
+    "maximum_amount"
+  ],
+  "fields": [
+    {
+      "fieldname": "skill",
+      "label": "Skill",
+      "fieldtype": "Select",
+      "options": "Speaking & Listening\nWriting & Grammar\nReading & Vocabulary",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "unit_of_payment",
+      "label": "Unit of Payment",
+      "fieldtype": "Data",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "rate",
+      "label": "Rate",
+      "fieldtype": "Currency",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "payable_quantity",
+      "label": "Payable Quantity",
+      "fieldtype": "Int",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "minimum_amount",
+      "label": "Minimum Amount",
+      "fieldtype": "Currency"
+    },
+    {
+      "fieldname": "maximum_amount",
+      "label": "Maximum Amount",
+      "fieldtype": "Currency"
+    }
+  ],
+  "permissions": [],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

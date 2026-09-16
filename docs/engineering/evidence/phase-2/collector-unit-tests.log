@@ -1,0 +1,14 @@
+test_error_with_version_text_does_not_pass (test_preflight.PreflightTests.test_error_with_version_text_does_not_pass) ... ok
+test_missing_binary_is_not_pass (test_preflight.PreflightTests.test_missing_binary_is_not_pass) ... ok
+test_timeout_is_recorded_not_hidden (test_preflight.PreflightTests.test_timeout_is_recorded_not_hidden) ... ok
+test_tool_success_never_certifies_erp (test_preflight.PreflightTests.test_tool_success_never_certifies_erp) ... ok
+test_wrong_patch_version_fails_exact_pin (test_preflight.PreflightTests.test_wrong_patch_version_fails_exact_pin) ... ok
+test_integrity_mismatch_rejected (test_yarn_mirror.MirrorTests.test_integrity_mismatch_rejected) ... ok
+test_scoped_filename_and_npm_transport (test_yarn_mirror.MirrorTests.test_scoped_filename_and_npm_transport) ... ok
+test_strongest_hash_required (test_yarn_mirror.MirrorTests.test_strongest_hash_required) ... ok
+test_unknown_origin_and_missing_integrity_rejected (test_yarn_mirror.MirrorTests.test_unknown_origin_and_missing_integrity_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.003s
+
+OK

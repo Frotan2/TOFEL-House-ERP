@@ -1,0 +1,10 @@
+{
+  "database_state_sha256": "f9a5bf36868bddaa79f95c6ad131cde7857852769a02c914ba94f091aebf6d54",
+  "external_key_not_archived": true,
+  "private_and_public_files_preserved": true,
+  "restore_system": "independent-restore-system",
+  "restored_tree_sha256": "11eb3a0dacb7924ed2d789c2ec3457e9b5b360bcfd3ef9e055529d39d427a929",
+  "same_tree": true,
+  "source_system": "local-source-system",
+  "source_tree_sha256": "11eb3a0dacb7924ed2d789c2ec3457e9b5b360bcfd3ef9e055529d39d427a929"
+}

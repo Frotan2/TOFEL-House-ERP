@@ -1,0 +1,194 @@
+{
+  "doctype": "DocType",
+  "name": "TH Admission Decision",
+  "module": "Admission",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "student_applicant",
+    "program",
+    "academic_year",
+    "academic_term",
+    "placement_decision",
+    "existing_student",
+    "status",
+    "version",
+    "drafted_by",
+    "reviewed_by",
+    "reviewed_at",
+    "decided_by",
+    "decided_at",
+    "outcome_reason",
+    "conditions",
+    "accepted",
+    "accepted_by",
+    "accepted_at",
+    "revoked_by",
+    "revoked_at",
+    "native_student",
+    "converted_at",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "student_applicant",
+      "label": "Student Applicant",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "Student Applicant"
+    },
+    {
+      "fieldname": "program",
+      "label": "Program",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "Program"
+    },
+    {
+      "fieldname": "academic_year",
+      "label": "Academic Year",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "Academic Year"
+    },
+    {
+      "fieldname": "academic_term",
+      "label": "Academic Term",
+      "fieldtype": "Link",
+      "options": "Academic Term"
+    },
+    {
+      "fieldname": "placement_decision",
+      "label": "Placement Decision",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Decision"
+    },
+    {
+      "fieldname": "existing_student",
+      "label": "Existing Student",
+      "fieldtype": "Link",
+      "options": "Student"
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "reqd": 1,
+      "options": "Draft\nReview\nApproved\nConditional\nDeferred\nRejected\nWithdrawn\nRevoked\nExpired"
+    },
+    {
+      "fieldname": "version",
+      "label": "Version",
+      "fieldtype": "Int",
+      "reqd": 1,
+      "default": "1"
+    },
+    {
+      "fieldname": "drafted_by",
+      "label": "Drafted By",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "reviewed_by",
+      "label": "Reviewed By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "reviewed_at",
+      "label": "Reviewed At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "decided_by",
+      "label": "Decided By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "decided_at",
+      "label": "Decided At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "outcome_reason",
+      "label": "Outcome Reason",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "conditions",
+      "label": "Conditions",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "accepted",
+      "label": "Accepted",
+      "fieldtype": "Check",
+      "default": "0"
+    },
+    {
+      "fieldname": "accepted_by",
+      "label": "Accepted By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "accepted_at",
+      "label": "Accepted At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "revoked_by",
+      "label": "Revoked By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "revoked_at",
+      "label": "Revoked At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "native_student",
+      "label": "Native Student",
+      "fieldtype": "Link",
+      "options": "Student"
+    },
+    {
+      "fieldname": "converted_at",
+      "label": "Converted At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Admission Officer",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Admission Reviewer",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Admission Approver",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Admission Auditor",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

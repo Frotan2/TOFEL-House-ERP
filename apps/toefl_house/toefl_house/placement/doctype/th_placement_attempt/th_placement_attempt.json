@@ -1,0 +1,212 @@
+{
+  "doctype": "DocType",
+  "name": "TH Placement Attempt",
+  "module": "Placement",
+  "autoname": "hash",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "case_name",
+    "ordinal",
+    "subject",
+    "blueprint",
+    "blueprint_version",
+    "blueprint_hash",
+    "policy",
+    "policy_version",
+    "policy_hash",
+    "mode",
+    "status",
+    "version",
+    "allocated_by",
+    "verified_by",
+    "verified_at",
+    "started_at",
+    "deadline_at",
+    "sealed_at",
+    "seal_reason",
+    "reviewed_by",
+    "reviewed_at",
+    "finalized_by",
+    "finalized_at",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "case_name",
+      "label": "Case",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Case"
+    },
+    {
+      "fieldname": "ordinal",
+      "label": "Ordinal",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "subject",
+      "label": "Subject",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "blueprint",
+      "label": "Blueprint",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Blueprint Revision"
+    },
+    {
+      "fieldname": "blueprint_version",
+      "label": "Blueprint Version",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "blueprint_hash",
+      "label": "Blueprint Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "policy",
+      "label": "Policy",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Policy Revision"
+    },
+    {
+      "fieldname": "policy_version",
+      "label": "Policy Version",
+      "fieldtype": "Int",
+      "reqd": 1
+    },
+    {
+      "fieldname": "policy_hash",
+      "label": "Policy Hash",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "mode",
+      "label": "Mode",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "status",
+      "label": "Status",
+      "fieldtype": "Select",
+      "reqd": 1,
+      "options": "Allocated\nVerified\nIn Progress\nSealed\nMarking\nReview\nFinalized"
+    },
+    {
+      "fieldname": "version",
+      "label": "Version",
+      "fieldtype": "Int",
+      "reqd": 1,
+      "default": "1"
+    },
+    {
+      "fieldname": "allocated_by",
+      "label": "Allocated By",
+      "fieldtype": "Data",
+      "reqd": 1
+    },
+    {
+      "fieldname": "verified_by",
+      "label": "Verified By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "verified_at",
+      "label": "Verified At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "started_at",
+      "label": "Started At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "deadline_at",
+      "label": "Deadline At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "sealed_at",
+      "label": "Sealed At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "seal_reason",
+      "label": "Seal Reason",
+      "fieldtype": "Select",
+      "options": "\nSubmitted\nTimeout"
+    },
+    {
+      "fieldname": "reviewed_by",
+      "label": "Reviewed By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "reviewed_at",
+      "label": "Reviewed At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "finalized_by",
+      "label": "Finalized By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "finalized_at",
+      "label": "Finalized At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "Placement Publisher",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Auditor",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Invigilator",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Assessor",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Reviewer",
+      "read": 1,
+      "select": 1
+    },
+    {
+      "role": "Placement Releaser",
+      "read": 1,
+      "select": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

@@ -1,0 +1,6 @@
+error: Failed to install cpython-3.14.4-linux-x86_64-gnu
+  Caused by: Request failed after 3 retries in 11.1s
+  Caused by: Failed to download https://github.com/astral-sh/python-build-standalone/releases/download/20260408/cpython-3.14.4%2B20260408-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz
+  Caused by: error sending request for url (https://github.com/astral-sh/python-build-standalone/releases/download/20260408/cpython-3.14.4%2B20260408-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz)
+  Caused by: client error (Connect)
+  Caused by: tls handshake eof

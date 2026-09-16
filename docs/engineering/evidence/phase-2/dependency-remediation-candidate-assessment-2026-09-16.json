@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "observed_date": "2026-09-16",
+  "status": "rejected_no_credible_official_candidate",
+  "decision": "No isolated package-lock, constraints override, forced resolver input, or baseline-pin replacement was built. Current official inputs cannot yield a clean SEC-DEPS-01 result; manufacturing such a candidate would be unsupported and would not meet the gate.",
+  "baseline_unchanged": true,
+  "baseline_evidence": {
+    "run": "35084695840",
+    "commit": "955e4cd5eedc34b90f4fbfce047339e18558f1f2",
+    "runtime_check": "104762158723",
+    "runtime_report_sha256": "f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc",
+    "advisory_record": "resolved-stack-advisory-2026-09-16.json",
+    "inventory": {
+      "bench_python_package_names": 161,
+      "supplied_installed_node_package_names": 572,
+      "pypi_osv_findings": 14,
+      "npm_advisory_entries": 97
+    }
+  },
+  "official_input_review": {
+    "frappe": {
+      "baseline": {
+        "tag": "v16.33.1",
+        "commit": "988e54f3c4c291e2077a83809663f123731abe76"
+      },
+      "newest_released_v16": {
+        "tag": "v16.34.0",
+        "commit": "c1f1e8ec3708750d7254f7f99d869ffb9886f19f",
+        "published_at": "2026-09-15T18:00:39Z",
+        "source": "https://api.github.com/repos/frappe/frappe/releases?per_page=100"
+      },
+      "dependency_input_sha256": {
+        "pyproject.toml": "75a442bcc2fdf946920bd4352c9719370869c5d943ad11e46e4f552bf301d8a6",
+        "package.json": "14db21279ddbbf525d41c678132614f4cc4b5404a41750cfe00d24d8c7f1c81d",
+        "yarn.lock": "4e39da1b48edcc235f1973302d96b283219b44774f07f447256319b66adfa608"
+      },
+      "comparison": "All listed hashes are identical between the baseline and v16.34.0. The newer release continues to require pypdf==6.15.0, WeasyPrint==68.0, and pdfkit~=1.0.0."
+    },
+    "erpnext": {
+      "baseline": {
+        "tag": "v16.34.2",
+        "commit": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd"
+      },
+      "newest_released_v16": {
+        "tag": "v16.35.0",
+        "commit": "12cd563fb9a79731f75ae2a45b1446a0a2dd9e74",
+        "published_at": "2026-09-15T18:46:19Z",
+        "source": "https://api.github.com/repos/frappe/erpnext/releases?per_page=100"
+      },
+      "dependency_input_sha256": {
+        "pyproject.toml": "8d473ef638e91c825d6d6d8e816c392b18b0f201c220f8ab2ecc0a4839d7f83b",
+        "package.json": "15104ce6d422c8c079b5014b3b46d1e89a40d201338d4d89a50748b735587d8c",
+        "yarn.lock": "ba6a3285c968d3e7ac606652b1aee15ed9c3ea133c019a7c0697533cf5dad8f0"
+      },
+      "comparison": "All listed hashes are identical between the baseline and v16.35.0."
+    },
+    "education": {
+      "baseline": {
+        "tag": "v16.1.0",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2"
+      },
+      "newest_released_v16": {
+        "tag": "v16.1.0",
+        "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+        "source": "https://api.github.com/repos/frappe/education/releases?per_page=100"
+      },
+      "official_version_16_branch": {
+        "commit": "22e0910d8b4188f17b76e58d7b434354ce5a0e58",
+        "ahead_of_baseline": 10,
+        "source": "https://api.github.com/repos/frappe/education/compare/93bc7075753369457919720690f80c6d2207b5f2...22e0910d8b4188f17b76e58d7b434354ce5a0e58"
+      },
+      "dependency_input_sha256": {
+        "package.json": "a874cc50ebe49e78933035e4ce88c5aea9d015a9ced2ecef3d49a6f789d2c8e5",
+        "yarn.lock": "38df2378ed26e20124d8c38a945af1b4a058656aab3b3b1f71a9d8a629cc0d81",
+        "frontend/package.json": "c44548c1e7e9f3b6c75209710d0e12018be3a00945167df8f70c45fd537e7cd9",
+        "frontend/yarn.lock": "10618b30bd7dfd48d6fc5e85d56af3d07562c2c11f62efe0b746a8f95f328072"
+      },
+      "comparison": "All listed hashes are identical between the released baseline and the unselected official version-16 branch head. A moving branch is not substituted for a release."
+    },
+    "hrms": {
+      "baseline_and_newest_released_v16": {
+        "tag": "v16.18.1",
+        "commit": "a4768b441cff346def505e27f2a2229ee1e05b9b"
+      },
+      "source": "https://api.github.com/repos/frappe/hrms/releases?per_page=100",
+      "comparison": "No newer non-prerelease v16 release was listed."
+    },
+    "bench": {
+      "baseline": {
+        "tag": "v5.31.0",
+        "commit": "f21f11793872705560e710b2bda69934c9c34011"
+      },
+      "current_release_status": "Newest published non-prerelease release listed.",
+      "dependency_constraint": "setuptools>=71.0.0,<82.0.0",
+      "source": "https://raw.githubusercontent.com/frappe/bench/f21f11793872705560e710b2bda69934c9c34011/pyproject.toml"
+    }
+  },
+  "python_remediation_blockers": [
+    {
+      "package": "pdfkit",
+      "installed_version": "1.0.0",
+      "advisory": "GHSA-9g3x-6x24-vf9f",
+      "provider_range": "<= 1.0.0",
+      "first_patched_version": null,
+      "source": "https://api.github.com/advisories/GHSA-9g3x-6x24-vf9f",
+      "blocker": "Frappe v16.34.0 continues to require pdfkit~=1.0.0 and the advisory lists no patched release."
+    },
+    {
+      "package": "pypdf",
+      "installed_version": "6.15.0",
+      "advisories": ["GHSA-23w6-3w8w-8484", "GHSA-763m-79hh-57f2", "GHSA-jp53-mhqp-8xcg"],
+      "provider_ranges": ["< 6.16.1", "< 6.16.1", "< 6.16.0"],
+      "first_patched_versions": ["6.16.1", "6.16.1", "6.16.0"],
+      "source": "https://api.github.com/advisories/GHSA-23w6-3w8w-8484",
+      "blocker": "Frappe v16.34.0 continues to pin pypdf==6.15.0."
+    },
+    {
+      "package": "weasyprint",
+      "installed_version": "68.0",
+      "advisories": ["GHSA-jf6q-chmf-3h3v", "GHSA-jhhc-3hcp-qhm5"],
+      "provider_ranges": ["< 70.0", "<= 68.1"],
+      "first_patched_versions": ["70.0", null],
+      "source": "https://api.github.com/advisories/GHSA-jf6q-chmf-3h3v",
+      "blocker": "Frappe v16.34.0 continues to pin WeasyPrint==68.0."
+    },
+    {
+      "package": "setuptools",
+      "installed_version": "80.9.0",
+      "advisory": "GHSA-h35f-9h28-mq5c",
+      "provider_range": "< 83.0.0",
+      "first_patched_version": "83.0.0",
+      "source": "https://api.github.com/advisories/GHSA-h35f-9h28-mq5c",
+      "blocker": "The selected official Bench v5.31.0 constraint is <82.0.0. A >=83 override would violate the reviewed upstream constraint."
+    }
+  ],
+  "node_remediation_blocker": {
+    "observed_entries": 97,
+    "observed_packages": 36,
+    "source": "resolved-stack-advisory-2026-09-16.json",
+    "blocker": "Neither newer released Frappe/ERPNext inputs nor the unselected Education version-16 branch head changes any reviewed Node manifest or frozen lockfile. Manually changing nested locks, package resolutions, or registry inputs would not be an officially released compatible Frappe/Education bundle."
+  },
+  "candidate_execution": {
+    "built": false,
+    "reason": "The official-input review proves that every evaluated source leaves known fail conditions in place before a Bench build. Running a fabricated override candidate would not meet the required clean full-stack audit and would create unsupported evidence theater.",
+    "not_claimed": [
+      "Full-stack dependency-audit pass",
+      "Security-gate pass",
+      "542 native lifecycle qualification",
+      "Backup/restore, worker/scheduler/realtime, upgrade/restart, or browser regression qualification"
+    ]
+  },
+  "smallest_viable_upstream_change": [
+    "An officially released, Frappe-compatible source bundle that removes/replaces pdfkit or supplies a supported remediation for its no-fixed-version advisory.",
+    "An officially released compatible Frappe v16 dependency update with pypdf at least 6.16.1 and WeasyPrint outside all recorded affected ranges, plus a compatible official Bench release permitting setuptools at least 83.0.0 or an upstream-supported alternative.",
+    "An officially released compatible Education v16 dependency/lockfile update that removes all applicable resolved Node advisory matches; Frappe/ERPNext Node locks must also change where they carry matches.",
+    "Only after such source inputs exist: create a separate immutable candidate matrix, build a disposable Bench, require a clean full-stack audit and security gates, then run the unchanged 542 native lifecycle and all recovery/worker/scheduler/realtime/upgrade/restart/browser regressions before any baseline replacement decision."
+  ],
+  "production_recommendation": "REJECT"
+}

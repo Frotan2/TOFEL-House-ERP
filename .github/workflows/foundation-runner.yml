@@ -1,0 +1,44 @@
+name: Foundation runner qualification
+
+on:
+  push:
+    branches: [arena/01a0a9f7-tofel-house-erp]
+    paths:
+      - .github/workflows/foundation-runner.yml
+      - tools/session_branch.py
+      - tools/foundation/runner_probe.py
+      - docs/engineering/foundation-version-matrix.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: foundation-runner-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  runner:
+    if: github.ref == 'refs/heads/arena/01a0a9f7-tofel-house-erp'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 reference resolved 2026-09-13
+        with:
+          persist-credentials: false
+      - name: Verify controlled runner downloads and services
+        run: python3 tools/foundation/runner_probe.py
+      - name: Publish sanitized machine-readable evidence
+        if: always() && hashFiles('.foundation/runner-evidence/runner-result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/foundation/publish_evidence.py .foundation/runner-evidence/runner-result.json
+      - name: Retain explicit probe evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: foundation-runner-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/runner-evidence/
+          if-no-files-found: error
+          retention-days: 14

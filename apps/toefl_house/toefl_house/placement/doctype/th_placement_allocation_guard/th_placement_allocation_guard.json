@@ -1,0 +1,32 @@
+{
+  "doctype": "DocType",
+  "name": "TH Placement Allocation Guard",
+  "module": "Placement",
+  "autoname": "prompt",
+  "engine": "InnoDB",
+  "allow_rename": 0,
+  "track_changes": 0,
+  "field_order": [
+    "blueprint",
+    "synthetic"
+  ],
+  "fields": [
+    {
+      "fieldname": "blueprint",
+      "label": "Blueprint",
+      "fieldtype": "Link",
+      "reqd": 1,
+      "options": "TH Placement Blueprint Revision"
+    },
+    {
+      "fieldname": "synthetic",
+      "label": "Synthetic",
+      "fieldtype": "Check",
+      "default": "1",
+      "read_only": 1
+    }
+  ],
+  "permissions": [],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

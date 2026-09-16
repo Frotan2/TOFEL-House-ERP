@@ -1,0 +1,2291 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-14",
+  "baseline_commit": "d77085b",
+  "branch": "arena/01a09bf3-tofel-house-erp",
+  "foundation_status": "REJECT",
+  "phase2_gate_passed": false,
+  "product_implementation_authorized": false,
+  "runtime_compatible_bundle_proven": false,
+  "approved_runtime_bundle": null,
+  "verdict_scope": "REJECT: unchanged production baseline retains 57 Education advisory matches. Isolated candidate reduces to 23 but remains unapproved; scoped web/worker restart passes. Broader deployment, durability, role and dependency acceptance incomplete.",
+  "matrix_sha256": "c6447f5b046d27449521b69415854f590f8c8a5abf3a17530737e13988f9e369",
+  "created_site_count": 73,
+  "created_business_fixture_count": null,
+  "tests": [
+    {
+      "id": "source-release-verification",
+      "status": "pass",
+      "scope": "static_source",
+      "command": "git clone --depth 1 --branch <recorded-release-tag> <recorded-repository>; git rev-parse HEAD; manifest/lock SHA-256 verification",
+      "exit_code": 0,
+      "evidence": [
+        "source-verification.json"
+      ],
+      "observation": "Six release source clones verified; no app install inferred.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "apt-http-update",
+      "status": "fail",
+      "scope": "environment",
+      "command": "sudo apt-get update",
+      "exit_code": 0,
+      "evidence": [
+        "apt-update.log"
+      ],
+      "observation": "APT exited zero despite unreachable indices. Semantic failure recorded; not treated as successful prerequisite setup.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "native-os-packages",
+      "status": "fail",
+      "scope": "environment",
+      "command": "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mariadb-server mariadb-client redis-server pkg-config libmariadb-dev build-essential libffi-dev libssl-dev libjpeg-dev zlib1g-dev liblcms2-dev libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0 libcups2-dev docker.io python3-venv",
+      "exit_code": 100,
+      "evidence": [
+        "apt-install.log"
+      ],
+      "observation": "No usable apt indices; package installation failed before services were created.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "apt-https-retry",
+      "status": "fail",
+      "scope": "environment",
+      "command": "sudo apt-get update -o APT::Update::Error-Mode=any (after temporary HTTPS source change)",
+      "exit_code": 100,
+      "evidence": [
+        "apt-update-https.log"
+      ],
+      "observation": "TLS connection terminated. Source configuration restored afterward; no TLS bypass.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "bootstrap-tool-environment",
+      "status": "pass",
+      "scope": "tooling",
+      "command": "$LAB/tools/bin/pip check",
+      "exit_code": 0,
+      "evidence": [
+        "bootstrap-pip-check.log",
+        "bootstrap-tool-versions.txt",
+        "native-preflight.json"
+      ],
+      "observation": "Bench 5.31.0 tools environment only, not Frappe requirements.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "python-initial-download",
+      "status": "fail",
+      "scope": "environment",
+      "command": "$LAB/tools/bin/uv python install 3.14; then UV_NATIVE_TLS=true uv python install 3.14.4",
+      "exit_code": 1,
+      "evidence": [
+        "python-install.log",
+        "python-install-system-trust.log"
+      ],
+      "observation": "uv 0.11.6 selected 3.14.4. Initial UnknownIssuer; system trust retry failed TLS handshake. Superseded by selected 3.14.7 attempt.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "python-selected-download",
+      "status": "fail",
+      "scope": "environment",
+      "command": "gh api -H \"Accept: application/octet-stream\" repos/astral-sh/python-build-standalone/releases/assets/539917786",
+      "exit_code": 1,
+      "evidence": [
+        "python-selected-asset.log"
+      ],
+      "observation": "Selected CPython 3.14.7, build 20260901; EOF at release asset host. Zero downloaded bytes; upstream checksum not locally verified.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "docker-download-connectivity",
+      "status": "fail",
+      "scope": "environment",
+      "command": "curl --head --max-time 10 <official static Docker endpoint and registry /v2/>",
+      "exit_code": 35,
+      "evidence": [
+        "network-probes.json"
+      ],
+      "observation": "Docker package install was also blocked by apt. No CLI, daemon, Compose or container runtime to test. 28.5.1 URL was a connectivity probe, not a selected engine pin.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "selected-node-yarn-cli",
+      "status": "pass",
+      "scope": "tooling",
+      "command": "npm install --prefix \"$LAB/node\" --no-audit --no-fund node@24.21.0 yarn@1.22.22; node --version; yarn --version",
+      "exit_code": 0,
+      "evidence": [
+        "native-preflight.json"
+      ],
+      "observation": "Node 24.21.0 and Yarn 1.22.22 CLI verified. Earlier Node 24.14.0 bootstrap was superseded.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "education-direct-frozen-install",
+      "status": "fail",
+      "scope": "frontend_dependency_install",
+      "command": "yarn install --frozen-lockfile --non-interactive --network-timeout 20000 --registry https://registry.npmjs.org",
+      "exit_code": 1,
+      "evidence": [
+        "education-frontend-install-selected.log",
+        "network-probes.json"
+      ],
+      "observation": "Frozen lock resolved URLs still use unreachable registry.yarnpkg.com; registry flag did not fix tarball transport.",
+      "duration_seconds": 12.549,
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "education-mirror-seed",
+      "status": "pass",
+      "scope": "frontend_dependency_integrity",
+      "command": "python3 tools/foundation/seed_yarn_mirror.py \"$LAB/sources/education/frontend/yarn.lock\" \"$LAB/yarn-mirror-clean\"",
+      "exit_code": 0,
+      "evidence": [
+        "education-mirror-clean-seed.log"
+      ],
+      "observation": "286 npm tarballs verified against original Yarn lock integrity values; no dependency/lock changes.",
+      "duration_seconds": 8.015,
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "education-clean-frozen-install",
+      "status": "pass",
+      "scope": "frontend_dependency_install",
+      "command": "yarn install --offline --frozen-lockfile --non-interactive --cache-folder \"$LAB/yarn-cache-clean\" --use-yarnrc \"$LAB/yarnrc-clean\"",
+      "exit_code": 0,
+      "evidence": [
+        "education-frontend-clean-install.log"
+      ],
+      "observation": "Ran with removed generated node_modules and a fresh cache. Peer/cache-destination warnings retained.",
+      "duration_seconds": 12.817,
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "education-production-asset-build",
+      "status": "pass",
+      "scope": "frontend_build",
+      "command": "yarn build (in selected Education frontend source directory)",
+      "exit_code": 0,
+      "evidence": [
+        "education-frontend-clean-build.log",
+        "education-frontend-build-hashes.txt",
+        "education-resolved-frontend-versions.txt"
+      ],
+      "observation": "Standalone production assets compiled, 1587 modules. NO backend or browser workflow validated.",
+      "duration_seconds": 7.46,
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "education-installed-dependency-advisories",
+      "status": "fail",
+      "scope": "dependency_security",
+      "command": "python3 tools/foundation/audit_frontend.py \"$LAB/sources/education/frontend/node_modules\" --output <evidence.json>",
+      "exit_code": 1,
+      "evidence": [
+        "education-frontend-advisories.json"
+      ],
+      "observation": "255 installed package names queried. 57 advisory entries in 21 packages: 27 high, 26 moderate, 4 low. Reachability not tested; remediation/triage gate remains open.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "native-preflight",
+      "status": "fail",
+      "scope": "environment",
+      "command": "python3 tools/foundation/preflight.py --method native --output <evidence.json>",
+      "exit_code": 1,
+      "evidence": [
+        "native-preflight.json"
+      ],
+      "observation": "Python mismatch and MariaDB/Redis missing; CLI successes cannot qualify runtime.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "docker-preflight",
+      "status": "fail",
+      "scope": "environment",
+      "command": "python3 tools/foundation/preflight.py --method docker --output <evidence.json>",
+      "exit_code": 1,
+      "evidence": [
+        "docker-preflight.json"
+      ],
+      "observation": "Docker server/Compose unavailable.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "validation-helper-unit-tests",
+      "status": "pass",
+      "scope": "validation_tool_tests",
+      "command": "python3 -m unittest discover -s tests/foundation -v",
+      "exit_code": 0,
+      "evidence": [
+        "collector-unit-tests.log"
+      ],
+      "observation": "9 validation-helper tests passed. None are upstream ERP or workflow tests.",
+      "checkpoint": "historical_local_validation"
+    },
+    {
+      "id": "http-probe-failure-accounting-unit-tests",
+      "checkpoint": "local_after_hosted_baseline",
+      "status": "pass",
+      "scope": "Two mocked HTTP helper tests only, not application authorization proof",
+      "command": "python3 -m unittest discover -s tests/foundation -q",
+      "suite_total": 11,
+      "observation": "Disclosed target document/private bytes cause both negative checks and the process to fail; successful simulated controls never authorize Phase 2; placeholder passwords absent from reports."
+    },
+    {
+      "id": "generic-security-guard-unit-tests",
+      "checkpoint": "local_security_continuation",
+      "status": "pass",
+      "scope": "9 guard tests with stubbed Frappe, not runtime authorization proof",
+      "suite_total": 20,
+      "command": "python3 -m unittest discover -s tests/foundation -q"
+    },
+    {
+      "id": "hosted-runtime-34776065793",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "15ac233147210579fe14b087f3a1cdfa0c2c4cfd",
+      "evidence": [
+        "hosted/runtime-34776065793.json"
+      ],
+      "passed_stages": 35,
+      "failed_stages": [
+        "bench-init"
+      ],
+      "business_checks": [],
+      "failure": "bench-init: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34776186463",
+      "checkpoint": "hosted_runtime",
+      "status": "pass",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "b3dc8c2e92e8284d594239adf88e834c501f08f3",
+      "evidence": [
+        "hosted/runtime-34776186463.json"
+      ],
+      "passed_stages": 59,
+      "failed_stages": [],
+      "business_checks": [],
+      "failure": null
+    },
+    {
+      "id": "hosted-runtime-34777102178",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "dd3d2b64a6e74c5734a2372975902abb4cd742e6",
+      "evidence": [
+        "hosted/runtime-34777102178.json"
+      ],
+      "passed_stages": 59,
+      "failed_stages": [
+        "business-smoke"
+      ],
+      "business_checks": [],
+      "failure": "business-smoke: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34777452072",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "b968161ea46a7a84b039299151eccb418fe29f4c",
+      "evidence": [
+        "hosted/runtime-34777452072.json"
+      ],
+      "passed_stages": 59,
+      "failed_stages": [
+        "business-smoke"
+      ],
+      "business_checks": [],
+      "failure": "business-smoke: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34777832562",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "7f73c6981dd93773a64772b9fbd3da29c0811d92",
+      "evidence": [
+        "hosted/runtime-34777832562.json"
+      ],
+      "passed_stages": 59,
+      "failed_stages": [
+        "business-smoke"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 14.879,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.675,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.116,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.031,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.668,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.006,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        }
+      ],
+      "failure": "business-smoke: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34778224918",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "ff2939532ce836174c5555d1be4f7f6b32b498d7",
+      "evidence": [
+        "hosted/runtime-34778224918.json"
+      ],
+      "passed_stages": 69,
+      "failed_stages": [
+        "http-login-and-isolation"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 11.347,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.503,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.082,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.023,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.503,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.005,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        },
+        {
+          "name": "schedule-attendance-submitted-assessment",
+          "status": "pass",
+          "seconds": 0.066,
+          "observation": {
+            "attendance": "EDU-ATT-2026-00001",
+            "result": "EDU-RES-2026-00001",
+            "score": 75.0,
+            "grade": "B"
+          }
+        },
+        {
+          "name": "fee-invoice-discount-payment-ledger",
+          "status": "pass",
+          "seconds": 0.942,
+          "observation": {
+            "invoice": "ACC-SINV-2026-00001",
+            "payment": "ACC-PAY-2026-00001",
+            "discounted_total": 90.0,
+            "outstanding": 0.0,
+            "gl_debit": 180.0,
+            "gl_credit": 180.0,
+            "gl_rows": 4
+          }
+        },
+        {
+          "name": "private-attachment",
+          "status": "pass",
+          "seconds": 0.025,
+          "observation": {
+            "file": "931c916839",
+            "private": 1,
+            "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+            "public_file": "073ac28c77"
+          }
+        }
+      ],
+      "failure": "http-login-and-isolation: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34778602344",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "43d4287bc63b47a2000cdb44a38f83fa322b9dc6",
+      "evidence": [
+        "hosted/runtime-34778602344.json"
+      ],
+      "passed_stages": 71,
+      "failed_stages": [
+        "http-login-and-isolation"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 15.275,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.69,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.112,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.03,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.668,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.006,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        },
+        {
+          "name": "schedule-attendance-submitted-assessment",
+          "status": "pass",
+          "seconds": 0.086,
+          "observation": {
+            "attendance": "EDU-ATT-2026-00001",
+            "result": "EDU-RES-2026-00001",
+            "score": 75.0,
+            "grade": "B"
+          }
+        },
+        {
+          "name": "fee-invoice-discount-payment-ledger",
+          "status": "pass",
+          "seconds": 1.239,
+          "observation": {
+            "invoice": "ACC-SINV-2026-00001",
+            "payment": "ACC-PAY-2026-00001",
+            "discounted_total": 90.0,
+            "outstanding": 0.0,
+            "gl_debit": 180.0,
+            "gl_credit": 180.0,
+            "gl_rows": 4
+          }
+        },
+        {
+          "name": "private-attachment",
+          "status": "pass",
+          "seconds": 0.032,
+          "observation": {
+            "file": "e0025edbc2",
+            "private": 1,
+            "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+            "public_file": "b00c3ae74b"
+          }
+        }
+      ],
+      "failure": "Baseline HTTP isolation failed; restricted-configuration results are separate diagnostics: http-login-and-isolation: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34779173567",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "72e09e7b62117afbcb1a9a76e983cf6f9c3323b3",
+      "evidence": [
+        "hosted/runtime-34779173567.json"
+      ],
+      "passed_stages": 75,
+      "failed_stages": [
+        "http-login-and-isolation",
+        "expanded-restricted-http-isolation",
+        "browser-native-portal-isolation"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 14.412,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.684,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.106,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.03,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.642,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.005,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        },
+        {
+          "name": "schedule-attendance-submitted-assessment",
+          "status": "pass",
+          "seconds": 0.083,
+          "observation": {
+            "attendance": "EDU-ATT-2026-00001",
+            "result": "EDU-RES-2026-00001",
+            "score": 75.0,
+            "grade": "B"
+          }
+        },
+        {
+          "name": "fee-invoice-discount-payment-ledger",
+          "status": "pass",
+          "seconds": 1.227,
+          "observation": {
+            "invoice": "ACC-SINV-2026-00001",
+            "payment": "ACC-PAY-2026-00001",
+            "discounted_total": 90.0,
+            "outstanding": 0.0,
+            "gl_debit": 180.0,
+            "gl_credit": 180.0,
+            "gl_rows": 4
+          }
+        },
+        {
+          "name": "private-attachment",
+          "status": "pass",
+          "seconds": 0.031,
+          "observation": {
+            "file": "9069bcb622",
+            "private": 1,
+            "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+            "public_file": "e1a0cf1dce"
+          }
+        }
+      ],
+      "failure": "Restricted policy regressions failed: expanded-restricted-http-isolation: exit 1; browser-native-portal-isolation: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34779652716",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "c48b4344a57b4a41f0a4c771453cdb808419405b",
+      "evidence": [
+        "hosted/runtime-34779652716.json"
+      ],
+      "passed_stages": 75,
+      "failed_stages": [
+        "http-login-and-isolation",
+        "expanded-restricted-http-isolation",
+        "browser-native-portal-isolation"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 15.711,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.71,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.119,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.032,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.689,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.006,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        },
+        {
+          "name": "schedule-attendance-submitted-assessment",
+          "status": "pass",
+          "seconds": 0.091,
+          "observation": {
+            "attendance": "EDU-ATT-2026-00001",
+            "result": "EDU-RES-2026-00001",
+            "score": 75.0,
+            "grade": "B"
+          }
+        },
+        {
+          "name": "fee-invoice-discount-payment-ledger",
+          "status": "pass",
+          "seconds": 1.301,
+          "observation": {
+            "invoice": "ACC-SINV-2026-00001",
+            "payment": "ACC-PAY-2026-00001",
+            "discounted_total": 90.0,
+            "outstanding": 0.0,
+            "gl_debit": 180.0,
+            "gl_credit": 180.0,
+            "gl_rows": 4
+          }
+        },
+        {
+          "name": "private-attachment",
+          "status": "pass",
+          "seconds": 0.034,
+          "observation": {
+            "file": "a501648bd7",
+            "private": 1,
+            "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+            "public_file": "8428cf79e7"
+          }
+        }
+      ],
+      "failure": "Restricted policy regressions failed: expanded-restricted-http-isolation: exit 1; browser-native-portal-isolation: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34780307591",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "4d0db151e60a8120a816a82812874018421c386f",
+      "evidence": [
+        "hosted/runtime-34780307591.json"
+      ],
+      "passed_stages": 71,
+      "failed_stages": [
+        "http-login-and-isolation",
+        "get-security-extension"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 12.804,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.619,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.095,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.028,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.724,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.004,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        },
+        {
+          "name": "schedule-attendance-submitted-assessment",
+          "status": "pass",
+          "seconds": 0.06,
+          "observation": {
+            "attendance": "EDU-ATT-2026-00001",
+            "result": "EDU-RES-2026-00001",
+            "score": 75.0,
+            "grade": "B"
+          }
+        },
+        {
+          "name": "fee-invoice-discount-payment-ledger",
+          "status": "pass",
+          "seconds": 0.843,
+          "observation": {
+            "invoice": "ACC-SINV-2026-00001",
+            "payment": "ACC-PAY-2026-00001",
+            "discounted_total": 90.0,
+            "outstanding": 0.0,
+            "gl_debit": 180.0,
+            "gl_credit": 180.0,
+            "gl_rows": 4
+          }
+        },
+        {
+          "name": "private-attachment",
+          "status": "pass",
+          "seconds": 0.023,
+          "observation": {
+            "file": "f745301e29",
+            "private": 1,
+            "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+            "public_file": "070da51e33"
+          }
+        }
+      ],
+      "failure": "get-security-extension: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34780667272",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "1e8a6792a672f73236475b77fa8bede5402e6b7b",
+      "evidence": [
+        "hosted/runtime-34780667272.json"
+      ],
+      "passed_stages": 76,
+      "failed_stages": [
+        "http-login-and-isolation",
+        "install-security-extension-foundation.localhost"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 15.458,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.693,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.117,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.032,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.676,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.006,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        },
+        {
+          "name": "schedule-attendance-submitted-assessment",
+          "status": "pass",
+          "seconds": 0.089,
+          "observation": {
+            "attendance": "EDU-ATT-2026-00001",
+            "result": "EDU-RES-2026-00001",
+            "score": 75.0,
+            "grade": "B"
+          }
+        },
+        {
+          "name": "fee-invoice-discount-payment-ledger",
+          "status": "pass",
+          "seconds": 1.293,
+          "observation": {
+            "invoice": "ACC-SINV-2026-00001",
+            "payment": "ACC-PAY-2026-00001",
+            "discounted_total": 90.0,
+            "outstanding": 0.0,
+            "gl_debit": 180.0,
+            "gl_credit": 180.0,
+            "gl_rows": 4
+          }
+        },
+        {
+          "name": "private-attachment",
+          "status": "pass",
+          "seconds": 0.032,
+          "observation": {
+            "file": "62b330d3d5",
+            "private": 1,
+            "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+            "public_file": "8ad232eda4"
+          }
+        }
+      ],
+      "failure": "install-security-extension-foundation.localhost: exit 1"
+    },
+    {
+      "id": "hosted-runtime-34781217903",
+      "checkpoint": "hosted_runtime",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "a2b368982063f05d160c151aa66ae51ed73e04f3",
+      "evidence": [
+        "hosted/runtime-34781217903.json"
+      ],
+      "passed_stages": 80,
+      "failed_stages": [
+        "http-login-and-isolation",
+        "http-isolation-with-native-user-permissions"
+      ],
+      "business_checks": [
+        {
+          "name": "company-chart-and-branch",
+          "status": "pass",
+          "seconds": 15.108,
+          "observation": {
+            "setup_complete": true,
+            "company": "Validation Institute",
+            "branch": "Validation Branch",
+            "account_count": 97
+          }
+        },
+        {
+          "name": "academic-context-and-employee-link",
+          "status": "pass",
+          "seconds": 0.676,
+          "observation": {
+            "instructor_employee": "HR-EMP-00001",
+            "group": "Validation Class",
+            "student_count": 0
+          }
+        },
+        {
+          "name": "assessment-plan-before-students",
+          "status": "pass",
+          "seconds": 0.116,
+          "observation": {
+            "plan": "EDU-ASP-2026-00001",
+            "students_at_plan_creation": 0,
+            "meaning": "A course/group Plan can precede Student creation; not an applicant-owned Result"
+          }
+        },
+        {
+          "name": "result-without-student-rejected",
+          "status": "pass",
+          "seconds": 0.033,
+          "observation": {
+            "exception": "StudentNotInGroupError",
+            "message": "Student <strong>None</strong> does not belong to group <strong>Validation Class</strong>"
+          }
+        },
+        {
+          "name": "applicant-student-customer-enrollment-group",
+          "status": "pass",
+          "seconds": 0.68,
+          "observation": {
+            "students": [
+              "EDU-STU-2026-00001",
+              "EDU-STU-2026-00002"
+            ],
+            "applicants": [
+              "EDU-APP-2026-00001",
+              "EDU-APP-2026-00002"
+            ],
+            "enrollments": [
+              "EDU-ENR-2026-00001",
+              "EDU-ENR-2026-00002"
+            ],
+            "user_link_observations": [
+              {
+                "student": "EDU-STU-2026-00001",
+                "automatic_existing_user_link": null
+              },
+              {
+                "student": "EDU-STU-2026-00002",
+                "automatic_existing_user_link": null
+              }
+            ]
+          }
+        },
+        {
+          "name": "applicant-cannot-own-academic-result",
+          "status": "pass",
+          "seconds": 0.006,
+          "observation": {
+            "exception": "LinkValidationError",
+            "message": "Could not find Student: EDU-APP-2026-00001"
+          }
+        },
+        {
+          "name": "schedule-attendance-submitted-assessment",
+          "status": "pass",
+          "seconds": 0.086,
+          "observation": {
+            "attendance": "EDU-ATT-2026-00001",
+            "result": "EDU-RES-2026-00001",
+            "score": 75.0,
+            "grade": "B"
+          }
+        },
+        {
+          "name": "fee-invoice-discount-payment-ledger",
+          "status": "pass",
+          "seconds": 1.277,
+          "observation": {
+            "invoice": "ACC-SINV-2026-00001",
+            "payment": "ACC-PAY-2026-00001",
+            "discounted_total": 90.0,
+            "outstanding": 0.0,
+            "gl_debit": 180.0,
+            "gl_credit": 180.0,
+            "gl_rows": 4
+          }
+        },
+        {
+          "name": "private-attachment",
+          "status": "pass",
+          "seconds": 0.034,
+          "observation": {
+            "file": "66c7f36539",
+            "private": 1,
+            "sha256": "e7d8a4bb38c8e8062b6d7e56b9bd9f412e2884c525f21f4ae66897be565f527b",
+            "public_file": "8f110ae15d"
+          }
+        }
+      ],
+      "failure": "http-isolation-with-native-user-permissions: exit 1"
+    },
+    {
+      "id": "generic-guard-hook-order-and-share-unit-regressions",
+      "checkpoint": "local_security_continuation",
+      "status": "pass",
+      "scope": "Unit tests only; include native self-share, global-share rejection and login/legacy-session token timing",
+      "suite_total": 26,
+      "command": "python3 -m unittest discover -s tests/foundation -q"
+    },
+    {
+      "id": "hosted-runtime-34781717183",
+      "status": "fail",
+      "scope": "Clean upstream installation and explicitly executed smoke gates only",
+      "commit": "956fd31889e8de6139c5f42a2300d124189e9b2e",
+      "run_id": "34781717183",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34781717183.json"
+      ],
+      "observation": "Baseline HTTP isolation failed; restricted-configuration results are separate diagnostics: http-login-and-isolation: exit 1",
+      "passed_subresults": {
+        "business_result": 9,
+        "restore_result": 5,
+        "background_result": 0,
+        "http-restricted_result": 10,
+        "isolation_result": 47,
+        "browser_result": 5,
+        "background-secured_result": 0
+      }
+    },
+    {
+      "id": "hosted-runtime-34801558069",
+      "status": "fail",
+      "scope": "Pinned foundation and enumerated security/recovery checks; not full Phase 2 acceptance",
+      "commit": "3f927a5d37671bfb861675dcf3c3dbb527fafdab",
+      "run_id": "34801558069",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34801558069.json"
+      ],
+      "observation": "'encryption_key'",
+      "passed_subresults": {
+        "business_result": 9,
+        "restore_result": 5,
+        "background_result": 0,
+        "http-restricted_result": 10,
+        "isolation_result": 47,
+        "browser_result": 5,
+        "background-secured_result": 0
+      }
+    },
+    {
+      "id": "hosted-runtime-34801702600",
+      "status": "fail",
+      "scope": "Pinned foundation and enumerated security/recovery checks; not full Phase 2 acceptance",
+      "commit": "52830c96ca42f26d85625c9d9984d4e4d2e67945",
+      "run_id": "34801702600",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34801702600.json"
+      ],
+      "observation": "'encryption_key'",
+      "passed_subresults": {
+        "business_result": 9,
+        "restore_result": 5,
+        "background_result": 0,
+        "http-restricted_result": 10,
+        "isolation_result": 47,
+        "browser_result": 5,
+        "background-secured_result": 0
+      }
+    },
+    {
+      "id": "hosted-runtime-34802126407",
+      "status": "fail",
+      "scope": "Pinned foundation and enumerated security/recovery checks; not full Phase 2 acceptance",
+      "commit": "eb09b39be4e7e9686396cd606b9a9caac67279ae",
+      "run_id": "34802126407",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34802126407.json"
+      ],
+      "observation": "hardened-recovery-invariants: exit 1",
+      "passed_subresults": {
+        "business_result": 9,
+        "restore_result": 5,
+        "background_result": 0,
+        "http-restricted_result": 10,
+        "isolation_result": 47,
+        "browser_result": 5,
+        "background-secured_result": 0
+      }
+    },
+    {
+      "id": "hosted-runtime-34803138631",
+      "status": "pass",
+      "scope": "Pinned foundation and enumerated security/recovery checks; not full Phase 2 acceptance",
+      "commit": "35aed363e4da79fca4f483e8d53866918547ed03",
+      "run_id": "34803138631",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34803138631.json"
+      ],
+      "observation": "Hardened scoped qualification passed; broader gates remain false.",
+      "passed_subresults": {
+        "business_result": 9,
+        "restore_result": 5,
+        "background_result": 0,
+        "http-restricted_result": 10,
+        "isolation_result": 47,
+        "browser_result": 5,
+        "background-secured_result": 0,
+        "restore-secured_result": 7,
+        "isolation-recovered_result": 47
+      }
+    },
+    {
+      "id": "remaining-gates-34804852658",
+      "status": "fail",
+      "scope": "Hosted native-role/REST, realtime, advisory and isolated framework upgrade continuation",
+      "evidence": [
+        "evidence/phase-2/hosted/remaining-34804852658.json"
+      ],
+      "observation": "Guardian unrelated Student returned 200. Salary fixture blocked by missing native holiday assignment. Socket client login 404 blocked realtime. 57 advisory matches persisted. Frappe-only patch upgrade and no-store checks passed."
+    },
+    {
+      "id": "remaining-gates-34805581935",
+      "status": "fail",
+      "scope": "Hosted role/payroll, native Guardian scope experiment, realtime, frontend audit and framework-only upgrade",
+      "evidence": [
+        "evidence/phase-2/hosted/remaining-34805581935.json"
+      ],
+      "observation": "See exact checks; no overall security or production pass inferred from narrow successes."
+    },
+    {
+      "id": "remaining-gates-34806388937",
+      "status": "fail",
+      "scope": "Hosted role/payroll, native Guardian scope experiment, realtime, frontend audit and framework-only upgrade",
+      "evidence": [
+        "evidence/phase-2/hosted/remaining-34806388937.json"
+      ],
+      "observation": "See exact checks; no overall security or production pass inferred from narrow successes."
+    },
+    {
+      "id": "hardening-remediation-34807848711",
+      "status": "fail",
+      "scope": "Exact hosted results include individually passing guard and operation checks; overall remains failed",
+      "evidence": [
+        "evidence/phase-2/hosted/remaining-34807848711.json",
+        "evidence/phase-2/hosted/runtime-34807848711.json"
+      ]
+    },
+    {
+      "id": "hardening-remediation-34808064545",
+      "status": "fail",
+      "scope": "Exact hosted results include individually passing guard and operation checks; overall remains failed",
+      "evidence": [
+        "evidence/phase-2/hosted/remaining-34808064545.json",
+        "evidence/phase-2/hosted/runtime-34808064545.json"
+      ]
+    },
+    {
+      "id": "hardening-remediation-34809413852",
+      "status": "fail",
+      "scope": "Exact hosted results include individually passing guard and operation checks; overall remains failed",
+      "evidence": [
+        "evidence/phase-2/hosted/remaining-34809413852.json",
+        "evidence/phase-2/hosted/runtime-34809413852.json"
+      ]
+    },
+    {
+      "id": "final-hardening-34809817009",
+      "status": "fail",
+      "scope": "Exact overall failed hosted run, with individual check results preserved; final follow-up has 54 readiness / 6 Guardian browser / 4 realtime / 33 upgrade passes, advisory failure",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34809817009.json",
+        "evidence/phase-2/hosted/remaining-34809817009.json"
+      ]
+    },
+    {
+      "id": "final-hardening-34810723925",
+      "status": "fail",
+      "scope": "Exact overall failed hosted run, with individual check results preserved; final follow-up has 54 readiness / 6 Guardian browser / 4 realtime / 33 upgrade passes, advisory failure",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34810723925.json",
+        "evidence/phase-2/hosted/remaining-34810723925.json"
+      ]
+    },
+    {
+      "id": "final-hardening-34812299091",
+      "status": "fail",
+      "scope": "Exact overall failed hosted run, with individual check results preserved; final follow-up has 54 readiness / 6 Guardian browser / 4 realtime / 33 upgrade passes, advisory failure",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34812299091.json",
+        "evidence/phase-2/hosted/remaining-34812299091.json"
+      ]
+    },
+    {
+      "id": "native-restart-34823345078",
+      "status": "fail",
+      "scope": "Overall advisory failure retained; controlled web/worker restart and 47 post-restart isolation checks plus native regressions pass",
+      "evidence": [
+        "evidence/phase-2/hosted/runtime-34823345078.json",
+        "evidence/phase-2/hosted/remaining-34823345078.json"
+      ]
+    },
+    {
+      "id": "frontend-candidate-34823793929",
+      "status": "fail",
+      "scope": "Frozen baseline/candidate build comparison: 57/23 advisory matches; candidate not adopted",
+      "evidence": [
+        "evidence/phase-2/hosted/frontend-34823793929.json"
+      ]
+    }
+  ],
+  "phase_gates": [
+    {
+      "phase": "2A",
+      "status": "pass",
+      "reason": "Repository and releases refreshed; immutable source evidence recorded."
+    },
+    {
+      "phase": "2B",
+      "status": "partial",
+      "reason": "Exact app/runtime/image pins executed; full dependency supply-chain locking and approved bundle remain incomplete."
+    },
+    {
+      "phase": "2C",
+      "status": "partial",
+      "reason": "Hosted native Bench plus container MariaDB/Redis proven; full application Docker image and local/WSL development usability unqualified."
+    },
+    {
+      "phase": "2D",
+      "status": "partial",
+      "reason": "Clean pinned installation, repeated migration/build and synthetic security-bearing backup/restore passed; interactive local/WSL reset usability remains unqualified."
+    },
+    {
+      "phase": "2E",
+      "status": "partial",
+      "reason": "Native cache/RQ, scheduler Complete and controlled web/worker restart with preserved state/queued work and 47 isolation checks pass hosted. DB/Redis/host durability, HA and long-duration availability not qualified."
+    },
+    {
+      "phase": "2F",
+      "status": "partial",
+      "reason": "Company/chart/branch, academics, linked Employee/Instructor and two Applicant/Student/Customer/enrollment chains created."
+    },
+    {
+      "phase": "2G",
+      "status": "partial",
+      "reason": "Nine synthetic business checks passed through attendance, assessment, discounted invoice/payment and balanced ledger. Full domain scenarios remain incomplete."
+    },
+    {
+      "phase": "2H",
+      "status": "partial",
+      "reason": "Plan before Students allowed; no-Student Result and Applicant-as-Student rejected. Versioned/non-enrolled attempt behavior not proved."
+    },
+    {
+      "phase": "2I",
+      "status": "partial",
+      "reason": "See business checks for invoice/payment/discount/GL outcomes. Refunds and legacy Fees overlap remain unexecuted."
+    },
+    {
+      "phase": "2J",
+      "status": "partial",
+      "reason": "Native payroll setup and draft salary slip pass with required Holiday List Assignment; seven tested payroll read boundaries pass. GL posting, leave and full payroll workflows remain unexecuted."
+    },
+    {
+      "phase": "2K",
+      "status": "partial",
+      "reason": "0.2.1 legacy-owner HTTP download/File REST/RPC/native content and Guardian scopes/browser pass with positive controls. Payroll read/report ACLs pass. Broader mixed-role/multi-child/lifecycle/export/print/attachment matrix incomplete."
+    },
+    {
+      "phase": "2L",
+      "status": "partial",
+      "reason": "Ten native tables inspected for columns/indexes/audit fields; referenced Student deletion denied. Concurrency and full transaction/audit behavior remain unqualified."
+    },
+    {
+      "phase": "2M",
+      "status": "pass",
+      "reason": "Synthetic SQL/files/relationships/submitted records, encrypted credential, security policy and copied-session revocation restored and verified in distinct clean database; 47 recovered-site checks passed."
+    },
+    {
+      "phase": "2N",
+      "status": "partial",
+      "reason": "Five upstream apps held at exact revisions while Frappe advanced 16.33.0\u219216.33.1; 33 stages and before/after business/file checks pass. Rollback, security-extension and independent app upgrades remain incomplete."
+    },
+    {
+      "phase": "2O",
+      "status": "fail",
+      "reason": "Education baseline 57 advisories; isolated candidate 23, not adopted. 58-entry union reviewed for paths, ranges, peers, fixes, compatibility and mitigation. Whole-stack dependency and full production security/operations not passed."
+    },
+    {
+      "phase": "2P",
+      "status": "partial",
+      "reason": "Real installation/migration/build and individual completed probe timings recorded; not representative browser/list/load performance."
+    },
+    {
+      "phase": "2Q",
+      "status": "partial",
+      "reason": "Full asset build and five native Chromium checks passed; broader forms/tables/dashboard/responsiveness/accessibility not fully qualified."
+    },
+    {
+      "phase": "2R",
+      "status": "partial",
+      "reason": "44 local Python tests and Node guard regression pass. Hosted native regression and 47 post-restart checks pass; isolated frontend builds and 8 package API checks/profile pass. Candidate native browser/backend and exploit regressions, broader capacity/operational matrix incomplete."
+    },
+    {
+      "phase": "2S",
+      "status": "fail",
+      "reason": "REJECT for current Phase 2/production acceptance; security disclosure and incomplete critical requirements. Product work remains prohibited."
+    }
+  ],
+  "runtime_scenarios": [
+    {
+      "group": "installation-and-services",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "scenarios": [
+        "Clean MariaDB site/schema creation",
+        "Install Frappe then ERPNext then Education; establish Payments import/install optionality",
+        "Record DocTypes before/after justified HRMS installation",
+        "Gunicorn/Bench startup, login, Redis cache, RQ job, scheduler, Socket.IO, file storage"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    },
+    {
+      "group": "student-lifecycle",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "scenarios": [
+        "Company/institution and branch",
+        "Program/course/academic year/term",
+        "Employee-linked Instructor",
+        "Admission/intake and approved Applicant",
+        "Supported conversion creates canonical Student and linked Customer",
+        "Program Enrollment submission creates Course Enrollments",
+        "Student Group/Batch membership and Course Schedule",
+        "Attendance submission",
+        "Assessment Plan/Result submission and computed grades",
+        "Fee obligation, invoice, allocation and ledger reconciliation",
+        "Conversion retry/duplicate prevention and cancel/history"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    },
+    {
+      "group": "placement-boundary",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "scenarios": [
+        "Plan before Student vs Result before Student",
+        "Applicant cannot be silently substituted for Student link",
+        "Absent course/group/enrollment and membership cases",
+        "Retake/amendment vs rule versioning",
+        "Future applicant-owned result link to later Student without duplicate authority"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    },
+    {
+      "group": "finance",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "scenarios": [
+        "Invoice-based receivable",
+        "Legacy Fees plus same logical invoice obligation duplicate experiment",
+        "Partial/full payment, overpayment, allocation and retry",
+        "Invoice/payment cancellation and reversal",
+        "Discount net/tax posting",
+        "Return/credit note plus refund payment",
+        "GL/payment-ledger reconciliation"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    },
+    {
+      "group": "hr-payroll",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "scenarios": [
+        "Employee/Department without HRMS",
+        "Employment/employee Attendance/Leave",
+        "Salary Structure/assignment",
+        "Salary Slip with deduction and Additional Salary",
+        "Payroll Entry Journal Entry posting and reversal",
+        "HRMS override composition on Employee/Payment Entry"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    },
+    {
+      "group": "authorization",
+      "status": "fail",
+      "reason": "Baseline Student REST/private-file isolation failed; restricted native configuration is a separate diagnostic, not full authorization acceptance.",
+      "scenarios": [
+        "Administrator actions",
+        "Academic manager scoped operations",
+        "Teacher assigned groups and denied finance/payroll write",
+        "Accountant denied sensitive HR/payroll controls",
+        "HR user limits",
+        "Student own record allow",
+        "Student other record ID change deny for profile/result/attendance/invoice",
+        "Report/export/print/private attachment scope",
+        "Guest/session/CSRF and privileged methods",
+        "Two-site isolation and trusted host routing"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    },
+    {
+      "group": "database",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "scenarios": [
+        "Version/charset/collation",
+        "Primary keys/Link and child metadata/indexes/audit fields",
+        "Duplicate/concurrent enrollment/results",
+        "Submit/cancel/delete linked history",
+        "Failed transaction rollback"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    },
+    {
+      "group": "backup-restore",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "scenarios": [
+        "Populate synthetic records and hash private/public files",
+        "Full backup with files and securely retained config/keys",
+        "Restore into distinct clean site with same pinned bundle",
+        "Verify login, counts, links, attachment hashes, ledger balances and critical record usability"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    },
+    {
+      "group": "migration",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "scenarios": [
+        "Controlled same-bundle migrate and unchanged rerun",
+        "Compare schema/patch state and business invariants",
+        "Separately pinned before/after release upgrade if upgrade claim is required"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    },
+    {
+      "group": "frontend-and-performance",
+      "status": "partial",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "scenarios": [
+        "Frappe Desk/ERPNext/HRMS asset builds",
+        "Actual portal routing/forms/tables/dashboards",
+        "English responsive/keyboard/focus/accessibility checks",
+        "Real startup/migration/page/list/report/job latency on representative data"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    },
+    {
+      "group": "upstream-tests",
+      "status": "not_run",
+      "reason": "Hosted environment now available. Only explicitly recorded checks are proven; remaining listed scenarios are unexecuted or blocked by an earlier failed probe.",
+      "scenarios": [
+        "Education student/applicant/enrollment/attendance/assessment/fees tests",
+        "ERPNext invoice/payment/ledger tests",
+        "HRMS attendance/leave/payroll/slip tests"
+      ],
+      "runtime_evidence": [
+        "hosted/runtime-34781217903.json"
+      ]
+    }
+  ],
+  "evidence_directory": "evidence/phase-2",
+  "evidence_files": {
+    "apt-install.log": {
+      "sha256": "6acb3ee2a431c8742c44242370e3ddce82068ea11b333b5c6e46d004ba998617",
+      "bytes": 1220
+    },
+    "apt-update-https.log": {
+      "sha256": "996fe75c6994825741df5e1179c1cc35fc549a44137e7025e2a298b3dacc7819",
+      "bytes": 1706
+    },
+    "apt-update.log": {
+      "sha256": "f01d4dbd835482603a0622d665e91d4b52882a9b0da786cf0aa3c197a7432594",
+      "bytes": 1375
+    },
+    "bootstrap-pip-check.log": {
+      "sha256": "9261363b733079a641c2e4cc9bc46ffa1d8336945a87f807b6cf68847dbc9b09",
+      "bytes": 30
+    },
+    "bootstrap-tool-versions.txt": {
+      "sha256": "058f1bbf4e18f530261ed1b749e067d9c13bb860f5c1b289b7adb37c77d059bc",
+      "bytes": 312
+    },
+    "collector-unit-tests.log": {
+      "sha256": "15134815067ae0e792a6312ad7de6caa880273798ec2b1e8bdb3245565e16d69",
+      "bytes": 1129
+    },
+    "docker-preflight.json": {
+      "sha256": "57c1eb0d3cd81cf490a872f66e1709ff3f550cee9cd1f6e7b17198f31bd1c044",
+      "bytes": 1414
+    },
+    "education-frontend-advisories.json": {
+      "sha256": "70fc996e663caa4d15aba3603b30e90befe9416f7eae3024eb49e125f159323c",
+      "bytes": 38596
+    },
+    "education-frontend-build-hashes.txt": {
+      "sha256": "c79d2a2fb1b3c36753c833e3a0a581e388f105ae8d39507ca19692f8a2d2afa5",
+      "bytes": 261
+    },
+    "education-frontend-clean-build.log": {
+      "sha256": "b4b7977a2f67098bd5041c821af05c02c7bd43bff83d54aa59de2f73b8ed5e2d",
+      "bytes": 9579
+    },
+    "education-frontend-clean-install.log": {
+      "sha256": "65ce382358d6bbef634631ff557844871b950b7767d45380db7d7f6f95a73508",
+      "bytes": 2974
+    },
+    "education-frontend-install-selected.log": {
+      "sha256": "0fbfc2fd64eab6662f07ca4e8bc0d40182a5e650a9a8c5b8da98181563189136",
+      "bytes": 1841
+    },
+    "education-mirror-clean-seed.log": {
+      "sha256": "90b4c80c629512cd6a1db2db1b422b9b1fb5d31f6e8742102a95206406b2bfe6",
+      "bytes": 167
+    },
+    "education-resolved-frontend-versions.txt": {
+      "sha256": "9225fb925b1317dd1f888abe0d4ae797e8214750784f8714dc326b74432b0806",
+      "bytes": 87
+    },
+    "native-preflight.json": {
+      "sha256": "d9a3dceaf94a0b0245c20ec870d443a9a17fe0683ba281774cf940dcfcaaca35",
+      "bytes": 1414
+    },
+    "network-probes.json": {
+      "sha256": "ce5de0d8af4c974464e75626475b2335937b8e4f808d5fde7b09dd9d0c04cdce",
+      "bytes": 1390
+    },
+    "python-install-system-trust.log": {
+      "sha256": "8c65366383b68e94b66008533ba59445e52f4d8a6d58624f58486c2e58725d93",
+      "bytes": 574
+    },
+    "python-install.log": {
+      "sha256": "1432d73abbb3c90b925b9c78536b6de12da2ef206d2eb56bc5842ad654589a8d",
+      "bytes": 595
+    },
+    "python-selected-asset.log": {
+      "sha256": "c21edd226bc473886f06db985426da771dd78f6a936994876505dbce997fe64d",
+      "bytes": 165
+    },
+    "source-verification.json": {
+      "sha256": "66759fb5652cda5117b7a1dd580ada84d26ae0e7704d7a01652bd47ba93f358c",
+      "bytes": 1876
+    },
+    "hosted/runner-34775900898.json": {
+      "sha256": "cf69ecc9faf123805038d8d9da79017e1d5cd5138a228daaaa93a497e05d2b6f",
+      "bytes": 6439
+    },
+    "hosted/runtime-34776065793.json": {
+      "sha256": "7b7b5a1531f8f0aeb858b54d3fcd7e9cc7ff001a6c286ad80aa247258d79062a",
+      "bytes": 15021
+    },
+    "hosted/runtime-34776186463.json": {
+      "sha256": "90bfdfcedba63d17a08bc098fdc57bba81657d4275c0bf5eb19dcd5f8fda8b0a",
+      "bytes": 20312
+    },
+    "hosted/runtime-34777102178.json": {
+      "sha256": "be0632938dbb482f1bb3de324c46a64756395586414a42e4b13deb0155d065a4",
+      "bytes": 23718
+    },
+    "hosted/runtime-34777452072.json": {
+      "sha256": "2304603d10f929d8e23d8bd15ac1acab6a6549b21c4ce831ef72a3a147aba3d7",
+      "bytes": 24953
+    },
+    "hosted/runtime-34777832562.json": {
+      "sha256": "deea2ce258ffb9502c09ffaacab2c152c7f1eb1c2a11e5f33d98255f7fab3b33",
+      "bytes": 28523
+    },
+    "hosted/runtime-34778224918.json": {
+      "sha256": "39856de7a6860fa576e059b2c0230bc612056845fa01153b0e474dbc4e2ee0e3",
+      "bytes": 43049
+    },
+    "hosted/runtime-34778602344.json": {
+      "sha256": "7cb1d9c064c11d0d416167bc4ba3649717730777c245e37650cad8ac904decfc",
+      "bytes": 46342
+    },
+    "hosted/runtime-34779173567.json": {
+      "sha256": "640ec2588bed7ea4dc0db710f7c2cea9148d6bbe8ba48c23905df69fabdd96f3",
+      "bytes": 33627
+    },
+    "hosted/runtime-34779652716.json": {
+      "sha256": "20b5fcfdb08934cfbf71dc09ea8fba39d1187f660c76b9654de227ba62d3ddc0",
+      "bytes": 37902
+    },
+    "hosted/runtime-34780307591.json": {
+      "sha256": "c04d6df67f55279afc1bdfe05b583293e888647325b647ac03f4c0407defeed9",
+      "bytes": 32005
+    },
+    "hosted/runtime-34780667272.json": {
+      "sha256": "bcfe5dded579c88cb30124d3a590a6211cf6f20311483f57e4a34a1be2ba169f",
+      "bytes": 32929
+    },
+    "hosted/runtime-34781217903.json": {
+      "sha256": "4d4640000e6a41acce4cd065b8ccdf88e22558da201afc90dd3f99e3740b2636",
+      "bytes": 33121
+    },
+    "hosted/runtime-34781717183.json": {
+      "sha256": "165df6d93326430b56bc234e6bd96054490a930fc036482b517c3f9beeb794a7",
+      "bytes": 41903
+    },
+    "hosted/runtime-34801558069.json": {
+      "sha256": "8d6e2492086359a391d7ffa1451dee49f0bb1462d98a26893798c9be7ebecc62",
+      "bytes": 41983
+    },
+    "hosted/runtime-34801702600.json": {
+      "sha256": "3ae4f689efa6d4e87056101ef6a204101736873932058561b6e8fa512025992f",
+      "bytes": 41979
+    },
+    "hosted/runtime-34802126407.json": {
+      "sha256": "af69fbecc23869770066ca530484f55ffc1c49acc7d86ac4d54ce6cd0c6507a4",
+      "bytes": 44284
+    },
+    "hosted/release-recheck-2026-09-14.json": {
+      "sha256": "f077e972cfedaf8d0605526cd2744cd4a75b860c903fb9954a2638fcf684ed43",
+      "bytes": 1163
+    },
+    "hosted/runtime-34803138631.json": {
+      "sha256": "634044a4149b8b266765a03608fb1ea3a3376be9d2aa2c36ae41ab2bd5d2350f",
+      "bytes": 57156
+    },
+    "hosted/runtime-34804852658.json": {
+      "sha256": "fd4f2d1820ee36d23f3b8d348747da6e263a277cd21108dee64b40894b772e18",
+      "bytes": 58714
+    },
+    "hosted/remaining-34804852658.json": {
+      "sha256": "993f65fd4989fd5f80c2757c05fb6b987aeada4a4f133010962d4b1cb2877980",
+      "bytes": 24793
+    },
+    "hosted/runtime-34805581935.json": {
+      "sha256": "2c3c659bac48e7cf347ced609410b7c5d0291626b591ca2dc52c959bfea4b6f4",
+      "bytes": 58708
+    },
+    "hosted/remaining-34805581935.json": {
+      "sha256": "3c5f9b1da64752808bc9cedc0cd31717b7a27e5fe385ae3e29edcd65f6cee623",
+      "bytes": 24498
+    },
+    "hosted/runtime-34806388937.json": {
+      "sha256": "7845bac9ee87e0b30a16529a9a3f8f7660bcd656bc53bbb1aeb8a11fc61c8a30",
+      "bytes": 58718
+    },
+    "hosted/remaining-34806388937.json": {
+      "sha256": "d56cb830e46d1fb303c250b47a9f97199d4dec9268b4f280f5fe0a2c63273f6c",
+      "bytes": 24555
+    },
+    "frontend-advisory-triage.json": {
+      "sha256": "421be864349c1599eba7f74b6e171d8db8f165918be7fcfc8b890e4564f173f7",
+      "bytes": 137218
+    },
+    "hosted/remaining-34807848711.json": {
+      "sha256": "f1d1436024d2b0f2951c1cac5ee2a3958e6a1f82c764a28bfda03023a686f5c8",
+      "bytes": 25675
+    },
+    "hosted/runtime-34807848711.json": {
+      "sha256": "3fe7cb99c81b61fbffa3e8cfdddae46b979ee76b8c6b65818eac5bad492f864e",
+      "bytes": 59005
+    },
+    "hosted/runtime-34808064545.json": {
+      "sha256": "b6fad9aa80ef3bd404e33bf32fb117f9978a8c223ae11653d55c4d46ff69cc9f",
+      "bytes": 59241
+    },
+    "hosted/remaining-34808064545.json": {
+      "sha256": "93ced34cb163a5d210c13e8135754f97db6697329657addd345282f9d2e4dbb3",
+      "bytes": 50277
+    },
+    "hosted/remaining-34809413852.json": {
+      "sha256": "0b7874dc98394c584af5e42b01d5d923567006c11b796e906de511313d18f63f",
+      "bytes": 60458
+    },
+    "hosted/runtime-34809413852.json": {
+      "sha256": "0394d47754c81c2b53b0eda0d5439d82feab97ee77bef15b86e0268180159e19",
+      "bytes": 59303
+    },
+    "frontend-advisory-patched-ranges.json": {
+      "sha256": "45d4b776b3d2500a792756cefe65ebac1f988cdb745b874ffec502adf834a51d",
+      "bytes": 66578
+    },
+    "education-security-candidate-review.json": {
+      "sha256": "fd667e1d6168e6343c4a5dfa6f1dd0563b61c1ae65be8ff87d02ba0030348fd9",
+      "bytes": 1081
+    },
+    "hosted/remaining-34809817009.json": {
+      "sha256": "8894c49ce56d3a139af293fb6e7000dfc5d377da78945a7d48cba56e8f971c3b",
+      "bytes": 60408
+    },
+    "hosted/runtime-34809817009.json": {
+      "sha256": "ecee2f87844c8f8a0d64aa61d02d19a868369528b0e62d3027ad7ecc999264d4",
+      "bytes": 59394
+    },
+    "hosted/remaining-34810723925.json": {
+      "sha256": "bc09d50fa6045cece54464a231f573f37f2df6c8b2b93e644b652d810fed4020",
+      "bytes": 60451
+    },
+    "hosted/runtime-34810723925.json": {
+      "sha256": "fa5035162532fbac325a87b8a0f749742eec6b58e9619afe7d8a0ef8dd530751",
+      "bytes": 59385
+    },
+    "hosted/remaining-34812299091.json": {
+      "sha256": "a4ece1ee42c8455bb2bdae49e48dea7ff16da7a7b9cefae2f32e364c890f8432",
+      "bytes": 61068
+    },
+    "hosted/runtime-34812299091.json": {
+      "sha256": "29f06f2040c5b11b881c42792f2134be5217fa149fb4e01abc431a2c760ca2ba",
+      "bytes": 59351
+    },
+    "final-hardening-hosted-verification.json": {
+      "sha256": "b3dcc62a576fcd97f385a81265c6366c18868564b5ad44abba36cfd77c620b44",
+      "bytes": 4185
+    },
+    "legacy-file-owner-source-review.json": {
+      "sha256": "c8a453b775b163adda9b71e71989db6c9e29b51e4e1935da7aa617624fcb6bc1",
+      "bytes": 2616
+    },
+    "hosted/frontend-34823793929.json": {
+      "sha256": "9acb56a9b04575ee5c97be7a01045aaee37a14d5d06cc80f5ed45a5681f4a2a5",
+      "bytes": 290941
+    },
+    "hosted/remaining-34823345078.json": {
+      "sha256": "be25cd4c1c01b30bcc21e06a8d988ef871b5b43acfc862da3ebdf64591af51eb",
+      "bytes": 67226
+    },
+    "hosted/runtime-34823345078.json": {
+      "sha256": "7a5ea92f5e0c1118f461ef0ab56040537ba6f2f75f4be4cb0d96283b2e06e3c8",
+      "bytes": 60147
+    },
+    "frontend-resolution-proposal.json": {
+      "sha256": "078b2579afc495fc08d1dde954c703449e63deecf708063558f358fd899373d6",
+      "bytes": 1735
+    },
+    "frontend-candidate-first-local-audit.json": {
+      "sha256": "f7853e7432fc492682498aba8d2871de310356a0a81ca452bc69e7529528d6c5",
+      "bytes": 25302
+    },
+    "frontend-candidate.yarn.lock": {
+      "sha256": "e736ad85856db6e29ccca0d7e3ec13b71533a4d9bc72e27ea784657ca41aea85",
+      "bytes": 97204
+    },
+    "frontend-package-compatibility-metadata.json": {
+      "sha256": "2e4fe4d47deafdb251cad50b83cbbe1504154340d149ddd47c3f7a8923c25f7d",
+      "bytes": 86351
+    },
+    "frontend-workflow-validation-failure-34823670550.json": {
+      "sha256": "57a73f06406e79498fc48be68977dff96ff529a2e7e8d886763c73c3b1dd06bc",
+      "bytes": 285
+    },
+    "frontend-candidate-additional-advisory.json": {
+      "sha256": "e96a3203040842124a7b3eaad003aa37cfe05a1ad02d2b6fb0585f4f5d5decd6",
+      "bytes": 5471
+    },
+    "frontend-candidate-local-transport-failure.txt": {
+      "sha256": "435b55561a67f19f5f72aacbfb793d34d70b25e67ebdee1db3386d8c251b0588",
+      "bytes": 810
+    },
+    "frontend-candidate-local-offline-failure.txt": {
+      "sha256": "766611584669b1df5ff1ee4bccf7d46cbf74c28231bf196eab853fedbaf00123",
+      "bytes": 276
+    },
+    "frontend-advisory-compatibility-review.json": {
+      "sha256": "682c39c2d5df8e6d37d397db044ee0f6f253f4f5b2d32fb14e66799345be4298",
+      "bytes": 242864
+    },
+    "frontend-advisory-compatibility-review.md": {
+      "sha256": "7a4a8eed4738c9443bc3bb9dd9ea56fe7286b1588baf4c60ffd73da630ef0309",
+      "bytes": 26708
+    },
+    "frappe-ui-coordinated-upgrade-review.json": {
+      "sha256": "1e8ea5224679ec10170fb190a39e429e99e6dfa0aaa41fc9547972d2d37ecaa0",
+      "bytes": 1362
+    },
+    "dependency-operations-hosted-verification.json": {
+      "sha256": "fd6675362c478fc7b497d36b3f8ed8b5a0c9493d07bb5b6909cec2f7c9789683",
+      "bytes": 1693
+    }
+  },
+  "created_site_count_scope": "Sum of created_sites in retained top-level runtime reports only; excludes isolated upgrade subprocess sites. Not currently live sites.",
+  "currently_live_validation_sites": null,
+  "business_fixture_count_note": "No exact full-document count claimed; explicit named records and successful controller checks are retained in each business_result.",
+  "clean_pinned_installation_proven": true,
+  "latest_hosted_checkpoint": {
+    "run_id": "34823345078",
+    "commit": "4fa3192880a05ec5ba67899ecfff64679821ec74",
+    "status": "fail",
+    "runtime_check_id": 103915411886,
+    "remaining_check_id": 103915414737,
+    "evidence": "evidence/phase-2/hosted/runtime-34823345078.json",
+    "remaining_gate_evidence": "evidence/phase-2/hosted/remaining-34823345078.json",
+    "only_failing_executed_gate": "hosted-frontend-advisory-audit"
+  },
+  "live_site_note": "All final qualification jobs completed on ephemeral hosted runners. No persistent deployment created; no independent live-site inventory is claimed.",
+  "github_connection": "Restored and verified by successful report retrieval and branch-only push on 2026-09-14.",
+  "security_gate_passed": false,
+  "native_permission_remediation": {
+    "run_id": 34778602344,
+    "status": "pass",
+    "restricted_http_checks": 10,
+    "scope": "Original REST/private-file defects only; overall baseline remains failed"
+  },
+  "latest_unverified_attempt": null,
+  "generic_guard_runtime_approved": false,
+  "enumerated_guard_checks_proven": {
+    "run_id": 34781717183,
+    "restricted_http": 10,
+    "expanded_isolation": 47,
+    "chromium": 5,
+    "secured_cache_rq": "pass",
+    "scope": "Synthetic enumerated Student and tenant controls only; does not approve full role matrix, dependency security or production deployment."
+  },
+  "hardened_profile_passed": false,
+  "security_preserving_recovery_proven": {
+    "run_id": "34803138631",
+    "invariants": 7,
+    "recovered_isolation_checks": 47,
+    "encrypted_credential_decryption": "pass",
+    "copied_live_session_native_revocation": "pass",
+    "source_valid_recovery_denied_http": "pass",
+    "scope": "Synthetic third-site SQL/files restore with existing pinned app code; not full deployment/upgrade qualification."
+  },
+  "upstream_security_suites": [
+    {
+      "module": "frappe.core.doctype.user_permission.test_user_permission",
+      "status": "pass",
+      "tests_run": 10,
+      "site": "upstream-tests.localhost"
+    },
+    {
+      "module": "frappe.core.doctype.docshare.test_docshare",
+      "status": "pass",
+      "tests_run": 15,
+      "site": "upstream-tests.localhost"
+    }
+  ],
+  "upstream_suite_evidence_limit": "Module exit codes and positive test counts verified in exact Check. Full artifact blob download failed with EOF; detailed skip counts not independently retrieved.",
+  "remaining_gates_checkpoint": {
+    "latest_verified_run": 34823345078,
+    "guardian_scope_and_browser": "pass_scoped_0.2.1",
+    "realtime_doc_task_and_session_revocation": "pass_scoped_0.2.1",
+    "legacy_file_owner_boundary": "pass_scoped_0.2.1",
+    "payroll_read_and_report_acl": "pass_scoped",
+    "five_app_framework_patch_upgrade": "pass_scoped",
+    "dependency_gate": "fail",
+    "scheduler": "pass_native_execution_scoped",
+    "full_production_readiness": "not_passed",
+    "controlled_web_worker_restart": "pass_scoped",
+    "experimental_frontend_candidate": "fail_not_adopted"
+  },
+  "isolated_upgrade_sites_created": 10,
+  "other_unverified_attempts": [],
+  "cancelled_unexecuted_attempts": [
+    34807925473,
+    34807977896,
+    34808944166,
+    34809760788,
+    34812019158
+  ],
+  "guard_remediation_proof": {
+    "version": "0.2.1",
+    "run_id": 34812299091,
+    "commit": "ff39ae3883ca51b46be96235b8ecf13afbd331b6",
+    "readiness_pass": 54,
+    "guardian_browser_pass": 6,
+    "realtime_pass": 4,
+    "legacy_owner_http_private_file_status": 403,
+    "legacy_owner_rest_file_status": 403,
+    "legacy_owner_rpc_file_status": 403,
+    "legacy_owner_native_content": "PermissionError",
+    "authorized_file_controls_and_content_hash": "pass",
+    "all_extension_source_hashes_match_checkout": true,
+    "scope": "Enumerated hosted boundaries only; not full mixed-role/attachment/ZIP/export/public websocket production approval."
+  },
+  "local_helper_tests": 44,
+  "hardened_profile_status_note": "Latest overall hardened workflow fails on advisory audit; enumerated guard checks pass separately. Earlier true checkpoint was scoped historical evidence, not the current full profile.",
+  "scheduler_execution_proof": [
+    {
+      "run_id": 34810723925,
+      "status": "Complete",
+      "seconds": 238.19,
+      "native_tick_seconds": 240,
+      "observation_budget_seconds": 360,
+      "scheduler_driven": true
+    },
+    {
+      "run_id": 34812299091,
+      "status": "Complete",
+      "scheduler_driven": true,
+      "native_tick_seconds": 240,
+      "observation_budget_seconds": 360,
+      "seconds": 164.14
+    },
+    {
+      "run_id": 34823345078,
+      "status": "Complete",
+      "scheduler_driven": true,
+      "native_tick_seconds": 240,
+      "observation_budget_seconds": 360,
+      "seconds": 234.2
+    }
+  ],
+  "final_hardening_verification": "evidence/phase-2/final-hardening-hosted-verification.json",
+  "frontend_candidate_checkpoint": {
+    "run_id": 34823793929,
+    "commit": "45568015dc98c9f5b4b0d0483ff8837fac5970e1",
+    "check_id": 103911386257,
+    "status": "fail",
+    "baseline_advisory_entries": 57,
+    "candidate_advisory_entries": 23,
+    "removed_original_matches": 35,
+    "introduced_matches": 1,
+    "production_pins_changed": false,
+    "adopted": false,
+    "baseline_build": "pass",
+    "candidate_build": "pass",
+    "candidate_api_smoke_checks": 8,
+    "candidate_dependency_range_issues": 0,
+    "native_integration_for_changed_dependencies": "not_qualified",
+    "evidence": "evidence/phase-2/hosted/frontend-34823793929.json"
+  },
+  "controlled_restart_proof": {
+    "run_id": 34823345078,
+    "status": "pass_scoped",
+    "native_record_preserved": true,
+    "cache_value_preserved": true,
+    "queued_job_finished_on_replacement_worker": true,
+    "proxy_ping": "pong",
+    "post_restart_isolation_checks": 47,
+    "scope": "Controlled Gunicorn/RQ process replacement; DB/Redis stay running; no host crash/HA/exactly-once/session continuity/downtime claim"
+  },
+  "production_acceptance_ledger": "foundation-production-acceptance-ledger.json",
+  "final_recommendation_report": "foundation-final-qualification.md",
+  "architecture_decision": {
+    "record": "foundation-architecture-decision.json",
+    "report": "foundation-architecture-decision.md",
+    "selected_strategy": "controlled_upstream_aligned_frontend_upgrade",
+    "production_recommendation": "REJECT",
+    "risk_acceptance_granted": false,
+    "runtime_changes": false,
+    "new_runtime_tests_executed": false
+  },
+  "phase3_domain_design": {
+    "status": "design_proposal_ready_for_review",
+    "index": "../domain/README.md",
+    "review_status": "../domain/review-status.json",
+    "design_authorized": true,
+    "implementation_authorized": false,
+    "production_deployment_authorized": false,
+    "new_domain_runtime_evidence": false
+  }
+}

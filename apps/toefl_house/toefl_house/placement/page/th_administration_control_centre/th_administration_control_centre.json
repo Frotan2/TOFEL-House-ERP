@@ -1,0 +1,13 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Placement",
+  "name": "th-administration-control-centre",
+  "page_name": "th-administration-control-centre",
+  "roles": [
+    {"role": "Course Owner"},
+    {"role": "General Manager"}
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Administration Control Centre"
+}

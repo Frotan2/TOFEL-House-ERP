@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "record_id": "TOFEL-HOUSE-OWNER-DECISIONS",
+  "record_date": "2026-09-16",
+  "authority": "Owner decisions supplied in the current engineering conversation; this record is the canonical repository representation.",
+  "active_branch": "arena/01a0a9f7-tofel-house-erp",
+  "production_state": "REJECT",
+  "business_authorities": {
+    "system_owner": "Course Owner",
+    "strategic_final_authority": "Course Owner",
+    "general_manager": "General Manager",
+    "general_manager_scope": "Overall administrative and routine operational management; must not become an unnecessary routine approval bottleneck.",
+    "academic_manager": "Academic Manager",
+    "academic_scope": "Academic operations and student academic progress.",
+    "finance_manager": "Finance Manager",
+    "finance_scope": "Finance and payroll operations through native ERPNext/HRMS authorities.",
+    "reception": "Reception",
+    "reception_scope": "Student intake and reception operations.",
+    "staff_access": "Role-based access only.",
+    "auditability": "Important activities require an auditable trail.",
+    "offboarding": "Employee offboarding revokes access while preserving historical records.",
+    "sensitive_decisions": "Sensitive financial and strategic decisions remain subject to appropriate management/Course Owner controls."
+  },
+  "organization_and_tenancy": {
+    "multi_branch_architecture": "REQUIRED",
+    "branch_operational_isolation": "REQUIRED",
+    "branch_authority": "Use native ERPNext Company/Branch and native permission/accounting authorities where applicable; do not create a parallel tenant or accounting ledger.",
+    "aggregate_visibility": "Course Owner and appropriately authorized senior management may view organization-level aggregates according to role; aggregate visibility does not bypass branch-level operational isolation.",
+    "student_guardian_portal": "FUTURE SCOPE \u2014 not current scope.",
+    "online_payment_gateway": "NOT REQUIRED AT LAUNCH. Payments app remains pinned but no gateway is selected."
+  },
+  "deployment_and_state": {
+    "current_deployment": "Local/server-based deployment accessed by authorized staff through Tailscale.",
+    "future_deployment": "Internet-hosted deployment is future direction; provider, hostname, DNS, public edge, and public TLS values are not selected.",
+    "current_database": "Local/server-based.",
+    "current_files": "Local/server-based.",
+    "current_trust_boundary": "Authorized staff access through the controlled Tailscale network; public internet access is not a current deployment assumption.",
+    "future_migration_boundary": "Future internet hosting requires a separate topology, edge, session, TLS, durability, capacity, and deployment evidence record; none is fabricated here."
+  },
+  "continuity_and_recovery": {
+    "backup": "Automated multi-version encrypted backup is REQUIRED.",
+    "recovery": "Recovery onto another system MUST be supported.",
+    "priority": "Preserving data is more important than minimizing recovery time.",
+    "offsite_backup": "Should be supported in the future; no provider or destination is selected now.",
+    "retention_and_rotation": "Engineering-owned implementation contract: versioned encrypted backups with deterministic rotation and restoration verification; exact deployed retention values remain configuration, not invented business policy.",
+    "rpo_rto": "No numeric RPO/RTO is supplied. Recovery priority is authoritative: preserve data first; do not claim a time objective until measured in the selected architecture."
+  },
+  "configurable_business_policy": {
+    "fees_discounts_courses_levels_skills_terms": "Must be configurable through native configuration or the smallest justified controlled extension; values must not be hard-coded.",
+    "teacher_compensation": "Must support configurable fixed, skill-based, and combined models through the native HRMS/payroll authority; no parallel payroll ledger.",
+    "roles_permissions": "Course Owner can manage roles and permissions through a controlled system interface; changes remain auditable and fail closed.",
+    "configuration_control_center": "Course Owner should have a central administrative configuration/control center.",
+    "health_attention_dashboard": "Course Owner should receive a high-level system health/attention dashboard; General Manager receives operationally appropriate visibility."
+  },
+  "engineering_authority": {
+    "selection_scope": [
+      "authentication and MFA",
+      "RBAC implementation",
+      "Tailscale/network controls",
+      "session security",
+      "encryption and secrets management",
+      "backup retention and rotation",
+      "logging, monitoring, and alerting",
+      "recovery implementation",
+      "configuration versioning",
+      "audit trail",
+      "deletion and archival mechanics",
+      "topology contracts",
+      "capacity testing",
+      "rollback",
+      "CI/CD and deployment hardening"
+    ],
+    "constraint": "Engineering selects sound mechanisms without asking the owner to choose technical implementation details, but must not invent provider, hostname, commercial, legal, numeric service, or production authorization values."
+  },
+  "architecture_invariants": {
+    "native_authorities": "Frappe/ERPNext/Education/HRMS remain authorities for identity, students, academic records, accounting, employees, and payroll.",
+    "parallel_ledgers": "PROHIBITED.",
+    "hard_coded_pricing": "PROHIBITED.",
+    "security": "Fail closed.",
+    "evidence": "Evidence-first qualification; documentation is not runtime proof.",
+    "production_authorization": "REJECT until every applicable release gate is actually proven."
+  },
+  "unresolved_business_inputs_not_reinterpreted": [
+    "Numeric capacity and availability objectives.",
+    "Future internet-hosted provider, hostname, DNS, and public-edge selection.",
+    "Future off-site backup destination.",
+    "Deferred academic grading/progression, advanced guardian, calendar/transfer, tax, refund-term, and metrics-steward policies already recorded in OWNER-DECISIONS.md."
+  ],
+  "source_documents": [
+    "docs/engineering/PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md",
+    "docs/engineering/OWNER-DECISIONS.md",
+    "docs/engineering/D8-OPERATIONAL-INPUT-PACKET.md",
+    "docs/engineering/d8-production-operations-decision-matrix.json",
+    "docs/domain/DOMAIN-CONTRACT.md",
+    "docs/domain/ERP-CAPABILITY-MAP.md",
+    "docs/engineering/RELEASE-GAP-MAP.md",
+    "docs/engineering/RELEASE-CANDIDATE-DOSSIER.md",
+    "docs/engineering/foundation-production-acceptance-ledger.json",
+    "docs/engineering/foundation-architecture-decision.md"
+  ],
+  "d8_business_requirements": {
+    "D8-OPS-AUTHORITY": {
+      "operating_authority_reference": "General Manager owns overall routine administration and operational management; Course Owner retains final strategic/system authority.",
+      "recovery_authority_reference": "General Manager owns operational recovery coordination; Course Owner retains final strategic escalation and data-preservation authority.",
+      "security_incident_authority_reference": "General Manager coordinates operational security incidents; Course Owner retains strategic/final management authority.",
+      "escalation_authority_reference": "Course Owner is final strategic/ownership escalation authority; General Manager is the routine operational escalation owner."
+    },
+    "D8-TOPOLOGY-EDGE": {
+      "hostname_and_dns_authority": "Current local/server deployment through Tailscale; future internet-hosted hostname/DNS is not selected.",
+      "trust_boundary_reference": "Current trust boundary is authorized staff access through Tailscale to the local/server deployment; public internet access is not current scope.",
+      "edge_proxy_reference": "Current local/Tailscale boundary; future internet-hosted edge/reverse proxy is not selected.",
+      "tls_custody_reference": "Engineering selects current session/TLS controls; future public TLS custody is not selected.",
+      "allowed_origins_reference": "Current staff-only Tailscale access; future hosted allowed origins are not selected.",
+      "service_placement_reference": "Current application, database and files are local/server-based; future service placement is not selected."
+    },
+    "D8-DURABLE-STATE": {
+      "mariadb_durability_reference": "Current database is local/server-based; engineering must implement and evidence durable persistence.",
+      "redis_durability_reference": "Current queue/cache placement is local/server-based; engineering selects durability appropriate to the workload and evidence.",
+      "site_configuration_custody_reference": "Current site configuration is local/server state with versioned, reviewable configuration and runtime injection; exact custody mechanism is engineering-owned.",
+      "encryption_key_custody_reference": "Encryption keys are engineering-managed secrets outside source control; exact custody mechanism is engineering-owned and must be recoverable.",
+      "private_file_storage_reference": "Current private files are local/server-based and must remain protected by native parent authorization plus tested backup/recovery.",
+      "public_asset_storage_reference": "Current public assets are local/server-based; future external asset storage is not selected."
+    },
+    "D8-BACKUP-RECOVERY": {
+      "backup_destination_reference": "Current destination is not a selected provider or off-site service; implementation must support automated versioned encrypted output and a future destination.",
+      "backup_retention_reference": "Multi-version rotation and retention are required; exact deployed values are engineering configuration, not invented business policy.",
+      "backup_encryption_reference": "Backup content must be encrypted before or at rest under engineering-selected secret management.",
+      "key_retrieval_authority_reference": "Engineering controls key retrieval; operational recovery is coordinated by General Manager with Course Owner strategic escalation.",
+      "restore_authority_reference": "General Manager coordinates restoration; Course Owner retains final strategic/data-preservation escalation.",
+      "rpo_reference": "Data preservation has priority over minimizing recovery time; no numeric RPO is supplied.",
+      "rto_reference": "Data preservation has priority over minimizing recovery time; no numeric RTO is supplied."
+    },
+    "D8-OBSERVABILITY-INCIDENT": {
+      "monitoring_responsibility_reference": "Engineering implements monitoring; General Manager owns routine operational visibility and response; Course Owner receives high-level attention visibility.",
+      "log_audit_retention_reference": "Important activity must be auditable; engineering selects retention/redaction and preserves historical records.",
+      "alert_receiver_reference": "General Manager receives routine operational alerts; Course Owner receives strategic/high-level attention escalation.",
+      "incident_authority_reference": "General Manager coordinates operational incidents; Course Owner retains strategic/final authority.",
+      "retention_rotation_reference": "Engineering selects log/metric rotation and retention consistent with auditability and preservation requirements; exact values are configuration."
+    },
+    "D8-CAPACITY-AVAILABILITY": {
+      "status": "NOT_SELECTED",
+      "concurrency_profile_reference": "No numeric workload profile supplied; engineering must baseline without claiming a target.",
+      "data_scale_reference": "No numeric data-scale objective supplied; engineering must measure the selected current architecture.",
+      "workload_mix_reference": "No numeric workload mix supplied; engineering must establish a representative baseline.",
+      "availability_objective_reference": "No numeric availability objective supplied; no availability claim is authorized."
+    },
+    "D8-CHANGE-ROLLBACK": {
+      "release_approver_reference": "Course Owner is final approver for strategic/ownership release decisions; General Manager manages routine operational release coordination.",
+      "build_provenance_reference": "Engineering owns immutable build/ref/commit and artifact provenance.",
+      "configuration_promotion_reference": "Engineering owns versioned configuration promotion with General Manager routine operational oversight and Course Owner control for strategic/sensitive changes.",
+      "maintenance_communication_reference": "General Manager owns routine operational communication; Course Owner receives strategic impact escalation.",
+      "rollback_criteria_reference": "Engineering implements rollback when integrity, authorization, data preservation, security or release evidence fails; Course Owner/General Manager retain decision authority by scope.",
+      "rollback_method_reference": "Engineering selects tested versioned-artifact and restore-based rollback mechanics; no unsupported downgrade is assumed."
+    }
+  },
+  "domain_gate_decisions": [
+    {
+      "id": "D1",
+      "decision": "DEFER",
+      "scope": "Academic assessment and progression policy (level vocabulary, grading, progression and related academic rules).",
+      "consequence": "A06 remains unstarted; native Education remains the future authority."
+    },
+    {
+      "id": "D2",
+      "decision": "UNLOCKED / FRAMEWORK SELECTED",
+      "scope": "Configurable teacher compensation supports fixed, skill-based and combined models through native HRMS/payroll; rates/statutory/payable terms remain configuration.",
+      "consequence": "Teaching compensation framework is shipped/qualified; full payroll posting remains gated."
+    },
+    {
+      "id": "D3",
+      "decision": "FRAMEWORK APPROVED / EXACT TERMS LATER",
+      "scope": "Guarded finance correction/refund framework; exact refund, partial-refund and Fees-side terms remain policy.",
+      "consequence": "Fail-closed correction framework may operate only with configured policy."
+    },
+    {
+      "id": "D4",
+      "decision": "DEFER ADVANCED POLICY",
+      "scope": "Advanced identity, guardian delegation and portal policy.",
+      "consequence": "Narrow remedy remains; full guardian/portal closure stays deferred."
+    },
+    {
+      "id": "D5",
+      "decision": "NATIVE BASIC LIFECYCLE / ADVANCED LATER",
+      "scope": "Use native basic calendar/lifecycle; repeat, transfer and withdrawal policy remains deferred.",
+      "consequence": "A05/A11 remain unstarted."
+    },
+    {
+      "id": "D6a",
+      "decision": "TAX NOT CONFIGURED YET",
+      "scope": "No tax configuration is inferred.",
+      "consequence": "Tax setup remains a business configuration gate."
+    },
+    {
+      "id": "D6b",
+      "decision": "NO ONLINE PAYMENT GATEWAY AT LAUNCH",
+      "scope": "Payments app may remain pinned, but no gateway is selected or enabled.",
+      "consequence": "Online payment integration remains closed at launch."
+    },
+    {
+      "id": "D7",
+      "decision": "DEFER / RAW REPORTS NOW",
+      "scope": "Raw-fact reports may ship; derived metrics require later named stewards, denominators, disclosure and retention policy.",
+      "consequence": "No warehouse or derived metric layer is unlocked."
+    },
+    {
+      "id": "D8",
+      "decision": "OWNER REQUIREMENTS RECORDED",
+      "scope": "Operational authority, deployment phases, branch isolation, state, backup/recovery, observability, capacity, change/rollback and implementation boundaries are represented in d8_business_requirements and the D8 matrix.",
+      "consequence": "Engineering proceeds autonomously; D8 evidence remains blocked and production remains REJECT."
+    },
+    {
+      "id": "D9",
+      "decision": "NO SEPARATE ATTENDANCE REGISTER",
+      "scope": "Attendance facts remain reachable through guarded APIs; no widened native report anchor is selected.",
+      "consequence": "D9 is closed at the status quo."
+    },
+    {
+      "id": "D10",
+      "decision": "ROLE-BASED PAGES WITHOUT NEW AUTHORITY",
+      "scope": "Staff command Pages use existing guarded endpoints; the Course Owner/General Manager control centre is a separate native-authority navigation/attention surface.",
+      "consequence": "13 command Pages are qualified; control centre has local contract proof."
+    }
+  ]
+}

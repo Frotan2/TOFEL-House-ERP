@@ -1,0 +1,43 @@
+{
+  "status": "experimental_not_adopted",
+  "upstream_commit": "93bc7075753369457919720690f80c6d2207b5f2",
+  "scope": "Isolated Education build candidate only; not ERPNext/Frappe dependency changes or production approval",
+  "resolutions": {
+    "brace-expansion": "5.0.9",
+    "braces": "3.0.3",
+    "browserslist": "4.28.7",
+    "cross-spawn": "7.0.5",
+    "glob": "10.5.0",
+    "linkify-it": "5.0.2",
+    "markdown-it": "14.2.0",
+    "micromatch": "4.0.8",
+    "minimatch": "9.0.7",
+    "nanoid": "3.3.18",
+    "picomatch": "2.3.2",
+    "postcss": "8.5.23",
+    "socket.io-parser": "4.2.7",
+    "socket.io-client": "4.8.3",
+    "engine.io-client": "6.6.6",
+    "ws": "8.21.0",
+    "yaml": "2.8.3",
+    "vite": "2.9.18"
+  },
+  "exclusions": {
+    "rollup": "2.80.0 violates Vite 2.9.x upper bound <2.78.0; retain old version rather than force",
+    "esbuild": "0.25.x outside Vite 2.9.x ^0.14.27",
+    "@tiptap/core": "3.30.4 requires matching pm/editor ecosystem; no isolated override",
+    "@tiptap/extension-link": "2.10.4 peers require core/pm ^2.7.0, unlike locked 2.2.3",
+    "showdown": "No patched release; maintained parser/editor migration needed"
+  },
+  "direct_dependencies": {
+    "vite": "2.9.18",
+    "postcss": "8.5.23"
+  },
+  "direct_dependency_sections": [
+    "dependencies",
+    "devDependencies"
+  ],
+  "first_local_attempt": "Resolutions alone retained vulnerable root Vite/PostCSS plus patched nested copies; preserved local audit, not accepted. Candidate now explicitly pins both direct dependency declarations.",
+  "candidate_lock_sha256": "e736ad85856db6e29ccca0d7e3ec13b71533a4d9bc72e27ea784657ca41aea85",
+  "candidate_manifest_sha256": "232b8a07fd9015310c37d7e5a179ea952d614dc28224d734734029338dba2935"
+}

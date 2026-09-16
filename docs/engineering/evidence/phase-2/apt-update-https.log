@@ -1,0 +1,20 @@
+Ign:1 https://deb.debian.org/debian bookworm InRelease
+Ign:2 https://deb.debian.org/debian bookworm-updates InRelease
+Ign:3 https://deb.debian.org/debian-security bookworm-security InRelease
+Ign:1 https://deb.debian.org/debian bookworm InRelease
+Ign:2 https://deb.debian.org/debian bookworm-updates InRelease
+Ign:3 https://deb.debian.org/debian-security bookworm-security InRelease
+Ign:1 https://deb.debian.org/debian bookworm InRelease
+Ign:2 https://deb.debian.org/debian bookworm-updates InRelease
+Ign:3 https://deb.debian.org/debian-security bookworm-security InRelease
+Err:1 https://deb.debian.org/debian bookworm InRelease
+  Could not handshake: The TLS connection was non-properly terminated. [IP: 151.101.130.132 443]
+Err:2 https://deb.debian.org/debian bookworm-updates InRelease
+  Could not handshake: The TLS connection was non-properly terminated. [IP: 151.101.130.132 443]
+Err:3 https://deb.debian.org/debian-security bookworm-security InRelease
+  Could not handshake: The TLS connection was non-properly terminated. [IP: 151.101.130.132 443]
+Reading package lists...
+E: Failed to fetch https://deb.debian.org/debian/dists/bookworm/InRelease  Could not handshake: The TLS connection was non-properly terminated. [IP: 151.101.130.132 443]
+E: Failed to fetch https://deb.debian.org/debian/dists/bookworm-updates/InRelease  Could not handshake: The TLS connection was non-properly terminated. [IP: 151.101.130.132 443]
+E: Failed to fetch https://deb.debian.org/debian-security/dists/bookworm-security/InRelease  Could not handshake: The TLS connection was non-properly terminated. [IP: 151.101.130.132 443]
+E: Some index files failed to download. They have been ignored, or old ones used instead.

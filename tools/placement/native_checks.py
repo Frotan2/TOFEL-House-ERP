@@ -1,0 +1,3432 @@
+"""Real native DB/controller/HTTP acceptance on isolated synthetic sites only."""
+import concurrent.futures
+import copy
+from datetime import timedelta
+import json
+import os
+from pathlib import Path
+import time
+import traceback
+from unittest.mock import patch
+from urllib.parse import quote
+
+
+def main():
+    if os.environ.get('GITHUB_ACTIONS') != 'true':raise RuntimeError('Hosted synthetic runner only')
+    import frappe
+    import requests
+    from toefl_house import api
+    from toefl_house import admission as adm
+    from toefl_house import enrollment as enr
+    from toefl_house import teaching as tea
+    from toefl_house import finance as fin_m
+    from toefl_house.policy import digest
+    output=Path(os.environ['PLACEMENT_REPORT'])
+    report={'scope':'Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20','status':'running','checks':[],
+            'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
+            'note':'Thin admission, native Program Enrollment and native teaching operations (Student Group / Course Schedule / Student Attendance); no TH Enrollment ledger, grading, fees or payroll'}
+    users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
+           'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
+           'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',
+           'invigilator':'synthetic-invigilator@example.test',
+           'assessor':'synthetic-assessor@example.test',
+           'reviewer':'synthetic-reviewer@example.test',
+           'reviewer2':'synthetic-reviewer2@example.test',
+           'releaser':'synthetic-releaser@example.test',
+           'candidate':'synthetic-candidate@example.test','candidate2':'synthetic-candidate2@example.test',
+           'candidate3':'synthetic-candidate3@example.test','candidate4':'synthetic-candidate4@example.test',
+           'candidate5':'synthetic-candidate5@example.test',
+           'candidate6':'synthetic-candidate6@example.test','candidate7':'synthetic-candidate7@example.test',
+           'candidate8':'synthetic-candidate8@example.test',
+           'officer':'synthetic-officer@example.test',
+           'admissions_reviewer':'synthetic-admissions-reviewer@example.test',
+           'approver':'synthetic-approver@example.test',
+           'admissions_auditor':'synthetic-admissions-auditor@example.test',
+           'enrollment_officer':'synthetic-enrollment-officer@example.test',
+           'enrollment_auditor':'synthetic-enrollment-auditor@example.test',
+           'candidate9':'synthetic-candidate9@example.test',
+           'teaching_scheduler':'synthetic-teaching-scheduler@example.test',
+           'attendance_recorder':'synthetic-attendance-recorder@example.test',
+           'teaching_auditor':'synthetic-teaching-auditor@example.test',
+           'finance_officer':'synthetic-finance-officer@example.test',
+           'finance_auditor':'synthetic-finance-auditor@example.test',
+           'containment_probe':'synthetic-containment-probe@example.test'}
+    item=None
+    def check(name,fn):
+        start=time.monotonic()
+        try:
+            value=fn();frappe.db.commit()
+            report['checks'].append({'name':name,'status':'pass','observation':value,'seconds':round(time.monotonic()-start,3)})
+            return value
+        except Exception as exc:
+            frappe.db.rollback()
+            report['checks'].append({'name':name,'status':'fail','exception':type(exc).__name__,'message':str(exc)[:600]})
+            raise
+        finally:output.write_text(json.dumps(report,indent=2,default=str)+'\n')
+    def denied(fn):
+        frappe.db.savepoint('denial')
+        try:fn()
+        except (frappe.PermissionError,frappe.ValidationError,frappe.DuplicateEntryError) as exc:return {'denied':type(exc).__name__}
+        else:raise AssertionError('Expected denial was accepted')
+        finally:frappe.db.rollback(save_point='denial')
+    def content(answer='a'):
+        return dict(skill='Grammar',difficulty='Entry',question_type='Single Choice',prompt='SYNTHETIC: select the fixture option.',options=[{'id':'a','text':'Fixture A'},{'id':'b','text':'Fixture B'}],answer=answer)
+    def family(actor,tail):return 'SYN-'+digest(actor)[:12].upper()+'-'+tail
+    def as_user(label,fn):frappe.set_user(users[label]);return fn()
+    def connect(site):
+        frappe.init(site=site,sites_path=str(Path.cwd()));frappe.connect();frappe.set_user('Administrator')
+    # Synthetic configuration fixtures. Structural values are fixture data, not
+    # approved operational policy (P1-P5 remain owner deliverables).
+    bp_code='SYN-BP-MAIN-1'
+    pol_code='SYN-POL-MAIN-1'
+    good_bp=dict(mode='Digital',
+                 sections=[dict(id='listening',skill='Listening',minutes=30,item_count=10),
+                           dict(id='reading',skill='Reading',minutes=40,item_count=12)],
+                 total_minutes=70)
+    revised_bp=dict(mode='Digital',
+                    sections=[dict(id='listening',skill='Listening',minutes=20,item_count=8),
+                              dict(id='reading',skill='Reading',minutes=50,item_count=14)],
+                    total_minutes=70)
+    conflict_bp=dict(good_bp,total_minutes=71)
+    bad_mode_bp=dict(good_bp,mode='Remote')
+    good_pol=dict(result_validity_days=90,retest_wait_days=14,
+                  release_working_days=2,appeal_working_days=5,retention_years=3)
+    bad_pol=dict(good_pol,retention_years=11)
+    good_map=dict(algorithm='course-map-v1',entries=[dict(internal_level='SYN-LEVEL-GENERAL',course_code='SYN-COURSE-GENERAL',match='any_correct')])
+    bad_map=dict(algorithm='course-map-v1',entries=[dict(internal_level='B1',course_code='SYN-COURSE-GENERAL',match='any_correct')])
+    try:
+        for site in ('placement-test.localhost','placement-second.localhost'):
+            connect(site)
+            assert frappe.conf.allow_tests==1 and frappe.conf.toefl_house_synthetic_only==1
+            def setup():
+                # `author` is dual-role (Author+Publisher) for increment-1/2 SoD
+                # (self-publish/self-review denied despite role union). It is a
+                # Publisher for increment-3 operational commands. Author-only
+                # denials must use `other` / `second_author`, never `author`.
+                mapping={'author':['Placement Author','Placement Publisher'],'other':['Placement Author'],
+                         'publisher':['Placement Publisher'],'publisher2':['Placement Publisher'],
+                         'second_author':['Placement Author'],'auditor':['Placement Auditor'],'outsider':[],
+                         'invigilator':['Placement Invigilator'],
+                         'assessor':['Placement Assessor'],
+                         'reviewer':['Placement Reviewer'],
+                         'reviewer2':['Placement Reviewer'],
+                         'releaser':['Placement Releaser'],
+                         'candidate':[],'candidate2':[],'candidate3':[],'candidate4':[],'candidate5':[],
+                         'candidate6':[],'candidate7':[],'candidate8':[],
+                         'officer':['Admission Officer'],
+                         'admissions_reviewer':['Admission Reviewer'],
+                         'approver':['Admission Approver'],
+                         'admissions_auditor':['Admission Auditor'],
+                         'enrollment_officer':['Enrollment Officer'],
+                         'enrollment_auditor':['Enrollment Auditor'],
+                         'candidate9':[],
+                         'teaching_scheduler':['Teaching Scheduler'],
+                         'attendance_recorder':['Attendance Recorder'],
+                         'teaching_auditor':['Teaching Auditor'],
+                         'finance_officer':['Finance Officer','Accounts User'],
+                         'finance_auditor':['Finance Auditor'],
+                         # A13 web-seam containment probe: native Accounts
+                         # User only; never revoked, so the REST probes below
+                         # exercise the guard layer, not a permission denial.
+                         'containment_probe':['Accounts User']}
+                for label,roles in mapping.items():
+                    frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
+                        enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
+                        roles=[{'role':r} for r in roles])).insert()
+                return {'site':site,'users':len(users),'apps':frappe.get_installed_apps()}
+            check('native-fixtures-'+site,setup);frappe.destroy()
+        connect('placement-test.localhost')
+        before_counts={dt:frappe.db.count(dt) for dt in ['Student','Student Applicant','Program Enrollment','Course Enrollment','Assessment Result','Sales Invoice','GL Entry','Salary Slip','Student Group','Course Schedule','Student Attendance','Employee','Attendance','Timesheet','Additional Salary','Fees']}
+        check('administrator-not-an-implicit-business-actor',lambda:denied(lambda:api.create_draft('admin_attempt_001',family(users['author'],'ADMIN'),1,content())))
+        def disabled():
+            original=frappe.conf.toefl_house_synthetic_only;frappe.conf.toefl_house_synthetic_only=0
+            try:return denied(lambda:as_user('author',lambda:api.create_draft('disabled_gate_001',family(users['author'],'OFF'),1,content())))
+            finally:frappe.conf.toefl_house_synthetic_only=original
+        check('disabled-site-fails-closed',disabled)
+        check('unrelated-role-denied',lambda:denied(lambda:as_user('outsider',lambda:api.create_draft('outsider_try_001',family(users['outsider'],'NO'),1,content()))))
+        item=check('create-native-draft',lambda:as_user('author',lambda:api.create_draft('native_create_001',family(users['author'],'ONE'),1,content())))
+        first_key=frappe.db.get_value(api.ITEM,item['name'],'key_revision')
+        def replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('author',lambda:api.create_draft('native_create_001',family(users['author'],'ONE'),1,content()))
+            assert value==item and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_audit':True}
+        check('idempotent-replay',replay)
+        check('database-family-revision-unique',lambda:denied(lambda:as_user('author',lambda:api.create_draft('duplicate_family_001',family(users['author'],'ONE'),1,content()))))
+        check('changed-payload-conflict',lambda:denied(lambda:as_user('author',lambda:api.create_draft('native_create_001',family(users['author'],'ONE'),1,content('b')))))
+        check('changed-actor-conflict',lambda:denied(lambda:as_user('other',lambda:api.create_draft('native_create_001',family(users['author'],'ONE'),1,content()))))
+        check('family-author-namespace-enforced',lambda:denied(lambda:as_user('other',lambda:api.create_draft('other_family_001',family(users['author'],'ONE'),2,content()))))
+        check('self-publication-denied-despite-role-union',lambda:denied(lambda:as_user('author',lambda:api.publish('self_publish_001',item['name'],1))))
+        item=check('revise-draft-append-key-history',lambda:as_user('author',lambda:api.revise_draft('native_revise_001',item['name'],1,content('b'))))
+        def key_history():
+            assert frappe.db.get_value(api.KEY,first_key,'answer')=='a'
+            assert frappe.db.count(api.KEY,{'item_revision':item['name']})==2
+            return {'old_key_preserved':True}
+        check('old-key-not-overwritten',key_history)
+        check('key-history-direct-update-denied',lambda:denied(lambda:frappe.get_doc(api.KEY,first_key).db_set('answer','b')))
+        check('stale-draft-edit-denied',lambda:denied(lambda:as_user('author',lambda:api.revise_draft('native_stale_001',item['name'],1,content()))))
+        check('other-author-edit-denied',lambda:denied(lambda:as_user('other',lambda:api.revise_draft('native_other_001',item['name'],2,content()))))
+        item=check('independent-native-publication',lambda:as_user('publisher',lambda:api.publish('native_publish_001',item['name'],2)))
+        assert item['status']=='Published'
+        check('published-edit-denied',lambda:denied(lambda:as_user('author',lambda:api.revise_draft('published_edit_001',item['name'],3,content()))))
+        def generic_write():
+            frappe.set_user(users['author']);doc=frappe.get_doc(api.ITEM,item['name']);doc.prompt='SYNTHETIC: forged mutation';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('ignore-permissions-does-not-bypass-controller',generic_write)
+        check('direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.ITEM,item['name']).db_set('status','Draft')))
+        check('direct-db-update-denied',lambda:denied(lambda:frappe.get_doc(api.ITEM,item['name']).db_update()))
+        check('delete-denied',lambda:denied(lambda:frappe.delete_doc(api.ITEM,item['name'],ignore_permissions=True)))
+        def native_reads():
+            frappe.set_user(users['other']);doc=frappe.get_doc(api.ITEM,item['name']);assert doc.has_permission('read')
+            key=frappe.get_doc(api.KEY,doc.key_revision);assert not key.has_permission('read')
+            assert not frappe.get_list(api.KEY,filters={'item_revision':doc.name})
+            frappe.set_user(users['auditor']);assert not key.has_permission('read')
+            assert len(frappe.get_list(api.AUDIT,filters={'item_revision':doc.name}))==3
+            return {'published_prompt_readable':True,'key_restricted':True,'audit_events':3}
+        check('native-role-and-list-parity',native_reads)
+        def rollback_proof():
+            frappe.set_user(users['author']);frappe.db.savepoint('atomic_failure')
+            old=frappe.db.count(api.ITEM);oldkey=frappe.db.count(api.KEY);oldop=frappe.db.count(api.OP)
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:raise RuntimeError('synthetic failure at audit append')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.create_draft('atomic_failure_001',family(users['author'],'ROLLBACK'),1,content())
+            except RuntimeError:frappe.db.rollback(save_point='atomic_failure')
+            else:raise AssertionError('Failure injection did not execute')
+            assert (frappe.db.count(api.ITEM),frappe.db.count(api.KEY),frappe.db.count(api.OP))==(old,oldkey,oldop)
+            return {'real_database_rollback':True,'injected_boundary':'audit append'}
+        check('atomic-item-key-receipt-audit-rollback',rollback_proof)
+        # --- Increment 2: blueprint/policy configuration governance ---
+        check('config-conflicting-quotas-create-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_conflict_001','blueprint',bp_code,1,conflict_bp))))
+        check('config-invalid-mode-create-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_badmode_0001','blueprint',bp_code,1,bad_mode_bp))))
+        check('config-out-of-bounds-policy-create-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_bad_policy_01','policy',pol_code,1,bad_pol))))
+        check('config-unknown-type-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_unknown_type_1','bank',bp_code,1,good_bp))))
+        check('config-non-synthetic-code-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_realcode_001','blueprint','REAL-BP',1,good_bp))))
+        bp=check('config-create-blueprint-draft',lambda:as_user('author',lambda:api.create_draft_config('cfg_create_bp_001','blueprint',bp_code,1,good_bp)))
+        assert bp['status']=='Draft' and bp['version']==1
+        check('config-duplicate-code-revision-unique',lambda:denied(lambda:as_user('second_author',lambda:api.create_draft_config('cfg_dup_code_001','blueprint',bp_code,1,good_bp))))
+        def cfg_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('author',lambda:api.create_draft_config('cfg_create_bp_001','blueprint',bp_code,1,good_bp))
+            assert value==bp and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_audit':True}
+        check('config-idempotent-replay',cfg_replay)
+        check('config-changed-payload-conflict',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('cfg_create_bp_001','blueprint',bp_code,1,conflict_bp))))
+        check('config-changed-actor-conflict',lambda:denied(lambda:as_user('second_author',lambda:api.create_draft_config('cfg_create_bp_001','blueprint',bp_code,1,good_bp))))
+        pol=check('config-create-policy-draft',lambda:as_user('author',lambda:api.create_draft_config('cfg_create_pol_001','policy',pol_code,1,good_pol)))
+        bp=check('config-revise-draft',lambda:as_user('author',lambda:api.revise_draft_config('cfg_revise_bp_001','blueprint',bp['name'],1,revised_bp)))
+        assert bp['version']==2 and bp['status']=='Draft'
+        check('config-other-author-revise-denied',lambda:denied(lambda:as_user('second_author',lambda:api.revise_draft_config('cfg_other_revise_001','blueprint',bp['name'],2,good_bp))))
+        check('config-stale-version-revise-denied',lambda:denied(lambda:as_user('author',lambda:api.revise_draft_config('cfg_stale_revise_001','blueprint',bp['name'],1,good_bp))))
+        check('config-self-review-denied-despite-role-union',lambda:denied(lambda:as_user('author',lambda:api.review_config('cfg_self_review_001','blueprint',bp['name'],2))))
+        bp=check('config-independent-review',lambda:as_user('publisher',lambda:api.review_config('cfg_review_bp_001','blueprint',bp['name'],2)))
+        assert bp['status']=='Reviewed'
+        check('config-review-freezes-content',lambda:denied(lambda:as_user('author',lambda:api.revise_draft_config('cfg_frozen_revise_001','blueprint',bp['name'],3,revised_bp))))
+        check('config-reviewer-self-publish-denied',lambda:denied(lambda:as_user('publisher',lambda:api.publish_config('cfg_self_publish_001','blueprint',bp['name'],3))))
+        check('config-author-publish-denied',lambda:denied(lambda:as_user('author',lambda:api.publish_config('cfg_author_publish_001','blueprint',bp['name'],3))))
+        bp=check('config-independent-publication',lambda:as_user('publisher2',lambda:api.publish_config('cfg_publish_bp_001','blueprint',bp['name'],3)))
+        assert bp['status']=='Published'
+        check('config-published-revise-denied',lambda:denied(lambda:as_user('author',lambda:api.revise_draft_config('cfg_pub_revise_001','blueprint',bp['name'],4,good_bp))))
+        check('config-retire-by-author-denied',lambda:denied(lambda:as_user('author',lambda:api.retire_config('cfg_author_retire_001','blueprint',bp['name'],4))))
+        bp=check('config-independent-retirement',lambda:as_user('publisher2',lambda:api.retire_config('cfg_retire_bp_001','blueprint',bp['name'],4)))
+        assert bp['status']=='Retired'
+        check('config-retired-is-terminal',lambda:denied(lambda:as_user('publisher',lambda:api.retire_config('cfg_retired_again_001','blueprint',bp['name'],5))))
+        pol=check('config-policy-review',lambda:as_user('publisher',lambda:api.review_config('cfg_review_pol_001','policy',pol['name'],1)))
+        pol=check('config-policy-independent-publication',lambda:as_user('publisher2',lambda:api.publish_config('cfg_publish_pol_001','policy',pol['name'],2)))
+        assert pol['status']=='Published'
+        def cfg_generic_write():
+            frappe.set_user(users['publisher2']);doc=frappe.get_doc(api.BLUEPRINT,bp['name']);doc.status='Draft';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('config-ignore-permissions-does-not-bypass-controller',cfg_generic_write)
+        check('config-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.POLICY,pol['name']).db_set('status','Retired')))
+        check('config-direct-db-update-denied',lambda:denied(lambda:frappe.get_doc(api.BLUEPRINT,bp['name']).db_update()))
+        check('config-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.BLUEPRINT,bp['name'],ignore_permissions=True)))
+        def cfg_audit_shape():
+            frappe.set_user(users['auditor'])
+            rows=frappe.get_all(api.AUDIT,filters={'target':bp['name']},fields=['action','item_revision','before_key','after_key'])
+            assert len(rows)==5,rows
+            assert all(not r.item_revision and not r.before_key and not r.after_key for r in rows)
+            actions=sorted(r.action for r in rows)
+            assert actions==sorted(['create_blueprint','revise_blueprint','review_blueprint','publish_blueprint','retire_blueprint']),actions
+            return {'config_audit_rows':len(rows),'actions':actions,'no_item_key_references':True}
+        check('config-audit-ledger-shape',cfg_audit_shape)
+        def cfg_native_reads():
+            frappe.set_user(users['second_author'])
+            assert not frappe.get_doc(api.BLUEPRINT,bp['name']).has_permission('read')
+            assert frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
+            frappe.set_user(users['author'])
+            assert frappe.get_doc(api.BLUEPRINT,bp['name']).has_permission('read')
+            frappe.set_user(users['publisher2'])
+            assert frappe.get_doc(api.BLUEPRINT,bp['name']).has_permission('read')
+            assert frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
+            frappe.set_user(users['auditor'])
+            assert frappe.get_doc(api.POLICY,pol['name']).has_permission('read')
+            assert not frappe.get_doc(api.BLUEPRINT,bp['name']).has_permission('read')
+            frappe.set_user(users['second_author'])
+            assert not frappe.get_list(api.BLUEPRINT,filters={'code':bp_code})
+            frappe.set_user(users['auditor'])
+            assert not frappe.get_list(api.BLUEPRINT,filters={'code':bp_code})
+            assert len(frappe.get_list(api.POLICY,filters={'code':pol_code}))==1
+            return {'own_and_published_visible':True,'retired_hidden_from_auditor':True,'list_parity':True}
+        check('config-role-and-list-parity',cfg_native_reads)
+        def cfg_rollback_proof():
+            frappe.set_user(users['author']);frappe.db.savepoint('cfg_atomic')
+            old=frappe.db.count(api.BLUEPRINT);oldop=frappe.db.count(api.OP)
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:raise RuntimeError('synthetic configuration audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.create_draft_config('cfg_atomic_bp_0001','blueprint','SYN-BP-ROLLBACK-1',1,good_bp)
+            except RuntimeError:frappe.db.rollback(save_point='cfg_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert (frappe.db.count(api.BLUEPRINT),frappe.db.count(api.OP))==(old,oldop)
+            return {'real_database_rollback':True,'injected_boundary':'audit append'}
+        check('config-atomic-doc-receipt-audit-rollback',cfg_rollback_proof)
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        check('second-site-no-first-site-record',lambda:{'absent':not frappe.db.exists(api.ITEM,item['name'])} if not frappe.db.exists(api.ITEM,item['name']) else (_ for _ in ()).throw(AssertionError('Cross-site record')))
+        def cfg_second_site():
+            assert not frappe.db.exists(api.BLUEPRINT,bp['name']) and not frappe.db.exists(api.POLICY,pol['name'])
+            return {'config_absent_on_second_site':True}
+        check('second-site-no-first-site-config-record',cfg_second_site)
+
+        def transient_recovery(exhaust=False):
+            frappe.set_user(users['author']);frappe.db.commit()
+            suffix='EXHAUST' if exhaust else 'RETRY'
+            f=family(users['author'],suffix);calls=[];original=api._new_key
+            previous=frappe.db.sql('SELECT @@SESSION.innodb_lock_wait_timeout')[0][0]
+            def flaky(*args):
+                calls.append(1)
+                assert frappe.db.sql('SELECT @@SESSION.innodb_lock_wait_timeout')[0][0]==5
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('Synthetic transient after item insert')
+                return original(*args)
+            with patch.object(api,'_new_key',side_effect=flaky):
+                if exhaust:
+                    try:api.create_draft('native_exhaust_retry_001',f,1,content())
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.create_draft('native_transient_retry_001',f,1,content())
+            assert len(calls)==(4 if exhaust else 2)
+            assert frappe.db.count(api.ITEM,{'family':f})==(0 if exhaust else 1)
+            if not exhaust:assert frappe.db.count(api.AUDIT,{'item_revision':result['name']})==1
+            assert frappe.db.sql('SELECT @@SESSION.innodb_lock_wait_timeout')[0][0]==previous
+            return {'attempts':len(calls),'rollback_and_wait_restore':True,'exhaustion':exhaust}
+        check('native-whole-command-transient-recovery',transient_recovery)
+        check('native-retry-exhaustion-bounded',lambda:transient_recovery(True))
+        # --- Increment 3: blueprint allocation and candidate form generation ---
+        # Isolation + increment-1/2 transient recovery ran on the second site.
+        # Allocation must execute on the primary site (users already exist on
+        # both); otherwise increment-3 records land on the wrong site and
+        # names captured from increment 2 are missing (run 34883984456).
+        frappe.db.commit();frappe.destroy();connect('placement-test.localhost')
+        from toefl_house import allocation
+        from toefl_house.policy import canonical as _canonical
+        from toefl_house.security import command as _command
+        def unavailable(fn,needle):
+            frappe.db.savepoint('denial')
+            try:fn()
+            except frappe.ValidationError as exc:
+                assert needle in str(exc),str(exc)
+                return {'denied':'ValidationError','reason':str(exc)[:140]}
+            else:raise AssertionError('Expected allocation unavailability was accepted')
+            finally:frappe.db.rollback(save_point='denial')
+        def bank_content(skill,difficulty,i,qtype):
+            if qtype=='True False':
+                options=[{'id':'true','text':'True'},{'id':'false','text':'False'}];answer='true'
+            else:
+                options=[{'id':'o%d'%j,'text':'SYN %s %s %d option %d'%(skill,difficulty,i,j)} for j in range(1,5)]
+                answer='o1'
+            return dict(skill=skill,difficulty=difficulty,question_type=qtype,
+                        prompt='SYNTHETIC: bank %s %s %d fixture question.'%(skill,difficulty,i),
+                        options=options,answer=answer)
+        def build_bank():
+            made=[]
+            for skill in ('Vocabulary','Grammar','Reading','Listening'):
+                for difficulty in ('Entry','Core','Stretch'):
+                    for i in range(3):
+                        qtype='True False' if i==2 else 'Single Choice'
+                        fam=family(users['author'],'BANK-%s-%s%d'%(skill[:3].upper(),difficulty[0].upper(),i))
+                        def make(f=fam,c=bank_content(skill,difficulty,i,qtype),k='bank-create-%s-%s-%d'%(skill,difficulty,i)):
+                            as_user('author',lambda:api.create_draft(k,f,1,c))
+                        make()
+                        made.append(fam)
+            frappe.db.commit()
+            rows=frappe.get_all(api.ITEM,filters={'status':'Draft','owner':users['author']},
+                                fields=['name','version'],order_by='creation asc')
+            for idx,row in enumerate(rows):
+                def pub(r=row,k='bank-publish-%03d'%idx):
+                    as_user('publisher',lambda:api.publish(k,r.name,r.version))
+                pub()
+            return {'bank_families':len(set(made)),'published_total':frappe.db.count(api.ITEM,{'status':'Published'})}
+        check('alloc-bank-fixture-published',build_bank)
+        alloc_sections=[dict(id='listening_a',skill='Listening',item_count=2,minutes=10),
+                        dict(id='reading_a',skill='Reading',item_count=3,minutes=15),
+                        dict(id='vocab_a',skill='Vocabulary',item_count=2,minutes=10),
+                        dict(id='grammar_a',skill='Grammar',item_count=2,minutes=10)]
+        alloc_bp=dict(mode='Digital',sections=alloc_sections,total_minutes=45)
+        alloc_bp2=dict(mode='Digital',
+                       sections=[dict(id='vocab_b',skill='Vocabulary',item_count=1,minutes=10),
+                                 dict(id='grammar_b',skill='Grammar',item_count=1,minutes=10)],
+                       total_minutes=20)
+        over_bp=dict(mode='Digital',sections=[dict(id='listening_x',skill='Listening',item_count=12,minutes=60)],total_minutes=60)
+        spk_bp=dict(mode='Digital',sections=[dict(id='speaking_x',skill='Speaking',item_count=2,minutes=10)],total_minutes=10)
+        def publish_config_flow(code,definition,config='blueprint'):
+            tag=code[4:].lower()
+            doc=as_user('author',lambda:api.create_draft_config('alloc_cfg_%s_create_1'%tag,config,code,1,definition))
+            doc=as_user('publisher',lambda:api.review_config('alloc_cfg_%s_review_1'%tag,config,doc['name'],1))
+            doc=as_user('publisher2',lambda:api.publish_config('alloc_cfg_%s_publish_1'%tag,config,doc['name'],2))
+            assert doc['status']=='Published' and doc['version']==3
+            return doc
+        def config_fixtures():
+            draft_bp=as_user('author',lambda:api.create_draft_config('alloc_cfg_draftbp_001','blueprint','SYN-BP-DRAFT-1',1,alloc_bp))
+            draft_pol=as_user('author',lambda:api.create_draft_config('alloc_cfg_draftpol_001','policy','SYN-POL-DRAFT-1',1,good_pol))
+            assert draft_bp['status']=='Draft' and draft_pol['status']=='Draft'
+            over=publish_config_flow('SYN-BP-OVER-1',over_bp)
+            spk=publish_config_flow('SYN-BP-SPK-1',spk_bp)
+            main=publish_config_flow('SYN-BP-ALLOC-1',alloc_bp)
+            small=publish_config_flow('SYN-BP-ALLOC-2',alloc_bp2)
+            main_pol=publish_config_flow('SYN-POL-ALLOC-1',good_pol,'policy')
+            return {'draft_bp':draft_bp['name'],'draft_pol':draft_pol['name'],
+                    'over_bp':over['name'],'spk_bp':spk['name'],
+                    'main_bp':main['name'],'small_bp':small['name'],'main_version':3,
+                    'main_pol':main_pol['name'],'main_pol_version':3}
+        cfgx=check('alloc-config-fixtures-published',config_fixtures)
+        pol_name=cfgx['main_pol']
+        main_skills={s['skill'] for s in alloc_sections}
+        main_sections=[dict(id=s['id'],skill=s['skill'],item_count=s['item_count']) for s in alloc_sections]
+        def solver_pool(excluded_families,skills):
+            rows=frappe.get_all(api.ITEM,filters={'status':'Published'},
+                                fields=['name','family','skill','difficulty','question_type','options_json'])
+            return [dict(name=r.name,family=r.family,skill=r.skill,difficulty=r.difficulty,
+                         question_type=r.question_type,options=[o['id'] for o in json.loads(r.options_json)])
+                    for r in rows if r.skill in skills and r.family not in excluded_families]
+        case=check('alloc-create-case',lambda:as_user('publisher',lambda:api.create_case('alloc_case_key_0001',users['candidate'])))
+        assert case['status']=='Open' and case['subject']==users['candidate']
+        check('alloc-case-duplicate-subject-denied',lambda:denied(lambda:as_user('publisher',lambda:api.create_case('alloc_case_dup_key_0001',users['candidate']))))
+        check('alloc-case-missing-subject-denied',lambda:denied(lambda:as_user('publisher',lambda:api.create_case('alloc_case_missing_001','nobody@example.test'))))
+        check('alloc-case-privileged-subject-denied',lambda:denied(lambda:as_user('publisher',lambda:api.create_case('alloc_case_admin_key_01','Administrator'))))
+        check('alloc-case-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.create_case('alloc_case_author_key_1',users['candidate2']))))
+        check('alloc-case-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.create_case('alloc_case_outsider_key_1',users['candidate2']))))
+        check('alloc-fail-missing-case',lambda:denied(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_case_0001','nonexistent-case-0001',cfgx['main_bp'],3,pol_name,3))))
+        check('alloc-fail-draft-blueprint',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_draftbp_01',case['name'],cfgx['draft_bp'],1,pol_name,3)),'Only published blueprint'))
+        check('alloc-fail-stale-blueprint-version',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_stalever_01',case['name'],cfgx['main_bp'],1,pol_name,3)),'Stale configuration revision'))
+        check('alloc-fail-draft-policy',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_draftpol_01',case['name'],cfgx['main_bp'],3,cfgx['draft_pol'],1)),'Only published policy'))
+        check('alloc-fail-infeasible-quota',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_over_0001',case['name'],cfgx['over_bp'],3,pol_name,3)),'insufficient eligible families for skill Listening'))
+        check('alloc-fail-missing-skill-section',lambda:unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_fail_spk_00001',case['name'],cfgx['spk_bp'],3,pol_name,3)),'insufficient eligible families for skill Speaking'))
+        alloc=check('alloc-happy-path',lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_001',case['name'],cfgx['main_bp'],3,pol_name,3)))
+        assert alloc['status']=='Allocated' and alloc['ordinal']==1 and alloc['item_count']==9
+        def manifest_integrity():
+            m=frappe.get_doc(api.MANIFEST,alloc['manifest'])
+            assert frappe.db.count(api.MANIFEST,{'attempt':alloc['attempt']})==1
+            assert m.status=='Committed' and m.algorithm_version==allocation.ALGORITHM_VERSION
+            assert len(m.seed)==64 and set(m.seed)<=set('0123456789abcdef')
+            form=json.loads(m.form_json)
+            assert m.form_hash==digest(form)
+            assert form['algorithm']==allocation.ALGORITHM_VERSION and form['seed']==m.seed
+            assert form['attempt']==alloc['attempt'] and form['case']==case['name'] and form['subject']==users['candidate']
+            assert form['pool_digest']==m.pool_digest
+            assert [(s['id'],s['skill'],s['minutes'],s['item_count']) for s in form['sections']]==[(s['id'],s['skill'],s['minutes'],s['item_count']) for s in alloc_sections]
+            a=frappe.get_doc(api.ATTEMPT,alloc['attempt'])
+            assert a.ordinal==1 and a.status=='Allocated' and a.mode=='Digital' and a.subject==users['candidate']
+            assert a.blueprint==cfgx['main_bp'] and a.blueprint_version==3
+            assert a.policy==pol_name and a.policy_version==3
+            assert a.blueprint_hash==frappe.db.get_value(api.BLUEPRINT,cfgx['main_bp'],'content_hash')
+            assert a.policy_hash==frappe.db.get_value(api.POLICY,pol_name,'content_hash')
+            items=form['items']
+            assert [e['order'] for e in items]==list(range(1,10))
+            by_section={}
+            for e in items:
+                by_section.setdefault(e['section'],[]).append(e)
+                row=frappe.db.get_value(api.ITEM,e['item'],['status','skill','difficulty','question_type','options_json','family'],as_dict=True)
+                assert row.status=='Published' and row.family==e['family']
+                assert row.skill==e['skill'] and row.skill==next(s['skill'] for s in alloc_sections if s['id']==e['section'])
+                assert row.difficulty==e['difficulty'] and row.question_type==e['question_type']
+                if row.question_type=='Single Choice':
+                    assert sorted(e['option_order'])==sorted(o['id'] for o in json.loads(row.options_json))
+                else:
+                    assert e['option_order'] is None
+            for s in alloc_sections:
+                picked=by_section[s['id']]
+                assert len(picked)==s['item_count'],s
+                assert len({e['family'] for e in picked})==len(picked)
+                assert len({e['difficulty'] for e in picked})==len(picked)
+            assert len({e['family'] for e in items})==9
+            pool=solver_pool(set(),main_skills)
+            assert m.pool_digest==allocation.pool_digest(pool)
+            plan=allocation.allocate(main_sections,pool,m.seed,{})
+            assert [(e['order'],e['item']) for e in plan['items']]==[(e['order'],e['item']) for e in items]
+            assert [e['option_order'] for e in plan['items']]==[e['option_order'] for e in items]
+            return {'one_manifest_per_attempt':True,'hash_bound':True,'quotas_exact':True,'strata_balanced':True,'rerun_identical':True}
+        check('alloc-manifest-integrity-and-determinism',manifest_integrity)
+        def audit_and_ledger():
+            rows=frappe.get_all(api.AUDIT,filters={'target':alloc['attempt']},fields=['action','item_revision','after_hash'])
+            assert len(rows)==1 and rows[0].action=='allocate_attempt' and not rows[0].item_revision
+            assert rows[0].after_hash==alloc['form_hash']
+            op=frappe.get_doc(api.OP,digest(['allocate_attempt','alloc_attempt_key_001']))
+            assert op.status=='Complete' and op.actor==users['publisher']
+            assert json.loads(op.result_json)['manifest']==alloc['manifest']
+            exp=frappe.get_all(api.EXPOSURE,filters={'attempt':alloc['attempt']},fields=['family','event','subject'])
+            assert len(exp)==9 and all(e.event=='Reserved' and e.subject==users['candidate'] for e in exp)
+            form=json.loads(frappe.get_doc(api.MANIFEST,alloc['manifest']).form_json)
+            assert {e.family for e in exp}=={i['family'] for i in form['items']}
+            assert len(frappe.get_all(api.AUDIT,filters={'target':case['name'],'action':'create_case'}))==1
+            return {'allocation_audit':1,'exposure_rows':9,'receipt_complete':True}
+        check('alloc-audit-and-exposure-ledger',audit_and_ledger)
+        def alloc_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_001',case['name'],cfgx['main_bp'],3,pol_name,3))
+            assert value==alloc and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count(api.ATTEMPT)==1
+            return {'same_result':True,'no_new_attempt':True}
+        check('alloc-idempotent-replay',alloc_replay)
+        check('alloc-changed-payload-conflict',lambda:denied(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_001',case['name'],cfgx['main_bp'],2,pol_name,3))))
+        check('alloc-changed-actor-conflict',lambda:denied(lambda:as_user('publisher2',lambda:api.allocate_attempt('alloc_attempt_key_001',case['name'],cfgx['main_bp'],3,pol_name,3))))
+        alloc2=check('alloc-second-attempt-ordinal',lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_002',case['name'],cfgx['main_bp'],3,pol_name,3)))
+        assert alloc2['ordinal']==2 and alloc2['attempt']!=alloc['attempt']
+        def reuse_controlled():
+            f1=json.loads(frappe.get_doc(api.MANIFEST,alloc['manifest']).form_json)['items']
+            f2=json.loads(frappe.get_doc(api.MANIFEST,alloc2['manifest']).form_json)['items']
+            fam1={e['family'] for e in f1};fam2={e['family'] for e in f2}
+            assert not (fam1&fam2)
+            assert len(fam2)==9
+            counts={r.family:max(0,r.c-(1 if r.family in fam2 else 0)) for r in frappe.db.sql('select family, count(*) as c from `tabTH Placement Exposure` group by family',as_dict=True)}
+            pool2=solver_pool(fam1,main_skills)
+            m2=frappe.get_doc(api.MANIFEST,alloc2['manifest'])
+            plan=allocation.allocate(main_sections,pool2,m2.seed,counts)
+            assert [(e['order'],e['item']) for e in plan['items']]==[(e['order'],e['item']) for e in f2]
+            return {'no_family_reuse_for_subject':True,'second_rerun_identical':True}
+        check('alloc-exposure-reuse-controlled',reuse_controlled)
+        case2=check('alloc-create-case-second-subject',lambda:as_user('publisher',lambda:api.create_case('alloc_case_key_0002',users['candidate2'])))
+        alloc3=check('alloc-other-subject-independent-pool',lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_010',case2['name'],cfgx['main_bp'],3,pol_name,3)))
+        assert alloc3['ordinal']==1
+        assert len(frappe.get_all(api.EXPOSURE,filters={'subject':users['candidate2']}))==9
+        alloc4=check('alloc-third-attempt',lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_003',case['name'],cfgx['main_bp'],3,pol_name,3)))
+        assert alloc4['ordinal']==3
+        def fourth_unavailable():
+            before={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.MANIFEST,api.EXPOSURE,api.OP,api.AUDIT)}
+            obs=unavailable(lambda:as_user('publisher',lambda:api.allocate_attempt('alloc_attempt_key_004',case['name'],cfgx['main_bp'],3,pol_name,3)),'insufficient eligible families for skill Reading')
+            assert {dt:frappe.db.count(dt) for dt in before}==before
+            return dict(obs,no_partial_state=True)
+        check('alloc-fourth-attempt-unavailable-fail-closed',fourth_unavailable)
+        def cannot_list(dt):
+            # No DocType grant (Author/outsider/guard) fails closed with
+            # PermissionError; a grant plus 1=0 query returns []. Both are denials.
+            try:return not frappe.get_list(dt)
+            except frappe.PermissionError:return True
+        def cannot_read_doc(doctype,name):
+            try:return not frappe.get_doc(doctype,name).has_permission('read')
+            except frappe.PermissionError:return True
+        def alloc_reads():
+            for label in ('second_author','other','outsider'):
+                frappe.set_user(users[label])
+                for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
+                    assert cannot_list(dt),label
+            frappe.set_user(users['second_author'])
+            assert cannot_read_doc(api.ATTEMPT,alloc['attempt'])
+            # Dual-role author includes Publisher: operational staff reads apply;
+            # role union does not invent extra SoD on allocation records.
+            frappe.set_user(users['author'])
+            assert frappe.get_doc(api.ATTEMPT,alloc['attempt']).has_permission('read')
+            for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
+                assert frappe.get_list(dt),dt
+            frappe.set_user(users['publisher'])
+            for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
+                assert frappe.get_list(dt),dt
+            guard_name='AG-'+digest([api.BLUEPRINT,cfgx['main_bp']])[:32]
+            assert frappe.db.exists(api.GUARD,guard_name)
+            assert cannot_read_doc(api.GUARD,guard_name)
+            assert cannot_list(api.GUARD)
+            frappe.set_user(users['auditor'])
+            for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE):
+                assert frappe.get_list(dt),dt
+            assert cannot_read_doc(api.GUARD,guard_name)
+            return {'staff_only_records':True,'guard_internal':True,'dual_role_author_reads_as_publisher':True}
+        check('alloc-role-and-list-parity',alloc_reads)
+        def alloc_generic_write():
+            frappe.set_user(users['publisher']);doc=frappe.get_doc(api.ATTEMPT,alloc['attempt']);doc.subject='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('alloc-ignore-permissions-does-not-bypass-controller',alloc_generic_write)
+        check('alloc-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.MANIFEST,alloc['manifest']).db_set('form_hash','f'*64)))
+        check('alloc-direct-db-update-denied',lambda:denied(lambda:frappe.get_doc(api.ATTEMPT,alloc['attempt']).db_update()))
+        check('alloc-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.CASE,case['name'],ignore_permissions=True)))
+        def forged_manifest():
+            frappe.set_user(users['publisher'])
+            with _command('allocate_attempt',users['publisher']):
+                frappe.get_doc(dict(doctype=api.MANIFEST,attempt=alloc['attempt'],
+                    algorithm_version=allocation.ALGORITHM_VERSION,seed='0'*64,pool_digest='0'*64,
+                    form_json=_canonical({'algorithm':allocation.ALGORITHM_VERSION,'items':[]}),
+                    form_hash='f'*64,status='Committed',synthetic=1)).insert(ignore_permissions=True)
+        check('alloc-forged-manifest-hash-denied',lambda:denied(forged_manifest))
+        def alloc_rollback_proof():
+            frappe.set_user(users['publisher']);frappe.db.savepoint('alloc_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.MANIFEST,api.EXPOSURE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.EXPOSURE:raise RuntimeError('synthetic allocation exposure failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.allocate_attempt('alloc_atomic_key_0001',case2['name'],cfgx['main_bp'],3,pol_name,3)
+            except RuntimeError:frappe.db.rollback(save_point='alloc_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            return {'real_database_rollback':True,'injected_boundary':'exposure reservation'}
+        check('alloc-atomic-attempt-manifest-exposure-rollback',alloc_rollback_proof)
+        case4=check('alloc-create-case-transient-subject',lambda:as_user('publisher',lambda:api.create_case('alloc_case_key_0004',users['candidate4'])))
+        def alloc_transient(exhaust=False):
+            frappe.set_user(users['publisher']);frappe.db.commit()
+            calls=[];original=allocation.allocate
+            prev=frappe.db.count(api.ATTEMPT,{'case_name':case4['name']})
+            key='alloc_exhaust_key_0001' if exhaust else 'alloc_retry_key_0001'
+            def flaky(*args,**kwargs):
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic allocation deadlock')
+                return original(*args,**kwargs)
+            with patch.object(allocation,'allocate',side_effect=flaky):
+                if exhaust:
+                    try:api.allocate_attempt(key,case4['name'],cfgx['main_bp'],3,pol_name,3)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.allocate_attempt(key,case4['name'],cfgx['main_bp'],3,pol_name,3)
+            assert len(calls)==(4 if exhaust else 2)
+            assert frappe.db.count(api.ATTEMPT,{'case_name':case4['name']})==prev+(0 if exhaust else 1)
+            if not exhaust:
+                m=frappe.get_doc(api.MANIFEST,result['manifest']);form=json.loads(m.form_json)
+                assert m.form_hash==digest(form)
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('alloc-whole-command-transient-recovery',alloc_transient)
+        check('alloc-retry-exhaustion-bounded',lambda:alloc_transient(True))
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def alloc_second_site():
+            assert frappe.db.count(api.CASE)==0 and frappe.db.count(api.ATTEMPT)==0
+            assert frappe.db.count(api.MANIFEST)==0 and frappe.db.count(api.EXPOSURE)==0
+            return {'allocation_absent_on_second_site':True}
+        check('second-site-no-first-site-allocation-record',alloc_second_site)
+        frappe.destroy();connect('placement-test.localhost')
+        # --- Increment 4: staff-supervised Digital verify / deliver / save / seal ---
+        check('deliver-verify-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.verify_attempt('deliver_pub_verify_0001',alloc3['attempt'],1))))
+        check('deliver-verify-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.verify_attempt('deliver_auth_verify_0001',alloc3['attempt'],1))))
+        check('deliver-verify-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.verify_attempt('deliver_out_verify_0001',alloc3['attempt'],1))))
+        def allocator_sod():
+            frappe.set_user('Administrator')
+            u=frappe.get_doc('User',users['publisher']);u.append('roles',{'role':'Placement Invigilator'});u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            try:return denied(lambda:as_user('publisher',lambda:api.verify_attempt('deliver_sod_verify_0001',alloc3['attempt'],1)))
+            finally:
+                frappe.set_user('Administrator');u=frappe.get_doc('User',users['publisher']);u.roles=[];u.append('roles',{'role':'Placement Publisher'});u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+        check('deliver-allocator-operator-denied',allocator_sod)
+        check('deliver-before-verify-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.deliver_attempt('deliver_before_verify_001',alloc['attempt'],1))))
+        def physical_denied():
+            phys=publish_config_flow('SYN-BP-PHYS-1',dict(alloc_bp2,mode='Physical'))
+            phys_alloc=as_user('publisher',lambda:api.allocate_attempt('alloc_phys_key_0001',case2['name'],phys['name'],3,pol_name,3))
+            obs=denied(lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_phys_verify_0001',phys_alloc['attempt'],1)))
+            assert frappe.get_doc(api.ATTEMPT,phys_alloc['attempt']).status=='Allocated'
+            return dict(obs,mode='Physical',status='Allocated')
+        check('deliver-physical-mode-denied',physical_denied)
+        verified=check('deliver-verify-happy',lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_verify_key_0001',alloc3['attempt'],1)))
+        assert verified['status']=='Verified' and verified['version']==2 and verified['verified_by']==users['invigilator']
+        def verify_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('invigilator',lambda:api.verify_attempt('deliver_verify_key_0001',alloc3['attempt'],1))
+            assert value==verified and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_audit':True}
+        check('deliver-verify-idempotent',verify_replay)
+        check('deliver-verify-stale-version-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_stale_verify_0001',alloc3['attempt'],1))))
+        check('deliver-second-verify-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_second_verify_001',alloc3['attempt'],2))))
+        delivered=check('deliver-happy-path',lambda:as_user('invigilator',lambda:api.deliver_attempt('deliver_attempt_key_001',alloc3['attempt'],2)))
+        assert delivered['status']=='In Progress' and delivered['version']==3 and delivered['item_count']==9
+        def deliver_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('invigilator',lambda:api.deliver_attempt('deliver_attempt_key_001',alloc3['attempt'],2))
+            assert value==delivered and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_delivery':True}
+        check('deliver-idempotent-replay',deliver_replay)
+        def exposure_converted():
+            rows=frappe.get_all(api.EXPOSURE,filters={'attempt':alloc3['attempt']},fields=['family','event'])
+            reserved={r.family for r in rows if r.event=='Reserved'}
+            delivered_f={r.family for r in rows if r.event=='Delivered'}
+            assert reserved==delivered_f and len(reserved)==9
+            return {'reserved':9,'delivered':9,'reserved_retained':True}
+        check('deliver-exposure-converted',exposure_converted)
+        def projection_strips_secrets():
+            projection=delivered['projection'];blob=json.dumps(projection)
+            assert 'seed' not in projection and 'algorithm' not in projection and 'pool_digest' not in projection
+            seed=frappe.db.get_value(api.MANIFEST,alloc3['manifest'],'seed')
+            assert seed and seed not in blob
+            for item in projection['items']:
+                assert 'family' not in item and 'item' not in item and 'answer' not in item
+                assert item['prompt'].startswith('SYNTHETIC: ') and item['options']
+            key_names=[row.name for row in frappe.get_all(api.KEY,fields=['name'])]
+            assert not any(name in blob for name in key_names)
+            return {'items':len(projection['items']),'no_seed_or_key':True}
+        check('deliver-projection-strips-secrets',projection_strips_secrets)
+        def clock_started():
+            a=frappe.get_doc(api.ATTEMPT,alloc3['attempt'])
+            assert a.started_at and a.deadline_at and a.status=='In Progress'
+            assert delivered['started_at'] and delivered['deadline_at']
+            return {'started_at':delivered['started_at'],'deadline_at':delivered['deadline_at']}
+        check('deliver-clock-started',clock_started)
+        first=delivered['projection']['items'][0]
+        oid=first['options'][0]['id'];occ=first['order']
+        oid2=first['options'][1]['id'] if len(first['options'])>1 else oid
+        check('deliver-save-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.save_response('deliver_pub_save_0001',alloc3['attempt'],3,occ,0,oid,0))))
+        check('deliver-save-unknown-occurrence-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.save_response('deliver_bad_occ_0001',alloc3['attempt'],3,99,0,oid,0))))
+        check('deliver-save-unknown-option-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.save_response('deliver_bad_opt_0001',alloc3['attempt'],3,occ,0,'not_an_option',0))))
+        check('deliver-save-missing-requires-empty-option',lambda:denied(lambda:as_user('invigilator',lambda:api.save_response('deliver_missing_opt_0001',alloc3['attempt'],3,occ,0,oid,1))))
+        saved=check('deliver-save-response',lambda:as_user('invigilator',lambda:api.save_response('deliver_save_key_0001',alloc3['attempt'],3,occ,0,oid,0)))
+        assert saved['revision']==1 and saved['option_id']==oid and saved['missing']==0
+        def save_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('invigilator',lambda:api.save_response('deliver_save_key_0001',alloc3['attempt'],3,occ,0,oid,0))
+            assert value==saved and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count(api.RESPONSE,{'attempt':alloc3['attempt'],'occurrence':occ})==1
+            return {'same_result':True,'one_revision':True}
+        check('deliver-save-idempotent',save_replay)
+        check('deliver-save-stale-revision-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.save_response('deliver_stale_save_0001',alloc3['attempt'],3,occ,0,oid2,0))))
+        revised=check('deliver-save-revise',lambda:as_user('invigilator',lambda:api.save_response('deliver_revise_key_0001',alloc3['attempt'],3,occ,1,oid2,0)))
+        assert revised['revision']==2 and revised['option_id']==oid2
+        def timeout_seal():
+            started=frappe.utils.get_datetime(frappe.db.get_value(api.ATTEMPT,alloc3['attempt'],'started_at'))
+            before=frappe.db.count(api.RESPONSE,{'attempt':alloc3['attempt']})
+            with patch.object(api,'_now',return_value=started+timedelta(minutes=46)):
+                value=as_user('invigilator',lambda:api.save_response('deliver_timeout_save_0001',alloc3['attempt'],3,2,0,oid,0))
+            assert value['status']=='Sealed' and value['seal_reason']=='Timeout' and value['version']==4
+            assert value['missing_count']==8
+            assert frappe.db.count(api.RESPONSE,{'attempt':alloc3['attempt'],'occurrence':2,'missing':0})==0
+            assert frappe.db.count(api.RESPONSE,{'attempt':alloc3['attempt']})==before+8
+            return {'seal_reason':'Timeout','missing_count':8,'late_save_rejected':True}
+        check('deliver-deadline-timeout-seal',timeout_seal)
+        check('deliver-save-after-seal-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.save_response('deliver_after_seal_0001',alloc3['attempt'],4,occ,2,oid,0))))
+        check('deliver-seal-after-seal-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.seal_attempt('deliver_reseal_key_0001',alloc3['attempt'],4,'Submitted'))))
+        verified2=check('deliver-verify-second-form',lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_verify_alloc2_001',alloc2['attempt'],1)))
+        assert verified2['status']=='Verified'
+        delivered2=check('deliver-second-form',lambda:as_user('invigilator',lambda:api.deliver_attempt('deliver_attempt_alloc2_1',alloc2['attempt'],2)))
+        first2=delivered2['projection']['items'][0]
+        saved2=check('deliver-save-second-form',lambda:as_user('invigilator',lambda:api.save_response('deliver_save_alloc2_0001',alloc2['attempt'],3,first2['order'],0,first2['options'][0]['id'],0)))
+        assert saved2['revision']==1
+        sealed2=check('deliver-submit-seal',lambda:as_user('invigilator',lambda:api.seal_attempt('deliver_seal_alloc2_0001',alloc2['attempt'],3,'Submitted')))
+        assert sealed2['status']=='Sealed' and sealed2['seal_reason']=='Submitted' and sealed2['missing_count']==8
+        def deliver_reads():
+            frappe.set_user(users['invigilator'])
+            for dt in (api.CASE,api.ATTEMPT,api.EXPOSURE,api.RESPONSE):
+                assert frappe.get_list(dt),dt
+            assert cannot_list(api.MANIFEST) and cannot_list(api.GUARD)
+            frappe.set_user(users['second_author'])
+            for dt in (api.CASE,api.ATTEMPT,api.MANIFEST,api.EXPOSURE,api.RESPONSE):
+                assert cannot_list(dt),dt
+            frappe.set_user(users['publisher'])
+            assert frappe.get_list(api.RESPONSE) and frappe.get_list(api.MANIFEST)
+            frappe.set_user(users['auditor'])
+            assert frappe.get_list(api.RESPONSE) and frappe.get_list(api.MANIFEST)
+            return {'invigilator_no_manifest':True,'author_denied':True,'staff_response_readable':True}
+        check('deliver-role-and-list-parity',deliver_reads)
+        def deliver_generic_write():
+            frappe.set_user(users['invigilator']);doc=frappe.get_doc(api.ATTEMPT,alloc3['attempt']);doc.subject='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('deliver-ignore-permissions-does-not-bypass-controller',deliver_generic_write)
+        resp_name=frappe.db.get_value(api.RESPONSE,{'attempt':alloc3['attempt'],'occurrence':occ,'revision':2},'name')
+        check('deliver-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.RESPONSE,resp_name).db_set('option_id','forged')))
+        check('deliver-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.RESPONSE,resp_name,ignore_permissions=True)))
+        check('deliver-verify-fourth',lambda:as_user('invigilator',lambda:api.verify_attempt('deliver_verify_alloc4_001',alloc4['attempt'],1)))
+        def deliver_rollback_proof():
+            frappe.set_user(users['invigilator']);frappe.db.savepoint('deliver_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.EXPOSURE,api.RESPONSE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.EXPOSURE and args[0].get('event')=='Delivered':
+                    raise RuntimeError('synthetic delivery exposure failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.deliver_attempt('deliver_atomic_key_0001',alloc4['attempt'],2)
+            except RuntimeError:frappe.db.rollback(save_point='deliver_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            assert frappe.get_doc(api.ATTEMPT,alloc4['attempt']).status=='Verified'
+            return {'real_database_rollback':True,'injected_boundary':'delivered exposure'}
+        check('deliver-atomic-exposure-rollback',deliver_rollback_proof)
+        def deliver_transient(exhaust=False):
+            frappe.set_user(users['invigilator']);frappe.db.commit()
+            if exhaust:
+                as_user('invigilator',lambda:api.verify_attempt('deliver_verify_alloc_0001',alloc['attempt'],1));frappe.db.commit()
+                target,version,key=alloc['attempt'],2,'deliver_exhaust_key_0001'
+            else:
+                target,version,key=alloc4['attempt'],2,'deliver_retry_key_0001'
+            calls=[];original=api._now
+            def flaky():
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic delivery deadlock')
+                return original()
+            with patch.object(api,'_now',side_effect=flaky):
+                if exhaust:
+                    try:api.deliver_attempt(key,target,version)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.deliver_attempt(key,target,version)
+            assert len(calls)==(4 if exhaust else 2)
+            if exhaust:
+                assert frappe.get_doc(api.ATTEMPT,target).status=='Verified'
+            else:
+                assert result['status']=='In Progress' and frappe.db.count(api.EXPOSURE,{'attempt':target,'event':'Delivered'})==9
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('deliver-whole-command-transient-recovery',lambda:deliver_transient(False))
+        check('deliver-retry-exhaustion-bounded',lambda:deliver_transient(True))
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def deliver_second_site():
+            assert frappe.db.count(api.CASE)==0 and frappe.db.count(api.ATTEMPT)==0
+            assert frappe.db.count(api.RESPONSE)==0 and frappe.db.count(api.EXPOSURE)==0
+            return {'delivery_absent_on_second_site':True}
+        check('second-site-no-first-site-delivery-record',deliver_second_site)
+        frappe.destroy();connect('placement-test.localhost')
+        # --- Increment 5: objective scoring of sealed Digital attempts ---
+        from toefl_house import scoring as _scoring
+        check('score-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.score_attempt('score_pub_key_0000001',alloc2['attempt'],4))))
+        check('score-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.score_attempt('score_auth_key_0000001',alloc2['attempt'],4))))
+        check('score-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.score_attempt('score_out_key_0000001',alloc2['attempt'],4))))
+        check('score-invigilator-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.score_attempt('score_inv_key_0000001',alloc2['attempt'],4))))
+        check('score-before-seal-denied',lambda:denied(lambda:as_user('assessor',lambda:api.score_attempt('score_before_seal_0001',alloc4['attempt'],3))))
+        scored=check('score-happy-path',lambda:as_user('assessor',lambda:api.score_attempt('score_attempt_key_0001',alloc2['attempt'],4)))
+        assert scored['status']=='Marking' and scored['version']==5
+        assert scored['presented']==9 and scored['missing']==8
+        assert scored['correct']+scored['incorrect']==1
+        assert scored['correct']+scored['incorrect']+scored['missing']==scored['presented']
+        assert scored['scorer_version']==_scoring.SCORER_VERSION
+        def score_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('assessor',lambda:api.score_attempt('score_attempt_key_0001',alloc2['attempt'],4))
+            assert value==scored and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count(api.SCORE,{'attempt':alloc2['attempt']})==1
+            return {'same_result':True,'one_score':True}
+        check('score-idempotent-replay',score_replay)
+        check('score-stale-version-denied',lambda:denied(lambda:as_user('assessor',lambda:api.score_attempt('score_stale_key_000001',alloc2['attempt'],4))))
+        check('score-second-denied',lambda:denied(lambda:as_user('assessor',lambda:api.score_attempt('score_second_key_00001',alloc2['attempt'],5))))
+        def score_missing_not_zero():
+            assert sum(1 for item in scored['items'] if item['outcome']=='missing')==8
+            assert all(item['outcome'] in ('correct','incorrect','missing') for item in scored['items'])
+            listening=scored['by_skill'].get('Listening') or scored['by_skill'].get('listening')
+            # Skills use blueprint labels; missing rows are not filed as incorrect.
+            assert scored['missing']==8 and scored['incorrect']>=0
+            assert 'percent' not in scored and 'cutoff' not in scored and 'recommendation' not in scored
+            return {'missing':8,'not_zero':True,'no_cutoff':True}
+        check('score-missing-is-not-zero',score_missing_not_zero)
+        def score_hides_keys():
+            blob=json.dumps(scored)
+            seed=frappe.db.get_value(api.MANIFEST,alloc2['manifest'],'seed')
+            assert seed and seed not in blob
+            assert 'answer' not in blob
+            for item in scored['items']:
+                assert 'item' not in item and 'family' not in item and 'option_id' not in item
+            key_names=[row[0] for row in frappe.db.sql('select name from `tabTH Placement Key Revision`')]
+            assert key_names and not any(name in blob for name in key_names)
+            return {'items':len(scored['items']),'no_seed_or_key':True}
+        check('score-projection-strips-keys',score_hides_keys)
+        def score_determinism():
+            form=json.loads(frappe.db.get_value(api.MANIFEST,{'attempt':alloc2['attempt']},'form_json'))
+            latest=api._latest_responses(alloc2['attempt'])
+            catalog=api._key_catalog(form)
+            expected=_scoring.score(form,latest,catalog)
+            assert [(i['order'],i['outcome']) for i in expected['items']]==[(i['order'],i['outcome']) for i in scored['items']]
+            assert expected['missing']==scored['missing'] and expected['correct']==scored['correct']
+            return {'rerun_identical':True,'scorer':_scoring.SCORER_VERSION}
+        check('score-determinism',score_determinism)
+        def score_reads():
+            frappe.set_user(users['assessor'])
+            for dt in (api.CASE,api.ATTEMPT,api.RESPONSE,api.SCORE):
+                assert frappe.get_list(dt),dt
+            assert cannot_list(api.MANIFEST) and cannot_list(api.GUARD) and cannot_list(api.KEY)
+            frappe.set_user(users['invigilator'])
+            assert cannot_list(api.SCORE)
+            frappe.set_user(users['second_author'])
+            assert cannot_list(api.SCORE) and cannot_list(api.ATTEMPT)
+            frappe.set_user(users['publisher'])
+            assert frappe.get_list(api.SCORE)
+            frappe.set_user(users['auditor'])
+            assert frappe.get_list(api.SCORE)
+            return {'assessor_no_manifest_or_key':True,'invigilator_no_score':True}
+        check('score-role-and-list-parity',score_reads)
+        def score_generic_write():
+            frappe.set_user(users['assessor']);doc=frappe.get_doc(api.SCORE,scored['score']);doc.scored_by='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('score-ignore-permissions-does-not-bypass-controller',score_generic_write)
+        check('score-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.SCORE,scored['score']).db_set('result_hash','f'*64)))
+        check('score-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.SCORE,scored['score'],ignore_permissions=True)))
+        def score_rollback_proof():
+            frappe.set_user(users['assessor']);frappe.db.savepoint('score_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.SCORE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.SCORE:
+                    raise RuntimeError('synthetic scoring insert failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.score_attempt('score_atomic_key_0001',alloc3['attempt'],4)
+            except RuntimeError:frappe.db.rollback(save_point='score_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            assert frappe.get_doc(api.ATTEMPT,alloc3['attempt']).status=='Sealed'
+            return {'real_database_rollback':True,'injected_boundary':'score insert'}
+        check('score-atomic-score-rollback',score_rollback_proof)
+        sealed4=check('score-seal-fourth',lambda:as_user('invigilator',lambda:api.seal_attempt('score_seal_alloc4_0001',alloc4['attempt'],3,'Submitted')))
+        assert sealed4['status']=='Sealed' and sealed4['version']==4
+        def score_transient(exhaust=False):
+            frappe.set_user(users['assessor']);frappe.db.commit()
+            if exhaust:
+                as_user('invigilator',lambda:api.deliver_attempt('score_deliver_alloc_001',alloc['attempt'],2))
+                as_user('invigilator',lambda:api.seal_attempt('score_seal_alloc_000001',alloc['attempt'],3,'Submitted'));frappe.db.commit()
+                frappe.set_user(users['assessor'])
+                target,version,key=alloc['attempt'],4,'score_exhaust_key_0001'
+            else:
+                target,version,key=alloc4['attempt'],4,'score_retry_key_00001'
+            calls=[];original=_scoring.score
+            def flaky(*args,**kwargs):
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic scoring deadlock')
+                return original(*args,**kwargs)
+            with patch.object(_scoring,'score',side_effect=flaky):
+                if exhaust:
+                    try:api.score_attempt(key,target,version)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.score_attempt(key,target,version)
+            assert len(calls)==(4 if exhaust else 2)
+            if exhaust:
+                assert frappe.get_doc(api.ATTEMPT,target).status=='Sealed'
+                assert frappe.db.count(api.SCORE,{'attempt':target})==0
+            else:
+                assert result['status']=='Marking' and frappe.db.count(api.SCORE,{'attempt':target})==1
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('score-whole-command-transient-recovery',lambda:score_transient(False))
+        check('score-retry-exhaustion-bounded',lambda:score_transient(True))
+
+        # --- Increment 6: independent review of marked Digital attempts ---
+        check('review-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.review_attempt('review_pub_key_000001',alloc2['attempt'],5))))
+        check('review-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.review_attempt('review_auth_key_000001',alloc2['attempt'],5))))
+        check('review-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.review_attempt('review_out_key_0000001',alloc2['attempt'],5))))
+        check('review-invigilator-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.review_attempt('review_inv_key_000001',alloc2['attempt'],5))))
+        check('review-assessor-denied',lambda:denied(lambda:as_user('assessor',lambda:api.review_attempt('review_as_key_00000001',alloc2['attempt'],5))))
+        check('review-before-score-denied',lambda:denied(lambda:as_user('reviewer',lambda:api.review_attempt('review_before_score_001',alloc3['attempt'],4))))
+        def review_scorer_union_denied():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.add_roles('Placement Reviewer');frappe.db.commit();frappe.clear_cache(user=u.name)
+            try:return denied(lambda:as_user('assessor',lambda:api.review_attempt('review_self_key_0000001',alloc4['attempt'],5)))
+            finally:
+                frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.remove_roles('Placement Reviewer');frappe.db.commit();frappe.clear_cache(user=u.name)
+        check('review-scorer-cannot-self-review',review_scorer_union_denied)
+        reviewed=check('review-happy-path',lambda:as_user('reviewer',lambda:api.review_attempt('review_attempt_key_0001',alloc2['attempt'],5)))
+        assert reviewed['status']=='Review' and reviewed['version']==6
+        assert reviewed['reviewed_by']==users['reviewer']
+        def review_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('reviewer',lambda:api.review_attempt('review_attempt_key_0001',alloc2['attempt'],5))
+            assert value==reviewed and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_audit':True}
+        check('review-idempotent-replay',review_replay)
+        check('review-stale-version-denied',lambda:denied(lambda:as_user('reviewer',lambda:api.review_attempt('review_stale_key_00001',alloc2['attempt'],5))))
+        check('review-second-denied',lambda:denied(lambda:as_user('reviewer',lambda:api.review_attempt('review_second_key_0001',alloc2['attempt'],6))))
+        def review_reads():
+            frappe.set_user(users['reviewer'])
+            for dt in (api.CASE,api.ATTEMPT,api.RESPONSE,api.SCORE):
+                assert frappe.get_list(dt),dt
+            assert cannot_list(api.MANIFEST) and cannot_list(api.GUARD) and cannot_list(api.KEY)
+            frappe.set_user(users['invigilator']);assert cannot_list(api.SCORE)
+            frappe.set_user(users['second_author']);assert cannot_list(api.SCORE) and cannot_list(api.ATTEMPT)
+            return {'reviewer_no_manifest_or_key':True}
+        check('review-role-and-list-parity',review_reads)
+        def review_generic_write():
+            frappe.set_user(users['reviewer']);doc=frappe.get_doc(api.ATTEMPT,alloc2['attempt']);doc.reviewed_by='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('review-ignore-permissions-does-not-bypass-controller',review_generic_write)
+        check('review-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.ATTEMPT,alloc2['attempt']).db_set('reviewed_by','forged@example.test')))
+        def review_rollback_proof():
+            frappe.set_user(users['reviewer']);frappe.db.savepoint('review_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.SCORE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic review audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.review_attempt('review_atomic_key_0001',alloc4['attempt'],5)
+            except RuntimeError:frappe.db.rollback(save_point='review_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            assert frappe.get_doc(api.ATTEMPT,alloc4['attempt']).status=='Marking'
+            return {'real_database_rollback':True,'injected_boundary':'review audit'}
+        check('review-atomic-review-rollback',review_rollback_proof)
+        def review_transient(exhaust=False):
+            frappe.set_user(users['reviewer']);frappe.db.commit()
+            if exhaust:
+                as_user('assessor',lambda:api.score_attempt('review_score_alloc_0001',alloc['attempt'],4));frappe.db.commit()
+                frappe.set_user(users['reviewer'])
+                target,version,key=alloc['attempt'],5,'review_exhaust_key_0001'
+            else:
+                target,version,key=alloc4['attempt'],5,'review_retry_key_00001'
+            calls=[];original=api._now
+            def flaky():
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic review deadlock')
+                return original()
+            with patch.object(api,'_now',side_effect=flaky):
+                if exhaust:
+                    try:api.review_attempt(key,target,version)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.review_attempt(key,target,version)
+            assert len(calls)==(4 if exhaust else 2)
+            if exhaust:
+                assert frappe.get_doc(api.ATTEMPT,target).status=='Marking'
+                assert not frappe.db.get_value(api.ATTEMPT,target,'reviewed_by')
+            else:
+                assert result['status']=='Review' and frappe.db.get_value(api.ATTEMPT,target,'reviewed_by')==users['reviewer']
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('review-whole-command-transient-recovery',lambda:review_transient(False))
+        check('review-retry-exhaustion-bounded',lambda:review_transient(True))
+
+        # --- Increment 7: independent finalization of reviewed Digital attempts ---
+        check('finalize-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.finalize_attempt('finalize_pub_key_00001',alloc2['attempt'],6))))
+        check('finalize-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.finalize_attempt('finalize_auth_key_0001',alloc2['attempt'],6))))
+        check('finalize-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.finalize_attempt('finalize_out_key_00001',alloc2['attempt'],6))))
+        check('finalize-invigilator-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.finalize_attempt('finalize_inv_key_0001',alloc2['attempt'],6))))
+        check('finalize-assessor-denied',lambda:denied(lambda:as_user('assessor',lambda:api.finalize_attempt('finalize_as_key_000001',alloc2['attempt'],6))))
+        check('finalize-reviewer-denied',lambda:denied(lambda:as_user('reviewer',lambda:api.finalize_attempt('finalize_self_key_0001',alloc2['attempt'],6))))
+        check('finalize-before-review-denied',lambda:denied(lambda:as_user('reviewer2',lambda:api.finalize_attempt('finalize_before_rev_001',alloc3['attempt'],4))))
+        def finalize_scorer_union_denied():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.add_roles('Placement Reviewer');frappe.db.commit();frappe.clear_cache(user=u.name)
+            try:return denied(lambda:as_user('assessor',lambda:api.finalize_attempt('finalize_scorer_key_001',alloc4['attempt'],6)))
+            finally:
+                frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.remove_roles('Placement Reviewer');frappe.db.commit();frappe.clear_cache(user=u.name)
+        check('finalize-scorer-cannot-finalize',finalize_scorer_union_denied)
+        finalized=check('finalize-happy-path',lambda:as_user('reviewer2',lambda:api.finalize_attempt('finalize_attempt_key_001',alloc2['attempt'],6)))
+        assert finalized['status']=='Finalized' and finalized['version']==7
+        assert finalized['finalized_by']==users['reviewer2']
+        assert 'recommendation' not in finalized and 'percent' not in finalized and 'cutoff' not in finalized
+        def finalize_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('reviewer2',lambda:api.finalize_attempt('finalize_attempt_key_001',alloc2['attempt'],6))
+            assert value==finalized and frappe.db.count(api.AUDIT)==count
+            return {'same_result':True,'no_duplicate_audit':True}
+        check('finalize-idempotent-replay',finalize_replay)
+        check('finalize-stale-version-denied',lambda:denied(lambda:as_user('reviewer2',lambda:api.finalize_attempt('finalize_stale_key_0001',alloc2['attempt'],6))))
+        check('finalize-second-denied',lambda:denied(lambda:as_user('reviewer2',lambda:api.finalize_attempt('finalize_second_key_001',alloc2['attempt'],7))))
+        def finalize_reads():
+            frappe.set_user(users['reviewer2'])
+            for dt in (api.CASE,api.ATTEMPT,api.RESPONSE,api.SCORE):
+                assert frappe.get_list(dt),dt
+            assert cannot_list(api.MANIFEST) and cannot_list(api.GUARD) and cannot_list(api.KEY)
+            frappe.set_user(users['invigilator']);assert cannot_list(api.SCORE)
+            frappe.set_user(users['second_author']);assert cannot_list(api.SCORE) and cannot_list(api.ATTEMPT)
+            return {'finalizer_no_manifest_or_key':True}
+        check('finalize-role-and-list-parity',finalize_reads)
+        def finalize_generic_write():
+            frappe.set_user(users['reviewer2']);doc=frappe.get_doc(api.ATTEMPT,alloc2['attempt']);doc.finalized_by='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('finalize-ignore-permissions-does-not-bypass-controller',finalize_generic_write)
+        check('finalize-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.ATTEMPT,alloc2['attempt']).db_set('finalized_by','forged@example.test')))
+        def finalize_rollback_proof():
+            frappe.set_user(users['reviewer2']);frappe.db.savepoint('finalize_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.SCORE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic finalize audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.finalize_attempt('finalize_atomic_key_001',alloc4['attempt'],6)
+            except RuntimeError:frappe.db.rollback(save_point='finalize_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            assert frappe.get_doc(api.ATTEMPT,alloc4['attempt']).status=='Review'
+            return {'real_database_rollback':True,'injected_boundary':'finalize audit'}
+        check('finalize-atomic-finalize-rollback',finalize_rollback_proof)
+        def finalize_transient(exhaust=False):
+            frappe.set_user(users['reviewer2']);frappe.db.commit()
+            if exhaust:
+                as_user('reviewer',lambda:api.review_attempt('finalize_review_alloc_01',alloc['attempt'],5));frappe.db.commit()
+                frappe.set_user(users['reviewer2'])
+                target,version,key=alloc['attempt'],6,'finalize_exhaust_key_001'
+            else:
+                target,version,key=alloc4['attempt'],6,'finalize_retry_key_0001'
+            calls=[];original=api._now
+            def flaky():
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic finalize deadlock')
+                return original()
+            with patch.object(api,'_now',side_effect=flaky):
+                if exhaust:
+                    try:api.finalize_attempt(key,target,version)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.finalize_attempt(key,target,version)
+            assert len(calls)==(4 if exhaust else 2)
+            if exhaust:
+                assert frappe.get_doc(api.ATTEMPT,target).status=='Review'
+                assert not frappe.db.get_value(api.ATTEMPT,target,'finalized_by')
+            else:
+                assert result['status']=='Finalized' and frappe.db.get_value(api.ATTEMPT,target,'finalized_by')==users['reviewer2']
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('finalize-whole-command-transient-recovery',lambda:finalize_transient(False))
+        check('finalize-retry-exhaustion-bounded',lambda:finalize_transient(True))
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def score_second_site():
+            assert frappe.db.count(api.SCORE)==0 and frappe.db.count(api.RESPONSE)==0
+            return {'score_absent_on_second_site':True}
+        check('second-site-no-first-site-score-record',score_second_site)
+        def review_second_site():
+            assert frappe.db.count(api.ATTEMPT)==0
+            return {'review_absent_on_second_site':True}
+        check('second-site-no-first-site-review-record',review_second_site)
+        def finalize_second_site():
+            assert frappe.db.count(api.ATTEMPT)==0
+            return {'finalize_absent_on_second_site':True}
+        check('second-site-no-first-site-finalize-record',finalize_second_site)
+        frappe.destroy();connect('placement-test.localhost')
+
+        # --- Placement closure: course map + internal decision + controlled release ---
+        def correct_answer(item_name):
+            key=frappe.db.get_value(api.ITEM,item_name,'key_revision')
+            return frappe.db.get_value(api.KEY,key,'answer')
+        def digital_finalize(case_name,prefix,bp_name=None,bp_ver=3):
+            bp_name=bp_name or cfgx['small_bp']
+            alloc=as_user('publisher',lambda:api.allocate_attempt(prefix+'_alloc01',case_name,bp_name,bp_ver,pol_name,3))
+            as_user('invigilator',lambda:api.verify_attempt(prefix+'_ver0001',alloc['attempt'],1))
+            as_user('invigilator',lambda:api.deliver_attempt(prefix+'_del0001',alloc['attempt'],2))
+            form=json.loads(frappe.db.get_value(api.MANIFEST,{'attempt':alloc['attempt']},'form_json'))
+            for entry in form['items']:
+                occ=entry['order'];answer=correct_answer(entry['item'])
+                as_user('invigilator',lambda occ=occ,answer=answer:api.save_response(prefix+'_save%03d'%occ,alloc['attempt'],3,occ,0,answer,0))
+            as_user('invigilator',lambda:api.seal_attempt(prefix+'_seal001',alloc['attempt'],3,'Submitted'))
+            scored=as_user('assessor',lambda:api.score_attempt(prefix+'_score01',alloc['attempt'],4))
+            assert scored['correct']>=1 and scored['missing']==0,scored
+            as_user('reviewer',lambda:api.review_attempt(prefix+'_rev0001',alloc['attempt'],5))
+            fin=as_user('reviewer2',lambda:api.finalize_attempt(prefix+'_fin0001',alloc['attempt'],6))
+            assert fin['status']=='Finalized' and fin['version']==7
+            return alloc
+        check('decision-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:api.release_decision('decision_pub_key_00001',alloc2['attempt'],7))))
+        check('decision-author-denied',lambda:denied(lambda:as_user('second_author',lambda:api.release_decision('decision_auth_key_0001',alloc2['attempt'],7))))
+        check('decision-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:api.release_decision('decision_out_key_00001',alloc2['attempt'],7))))
+        check('decision-invigilator-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.release_decision('decision_inv_key_0001',alloc2['attempt'],7))))
+        check('decision-assessor-denied',lambda:denied(lambda:as_user('assessor',lambda:api.release_decision('decision_as_key_000001',alloc2['attempt'],7))))
+        check('decision-reviewer-denied',lambda:denied(lambda:as_user('reviewer',lambda:api.release_decision('decision_rev_key_00001',alloc2['attempt'],7))))
+        check('decision-finalizer-denied',lambda:denied(lambda:as_user('reviewer2',lambda:api.release_decision('decision_fin_key_00001',alloc2['attempt'],7))))
+        check('decision-before-finalize-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_before_fin_001',alloc['attempt'],6))))
+        check('decision-missing-course-map-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_nomap_key001',alloc2['attempt'],7))))
+        check('decision-invalid-course-map-denied',lambda:denied(lambda:as_user('author',lambda:api.create_draft_config('decision_bad_map_0001','course_map','SYN-CM-BAD-1',1,bad_map))))
+        cmap=check('decision-course-map-published',lambda:publish_config_flow('SYN-CM-ALLOC-1',good_map,'course_map'))
+        assert cmap['status']=='Published' and cmap['config']=='course_map'
+        cmap2=check('decision-second-course-map-published',lambda:publish_config_flow('SYN-CM-ALLOC-2',good_map,'course_map'))
+        check('decision-two-published-maps-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_twomap_key001',alloc2['attempt'],7))))
+        check('decision-retire-second-course-map',lambda:as_user('publisher2',lambda:api.retire_config('decision_retire_map_001','course_map',cmap2['name'],3)))
+        check('decision-all-missing-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_missing_ev001',alloc4['attempt'],7))))
+        case5=check('decision-create-case',lambda:as_user('publisher',lambda:api.create_case('decision_case_key_0001',users['candidate5'])))
+        alloc_dec=check('decision-digital-pipeline',lambda:digital_finalize(case5['name'],'decision_pipe_a'))
+        released=check('decision-happy-path',lambda:as_user('releaser',lambda:api.release_decision('decision_release_key001',alloc_dec['attempt'],7)))
+        assert released['status']=='Finalized' and released['version']==7
+        assert released['internal_level']=='SYN-LEVEL-GENERAL' and released['course_code']=='SYN-COURSE-GENERAL'
+        assert released['released_by']==users['releaser'] and released['validity_days']==90
+        assert 'percent' not in released and 'cefr' not in released and 'toefl' not in released and 'composite' not in released
+        assert frappe.get_doc(api.ATTEMPT,alloc_dec['attempt']).status=='Finalized'
+        assert frappe.get_doc(api.CASE,case5['name']).status=='Open'
+        def decision_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('releaser',lambda:api.release_decision('decision_release_key001',alloc_dec['attempt'],7))
+            assert value==released and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count(api.DECISION,{'attempt':alloc_dec['attempt']})==1
+            return {'same_result':True,'one_decision':True}
+        check('decision-idempotent-replay',decision_replay)
+        check('decision-stale-version-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_stale_key_0001',alloc_dec['attempt'],6))))
+        check('decision-second-denied',lambda:denied(lambda:as_user('releaser',lambda:api.release_decision('decision_second_key_001',alloc_dec['attempt'],7))))
+        def decision_reads():
+            frappe.set_user(users['releaser'])
+            for dt in (api.CASE,api.ATTEMPT,api.RESPONSE,api.SCORE,api.DECISION):
+                assert frappe.get_list(dt),dt
+            assert cannot_list(api.MANIFEST) and cannot_list(api.GUARD) and cannot_list(api.KEY)
+            frappe.set_user(users['reviewer']);assert cannot_list(api.DECISION)
+            frappe.set_user(users['assessor']);assert cannot_list(api.DECISION)
+            frappe.set_user(users['invigilator']);assert cannot_list(api.DECISION)
+            frappe.set_user(users['second_author']);assert cannot_list(api.DECISION) and cannot_list(api.ATTEMPT)
+            frappe.set_user(users['publisher']);assert frappe.get_list(api.DECISION)
+            frappe.set_user(users['auditor']);assert frappe.get_list(api.DECISION)
+            return {'releaser_no_manifest_or_key':True,'staff_decision_readable':True}
+        check('decision-role-and-list-parity',decision_reads)
+        def decision_generic_write():
+            frappe.set_user(users['releaser']);doc=frappe.get_doc(api.DECISION,released['decision']);doc.released_by='forged@example.test';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('decision-ignore-permissions-does-not-bypass-controller',decision_generic_write)
+        check('decision-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(api.DECISION,released['decision']).db_set('result_hash','f'*64)))
+        check('decision-delete-denied',lambda:denied(lambda:frappe.delete_doc(api.DECISION,released['decision'],ignore_permissions=True)))
+        check('decision-post-finalize-attempt-mutation-denied',lambda:denied(lambda:as_user('invigilator',lambda:api.seal_attempt('decision_reseal_key_001',alloc_dec['attempt'],7,'Submitted'))))
+        alloc_dec2=check('decision-second-digital-pipeline',lambda:digital_finalize(case5['name'],'decision_pipe_b'))
+        def decision_rollback_proof():
+            frappe.set_user(users['releaser']);frappe.db.savepoint('decision_atomic')
+            old={dt:frappe.db.count(dt) for dt in (api.ATTEMPT,api.DECISION,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.DECISION:
+                    raise RuntimeError('synthetic decision insert failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):api.release_decision('decision_atomic_key_001',alloc_dec2['attempt'],7)
+            except RuntimeError:frappe.db.rollback(save_point='decision_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            assert frappe.get_doc(api.ATTEMPT,alloc_dec2['attempt']).status=='Finalized'
+            assert frappe.db.count(api.DECISION,{'attempt':alloc_dec2['attempt']})==0
+            return {'real_database_rollback':True,'injected_boundary':'decision insert'}
+        check('decision-atomic-decision-rollback',decision_rollback_proof)
+        def decision_transient(exhaust=False):
+            frappe.set_user(users['releaser']);frappe.db.commit()
+            if exhaust:
+                extra=digital_finalize(case5['name'],'decision_pipe_c')
+                frappe.set_user(users['releaser']);frappe.db.commit()
+                target,version,key=extra['attempt'],7,'decision_exhaust_key001'
+            else:
+                target,version,key=alloc_dec2['attempt'],7,'decision_retry_key_0001'
+            calls=[];original=api._now
+            def flaky():
+                calls.append(1)
+                if exhaust or len(calls)==1:raise frappe.QueryDeadlockError('synthetic decision deadlock')
+                return original()
+            with patch.object(api,'_now',side_effect=flaky):
+                if exhaust:
+                    try:api.release_decision(key,target,version)
+                    except frappe.QueryDeadlockError:pass
+                    else:raise AssertionError('Retry exhaustion must fail closed')
+                else:result=api.release_decision(key,target,version)
+            assert len(calls)==(4 if exhaust else 2)
+            if exhaust:
+                assert frappe.get_doc(api.ATTEMPT,target).status=='Finalized'
+                assert frappe.db.count(api.DECISION,{'attempt':target})==0
+            else:
+                assert result['status']=='Finalized' and frappe.db.count(api.DECISION,{'attempt':target})==1
+            return {'attempts':len(calls),'whole_command_reentered':True,'exhaustion':exhaust}
+        check('decision-whole-command-transient-recovery',lambda:decision_transient(False))
+        check('decision-retry-exhaustion-bounded',lambda:decision_transient(True))
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def decision_second_site():
+            assert frappe.db.count(api.DECISION)==0
+            assert frappe.db.count(api.COURSE_MAP)==0
+            return {'decision_absent_on_second_site':True}
+        check('second-site-no-first-site-decision-record',decision_second_site)
+        frappe.destroy();connect('placement-test.localhost')
+
+        # --- Admission: thin decision over native Applicant/Student ---
+        from frappe.utils.nestedset import get_root_of
+        def placement_wrote_no_learner():
+            assert frappe.db.count('Student')==before_counts['Student']
+            assert frappe.db.count('Student Applicant')==before_counts['Student Applicant']
+            assert frappe.db.count('Program Enrollment')==before_counts['Program Enrollment']
+            return {'placement_no_student_or_applicant':True}
+        check('placement-closed-without-student-or-applicant',placement_wrote_no_learner)
+        def catalog():
+            frappe.set_user('Administrator')
+            if not frappe.db.exists('Academic Year','SYN-AY-2026'):
+                frappe.get_doc(dict(doctype='Academic Year',academic_year_name='SYN-AY-2026',
+                    year_start_date='2026-01-01',year_end_date='2026-12-31')).insert()
+            if not frappe.db.exists('Program','SYN-PROGRAM-GENERAL'):
+                frappe.get_doc(dict(doctype='Program',program_name='SYN-PROGRAM-GENERAL')).insert()
+            if not frappe.db.exists('Customer Group','Student'):
+                frappe.get_doc(dict(doctype='Customer Group',customer_group_name='Student',
+                    parent_customer_group=get_root_of('Customer Group'),is_group=0)).insert()
+            try:frappe.db.set_single_value('Education Settings','user_creation_skip',1)
+            except Exception:pass
+            return {'program':'SYN-PROGRAM-GENERAL','academic_year':'SYN-AY-2026'}
+        cat=check('admission-native-catalog',catalog)
+        REASON='Eligible after internal placement.'
+        COND='Awaiting document verification only.'
+        check('admission-unknown-program-denied',lambda:denied(lambda:as_user('officer',lambda:adm.record_applicant('adm_bad_program_0001',released['decision'],'SYNTHETIC Applicant','NOT-A-PROGRAM',cat['academic_year']))))
+        check('admission-missing-placement-denied',lambda:denied(lambda:as_user('officer',lambda:adm.record_applicant('adm_bad_place_000001','missing-placement-decision','SYNTHETIC Applicant',cat['program'],cat['academic_year']))))
+        check('admission-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:adm.record_applicant('adm_out_record_00001',released['decision'],'SYNTHETIC Applicant',cat['program'],cat['academic_year']))))
+        check('admission-author-denied',lambda:denied(lambda:as_user('second_author',lambda:adm.record_applicant('adm_auth_record_0001',released['decision'],'SYNTHETIC Applicant',cat['program'],cat['academic_year']))))
+        check('admission-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:adm.record_applicant('adm_pub_record_00001',released['decision'],'SYNTHETIC Applicant',cat['program'],cat['academic_year']))))
+        app=check('admission-record-applicant',lambda:as_user('officer',lambda:adm.record_applicant('adm_record_app_00001',released['decision'],'SYNTHETIC Applicant',cat['program'],cat['academic_year'])))
+        assert app['application_status']=='Applied' and app['paid']==0
+        assert app['student_email_id']==users['candidate5']
+        check('admission-duplicate-applicant-denied',lambda:denied(lambda:as_user('officer',lambda:adm.record_applicant('adm_dup_app_00000001',released['decision'],'SYNTHETIC Applicant',cat['program'],cat['academic_year']))))
+        dec=check('admission-create-draft',lambda:as_user('officer',lambda:adm.create_admission('adm_create_key_00001',app['name'],released['decision'])))
+        assert dec['status']=='Draft' and dec['version']==1
+        check('admission-duplicate-active-denied',lambda:denied(lambda:as_user('officer',lambda:adm.create_admission('adm_dup_dec_00000001',app['name'],released['decision']))))
+        check('admission-officer-self-review-denied',lambda:denied(lambda:as_user('officer',lambda:adm.review_admission('adm_self_review_00001',dec['name'],1))))
+        check('admission-approver-review-denied',lambda:denied(lambda:as_user('approver',lambda:adm.review_admission('adm_appr_review_00001',dec['name'],1))))
+        reviewed=check('admission-review',lambda:as_user('admissions_reviewer',lambda:adm.review_admission('adm_review_key_00001',dec['name'],1)))
+        assert reviewed['status']=='Review' and reviewed['version']==2
+        check('admission-officer-self-decide-denied',lambda:denied(lambda:as_user('officer',lambda:adm.decide_admission('adm_self_decide_00001',dec['name'],2,'Approved',REASON))))
+        check('admission-reviewer-decide-denied',lambda:denied(lambda:as_user('admissions_reviewer',lambda:adm.decide_admission('adm_rev_decide_00001',dec['name'],2,'Approved',REASON))))
+        approved=check('admission-approve',lambda:as_user('approver',lambda:adm.decide_admission('adm_decide_key_00001',dec['name'],2,'Approved',REASON)))
+        assert approved['status']=='Approved' and approved['version']==3
+        assert frappe.db.get_value('Student Applicant',app['name'],'application_status') in (None,'','Applied')
+        check('admission-convert-before-accept-denied',lambda:denied(lambda:as_user('approver',lambda:adm.convert_applicant('adm_early_conv_00001',dec['name'],3))))
+        check('admission-approver-self-accept-denied',lambda:denied(lambda:as_user('approver',lambda:adm.accept_offer('adm_self_accept_00001',dec['name'],3))))
+        accepted=check('admission-accept-offer',lambda:as_user('officer',lambda:adm.accept_offer('adm_accept_key_00001',dec['name'],3)))
+        assert accepted['accepted']==1 and accepted['status']=='Approved' and accepted['version']==4
+        check('admission-officer-convert-denied',lambda:denied(lambda:as_user('officer',lambda:adm.convert_applicant('adm_off_conv_0000001',dec['name'],4))))
+        converted=check('admission-convert-student',lambda:as_user('approver',lambda:adm.convert_applicant('adm_convert_key_00001',dec['name'],4)))
+        assert converted['native_student'] and converted['version']==5
+        assert converted['native_application_status']=='Admitted'
+        assert converted['program_enrollment']==0
+        assert frappe.db.count('Program Enrollment')==before_counts['Program Enrollment']
+        assert frappe.db.count('Course Enrollment')==before_counts['Course Enrollment']
+        assert frappe.db.count('Sales Invoice')==before_counts['Sales Invoice']
+        assert frappe.db.count('GL Entry')==before_counts['GL Entry']
+        assert frappe.db.count('Salary Slip')==before_counts['Salary Slip']
+        def convert_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('approver',lambda:adm.convert_applicant('adm_convert_key_00001',dec['name'],4))
+            assert value==converted and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count('Student',{'student_applicant':app['name']})==1
+            return {'same_result':True,'one_student':True}
+        check('admission-convert-idempotent',convert_replay)
+        check('admission-stale-convert-denied',lambda:denied(lambda:as_user('approver',lambda:adm.convert_applicant('adm_stale_conv_00001',dec['name'],4))))
+        check('admission-revoke-converted-denied',lambda:denied(lambda:as_user('approver',lambda:adm.revoke_admission('adm_rev_conv_0000001',dec['name'],5,REASON))))
+        def enroll_contained():
+            return denied(lambda:adm.deny_enroll_student(app['name']))
+        check('admission-enroll-student-contained',enroll_contained)
+        def pe_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Program Enrollment',student=converted['native_student'],
+                program=cat['program'],academic_year=cat['academic_year'],enrollment_date=frappe.utils.today())).insert(ignore_permissions=True))
+        check('admission-program-enrollment-denied',pe_denied)
+        def adm_generic_write():
+            frappe.set_user(users['officer']);doc=frappe.get_doc(adm.DECISION_DT,dec['name']);doc.status='Rejected';doc.flags.ignore_permissions=True
+            return denied(lambda:doc.save(ignore_permissions=True))
+        check('admission-ignore-permissions-does-not-bypass-controller',adm_generic_write)
+        check('admission-direct-db-set-denied',lambda:denied(lambda:frappe.get_doc(adm.DECISION_DT,dec['name']).db_set('status','Rejected')))
+        check('admission-delete-denied',lambda:denied(lambda:frappe.delete_doc(adm.DECISION_DT,dec['name'],ignore_permissions=True)))
+        def release_for(label,prefix):
+            case=as_user('publisher',lambda:api.create_case(prefix+'_case0000001',users[label]))
+            alloc=digital_finalize(case['name'],prefix)
+            rel=as_user('releaser',lambda:api.release_decision(prefix+'_rel0000001',alloc['attempt'],7))
+            return rel
+        rel6=check('admission-extra-released-withdraw',lambda:release_for('candidate6','adm_pipe_w'))
+        app6=check('admission-record-withdraw-applicant',lambda:as_user('officer',lambda:adm.record_applicant('adm_record_w_0000001',rel6['decision'],'SYNTHETIC Withdraw',cat['program'],cat['academic_year'])))
+        dec6=check('admission-create-withdraw-draft',lambda:as_user('officer',lambda:adm.create_admission('adm_create_w_0000001',app6['name'],rel6['decision'])))
+        withdrawn=check('admission-withdraw',lambda:as_user('officer',lambda:adm.withdraw_admission('adm_withdraw_key_0001',dec6['name'],1,REASON)))
+        assert withdrawn['status']=='Withdrawn'
+        check('admission-withdraw-other-denied',lambda:denied(lambda:as_user('admissions_reviewer',lambda:adm.withdraw_admission('adm_withdraw_other01',dec6['name'],2,REASON))))
+        rel7=check('admission-extra-released-reject',lambda:release_for('candidate7','adm_pipe_r'))
+        app7=check('admission-record-reject-applicant',lambda:as_user('officer',lambda:adm.record_applicant('adm_record_r_0000001',rel7['decision'],'SYNTHETIC Reject',cat['program'],cat['academic_year'])))
+        dec7=check('admission-create-reject-draft',lambda:as_user('officer',lambda:adm.create_admission('adm_create_r_0000001',app7['name'],rel7['decision'])))
+        as_user('admissions_reviewer',lambda:adm.review_admission('adm_review_r_0000001',dec7['name'],1))
+        rejected=check('admission-reject',lambda:as_user('approver',lambda:adm.decide_admission('adm_decide_r_0000001',dec7['name'],2,'Rejected',REASON)))
+        assert rejected['status']=='Rejected'
+        assert frappe.db.get_value('Student Applicant',app7['name'],'application_status') in (None,'','Applied')
+        def reject_no_student():
+            count=frappe.db.count('Student',{'student_applicant':app7['name']})
+            assert count==0
+            return {'students':0}
+        check('admission-reject-does-not-convert',reject_no_student)
+        rel8=check('admission-extra-released-conditional',lambda:release_for('candidate8','adm_pipe_c'))
+        app8=check('admission-record-conditional-applicant',lambda:as_user('officer',lambda:adm.record_applicant('adm_record_c_0000001',rel8['decision'],'SYNTHETIC Conditional',cat['program'],cat['academic_year'])))
+        dec8=check('admission-create-conditional-draft',lambda:as_user('officer',lambda:adm.create_admission('adm_create_c_0000001',app8['name'],rel8['decision'])))
+        as_user('admissions_reviewer',lambda:adm.review_admission('adm_review_c_0000001',dec8['name'],1))
+        conditional=check('admission-conditional',lambda:as_user('approver',lambda:adm.decide_admission('adm_decide_c_0000001',dec8['name'],2,'Conditional',REASON,COND)))
+        assert conditional['status']=='Conditional' and conditional['conditions']==COND
+        as_user('officer',lambda:adm.accept_offer('adm_accept_c_0000001',dec8['name'],3))
+        check('admission-conditional-convert-denied',lambda:denied(lambda:as_user('approver',lambda:adm.convert_applicant('adm_cond_conv_000001',dec8['name'],4))))
+        def expire_now():
+            started=frappe.utils.get_datetime(rel8['expires_at'])
+            with patch.object(adm,'_now',return_value=started+timedelta(days=1)):
+                value=as_user('officer',lambda:adm.expire_admission('adm_expire_key_00001',dec8['name'],4))
+            assert value['status']=='Expired'
+            return {'status':'Expired'}
+        check('admission-expire-after-placement-validity',expire_now)
+        def adm_reads():
+            frappe.set_user(users['officer']);assert frappe.get_list(adm.DECISION_DT)
+            frappe.set_user(users['admissions_reviewer']);assert frappe.get_list(adm.DECISION_DT)
+            frappe.set_user(users['approver']);assert frappe.get_list(adm.DECISION_DT)
+            frappe.set_user(users['admissions_auditor']);assert frappe.get_list(adm.DECISION_DT)
+            frappe.set_user(users['second_author'])
+            try:listed=frappe.get_list(adm.DECISION_DT)
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            frappe.set_user(users['publisher'])
+            try:listed=frappe.get_list(adm.DECISION_DT)
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            return {'admission_staff_only':True}
+        check('admission-role-and-list-parity',adm_reads)
+        def adm_rollback_proof():
+            frappe.set_user(users['officer']);frappe.db.savepoint('adm_atomic')
+            old={dt:frappe.db.count(dt) for dt in (adm.DECISION_DT,api.OP,api.AUDIT,'Student Applicant')}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic admission audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):
+                    adm.create_admission('adm_atomic_key_00001',app6['name'],rel6['decision'])
+            except RuntimeError:frappe.db.rollback(save_point='adm_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            return {'real_database_rollback':True,'injected_boundary':'admission audit'}
+        check('admission-atomic-decision-rollback',adm_rollback_proof)
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def adm_second_site():
+            assert frappe.db.count(adm.DECISION_DT)==0
+            assert frappe.db.count('Student Applicant')==0
+            return {'admission_absent_on_second_site':True}
+        check('second-site-no-first-site-admission-record',adm_second_site)
+        frappe.destroy();connect('placement-test.localhost')
+
+        # --- Enrollment: native Program Enrollment after converted admission ---
+        def enrollment_catalog():
+            frappe.set_user('Administrator')
+            if not frappe.db.exists('Course','SYN-COURSE-CORE'):
+                frappe.get_doc(dict(doctype='Course',course_name='SYN-COURSE-CORE')).insert()
+            program=frappe.get_doc('Program','SYN-PROGRAM-GENERAL')
+            if not any((row.course=='SYN-COURSE-CORE') for row in (program.get('courses') or [])):
+                program.append('courses',dict(course='SYN-COURSE-CORE',required=1))
+                program.save()
+            return {'course':'SYN-COURSE-CORE','program':'SYN-PROGRAM-GENERAL'}
+        enr_cat=check('enrollment-native-catalog',enrollment_catalog)
+        check('enrollment-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:enr.enroll_in_program('enr_out_key_00000001',dec['name']))))
+        check('enrollment-author-denied',lambda:denied(lambda:as_user('second_author',lambda:enr.enroll_in_program('enr_auth_key_0000001',dec['name']))))
+        check('enrollment-admission-officer-denied',lambda:denied(lambda:as_user('officer',lambda:enr.enroll_in_program('enr_off_key_00000001',dec['name']))))
+        check('enrollment-approver-denied',lambda:denied(lambda:as_user('approver',lambda:enr.enroll_in_program('enr_appr_key_0000001',dec['name']))))
+        check('enrollment-publisher-denied',lambda:denied(lambda:as_user('publisher',lambda:enr.enroll_in_program('enr_pub_key_00000001',dec['name']))))
+        check('enrollment-withdrawn-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_withdraw_key_0001',dec6['name']))))
+        check('enrollment-rejected-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_reject_key_000001',dec7['name']))))
+        check('enrollment-expired-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_expire_key_000001',dec8['name']))))
+        def enroll_rollback_proof():
+            frappe.set_user(users['enrollment_officer']);frappe.db.savepoint('enr_atomic')
+            old={dt:frappe.db.count(dt) for dt in (enr.PE,enr.CE,api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic enrollment audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):
+                    enr.enroll_in_program('enr_atomic_key_00001',dec['name'])
+            except RuntimeError:frappe.db.rollback(save_point='enr_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            return {'real_database_rollback':True,'injected_boundary':'enrollment audit'}
+        check('enrollment-atomic-enrollment-rollback',enroll_rollback_proof)
+        enrolled=check('enrollment-happy-path',lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_enroll_key_00001',dec['name'])))
+        assert enrolled['docstatus']==1 and enrolled['student']==converted['native_student']
+        assert enrolled['program']==cat['program'] and enrolled['course_enrollments']==1
+        assert enrolled['sales_invoice']==0
+        assert frappe.db.count('Sales Invoice')==before_counts['Sales Invoice']
+        assert frappe.db.count('GL Entry')==before_counts['GL Entry']
+        assert frappe.db.count('Salary Slip')==before_counts['Salary Slip']
+        assert frappe.db.count('Assessment Result')==before_counts['Assessment Result']
+        def enroll_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_enroll_key_00001',dec['name']))
+            assert value==enrolled and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count(enr.PE,{'student':converted['native_student']})==1
+            return {'same_result':True,'one_enrollment':True}
+        check('enrollment-idempotent-replay',enroll_replay)
+        check('enrollment-duplicate-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_dup_key_00000001',dec['name']))))
+        def enroll_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Program Enrollment',student=converted['native_student'],
+                program=cat['program'],academic_year=cat['academic_year'],enrollment_date=frappe.utils.today())).insert(ignore_permissions=True))
+        check('enrollment-direct-pe-still-denied',enroll_direct_denied)
+        def enroll_contained():
+            return denied(lambda:adm.deny_enroll_student(app['name']))
+        check('enrollment-enroll-student-still-contained',enroll_contained)
+        def enroll_reads():
+            frappe.set_user(users['enrollment_officer'])
+            try:listed=frappe.get_list('Program Enrollment')
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            try:listed=frappe.get_list('Course Enrollment')
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            frappe.set_user(users['enrollment_auditor'])
+            assert frappe.get_list(api.OP) and frappe.get_list(api.AUDIT)
+            try:listed=frappe.get_list(adm.DECISION_DT)
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            frappe.set_user(users['officer'])
+            try:listed=frappe.get_list('Program Enrollment')
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            return {'enrollment_officer_no_pe_crud':True,'auditor_receipts_only':True}
+        check('enrollment-role-and-list-parity',enroll_reads)
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def enr_second_site():
+            assert frappe.db.count(enr.PE)==0 and frappe.db.count(enr.CE)==0
+            return {'enrollment_absent_on_second_site':True}
+        check('second-site-no-first-site-enrollment-record',enr_second_site)
+        frappe.destroy();connect('placement-test.localhost')
+
+        # --- Teaching operations: native Student Group / Course Schedule / Student Attendance ---
+        # Native authorities only: no TH roster/timetable/grading/fees/payroll DocType.
+        def teaching_catalog():
+            frappe.set_user('Administrator')
+            if not frappe.db.exists('Academic Year','SYN-AY-2027'):
+                frappe.get_doc(dict(doctype='Academic Year',academic_year_name='SYN-AY-2027',
+                    year_start_date='2027-01-01',year_end_date='2027-12-31')).insert()
+            if not frappe.db.exists('Course','SYN-COURSE-ELECTIVE'):
+                frappe.get_doc(dict(doctype='Course',course_name='SYN-COURSE-ELECTIVE')).insert()
+            rooms={}
+            for label in ('SYN-ROOM-A','SYN-ROOM-B'):
+                if not frappe.db.get_value('Room',{'room_name':label},'name'):
+                    frappe.get_doc(dict(doctype='Room',room_name=label,seating_capacity='24')).insert()
+                rooms[label]=frappe.db.get_value('Room',{'room_name':label},'name')
+            frappe.db.set_single_value('Education Settings','instructor_created_by','Naming Series')
+            instructors={}
+            for label,status in (('SYN Instructor One','Active'),('SYN Instructor Two','Active'),('SYN Instructor Left','Left')):
+                name=frappe.db.get_value('Instructor',{'instructor_name':label},'name')
+                if not name:
+                    name=frappe.get_doc(dict(doctype='Instructor',instructor_name=label,
+                        naming_series='EDU-INS-.YYYY.-',status=status)).insert().name
+                instructors[label]=name
+            # Native Student Attendance validation requires a default company with a
+            # holiday list; zero-holiday synthetic fixtures, no financial postings.
+            # Company default-warehouse creation links Warehouse Type 'Transit',
+            # which the ERPNext setup wizard seeds; create the identical fixture
+            # record on this wizard-less site (no financial effect).
+            if not frappe.db.exists('Warehouse Type','Transit'):
+                frappe.get_doc(dict(doctype='Warehouse Type',name='Transit')).insert()
+            if not frappe.db.exists('Holiday List','SYN-HOLIDAYS-2026'):
+                frappe.get_doc(dict(doctype='Holiday List',holiday_list_name='SYN-HOLIDAYS-2026',
+                    from_date='2026-01-01',to_date='2026-12-31')).insert()
+            if not frappe.db.exists('Company','SYN Teaching House'):
+                frappe.get_doc(dict(doctype='Company',company_name='SYN Teaching House',abbr='SYNTH',
+                    country='United States',default_currency='USD',valuation_method='FIFO',
+                    enable_perpetual_inventory=0)).insert()
+            frappe.db.set_value('Company','SYN Teaching House','default_holiday_list','SYN-HOLIDAYS-2026')
+            frappe.db.set_single_value('Global Defaults','default_company','SYN Teaching House')
+            return {'rooms':rooms,'instructors':instructors,'company':'SYN Teaching House'}
+        tea_cat=check('teaching-native-catalog',teaching_catalog)
+        def second_intake():
+            rel=release_for('candidate9','teaching_pipe_a')
+            app9=as_user('officer',lambda:adm.record_applicant('teaching_record_app_0001',rel['decision'],'SYNTHETIC Classmate',cat['program'],cat['academic_year']))
+            dec9=as_user('officer',lambda:adm.create_admission('teaching_create_adm_0001',app9['name'],rel['decision']))
+            as_user('admissions_reviewer',lambda:adm.review_admission('teaching_review_adm_0001',dec9['name'],1))
+            as_user('approver',lambda:adm.decide_admission('teaching_decide_adm_001',dec9['name'],2,'Approved',REASON))
+            as_user('officer',lambda:adm.accept_offer('teaching_accept_adm_0001',dec9['name'],3))
+            conv=as_user('approver',lambda:adm.convert_applicant('teaching_convert_adm_001',dec9['name'],4))
+            enrolled2=as_user('enrollment_officer',lambda:enr.enroll_in_program('teaching_enroll_key_0001',dec9['name']))
+            assert enrolled2['docstatus']==1 and enrolled2['student']==conv['native_student']
+            assert frappe.db.count('Program Enrollment',{'program':cat['program'],'academic_year':cat['academic_year'],'docstatus':1})==2
+            return {'student':conv['native_student'],'program_enrollment':enrolled2['program_enrollment'],'released':rel['decision']}
+        second=check('teaching-second-intake-enrolled',second_intake)
+        GRP_A='SYN-GRP-MAIN-1';GRP_B='SYN-GRP-MAIN-2'
+        INS_ONE=tea_cat['instructors']['SYN Instructor One'];INS_TWO=tea_cat['instructors']['SYN Instructor Two']
+        INS_LEFT=tea_cat['instructors']['SYN Instructor Left']
+        ROOM_A=tea_cat['rooms']['SYN-ROOM-A'];ROOM_B=tea_cat['rooms']['SYN-ROOM-B']
+        check('teaching-outsider-group-denied',lambda:denied(lambda:as_user('outsider',lambda:tea.create_student_group('tea_out_group_0000001',GRP_A,cat['program'],cat['academic_year'],'',2))))
+        check('teaching-recorder-group-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.create_student_group('tea_rec_group_0000001',GRP_A,cat['program'],cat['academic_year'],'',2))))
+        check('teaching-enrollment-officer-group-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:tea.create_student_group('tea_enr_group_0000001',GRP_A,cat['program'],cat['academic_year'],'',2))))
+        check('teaching-group-non-synthetic-name-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_badname_000000001','REAL-CLASS-1',cat['program'],cat['academic_year'],'',2))))
+        check('teaching-group-unbounded-capacity-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_badsized_0000001',GRP_A,cat['program'],cat['academic_year'],'',0))))
+        check('teaching-group-unknown-year-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_badyear_0000001',GRP_A,cat['program'],'SYN-AY-NOPE','',2))))
+        check('teaching-group-empty-roster-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_empty_000000001',GRP_A,cat['program'],'SYN-AY-2027','',2))))
+        check('teaching-group-over-capacity-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_overcap_0000001',GRP_A,cat['program'],cat['academic_year'],'',1))))
+        groupA=check('teaching-group-happy-path',lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_a_key_00001',GRP_A,cat['program'],cat['academic_year'],'',2)))
+        assert groupA['name']==GRP_A and groupA['students']==2
+        assert groupA['roster']==sorted([converted['native_student'],second['student']])
+        def group_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_a_key_00001',GRP_A,cat['program'],cat['academic_year'],'',2))
+            assert value==groupA and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count('Student Group',{'student_group_name':GRP_A})==1
+            return {'same_result':True,'one_group':True}
+        check('teaching-group-idempotent-replay',group_replay)
+        check('teaching-group-duplicate-name-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_dup_0000001',GRP_A,cat['program'],cat['academic_year'],'',2))))
+        def group_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Student Group',student_group_name='SYN-GRP-DIRECT-1',
+                group_based_on='Batch',program=cat['program'],academic_year=cat['academic_year'],max_strength=2)).insert(ignore_permissions=True))
+        check('teaching-group-direct-write-denied',group_direct_denied)
+        groupB=check('teaching-second-group',lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_b_key_00001',GRP_B,cat['program'],cat['academic_year'],'',2)))
+        assert groupB['students']==2
+        check('teaching-session-recorder-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.schedule_session('tea_rec_sched_0000001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))))
+        check('teaching-session-inverted-window-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_badwindow_0000001',GRP_A,'2026-09-21','10:30:00','09:00:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))))
+        check('teaching-session-outside-year-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_baddate_000000001',GRP_A,'2027-01-05','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))))
+        check('teaching-session-left-instructor-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_leftins_000000001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_LEFT,ROOM_A,'SYN-COURSE-CORE'))))
+        check('teaching-session-unknown-course-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_badcourse_0000001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-NOPE'))))
+        check('teaching-session-course-outside-program-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_offcourse_0000001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-ELECTIVE'))))
+        schedA=check('teaching-session-happy-path',lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_a_key_00001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE')))
+        assert schedA['title']=='SYN-COURSE-CORE by SYN Instructor One' and schedA['student_group']==GRP_A
+        def sched_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_a_key_00001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))
+            assert value==schedA and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count('Course Schedule',{'student_group':GRP_A,'schedule_date':'2026-09-21'})==1
+            return {'same_result':True,'one_session':True}
+        check('teaching-session-idempotent-replay',sched_replay)
+        check('teaching-session-group-conflict-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_grp_conflict_0001',GRP_A,'2026-09-21','09:30:00','11:00:00',INS_TWO,ROOM_B,'SYN-COURSE-CORE'))))
+        check('teaching-session-instructor-conflict-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_ins_conflict_0001',GRP_B,'2026-09-21','09:30:00','11:00:00',INS_ONE,ROOM_B,'SYN-COURSE-CORE'))))
+        check('teaching-session-room-conflict-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_room_conflict_001',GRP_B,'2026-09-21','09:30:00','11:00:00',INS_TWO,ROOM_A,'SYN-COURSE-CORE'))))
+        def session_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Course Schedule',naming_series='EDU-CSH-.YYYY.-',
+                student_group=GRP_A,instructor=INS_TWO,room=ROOM_B,course='SYN-COURSE-CORE',
+                schedule_date='2026-09-24',from_time='09:00:00',to_time='10:00:00')).insert(ignore_permissions=True))
+        check('teaching-session-direct-write-denied',session_direct_denied)
+        schedB=check('teaching-second-session',lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_b_key_00001',GRP_B,'2026-09-22','13:00:00','14:30:00',INS_TWO,ROOM_B,'SYN-COURSE-CORE')))
+        def outsider_student():
+            frappe.set_user('Administrator')
+            return frappe.get_doc(dict(doctype='Student',first_name='SYNTHETIC Outsider',
+                student_email_id=users['outsider'])).insert().name
+        outsider_stu=check('teaching-outsider-student-fixture',outsider_student)
+        stu1,stu2=groupA['roster']
+        check('teaching-attendance-scheduler-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.record_attendance('tea_sch_att_000000001',schedA['name'],{stu1:'Present'}))))
+        check('teaching-attendance-invalid-status-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_badstatus_0000001',schedA['name'],{stu1:'Late'}))))
+        check('teaching-attendance-empty-batch-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_empty_att_0000001',schedA['name'],{}))))
+        check('teaching-attendance-off-roster-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_offroster_0000001',schedA['name'],{outsider_stu:'Present'}))))
+        attA=check('teaching-attendance-happy-path',lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_att_a_key_00000001',schedA['name'],{stu1:'Present',stu2:'Absent'})))
+        assert attA['marked']==2 and attA['date']=='2026-09-21' and attA['student_group']==GRP_A
+        for student,att_name in attA['records'].items():
+            att_row=frappe.db.get_value('Student Attendance',att_name,['docstatus','student_group'],as_dict=True)
+            assert att_row.docstatus==1 and att_row.student_group==GRP_A
+        assert frappe.db.get_value('Student Attendance',attA['records'][stu1],'status')=='Present'
+        assert frappe.db.get_value('Student Attendance',attA['records'][stu2],'status')=='Absent'
+        def att_replay():
+            count=frappe.db.count(api.AUDIT)
+            value=as_user('attendance_recorder',lambda:tea.record_attendance('tea_att_a_key_00000001',schedA['name'],{stu1:'Present',stu2:'Absent'}))
+            assert value==attA and frappe.db.count(api.AUDIT)==count
+            assert frappe.db.count('Student Attendance',{'course_schedule':schedA['name']})==2
+            return {'same_result':True,'two_records':True}
+        check('teaching-attendance-idempotent-replay',att_replay)
+        check('teaching-attendance-duplicate-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.record_attendance('tea_att_dup_00000001',schedA['name'],{stu1:'Present'}))))
+        def att_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Student Attendance',naming_series='EDU-ATT-.YYYY.-',
+                student=stu1,course_schedule=schedB['name'],status='Present')).insert(ignore_permissions=True))
+        check('teaching-attendance-direct-write-denied',att_direct_denied)
+        def att_rollback_proof():
+            frappe.set_user(users['attendance_recorder']);frappe.db.savepoint('tea_atomic')
+            old={dt:frappe.db.count(dt) for dt in ('Student Attendance',api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic teaching audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):
+                    tea.record_attendance('tea_att_atomic_00001',schedB['name'],{stu1:'Present'})
+            except RuntimeError:frappe.db.rollback(save_point='tea_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            return {'real_database_rollback':True,'injected_boundary':'teaching audit'}
+        check('teaching-attendance-atomic-rollback',att_rollback_proof)
+        def tea_reads():
+            frappe.set_user(users['teaching_scheduler'])
+            for dt in ('Student Group','Course Schedule','Student Attendance'):
+                try:listed=frappe.get_list(dt)
+                except frappe.PermissionError:listed=[]
+                assert not listed
+            frappe.set_user(users['attendance_recorder'])
+            for dt in ('Student Group','Course Schedule','Student Attendance'):
+                try:listed=frappe.get_list(dt)
+                except frappe.PermissionError:listed=[]
+                assert not listed
+            frappe.set_user(users['teaching_auditor'])
+            assert frappe.get_list(api.OP) and frappe.get_list(api.AUDIT)
+            try:listed=frappe.get_list(adm.DECISION_DT)
+            except frappe.PermissionError:listed=[]
+            assert not listed
+            return {'teaching_no_native_crud':True,'auditor_receipts_only':True}
+        check('teaching-role-and-list-parity',tea_reads)
+        # Cross-domain integration proof: the four qualified slices are one
+        # connected lifecycle, not isolated domains. Every hop is re-read from
+        # the database; fixture variables are only used to locate the start.
+        def journey_trace():
+            frappe.set_user('Administrator')
+            start=second['student']
+            att=frappe.db.get_value('Student Attendance',attA['records'][start],
+                ['name','docstatus','student','course_schedule','student_group','status'],as_dict=True)
+            assert att and att.docstatus==1 and att.student==start and att.student_group==GRP_A
+            assert att.course_schedule==schedA['name']
+            sess=frappe.db.get_value('Course Schedule',att.course_schedule,
+                ['name','student_group','instructor','room','course','schedule_date'],as_dict=True)
+            assert sess.student_group==GRP_A and sess.instructor and sess.room and sess.course
+            grp=frappe.db.get_value('Student Group',sess.student_group,
+                ['name','program','academic_year','group_based_on'],as_dict=True)
+            assert grp.program==cat['program'] and grp.academic_year==cat['academic_year']
+            roster={r.student for r in frappe.db.sql("select student from `tabStudent Group Student` where parent=%s",(GRP_A,),as_dict=True)}
+            assert start in roster
+            pe=frappe.db.get_value('Program Enrollment',{'student':start,'program':grp.program,'academic_year':grp.academic_year,'docstatus':1},['name'],as_dict=True)
+            assert pe and pe.name==second['program_enrollment']
+            dec=frappe.db.get_value(adm.DECISION_DT,{'native_student':start},
+                ['name','student_applicant','placement_decision','status','accepted','converted_at'],as_dict=True)
+            assert dec and dec.accepted==1 and dec.converted_at and dec.status in ('Approved','Conditional')
+            pd=frappe.db.get_value(api.DECISION,dec.placement_decision,
+                ['name','attempt','status','internal_level','course_code'],as_dict=True)
+            assert pd and pd.status=='Released' and pd.internal_level and pd.course_code
+            attempt=frappe.db.get_value(api.ATTEMPT,pd.attempt,['name','case_name','status','subject'],as_dict=True)
+            case=frappe.db.get_value(api.CASE,attempt.case_name,['name','subject','purpose','status'],as_dict=True)
+            assert case.subject==attempt.subject==users['candidate9']
+            appl=frappe.db.get_value('Student Applicant',dec.student_applicant,['name'],as_dict=True)
+            assert appl
+            return {'attendance':att.name,'course_schedule':sess.name,'student_group':grp.name,
+                    'program_enrollment':pe.name,'admission_decision':dec.name,
+                    'placement_decision':pd.name,'placement_case':case.name,
+                    'student':start,'chain_complete':True}
+        check('integration-e2e-student-journey',journey_trace)
+        def journey_receipts():
+            frappe.set_user('Administrator')
+            journey=[('release_decision','teaching_pipe_a_rel0000001',users['releaser']),
+                     ('record_applicant','teaching_record_app_0001',users['officer']),
+                     ('create_admission','teaching_create_adm_0001',users['officer']),
+                     ('review_admission','teaching_review_adm_0001',users['admissions_reviewer']),
+                     ('decide_admission','teaching_decide_adm_001',users['approver']),
+                     ('accept_offer','teaching_accept_adm_0001',users['officer']),
+                     ('convert_applicant','teaching_convert_adm_001',users['approver']),
+                     ('enroll_in_program','teaching_enroll_key_0001',users['enrollment_officer']),
+                     ('create_student_group','tea_group_a_key_00001',users['teaching_scheduler']),
+                     ('schedule_session','tea_sched_a_key_00001',users['teaching_scheduler']),
+                     ('record_attendance','tea_att_a_key_00000001',users['attendance_recorder'])]
+            kinds=[]
+            for kind,key,actor in journey:
+                op=frappe.db.get_value(api.OP,digest([kind,key]),['name','kind','actor','status'],as_dict=True)
+                assert op and op.kind==kind and op.status=='Complete',(kind,'missing or incomplete receipt')
+                assert op.actor==actor,(kind,'actor separation broken')
+                assert frappe.db.count(api.AUDIT,{'operation':op.name})>=1,(kind,'no audit event')
+                kinds.append(kind)
+            assert len(set(kinds))==len(kinds)
+            return {'journey_commands_receipted':len(kinds),'actor_separation_verified':True,'kinds':kinds}
+        check('integration-journey-receipt-continuity',journey_receipts)
+        def cross_domain_invariants():
+            frappe.set_user('Administrator')
+            groups=frappe.db.get_all('Student Group',['name','program','academic_year'])
+            assert groups
+            for g in groups:
+                assert frappe.db.exists('Program',g.program) and frappe.db.exists('Academic Year',g.academic_year)
+                enrolled={r.student for r in frappe.db.get_all('Program Enrollment',{'program':g.program,'academic_year':g.academic_year,'docstatus':1},['student'])}
+                roster=[r.student for r in frappe.db.sql("select student from `tabStudent Group Student` where parent=%s",(g.name,),as_dict=True)]
+                orphan=[s for s in roster if s not in enrolled]
+                assert not orphan,(g.name,orphan)
+            schedules=frappe.db.get_all('Course Schedule',['name','student_group'])
+            assert schedules
+            for s in schedules:
+                assert frappe.db.exists('Student Group',s.student_group),s.name
+            atts=frappe.db.get_all('Student Attendance',['name','student','course_schedule','student_group','docstatus'])
+            assert atts
+            for a in atts:
+                assert a.docstatus==1,a.name
+                assert a.course_schedule and frappe.db.get_value('Course Schedule',a.course_schedule,'student_group')==a.student_group,a.name
+                assert frappe.db.sql("select name from `tabStudent Group Student` where parent=%s and student=%s",(a.student_group,a.student)),a.name
+            for pe in frappe.db.get_all('Program Enrollment',{'docstatus':1},['name','student']):
+                dec=frappe.db.get_value(adm.DECISION_DT,{'native_student':pe.student},['accepted'],as_dict=True)
+                assert dec and dec.accepted==1,pe.name
+            total=frappe.db.count(api.AUDIT)
+            linked=frappe.db.sql("select count(*) from `tabTH Placement Audit Event` e join `tabTH Placement Operation` o on e.operation=o.name")[0][0]
+            assert total>0 and total==linked,(total,linked)
+            return {'groups_verified':len(groups),'schedules_verified':len(schedules),
+                    'attendance_verified':len(atts),'audit_ledger_referential':total}
+        check('integration-cross-domain-referential-integrity',cross_domain_invariants)
+        frappe.db.commit();frappe.destroy();connect('placement-second.localhost')
+        def tea_second_site():
+            assert frappe.db.count('Student Group')==0 and frappe.db.count('Course Schedule')==0
+            assert frappe.db.count('Student Attendance')==0
+            return {'teaching_absent_on_second_site':True}
+        check('second-site-no-first-site-teaching-record',tea_second_site)
+        frappe.destroy();connect('placement-test.localhost')
+        base='http://127.0.0.1:18000'
+        for _ in range(60):
+            try:
+                r=requests.get(base+'/api/method/ping',headers={'Host':'placement-test.localhost'},timeout=3)
+                if r.status_code==200:break
+            except requests.RequestException:pass
+            time.sleep(1)
+        else:raise AssertionError('HTTP backend not ready')
+        def login(label):
+            s=requests.Session();s.headers['Host']='placement-test.localhost'
+            r=s.post(base+'/api/method/login',json={'usr':users[label],'pwd':os.environ['PLACEMENT_TEST_PASSWORD']},timeout=30)
+            assert r.status_code==200,f'login {label}: HTTP {r.status_code}'
+            sid=s.cookies.get('sid');assert sid and sid!='Guest'
+            # Native server-side fixture observation only, not a browser-CSRF qualification claim.
+            native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
+            s.headers['X-Frappe-CSRF-Token']=token
+            return s
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor','teaching_scheduler','attendance_recorder','finance_officer','containment_probe')}
+        def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
+        def apost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.admission.'+method,json=payload,timeout=40)
+        def epost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.enrollment.'+method,json=payload,timeout=40)
+        def http_denied(response,csrf=False):
+            assert response.status_code in (400,403,404,405,409,417),f'Unexpected HTTP {response.status_code}'
+            data=response.json()
+            if not csrf:assert data.get('exc_type')!='CSRFTokenError','Not an authorization denial'
+            return {'http_status':response.status_code,'exception':data.get('exc_type')}
+        payload=dict(request_key='http_create_key_001',family=family(users['author'],'HTTP'),revision=1,content=content())
+        def http_create():
+            r=post('author','create_draft',payload);assert r.status_code==200,f'create HTTP {r.status_code}'
+            return r.json()['message']
+        httpitem=check('http-positive-create',http_create)
+        check('http-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.create_draft',headers={'Host':'placement-test.localhost'},json=payload,timeout=30)))
+        check('http-unrelated-role-denied',lambda:http_denied(post('outsider','create_draft',dict(payload,request_key='http_outsider_001'))))
+        check('http-get-cannot-mutate',lambda:http_denied(sessions['author'].get(base+'/api/method/toefl_house.api.create_draft',params={'request_key':'get_not_allowed_001'},timeout=30)))
+        def csrf_negative():
+            s=sessions['author'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.create_draft',json=dict(payload,request_key='http_csrf_fail_001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-csrf-negative-with-positive-control',csrf_negative)
+        url=base+'/api/resource/'+quote(api.ITEM,safe='')+'/'+httpitem['name']
+        check('http-direct-crud-mutation-denied',lambda:http_denied(sessions['author'].put(url,json={'status':'Published','flags':{'ignore_permissions':1}},timeout=30)))
+        check('http-other-author-draft-read-denied',lambda:http_denied(sessions['other'].get(url,timeout=30)))
+        keyname=frappe.db.get_value(api.ITEM,httpitem['name'],'key_revision')
+        check('http-auditor-key-read-denied',lambda:http_denied(sessions['auditor'].get(base+'/api/resource/'+quote(api.KEY,safe='')+'/'+keyname,timeout=30)))
+        def concurrent_create():
+            p=dict(payload,request_key='http_concurrent_create_001',family=family(users['author'],'RACE'))
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['author'].headers);s.cookies.update(sessions['author'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.create_draft',json=p,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            frappe.db.rollback();assert frappe.db.count(api.ITEM,{'family':p['family']})==1
+            assert frappe.db.count(api.AUDIT,{'item_revision':results[0]['name']})==1
+            return {'http_statuses':[200,200],'one_item_and_audit':True}
+        check('http-concurrent-create-idempotency',concurrent_create)
+        def concurrent_publish():
+            def request(i):
+                s=requests.Session();s.headers.update(sessions['publisher'].headers);s.cookies.update(sessions['publisher'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.publish',json={'request_key':f'http_race_publish_00{i}','item_name':httpitem['name'],'expected_version':1},timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            statuses=sorted(r.status_code for r in rs);assert statuses==[200,417],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
+            frappe.db.rollback();assert frappe.db.count(api.AUDIT,{'item_revision':httpitem['name'],'action':'publish'})==1
+            return {'http_statuses':statuses,'one_publication':True}
+        check('http-concurrent-publication-cas',concurrent_publish)
+        # --- Increment 2 over HTTP: routes, CSRF, CRUD containment, races, revocation ---
+        http_bp_def=dict(good_bp)
+        http_pol_def=dict(good_pol)
+        cfg_payload=dict(request_key='http_cfg_create_001',config='blueprint',code='SYN-BP-HTTP-1',revision=1,definition=http_bp_def)
+        def http_cfg_create():
+            r=post('author','create_draft_config',cfg_payload);assert r.status_code==200,f'config create HTTP {r.status_code}'
+            return r.json()['message']
+        httpbp=check('http-config-positive-create',http_cfg_create)
+        check('http-config-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.create_draft_config',headers={'Host':'placement-test.localhost'},json=cfg_payload,timeout=30)))
+        check('http-config-unrelated-role-denied',lambda:http_denied(post('outsider','create_draft_config',dict(cfg_payload,request_key='http_cfg_outsider_001'))))
+        check('http-config-get-cannot-mutate',lambda:http_denied(sessions['author'].get(base+'/api/method/toefl_house.api.create_draft_config',params={'request_key':'http_cfg_get_0001'},timeout=30)))
+        def cfg_csrf_negative():
+            s=sessions['author'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.create_draft_config',json=dict(cfg_payload,request_key='http_cfg_csrf_0001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-config-csrf-negative-with-positive-control',cfg_csrf_negative)
+        cfg_url=base+'/api/resource/'+quote(api.BLUEPRINT,safe='')+'/'+httpbp['name']
+        check('http-config-direct-crud-mutation-denied',lambda:http_denied(sessions['author'].put(cfg_url,json={'status':'Published','flags':{'ignore_permissions':1}},timeout=30)))
+        check('http-config-other-author-read-denied',lambda:http_denied(sessions['second_author'].get(cfg_url,timeout=30)))
+        def concurrent_cfg_create():
+            p=dict(cfg_payload,request_key='http_cfg_concurrent_001',code='SYN-BP-RACE-1')
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['author'].headers);s.cookies.update(sessions['author'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.create_draft_config',json=p,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            frappe.db.rollback();assert frappe.db.count(api.BLUEPRINT,{'code':p['code']})==1
+            assert frappe.db.count(api.AUDIT,{'target':results[0]['name']})==1
+            return {'http_statuses':[200,200],'one_doc_and_audit':True}
+        check('http-config-concurrent-create-idempotency',concurrent_cfg_create)
+        def concurrent_cfg_publish():
+            race_def=dict(good_bp)
+            doc=as_user('author',lambda:api.create_draft_config('cfg_race_create_001','blueprint','SYN-BP-RACE2-1',1,race_def))
+            as_user('publisher',lambda:api.review_config('cfg_race_review_001','blueprint',doc['name'],1))
+            frappe.db.commit()
+            def request(i):
+                s=requests.Session();s.headers.update(sessions['publisher2'].headers);s.cookies.update(sessions['publisher2'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.publish_config',json={'request_key':f'http_cfg_race_pub_00{i}','config':'blueprint','name':doc['name'],'expected_version':2},timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            statuses=sorted(r.status_code for r in rs);assert statuses==[200,417],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
+            frappe.db.rollback();assert frappe.db.count(api.AUDIT,{'target':doc['name'],'action':'publish_blueprint'})==1
+            return {'http_statuses':statuses,'one_publication':True}
+        check('http-config-concurrent-publication-cas',concurrent_cfg_publish)
+        def http_cfg_policy_flow():
+            r=post('author','create_draft_config',dict(request_key='http_cfg_pol_0001',config='policy',code='SYN-POL-HTTP-1',revision=1,definition=http_pol_def))
+            assert r.status_code==200,f'policy create HTTP {r.status_code}'
+            name=r.json()['message']['name']
+            r=post('publisher','review_config',dict(request_key='http_cfg_pol_review_001',config='policy',name=name,expected_version=1))
+            assert r.status_code==200,f'policy review HTTP {r.status_code}'
+            r=post('publisher2','publish_config',dict(request_key='http_cfg_pol_publish_001',config='policy',name=name,expected_version=2))
+            assert r.status_code==200,f'policy publish HTTP {r.status_code}'
+            return name
+        polhttp=check('http-config-policy-draft-review-publish-flow',http_cfg_policy_flow)
+        # --- Increment 3 over HTTP: case + allocation routes, CSRF, containment, races, revocation ---
+        def http_case_create():
+            r=post('publisher','create_case',dict(request_key='http_case_key_0001',subject=users['candidate3']))
+            assert r.status_code==200,f'case create HTTP {r.status_code}'
+            return r.json()['message']
+        httpcase=check('http-alloc-case-create',http_case_create)
+        http_alloc_payload=dict(request_key='http_alloc_key_0001',case=httpcase['name'],
+                                blueprint=cfgx['main_bp'],blueprint_version=3,policy=pol_name,policy_version=3)
+        def http_alloc():
+            r=post('publisher','allocate_attempt',http_alloc_payload);assert r.status_code==200,f'allocate HTTP {r.status_code}'
+            return r.json()['message']
+        httpalloc=check('http-alloc-positive-create',http_alloc)
+        assert httpalloc['status']=='Allocated' and httpalloc['ordinal']==1
+        check('http-alloc-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.allocate_attempt',headers={'Host':'placement-test.localhost'},json=http_alloc_payload,timeout=30)))
+        check('http-alloc-unrelated-role-denied',lambda:http_denied(post('outsider','allocate_attempt',dict(http_alloc_payload,request_key='http_alloc_out_0001'))))
+        check('http-alloc-wrong-role-denied',lambda:http_denied(post('second_author','allocate_attempt',dict(http_alloc_payload,request_key='http_alloc_author_01'))))
+        check('http-alloc-case-wrong-role-denied',lambda:http_denied(post('second_author','create_case',dict(request_key='http_case_second_001',subject=users['candidate3']))))
+        check('http-alloc-get-cannot-mutate',lambda:http_denied(sessions['publisher'].get(base+'/api/method/toefl_house.api.allocate_attempt',params={'request_key':'http_alloc_get_0001'},timeout=30)))
+        def http_alloc_csrf():
+            s=sessions['publisher'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.allocate_attempt',json=dict(http_alloc_payload,request_key='http_alloc_csrf_0001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-alloc-csrf-negative-with-positive-control',http_alloc_csrf)
+        attempt_url=base+'/api/resource/'+quote(api.ATTEMPT,safe='')+'/'+httpalloc['attempt']
+        check('http-alloc-direct-crud-mutation-denied',lambda:http_denied(sessions['publisher'].put(attempt_url,json={'subject':'forged@example.test'},timeout=30)))
+        check('http-alloc-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(attempt_url,timeout=30)))
+        def http_alloc_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['publisher'].headers);s.cookies.update(sessions['publisher'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.allocate_attempt',json=dict(http_alloc_payload,blueprint=cfgx['small_bp'],request_key='http_alloc_idem_0001'),timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count(api.ATTEMPT,{'case_name':httpcase['name']})==2
+            assert frappe.db.count(api.AUDIT,{'target':results[0]['attempt']})==1
+            return {'http_statuses':[200,200],'one_attempt_for_key':True}
+        check('http-alloc-concurrent-create-idempotency',http_alloc_idem)
+        def http_alloc_race():
+            def request(i):
+                s=requests.Session();s.headers.update(sessions['publisher'].headers);s.cookies.update(sessions['publisher'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.allocate_attempt',json=dict(http_alloc_payload,blueprint=cfgx['small_bp'],request_key='http_alloc_race_%04d'%i),timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs]
+            assert sorted(r['ordinal'] for r in results)==[3,4]
+            fams=[{i['family'] for i in json.loads(frappe.get_doc(api.MANIFEST,r['manifest']).form_json)['items']} for r in results]
+            assert not (fams[0]&fams[1])
+            return {'http_statuses':[200,200],'ordinals':[3,4],'concurrent_forms_disjoint':True}
+        check('http-alloc-concurrent-distinct-keys',http_alloc_race)
+
+        # --- Increment 4 over HTTP: verify/deliver/save/seal, CSRF, containment, races, revocation ---
+        def http_verify():
+            r=post('invigilator','verify_attempt',dict(request_key='http_verify_key_0001',attempt=httpalloc['attempt'],expected_version=1))
+            assert r.status_code==200,f'verify HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpverified=check('http-deliver-verify',http_verify)
+        assert httpverified['status']=='Verified' and httpverified['version']==2
+        http_deliver_payload=dict(request_key='http_deliver_key_0001',attempt=httpalloc['attempt'],expected_version=2)
+        def http_deliver():
+            r=post('invigilator','deliver_attempt',http_deliver_payload);assert r.status_code==200,f'deliver HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpdelivered=check('http-deliver-positive',http_deliver)
+        assert httpdelivered['status']=='In Progress' and httpdelivered['version']==3
+        check('http-deliver-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.deliver_attempt',headers={'Host':'placement-test.localhost'},json=http_deliver_payload,timeout=30)))
+        check('http-deliver-unrelated-role-denied',lambda:http_denied(post('outsider','deliver_attempt',dict(http_deliver_payload,request_key='http_deliver_out_0001'))))
+        check('http-deliver-wrong-role-denied',lambda:http_denied(post('second_author','deliver_attempt',dict(http_deliver_payload,request_key='http_deliver_author_01'))))
+        check('http-deliver-publisher-denied',lambda:http_denied(post('publisher','deliver_attempt',dict(http_deliver_payload,request_key='http_deliver_pub_0001'))))
+        check('http-deliver-get-cannot-mutate',lambda:http_denied(sessions['invigilator'].get(base+'/api/method/toefl_house.api.deliver_attempt',params={'request_key':'http_deliver_get_0001'},timeout=30)))
+        def http_deliver_csrf():
+            s=sessions['invigilator'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.deliver_attempt',json=dict(http_deliver_payload,request_key='http_deliver_csrf_0001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-deliver-csrf-negative-with-positive-control',http_deliver_csrf)
+        check('http-deliver-direct-crud-mutation-denied',lambda:http_denied(sessions['invigilator'].put(attempt_url,json={'status':'Sealed'},timeout=30)))
+        http_first=httpdelivered['projection']['items'][0]
+        http_save_payload=dict(request_key='http_save_key_0001',attempt=httpalloc['attempt'],expected_version=3,
+                               occurrence=http_first['order'],expected_revision=0,option_id=http_first['options'][0]['id'],missing=0)
+        def http_save():
+            r=post('invigilator','save_response',http_save_payload);assert r.status_code==200,f'save HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpsaved=check('http-save-positive',http_save)
+        assert httpsaved['revision']==1
+        resp_url=base+'/api/resource/'+quote(api.RESPONSE,safe='')+'/'+frappe.db.get_value(api.RESPONSE,{'attempt':httpalloc['attempt'],'occurrence':http_first['order'],'revision':1},'name')
+        check('http-deliver-other-role-response-read-denied',lambda:http_denied(sessions['second_author'].get(resp_url,timeout=30)))
+        def http_save_idem():
+            p=dict(http_save_payload,request_key='http_save_idem_0001',occurrence=httpdelivered['projection']['items'][1]['order'],
+                   option_id=httpdelivered['projection']['items'][1]['options'][0]['id'])
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['invigilator'].headers);s.cookies.update(sessions['invigilator'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.save_response',json=p,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count(api.RESPONSE,{'attempt':httpalloc['attempt'],'occurrence':p['occurrence']})==1
+            return {'http_statuses':[200,200],'one_revision':True}
+        check('http-save-concurrent-idempotency',http_save_idem)
+        def http_seal():
+            r=post('invigilator','seal_attempt',dict(request_key='http_seal_key_0001',attempt=httpalloc['attempt'],expected_version=3,reason='Submitted'))
+            assert r.status_code==200,f'seal HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpsealed=check('http-seal-submitted',http_seal)
+        assert httpsealed['status']=='Sealed' and httpsealed['seal_reason']=='Submitted'
+        # --- Increment 5 over HTTP: score_attempt, CSRF, containment, races, revocation ---
+        http_score_payload=dict(request_key='http_score_key_0001',attempt=httpalloc['attempt'],expected_version=4)
+        def http_score():
+            r=post('assessor','score_attempt',http_score_payload);assert r.status_code==200,f'score HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpscored=check('http-score-positive',http_score)
+        assert httpscored['status']=='Marking' and httpscored['version']==5
+        assert httpscored['missing']>=0 and httpscored['presented']==httpscored['correct']+httpscored['incorrect']+httpscored['missing']
+        check('http-score-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.score_attempt',headers={'Host':'placement-test.localhost'},json=http_score_payload,timeout=30)))
+        check('http-score-unrelated-role-denied',lambda:http_denied(post('outsider','score_attempt',dict(http_score_payload,request_key='http_score_out_00001'))))
+        check('http-score-wrong-role-denied',lambda:http_denied(post('second_author','score_attempt',dict(http_score_payload,request_key='http_score_author_0001'))))
+        check('http-score-invigilator-denied',lambda:http_denied(post('invigilator','score_attempt',dict(http_score_payload,request_key='http_score_inv_000001'))))
+        check('http-score-publisher-denied',lambda:http_denied(post('publisher','score_attempt',dict(http_score_payload,request_key='http_score_pub_000001'))))
+        check('http-score-get-cannot-mutate',lambda:http_denied(sessions['assessor'].get(base+'/api/method/toefl_house.api.score_attempt',params={'request_key':'http_score_get_00001'},timeout=30)))
+        def http_score_csrf():
+            s=sessions['assessor'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.score_attempt',json=dict(http_score_payload,request_key='http_score_csrf_00001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-score-csrf-negative-with-positive-control',http_score_csrf)
+        score_url=base+'/api/resource/'+quote(api.SCORE,safe='')+'/'+httpscored['score']
+        check('http-score-direct-crud-mutation-denied',lambda:http_denied(sessions['assessor'].put(score_url,json={'scored_by':'forged@example.test'},timeout=30)))
+        check('http-score-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(score_url,timeout=30)))
+        def http_score_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['assessor'].headers);s.cookies.update(sessions['assessor'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.score_attempt',json=http_score_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count(api.SCORE,{'attempt':httpalloc['attempt']})==1
+            return {'http_statuses':[200,200],'one_score':True}
+        check('http-score-concurrent-idempotency',http_score_idem)
+
+        # --- Increment 6 over HTTP: review_attempt, CSRF, containment, races, revocation ---
+        http_review_payload=dict(request_key='http_review_key_0001',attempt=httpalloc['attempt'],expected_version=5)
+        def http_review():
+            r=post('reviewer','review_attempt',http_review_payload);assert r.status_code==200,f'review HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpreviewed=check('http-review-positive',http_review)
+        assert httpreviewed['status']=='Review' and httpreviewed['version']==6
+        check('http-review-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.review_attempt',headers={'Host':'placement-test.localhost'},json=http_review_payload,timeout=30)))
+        check('http-review-unrelated-role-denied',lambda:http_denied(post('outsider','review_attempt',dict(http_review_payload,request_key='http_review_out_00001'))))
+        check('http-review-wrong-role-denied',lambda:http_denied(post('second_author','review_attempt',dict(http_review_payload,request_key='http_review_author_0001'))))
+        check('http-review-invigilator-denied',lambda:http_denied(post('invigilator','review_attempt',dict(http_review_payload,request_key='http_review_inv_000001'))))
+        check('http-review-publisher-denied',lambda:http_denied(post('publisher','review_attempt',dict(http_review_payload,request_key='http_review_pub_000001'))))
+        check('http-review-assessor-denied',lambda:http_denied(post('assessor','review_attempt',dict(http_review_payload,request_key='http_review_as_0000001'))))
+        check('http-review-get-cannot-mutate',lambda:http_denied(sessions['reviewer'].get(base+'/api/method/toefl_house.api.review_attempt',params={'request_key':'http_review_get_00001'},timeout=30)))
+        def http_review_csrf():
+            s=sessions['reviewer'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.review_attempt',json=dict(http_review_payload,request_key='http_review_csrf_00001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-review-csrf-negative-with-positive-control',http_review_csrf)
+        check('http-review-direct-crud-mutation-denied',lambda:http_denied(sessions['reviewer'].put(attempt_url,json={'reviewed_by':'forged@example.test'},timeout=30)))
+        check('http-review-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(score_url,timeout=30)))
+        def http_review_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['reviewer'].headers);s.cookies.update(sessions['reviewer'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.review_attempt',json=http_review_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.get_doc(api.ATTEMPT,httpalloc['attempt']).status=='Review'
+            return {'http_statuses':[200,200],'one_review':True}
+        check('http-review-concurrent-idempotency',http_review_idem)
+
+        # --- Increment 7 over HTTP: finalize_attempt, CSRF, containment, races, revocation ---
+        http_finalize_payload=dict(request_key='http_finalize_key_0001',attempt=httpalloc['attempt'],expected_version=6)
+        def http_finalize():
+            r=post('reviewer2','finalize_attempt',http_finalize_payload);assert r.status_code==200,f'finalize HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpfinalized=check('http-finalize-positive',http_finalize)
+        assert httpfinalized['status']=='Finalized' and httpfinalized['version']==7
+        assert 'recommendation' not in httpfinalized and 'percent' not in httpfinalized
+        check('http-finalize-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.finalize_attempt',headers={'Host':'placement-test.localhost'},json=http_finalize_payload,timeout=30)))
+        check('http-finalize-unrelated-role-denied',lambda:http_denied(post('outsider','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_out_0001'))))
+        check('http-finalize-wrong-role-denied',lambda:http_denied(post('second_author','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_author_01'))))
+        check('http-finalize-invigilator-denied',lambda:http_denied(post('invigilator','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_inv_0001'))))
+        check('http-finalize-publisher-denied',lambda:http_denied(post('publisher','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_pub_0001'))))
+        check('http-finalize-assessor-denied',lambda:http_denied(post('assessor','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_as_00001'))))
+        check('http-finalize-reviewer-denied',lambda:http_denied(post('reviewer','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_self_0001'))))
+        check('http-finalize-get-cannot-mutate',lambda:http_denied(sessions['reviewer2'].get(base+'/api/method/toefl_house.api.finalize_attempt',params={'request_key':'http_finalize_get_0001'},timeout=30)))
+        def http_finalize_csrf():
+            s=sessions['reviewer2'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.finalize_attempt',json=dict(http_finalize_payload,request_key='http_finalize_csrf_0001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-finalize-csrf-negative-with-positive-control',http_finalize_csrf)
+        check('http-finalize-direct-crud-mutation-denied',lambda:http_denied(sessions['reviewer2'].put(attempt_url,json={'finalized_by':'forged@example.test'},timeout=30)))
+        check('http-finalize-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(score_url,timeout=30)))
+        def http_finalize_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['reviewer2'].headers);s.cookies.update(sessions['reviewer2'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.finalize_attempt',json=http_finalize_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.get_doc(api.ATTEMPT,httpalloc['attempt']).status=='Finalized'
+            return {'http_statuses':[200,200],'one_finalize':True}
+        check('http-finalize-concurrent-idempotency',http_finalize_idem)
+
+        # --- Closure over HTTP: release_decision, CSRF, containment, races, revocation ---
+        def http_decision_setup():
+            alloc=digital_finalize(case5['name'],'decision_http_a')
+            frappe.db.commit()
+            return alloc
+        httpdec=check('http-decision-setup-finalized',http_decision_setup)
+        http_decision_payload=dict(request_key='http_decision_key_0001',attempt=httpdec['attempt'],expected_version=7)
+        def http_decision():
+            r=post('releaser','release_decision',http_decision_payload);assert r.status_code==200,f'decision HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpdecision=check('http-decision-positive',http_decision)
+        assert httpdecision['status']=='Finalized' and httpdecision['version']==7
+        assert httpdecision['internal_level']=='SYN-LEVEL-GENERAL' and httpdecision['course_code']=='SYN-COURSE-GENERAL'
+        assert 'percent' not in httpdecision and 'cefr' not in httpdecision
+        check('http-decision-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.api.release_decision',headers={'Host':'placement-test.localhost'},json=http_decision_payload,timeout=30)))
+        check('http-decision-unrelated-role-denied',lambda:http_denied(post('outsider','release_decision',dict(http_decision_payload,request_key='http_decision_out_0001'))))
+        check('http-decision-wrong-role-denied',lambda:http_denied(post('second_author','release_decision',dict(http_decision_payload,request_key='http_decision_author_01'))))
+        check('http-decision-invigilator-denied',lambda:http_denied(post('invigilator','release_decision',dict(http_decision_payload,request_key='http_decision_inv_0001'))))
+        check('http-decision-publisher-denied',lambda:http_denied(post('publisher','release_decision',dict(http_decision_payload,request_key='http_decision_pub_0001'))))
+        check('http-decision-assessor-denied',lambda:http_denied(post('assessor','release_decision',dict(http_decision_payload,request_key='http_decision_as_00001'))))
+        check('http-decision-reviewer-denied',lambda:http_denied(post('reviewer','release_decision',dict(http_decision_payload,request_key='http_decision_rev_0001'))))
+        check('http-decision-finalizer-denied',lambda:http_denied(post('reviewer2','release_decision',dict(http_decision_payload,request_key='http_decision_fin_0001'))))
+        check('http-decision-get-cannot-mutate',lambda:http_denied(sessions['releaser'].get(base+'/api/method/toefl_house.api.release_decision',params={'request_key':'http_decision_get_0001'},timeout=30)))
+        def http_decision_csrf():
+            s=sessions['releaser'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.api.release_decision',json=dict(http_decision_payload,request_key='http_decision_csrf_0001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-decision-csrf-negative-with-positive-control',http_decision_csrf)
+        decision_url=base+'/api/resource/'+quote(api.DECISION,safe='')+'/'+httpdecision['decision']
+        check('http-decision-direct-crud-mutation-denied',lambda:http_denied(sessions['releaser'].put(decision_url,json={'released_by':'forged@example.test'},timeout=30)))
+        check('http-decision-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(decision_url,timeout=30)))
+        def http_decision_idem():
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['releaser'].headers);s.cookies.update(sessions['releaser'].cookies)
+                return s.post(base+'/api/method/toefl_house.api.release_decision',json=http_decision_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([r.json().get('exc_type') for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count(api.DECISION,{'attempt':httpdec['attempt']})==1
+            return {'http_statuses':[200,200],'one_decision':True}
+        check('http-decision-concurrent-idempotency',http_decision_idem)
+        # --- Admission over HTTP ---
+        http_adm_payload=dict(request_key='http_adm_create_00001',student_applicant=app6['name'],placement_decision=rel6['decision'])
+        def http_adm_create():
+            r=apost('officer','create_admission',http_adm_payload);assert r.status_code==200,f'admission create HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpadm=check('http-admission-create',http_adm_create)
+        assert httpadm['status']=='Draft' and httpadm['version']==1
+        check('http-admission-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.admission.create_admission',headers={'Host':'placement-test.localhost'},json=http_adm_payload,timeout=30)))
+        check('http-admission-unrelated-role-denied',lambda:http_denied(apost('outsider','create_admission',dict(http_adm_payload,request_key='http_adm_out_0000001'))))
+        check('http-admission-wrong-role-denied',lambda:http_denied(apost('second_author','create_admission',dict(http_adm_payload,request_key='http_adm_author_0001'))))
+        check('http-admission-publisher-denied',lambda:http_denied(apost('publisher','create_admission',dict(http_adm_payload,request_key='http_adm_pub_0000001'))))
+        check('http-admission-get-cannot-mutate',lambda:http_denied(sessions['officer'].get(base+'/api/method/toefl_house.admission.create_admission',params={'request_key':'http_adm_get_0000001'},timeout=30)))
+        def http_adm_csrf():
+            s=sessions['officer'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.admission.create_admission',json=dict(http_adm_payload,request_key='http_adm_csrf_0000001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-admission-csrf-negative-with-positive-control',http_adm_csrf)
+        adm_url=base+'/api/resource/'+quote(adm.DECISION_DT,safe='')+'/'+httpadm['name']
+        check('http-admission-direct-crud-mutation-denied',lambda:http_denied(sessions['officer'].put(adm_url,json={'status':'Approved'},timeout=30)))
+        check('http-admission-other-role-read-denied',lambda:http_denied(sessions['second_author'].get(adm_url,timeout=30)))
+        def http_adm_review():
+            r=apost('admissions_reviewer','review_admission',dict(request_key='http_adm_review_00001',name=httpadm['name'],expected_version=1))
+            assert r.status_code==200,f'review HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httprev=check('http-admission-review',http_adm_review)
+        assert httprev['status']=='Review'
+        def http_adm_decide():
+            r=apost('approver','decide_admission',dict(request_key='http_adm_decide_00001',name=httpadm['name'],expected_version=2,outcome='Approved',reason='Eligible after internal placement.'))
+            assert r.status_code==200,f'decide HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpdecided=check('http-admission-approve',http_adm_decide)
+        assert httpdecided['status']=='Approved'
+        def http_adm_accept():
+            r=apost('officer','accept_offer',dict(request_key='http_adm_accept_00001',name=httpadm['name'],expected_version=3))
+            assert r.status_code==200,f'accept HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpaccepted=check('http-admission-accept',http_adm_accept)
+        assert httpaccepted['accepted']==1
+        def http_adm_convert():
+            r=apost('approver','convert_applicant',dict(request_key='http_adm_convert_0001',name=httpadm['name'],expected_version=4))
+            assert r.status_code==200,f'convert HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpconverted=check('http-admission-convert',http_adm_convert)
+        assert httpconverted['native_student'] and httpconverted['program_enrollment']==0
+        check('http-admission-enroll-student-denied',lambda:http_denied(sessions['officer'].post(base+'/api/method/education.education.api.enroll_student',json={'source_name':app6['name']},timeout=30)))
+        def http_adm_idem():
+            r0=apost('approver','convert_applicant',dict(request_key='http_adm_convert_0001',name=httpadm['name'],expected_version=4))
+            assert r0.status_code==200,f'convert replay HTTP {r0.status_code} {r0.text[:200]}'
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['approver'].headers);s.cookies.update(sessions['approver'].cookies)
+                return s.post(base+'/api/method/toefl_house.admission.convert_applicant',json=dict(request_key='http_adm_convert_0001',name=httpadm['name'],expected_version=4),timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type'),'message':(r.json().get('exception') or r.text)[:240]} for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count('Student',{'student_applicant':app6['name']})==1
+            return {'http_statuses':[200,200],'one_student':True}
+        check('http-admission-concurrent-idempotency',http_adm_idem)
+        http_enr_payload=dict(request_key='http_enr_enroll_00001',admission_decision=httpadm['name'])
+        def http_enroll():
+            r=epost('enrollment_officer','enroll_in_program',http_enr_payload);assert r.status_code==200,f'enroll HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpenrolled=check('http-enrollment-positive',http_enroll)
+        assert httpenrolled['docstatus']==1 and httpenrolled['student']==httpconverted['native_student']
+        assert httpenrolled['course_enrollments']==1 and httpenrolled['sales_invoice']==0
+        check('http-enrollment-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.enrollment.enroll_in_program',headers={'Host':'placement-test.localhost'},json=http_enr_payload,timeout=30)))
+        check('http-enrollment-unrelated-role-denied',lambda:http_denied(epost('outsider','enroll_in_program',dict(http_enr_payload,request_key='http_enr_out_0000001'))))
+        check('http-enrollment-wrong-role-denied',lambda:http_denied(epost('second_author','enroll_in_program',dict(http_enr_payload,request_key='http_enr_author_0001'))))
+        check('http-enrollment-admission-officer-denied',lambda:http_denied(epost('officer','enroll_in_program',dict(http_enr_payload,request_key='http_enr_off_0000001'))))
+        check('http-enrollment-approver-denied',lambda:http_denied(epost('approver','enroll_in_program',dict(http_enr_payload,request_key='http_enr_appr_000001'))))
+        check('http-enrollment-get-cannot-mutate',lambda:http_denied(sessions['enrollment_officer'].get(base+'/api/method/toefl_house.enrollment.enroll_in_program',params={'request_key':'http_enr_get_0000001'},timeout=30)))
+        def http_enr_csrf():
+            s=sessions['enrollment_officer'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.enrollment.enroll_in_program',json=dict(http_enr_payload,request_key='http_enr_csrf_0000001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-enrollment-csrf-negative-with-positive-control',http_enr_csrf)
+        pe_url=base+'/api/resource/'+quote('Program Enrollment',safe='')+'/'+httpenrolled['program_enrollment']
+        check('http-enrollment-direct-crud-mutation-denied',lambda:http_denied(sessions['enrollment_officer'].put(pe_url,json={'program':'forged'},timeout=30)))
+        def http_enr_idem():
+            r0=epost('enrollment_officer','enroll_in_program',http_enr_payload)
+            assert r0.status_code==200,f'enroll replay HTTP {r0.status_code} {r0.text[:200]}'
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['enrollment_officer'].headers);s.cookies.update(sessions['enrollment_officer'].cookies)
+                return s.post(base+'/api/method/toefl_house.enrollment.enroll_in_program',json=http_enr_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type'),'message':(r.json().get('exception') or r.text)[:240]} for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count('Program Enrollment',{'student':httpconverted['native_student']})==1
+            return {'http_statuses':[200,200],'one_enrollment':True}
+        check('http-enrollment-concurrent-idempotency',http_enr_idem)
+        # --- Teaching operations over HTTP: routes, CSRF, CRUD containment, races ---
+        def tpost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.teaching.'+method,json=payload,timeout=40)
+        GRP_HTTP='SYN-GRP-HTTP-1'
+        http_grp_payload=dict(request_key='http_tea_group_0000001',group_name=GRP_HTTP,program=cat['program'],academic_year=cat['academic_year'],max_strength=3)
+        def http_group():
+            r=tpost('teaching_scheduler','create_student_group',http_grp_payload);assert r.status_code==200,f'group HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpgroup=check('http-teaching-group-positive',http_group)
+        assert httpgroup['students']==3
+        check('http-teaching-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.teaching.create_student_group',headers={'Host':'placement-test.localhost'},json=http_grp_payload,timeout=30)))
+        check('http-teaching-unrelated-role-denied',lambda:http_denied(tpost('outsider','create_student_group',dict(http_grp_payload,request_key='http_tea_out_000000001'))))
+        check('http-teaching-wrong-role-denied',lambda:http_denied(tpost('attendance_recorder','create_student_group',dict(http_grp_payload,request_key='http_tea_rec_000000001'))))
+        check('http-teaching-get-cannot-mutate',lambda:http_denied(sessions['teaching_scheduler'].get(base+'/api/method/toefl_house.teaching.create_student_group',params={'request_key':'http_tea_get_000000001'},timeout=30)))
+        def http_tea_csrf():
+            s=sessions['teaching_scheduler'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:
+                result=http_denied(s.post(base+'/api/method/toefl_house.teaching.create_student_group',json=dict(http_grp_payload,request_key='http_tea_csrf_000000001'),timeout=30),csrf=True)
+                assert result['exception']=='CSRFTokenError',result
+                return result
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-teaching-csrf-negative-with-positive-control',http_tea_csrf)
+        grp_url=base+'/api/resource/'+quote('Student Group',safe='')+'/'+httpgroup['name']
+        check('http-teaching-direct-crud-mutation-denied',lambda:http_denied(sessions['teaching_scheduler'].put(grp_url,json={'max_strength':99},timeout=30)))
+        def http_grp_idem():
+            r0=tpost('teaching_scheduler','create_student_group',http_grp_payload)
+            assert r0.status_code==200,f'group replay HTTP {r0.status_code} {r0.text[:200]}'
+            def request(_):
+                s=requests.Session();s.headers.update(sessions['teaching_scheduler'].headers);s.cookies.update(sessions['teaching_scheduler'].cookies)
+                return s.post(base+'/api/method/toefl_house.teaching.create_student_group',json=http_grp_payload,timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            assert [r.status_code for r in rs]==[200,200],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
+            results=[r.json()['message'] for r in rs];assert results[0]==results[1]
+            assert frappe.db.count('Student Group',{'student_group_name':GRP_HTTP})==1
+            return {'http_statuses':[200,200],'one_group':True}
+        check('http-teaching-concurrent-group-idempotency',http_grp_idem)
+        http_sched_payload=dict(request_key='http_tea_sched_000000001',student_group=GRP_HTTP,schedule_date='2026-09-22',from_time='11:00:00',to_time='12:30:00',instructor=INS_TWO,room=ROOM_B,course='SYN-COURSE-CORE')
+        def http_session():
+            r=tpost('teaching_scheduler','schedule_session',http_sched_payload);assert r.status_code==200,f'session HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpsched=check('http-teaching-session-positive',http_session)
+        check('http-teaching-session-unrelated-role-denied',lambda:http_denied(tpost('outsider','schedule_session',dict(http_sched_payload,request_key='http_tea_s_out_0000001'))))
+        http_att_payload=dict(request_key='http_tea_att_0000000001',course_schedule=httpsched['name'],statuses={s:'Present' for s in httpgroup['roster']})
+        def http_attendance():
+            r=tpost('attendance_recorder','record_attendance',http_att_payload);assert r.status_code==200,f'attendance HTTP {r.status_code} {r.text[:200]}'
+            return r.json()['message']
+        httpatt=check('http-teaching-attendance-positive',http_attendance)
+        assert httpatt['marked']==3
+        check('http-teaching-attendance-scheduler-denied',lambda:http_denied(tpost('teaching_scheduler','record_attendance',dict(http_att_payload,request_key='http_tea_a_sch_0000001'))))
+        def http_att_csrf():
+            s=sessions['attendance_recorder'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:
+                result=http_denied(s.post(base+'/api/method/toefl_house.teaching.record_attendance',json=dict(http_att_payload,request_key='http_tea_a_csrf_000001'),timeout=30),csrf=True)
+                assert result['exception']=='CSRFTokenError',result
+                return result
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-teaching-attendance-csrf-negative-with-positive-control',http_att_csrf)
+        def http_att_race():
+            # CAS needs an unmarked session: the positive check already committed
+            # httpsched attendance, so race on a fresh race-day session. The loser
+            # must fail closed under the session-row lock (no double marking).
+            r=tpost('teaching_scheduler','schedule_session',dict(request_key='http_tea_sched_race_0001',student_group=GRP_HTTP,schedule_date='2026-09-23',from_time='11:00:00',to_time='12:30:00',instructor=INS_TWO,room=ROOM_B,course='SYN-COURSE-CORE'))
+            assert r.status_code==200,f'race session HTTP {r.status_code} {r.text[:200]}'
+            race_sched=r.json()['message']['name']
+            def request(i):
+                s=requests.Session();s.headers.update(sessions['attendance_recorder'].headers);s.cookies.update(sessions['attendance_recorder'].cookies)
+                return s.post(base+'/api/method/toefl_house.teaching.record_attendance',json=dict(request_key=f'http_tea_a_race_000{i}',course_schedule=race_sched,statuses=http_att_payload['statuses']),timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,range(2)))
+            statuses=sorted(r.status_code for r in rs);assert statuses==[200,417],str([{'status':r.status_code,'exception':r.json().get('exc_type')} for r in rs])
+            frappe.db.rollback();assert frappe.db.count('Student Attendance',{'course_schedule':race_sched,'docstatus':('!=',2)})==3
+            return {'http_statuses':statuses,'no_double_marking':True,'race_session':race_sched}
+        check('http-teaching-concurrent-attendance-duplicate-cas',http_att_race)
+        def http_att_replay():
+            r0=tpost('attendance_recorder','record_attendance',http_att_payload)
+            assert r0.status_code==200,f'attendance replay HTTP {r0.status_code} {r0.text[:200]}'
+            assert r0.json()['message']==httpatt
+            assert frappe.db.count('Student Attendance',{'course_schedule':httpsched['name']})==3
+            return {'same_result':True,'three_records':True}
+        check('http-teaching-attendance-idempotent-replay',http_att_replay)
+        att_url=base+'/api/resource/'+quote('Student Attendance',safe='')+'/'+httpatt['records'][httpgroup['roster'][0]]
+        check('http-teaching-attendance-direct-crud-mutation-denied',lambda:http_denied(sessions['attendance_recorder'].put(att_url,json={'status':'Absent'},timeout=30)))
+        def enrollment_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['enrollment_officer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(epost('enrollment_officer','enroll_in_program',dict(http_enr_payload,request_key='http_enr_revoked_0001')))
+        check('http-enrollment-revoked-officer-old-session-denied',enrollment_revoke)
+        def admission_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['officer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(apost('officer','create_admission',dict(http_adm_payload,request_key='http_adm_revoked_0001')))
+        check('http-admission-revoked-officer-old-session-denied',admission_revoke)
+        def decision_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['releaser']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('releaser','release_decision',dict(http_decision_payload,request_key='http_decision_revoked_01')))
+        check('http-decision-revoked-releaser-old-session-denied',decision_revoke)
+        def finalize_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['reviewer2']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('reviewer2','finalize_attempt',dict(http_finalize_payload,request_key='http_finalize_revoked_01')))
+        check('http-finalize-revoked-reviewer-old-session-denied',finalize_revoke)
+        def review_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['reviewer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('reviewer','review_attempt',dict(http_review_payload,request_key='http_review_revoked_0001')))
+        check('http-review-revoked-reviewer-old-session-denied',review_revoke)
+        def score_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['assessor']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('assessor','score_attempt',dict(http_score_payload,request_key='http_score_revoked_0001')))
+        check('http-score-revoked-assessor-old-session-denied',score_revoke)
+        def deliver_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['invigilator']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('invigilator','seal_attempt',dict(request_key='http_deliver_revoked_001',attempt=httpalloc['attempt'],expected_version=4,reason='Submitted')))
+        check('http-deliver-revoked-invigilator-old-session-denied',deliver_revoke)
+        def alloc_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['publisher']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('publisher','allocate_attempt',dict(http_alloc_payload,blueprint=cfgx['small_bp'],request_key='http_alloc_revoked_001')))
+        check('http-alloc-revoked-publisher-old-session-denied',alloc_revoke)
+        def revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['other']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('other','create_draft',dict(payload,request_key='revoked_actor_001',family=family(users['other'],'REVOKED'))))
+        check('http-role-revocation-old-session-denied',revoke)
+        def cfg_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['publisher2']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(post('publisher2','retire_config',dict(request_key='cfg_revoked_retire_001',config='policy',name=polhttp,expected_version=3)))
+        check('http-config-revoked-publisher-old-session-denied',cfg_revoke)
+        def teaching_scheduler_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['teaching_scheduler']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(tpost('teaching_scheduler','create_student_group',dict(http_grp_payload,request_key='http_tea_revoked_0001')))
+        check('http-teaching-revoked-scheduler-old-session-denied',teaching_scheduler_revoke)
+        def attendance_recorder_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['attendance_recorder']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(tpost('attendance_recorder','record_attendance',dict(http_att_payload,request_key='http_tea_a_revoked_001')))
+        check('http-teaching-revoked-recorder-old-session-denied',attendance_recorder_revoke)
+        def no_side_effects():
+            after={dt:frappe.db.count(dt) for dt in before_counts}
+            for dt in ('Assessment Result','Sales Invoice','GL Entry','Salary Slip','Employee','Attendance','Timesheet','Additional Salary','Fees'):
+                assert after[dt]==before_counts[dt],(dt,before_counts[dt],after[dt])
+            assert after['Program Enrollment']>=3 and after['Course Enrollment']>=3
+            assert after['Student']>=3 and after['Student Applicant']>=3
+            assert after['Student Group']>=3 and after['Course Schedule']>=3
+            assert after['Student Attendance']>=5
+            return {'academic_finance_payroll_unchanged':True,
+                    'native_program_enrollments':after['Program Enrollment'],
+                    'native_course_enrollments':after['Course Enrollment'],
+                    'native_students':after['Student'],'native_applicants':after['Student Applicant'],
+                    'native_student_groups':after['Student Group'],
+                    'native_course_schedules':after['Course Schedule'],
+                    'native_student_attendance':after['Student Attendance']}
+        check('no-academic-finance-payroll-writes',no_side_effects)
+        # --- Finance slice (R05/B07 resolved at framework level): native Fees /
+        # Sales Invoice / Pricing Rule authorities; rates are Finance-configured
+        # synthetic values in this suite, never code constants. Payroll (A09)
+        # and academic assessment (B04/B05) remain gated and untouched. ---
+        def finance_catalog():
+            frappe.set_user('Administrator')
+            fin_before={dt:frappe.db.count(dt) for dt in before_counts}
+            if not frappe.db.get_value('Currency','AFN','enabled'):
+                frappe.db.set_value('Currency','AFN','enabled',1)
+            if not frappe.db.exists('Fiscal Year','2026'):
+                frappe.get_doc(dict(doctype='Fiscal Year',year='2026',
+                    year_start_date='2026-01-01',year_end_date='2026-12-31')).insert()
+            if not frappe.db.exists('Company','TOEFL House'):
+                frappe.get_doc(dict(doctype='Company',company_name='TOEFL House',abbr='TH',
+                    country='Afghanistan',default_currency='AFN',valuation_method='FIFO',
+                    enable_perpetual_inventory=0)).insert()
+            comp=frappe.get_doc('Company','TOEFL House')
+            assert comp.default_receivable_account and comp.default_income_account and comp.cost_center,(comp.default_receivable_account,comp.default_income_account,comp.cost_center)
+            # UOM / Item Group / Customer Group / Territory masters are seeded
+            # by the ERPNext setup wizard; recreate the identical records on
+            # this wizard-less site (no business meaning, catalog scaffolding).
+            if not frappe.db.exists('UOM','Nos'):
+                frappe.get_doc(dict(doctype='UOM',uom_name='Nos')).insert()
+            if not frappe.db.exists('Item Group','All Item Groups'):
+                frappe.get_doc(dict(doctype='Item Group',item_group_name='All Item Groups',
+                    is_group=1)).insert()
+            if not frappe.db.exists('Item Group','Services'):
+                frappe.get_doc(dict(doctype='Item Group',item_group_name='Services',
+                    parent_item_group='All Item Groups')).insert()
+            if not frappe.db.exists('Customer Group','All Customer Groups'):
+                frappe.get_doc(dict(doctype='Customer Group',customer_group_name='All Customer Groups',
+                    is_group=1)).insert()
+            if not frappe.db.exists('Customer Group','Commercial'):
+                frappe.get_doc(dict(doctype='Customer Group',customer_group_name='Commercial',
+                    parent_customer_group='All Customer Groups')).insert()
+            if not frappe.db.count('Territory'):
+                frappe.get_doc(dict(doctype='Territory',territory_name='All Territories',
+                    is_group=1)).insert()
+            if not frappe.db.exists('Item','SYN-PLACEMENT-FEE'):
+                frappe.get_doc(dict(doctype='Item',item_code='SYN-PLACEMENT-FEE',
+                    item_name='Synthetic Placement Fee',item_group='Services',
+                    stock_uom='Nos',uom='Nos',is_stock_item=0,is_sales_item=1,
+                    is_service_item=1)).insert()
+            if not frappe.db.exists('Price List','TOEFL House Standard'):
+                frappe.get_doc(dict(doctype='Price List',price_list_name='TOEFL House Standard',
+                    currency='AFN',selling=1,buying=0,enabled=1)).insert()
+            if not frappe.db.exists('Item Price',{'item_code':'SYN-PLACEMENT-FEE','price_list':'TOEFL House Standard'}):
+                # Synthetic configured rate; the owner supplies real values.
+                frappe.get_doc(dict(doctype='Item Price',item_code='SYN-PLACEMENT-FEE',
+                    price_list='TOEFL House Standard',selling=1,currency='AFN',
+                    price_list_rate=4000)).insert()
+            # Fee Category after_insert auto-creates a sales Item in group
+            # 'Fee Component' (education integration); reuse an explicitly
+            # created item so no default depends on the setup wizard.
+            if not frappe.db.exists('Item Group','Fee Component'):
+                frappe.get_doc(dict(doctype='Item Group',item_group_name='Fee Component',
+                    parent_item_group='All Item Groups')).insert()
+            if not frappe.db.exists('Item','SYN-Tuition'):
+                frappe.get_doc(dict(doctype='Item',item_code='SYN-Tuition',
+                    item_name='SYN-Tuition',item_group='Fee Component',
+                    stock_uom='Nos',uom='Nos',is_stock_item=0,is_sales_item=1,
+                    is_service_item=1)).insert()
+            if not frappe.db.exists('Fee Category','SYN-Tuition'):
+                frappe.get_doc(dict(doctype='Fee Category',category_name='SYN-Tuition')).insert()
+            if not frappe.db.exists('Fee Structure',{'program':cat['program'],'academic_year':cat['academic_year']}):
+                fs=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
+                    program=cat['program'],academic_year=cat['academic_year'],
+                    receivable_account=comp.default_receivable_account,
+                    income_account=comp.default_income_account,
+                    cost_center=comp.cost_center,company='TOEFL House'))
+                fs.append('components',{'fees_category':'SYN-Tuition','amount':25000})
+                fs.insert()
+            fs_name=frappe.db.get_value('Fee Structure',{'program':cat['program'],'academic_year':cat['academic_year']})
+            payers={}
+            for label in ('one','two'):
+                key='SYN Placement Payer '+label.capitalize()
+                if not frappe.db.exists('Customer',{'customer_name':key}):
+                    frappe.get_doc(dict(doctype='Customer',naming_series='CUST-.YYYY.-',
+                        customer_name=key,customer_group='Commercial',
+                        territory=frappe.get_all('Territory',limit=1)[0].name)).insert()
+                payers[label]=frappe.db.get_value('Customer',{'customer_name':key})
+            return {'company':'TOEFL House','price_list':'TOEFL House Standard',
+                    'placement_item':'SYN-PLACEMENT-FEE','fee_structure':fs_name,
+                    'receivable':comp.default_receivable_account,'payer':payers['one'],
+                    'payer_waiver':payers['two'],'before':fin_before}
+        def traced(fn):
+            # Diagnostics: name the exact statement of a failure in one hosted
+            # cycle instead of guessing (job logs are unreachable; only the
+            # exception message reaches the report).
+            def wrapped():
+                try:return fn()
+                except Exception as exc:
+                    import traceback as _tb
+                    frames=[f for f in _tb.extract_tb(exc.__traceback__) if f.filename.split('/')[-1] not in ('database.py','cursors.py','connections.py','base.py')]
+                    frames=" <- ".join(f.filename.split('/')[-1]+':'+str(f.lineno)+':'+f.name for f in frames[-6:])
+                    raise AssertionError(f'{type(exc).__name__}: {exc} @ {frames}') from exc
+            return wrapped
+        fin=check('finance-native-catalog',traced(finance_catalog))
+        def case_of(label):
+            # Cases are autonamed; the request key is only the receipt identity.
+            return frappe.db.get_value(api.CASE,{'subject':users[label]},'name')
+        CASE9=case_of('candidate9')
+        check('finance-tuition-unknown-enrollment-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_pe_0000000001','NO-SUCH-PE',fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        check('finance-tuition-bad-window-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_window_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-30','2026-09-01'))))
+        def wrong_year_structure():
+            frappe.set_user('Administrator')
+            if not frappe.db.exists('Academic Year','SYN-AY-2027'):
+                frappe.get_doc(dict(doctype='Academic Year',academic_year_name='SYN-AY-2027',
+                    year_start_date='2027-01-01',year_end_date='2027-12-31')).insert()
+            fs2=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
+                program=cat['program'],academic_year='SYN-AY-2027',
+                receivable_account=fin['receivable'],
+                income_account=frappe.db.get_value('Company','TOEFL House','default_income_account'),
+                cost_center=frappe.db.get_value('Company','TOEFL House','cost_center'),
+                company='TOEFL House'))
+            fs2.append('components',{'fees_category':'SYN-Tuition','amount':25000})
+            fs2.insert()
+            return denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_wrongyear_00001',second['program_enrollment'],fs2.name,'2026-09-01','2026-09-30')))
+        check('finance-tuition-outside-year-structure-denied',wrong_year_structure)
+        check('finance-tuition-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:fin_m.issue_tuition_fees('fin_out_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        check('finance-tuition-enrollment-officer-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:fin_m.issue_tuition_fees('fin_enr_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        check('finance-tuition-scheduler-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:fin_m.issue_tuition_fees('fin_sch_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        def tuition_positive():
+            value=as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_a_000001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))
+            assert value['grand_total']==25000.0 and value['outstanding_amount']==25000.0 and value['currency']=='AFN',value
+            row=frappe.db.get_value('Fees',value['fees'],['docstatus','program_enrollment','fee_structure'],as_dict=True)
+            assert row.docstatus==1 and row.program_enrollment==second['program_enrollment'] and row.fee_structure==fin['fee_structure'],(row,value)
+            assert frappe.db.count('GL Entry',{'voucher_no':value['fees'],'voucher_type':'Fees'})>0,value
+            return value
+        fees1=check('finance-tuition-happy-path',traced(tuition_positive))
+        def tuition_replay():
+            count=frappe.db.count(api.AUDIT);fees_count=frappe.db.count('Fees')
+            value=as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_a_000001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))
+            assert value==fees1 and frappe.db.count(api.AUDIT)==count and frappe.db.count('Fees')==fees_count
+            return {'same_result':True,'no_new_fees':True}
+        check('finance-tuition-idempotent-replay',tuition_replay)
+        check('finance-tuition-duplicate-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_dup_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        def tuition_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Fees',naming_series='EDU-FEE-.YYYY.-',
+                student=second['student'],program_enrollment=second['program_enrollment'],
+                company='TOEFL House',posting_date='2026-09-01',due_date='2026-09-30',
+                fee_structure=fin['fee_structure'],receivable_account=fin['receivable'],
+                components=[dict(fees_category='SYN-Tuition',amount=1)])).insert(ignore_permissions=True))
+        check('finance-tuition-direct-write-denied',tuition_direct_denied)
+        def tuition_rollback_proof():
+            frappe.set_user(users['finance_officer']);frappe.db.savepoint('fin_atomic')
+            old={dt:frappe.db.count(dt) for dt in ('Fees','GL Entry',api.OP,api.AUDIT)}
+            original=frappe.get_doc
+            def injected(*args,**kwargs):
+                if args and isinstance(args[0],dict) and args[0].get('doctype')==api.AUDIT:
+                    raise RuntimeError('synthetic finance audit failure')
+                return original(*args,**kwargs)
+            try:
+                with patch.object(frappe,'get_doc',side_effect=injected):
+                    fin_m.issue_tuition_fees('fin_tuition_atomic_01',enrolled['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30')
+            except RuntimeError:frappe.db.rollback(save_point='fin_atomic')
+            else:raise AssertionError('Failure injection did not execute')
+            assert {dt:frappe.db.count(dt) for dt in old}==old
+            return {'real_database_rollback':True,'injected_boundary':'finance audit'}
+        check('finance-tuition-atomic-rollback',tuition_rollback_proof)
+        check('finance-placement-unknown-case-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_bad_case_00000001','NO-SUCH-CASE',fin['payer'],'2026-09-01','2026-09-30'))))
+        check('finance-placement-unknown-customer-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_bad_cust_0000001',CASE9,'NO-SUCH-CUSTOMER','2026-09-01','2026-09-30'))))
+        check('finance-placement-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:fin_m.issue_placement_fee('fin_out_place_0000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))))
+        def zero_rate_not_billable():
+            # Owner policy: free-vs-charged is configuration, never code.
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Item Price',{'item_code':'SYN-PLACEMENT-FEE','price_list':'TOEFL House Standard'},'price_list_rate',0)
+            return denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_zero_000001',CASE9,fin['payer'],'2026-09-01','2026-09-30')))
+        check('finance-placement-zero-rate-not-billable',zero_rate_not_billable)
+        def placement_positive():
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Item Price',{'item_code':'SYN-PLACEMENT-FEE','price_list':'TOEFL House Standard'},'price_list_rate',4000)
+            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_a_00000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))
+            assert value['configured_rate']==4000.0 and value['grand_total']==4000.0 and value['currency']=='AFN',value
+            row=frappe.db.get_value('Sales Invoice',value['sales_invoice'],['docstatus','customer','th_placement_case','company'],as_dict=True)
+            assert row.docstatus==1 and row.customer==fin['payer'] and row.th_placement_case==CASE9 and row.company=='TOEFL House',(row,value)
+            assert frappe.db.count('GL Entry',{'voucher_no':value['sales_invoice'],'voucher_type':'Sales Invoice'})>0
+            return value
+        inv1=check('finance-placement-happy-path',traced(placement_positive))
+        def placement_replay():
+            count=frappe.db.count(api.AUDIT);si_count=frappe.db.count('Sales Invoice')
+            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_a_00000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))
+            assert value==inv1 and frappe.db.count(api.AUDIT)==count and frappe.db.count('Sales Invoice')==si_count
+            return {'same_result':True,'no_new_invoice':True}
+        check('finance-placement-idempotent-replay',placement_replay)
+        check('finance-placement-duplicate-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_dup_000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))))
+        def placement_direct_denied():
+            frappe.set_user('Administrator')
+            return denied(lambda:frappe.get_doc(dict(doctype='Sales Invoice',customer=fin['payer'],
+                company='TOEFL House',posting_date='2026-09-01',due_date='2026-09-30',
+                th_placement_case=CASE9,
+                items=[dict(item_code='SYN-PLACEMENT-FEE',qty=1)])).insert(ignore_permissions=True))
+        check('finance-placement-direct-write-denied',placement_direct_denied)
+        def waiver_flow():
+            # Waivers are native Pricing Rules configured by Finance, applied
+            # natively by the invoice; no waiver logic exists in owned code.
+            frappe.set_user('Administrator')
+            rule=frappe.get_doc(dict(doctype='Pricing Rule',title='SYN Placement Waiver',
+                apply_on='Item Code',items=[dict(item_code='SYN-PLACEMENT-FEE')],
+                rate_or_discount='Discount Percentage',discount_percentage=100,
+                apply_discount_on='Grand Total',
+                price_or_product_discount='Price',selling=1,
+                applicable_for='Customer',customer=fin['payer_waiver'],
+                company='TOEFL House')).insert()
+            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_waiver_01',case_of('candidate6'),fin['payer_waiver'],'2026-09-01','2026-09-30'))
+            line_disc=frappe.db.get_value('Sales Invoice Item',{'parent':value['sales_invoice']},'discount_amount')
+            assert value['configured_rate']==4000.0 and float(line_disc)==4000.0,(value,line_disc)
+            assert value['net_total']==0.0 and value['grand_total']==0.0,value
+            return {'pricing_rule':rule.name,'waived_grand_total':value['grand_total'],
+                    'line_discount':float(line_disc),'sales_invoice':value['sales_invoice']}
+        waiver=check('finance-placement-native-pricing-rule-waiver',traced(waiver_flow))
+        def fin_reads():
+            # Containment lives in the absolute guards (direct writes denied
+            # even for Administrator), not in read-role scarcity: the Finance
+            # Officer carries the native Accounts User role (the native
+            # finance-staff role) and the receipt/audit ledger stays
+            # auditor-only. Native ERPNext grants Sales Invoice read to every
+            # staff account ('All' row) - native behavior, unchanged here.
+            frappe.set_user(users['finance_officer'])
+            for dt in (api.OP,api.AUDIT):
+                try:listed=frappe.get_list(dt)
+                except frappe.PermissionError:listed=[]
+                assert not listed,(dt,'receipt ledger is auditor-only')
+            frappe.set_user(users['finance_auditor'])
+            assert frappe.get_list(api.OP) and frappe.get_list(api.AUDIT)
+            try:listed=frappe.get_list('Fees')
+            except frappe.PermissionError:listed=[]
+            assert not listed,'auditor reads receipts only'
+            return {'receipt_ledger_auditor_only':True,'auditor_no_fees':True}
+        check('finance-role-and-list-parity',fin_reads)
+        def fpost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.finance.'+method,json=payload,timeout=40)
+        http_fin_payload=dict(request_key='http_fin_tuition_00001',program_enrollment=enrolled['program_enrollment'],fee_structure=fin['fee_structure'],posting_date='2026-09-02',due_date='2026-10-02')
+        def http_tuition():
+            r=fpost('finance_officer','issue_tuition_fees',http_fin_payload)
+            assert r.status_code==200,f'tuition HTTP {r.status_code} {r.text[:200]}'
+            value=r.json()['message']
+            assert value['grand_total']==25000.0 and value['currency']=='AFN',value
+            return value
+        httpfees=check('http-finance-tuition-positive',http_tuition)
+        check('http-finance-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.finance.issue_tuition_fees',headers={'Host':'placement-test.localhost'},json=http_fin_payload,timeout=30)))
+        def http_fin_csrf():
+            s=sessions['finance_officer'];token=s.headers.pop('X-Frappe-CSRF-Token')
+            try:return http_denied(s.post(base+'/api/method/toefl_house.finance.issue_tuition_fees',json=dict(http_fin_payload,request_key='http_fin_csrf_0000001'),timeout=30),csrf=True)
+            finally:s.headers['X-Frappe-CSRF-Token']=token
+        check('http-finance-csrf-negative-with-positive-control',http_fin_csrf)
+        check('http-finance-wrong-role-denied',lambda:http_denied(fpost('enrollment_officer','issue_tuition_fees',dict(http_fin_payload,request_key='http_fin_role_0000001'))))
+        check('http-finance-get-cannot-mutate',lambda:http_denied(sessions['finance_officer'].get(base+'/api/method/toefl_house.finance.issue_tuition_fees',params={'request_key':'http_fin_get_0000001'},timeout=30)))
+        def http_tuition_replay():
+            r=fpost('finance_officer','issue_tuition_fees',http_fin_payload)
+            assert r.status_code==200 and r.json()['message']==httpfees
+            assert frappe.db.count('Fees',{'program_enrollment':enrolled['program_enrollment'],'docstatus':('!=',2)})==1
+            return {'same_result':True,'no_new_fees':True}
+        check('http-finance-tuition-idempotent-replay',http_tuition_replay)
+        def http_placement():
+            r=fpost('finance_officer','issue_placement_fee',dict(request_key='http_fin_place_00001',case=case_of('candidate7'),customer=fin['payer'],posting_date='2026-09-02',due_date='2026-10-02'))
+            assert r.status_code==200,f'placement fee HTTP {r.status_code} {r.text[:200]}'
+            value=r.json()['message']
+            assert value['grand_total']==4000.0 and value['currency']=='AFN',value
+            return value
+        httpinv=check('http-finance-placement-positive',http_placement)
+        def finance_officer_revoke():
+            frappe.set_user('Administrator');u=frappe.get_doc('User',users['finance_officer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
+            return http_denied(fpost('finance_officer','issue_tuition_fees',dict(http_fin_payload,request_key='http_fin_revoked_00001')))
+        check('http-finance-revoked-officer-old-session-denied',finance_officer_revoke)
+        def finance_containment():
+            after={dt:frappe.db.count(dt) for dt in before_counts}
+            fb=fin['before']
+            for dt in ('Assessment Result','Salary Slip','Employee','Attendance','Timesheet','Additional Salary',
+                       'Student','Student Applicant','Program Enrollment','Course Enrollment',
+                       'Student Group','Course Schedule','Student Attendance'):
+                assert after[dt]==fb[dt],(dt,fb[dt],after[dt])
+            assert after['Fees']==fb['Fees']+2,(fb['Fees'],after['Fees'])
+            assert after['Sales Invoice']==fb['Sales Invoice']+3,(fb['Sales Invoice'],after['Sales Invoice'])
+            assert after['GL Entry']>fb['GL Entry']
+            vouchers={r.voucher_type for r in frappe.db.sql("select distinct voucher_type from `tabGL Entry`",as_dict=True)}
+            assert vouchers<={'Fees','Sales Invoice'},vouchers
+            return {'fees_billed':after['Fees'],'placement_invoices':after['Sales Invoice'],
+                    'gl_voucher_types':sorted(vouchers),'academic_and_payroll_untouched':True}
+        check('finance-write-containment',finance_containment)
+        # ---- A13 containment: native bypass-route negative proofs. Pinned
+        # frappe (988e54f3c4c2, document.py run_before_save_methods):
+        # "validate" fires only for save/submit; cancel runs "before_cancel"
+        # and post-submit edits run "before_update_after_submit" WITHOUT
+        # validate, so hooks.py pins the command-only guards on all three
+        # seams. Delete of submitted documents is natively denied even for
+        # Administrator (delete_doc check_permission_and_not_submitted);
+        # drafts cannot exist outside commands because insert is denied.
+        # db_set/direct SQL and the queue-worker seam remain documented
+        # governance boundaries (A13), not code claims.
+        probe_base=dict(gl=frappe.db.count('GL Entry'),fees=frappe.db.count('Fees'),si=frappe.db.count('Sales Invoice'),op=frappe.db.count(api.OP),audit=frappe.db.count(api.AUDIT))
+        def first_doc(dt):
+            name=frappe.db.get_value(dt,{},'name',order_by='creation asc')
+            assert name,(dt,'expected a command-created document to probe')
+            return name
+        cancel_targets=[('Fees',fees1['fees']),('Sales Invoice',httpinv['sales_invoice']),('Program Enrollment',enrolled['program_enrollment']),('Course Enrollment',first_doc('Course Enrollment')),('Student Group',first_doc('Student Group')),('Course Schedule',first_doc('Course Schedule')),('Student Attendance',attA['records'][stu1])]
+        def cancel_probes():
+            # Submitted documents (docstatus 1) reach the before_cancel guard;
+            # drafts of non-submittable doctypes are denied earlier by frappe's
+            # native docstatus transition validator (draft cannot go to 2) -
+            # both layers are containment; the observation records which fired.
+            frappe.set_user('Administrator')
+            probed={}
+            for dt,name in cancel_targets:
+                before=int(frappe.db.get_value(dt,name,'docstatus') or 0)
+                try:
+                    frappe.get_doc(dt,name).cancel()
+                    raise AssertionError((dt,name,'cancel unexpectedly succeeded'))
+                except (frappe.ValidationError,frappe.PermissionError) as exc:
+                    msg=str(exc)
+                    if before==1:
+                        assert 'requires an authorized' in msg,(dt,name,msg[:200])
+                        probed[dt]='command-only guard (before_cancel)'
+                    else:
+                        assert 'Cannot change docstatus' in msg,(dt,name,msg[:200])
+                        probed[dt]='native docstatus transition (draft, non-submittable)'
+                assert frappe.db.get_value(dt,name,'docstatus')==before,(dt,name,'docstatus changed by denied cancel')
+            return {'cancel_denied_docstatus_intact':probed}
+        check('containment-admin-cancel-denied',traced(cancel_probes))
+        def probe_field(dt):
+            for df in frappe.get_meta(dt).fields:
+                if df.fieldtype in ('Data','Small Text','Text') and df.fieldname not in ('naming_series','amended_from'):
+                    return df.fieldname
+            raise AssertionError((dt,'no text probe field found'))
+        edit_targets=[('Fees',fees1['fees']),('Sales Invoice',httpinv['sales_invoice']),('Course Enrollment',first_doc('Course Enrollment')),('Student Group',first_doc('Student Group')),('Course Schedule',first_doc('Course Schedule'))]
+        def edit_probes():
+            # Submitted Fees/SI exercise the before_update_after_submit seam;
+            # draft CE/SG/CS exercise the validate seam on save. Program
+            # Enrollment and Student Attendance carry no plain-text field, so
+            # their edit seam stays covered by the pinned hooks and the
+            # identical guard code path, reported not probed here.
+            frappe.set_user('Administrator')
+            probed={}
+            for dt,name in edit_targets:
+                field=probe_field(dt)
+                doc=frappe.get_doc(dt,name);doc.update({field:'SYN-PROBE'})
+                try:
+                    doc.save()
+                    raise AssertionError((dt,name,field,'edit unexpectedly succeeded'))
+                except (frappe.ValidationError,frappe.PermissionError) as exc:
+                    assert 'requires an authorized' in str(exc),(dt,name,field,str(exc)[:200])
+                assert frappe.db.get_value(dt,name,field)!='SYN-PROBE',(dt,name,field,'denied edit persisted')
+                probed[dt]=field
+            return {'edit_seam_denied':probed,'no_text_probe_field':['Program Enrollment','Student Attendance']}
+        check('containment-edit-seam-denied',traced(edit_probes))
+        def rpc_probes():
+            frappe.set_user('Administrator')
+            client_insert=frappe.get_attr('frappe.client.insert');client_set_value=frappe.get_attr('frappe.client.set_value');client_delete=frappe.get_attr('frappe.client.delete')
+            try:
+                client_insert(doc=dict(doctype='Fees',naming_series='EDU-FEE-.YYYY.-',student=second['student'],program_enrollment=second['program_enrollment'],company='TOEFL House',posting_date='2026-09-01',due_date='2026-09-30',fee_structure=fin['fee_structure'],receivable_account=fin['receivable'],components=[dict(fees_category='SYN-Tuition',amount=1)]))
+                raise AssertionError('frappe.client.insert unexpectedly succeeded')
+            except (frappe.ValidationError,frappe.PermissionError) as exc:
+                assert 'requires an authorized' in str(exc),str(exc)[:200]
+            field=probe_field('Fees')
+            try:
+                client_set_value(doctype='Fees',name=fees1['fees'],fieldname=field,value='SYN-PROBE')
+                raise AssertionError('frappe.client.set_value unexpectedly succeeded')
+            except (frappe.ValidationError,frappe.PermissionError) as exc:
+                assert 'requires an authorized' in str(exc),str(exc)[:200]
+            assert frappe.db.get_value('Fees',fees1['fees'],field)!='SYN-PROBE','denied RPC set_value persisted'
+            try:
+                client_delete(doctype='Fees',name=fees1['fees'])
+                raise AssertionError('frappe.client.delete unexpectedly succeeded')
+            except Exception:
+                assert frappe.db.exists('Fees',fees1['fees']),'submitted Fees deleted through RPC'
+            return {'rpc_insert_denied':True,'rpc_set_value_denied':field,'rpc_delete_denied_natively':True}
+        check('containment-rpc-routes-denied',traced(rpc_probes))
+        def rest_probes():
+            # containment_probe natively carries Accounts User (Fees
+            # read/write/create/delete in education's Fees permissions) and
+            # is never revoked, so a 417 ValidationError below is the
+            # command-only guard at the web seam, not a role denial. The
+            # Desk cancel route is expected to stop at the permission layer
+            # (no cancel permission on Fees for Accounts User); the guard
+            # layer on the cancel seam is proven server-side above where
+            # permission checks are bypassed.
+            s=sessions['containment_probe'];field=probe_field('Fees')
+            obs={'rest_insert':http_denied(s.post(base+'/api/resource/Fees',json=dict(naming_series='EDU-FEE-.YYYY.-',student=second['student'],program_enrollment=second['program_enrollment'],company='TOEFL House',posting_date='2026-09-01',due_date='2026-09-30',fee_structure=fin['fee_structure'],receivable_account=fin['receivable'],components=[dict(fees_category='SYN-Tuition',amount=1)]),timeout=40))}
+            obs['rest_update']=http_denied(s.put(base+'/api/resource/Fees/'+quote(fees1['fees'],safe=''),json={field:'SYN-PROBE'},timeout=40))
+            assert frappe.db.get_value('Fees',fees1['fees'],field)!='SYN-PROBE','denied REST update persisted'
+            obs['desk_cancel_route_permission_layer']=http_denied(s.post(base+'/api/method/runserverobj',json={'method':'cancel','dt':'Fees','dn':fees1['fees'],'args':'[]'},timeout=40))
+            obs['rest_delete']=http_denied(s.delete(base+'/api/resource/Fees/'+quote(fees1['fees'],safe=''),timeout=40))
+            obs['probe_user']='containment_probe (native Accounts User, never revoked)'
+            return obs
+        check('containment-rest-routes-denied',rest_probes)
+        def amend_copy_probes():
+            frappe.set_user('Administrator')
+            for dt,name in (('Fees',fees1['fees']),('Sales Invoice',httpinv['sales_invoice'])):
+                copy=frappe.copy_doc(frappe.get_doc(dt,name))
+                try:
+                    copy.insert(ignore_permissions=True)
+                    raise AssertionError((dt,'copy/amend insert unexpectedly succeeded'))
+                except (frappe.ValidationError,frappe.PermissionError) as exc:
+                    assert 'requires an authorized' in str(exc),(dt,str(exc)[:200])
+            return {'copy_insert_denied':['Fees','Sales Invoice'],'amend_route':'unreachable while cancel is denied'}
+        check('containment-amend-copy-denied',traced(amend_copy_probes))
+        def probe_side_effects():
+            now=dict(gl=frappe.db.count('GL Entry'),fees=frappe.db.count('Fees'),si=frappe.db.count('Sales Invoice'),op=frappe.db.count(api.OP),audit=frappe.db.count(api.AUDIT))
+            assert now==probe_base,(probe_base,now)
+            for dt,name in cancel_targets:
+                assert frappe.db.exists(dt,name),(dt,name,'command-created document missing after probes')
+            return {'no_writes_from_probes':True,'targets_intact':[dt for dt,_ in cancel_targets]}
+        check('containment-no-side-effects-from-probes',probe_side_effects)
+        # ---- R1 release surface: role-scoped staff workspaces (native
+        # configuration). Workspaces are navigation only - pinned frappe
+        # (988e54f3c4c2, desk/desktop.py get_workspaces -> is_permitted):
+        # visible iff the user holds one of the workspace Has Role rows;
+        # they grant no document read. Probes use never-revoked sessions.
+        # Pinned visibility model (frappe 988e54f3c4c2 desktop.py Workspace.__init__
+        # + utils/user.py allow_modules): a workspace is reachable only when its
+        # module holds at least one doctype the user can natively read/write/
+        # create, then the Has-Role table scopes it. Under A13 containment the
+        # API-first operational roles have existing, narrowly scoped TH-DocType
+        # reads, further contained by policy.can_read; they receive no native
+        # Education/ERPNext CRUD authority. The Workspace module-gate composition
+        # does not supply a compliant staff workspace, hence D10(ii)'s separate
+        # Page surface. Shipped workspaces remain: auditors (read the TH operations ledger,
+        # module Placement) and the finance officer (native Accounts User reads,
+        # module Accounts).
+        ws_spec={'TH Receipts':('Placement',{'Placement Auditor','Admission Auditor','Enrollment Auditor','Teaching Auditor','Finance Auditor'}),
+                 'TH Finance':('Accounts',{'Finance Officer'})}
+        def restore_probe_users():
+            # The containment blocks strip roles from shared users as a
+            # fail-closed proof and never re-grant them; the release probes
+            # are only meaningful with the designed role sets restored.
+            # (The finance officer's Accounts User role also feeds the pinned
+            # module-visibility gate: allow_modules via native Accounts reads.)
+            frappe.set_user('Administrator')
+            grants={
+                # Full designed Page audience is restored after the role-revocation
+                # negatives. This makes the Page proof test real role memberships,
+                # not a cached or Administrator-only presentation.
+                'second_author':['Placement Author'],
+                'publisher':['Placement Publisher'],
+                'invigilator':['Placement Invigilator'],
+                'assessor':['Placement Assessor'],
+                'reviewer':['Placement Reviewer'],
+                'releaser':['Placement Releaser'],
+                'officer':['Admission Officer'],
+                'admissions_reviewer':['Admission Reviewer'],
+                'approver':['Admission Approver'],
+                'enrollment_officer':['Enrollment Officer'],
+                'teaching_scheduler':['Teaching Scheduler'],
+                'attendance_recorder':['Attendance Recorder'],
+                # The Finance workspace keeps its existing upstream module anchor.
+                'finance_officer':['Finance Officer','Accounts User'],
+            }
+            for label,roles in grants.items():
+                u=frappe.get_doc('User',users[label])
+                u.roles=[]
+                for r in roles:u.append('roles',{'role':r})
+                u.save()
+            frappe.db.commit()
+            for label in grants:frappe.clear_cache(user=users[label])
+            return {'restored':sorted(grants)}
+        check('release-probe-users-restored',restore_probe_users)
+        def ws_configured():
+            frappe.set_user('Administrator')
+            for ws_name,(module,roles) in ws_spec.items():
+                ws=frappe.get_doc('Workspace',ws_name)
+                assert int(ws.public)==1 and not ws.for_user,(ws_name,'must be a public workspace')
+                assert ws.module==module,(ws_name,ws.module,module)
+                assert {r.role for r in ws.roles}==roles,(ws_name,sorted(r.role for r in ws.roles),sorted(roles))
+                cards={l.label for l in ws.links if l.type=='Card Break'}
+                for l in ws.links:
+                    if l.type=='Link':
+                        if l.link_type=='DocType':
+                            assert frappe.db.exists('DocType',l.link_to),(ws_name,l.label,l.link_to)
+                        else:
+                            assert l.link_type=='Report' and frappe.db.exists('Report',l.link_to) and int(l.is_query_report or 0)==1,(ws_name,l.label,'report links must reference query reports')
+                content=json.loads(ws.content)
+                referenced={b['data']['card_name'] for b in content if b.get('type')=='card'}
+                assert referenced and referenced<=cards,(ws_name,sorted(referenced),sorted(cards))
+            return {'workspaces_configured':sorted(ws_spec)}
+        check('release-workspaces-configured',ws_configured)
+        def ws_visibility():
+            get_ws=frappe.get_attr('frappe.desk.desktop.get_workspaces')
+            def visible(label):
+                frappe.set_user(users[label])
+                return {p['name'] for p in get_ws()['pages']}
+            probe={'finance_auditor':({'TH Receipts'},{'TH Finance'}),
+                   'admissions_auditor':({'TH Receipts'},{'TH Finance'}),
+                   'finance_officer':({'TH Finance'},{'TH Receipts'}),
+                   'invigilator':(set(),{'TH Receipts','TH Finance'}),
+                   'teaching_scheduler':(set(),{'TH Receipts','TH Finance'})}
+            observed={}
+            for label,(must,must_not) in probe.items():
+                seen=visible(label)
+                for m in sorted(must):
+                    if m in seen:continue
+                    # self-diagnosing failure: dump the decisive gate facts so
+                    # the hosted report names the exact failing link
+                    diag={'label':label,'missing':m,'roles':sorted(frappe.get_roles()),
+                          'seen':sorted(seen)[:6],'seen_n':len(seen),
+                          'si_perm':frappe.db.get_value('DocPerm',{'parent':'Sales Invoice','role':'Accounts User'},'read'),
+                          'si_custom':frappe.db.count('Custom DocPerm',{'parent':'Sales Invoice'}),
+                          'pe_perm':frappe.db.get_value('DocPerm',{'parent':'Payment Entry','role':'Accounts User'},'read'),
+                          'pe_custom':frappe.db.count('Custom DocPerm',{'parent':'Payment Entry'})}
+                    try:
+                        up=frappe.get_user()
+                        if not up.allow_modules:up.build_permissions()
+                        diag['allow_modules']=sorted(set(up.allow_modules or []))
+                        diag['si_readable']='Sales Invoice' in (up.can_read+up.can_write+up.can_create)
+                    except Exception as exc:diag['perm_err']=repr(exc)[:90]
+                    try:
+                        wsx=frappe.get_attr('frappe.desk.desktop.Workspace')({'name':m},True)
+                        diag['is_permitted']=bool(wsx.is_permitted())
+                        diag['doc_module']=wsx.doc.module
+                    except Exception as exc:diag['ws_init_err']=repr(exc)[:90]
+                    raise AssertionError(json.dumps(diag,default=str)[:590])
+                for m in sorted(must_not):
+                    assert m not in seen,(label,m,'workspace leaked to a non-member role')
+                observed[label]=sorted(must)
+            frappe.set_user('Administrator')
+            return {'role_scoped_visibility':observed}
+        check('release-workspace-role-visibility',ws_visibility)
+        def ws_no_privilege_escalation():
+            # Navigation grants no read: the document permission model stays
+            # authoritative after the workspace module files are synced at install.
+            frappe.set_user(users['finance_auditor'])
+            try:listed=frappe.get_list('Fees')
+            except frappe.PermissionError:listed=[]
+            assert not listed,'workspace visibility must not grant Fees read'
+            frappe.set_user(users['invigilator'])
+            try:listed=frappe.get_list(api.OP)
+            except frappe.PermissionError:listed=[]
+            assert not listed,'workspace visibility must not grant receipt read'
+            frappe.set_user('Administrator')
+            return {'no_read_granted_by_workspaces':True}
+        check('release-workspace-no-privilege-escalation',ws_no_privilege_escalation)
+        # ---- T3 / D10(ii): native role-scoped command Pages. Pinned Frappe
+        # Page.get checks the Page Has Role rows directly; unlike Workspace it
+        # has no module-visibility prerequisite. The Page client is a thin
+        # command launcher only. It makes no document-list/read request, and
+        # each server command still authorizes KIND_ROLES and its own state/SoD.
+        PAGE_SPEC={
+            'th-command-centre':('Placement',{'Placement Author','Placement Publisher','Placement Invigilator','Placement Assessor','Placement Reviewer','Placement Releaser','Admission Officer','Admission Reviewer','Admission Approver','Enrollment Officer','Teaching Scheduler','Attendance Recorder'}),
+            'th-placement-author':('Placement',{'Placement Author'}),
+            'th-placement-publisher':('Placement',{'Placement Publisher'}),
+            'th-placement-invigilation':('Placement',{'Placement Invigilator'}),
+            'th-placement-assessment':('Placement',{'Placement Assessor'}),
+            'th-placement-review':('Placement',{'Placement Reviewer'}),
+            'th-placement-release':('Placement',{'Placement Releaser'}),
+            'th-admission-officer':('Admission',{'Admission Officer'}),
+            'th-admission-review':('Admission',{'Admission Reviewer'}),
+            'th-admission-approval':('Admission',{'Admission Approver'}),
+            'th-enrollment':('Enrollment',{'Enrollment Officer'}),
+            'th-teaching-scheduling':('Teaching',{'Teaching Scheduler'}),
+            'th-attendance-recording':('Teaching',{'Attendance Recorder'}),
+        }
+        PAGE_PROBES={
+            'second_author':'th-placement-author',
+            'publisher':'th-placement-publisher',
+            'invigilator':'th-placement-invigilation',
+            'assessor':'th-placement-assessment',
+            'reviewer':'th-placement-review',
+            'releaser':'th-placement-release',
+            'officer':'th-admission-officer',
+            'admissions_reviewer':'th-admission-review',
+            'approver':'th-admission-approval',
+            'enrollment_officer':'th-enrollment',
+            'teaching_scheduler':'th-teaching-scheduling',
+            'attendance_recorder':'th-attendance-recording',
+        }
+        def pages_configured():
+            frappe.set_user('Administrator')
+            configured={}
+            for page_name,(module,roles) in PAGE_SPEC.items():
+                page=frappe.get_doc('Page',page_name)
+                assert page.standard=='Yes' and page.page_name==page_name,(page_name,page.standard,page.page_name)
+                assert page.module==module,(page_name,page.module,module)
+                assert {r.role for r in page.roles}==roles,(page_name,sorted(r.role for r in page.roles),sorted(roles))
+                page.load_assets()
+                assert 'toefl_house.command_pages' in page.script,(page_name,'shared command page script missing')
+                configured[page_name]=sorted(roles)
+            assert frappe.get_hooks('app_home',app_name='toefl_house')==['/app/th-command-centre']
+            return {'pages_configured':configured,'app_home':'/app/th-command-centre'}
+        check('release-command-pages-configured',pages_configured)
+        def page_role_visibility():
+            from frappe.desk.desk_page import get as get_page
+            from frappe.desk.desk_views import DeskViews
+            observed={}
+            for label,page_name in PAGE_PROBES.items():
+                frappe.clear_cache(user=users[label])
+                frappe.set_user(users[label])
+                allowed=DeskViews.get_allowed_pages(cache=False)
+                actual={name for name in PAGE_SPEC if name in allowed}
+                assert actual=={'th-command-centre',page_name},(label,sorted(actual),page_name)
+                loaded=get_page(page_name)
+                assert loaded.name==page_name and 'toefl_house.command_pages' in loaded.script,(label,page_name)
+                observed[label]=sorted(actual)
+            # Existing audit/finance Workspace audiences and an unrelated user
+            # do not receive a D10 command page simply because pages exist.
+            for label in ('auditor','admissions_auditor','enrollment_auditor','teaching_auditor','finance_auditor','finance_officer','outsider'):
+                frappe.clear_cache(user=users[label])
+                frappe.set_user(users[label])
+                allowed=DeskViews.get_allowed_pages(cache=False)
+                assert not ({name for name in PAGE_SPEC if name in allowed}),(label,sorted(set(allowed)&set(PAGE_SPEC)))
+                assert denied(lambda:get_page('th-placement-invigilation')),(label,'non-member Page must deny')
+            frappe.set_user('Administrator')
+            return {'role_scoped_pages':observed,'non_members_denied':7}
+        check('release-command-page-role-visibility',page_role_visibility)
+        def page_no_privilege_escalation():
+            from frappe.desk.desk_page import get as get_page
+            frappe.set_user(users['invigilator'])
+            native_doctypes=('Program Enrollment','Student Group','Course Schedule','Student Attendance','Fees','Sales Invoice')
+            before={dt:frappe.has_permission(dt,'read') for dt in native_doctypes}
+            assert not any(before.values()),before
+            loaded=get_page('th-placement-invigilation')
+            after={dt:frappe.has_permission(dt,'read') for dt in native_doctypes}
+            assert before==after,(before,after)
+            for dt in native_doctypes:
+                # Frappe's list path may deny by an empty result instead of an
+                # exception; either is containment, but any returned row fails.
+                try:
+                    listed=frappe.get_list(dt)
+                except frappe.PermissionError:
+                    listed=[]
+                assert not listed,(dt,'Page access must not unlock native reads')
+            frappe.set_user('Administrator')
+            return {'page_loaded':loaded.name,'native_read_permissions_unchanged':True,
+                    'native_direct_lists_empty_or_denied':list(native_doctypes)}
+        check('release-command-pages-no-privilege-escalation',page_no_privilege_escalation)
+        # --- R2: factual operations registers (native Query Reports, raw facts
+        # only). Access is native: the Report Has-Role table gates execution
+        # (pinned Report.is_permitted) and the ref-doctype `report` permission
+        # gates the query surface (pinned query_report._run). The registers
+        # state billing facts; denominators/thresholds stay an A12 owner
+        # deliverable and never ship inside SQL.
+        REGISTERS={
+            'TH Tuition Billing Register':{'ref':'Fees','module':'Finance',
+                'roles':['Finance Officer'],
+                'columns':['fees','student','program_enrollment','academic_year','posting_date','due_date','grand_total','outstanding_amount','docstatus'],
+                'permitted':['finance_officer'],
+                'denied':['finance_auditor','invigilator','teaching_scheduler']},
+            'TH Placement Billing Register':{'ref':api.OP,'module':'Finance',
+                'roles':['Finance Officer','Finance Auditor'],
+                'columns':['sales_invoice','customer','placement_case','posting_date','due_date','grand_total','outstanding_amount','docstatus'],
+                'permitted':['finance_officer','finance_auditor'],
+                'denied':['invigilator','teaching_scheduler']},
+        }
+        run_report=frappe.get_attr('frappe.desk.query_report.run')
+        def register_rows(name):
+            out=run_report(name)
+            cols=[c['fieldname'] if isinstance(c,dict) else str(c) for c in out['columns']]
+            return cols,[dict(zip(cols,r)) if isinstance(r,(list,tuple)) else r for r in out['result']]
+        def registers_configured():
+            observed={}
+            for name,spec in REGISTERS.items():
+                doc=frappe.get_doc('Report',name)
+                assert doc.report_type=='Query Report' and doc.is_standard=='Yes' and not doc.disabled,(name,'must be a standard Query Report')
+                assert doc.ref_doctype==spec['ref'] and doc.module==spec['module'],(name,doc.ref_doctype,doc.module)
+                assert sorted(r.role for r in doc.roles)==sorted(spec['roles']),(name,'role table must match the designed audience exactly')
+                cols,_=register_rows(name)
+                assert cols==spec['columns'],(name,cols)
+                observed[name]=cols
+            _,tuition=register_rows('TH Tuition Billing Register')
+            row=next((r for r in tuition if r['fees']==fees1['fees']),None)
+            assert row and float(row['grand_total'])==25000.0,(fees1['fees'],row)
+            assert all(int(r['docstatus']) in (0,1,2) for r in tuition),'docstatus must be a fact column'
+            _,placement=register_rows('TH Placement Billing Register')
+            inv=next((r for r in placement if r['sales_invoice']==inv1['sales_invoice']),None)
+            wai=next((r for r in placement if r['sales_invoice']==waiver['sales_invoice']),None)
+            assert inv and inv['placement_case']==CASE9 and float(inv['grand_total'])==4000.0,(inv1['sales_invoice'],inv)
+            assert wai and wai['placement_case']==case_of('candidate6') and float(wai['grand_total'])==0.0,(waiver['sales_invoice'],wai)
+            assert all(r['placement_case'] for r in placement),'register only holds placement-linked invoices'
+            frappe.set_user('Administrator')
+            return observed
+        check('release-registers-configured',registers_configured)
+        def registers_role_access():
+            observed={}
+            for name,spec in REGISTERS.items():
+                for key in spec['permitted']:
+                    as_user(key,lambda:run_report(name))
+                    frappe.set_user('Administrator')
+                for key in spec['denied']:
+                    assert denied(lambda:as_user(key,lambda:run_report(name))),(key,name,'register leaked to a non-audience role')
+                    frappe.set_user('Administrator')
+                observed[name]={'permitted':spec['permitted'],'denied':spec['denied']}
+            return observed
+        check('release-registers-role-access',registers_role_access)
+        def registers_facts_only():
+            observed={}
+            for name,spec in REGISTERS.items():
+                q=frappe.db.get_value('Report',name,'query')
+                assert q.strip().lower().startswith('select') and ';' not in q,(name,'single select statement only')
+                low=' '+q.lower()+' '
+                for agg in ('count(','sum(','avg(','min(','max(','group by'):
+                    assert agg not in low,(name,agg,'aggregates are metrics, not facts')
+                cols,_=register_rows(name)
+                assert cols==spec['columns'],(name,'column contract drift')
+                observed[name]=cols
+            frappe.set_user('Administrator')
+            return observed
+        check('release-registers-facts-only',registers_facts_only)
+        # --- R3: read-side path containment for the guarded ledgers
+        # (attachments, list/export reads, print) + native observability
+        # probes. A13 covered the write seams; these prove the passive
+        # surfaces grant nothing to non-member roles: pinned core
+        # File.has_permission falls back to parent-document access, get_list
+        # runs through the db_query permission layer, and download_pdf
+        # validates print permission (pinned 988e54f3c4c2).
+        op_name=digest(['allocate_attempt','alloc_attempt_key_001'])
+        def attachment_paths():
+            frappe.set_user('Administrator')
+            assert frappe.db.exists(api.OP,op_name),('operation fixture missing',op_name)
+            f=frappe.get_doc(dict(doctype='File',file_name='syn-attach-probe.txt',
+                attached_to_doctype=api.OP,attached_to_name=op_name,
+                is_private=1,content='synthetic attachment probe')).insert()
+            frappe.db.commit()
+            try:
+                # the auditor reads the parent ledger -> private attachment reachable
+                content=as_user('finance_auditor',lambda:frappe.get_doc('File',f.name).get_content())
+                assert 'synthetic attachment probe' in str(content),str(content)[:120]
+                frappe.set_user('Administrator')
+                # non-member roles get no attachment authority through the parent
+                for label in ('invigilator','outsider'):
+                    assert not as_user(label,lambda:frappe.has_permission('File','read',frappe.get_doc('File',f.name))),(label,'attachment readable without parent access')
+                    assert not as_user(label,lambda:frappe.get_doc('File',f.name).is_downloadable()),(label,'attachment downloadable without parent access')
+                    frappe.set_user('Administrator')
+                return {'attachment_parent_gated':['invigilator','outsider'],'auditor_read_verified':True}
+            finally:
+                frappe.set_user('Administrator')
+                frappe.delete_doc('File',f.name);frappe.db.commit()
+        check('release-attachment-paths-guarded',attachment_paths)
+        def read_export_print_paths():
+            observed={}
+            for label in ('invigilator','outsider'):
+                for dt in (api.OP,api.AUDIT):
+                    try:rows=as_user(label,lambda:frappe.get_list(dt,fields=['name']))
+                    except frappe.PermissionError:rows=[]
+                    frappe.set_user('Administrator')
+                    assert not rows,(label,dt,'guarded ledger leaked rows on the list/export read path')
+                assert denied(lambda:as_user(label,lambda:frappe.get_attr('frappe.utils.print_format.download_pdf')(api.OP,op_name))),(label,'guarded ledger printable without print authority')
+                frappe.set_user('Administrator')
+                observed[label]={'list_denied':[api.OP,api.AUDIT],'print_denied':api.OP}
+            return observed
+        check('release-read-export-print-paths-denied',read_export_print_paths)
+        def observability_probes():
+            frappe.set_user('Administrator')
+            observed={}
+            # native error-log pipeline persists and returns failures
+            marker='SYN-observability-probe'
+            entry=frappe.log_error(marker)
+            frappe.db.commit()
+            row=frappe.get_doc('Error Log',entry.name)
+            assert marker in ((row.method or '')+(row.error or '')),(row.method,str(row.error)[:120])
+            frappe.delete_doc('Error Log',entry.name,ignore_permissions=True)
+            frappe.db.commit()
+            observed['error_log_roundtrip']=entry.name
+            # scheduler job registry active
+            assert frappe.get_all('Scheduled Job Type',filters={'stopped':0},limit_page_length=1),'no active scheduled job types'
+            observed['scheduler_jobs_active']=True
+            # health ping
+            assert frappe.ping()=='pong'
+            observed['ping']='pong'
+            return observed
+        check('release-observability-probes',observability_probes)
+        # --- D2 contract-driven teaching compensation (owner requirement
+        # 2026-09-16). Contract authority + skill-area assignment facts +
+        # the single native Additional Salary input path. Rates/terms are
+        # fixture data; no policy value is invented.
+        from toefl_house.teaching import compensation as tcomp
+        CON='TH Instructor Contract';ASSIGN='TH Teaching Assignment';ADS='Additional Salary'
+        SK1,SK2,SK3='Speaking & Listening','Writing & Grammar','Reading & Vocabulary'
+        def comp_fixtures():
+            frappe.set_user('Administrator')
+            comp='SYN Teaching House'
+            for cname,ctype in (('SYN Teaching Pay','Earning'),('SYN Contract Deduction','Deduction')):
+                # pinned HRMS a4768b44: Salary Component autoname is
+                # field:salary_component (the field labelled "Name")
+                if not frappe.db.exists('Salary Component',cname):
+                    frappe.get_doc(dict(doctype='Salary Component',salary_component=cname,
+                        type=ctype)).insert()
+            emps={}
+            ins={}
+            for label in ('SYN Instructor One','SYN Instructor Two','SYN Instructor Left'):
+                ins[label.split()[-1]]=frappe.db.get_value('Instructor',{'instructor_name':label},'name')
+                assert ins[label.split()[-1]],('teaching catalog instructor missing',label)
+            cur=frappe.db.get_value('Company',comp,'default_currency') or 'USD'
+            if not frappe.db.exists('Gender','Other'):
+                frappe.get_doc(dict(doctype='Gender',gender='Other')).insert()
+            for label in ('One','Two'):
+                ename=frappe.db.get_value('Employee',{'employee_name':'SYN Employee '+label},'name')
+                if not ename:
+                    # pinned erpnext 4048fb70: Employee autoname naming_series,
+                    # no default series value - pass the offered prefix
+                    emp=frappe.get_doc(dict(doctype='Employee',naming_series='HR-EMP-',
+                        first_name='SYN Employee '+label,
+                        employee_name='SYN Employee '+label,company=comp,status='Active',
+                        gender='Other',date_of_birth='1990-01-01',
+                        date_of_joining='2026-01-01')).insert()
+                    ename=emp.name
+                emps[label]=ename
+                if not frappe.db.exists('Salary Structure','SYN Teaching Structure'):
+                    frappe.get_doc(dict(doctype='Salary Structure',name='SYN Teaching Structure',
+                        company=comp,currency=cur,is_active='Yes',payroll_frequency='Monthly',
+                        earnings=[dict(salary_component='SYN Teaching Pay',
+                                       amount_based_on_formula=0,amount=1)])).insert()
+                if not frappe.db.get_value('Salary Structure Assignment',{'employee':ename,'docstatus':1},'name'):
+                    ssa=frappe.get_doc(dict(doctype='Salary Structure Assignment',employee=ename,
+                        salary_structure='SYN Teaching Structure',from_date='2026-01-01',
+                        company=comp,currency=cur,base=0))
+                    ssa.insert();ssa.submit()
+            frappe.db.commit()
+            return dict(company=comp,earning='SYN Teaching Pay',deduction='SYN Contract Deduction',
+                        emps=emps,ins=ins)
+        cfx=comp_fixtures()
+        def contract_authority():
+            frappe.set_user('Administrator')
+            slips_before=frappe.db.count('Salary Slip')
+            terms_one=[dict(skill=SK1,unit_of_payment='SYN Session',rate=12.5,payable_quantity=40),
+                       dict(skill=SK2,unit_of_payment='SYN Session',rate=10,payable_quantity=40)]
+            adj_one=[dict(adjustment_type='Bonus',amount=50,effective_date='2026-09-10',
+                          approver=users['finance_officer'],reason='SYN approved bonus')]
+            r1=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_contract_one_0000001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
+                'SYN class skill coverage','Monthly','2026-01-01','',
+                'SYN fixture conditions',terms_one,adj_one))
+            r2=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_contract_two_0000001',cfx['ins']['Two'],cfx['emps']['Two'],'Skill-Based',
+                'SYN class skill coverage','Monthly','2026-01-01','',
+                '',[dict(skill=SK3,unit_of_payment='SYN Session',rate=15,payable_quantity=20)],
+                [dict(adjustment_type='Deduction',amount=25,effective_date='2026-09-05',
+                      approver=users['finance_officer'],reason='SYN approved deduction')]))
+            fixed=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_contract_left_00001',cfx['ins']['Left'],cfx['emps']['One'],'Fixed Salary',
+                'SYN native salary structure','Monthly','2026-01-01'))
+            # only the finance side may create contracts
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.create_teaching_contract(
+                'tc_denied_sched_00001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
+                'SYN basis','Monthly','2026-01-01'))),('scheduler created a contract')
+            assert denied(lambda:as_user('outsider',lambda:tcomp.create_teaching_contract(
+                'tc_denied_outs_000001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
+                'SYN basis','Monthly','2026-01-01'))),('outsider created a contract')
+            # model invariants and window uniqueness
+            assert denied(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_fixed_terms_00001',cfx['ins']['Left'],cfx['emps']['One'],'Fixed Salary',
+                'SYN basis','Monthly','2026-01-01','',
+                '',terms_one))),( 'fixed-salary contract accepted skill terms')
+            assert denied(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_overlap_000000001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
+                'SYN basis','Monthly','2026-06-01'))),('overlapping active contract accepted')
+            # supersession is exercised in the calculation phase, AFTER facts
+            # are recorded against the Active contracts (run 35060611969:
+            # assigning against a superseded contract is correctly refused)
+            frappe.set_user('Administrator')
+            # in-place tampering is denied even for Administrator
+            assert denied(lambda:(lambda d:(d.__setattr__('conditions','tamper'),d.save()))(
+                frappe.get_doc(CON,r1['name']))),('contract edited outside a command')
+            # read containment: compensation terms are finance-sensitive
+            frappe.set_user('Administrator')
+            cdoc=frappe.get_doc(CON,r1['name'])
+            assert not as_user('teaching_scheduler',lambda:frappe.has_permission(CON,'read',cdoc)),('scheduler reads contracts')
+            assert not as_user('outsider',lambda:frappe.has_permission(CON,'read',cdoc)),('outsider reads contracts')
+            assert as_user('finance_auditor',lambda:frappe.has_permission(CON,'read',cdoc)),('finance auditor denied contract read')
+            frappe.set_user('Administrator')
+            assert frappe.db.count('Salary Slip')==slips_before
+            frappe.db.commit()
+            return {'contracts':{'one':r1['name'],'two':r2['name'],'fixed':fixed['name']},
+                    'scheduler_contract_denied':True,
+                    'outsider_contract_denied':True,'tamper_denied':True,
+                    'scheduler_contract_read_denied':True}
+        cauth=check('teaching-compensation-contract-authority',contract_authority)
+        def assignment_facts():
+            frappe.set_user('Administrator')
+            c1,c2,fixed=cauth['contracts']['one'],cauth['contracts']['two'],cauth['contracts']['fixed']
+            a1=as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_one_sk1_001','SYN-GRP-MAIN-1',SK1,cfx['ins']['One'],c1,'2026-09-01'))
+            a2=as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_one_sk2_001','SYN-GRP-MAIN-1',SK2,cfx['ins']['One'],c1,'2026-09-01'))
+            a3=as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_two_sk3_001','SYN-GRP-MAIN-2',SK3,cfx['ins']['Two'],c2,'2026-09-01'))
+            # one instructor holds a skill area per class window
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_dup_0000001','SYN-GRP-MAIN-1',SK1,cfx['ins']['Two'],c2,'2026-09-01'))),('duplicate skill-area assignment accepted')
+            # contract must belong to the assigned instructor and be assignable
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_mix_0000001','SYN-GRP-MAIN-2',SK1,cfx['ins']['Two'],c1,'2026-09-01'))),('cross-instructor contract accepted')
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_fixed_00001','SYN-GRP-MAIN-1',SK1,cfx['ins']['Left'],fixed,'2026-09-01'))),('fixed-salary contract assigned per skill')
+            # separation of responsibilities: finance may not write teaching facts
+            assert denied(lambda:as_user('finance_officer',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_off_0000001','SYN-GRP-MAIN-1',SK1,cfx['ins']['One'],c1,'2026-09-01'))),('officer assigned a skill')
+            assert denied(lambda:as_user('outsider',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_outs_000001','SYN-GRP-MAIN-1',SK1,cfx['ins']['One'],c1,'2026-09-01'))),('outsider assigned a skill')
+            # ending records the end date once; facts are immutable
+            ended=as_user('teaching_scheduler',lambda:tcomp.end_teaching_assignment(
+                'tc_end_two_000000001',a2['name'],'2026-09-15'))
+            assert ended['effective_end']=='2026-09-15'
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.end_teaching_assignment(
+                'tc_end_two_again_0001',a2['name'],'2026-09-20'))),('end date rewritten')
+            assert denied(lambda:(lambda d:(d.__setattr__('skill',SK3),d.save()))(
+                frappe.get_doc(ASSIGN,a1['name']))),('assignment facts edited outside a command')
+            # read containment on teaching facts
+            frappe.set_user('Administrator')
+            adoc=frappe.get_doc(ASSIGN,a1['name'])
+            assert as_user('teaching_scheduler',lambda:frappe.has_permission(ASSIGN,'read',adoc))
+            assert as_user('teaching_auditor',lambda:frappe.has_permission(ASSIGN,'read',adoc))
+            assert not as_user('outsider',lambda:frappe.has_permission(ASSIGN,'read',adoc)),('outsider reads assignments')
+            frappe.set_user('Administrator')
+            try:rows=as_user('outsider',lambda:frappe.get_list(ASSIGN,fields=['name']))
+            except frappe.PermissionError:rows=[]
+            frappe.set_user('Administrator')
+            assert not rows,('assignment list leaked',len(rows))
+            frappe.db.commit()
+            return {'assignments':{'a1':a1['name'],'a2':a2['name'],'a3':a3['name']},
+                    'one_instructor_two_skills':True,'two_classes_covered':True,
+                    'duplicate_skill_denied':True,'fixed_assign_denied':True,
+                    'officer_assign_denied':True,'outsider_assignment_read_denied':True}
+        afacts=check('teaching-assignment-facts',assignment_facts)
+        def compensation_calculation():
+            frappe.set_user('Administrator')
+            slips_before=frappe.db.count('Salary Slip')
+            ads_before=frappe.db.count(ADS)
+            a=afacts['assignments']
+            # supersession AFTER the facts were recorded against the then-Active
+            # contracts; September payability must still resolve from them
+            rev1=as_user('finance_officer',lambda:tcomp.revise_teaching_contract(
+                'tc_revise_one_000001',cauth['contracts']['one'],'Skill-Based',
+                'SYN class skill coverage','Monthly','2026-10-01','',
+                'SYN fixture conditions',[dict(skill=SK1,unit_of_payment='SYN Session',rate=13,
+                                               payable_quantity=40)],[]))
+            rev2=as_user('finance_officer',lambda:tcomp.revise_teaching_contract(
+                'tc_revise_two_000001',cauth['contracts']['two'],'Skill-Based',
+                'SYN class skill coverage','Monthly','2027-01-01','',
+                '',[dict(skill=SK3,unit_of_payment='SYN Session',rate=16,payable_quantity=20)],[]))
+            frappe.set_user('Administrator')
+            old=frappe.get_doc(CON,cauth['contracts']['one'])
+            assert old.status=='Superseded',(old.status,)
+            assert float(old.skill_terms[0].rate)==12.5,(float(old.skill_terms[0].rate),)
+            assert frappe.get_doc(CON,rev1['name']).supersedes==cauth['contracts']['one']
+            # regressions (run 35060611969): a superseded (inactive) contract
+            # and a future-effective contract must not anchor assignments
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_supsd_00001','SYN-GRP-MAIN-2',SK1,cfx['ins']['One'],
+                cauth['contracts']['one'],'2026-11-01'))),('superseded contract accepted an assignment')
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_future_00001','SYN-GRP-MAIN-1',SK3,cfx['ins']['Two'],
+                rev2['name'],'2026-09-01','2026-09-30'))),('future-effective contract accepted an assignment')
+            # deductions require the explicit owner-provided deduction component
+            assert denied(lambda:as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_nodeduct_0001','2026-09-01','2026-09-30',cfx['company'],cfx['earning']))),('deduction posted without a deduction component')
+            assert frappe.db.count(ADS)==ads_before,('partial posting survived the denial')
+            res=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_full_00000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],
+                cfx['deduction']))
+            frappe.set_user('Administrator')
+            assert res['assignments']==3,(res['assignments'],)
+            assert res['adjustments_posted']==2,(res['adjustments_posted'],)
+            assert frappe.db.count(ADS)==ads_before+5,(frappe.db.count(ADS),ads_before)
+            # amounts come from the contract that was effective for the period
+            # (12.5 pre-revision rate, not the 13.0 successor) and the audit
+            # chain links every payable row back to its teaching fact
+            for aname,expected,econtract in ((a['a1'],500.0,cauth['contracts']['one']),
+                                             (a['a2'],400.0,cauth['contracts']['one']),
+                                             (a['a3'],300.0,cauth['contracts']['two'])):
+                row=frappe.db.get_value(ADS,{'ref_doctype':ASSIGN,'ref_docname':aname,
+                    'payroll_date':'2026-09-30','disabled':0},['name','amount','salary_component'],as_dict=True)
+                assert row and float(row.amount)==expected,(aname,row and float(row.amount))
+                assert row.salary_component==cfx['earning']
+                linked=frappe.get_doc(ASSIGN,aname)
+                assert linked.contract==econtract,(aname,linked.contract,econtract)
+            bonus=frappe.db.get_value(ADS,{'ref_doctype':CON,'ref_docname':cauth['contracts']['one'],
+                'payroll_date':'2026-09-30','disabled':0},['name','amount','type'],as_dict=True)
+            assert bonus and float(bonus.amount)==50.0,(bonus,)
+            deduct=frappe.db.get_value(ADS,{'ref_doctype':CON,'ref_docname':cauth['contracts']['two'],
+                'payroll_date':'2026-09-30','disabled':0},['name','amount','type','salary_component'],as_dict=True)
+            assert deduct and float(deduct.amount)==25.0 and deduct.type=='Deduction',(deduct,)
+            assert deduct.salary_component==cfx['deduction']
+            # the request-key receipt replays without re-posting
+            replay=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_full_00000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],
+                cfx['deduction']))
+            frappe.set_user('Administrator')
+            assert replay==res,('receipt replay diverged')
+            assert frappe.db.count(ADS)==ads_before+5
+            # a fresh run over the same period never double-pays
+            rerun=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_rerun_0000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],
+                cfx['deduction']))
+            frappe.set_user('Administrator')
+            assert rerun['skipped_existing']==5 and not rerun['posted'],(rerun['skipped_existing'],rerun['posted'])
+            assert frappe.db.count(ADS)==ads_before+5
+            # no second engine: slips/statutory math stay untouched and native
+            assert frappe.db.count('Salary Slip')==slips_before
+            assert frappe.db.count('TH Placement Audit Event')>0
+            frappe.db.commit()
+            return {'payroll_inputs':5,'amounts':{'a1':500.0,'a2':400.0,'a3':300.0,
+                    'bonus':50.0,'deduction':25.0},
+                    'pre_revision_rate_used':True,'supersession_reproducible':True,
+                    'superseded_contract_assign_denied':True,
+                    'future_contract_assign_denied':True,'duplicate_pay_prevented':True,
+                    'receipt_idempotent':True,'salary_slips_untouched':True,
+                    'audit_chain_ref_fields':True}
+        check('teaching-compensation-calculation',compensation_calculation)
+        # --- D3 correction framework (owner: "framework approved; exact
+        # terms later"). Fail-closed until a policy exists; approval terms
+        # are fixture configuration, not invented policy. The money
+        # artifact is only the native credit note.
+        from toefl_house.finance import corrections as corr
+        POLICY='TH Correction Policy';CREQ='TH Correction Request'
+        if 'correction_probe' not in users:
+            users['correction_probe']='synthetic-correction-probe@example.test'
+        def corr_fixtures():
+            frappe.set_user('Administrator')
+            si=frappe.db.get_value('Sales Invoice',{'th_placement_case':['is','set'],
+                'is_return':0,'docstatus':1,'grand_total':['>',0]},
+                'name',order_by='creation asc')
+            assert si,('no chargeable TH placement invoice available for correction checks')
+            si2=frappe.db.get_value('Sales Invoice',{'th_placement_case':['is','set'],
+                'is_return':0,'docstatus':1,'name':['!=',si],'grand_total':['>',0]},
+                'name',order_by='creation asc')
+            assert si2,('no second chargeable TH placement invoice for correction checks')
+            if not frappe.db.exists('User',users['correction_probe']):
+                frappe.get_doc(dict(doctype='User',email=users['correction_probe'],
+                    first_name='Synthetic correction_probe',enabled=1,send_welcome_email=0,
+                    new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
+                    roles=[{'role':'Finance Officer'}])).insert()
+            frappe.db.commit()
+            return {'si':si,'si2':si2}
+        cfx2=corr_fixtures()
+        def correction_fail_closed():
+            frappe.set_user('Administrator')
+            assert not frappe.db.exists(POLICY,{'status':'Active'}),('a policy exists before configuration')
+            gt=float(frappe.db.get_value('Sales Invoice',cfx2['si'],'grand_total'))
+            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_nopolicy_00001',cfx2['si'],'SYN fixture correction',gt))),('request accepted with no policy')
+            return {'no_policy_fail_closed':True}
+        check('finance-correction-fail-closed',correction_fail_closed)
+        def correction_sod_and_window():
+            frappe.set_user('Administrator')
+            pol=as_user('finance_officer',lambda:corr.configure_correction_policy(
+                'fc_policy_0000000001','Accounts User',30))
+            assert pol['approver_role']=='Accounts User' and pol['correction_window_days']==30
+            gt=float(frappe.db.get_value('Sales Invoice',cfx2['si'],'grand_total'))
+            # role containment around the framework commands
+            assert denied(lambda:as_user('outsider',lambda:corr.request_invoice_correction(
+                'fc_req_outsider_0001',cfx2['si'],'SYN fixture correction',gt))),('outsider requested a correction')
+            assert denied(lambda:as_user('teaching_scheduler',lambda:corr.request_invoice_correction(
+                'fc_req_sched_0000001',cfx2['si'],'SYN fixture correction',gt))),('scheduler requested a correction')
+            # partial amounts are refused until owner terms exist
+            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_partial_000001',cfx2['si'],'SYN partial attempt',round(gt-1,2)))),('partial correction accepted')
+            # window enforcement from the owner-configured policy
+            original=frappe.db.get_value('Sales Invoice',cfx2['si'],'posting_date')
+            frappe.db.set_value('Sales Invoice',cfx2['si'],'posting_date','2020-01-01')
+            try:
+                assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                    'fc_req_window_000001',cfx2['si'],'SYN late correction',gt))),('expired-window correction accepted')
+            finally:
+                frappe.db.set_value('Sales Invoice',cfx2['si'],'posting_date',original)
+                frappe.db.commit()
+            # dual key: command access alone (Finance Officer without the
+            # configured approver role) cannot approve; the approver role
+            # alone (Finance Auditor without command access) cannot either
+            req=as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_ok_00000000001',cfx2['si'],'SYN fixture correction',gt))
+            assert denied(lambda:as_user('correction_probe',lambda:corr.approve_invoice_correction(
+                'fc_appr_probe_0000001',req['name']))),('non-approver Finance Officer approved')
+            assert denied(lambda:as_user('finance_auditor',lambda:corr.approve_invoice_correction(
+                'fc_appr_auditor_00001',req['name']))),('Finance Auditor approved without command access')
+            frappe.db.commit()
+            return {'policy':pol['name'],'request':req['name'],
+                    'outsider_denied':True,'scheduler_denied':True,'partial_denied':True,
+                    'expired_window_denied':True,'dual_key_enforced':True}
+        csod=check('finance-correction-sod-and-window',correction_sod_and_window)
+        def correction_posting():
+            frappe.set_user('Administrator')
+            si=cfx2['si']
+            gt=float(frappe.db.get_value('Sales Invoice',si,'grand_total'))
+            cn_before=frappe.db.count('Sales Invoice',{'is_return':1})
+            posted=as_user('finance_officer',lambda:corr.approve_invoice_correction(
+                'fc_appr_post_00000001',csod['request']))
+            frappe.set_user('Administrator')
+            assert posted['status']=='Posted'
+            note=frappe.db.get_value('Sales Invoice',posted['credit_note'],
+                ['name','is_return','return_against','grand_total','docstatus'],as_dict=True)
+            assert int(note.is_return)==1 and note.return_against==si and int(note.docstatus)==1
+            assert round(float(note.grand_total),2)==-round(gt,2),(float(note.grand_total),gt)
+            assert frappe.db.exists('GL Entry',{'voucher_no':note.name}),('credit note posted no GL rows')
+            req=frappe.db.get_value(CREQ,csod['request'],['status','approved_by','credit_note'],as_dict=True)
+            assert req.status=='Posted' and req.credit_note==note.name and req.approved_by==users['finance_officer']
+            # one-shot decisions; no second correction on a corrected invoice
+            assert denied(lambda:as_user('finance_officer',lambda:corr.approve_invoice_correction(
+                'fc_appr_again_0000001',csod['request']))),('request approved twice')
+            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_second_0000001',si,'SYN second attempt',gt))),('second correction on corrected invoice')
+            # denial path posts nothing
+            gt2=float(frappe.db.get_value('Sales Invoice',cfx2['si2'],'grand_total'))
+            req2=as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_deny_000000001',cfx2['si2'],'SYN fixture denial path',gt2))
+            denied_req=as_user('finance_officer',lambda:corr.deny_invoice_correction(
+                'fc_deny_post_000000001',req2['name']))
+            frappe.set_user('Administrator')
+            assert denied_req['status']=='Denied'
+            assert not frappe.db.exists('Sales Invoice',{'return_against':cfx2['si2'],'docstatus':('!=',2)})
+            assert frappe.db.count('Sales Invoice',{'is_return':1})==cn_before+1
+            # request facts are immutable even for Administrator
+            assert denied(lambda:(lambda d:(d.__setattr__('reason','tamper'),d.save()))(
+                frappe.get_doc(CREQ,csod['request']))),('request edited outside a command')
+            frappe.db.commit()
+            return {'credit_note':note.name,'credit_total':round(float(note.grand_total),2),
+                    'gl_posted':True,'one_shot_decision':True,'denial_posts_nothing':True,
+                    'facts_immutable':True}
+        check('finance-correction-posting',correction_posting)
+        report['status']='pass'
+    except Exception as exc:
+        report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}
+        print('Native qualification failed:',type(exc).__name__,str(exc)[:600],flush=True)
+        print(traceback.format_exc(),flush=True)
+    finally:
+        output.write_text(json.dumps(report,indent=2,default=str)+'\n')
+        frappe.destroy()
+    return 0 if report['status']=='pass' else 1
+
+
+if __name__=='__main__':raise SystemExit(main())

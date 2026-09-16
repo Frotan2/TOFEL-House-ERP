@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Admission",
+  "name": "th-admission-approval",
+  "page_name": "th-admission-approval",
+  "roles": [
+    {
+      "role": "Admission Approver"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Admission Approval"
+}

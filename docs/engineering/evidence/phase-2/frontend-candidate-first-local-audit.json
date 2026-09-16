@@ -1,0 +1,1223 @@
+{
+  "scope": "Installed frontend dependencies only; not exploit validation or full-stack SBOM",
+  "source": "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk",
+  "checked_at_utc": "2026-09-14T08:30:39.813574+00:00",
+  "versions_submitted": {
+    "@alloc/quick-lru": [
+      "5.2.0"
+    ],
+    "@babel/parser": [
+      "7.23.9"
+    ],
+    "@fortawesome/fontawesome-common-types": [
+      "6.5.1"
+    ],
+    "@fortawesome/fontawesome-svg-core": [
+      "6.5.1"
+    ],
+    "@fortawesome/free-regular-svg-icons": [
+      "6.5.1"
+    ],
+    "@fortawesome/free-solid-svg-icons": [
+      "6.5.1"
+    ],
+    "@fortawesome/vue-fontawesome": [
+      "3.0.6"
+    ],
+    "@headlessui/vue": [
+      "1.7.19"
+    ],
+    "@isaacs/cliui": [
+      "8.0.2"
+    ],
+    "@jridgewell/gen-mapping": [
+      "0.3.3"
+    ],
+    "@jridgewell/resolve-uri": [
+      "3.1.2"
+    ],
+    "@jridgewell/set-array": [
+      "1.1.2"
+    ],
+    "@jridgewell/sourcemap-codec": [
+      "1.4.15"
+    ],
+    "@jridgewell/trace-mapping": [
+      "0.3.22"
+    ],
+    "@nodelib/fs.scandir": [
+      "2.1.5"
+    ],
+    "@nodelib/fs.stat": [
+      "2.0.5"
+    ],
+    "@nodelib/fs.walk": [
+      "1.2.8"
+    ],
+    "@pkgjs/parseargs": [
+      "0.11.0"
+    ],
+    "@popperjs/core": [
+      "2.11.8"
+    ],
+    "@remirror/core-constants": [
+      "2.0.2"
+    ],
+    "@remirror/core-helpers": [
+      "3.0.0"
+    ],
+    "@remirror/types": [
+      "1.0.1"
+    ],
+    "@socket.io/component-emitter": [
+      "3.1.0"
+    ],
+    "@tailwindcss/forms": [
+      "0.5.7"
+    ],
+    "@tailwindcss/typography": [
+      "0.5.10"
+    ],
+    "@tanstack/virtual-core": [
+      "3.1.2"
+    ],
+    "@tanstack/vue-virtual": [
+      "3.1.2"
+    ],
+    "@tiptap/core": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-blockquote": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-bold": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-bubble-menu": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-bullet-list": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-code": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-code-block": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-color": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-document": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-dropcursor": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-floating-menu": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-gapcursor": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-hard-break": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-heading": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-highlight": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-history": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-horizontal-rule": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-image": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-italic": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-link": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-list-item": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-mention": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-ordered-list": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-paragraph": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-placeholder": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-strike": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-table": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-table-cell": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-table-header": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-table-row": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-text": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-text-align": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-text-style": [
+      "2.2.3"
+    ],
+    "@tiptap/extension-typography": [
+      "2.2.3"
+    ],
+    "@tiptap/pm": [
+      "2.2.3"
+    ],
+    "@tiptap/starter-kit": [
+      "2.2.3"
+    ],
+    "@tiptap/suggestion": [
+      "2.2.3"
+    ],
+    "@tiptap/vue-3": [
+      "2.2.3"
+    ],
+    "@types/object.omit": [
+      "3.0.3"
+    ],
+    "@types/object.pick": [
+      "1.3.4"
+    ],
+    "@types/throttle-debounce": [
+      "2.1.0"
+    ],
+    "@types/web-bluetooth": [
+      "0.0.20"
+    ],
+    "@vitejs/plugin-vue": [
+      "2.3.4"
+    ],
+    "@vue/compiler-core": [
+      "3.4.19"
+    ],
+    "@vue/compiler-dom": [
+      "3.4.19"
+    ],
+    "@vue/compiler-sfc": [
+      "3.4.19"
+    ],
+    "@vue/compiler-ssr": [
+      "3.4.19"
+    ],
+    "@vue/devtools-api": [
+      "6.6.1"
+    ],
+    "@vue/reactivity": [
+      "3.4.19"
+    ],
+    "@vue/runtime-core": [
+      "3.4.19"
+    ],
+    "@vue/runtime-dom": [
+      "3.4.19"
+    ],
+    "@vue/server-renderer": [
+      "3.4.19"
+    ],
+    "@vue/shared": [
+      "3.4.19"
+    ],
+    "@vueuse/core": [
+      "10.8.0"
+    ],
+    "@vueuse/metadata": [
+      "10.8.0"
+    ],
+    "@vueuse/shared": [
+      "10.8.0"
+    ],
+    "ansi-regex": [
+      "5.0.1",
+      "6.0.1"
+    ],
+    "ansi-styles": [
+      "4.3.0",
+      "6.2.1"
+    ],
+    "any-promise": [
+      "1.3.0"
+    ],
+    "anymatch": [
+      "3.1.3"
+    ],
+    "arg": [
+      "5.0.2"
+    ],
+    "argparse": [
+      "2.0.1"
+    ],
+    "autoprefixer": [
+      "10.4.17"
+    ],
+    "balanced-match": [
+      "4.0.4"
+    ],
+    "baseline-browser-mapping": [
+      "2.11.23"
+    ],
+    "binary-extensions": [
+      "2.2.0"
+    ],
+    "brace-expansion": [
+      "5.0.9"
+    ],
+    "braces": [
+      "3.0.3"
+    ],
+    "browserslist": [
+      "4.28.7"
+    ],
+    "camelcase-css": [
+      "2.0.1"
+    ],
+    "caniuse-lite": [
+      "1.0.30001589",
+      "1.0.30001810"
+    ],
+    "case-anything": [
+      "2.1.13"
+    ],
+    "chokidar": [
+      "3.6.0"
+    ],
+    "classnames": [
+      "2.5.1"
+    ],
+    "color-convert": [
+      "2.0.1"
+    ],
+    "color-name": [
+      "1.1.4"
+    ],
+    "commander": [
+      "4.1.1",
+      "9.5.0"
+    ],
+    "core-js": [
+      "3.36.0"
+    ],
+    "crelt": [
+      "1.0.6"
+    ],
+    "cross-spawn": [
+      "7.0.5"
+    ],
+    "cssesc": [
+      "3.0.0"
+    ],
+    "csstype": [
+      "3.1.3"
+    ],
+    "dash-get": [
+      "1.0.2"
+    ],
+    "dayjs": [
+      "1.11.10"
+    ],
+    "debug": [
+      "4.4.3"
+    ],
+    "deepmerge": [
+      "4.3.1"
+    ],
+    "didyoumean": [
+      "1.2.2"
+    ],
+    "dlv": [
+      "1.1.3"
+    ],
+    "eastasianwidth": [
+      "0.2.0"
+    ],
+    "electron-to-chromium": [
+      "1.5.427"
+    ],
+    "emoji-regex": [
+      "8.0.0",
+      "9.2.2"
+    ],
+    "engine.io-client": [
+      "6.6.6"
+    ],
+    "engine.io-parser": [
+      "5.2.2"
+    ],
+    "entities": [
+      "4.5.0"
+    ],
+    "esbuild": [
+      "0.14.54"
+    ],
+    "esbuild-linux-64": [
+      "0.14.54"
+    ],
+    "escalade": [
+      "3.2.0"
+    ],
+    "escape-string-regexp": [
+      "4.0.0"
+    ],
+    "estree-walker": [
+      "2.0.2"
+    ],
+    "fast-deep-equal": [
+      "3.1.3"
+    ],
+    "fast-glob": [
+      "3.3.2"
+    ],
+    "fastq": [
+      "1.17.1"
+    ],
+    "feather-icons": [
+      "4.29.1"
+    ],
+    "fill-range": [
+      "7.1.1"
+    ],
+    "foreground-child": [
+      "3.1.1"
+    ],
+    "fraction.js": [
+      "4.3.7"
+    ],
+    "frappe-ui": [
+      "0.1.31"
+    ],
+    "function-bind": [
+      "1.1.2"
+    ],
+    "glob": [
+      "10.5.0"
+    ],
+    "glob-parent": [
+      "5.1.2",
+      "6.0.2"
+    ],
+    "hasown": [
+      "2.0.1"
+    ],
+    "idb-keyval": [
+      "6.2.1"
+    ],
+    "is-binary-path": [
+      "2.1.0"
+    ],
+    "is-core-module": [
+      "2.13.1"
+    ],
+    "is-extendable": [
+      "1.0.1"
+    ],
+    "is-extglob": [
+      "2.1.1"
+    ],
+    "is-fullwidth-code-point": [
+      "3.0.0"
+    ],
+    "is-glob": [
+      "4.0.3"
+    ],
+    "is-number": [
+      "7.0.0"
+    ],
+    "is-plain-object": [
+      "2.0.4"
+    ],
+    "isexe": [
+      "2.0.0"
+    ],
+    "isobject": [
+      "3.0.1"
+    ],
+    "jackspeak": [
+      "3.4.3"
+    ],
+    "jiti": [
+      "1.21.0"
+    ],
+    "lilconfig": [
+      "2.1.0",
+      "3.1.1"
+    ],
+    "lines-and-columns": [
+      "1.2.4"
+    ],
+    "linkify-it": [
+      "5.0.2"
+    ],
+    "linkifyjs": [
+      "4.1.3"
+    ],
+    "lodash.castarray": [
+      "4.4.0"
+    ],
+    "lodash.isplainobject": [
+      "4.0.6"
+    ],
+    "lodash.merge": [
+      "4.6.2"
+    ],
+    "lru-cache": [
+      "10.4.3"
+    ],
+    "lucide-vue-next": [
+      "0.259.0"
+    ],
+    "magic-string": [
+      "0.30.7"
+    ],
+    "make-error": [
+      "1.3.6"
+    ],
+    "markdown-it": [
+      "14.2.0"
+    ],
+    "mdurl": [
+      "2.0.0"
+    ],
+    "merge2": [
+      "1.4.1"
+    ],
+    "micromatch": [
+      "4.0.8"
+    ],
+    "mini-svg-data-uri": [
+      "1.4.4"
+    ],
+    "minimatch": [
+      "9.0.7"
+    ],
+    "minipass": [
+      "7.0.4",
+      "7.1.3"
+    ],
+    "ms": [
+      "2.1.3"
+    ],
+    "mz": [
+      "2.7.0"
+    ],
+    "nanoid": [
+      "3.3.18"
+    ],
+    "node-releases": [
+      "2.0.55"
+    ],
+    "normalize-path": [
+      "3.0.0"
+    ],
+    "normalize-range": [
+      "0.1.2"
+    ],
+    "object-assign": [
+      "4.1.1"
+    ],
+    "object-hash": [
+      "3.0.0"
+    ],
+    "object.omit": [
+      "3.0.0"
+    ],
+    "object.pick": [
+      "1.3.0"
+    ],
+    "orderedmap": [
+      "2.1.1"
+    ],
+    "package-json-from-dist": [
+      "1.0.1"
+    ],
+    "path-key": [
+      "3.1.1"
+    ],
+    "path-parse": [
+      "1.0.7"
+    ],
+    "path-scurry": [
+      "1.11.1"
+    ],
+    "perfect-scrollbar": [
+      "1.5.5"
+    ],
+    "picocolors": [
+      "1.0.0",
+      "1.1.1"
+    ],
+    "picomatch": [
+      "2.3.2"
+    ],
+    "pify": [
+      "2.3.0"
+    ],
+    "pinia": [
+      "2.1.7"
+    ],
+    "pirates": [
+      "4.0.6"
+    ],
+    "postcss": [
+      "8.4.35",
+      "8.5.23"
+    ],
+    "postcss-import": [
+      "15.1.0"
+    ],
+    "postcss-js": [
+      "4.0.1"
+    ],
+    "postcss-load-config": [
+      "4.0.2"
+    ],
+    "postcss-nested": [
+      "6.0.1"
+    ],
+    "postcss-selector-parser": [
+      "6.0.10",
+      "6.0.15"
+    ],
+    "postcss-value-parser": [
+      "4.2.0"
+    ],
+    "prosemirror-changeset": [
+      "2.2.1"
+    ],
+    "prosemirror-collab": [
+      "1.3.1"
+    ],
+    "prosemirror-commands": [
+      "1.5.2"
+    ],
+    "prosemirror-dropcursor": [
+      "1.8.1"
+    ],
+    "prosemirror-gapcursor": [
+      "1.3.2"
+    ],
+    "prosemirror-history": [
+      "1.3.2"
+    ],
+    "prosemirror-inputrules": [
+      "1.4.0"
+    ],
+    "prosemirror-keymap": [
+      "1.2.2"
+    ],
+    "prosemirror-markdown": [
+      "1.12.0"
+    ],
+    "prosemirror-menu": [
+      "1.2.4"
+    ],
+    "prosemirror-model": [
+      "1.19.4"
+    ],
+    "prosemirror-schema-basic": [
+      "1.2.2"
+    ],
+    "prosemirror-schema-list": [
+      "1.3.0"
+    ],
+    "prosemirror-state": [
+      "1.4.3"
+    ],
+    "prosemirror-tables": [
+      "1.3.5"
+    ],
+    "prosemirror-trailing-node": [
+      "2.0.7"
+    ],
+    "prosemirror-transform": [
+      "1.8.0"
+    ],
+    "prosemirror-view": [
+      "1.33.1"
+    ],
+    "punycode.js": [
+      "2.3.1"
+    ],
+    "qalendar": [
+      "3.7.0"
+    ],
+    "queue-microtask": [
+      "1.2.3"
+    ],
+    "read-cache": [
+      "1.0.0"
+    ],
+    "readdirp": [
+      "3.6.0"
+    ],
+    "resolve": [
+      "1.22.8"
+    ],
+    "reusify": [
+      "1.0.4"
+    ],
+    "rollup": [
+      "2.77.3"
+    ],
+    "rope-sequence": [
+      "1.3.4"
+    ],
+    "run-parallel": [
+      "1.2.0"
+    ],
+    "shebang-command": [
+      "2.0.0"
+    ],
+    "shebang-regex": [
+      "3.0.0"
+    ],
+    "showdown": [
+      "2.1.0"
+    ],
+    "signal-exit": [
+      "4.1.0"
+    ],
+    "socket.io-client": [
+      "4.8.3"
+    ],
+    "socket.io-parser": [
+      "4.2.7"
+    ],
+    "source-map-js": [
+      "1.0.2",
+      "1.2.1"
+    ],
+    "string-width": [
+      "4.2.3",
+      "5.1.2"
+    ],
+    "strip-ansi": [
+      "6.0.1",
+      "7.1.0"
+    ],
+    "sucrase": [
+      "3.35.0"
+    ],
+    "supports-preserve-symlinks-flag": [
+      "1.0.0"
+    ],
+    "tailwindcss": [
+      "3.4.1"
+    ],
+    "thenify": [
+      "3.3.1"
+    ],
+    "thenify-all": [
+      "1.6.0"
+    ],
+    "throttle-debounce": [
+      "3.0.1"
+    ],
+    "tippy.js": [
+      "6.3.7"
+    ],
+    "to-regex-range": [
+      "5.0.1"
+    ],
+    "ts-interface-checker": [
+      "0.1.13"
+    ],
+    "type-fest": [
+      "2.19.0"
+    ],
+    "uc.micro": [
+      "2.0.0",
+      "2.1.0"
+    ],
+    "update-browserslist-db": [
+      "1.3.3"
+    ],
+    "util-deprecate": [
+      "1.0.2"
+    ],
+    "vite": [
+      "2.9.17",
+      "2.9.18"
+    ],
+    "vue": [
+      "3.4.19"
+    ],
+    "vue-demi": [
+      "0.14.7"
+    ],
+    "vue-router": [
+      "4.3.0"
+    ],
+    "w3c-keyname": [
+      "2.2.8"
+    ],
+    "which": [
+      "2.0.2"
+    ],
+    "wrap-ansi": [
+      "7.0.0",
+      "8.1.0"
+    ],
+    "ws": [
+      "8.21.0"
+    ],
+    "xmlhttprequest-ssl": [
+      "2.1.2"
+    ],
+    "yaml": [
+      "2.8.3"
+    ]
+  },
+  "package_names_submitted": 257,
+  "packages_with_advisories": 7,
+  "advisories": {
+    "@tiptap/core": [
+      {
+        "id": 1158508,
+        "url": "https://github.com/advisories/GHSA-cp6q-959q-f8rh",
+        "title": "Tiptap: mergeAttributes() turns an own __proto__ key into inherited executable DOM attributes",
+        "severity": "moderate",
+        "vulnerable_versions": ">=2.0.0-alpha.0 <3.30.4",
+        "cwe": [
+          "CWE-79",
+          "CWE-1321"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      }
+    ],
+    "@tiptap/extension-link": [
+      {
+        "id": 1111311,
+        "url": "https://github.com/advisories/GHSA-vhrc-hgrq-x75r",
+        "title": "@tiptap/extension-link vulnerable to Cross-site Scripting (XSS)",
+        "severity": "low",
+        "vulnerable_versions": "<2.10.4",
+        "cwe": [
+          "CWE-79"
+        ],
+        "cvss": {
+          "score": 6.1,
+          "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N"
+        }
+      }
+    ],
+    "esbuild": [
+      {
+        "id": 1102341,
+        "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+        "title": "esbuild enables any website to send any requests to the development server and read the response",
+        "severity": "moderate",
+        "vulnerable_versions": "<=0.24.2",
+        "cwe": [
+          "CWE-346"
+        ],
+        "cvss": {
+          "score": 5.3,
+          "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"
+        }
+      }
+    ],
+    "postcss": [
+      {
+        "id": 1130709,
+        "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+        "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q \u2014 attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+        "severity": "moderate",
+        "vulnerable_versions": "<=8.5.22",
+        "cwe": [
+          "CWE-22",
+          "CWE-200"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      },
+      {
+        "id": 1117015,
+        "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+        "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+        "severity": "moderate",
+        "vulnerable_versions": "<8.5.10",
+        "cwe": [
+          "CWE-79"
+        ],
+        "cvss": {
+          "score": 6.1,
+          "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N"
+        }
+      },
+      {
+        "id": 1124252,
+        "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+        "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+        "severity": "high",
+        "vulnerable_versions": "<=8.5.11",
+        "cwe": [
+          "CWE-22",
+          "CWE-200"
+        ],
+        "cvss": {
+          "score": 7.5,
+          "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+        }
+      },
+      {
+        "id": 1139510,
+        "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+        "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+        "severity": "high",
+        "vulnerable_versions": "<=8.5.17",
+        "cwe": [
+          "CWE-22"
+        ],
+        "cvss": {
+          "score": 7.5,
+          "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+        }
+      }
+    ],
+    "rollup": [
+      {
+        "id": 1099757,
+        "url": "https://github.com/advisories/GHSA-gcx4-mw62-g8wm",
+        "title": "DOM Clobbering Gadget found in rollup bundled scripts that leads to XSS",
+        "severity": "high",
+        "vulnerable_versions": "<2.79.2",
+        "cwe": [
+          "CWE-79"
+        ],
+        "cvss": {
+          "score": 6.4,
+          "vectorString": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:L/I:L/A:H"
+        }
+      },
+      {
+        "id": 1113517,
+        "url": "https://github.com/advisories/GHSA-mw96-cpmx-2vgc",
+        "title": "Rollup 4 has Arbitrary File Write via Path Traversal",
+        "severity": "high",
+        "vulnerable_versions": "<2.80.0",
+        "cwe": [
+          "CWE-22"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      }
+    ],
+    "showdown": [
+      {
+        "id": 1117038,
+        "url": "https://github.com/advisories/GHSA-rmmh-p597-ppvv",
+        "title": "Showdown vulnerable to Regular Expression Denial of Service (ReDoS) in link/anchor parsing",
+        "severity": "moderate",
+        "vulnerable_versions": "<=2.1.0",
+        "cwe": [
+          "CWE-674",
+          "CWE-777"
+        ],
+        "cvss": {
+          "score": 5.3,
+          "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+        }
+      },
+      {
+        "id": 1138814,
+        "url": "https://github.com/advisories/GHSA-cr32-g25g-vxjj",
+        "title": "showdown metadata title handling allows cross-site scripting",
+        "severity": "moderate",
+        "vulnerable_versions": "<=2.1.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "cvss": {
+          "score": 6.1,
+          "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N"
+        }
+      },
+      {
+        "id": 1138815,
+        "url": "https://github.com/advisories/GHSA-22g5-r2x5-97cx",
+        "title": "showdown allows stored cross-site scripting through table header ID injection",
+        "severity": "moderate",
+        "vulnerable_versions": "<=2.1.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "cvss": {
+          "score": 6.1,
+          "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N"
+        }
+      }
+    ],
+    "vite": [
+      {
+        "id": 1099690,
+        "url": "https://github.com/advisories/GHSA-64vr-g452-qvp3",
+        "title": "Vite DOM Clobbering gadget found in vite bundled scripts that leads to XSS",
+        "severity": "moderate",
+        "vulnerable_versions": "<3.2.11",
+        "cwe": [
+          "CWE-79"
+        ],
+        "cvss": {
+          "score": 6.4,
+          "vectorString": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:L/I:L/A:H"
+        }
+      },
+      {
+        "id": 1099695,
+        "url": "https://github.com/advisories/GHSA-9cwx-2883-4wfx",
+        "title": "Vite's `server.fs.deny` is bypassed when using `?import&raw`",
+        "severity": "moderate",
+        "vulnerable_versions": "<=3.2.10",
+        "cwe": [
+          "CWE-200",
+          "CWE-284"
+        ],
+        "cvss": {
+          "score": 5.3,
+          "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+        }
+      },
+      {
+        "id": 1102436,
+        "url": "https://github.com/advisories/GHSA-vg6x-rcgg-rjx6",
+        "title": "Websites were able to send any requests to the development server and read the response in vite",
+        "severity": "moderate",
+        "vulnerable_versions": "<=4.5.5",
+        "cwe": [
+          "CWE-346",
+          "CWE-350",
+          "CWE-1385"
+        ],
+        "cvss": {
+          "score": 6.5,
+          "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:N"
+        }
+      },
+      {
+        "id": 1103516,
+        "url": "https://github.com/advisories/GHSA-x574-m823-4x7w",
+        "title": "Vite bypasses server.fs.deny when using ?raw??",
+        "severity": "moderate",
+        "vulnerable_versions": "<4.5.10",
+        "cwe": [
+          "CWE-200",
+          "CWE-284"
+        ],
+        "cvss": {
+          "score": 5.3,
+          "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"
+        }
+      },
+      {
+        "id": 1103883,
+        "url": "https://github.com/advisories/GHSA-356w-63v5-8wf4",
+        "title": "Vite has an `server.fs.deny` bypass with an invalid `request-target`",
+        "severity": "moderate",
+        "vulnerable_versions": "<4.5.13",
+        "cwe": [
+          "CWE-200"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      },
+      {
+        "id": 1104172,
+        "url": "https://github.com/advisories/GHSA-859w-5945-r5v3",
+        "title": "Vite's server.fs.deny bypassed with /. for files under project root",
+        "severity": "moderate",
+        "vulnerable_versions": "<=4.5.13",
+        "cwe": [
+          "CWE-22"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      },
+      {
+        "id": 1104201,
+        "url": "https://github.com/advisories/GHSA-xcj6-pq6g-qj4x",
+        "title": "Vite allows server.fs.deny to be bypassed with .svg or relative paths",
+        "severity": "moderate",
+        "vulnerable_versions": "<4.5.12",
+        "cwe": [
+          "CWE-200",
+          "CWE-284"
+        ],
+        "cvss": {
+          "score": 5.3,
+          "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"
+        }
+      },
+      {
+        "id": 1107323,
+        "url": "https://github.com/advisories/GHSA-g4jq-h2w9-997c",
+        "title": "Vite middleware may serve files starting with the same name with the public directory",
+        "severity": "low",
+        "vulnerable_versions": "<=5.4.19",
+        "cwe": [
+          "CWE-22",
+          "CWE-200",
+          "CWE-284"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      },
+      {
+        "id": 1107327,
+        "url": "https://github.com/advisories/GHSA-jqfw-vq24-v9c3",
+        "title": "Vite's `server.fs` settings were not applied to HTML files",
+        "severity": "low",
+        "vulnerable_versions": "<=5.4.19",
+        "cwe": [
+          "CWE-23",
+          "CWE-200",
+          "CWE-284"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      },
+      {
+        "id": 1109134,
+        "url": "https://github.com/advisories/GHSA-93m4-6634-74q7",
+        "title": "vite allows server.fs.deny bypass via backslash on Windows",
+        "severity": "moderate",
+        "vulnerable_versions": ">=2.9.18 <3.0.0",
+        "cwe": [
+          "CWE-22"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      },
+      {
+        "id": 1112510,
+        "url": "https://github.com/advisories/GHSA-4r4m-qw57-chr8",
+        "title": "Vite has a `server.fs.deny` bypassed for `inline` and `raw` with `?import` query",
+        "severity": "moderate",
+        "vulnerable_versions": "<4.5.11",
+        "cwe": [
+          "CWE-200",
+          "CWE-284"
+        ],
+        "cvss": {
+          "score": 5.3,
+          "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"
+        }
+      },
+      {
+        "id": 1120061,
+        "url": "https://github.com/advisories/GHSA-c27g-q93r-2cwf",
+        "title": "launch-editor vulnerable to command injection via the crafted request on Windows",
+        "severity": "high",
+        "vulnerable_versions": "<=5.4.8",
+        "cwe": [
+          "CWE-77"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      },
+      {
+        "id": 1120784,
+        "url": "https://github.com/advisories/GHSA-v6wh-96g9-6wx3",
+        "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+        "severity": "moderate",
+        "vulnerable_versions": "<=6.4.2",
+        "cwe": [
+          "CWE-73",
+          "CWE-522"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      },
+      {
+        "id": 1116229,
+        "url": "https://github.com/advisories/GHSA-4w7w-66w2-5vf9",
+        "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+        "severity": "moderate",
+        "vulnerable_versions": "<=6.4.1",
+        "cwe": [
+          "CWE-22",
+          "CWE-200"
+        ],
+        "cvss": {
+          "score": 0,
+          "vectorString": null
+        }
+      },
+      {
+        "id": 1096897,
+        "url": "https://github.com/advisories/GHSA-8jhw-289h-jh2g",
+        "title": "Vite's `server.fs.deny` did not deny requests for patterns with directories.",
+        "severity": "moderate",
+        "vulnerable_versions": ">=2.7.0 <=2.9.17",
+        "cwe": [
+          "CWE-200",
+          "CWE-284"
+        ],
+        "cvss": {
+          "score": 5.9,
+          "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N"
+        }
+      },
+      {
+        "id": 1123525,
+        "url": "https://github.com/advisories/GHSA-fx2h-pf6j-xcff",
+        "title": "vite: `server.fs.deny` bypass on Windows alternate paths",
+        "severity": "high",
+        "vulnerable_versions": "<=6.4.2",
+        "cwe": [
+          "CWE-22",
+          "CWE-200"
+        ],
+        "cvss": {
+          "score": 7.5,
+          "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+name: Placement evidence recovery
+on:
+  # Historical artifact recovery is manual-only. It is not a qualification gate
+  # and must not fail every active-branch code push when the artifact host is
+  # unavailable.
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Authorized synthetic qualification run
+        default: '34850654470'
+        required: true
+permissions:
+  contents: read
+  actions: read
+  checks: write
+jobs:
+  recover:
+    if: github.ref == 'refs/heads/arena/01a0a9f7-tofel-house-erp'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Recover original sanitized evidence without changing observations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run || '34850654470' }}
+        run: python3 tools/placement/recover_evidence.py
+      - name: Retain the earlier HMAC harness failure completely
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_RUN: '34848508030'
+        run: python3 tools/placement/recover_evidence.py

@@ -1,0 +1,67 @@
+{
+  "scope": "Static source provenance, NOT installed apps",
+  "checks": [
+    {
+      "component": "frappe",
+      "commit": "988e54f3c4c291e2077a83809663f123731abe76",
+      "tracked_worktree_clean": true,
+      "recorded_source_hashes_match": {
+        "pyproject.toml": true,
+        "package.json": true,
+        "yarn.lock": true,
+        "frappe/hooks.py": true
+      }
+    },
+    {
+      "component": "erpnext",
+      "commit": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+      "tracked_worktree_clean": true,
+      "recorded_source_hashes_match": {
+        "pyproject.toml": true,
+        "package.json": true,
+        "yarn.lock": true,
+        "erpnext/hooks.py": true
+      }
+    },
+    {
+      "component": "education",
+      "commit": "93bc7075753369457919720690f80c6d2207b5f2",
+      "tracked_worktree_clean": true,
+      "recorded_source_hashes_match": {
+        "pyproject.toml": true,
+        "package.json": true,
+        "frontend/package.json": true,
+        "frontend/yarn.lock": true,
+        "yarn.lock": true,
+        "education/hooks.py": true
+      }
+    },
+    {
+      "component": "hrms",
+      "commit": "a4768b441cff346def505e27f2a2229ee1e05b9b",
+      "tracked_worktree_clean": true,
+      "recorded_source_hashes_match": {
+        "pyproject.toml": true,
+        "package.json": true,
+        "frontend/package.json": true,
+        "frontend/yarn.lock": true,
+        "yarn.lock": true,
+        "hrms/hooks.py": true
+      }
+    },
+    {
+      "component": "bench",
+      "commit": "f21f11793872705560e710b2bda69934c9c34011",
+      "tracked_worktree_clean": true,
+      "recorded_source_hashes_match": {
+        "pyproject.toml": true
+      }
+    },
+    {
+      "component": "frappe_docker",
+      "commit": "3061850feface8fbbad15b5dc08a110c596107cb",
+      "tracked_worktree_clean": true,
+      "recorded_source_hashes_match": {}
+    }
+  ]
+}

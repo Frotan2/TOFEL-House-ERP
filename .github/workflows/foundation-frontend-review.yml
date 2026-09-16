@@ -1,0 +1,52 @@
+name: Foundation frontend candidate review
+on:
+  push:
+    branches: [arena/01a0a9f7-tofel-house-erp]
+    paths:
+      - .github/workflows/foundation-frontend-review.yml
+      - tools/session_branch.py
+      - tools/foundation/frontend_*.py
+      - tools/foundation/frontend_*.cjs
+      - docs/engineering/evidence/phase-2/frontend-resolution-proposal.json
+      - docs/engineering/evidence/phase-2/frontend-candidate.yarn.lock
+  workflow_dispatch:
+permissions:
+  contents: read
+  checks: write
+concurrency:
+  group: foundation-frontend-review-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  comparison:
+    if: github.ref == 'refs/heads/arena/01a0a9f7-tofel-house-erp'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Install pinned qualification tools
+        run: |
+          export FOUNDATION_REVIEW_TOOLS="$RUNNER_TEMP/frontend-review-tools"
+          echo "FOUNDATION_REVIEW_TOOLS=$FOUNDATION_REVIEW_TOOLS" >> "$GITHUB_ENV"
+          npm install --global yarn@1.22.22
+          npm install --prefix "$FOUNDATION_REVIEW_TOOLS" --ignore-scripts --no-audit --no-fund semver@7.7.3
+      - name: Compare frozen baseline and isolated candidate
+        run: python3 tools/foundation/frontend_experiment.py
+      - name: Publish complete comparison including failed advisory gate
+        if: always() && hashFiles('.foundation/frontend-experiment-evidence/result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/foundation/publish_evidence.py .foundation/frontend-experiment-evidence/result.json --name 'Foundation frontend candidate evidence'
+      - name: Retain comparison logs and reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: foundation-frontend-review-${{ github.run_id }}
+          path: .foundation/frontend-experiment-evidence/
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,44 @@
+{
+  "scope": "Lossless sanitized Check reports; complete artifact logs not independently fetched for this pass",
+  "reports": [
+    {
+      "run_id": 34823793929,
+      "commit": "45568015dc98c9f5b4b0d0483ff8837fac5970e1",
+      "check_id": 103911386257,
+      "check_name": "Foundation frontend candidate evidence",
+      "file": "hosted/frontend-34823793929.json",
+      "sha256": "9acb56a9b04575ee5c97be7a01045aaee37a14d5d06cc80f5ed45a5681f4a2a5",
+      "bytes": 290941,
+      "status": "fail",
+      "report_sha256_matches_check_summary": true,
+      "embedded_commit_matches_check_head": true,
+      "embedded_run_id_verified": true
+    },
+    {
+      "run_id": 34823345078,
+      "commit": "4fa3192880a05ec5ba67899ecfff64679821ec74",
+      "check_id": 103915414737,
+      "check_name": "Foundation remaining gate evidence",
+      "file": "hosted/remaining-34823345078.json",
+      "sha256": "be25cd4c1c01b30bcc21e06a8d988ef871b5b43acfc862da3ebdf64591af51eb",
+      "bytes": 67226,
+      "status": "fail",
+      "report_sha256_matches_check_summary": true,
+      "embedded_commit_matches_check_and_workflow_head": true,
+      "embedded_run_id_verified": true
+    },
+    {
+      "run_id": 34823345078,
+      "commit": "4fa3192880a05ec5ba67899ecfff64679821ec74",
+      "check_id": 103915411886,
+      "check_name": "Foundation runtime evidence",
+      "file": "hosted/runtime-34823345078.json",
+      "sha256": "7a5ea92f5e0c1118f461ef0ab56040537ba6f2f75f4be4cb0d96283b2e06e3c8",
+      "bytes": 60147,
+      "status": "fail",
+      "report_sha256_matches_check_summary": true,
+      "embedded_commit_matches_check_and_workflow_head": true,
+      "embedded_run_id_verified": true
+    }
+  ]
+}
