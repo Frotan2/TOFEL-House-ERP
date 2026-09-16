@@ -180,6 +180,38 @@ def main() -> int:
         bench("migrate-first", "--site", site, "migrate")
         bench("migrate-replay", "--site", site, "migrate")
         bench("asset-build", "build", timeout=1800)
+        # Inventory resolved dependency trees after their actual asset build.
+        # Findings remain REJECT evidence rather than a hidden best-effort scan.
+        stack_audit_path = evidence / "stack-dependency-audit.json"
+        stack_node_roots = [bench_dir / "apps" / name / "node_modules"
+                            for name in ("frappe", "erpnext", "education", "payments", "hrms")]
+        stack_node_roots.append(bench_dir / "apps" / "education" / "frontend" / "node_modules")
+        stack_audit_command = [bench_dir / "env/bin/python", ROOT / "tools/foundation/audit_stack.py"]
+        for root in stack_node_roots:
+            stack_audit_command += ["--node-modules", root]
+        for name in ("mariadb", "redis"):
+            stack_audit_command += ["--image", name + "=" + components[name]["image_digest"]]
+        stack_audit_command += ["--output", stack_audit_path]
+        diagnostic_failures = []
+        try:
+            run("hosted-full-stack-dependency-audit", stack_audit_command, timeout=2400)
+        except RuntimeError as exc:
+            diagnostic_failures = [str(exc)]
+        else:
+            diagnostic_failures = []
+        if not stack_audit_path.exists():
+            raise RuntimeError("Full-stack dependency audit produced no result")
+        stack_audit = json.loads(stack_audit_path.read_text())
+        if stack_audit.get("status") == "error":
+            raise RuntimeError("Full-stack dependency audit failed to complete: " + stack_audit.get("error", "unknown error"))
+        report["stack_dependency_audit"] = {
+            "status": stack_audit["status"], "scope": stack_audit["scope"],
+            "python_package_names": stack_audit["python"]["package_names"],
+            "python_osv_findings": len(stack_audit["python"]["osv"]["findings"]),
+            "node_package_names": stack_audit["node"]["package_names"],
+            "node_advisory_entries": stack_audit["node"]["advisory_entries"],
+            "container_status": stack_audit["containers"]["status"],
+        }
         report["site_apps"] = bench("site-app-list", "--site", site, "list-apps", "--format", "json")
         env["FOUNDATION_TEST_PASSWORD"] = test_password
         env["FOUNDATION_ADMIN_PASSWORD"] = admin_password
@@ -300,7 +332,6 @@ http {{
         run("nginx-config-check", ["nginx", "-t", "-c", proxy_conf])
         launch("public-proxy", ["nginx", "-c", proxy_conf, "-g", "daemon off;"], lab)
         env["FOUNDATION_ISOLATION_REPORT"] = str(evidence / "isolation-result.json")
-        diagnostic_failures = []
         try:
             run("expanded-restricted-http-isolation", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_isolation.py"], cwd=bench_dir / "sites")
         except RuntimeError as exc:
@@ -435,6 +466,16 @@ http {{
             if path.exists(): path.write_text(redact(path.read_text()))
             continuation[label] = json.loads(path.read_text()) if path.exists() else {"status":"blocked","reason":"No completed report"}
             if continuation[label]["status"] != "pass": continuation["status"]="fail"
+        continuation["resolved_stack_dependencies"] = {
+            "status": stack_audit["status"],
+            "scope": stack_audit["scope"],
+            "python_packages": stack_audit["python"]["package_names"],
+            "python_osv_findings": len(stack_audit["python"]["osv"]["findings"]),
+            "node_packages": stack_audit["node"]["package_names"],
+            "node_advisory_entries": stack_audit["node"]["advisory_entries"],
+            "container_status": stack_audit["containers"]["status"],
+        }
+        if stack_audit["status"] != "pass": continuation["status"] = "fail"
         audit_path=evidence / "frontend-advisories.json"
         if audit_path.exists():
             audit=json.loads(audit_path.read_text())
