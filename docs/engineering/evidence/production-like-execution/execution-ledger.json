@@ -1133,5 +1133,56 @@
       "local-unittest-313.txt": "6d95cec0565e3ae2ea04e63dec3ecfad6c4076bb61c772c87a081c465d615562"
     },
     "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED."
-  }
+  },
+  "corroborating_reruns_at_evidence_commit": {
+    "commit": "c891949e (Record production-like execution on the active branch and classify every probe)",
+    "note": "Pushing the evidence commit re-triggered the hosted gates because tools/session_branch.py and tools/foundation/d8_validate.py are in their path filters. Conclusions below are only those actually observed through the GitHub API before the credential outage; nothing is inferred or assumed for a run that was still in progress.",
+    "runs": {
+      "35125669493": {
+        "workflow": "D8 operations contract validation",
+        "observed_conclusion": "success"
+      },
+      "35125669408": {
+        "workflow": "Foundation runner qualification",
+        "observed_conclusion": "success"
+      },
+      "35125669475": {
+        "workflow": "Placement synthetic content qualification",
+        "observed_conclusion": "success"
+      },
+      "35125669372": {
+        "workflow": "Foundation frontend candidate review",
+        "observed_conclusion": "failure"
+      },
+      "35125669370": {
+        "workflow": "Foundation runtime validation",
+        "observed_conclusion": null,
+        "status": "NOT RETRIEVED",
+        "reason": "Still in_progress at the last successful API poll, then GitHub authentication failed. The conclusion was never observed, so it is recorded as NOT RETRIEVED. It is NOT assumed to be failure merely because every prior runtime run failed, and it is NOT counted as evidence in either direction."
+      }
+    },
+    "authoritative_execution_evidence": "The probe classifications in this ledger remain bound to commit d7df9ca766cd3039d68051ca83cdc8be5e834452 and runs 35122242676 / 35122242728 / 35122242581 / 35122242647 / 35122242888, whose complete sanitized reports are archived here with SHA-256 values. The c891949e re-runs are corroboration only and are not substituted for that archived evidence. session_branch.ACTIVE_RUNTIME_RUN stays pinned to 35122242581 for that reason."
+  },
+  "evidence_retrieval_limitations": [
+    {
+      "limitation": "Runner artifact ZIPs and workflow logs unreachable",
+      "observed": "gh run download and gh run view --log both return EOF from productionresultssa*.blob.core.windows.net and results-receiver.actions.githubusercontent.com",
+      "mitigation": "Evidence retrieved through the repository's own sanctioned lossless Checks-API transport (tools/foundation/publish_evidence.py); every retrieved report archived with SHA-256.",
+      "effect_on_conclusions": "None. Full sanitized reports were obtained for all five d7df9ca runs."
+    },
+    {
+      "limitation": "GitHub credential expiry mid-pass",
+      "observed": "gh auth status reports 'The github.com token in GH_TOKEN is no longer valid'; api.github.com returns HTTP 401 while github.com returns 200, so this is an authentication failure and not a network outage. git ls-remote also fails with 'could not read Username'.",
+      "detected_at_utc": "2026-09-16T17:24:26.633809+00:00",
+      "mitigation": "None available inside the sandbox; credentials must never be requested or stored in chat. The GitHub connection has to be re-established in Arena.",
+      "effect_on_conclusions": "PR #2 could not be updated with a comment, and the Foundation runtime conclusion at c891949e (run 35125669370) could not be retrieved. Both are recorded as outstanding. git push also fails ('could not read Username for https://github.com'), so the final local commit - the one recording corroboration, the credential-expiry limitations and the queued PR #2 update - is committed locally but NOT on GitHub. The remote tip of arena/01a0aafe-tofel-house-erp is c891949, confirmed by the successful push output 'd7df9ca..c891949'. No release conclusion depends on any of this: the authoritative execution evidence is the fully archived d7df9ca set, and production authorization is REJECT either way."
+    }
+  ],
+  "outstanding_actions": [
+    "Re-establish GitHub authentication in Arena (the GH_TOKEN is no longer valid; credentials must never be requested or stored in chat).",
+    "git push origin arena/01a0aafe-tofel-house-erp  # publishes the final local commit; remote tip is currently c891949",
+    "Post the prepared PR #2 comment: gh pr comment 2 --repo Frotan2/TOFEL-House-ERP --body-file docs/engineering/evidence/production-like-execution/PR2-COMMENT.body.md",
+    "Retrieve and record the conclusion of Foundation runtime run 35125669370 at c891949e; do not assume it.",
+    "Optionally re-run the five workflows at the final commit once it is pushed, and archive those reports the same way."
+  ]
 }

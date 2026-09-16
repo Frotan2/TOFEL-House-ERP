@@ -376,6 +376,27 @@ was retrieved through the repository's own sanctioned Checks-API transport
 report losslessly. Each retrieved report is archived under
 `evidence/production-like-execution/` with its SHA-256.
 
+Pushing the evidence commit `c891949` re-triggered the hosted gates because
+`tools/session_branch.py` and `tools/foundation/d8_validate.py` are in their path
+filters. Conclusions actually observed before a GitHub credential expiry: D8
+`35125669493` **success**, runner `35125669408` **success**, placement
+`35125669475` **success**, frontend `35125669372` **failure**. Foundation runtime
+`35125669370` was still `in_progress` at the last successful poll and is recorded
+as **NOT RETRIEVED** — it is not assumed to be a failure merely because every
+prior runtime run failed, and it is not counted in either direction. These
+re-runs are corroboration only; `session_branch.ACTIVE_RUNTIME_RUN` stays pinned
+to `35122242581`, whose complete report is archived.
+
+`gh auth status` then reported *"The github.com token in GH_TOKEN is no longer
+valid"*; `api.github.com` returned 401 while `github.com` returned 200, so this
+is an authentication failure rather than a network outage. The PR #2 comment was
+therefore queued as
+[`evidence/production-like-execution/PR2-COMMENT.md`](evidence/production-like-execution/PR2-COMMENT.md)
+(with a ready-to-post
+[`PR2-COMMENT.body.md`](evidence/production-like-execution/PR2-COMMENT.body.md))
+instead of being paraphrased or silently dropped. Credentials were never
+requested or stored. Outstanding actions are listed in the execution ledger.
+
 ### 8.4 Probe-by-probe classification
 
 | # | Requested probe | Classification | Executed and genuinely proven | Not executed — remains open |

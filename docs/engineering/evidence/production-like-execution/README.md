@@ -64,6 +64,8 @@ repository's own lossless Checks-API transport (`tools/foundation/publish_eviden
 | [`local-d8-validate.json`](local-d8-validate.json) | PASS / STRUCTURAL | `e39c9fad0ce393541af0a21ab193e8768db4f31d597a74d98e00cc283022d32e` | 1997 | D8 validator output on the rotated active branch: exit 0 while reporting BLOCKED, REJECT, production_enabled false, SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT, checkout_branch_matches_active true. |
 | [`local-runner-capability-probe.json`](local-runner-capability-probe.json) | ENVIRONMENT-BLOCKED | `d42a00f281fc5a95c5aceef9d4567bc2b8191ad0941c6dab7a14061e64bbadb4` | 7077 | Capability determination for the requesting sandbox: no Docker Engine/Compose, apt and download.docker.com unreachable, no /lib/modules, read-only /proc, 2 vCPU / 3.8 GiB RAM. Commands and raw outputs inline. |
 | [`local-unittest-313.txt`](local-unittest-313.txt) | PASS / LOCAL | `6d95cec0565e3ae2ea04e63dec3ecfad6c4076bb61c772c87a081c465d615562` | 455 | Full local Python suite: 313 tests, OK. |
+| [`PR2-COMMENT.body.md`](PR2-COMMENT.body.md) | QUEUED | `eb65deef7f66b00b54d7f451f2a72a89085aaef8dd59330292779f3d456358f2` | 9202 | Ready-to-post body for the PR #2 update. Queued because the GitHub credential expired mid-pass. |
+| [`PR2-COMMENT.md`](PR2-COMMENT.md) | QUEUED | `d7a9a4d9daa1ba965085ff31cbe4314551bd93573a3d6da9a741640210046a14` | 9602 | Posting instructions plus the PR #2 update text, and the two premise corrections (nonexistent commit d3705e6, ENVIRONMENT-BLOCKED local host). |
 
 ## Release state after this pass
 
@@ -75,3 +77,22 @@ capacity/availability objective invented, and PR #2 is not merged.
 See [`FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md`](../../FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md)
 §8 and [`RELEASE-GAP-MAP.md`](../../RELEASE-GAP-MAP.md) §1.6 for the
 executed-versus-blocked breakdown.
+
+## Outstanding
+
+The GitHub credential expired mid-pass (`gh auth status`: *"The github.com token
+in GH_TOKEN is no longer valid"*; `api.github.com` 401 while `github.com` 200).
+Two things are therefore queued rather than claimed:
+
+1. Post [`PR2-COMMENT.body.md`](PR2-COMMENT.body.md) to PR #2 — see the command
+   in [`PR2-COMMENT.md`](PR2-COMMENT.md).
+2. Retrieve the conclusion of Foundation runtime run `35125669370` at `c891949`.
+   It is recorded as **NOT RETRIEVED** and is not assumed to be a failure.
+3. Push the final local commit. The remote tip of
+   `arena/01a0aafe-tofel-house-erp` is `c891949` (confirmed by the push output
+   `d7df9ca..c891949`); the commit recording these limitations is local-only
+   because `git push` fails with *"could not read Username for
+   'https://github.com'"*.
+
+Neither affects the release conclusion: the authoritative execution evidence is
+the archived `d7df9ca` run set above, and production authorization is **REJECT**.
