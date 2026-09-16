@@ -22,6 +22,9 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 from session_branch import ACTIVE_REF
+# Imported, not re-implemented, so the hosted harness and the local regression
+# tests exercise exactly the same fail-closed restore logic.
+from runtime_encryption_key import restore_key_into_config
 
 
 def main() -> int:
@@ -181,6 +184,23 @@ def main() -> int:
             report["installed_apps"].append(name)
         bench("migrate-first", "--site", site, "migrate")
         bench("migrate-replay", "--site", site, "migrate")
+        # Frappe creates the site encryption key lazily, on the first call to
+        # frappe.utils.password.get_encryption_key(); `bench new-site` does not.
+        # A backup taken before that point carries no key material, and restoring
+        # it produces a site that cannot decrypt encrypted content. Initialize the
+        # key here through the native mechanism - the same call the application's
+        # own after_install hook uses - so the entire backup/restore lifecycle is
+        # covered and the key cannot be silently absent at restore time.
+        env["FOUNDATION_LAB"] = str(lab)
+        env["FOUNDATION_ENCRYPTION_KEY_REPORT"] = str(evidence / "encryption-key-initialize.json")
+        run("initialize-native-site-encryption-key",
+            [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_encryption_key.py",
+             "initialize", site], cwd=bench_dir / "sites")
+        initialize_result = json.loads((evidence / "encryption-key-initialize.json").read_text())
+        if initialize_result["status"] != "pass":
+            raise RuntimeError("Native site encryption key was not initialized before the first backup")
+        report["site_encryption_key_initialized"] = True
+        report["site_encryption_key_sha256"] = initialize_result["checks"][0]["observation"]["sha256"]
         bench("asset-build", "build", timeout=1800)
         # Inventory resolved dependency trees after their actual asset build.
         # Findings remain REJECT evidence rather than a hidden best-effort scan.
@@ -222,6 +242,16 @@ def main() -> int:
         run("business-smoke", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_smoke.py", site], cwd=bench_dir / "sites")
         run("mariadb-client-install", ["sudo", "apt-get", "install", "-y", "--no-install-recommends", "mariadb-client", "file"])
         report["mariadb_client_version"] = run("mariadb-client-version", ["mariadb", "--version"])
+        # Write a native encrypted Password field BEFORE the backup so the restore
+        # has real ciphertext to prove key survival against, not just a key string.
+        env["FOUNDATION_ENCRYPTION_KEY_REPORT"] = str(evidence / "encryption-key-prepare.json")
+        run("prepare-native-encrypted-fixture-before-backup",
+            [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_encryption_key.py",
+             "prepare", site], cwd=bench_dir / "sites")
+        prepare_result = json.loads((evidence / "encryption-key-prepare.json").read_text())
+        if prepare_result["status"] != "pass":
+            raise RuntimeError("Native encrypted fixture was not written before the backup")
+        report["encrypted_fixture_before_backup"] = prepare_result["checks"][0]["observation"]
         bench("backup-with-files", "--site", site, "backup", "--with-files")
         backup_dir = bench_dir / "sites" / site / "private/backups"
         database = next(backup_dir.glob("*-database.sql.gz"))
@@ -239,14 +269,39 @@ def main() -> int:
         original_config = json.loads((bench_dir / "sites" / site / "site_config.json").read_text())
         restore_config_file = bench_dir / "sites" / restored_site / "site_config.json"
         restore_config = json.loads(restore_config_file.read_text())
-        assert original_config["db_name"] != restore_config["db_name"], "Restore must use a different database"
-        if "encryption_key" in original_config:
-            restore_config["encryption_key"] = original_config["encryption_key"]
-            restore_config_file.write_text(json.dumps(restore_config, indent=2) + "\n")
-            restore_config_file.chmod(0o600)
+        # Fail closed through the shared, unit-tested helper: site_config.json is
+        # not SQL, so `bench restore` never carries the encryption key across on
+        # its own. The previous conditional copy silently no-oped whenever the
+        # source site had not yet generated a key, and reported
+        # site_encryption_key_restored=false as a passive observation instead of
+        # failing. The key is now initialized through the native mechanism before
+        # the first backup, so its absence here is a real defect; the helper
+        # raises rather than tolerating it, and also refuses a same-database
+        # restore or reuse of the source database credentials.
+        restore_config = restore_key_into_config(original_config, restore_config)
+        restore_config_file.write_text(json.dumps(restore_config, indent=2) + "\n")
+        restore_config_file.chmod(0o600)
+        if json.loads(restore_config_file.read_text()).get("encryption_key") != original_config["encryption_key"]:
+            raise RuntimeError("Restored site_config.json does not hold the source encryption key")
         report["restore_separate_database"] = True
-        report["site_encryption_key_restored"] = "encryption_key" in original_config
+        report["source_db_credentials_copied"] = False
         bench("restore-migrate", "--site", restored_site, "migrate")
+        # Prove the key actually survived: SHA-256 fingerprint match against the
+        # source plus real decryption of the ciphertext written before the backup.
+        # Mere presence of a key string is not accepted as a pass.
+        env["FOUNDATION_ENCRYPTION_KEY_REPORT"] = str(evidence / "encryption-key-restore-verify.json")
+        run("verify-encryption-key-survived-restore",
+            [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_encryption_key.py",
+             "verify", restored_site], cwd=bench_dir / "sites")
+        key_verify = json.loads((evidence / "encryption-key-restore-verify.json").read_text())
+        if key_verify["status"] != "pass":
+            raise RuntimeError("Restored site could not decrypt content encrypted before the backup")
+        key_observation = key_verify["checks"][0]["observation"]
+        report["site_encryption_key_restored"] = bool(
+            key_observation["fingerprint_matches_source"]
+            and key_observation["encrypted_content_decrypts_after_restore"]
+            and key_observation["ciphertext_matches_source"])
+        report["encryption_key_restore_proof"] = key_observation
         run("restore-verification", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_restore.py", restored_site], cwd=bench_dir / "sites")
 
         def launch(name, command, cwd):
@@ -357,6 +412,18 @@ http {{
         run("prepare-native-encrypted-recovery-fixture", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_recovery_secret.py", "prepare", site], cwd=bench_dir / "sites")
         original_config = json.loads((bench_dir / "sites" / site / "site_config.json").read_text())
         assert original_config.get("encryption_key"), "Native encrypted fixture must initialize the site key"
+        # Refresh the recorded key fingerprint and ciphertext digest for THIS
+        # backup cycle. Fernet output is randomized per encryption, so the
+        # recovery fixture above rewrote the ciphertext; re-recording here lets
+        # the recovery-site verification compare against the bytes that actually
+        # go into the hardened backup instead of the first cycle's.
+        env["FOUNDATION_ENCRYPTION_KEY_REPORT"] = str(evidence / "encryption-key-hardened-prepare.json")
+        run("prepare-native-encrypted-fixture-before-hardened-backup",
+            [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_encryption_key.py",
+             "prepare", site], cwd=bench_dir / "sites")
+        hardened_prepare = json.loads((evidence / "encryption-key-hardened-prepare.json").read_text())
+        if hardened_prepare["status"] != "pass":
+            raise RuntimeError("Native encrypted fixture was not refreshed before the hardened backup")
         bench("hardened-backup-with-files", "--site", site, "backup", "--with-files")
         secured_database = max(backup_dir.glob("*-database.sql.gz"), key=lambda p: p.stat().st_mtime_ns)
         secured_private = max(backup_dir.glob("*-private-files.tar"), key=lambda p: p.stat().st_mtime_ns)
@@ -372,15 +439,35 @@ http {{
         recovered_config_file = bench_dir / "sites" / recovered_site / "site_config.json"
         recovered_config = json.loads(recovered_config_file.read_text())
         assert recovered_config["db_name"] not in (original_config["db_name"], restore_config["db_name"])
+        assert recovered_config.get("db_password") not in (
+            original_config.get("db_password"), restore_config.get("db_password")), \
+            "Recovery site must not reuse the source or restore database credentials"
         # Site config is not SQL. Restore the required non-secret policy flag and
-        # encryption key explicitly, without copying source database credentials.
-        recovered_config["encryption_key"] = original_config["encryption_key"]
+        # the encryption key through the same fail-closed helper as the first
+        # restore cycle, without copying source database credentials.
+        recovered_config = restore_key_into_config(original_config, recovered_config)
         recovered_config["disable_website_cache"] = 1
         recovered_config_file.write_text(json.dumps(recovered_config,indent=2)+"\n")
         recovered_config_file.chmod(0o600)
         bench("hardened-recovery-migrate", "--site", recovered_site, "migrate")
         env["FOUNDATION_RESTORE_REPORT"] = str(evidence / "restore-secured-result.json")
         run("verify-native-encrypted-credential-recovery", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_recovery_secret.py", "verify", recovered_site], cwd=bench_dir / "sites")
+        # Apply the same fingerprint-and-decryption proof as the first restore
+        # cycle, so the hardened path cannot pass on a key string that merely
+        # happens to be present without actually decrypting restored ciphertext.
+        env["FOUNDATION_ENCRYPTION_KEY_REPORT"] = str(evidence / "encryption-key-hardened-verify.json")
+        run("verify-encryption-key-survived-hardened-recovery",
+            [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_encryption_key.py",
+             "verify", recovered_site], cwd=bench_dir / "sites")
+        hardened_key_verify = json.loads((evidence / "encryption-key-hardened-verify.json").read_text())
+        if hardened_key_verify["status"] != "pass":
+            raise RuntimeError("Hardened recovery site could not decrypt content encrypted before the backup")
+        hardened_key_observation = hardened_key_verify["checks"][0]["observation"]
+        report["site_encryption_key_restored_hardened"] = bool(
+            hardened_key_observation["fingerprint_matches_source"]
+            and hardened_key_observation["encrypted_content_decrypts_after_restore"]
+            and hardened_key_observation["ciphertext_matches_source"])
+        report["hardened_encryption_key_restore_proof"] = hardened_key_observation
         run("hardened-recovery-invariants", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_restore.py", recovered_site], cwd=bench_dir / "sites")
         run("copied-session-revocation-http-proof", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_recovery_session.py", "verify"])
         env["FOUNDATION_PRIMARY_SITE"] = recovered_site
