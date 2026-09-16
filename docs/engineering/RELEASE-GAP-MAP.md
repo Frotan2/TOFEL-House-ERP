@@ -98,7 +98,7 @@ invent business rules.
 | D5 = B03 | Real intake calendars, same-term repeat requirement, transfer/withdrawal semantics with history preservation | A05/A11 |
 | D6 = B07 remainder/B12 | Tax configuration policy; payment-gateway selection (or explicit none) | Tax setup, payments |
 | D7 = A12 stewards | Named metric stewards; denominators/disclosure/retention rules | Reporting metrics layer (over R2 registers) |
-| D8 | [Canonical D8 decision matrix](d8-production-operations-decision-matrix.json), [canonical owner-decision record](canonical-owner-decision-record.json), and [operational qualification packet](D8-OPERATIONAL-INPUT-PACKET.md): selected authority roles, current local/Tailscale boundary, local state, encrypted versioned backup/recovery requirement, preservation priority, audit/health visibility, and change responsibility; numeric capacity/availability remains unresolved | Business policy is recorded. Engineering must continue implementation autonomously; selected-operation implementation and independent evidence remain **BLOCKED**. D8 is not production acceptance by itself; production remains **REJECT** |
+| D8 | [Canonical D8 decision matrix](d8-production-operations-decision-matrix.json), [canonical owner-decision record](canonical-owner-decision-record.json), [operational qualification packet](D8-OPERATIONAL-INPUT-PACKET.md), and [final evidence closure report](FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md): selected authority roles, current local/Tailscale boundary, local state, encrypted versioned backup/recovery requirement, preservation priority, audit/health visibility, and change responsibility; numeric capacity/availability remains unresolved | Bounded encrypted backup/restore, preservation, offboarding, audit, alert fail-closed and rollback proofs are reproducible. Selected-operation implementation and independent evidence remain **BLOCKED**; production remains **REJECT** |
 | D9 | Attendance-coverage register access anchor: native `report` flag on Student Attendance belongs to Academics User/Student/Guardian only. Options (owner picks): (a) grant teaching roles native Academics User — widens direct write access beyond the guarded teaching API; (b) Custom DocPerm replication on Student Attendance — invasive, replaces native permission rows wholesale; (c) new TH anchor doctype for teaching facts; (d) no register (current state — teaching facts reachable via guarded APIs only) | TH Attendance Coverage Register (R2 remainder) |
 | D10 | Desk workspaces for API-first staff roles (invigilator, placement author/publisher, admission, enrollment, teaching): the pinned frappe module-visibility gate makes workspaces reachable only for users with at least one native document read in the workspace's module. Their existing TH-DocType reads remain narrowly contained by `policy.can_read`, and no native Education/ERPNext read should be added. The pinned Workspace/module-gate composition did not yield a compliant staff Workspace; D10(ii) selects a role-gated native Page surface per role with no authority change. **T3 is shipped and qualified** in run `35073376790` @ `3587700` (542/542): Page roles/assets, 12 member audiences + seven non-members, and no native-read escalation. | Staff-facing native Page navigation |
 
@@ -130,14 +130,15 @@ invent business rules.
 
 ### 1.6 Operational gates (deployment-scope; cannot be closed without deploy)
 Independent-host disaster recovery, measured restart downtime, HA,
-full-bundle upgrade/rollback, public TLS/proxy qualification, capacity
-and monitoring operation (D8). Scoped hosted passes exist (ledger
-2026-09-14), and a synthetic product SQL/files backup-to-separate-site
-rehearsal is tracked separately from those production claims. The
-minimal owner inputs and closure evidence are in the
-[D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md). These
-remain deferred until an authorized deployment target exists — running
-them "somewhere else" would be evidence theater.
+full-bundle upgrade/rollback, public TLS/proxy qualification, capacity,
+branch-isolation runtime proof and deployed monitoring operation (D8). The
+final closure harness supplies bounded encrypted SQL/files-shaped preservation,
+revocation, audit, alert fail-closed and rollback evidence; it is tracked in
+[FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md](FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md)
+and is not production evidence. The minimal owner inputs and closure evidence
+are in the [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md). These
+remain blocked until an authorized deployment target exists — running them
+"somewhere else" would be evidence theater.
 
 ### 1.7 Explicitly deferred (does not affect RC readiness)
 Portals/student self-service (B11 + D4), placement candidate portal,

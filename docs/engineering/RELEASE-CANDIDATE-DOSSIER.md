@@ -134,11 +134,12 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
    selected provider, hostname, DNS, or public edge. Independent-host DR,
    measured restart downtime, HA, full-bundle upgrade/rollback, public
    TLS/proxy qualification, branch isolation, capacity, and monitoring operation
-   (D8) remain unproven. The recorded hosted qualification additionally proved a
-   disposable product SQL/files backup and separate-site restore in
-   `35076449739` at `ebe7767`, with 542/542 native checks. It is explicitly not
-   independent-host, production, RPO/RTO, SLA, or availability evidence; running
-   production claims "somewhere else" would be evidence theater.
+   (D8) remain unproven. The final closure report records a reproducible bounded
+   encrypted backup/restore, preservation, offboarding, audit, alert fail-closed
+   and rollback harness, alongside the earlier disposable product restore
+   `35076449739` at `ebe7767`. These are explicitly not independent-host,
+   production, RPO/RTO, SLA, or availability evidence. See
+   [FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md](FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md).
 4. **SEC-GUARDIAN-01** — fail-closed Guardian isolation awaits D4;
    narrow explicit-User-Permissions remedy already passes hosted.
 5. **Explicit deferrals (do not affect RC):** portals/self-service,

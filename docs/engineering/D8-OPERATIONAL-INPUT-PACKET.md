@@ -37,6 +37,7 @@ T3, or T5 scope.
 | Foundation runtime, `35084695840` at `955e4cd5eedc34b90f4fbfce047339e18558f1f2` | Historical predecessor: **116** restricted checks ran; **114** passed. Its post-build audit recorded the same unresolved dependency class. | Historical evidence remains preserved; the active-branch record above is authoritative for this cycle. |
 | Product backup/restore, `35076449739` at `ebe77676fffb3e2e1f0b49cac8e18c5e7763180a` | Native acceptance re-ran **542/542**. `bench backup --with-files` captured SQL, public files, and private files; restoration into `placement-restore.localhost` used a distinct database and credential, then reapplied the site encryption key and non-database test flags. The restore verifier passed representative record count/name-digest comparisons across 14 doctypes and a private File byte SHA-256 check. | The runner report itself says `production: REJECT` and scopes this as disposable synthetic product recovery, **not** full Placement requalification, an offsite backup, real production DR, an RPO/RTO, or availability proof. |
 | First product rehearsal, `35075532675` at `d84f1c9bdcfe704a2fdcde213e4891b8f49f090b` | The 542 native checks passed, then Bench backup failed before restoration because the hosted MySQL client attempted its optional `information_schema.COLUMN_STATISTICS` query against pinned MariaDB. | The failure is retained as REJECT evidence. The retry added a local hosted-only `mysqldump` wrapper which adds `--column-statistics=0` only when that client supports the option; it does not change the pinned database or suppress any backup failure. |
+| Final closure harness, active checkout baseline `14cd64e` | `tools/foundation/release_readiness_evidence.py` created three encrypted versions, rotated to versions 2/3, restored version 3 into a separate system directory, verified complete source/restore tree equality, and exercised bounded offboarding, audit, alert fail-closed and rollback checks. | **PASS / BOUNDED only.** It is independently rerunnable but does not prove a production host, live MariaDB/Redis, native branch runtime, deployed monitoring receiver, RPO/RTO, capacity, or production authorization. Machine result: [`release-readiness-evidence.json`](evidence/release-readiness-evidence.json). |
 
 The D8 verifier captures representative synthetic product records and a private File
 byte digest, invokes `bench backup --with-files`, restores into a separately created
@@ -117,9 +118,12 @@ only.
    requirement, auditability, and health/attention visibility are recorded. The
    provider-neutral future internet topology and future off-site destination remain
    unselected by design; engineering must not invent them.
-2. No separate-infrastructure production-like backup/restore, host-loss, rollback,
-   alert-delivery, capacity, branch-isolation, or public-edge evidence exists. All
-   selected D8 operational areas therefore remain evidence-gated and BLOCKED.
+2. The final closure harness provides bounded encrypted backup/restore, data/file
+   preservation, offboarding, audit, alert fail-closed and rollback evidence, but
+   no separate-infrastructure production-like backup/restore, host-loss,
+   deployed alert-delivery, capacity, native branch-isolation, or public-edge
+   evidence exists. All selected D8 operational areas therefore remain
+   evidence-gated and BLOCKED. See [FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md](FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md).
 3. `SEC-DEPS-01` remains **UPSTREAM-BLOCKED / REJECT**. Latest active-branch runtime
    `35090904508` at `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` has a failed
    post-build resolved-tree audit: 14 Python OSV finding records across four

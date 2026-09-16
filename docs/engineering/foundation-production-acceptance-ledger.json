@@ -98,6 +98,14 @@
       "id": "wider-business-role-coverage",
       "status": "not_qualified",
       "closure": "Native payroll posting/GL and broader staff/HR/finance role, report/export/print and attachment lifecycle coverage; do not substitute draft payroll/report read ACLs."
+    },
+    {
+      "id": "release-readiness-evidence-closure",
+      "status": "pass_scoped",
+      "evidence": "release-readiness-evidence.json; FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md; encrypted-restore-manifest.json",
+      "observed": "A reproducible bounded harness created three encrypted backup versions, rotated to two retained versions, restored version three into a separate system directory, verified source/restore tree equality, and exercised bounded offboarding, audit, branch-model, alert fail-closed, native-authority and rollback checks.",
+      "limits": "No production site, independent host, live MariaDB/Redis, deployed Tailscale edge, monitoring receiver, native branch runtime, measured RPO/RTO, capacity objective, or production authorization. Bounded proofs do not close D8 gates.",
+      "closure": "Retain as scoped engineering evidence only. Production remains REJECT and SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT."
     }
   ],
   "architecture_decision": "foundation-architecture-decision.json",
@@ -246,5 +254,6 @@
     "selected": "Authority roles, role-based access/auditability/offboarding, multi-branch isolation, current local/Tailscale deployment, local database/files, encrypted multi-version backup/recovery, preservation priority, configurable business policy, controlled administration, and health/attention visibility.",
     "unresolved": "Numeric capacity/availability objective, future internet provider/hostname/DNS/public edge, future off-site backup destination, numeric RPO/RTO, and separately deferred domain policies.",
     "does_not_authorize_production": true
-  }
+  },
+  "release_readiness_evidence": "release-readiness-evidence.json"
 }

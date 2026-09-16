@@ -24,6 +24,7 @@ from session_branch import ACTIVE_BRANCH  # noqa: E402
 MATRIX_PATH = ROOT / "docs/engineering/d8-production-operations-decision-matrix.json"
 TEMPLATE_PATH = ROOT / "docs/engineering/d8-operational-contract.template.json"
 OWNER_RECORD_PATH = ROOT / "docs/engineering/canonical-owner-decision-record.json"
+RELEASE_READINESS_PATH = ROOT / "docs/engineering/evidence/release-readiness-evidence.json"
 LEDGER_PATH = ROOT / "docs/engineering/foundation-production-acceptance-ledger.json"
 SECURITY_PATH = ROOT / "apps/toefl_house/toefl_house/security.py"
 
@@ -128,6 +129,24 @@ def validate_owner_record() -> None:
             for value in d8_requirements[ident].values()
         ):
             raise ContractError(f"canonical owner-decision record has an empty {ident} projection")
+
+
+def validate_release_readiness_report() -> None:
+    report = load_json(RELEASE_READINESS_PATH)
+    if report.get("baseline_commit") != "14cd64e":
+        raise ContractError("release-readiness evidence baseline drifted")
+    if report.get("production_state") != "REJECT" or report.get("production_enabled") is not False:
+        raise ContractError("release-readiness evidence contains production authorization drift")
+    if report.get("synthetic_only_guard") != "REQUIRED":
+        raise ContractError("release-readiness evidence relaxed synthetic-only guard")
+    if report.get("security_dependency_state") != "UPSTREAM-BLOCKED / REJECT":
+        raise ContractError("release-readiness evidence changed SEC-DEPS-01 disposition")
+    gates = report.get("release_gate_state")
+    if not isinstance(gates, dict) or gates.get("production_authorization") != "REJECT":
+        raise ContractError("release-readiness evidence production gate is not REJECT")
+    for key in ("recovery", "backup_restore", "observability", "topology_edge_session", "capacity_availability", "durability", "change_control"):
+        if not str(gates.get(key, "")).startswith(("BLOCKED", "REJECT")):
+            raise ContractError(f"release-readiness evidence incorrectly passes {key}")
 
 
 def validate_matrix(matrix: dict) -> tuple[dict[str, dict], list[str]]:
@@ -302,6 +321,7 @@ def validate_contract(contract: dict, decisions: dict[str, dict]) -> tuple[str, 
 
 def run(contract_path: Path) -> dict:
     validate_owner_record()
+    validate_release_readiness_report()
     matrix = load_json(MATRIX_PATH)
     decisions, minimum = validate_matrix(matrix)
     validate_ledger()

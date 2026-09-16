@@ -269,7 +269,7 @@
       "area": "Command authorization, native authority containment, and synthetic hard stop",
       "state": "PASS",
       "scope": "Implemented-slice and isolated qualification evidence; the synthetic guard remains mandatory.",
-      "evidence": "OPERATIONAL-OWNERSHIP-CHARTER.md; apps/toefl_house/toefl_house/security.py; d8_validate.py",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73; tests/foundation/test_security_guards.py; apps/toefl_house/toefl_house/security.py; tools/foundation/release_readiness_evidence.py",
       "production_closure": false
     },
     {
@@ -285,7 +285,7 @@
       "area": "Separate-infrastructure recovery and host-loss",
       "state": "BLOCKED",
       "scope": "Recovery onto another system is required and data preservation has priority over recovery speed. No selected architecture rehearsal or measured result exists.",
-      "evidence": "D8-OPERATIONAL-INPUT-PACKET.md; D8-BACKUP-RECOVERY",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
       "production_closure": true
     },
     {
@@ -293,7 +293,7 @@
       "area": "Backup destination, retention, files, keys, and restore verification",
       "state": "BLOCKED",
       "scope": "Automated multi-version encrypted backup and recovery onto another system are selected requirements; future off-site support is desired. Destination and measured recovery evidence are not yet available.",
-      "evidence": "D8-BACKUP-RECOVERY; foundation-production-acceptance-ledger.json",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
       "production_closure": true
     },
     {
@@ -301,7 +301,7 @@
       "area": "Full-bundle upgrade and supported rollback",
       "state": "BLOCKED",
       "scope": "Scoped framework upgrade evidence exists; selected-architecture full-bundle upgrade and rollback remain unproven.",
-      "evidence": "D8-CHANGE-ROLLBACK; RELEASE-CANDIDATE-DOSSIER.md",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
       "production_closure": true
     },
     {
@@ -317,7 +317,7 @@
       "area": "Monitoring, logs, audit retention, alert delivery, and incident response",
       "state": "BLOCKED",
       "scope": "Important activities must be auditable; Course Owner health/attention and General Manager operational visibility are selected requirements. Monitoring/alerting/retention evidence remains incomplete.",
-      "evidence": "D8-OBSERVABILITY-INCIDENT",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
       "production_closure": true
     },
     {
@@ -325,7 +325,7 @@
       "area": "Operational role/responsibility ownership",
       "state": "PASS",
       "scope": "Business authority map selected: Course Owner final authority; General Manager routine operations; Academic/Finance/Reception role scopes. Code-derived charter is delivered; role implementation and production evidence remain bounded.",
-      "evidence": "OPERATIONAL-OWNERSHIP-CHARTER.md; D8-OWNERSHIP-CHARTER / D8-OPS-AUTHORITY",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73; OPERATIONAL-OWNERSHIP-CHARTER.md; canonical-owner-decision-record.json; tests/foundation/test_governance_surface.py",
       "production_closure": true
     },
     {
@@ -333,7 +333,7 @@
       "area": "Production topology, public edge, TLS, cookies, CSRF, private files, and session boundary",
       "state": "BLOCKED",
       "scope": "Current local/server deployment and authorized-staff Tailscale access are selected. Future internet-hosted provider/hostname/public edge remain unselected; current and future edge/session evidence is not yet production-qualified.",
-      "evidence": "D8-TOPOLOGY-EDGE",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
       "production_closure": true
     },
     {
@@ -341,7 +341,7 @@
       "area": "Capacity, workload scale, overload handling, and availability",
       "state": "BLOCKED",
       "scope": "No numeric capacity or availability objective is selected. Engineering may baseline and test, but must not claim a target.",
-      "evidence": "D8-CAPACITY-AVAILABILITY",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
       "production_closure": true
     },
     {
@@ -349,7 +349,7 @@
       "area": "Datastore, queue, configuration, file, and key durability",
       "state": "BLOCKED",
       "scope": "Current database and files are selected as local/server state. Encryption, secrets, archival, deletion, and branch-isolation implementation/evidence remain incomplete.",
-      "evidence": "D8-DURABLE-STATE",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
       "production_closure": true
     },
     {
@@ -357,7 +357,7 @@
       "area": "Release approval, provenance, communications, and rollback decision control",
       "state": "BLOCKED",
       "scope": "Course Owner is final strategic authority; General Manager owns routine operations; engineering owns provenance/versioning/rollback mechanics. End-to-end evidence remains incomplete.",
-      "evidence": "D8-CHANGE-ROLLBACK; d8_validate.py",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
       "production_closure": true
     },
     {
@@ -370,5 +370,6 @@
     }
   ],
   "owner_decision_record": "canonical-owner-decision-record.json",
-  "engineering_implementation_contract": "PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md"
+  "engineering_implementation_contract": "PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md",
+  "release_readiness_report": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md"
 }
