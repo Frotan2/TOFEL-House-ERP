@@ -218,6 +218,12 @@ class DestructiveTriggerTests(unittest.TestCase):
         self.assertIn('report["archived_site_directories_on_source_only"]', SOURCE)
         self.assertIn("so the independent system cannot reach it", SOURCE)
 
+    def test_the_archive_path_is_the_one_frappe_actually_uses(self):
+        """frappe moves the site to <bench>/archived/sites; the wrong path would
+        silently report an empty archive and misrepresent the evidence."""
+        self.assertIn('archived = bench_dir / "archived" / "sites"', SOURCE)
+        self.assertNotIn('"sites" / "archived_sites"', SOURCE)
+
     def test_target_states_the_source_was_already_destroyed(self):
         self.assertIn('report["source_site_was_destroyed_before_recovery"] = True', TARGET)
         self.assertIn('report["recovery_depends_on_the_staged_backup"] = True', SOURCE)
@@ -426,6 +432,46 @@ class EncryptedFieldLimitationTests(unittest.TestCase):
         self.assertIn("ciphertext_sha256", DATA)
 
 
+class CiphertextAccessTests(unittest.TestCase):
+    """``frappe.db.get_value`` appends ``ORDER BY creation``, which ``__Auth`` lacks.
+
+    That is MySQL error 1054, and it failed the hosted source run at
+    ``create-synthetic-state``. The ciphertext must be read with the native
+    parameterized query the encryption-key probe already uses.
+    """
+
+    def test_the_broken_access_pattern_is_not_used(self):
+        self.assertNotIn('get_value("__Auth"', DATA)
+        self.assertIn("SELECT `password` FROM `__Auth`", DATA)
+        self.assertIn("MySQL error 1054", DATA)
+
+    def test_a_tuple_row_yields_the_value(self):
+        self.assertEqual(data.first_ciphertext([("cipher",)], "User.A.x"), "cipher")
+
+    def test_a_list_row_yields_the_value(self):
+        self.assertEqual(data.first_ciphertext([["cipher"]], "User.A.x"), "cipher")
+
+    def test_a_scalar_row_yields_the_value(self):
+        self.assertEqual(data.first_ciphertext(["cipher"], "User.A.x"), "cipher")
+
+    def test_no_rows_is_an_absent_ciphertext_not_an_empty_one(self):
+        for rows in ([], None):
+            with self.assertRaises(AssertionError) as caught:
+                data.first_ciphertext(rows, "User.A.x")
+            self.assertIn("No ciphertext row exists", str(caught.exception))
+
+    def test_an_empty_value_is_rejected_rather_than_reported_as_recovered(self):
+        for value in (None, "", b""):
+            with self.assertRaises(AssertionError) as caught:
+                data.first_ciphertext([(value,)], "User.A.x")
+            self.assertIn("empty value", str(caught.exception))
+
+    def test_the_failure_names_the_field_being_read(self):
+        with self.assertRaises(AssertionError) as caught:
+            data.first_ciphertext([], "User.Administrator.api_secret")
+        self.assertIn("User.Administrator.api_secret", str(caught.exception))
+
+
 class NginxContractTests(unittest.TestCase):
     """Public files must be served the way the pinned bench template serves them."""
 
@@ -474,6 +520,11 @@ class UsabilityTests(unittest.TestCase):
         self.assertIn("synthetic-independent-recovery-", USABILITY)
         self.assertIn("all_source_records_listed", USABILITY)
         self.assertIn("Recovered record content differs", USABILITY)
+
+    def test_the_listing_is_filtered_so_a_page_cap_cannot_fake_a_shortfall(self):
+        self.assertIn('"filters": json.dumps(', USABILITY)
+        self.assertIn("an unfiltered list could be", USABILITY)
+        self.assertIn("Source records not listed over HTTP", USABILITY)
 
     def test_both_files_are_downloaded_and_digest_compared(self):
         self.assertIn("for file_name in (PRIVATE_FILE, PUBLIC_FILE):", USABILITY)

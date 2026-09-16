@@ -126,10 +126,22 @@ def main():
         expected = f"synthetic-independent-recovery-{manifest['run_tag']}-000"
         if description != expected:
             raise AssertionError("Recovered record content differs: " + str(description))
-        listing = session.get(base_url + "/api/resource/" + doctype,
-                              params={"limit_page_length": 100}, timeout=60).json()["data"]
+        # Filtered to this run's synthetic records: an unfiltered list could be
+        # capped by the page length, which would make a fully recovered site look
+        # incomplete.
+        listing = session.get(
+            base_url + "/api/resource/" + doctype,
+            params={"filters": json.dumps(
+                        [[doctype, "description", "like",
+                          "synthetic-independent-recovery-" + manifest["run_tag"] + "-%"]]),
+                    "fields": json.dumps(["name", "description"]),
+                    "limit_page_length": 100},
+            timeout=60).json()["data"]
         recovered_names = {row["name"] for row in listing}
         expected_names = set(manifest["doctypes"][doctype]["names"])
+        missing = sorted(expected_names - recovered_names)
+        if missing:
+            raise AssertionError("Source records not listed over HTTP: " + str(missing))
         return {"doctype": doctype, "name": name, "http_status": 200,
                 "content_matches_manifest": True,
                 "records_listed_over_http": len(listing),

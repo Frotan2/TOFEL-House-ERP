@@ -27,6 +27,39 @@ ALLOWED = {
 RECORDS_PER_DOCTYPE = 12
 PRIVATE_FILE = "independent-recovery-private.txt"
 PUBLIC_FILE = "independent-recovery-public.txt"
+AUTH_FIELD = ("User", "Administrator", "api_secret")
+
+
+def first_ciphertext(rows, label):
+    """Validate the rows returned by the ``__Auth`` query.
+
+    Split out from the database access so it can be exercised directly: an absent
+    row and an empty value are different failures, and neither may be reported as
+    a recovered ciphertext.
+    """
+    if not rows:
+        raise AssertionError("No ciphertext row exists in __Auth for " + label)
+    row = rows[0]
+    value = row[0] if isinstance(row, (list, tuple)) else row
+    if value in (None, "", b""):
+        raise AssertionError("__Auth holds an empty value for " + label)
+    return value
+
+
+def stored_ciphertext(db, doctype, name, fieldname):
+    """Read the stored ciphertext straight from ``__Auth``.
+
+    ``frappe.db.get_value`` appends the default ``ORDER BY creation``, and
+    ``__Auth`` has no ``creation`` column, so it fails with MySQL error 1054. The
+    native parameterized query is used instead - the same form the encryption-key
+    probe uses.
+    """
+    label = ".".join((doctype, name, fieldname))
+    rows = db.sql(
+        "SELECT `password` FROM `__Auth`"
+        " WHERE `doctype`=%s AND `name`=%s AND `fieldname`=%s",
+        (doctype, name, fieldname))
+    return first_ciphertext(rows, label)
 
 
 def main():
@@ -116,9 +149,7 @@ def main():
                     "field": "User.Administrator.api_secret",
                     "source_key_sha256": hashlib.sha256(key.encode()).hexdigest(),
                     "ciphertext_sha256": hashlib.sha256(
-                        str(frappe.db.get_value("__Auth", {
-                            "doctype": "User", "name": "Administrator",
-                            "fieldname": "api_secret"}, "password")).encode()).hexdigest(),
+                        str(stored_ciphertext(frappe.db, *AUTH_FIELD)).encode()).hexdigest(),
                     "decrypts_on_source": True,
                 }
                 private_payload = f"synthetic private content {run_tag}\n" + ("x" * 512) + "\n"
@@ -221,9 +252,7 @@ def main():
                 local_key = json.loads(
                     (Path.cwd() / site / "site_config.json").read_text())["encryption_key"]
                 local_sha = hashlib.sha256(local_key.encode()).hexdigest()
-                stored = str(frappe.db.get_value("__Auth", {
-                    "doctype": "User", "name": "Administrator",
-                    "fieldname": "api_secret"}, "password"))
+                stored = str(stored_ciphertext(frappe.db, *AUTH_FIELD))
                 ciphertext_sha = hashlib.sha256(stored.encode()).hexdigest()
                 try:
                     get_decrypted_password("User", "Administrator", "api_secret")

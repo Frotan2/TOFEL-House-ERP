@@ -202,7 +202,10 @@ def main() -> int:
         probe.run("destructive-drop-site",
                   [str(bench), "drop-site", SITE, "--db-root-password", root_password,
                    "--no-backup"], cwd=bench_dir, timeout=600)
-        archived = bench_dir / "sites" / "archived_sites"
+        # frappe moves the site directory to <bench>/archived/sites, not to
+        # sites/archived_sites; recording the wrong path would silently report an
+        # empty archive and misrepresent what destruction left behind.
+        archived = bench_dir / "archived" / "sites"
         report["archived_site_directories_on_source_only"] = (
             sorted(p.name for p in archived.glob("*")) if archived.exists() else [])
         report["post_destruction"] = {
