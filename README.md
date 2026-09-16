@@ -9,6 +9,19 @@ Active engineering branch: `arena/01a0aafe-tofel-house-erp`. Historical hosted
 runs retain their original branch provenance; see
 [branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
 
+**Production-like execution pass (2026-09-16, commit `d7df9ca`):** the readiness
+harness was re-executed on a genuine Docker-capable runner (ubuntu-24.04, Docker
+28.0.4, Compose 2.38.2) — runner qualification `35122242676` passed 18/18 with
+real MariaDB health and Redis probes, placement `35122242728` passed 542/542
+native checks with a real backup → separate-database restore → integrity
+verification, and Foundation runtime `35122242581` **failed** again on
+SEC-DEPS-01 (114/116 restricted checks). The requesting sandbox has no Docker
+Engine and is recorded **ENVIRONMENT-BLOCKED**; no preflight or bounded result
+was promoted to execution evidence. Probe-by-probe classification:
+[execution ledger](docs/engineering/evidence/production-like-execution/execution-ledger.json)
+and [final readiness report §8](docs/engineering/FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md).
+**No D8 gate flipped to PASS. Production remains REJECT.**
+
 **Placement is CLOSED / QUALIFIED** for the bounded synthetic isolated build
 (historical qualifying branch `arena/01a0a13b-tofel-house-erp`). Hosted run `34932512626`
 on commit `4571e6c`: 332/332 native checks, 86/86 runner steps, production

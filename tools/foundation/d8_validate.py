@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = ROOT / "tools"
 sys.path.insert(0, str(TOOLS))
-from session_branch import ACTIVE_BRANCH  # noqa: E402
+from session_branch import ACTIVE_BRANCH, ACTIVE_RUNTIME_RUN  # noqa: E402
 
 MATRIX_PATH = ROOT / "docs/engineering/d8-production-operations-decision-matrix.json"
 TEMPLATE_PATH = ROOT / "docs/engineering/d8-operational-contract.template.json"
@@ -27,6 +27,10 @@ OWNER_RECORD_PATH = ROOT / "docs/engineering/canonical-owner-decision-record.jso
 RELEASE_READINESS_PATH = ROOT / "docs/engineering/evidence/release-readiness-evidence.json"
 LEDGER_PATH = ROOT / "docs/engineering/foundation-production-acceptance-ledger.json"
 SECURITY_PATH = ROOT / "apps/toefl_house/toefl_house/security.py"
+
+# Historical provenance pin: the last Foundation runtime executed on the previous
+# Arena session branch. It is evidence identity, never current execution authority.
+PRIOR_ACTIVE_RUNTIME_RUN = "35090904508"
 
 REQUIRED_DECISION_KEYS = {
     "current_disposition",
@@ -225,9 +229,9 @@ def validate_ledger() -> None:
         raise ContractError("acceptance ledger active qualification branch drifted")
     runtime = active.get("foundation_runtime", {})
     # Hard stop: the current active branch may never claim a passing Foundation
-    # runtime while SEC-DEPS-01 is open. A pending record is explicitly not
-    # evidence and is the only non-REJECT value tolerated.
-    if runtime.get("status") not in ("fail_reject", "pending_not_executed"):
+    # runtime while SEC-DEPS-01 is open, and the pinned active-branch run may not
+    # be silently swapped. Both the status and the exact executed run are asserted.
+    if runtime.get("status") != "fail_reject" or runtime.get("run") != ACTIVE_RUNTIME_RUN:
         raise ContractError("acceptance ledger latest runtime evidence drifted")
     for flag in ("phase2_gate_passed", "security_gate_passed", "product_implementation_authorized"):
         if runtime.get(flag) is not False:
@@ -237,7 +241,7 @@ def validate_ledger() -> None:
     if prior.get("classification") != "historical_provenance":
         raise ContractError("prior active-branch provenance is not explicitly historical")
     prior_runtime = prior.get("foundation_runtime", {})
-    if prior_runtime.get("status") != "fail_reject" or prior_runtime.get("run") != "35090904508":
+    if prior_runtime.get("status") != "fail_reject" or prior_runtime.get("run") != PRIOR_ACTIVE_RUNTIME_RUN:
         raise ContractError("prior active-branch runtime evidence drifted")
     if ledger.get("historical_branch_requalification", {}).get("classification") != "historical_provenance":
         raise ContractError("historical qualification provenance is not explicitly historical")

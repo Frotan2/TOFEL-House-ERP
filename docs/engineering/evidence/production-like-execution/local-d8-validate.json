@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "checked_at_utc": "2026-09-16T16:29:06.465563+00:00",
+  "scope": "Provider-neutral D8 contract and release-integrity validation; no deployment or infrastructure probe",
+  "active_branch": "arena/01a0aafe-tofel-house-erp",
+  "checkout_branch": "arena/01a0aafe-tofel-house-erp",
+  "checkout_branch_matches_active": true,
+  "matrix": "docs/engineering/d8-production-operations-decision-matrix.json",
+  "contract": "d8-operational-contract.template.json",
+  "d8_gate_state": "BLOCKED",
+  "production_state": "REJECT",
+  "production_enabled": false,
+  "synthetic_only_guard": "REQUIRED",
+  "minimum_owner_decisions": [
+    "D8-CAPACITY-AVAILABILITY"
+  ],
+  "unresolved_owner_decisions": [
+    "D8-CAPACITY-AVAILABILITY"
+  ],
+  "release_gate_states": {
+    "domain-qualification": "PASS",
+    "authorization-isolation": "PASS",
+    "dependency-security": "REJECT",
+    "recovery": "BLOCKED",
+    "backup-restore": "BLOCKED",
+    "upgrade-rollback": "BLOCKED",
+    "realtime": "PASS",
+    "observability": "BLOCKED",
+    "ownership": "PASS",
+    "topology-edge-session": "BLOCKED",
+    "capacity-availability": "BLOCKED",
+    "durability": "BLOCKED",
+    "change-control": "BLOCKED",
+    "production-authorization": "REJECT"
+  },
+  "sec_deps": "UPSTREAM-BLOCKED / REJECT",
+  "historical_provenance_checked": true,
+  "checks": {
+    "matrix_schema": "PASS",
+    "ledger_release_state": "PASS",
+    "synthetic_hard_stop": "PASS",
+    "contract_schema": "PASS",
+    "configuration_secret_hygiene": "PASS",
+    "environment_separation": "PASS",
+    "topology_schema": "PASS",
+    "backup_recovery_contract": "PASS",
+    "observability_contract": "PASS",
+    "capacity_harness_contract": "PASS",
+    "edge_security_harness_contract": "PASS",
+    "release_provenance": "PASS",
+    "rollback_contract": "PASS",
+    "production_enablement_guard": "PASS"
+  },
+  "warning": "BLOCKED/REJECT are intentional outcomes. This report is not production qualification or deployment evidence."
+}

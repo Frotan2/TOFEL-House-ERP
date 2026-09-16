@@ -35,15 +35,34 @@ is invented anywhere in this plan.**
   foundation-production-acceptance-ledger.json): REJECT; scoped passes
   for web/worker restart, scheduler, framework patch upgrade, hardened
   restore; open items SEC-DEPS-01, SEC-GUARDIAN-01, SEC-RT-TASK-01 and
-  deployment-scope operations. Latest active-branch Foundation run `35090904508`
-  at `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` ran 116 restricted checks; 114
+  deployment-scope operations.
+- **Current active-branch hosted execution (`d7df9ca7`, branch
+  `arena/01a0aafe-tofel-house-erp`, real Docker 28.0.4 / Compose 2.38.2 on
+  ubuntu-24.04 image `20260907.300.1`):** runner qualification `35122242676`
+  **passed** 18/18 (pinned MariaDB digest `sha256:8b5f33eb…` healthy in 5 polls
+  with version, `utf8mb4/utf8mb4_unicode_ci` and a transaction/rollback count-0
+  proof; pinned Redis digest `sha256:75934ddb…` PING/PONG and version);
+  placement `35122242728` **passed** 542/542 native checks and 101/101 runner
+  steps including a real backup → separate-site/separate-database restore →
+  integrity verification; Foundation runtime `35122242581` **failed** with 114 of
+  116 restricted checks passing and both dependency audits failing; frontend
+  candidate `35122242647` **failed** and is **not adopted**; D8 contract
+  `35122242888` **passed structurally** while reporting BLOCKED/REJECT. Probe-by-probe
+  classification: [production-like execution ledger](evidence/production-like-execution/execution-ledger.json).
+  The local sandbox that requested this pass has **no Docker Engine or Compose and
+  cannot install them**, recorded as
+  [ENVIRONMENT-BLOCKED](evidence/production-like-execution/local-runner-capability-probe.json);
+  no local preflight result was substituted for execution evidence.
+- Prior-branch provenance (not an execution on the active branch): Foundation run
+  `35090904508` at `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` on
+  `arena/01a0a9f7-tofel-house-erp` ran 116 restricted checks; 114
   passed. Its post-build full-stack resolved-tree audit recorded 14 PyPI/OSV
   findings across four packages and 97 npm advisory findings; the full-stack and
-  Education frontend audits failed. Both Phase 2 and security gates remain false;
-  this is not OS-package, container-CVE, exploitability/reachability, full-SBOM,
-  or production evidence. Runtime/remaining-gate Checks `104787576338` /
+  Education frontend audits failed. Runtime/remaining-gate Checks `104787576338` /
   `104787579362` have SHA-256 `08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f` /
-  `3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa`.
+  `3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa`. Both Phase 2
+  and security gates remain false; this is not OS-package, container-CVE,
+  exploitability/reachability, full-SBOM, or production evidence.
 - D8 engineering now has a hosted disposable product SQL/public-files/private-files
   backup and distinct-site restore rehearsal: run `35076449739` at `ebe7767`
   passed its 542 native checks and restore verifier. This does not reopen a
@@ -104,14 +123,19 @@ invent business rules.
 
 ### 1.5 Security gates (non-owner parts vs upstream/owner parts)
 - **Closed here:** A13 implemented-slice containment (523/523).
-- **SEC-DEPS-01** (resolved dependency advisories): latest hosted runtime
-  `35090904508` at `6e7ccb99fc9d5f80fe550aa187787c56d72fea47` reports 14
-  PyPI/OSV finding records across four packages plus 97 npm advisory findings;
-  both the full-stack and Education frontend advisory checks fail (runtime Check
-  `104787576338`, SHA-256
-  `08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f`).
-  Remaining-gate Check `104787579362` has SHA-256
-  `3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa`.
+- **SEC-DEPS-01** (resolved dependency advisories): re-executed on the current
+  active branch — hosted runtime `35122242581` at
+  `d7df9ca766cd3039d68051ca83cdc8be5e834452` again reports 14 PyPI/OSV finding
+  records across `pdfkit`, `pypdf`, `setuptools` and `weasyprint` from 161
+  inventoried Bench Python package names, plus 57 npm advisory findings (27 high,
+  26 moderate, 4 low) across 21 of 255 queried package names in 572 supplied
+  installed Node package names; both the full-stack and Education frontend
+  advisory checks fail (runtime Check `104889030990`, remaining-gate Check
+  `104889035777`; report SHA-256 values are recorded in
+  `foundation-production-acceptance-ledger.json`). The frontend candidate review
+  `35122242647` also failed and the candidate is **not adopted**. Prior-branch
+  provenance: run `35090904508` at `6e7ccb99fc9d5f80fe550aa187787c56d72fea47`,
+  Checks `104787576338` / `104787579362`.
   A coherent maintained upstream stack migration and clean re-run are required;
   patching the pinned upstream bundle in-repo would invent a fork. The audit
   explicitly does not cover OS packages or container image CVEs, and does not
@@ -122,6 +146,7 @@ invent business rules.
   Bench-constrained setuptools fix. No credible official candidate can pass
   this gate yet; the verified rejection and smallest viable upstream input are
   in [`dependency-remediation-candidate-assessment-2026-09-16.json`](evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json).
+  **This gate was not weakened, waived or reinterpreted by the fresh execution.**
 - **SEC-GUARDIAN-01**: fail-closed Guardian isolation requires D4 policy;
   the narrow explicit-User-Permissions remedy already passes hosted.
 - **SEC-RT-TASK-01**: upstream realtime task-room behavior. Product-side
@@ -139,6 +164,24 @@ and is not production evidence. The minimal owner inputs and closure evidence
 are in the [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md). These
 remain blocked until an authorized deployment target exists — running them
 "somewhere else" would be evidence theater.
+
+The production-like execution pass on the active branch
+([execution ledger](evidence/production-like-execution/execution-ledger.json))
+separates what a real Docker runner genuinely proved from what it structurally
+cannot prove, so the remaining asks are precise rather than generic:
+
+| Operational ask | Genuinely executed on a Docker runner | Still structurally blocked |
+|---|---|---|
+| MariaDB | Startup, healthcheck to healthy, version, charset/collation, transaction rollback, hosting three real bench sites (`35122242676`, `35122242728`) | Restart persistence, crash/power-loss/volume-loss durability, durability on the selected local/server host |
+| Redis | Startup of queue and cache instances, PING/PONG, version, cache marker surviving an app restart (`35122242676`, `35122242728`, `35122242581`) | RDB/AOF persistence configuration, Redis restart recovery, in-flight/exactly-once job semantics after a Redis loss |
+| Backup | Real bench backup with SHA-256 over database, private files and public files; hardened variant (`35122242728`, `35122242581`) | Multiple retained versions, encryption at rest, external key custody, rotation, selected destination. Run `35122242581` recorded `site_encryption_key_restored=false` — a real defect, not reclassified |
+| Recovery | Restore into a separate site **and** separate database with source credentials not copied; post-restore integrity and authorization re-verification (`35122242728`, `35122242581`) | Restore onto a genuinely independent system/environment, destructive trigger, measured recovery objective |
+| Integrity | Snapshot before backup verified after restore across 14 doctypes by exact record count plus a private-file SHA-256 (`35122242728`) | Whole-database checksum equality; comparison across independent systems |
+| Edge/session/TLS | CSRF token presence per site/role, 13 CSRF negative-with-positive-control checks, cross-site session replay denial, private-file own/other/guest isolation (`35122242581`, `35122242728`) | TLS termination/certificates/HSTS, reverse proxy and public edge, cookie attributes under the real edge, the Tailscale tailnet/ACL boundary |
+| Monitoring | Native Error Log roundtrip, Scheduled Job Type registry, health ping (`35122242728`) | Alert receiver and delivery, retention/rotation/archival, deployed fail-closed behavior, incident response |
+| Upgrade/rollback | Isolated artifact-based Frappe patch upgrade, 33/33, other four pins held fixed (`35122242581`) | Rollback rehearsal, full-bundle upgrade of ERPNext/Education/HRMS/payments and the owned extension, promotion/approval/communication |
+| Capacity/availability | Descriptive timings and runner envelope only | Any load, concurrency, soak, overload, failover or availability measurement. **No numeric objective is selected and none is invented** |
+
 
 ### 1.7 Explicitly deferred (does not affect RC readiness)
 Portals/student self-service (B11 + D4), placement candidate portal,

@@ -261,7 +261,7 @@
       "area": "Placement, Admission, Enrollment, Teaching, Finance, T3, and T5 implemented surface",
       "state": "PASS",
       "scope": "Scoped hosted/synthetic qualification only; domains remain closed and must not be reopened without a proven defect.",
-      "evidence": "foundation-production-acceptance-ledger.json and RELEASE-CANDIDATE-DOSSIER.md",
+      "evidence": "Placement, Admission, Enrollment, Teaching, Finance, T3 and T5 implemented surface re-executed on the active branch at d7df9ca: run 35122242728 passed 542/542 native checks and 101/101 runner steps with all five upstream app pins verified unchanged. Historical qualifying runs 34932512626, 34941341845, 34946981784, 34966681820, 34999987969 and 35073376790 remain provenance. foundation-production-acceptance-ledger.json; RELEASE-CANDIDATE-DOSSIER.md. evidence/production-like-execution/execution-ledger.json",
       "production_closure": false
     },
     {
@@ -269,7 +269,7 @@
       "area": "Command authorization, native authority containment, and synthetic hard stop",
       "state": "PASS",
       "scope": "Implemented-slice and isolated qualification evidence; the synthetic guard remains mandatory.",
-      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73; tests/foundation/test_security_guards.py; apps/toefl_house/toefl_house/security.py; tools/foundation/release_readiness_evidence.py",
+      "evidence": "Executed and scoped PASS: placement run 35122242728 542/542 native checks across placement-test.localhost and a second isolated site placement-second.localhost, including http-role-revocation-old-session-denied, http-teaching-revoked-scheduler-old-session-denied, release-read-export-print-paths-denied and release-attachment-paths-guarded; runtime run 35122242581 isolation 47/47, guardian browser 6/6 (own 200 vs other 403), readiness 54/54, realtime 4/4 including live-session-revocation-stops-document-and-task-delivery, and upstream native security suites user_permission 10 and docshare 15 pass. Synthetic-only guard remains mandatory. apps/toefl_house/toefl_house/security.py; tests/foundation/test_security_guards.py. evidence/production-like-execution/execution-ledger.json",
       "production_closure": false
     },
     {
@@ -277,7 +277,7 @@
       "area": "Resolved dependency and frontend advisory gates",
       "state": "REJECT",
       "scope": "SEC-DEPS-01 is UPSTREAM-BLOCKED / REJECT; no waiver, override, fabricated lock, unsupported upgrade, or fork-like patch.",
-      "evidence": "Foundation runtime 35090904508, Checks 104787576338 / 104787579362",
+      "evidence": "Foundation runtime 35122242581 on the active branch at d7df9ca (Checks 104889030990 / 104889035777): 116 restricted checks, 114 pass, hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail. Resolved-stack audit inventoried 161 Bench Python and 572 supplied Node package names with 14 PyPI/OSV findings across pdfkit, pypdf, setuptools and weasyprint; npm bulk advisory audit queried 255 package names with 21 returning 57 findings (27 high, 26 moderate, 4 low). Frontend candidate review 35122242647 also failed and the candidate is NOT adopted. Prior-branch provenance retained: run 35090904508, Checks 104787576338 / 104787579362. evidence/production-like-execution/execution-ledger.json",
       "production_closure": true
     },
     {
@@ -285,7 +285,7 @@
       "area": "Separate-infrastructure recovery and host-loss",
       "state": "BLOCKED",
       "scope": "Recovery onto another system is required and data preservation has priority over recovery speed. No selected architecture rehearsal or measured result exists.",
-      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
+      "evidence": "Executed on a real Docker runner but NOT closed: placement run 35122242728 restored a real bench backup into placement-restore.localhost with separate_database=true and source_db_credentials_copied=false, and runtime run 35122242581 restored into restore.localhost/recovery.localhost with restore_separate_database=true (restore 5/5, restore-secured 7/7, isolation-recovered 47/47). All targets were on the SAME ephemeral host, no destructive trigger was executed and no measured recovery objective exists, so recovery onto another system is still unproven. Bounded alternate-directory proof: evidence/release-readiness-evidence.json. evidence/production-like-execution/execution-ledger.json",
       "production_closure": true
     },
     {
@@ -293,7 +293,7 @@
       "area": "Backup destination, retention, files, keys, and restore verification",
       "state": "BLOCKED",
       "scope": "Automated multi-version encrypted backup and recovery onto another system are selected requirements; future off-site support is desired. Destination and measured recovery evidence are not yet available.",
-      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
+      "evidence": "Real backups executed: placement run 35122242728 database 1266947 bytes sha256 0e25af257844eecfbe0ca9e690efbf65ed9eb908eb951bd18823ee207c48fcc8 plus private/public file digests; runtime run 35122242581 database 1155855 bytes sha256 9aad16baa470599a43a28e316b343c3600436f91f0e7b2f430e4c3997205701e and hardened database 1159791 bytes sha256 bc1324f9ec7b8d8a782f5d98f77563684054c9d3f37192c83b5bba72c2928126. NOT closed: no versioned encrypted backup set, no external key custody, no rotation on the native stack, and run 35122242581 records site_encryption_key_restored=false (run 35122242728 records true) - a genuine observed defect, not reclassified. Versioning/encryption/HMAC/rotation/key-boundary exist only as bounded local proof: evidence/release-readiness-evidence.json. evidence/production-like-execution/execution-ledger.json",
       "production_closure": true
     },
     {
@@ -301,7 +301,7 @@
       "area": "Full-bundle upgrade and supported rollback",
       "state": "BLOCKED",
       "scope": "Scoped framework upgrade evidence exists; selected-architecture full-bundle upgrade and rollback remain unproven.",
-      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
+      "evidence": "Upgrade executed, rollback NOT executed: runtime run 35122242581 upgrade probe passed 33/33, moving Frappe from 33bf510b17afcaaa857ed38b921d8e9e50dcd232 to 988e54f3c4c291e2077a83809663f123731abe76 on an isolated five-app bundle with the other four pins held fixed; its own scope states it is not rollback or full production acceptance. Local artifact rollback remains a bounded proof only. evidence/production-like-execution/execution-ledger.json",
       "production_closure": true
     },
     {
@@ -309,7 +309,7 @@
       "area": "Realtime connection and authorization",
       "state": "PASS",
       "scope": "Scoped realtime and product-side containment evidence; upstream task-room risk remains separately tracked and not a production authorization.",
-      "evidence": "UPSTREAM-TRACKING.md; Foundation runtime remaining-gate evidence",
+      "evidence": "Runtime run 35122242581 realtime probe passed 4/4: authenticated student sockets, document-room cross-student isolation, unrelated task-progress subscription denied and live session revocation stopping document and task delivery. Upstream task-room risk remains separately tracked and is not a production authorization. UPSTREAM-TRACKING.md. evidence/production-like-execution/execution-ledger.json",
       "production_closure": false
     },
     {
@@ -317,7 +317,7 @@
       "area": "Monitoring, logs, audit retention, alert delivery, and incident response",
       "state": "BLOCKED",
       "scope": "Important activities must be auditable; Course Owner health/attention and General Manager operational visibility are selected requirements. Monitoring/alerting/retention evidence remains incomplete.",
-      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
+      "evidence": "Only native probes executed: release-observability-probes in placement run 35122242728 (native Error Log roundtrip, Scheduled Job Type registry, health ping). No monitoring stack, alert receiver, delivery attempt, retention window or deployed fail-closed behavior was exercised. Missing-receiver fail-closed remains a bounded local model. evidence/production-like-execution/execution-ledger.json",
       "production_closure": true
     },
     {
@@ -333,7 +333,7 @@
       "area": "Production topology, public edge, TLS, cookies, CSRF, private files, and session boundary",
       "state": "BLOCKED",
       "scope": "Current local/server deployment and authorized-staff Tailscale access are selected. Future internet-hosted provider/hostname/public edge remain unselected; current and future edge/session evidence is not yet production-qualified.",
-      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
+      "evidence": "Session boundaries executed over real HTTP: CSRF token presence per site/role and 13 CSRF negative-with-positive-control checks, cross-site-session-replay-denied, private-file own/other/guest isolation, private-file-still-isolated-after-share-attempts and REST/RPC write denial (runs 35122242581 / 35122242728). NOT closed: all traffic was plain http://127.0.0.1:8000 with Host-header routing, so no TLS termination, certificate, HSTS, reverse proxy, cookie-attribute-under-edge or Tailscale tailnet/ACL behavior was exercised. Future public edge remains unselected. evidence/production-like-execution/execution-ledger.json",
       "production_closure": true
     },
     {
@@ -341,7 +341,7 @@
       "area": "Capacity, workload scale, overload handling, and availability",
       "state": "BLOCKED",
       "scope": "No numeric capacity or availability objective is selected. Engineering may baseline and test, but must not claim a target.",
-      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
+      "evidence": "No numeric objective is selected and none is invented. Descriptive observations only from runs 35122242676 / 35122242581 / 35122242728: ubuntu-24.04 image 20260907.300.1 with Docker 28.0.4 and Compose 2.38.2; MariaDB healthy in 5 polls at a 2s interval; start-mariadb 8.233s, bench-init 25.973s, new-site 21.597s, erpnext install 38.481s, migrate 12.462s, native-acceptance 28.084s, backup 5.207s, restore 8.098s; worker/scheduler/socketio live. No load, concurrency, soak, overload, failover or availability measurement was executed. evidence/production-like-execution/execution-ledger.json",
       "production_closure": true
     },
     {
@@ -349,7 +349,7 @@
       "area": "Datastore, queue, configuration, file, and key durability",
       "state": "BLOCKED",
       "scope": "Current database and files are selected as local/server state. Encryption, secrets, archival, deletion, and branch-isolation implementation/evidence remain incomplete.",
-      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
+      "evidence": "Startup and health executed, durability NOT executed: runner run 35122242676 started pinned mariadb digest sha256:8b5f33ebd85d1775657e974ed10434128bb493c80e826ceaa54074fd1a92a112 to healthy in 5 polls and verified version, utf8mb4/utf8mb4_unicode_ci and a START TRANSACTION/ROLLBACK count-0 result, plus redis digest sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36 PING/PONG and version; placement run 35122242728 ran start-mariadb, start-redis-queue and start-redis-cache for three real sites. NOT closed: no MariaDB or Redis restart, no crash/power-loss/volume-loss probe, no RDB/AOF persistence verification; the only restart probe is Gunicorn/RQ and explicitly excludes Redis and database restart and host crash/failover. Branch-isolation runtime proof and key/host durability also remain incomplete. evidence/production-like-execution/execution-ledger.json",
       "production_closure": true
     },
     {
@@ -357,7 +357,7 @@
       "area": "Release approval, provenance, communications, and rollback decision control",
       "state": "BLOCKED",
       "scope": "Course Owner is final strategic authority; General Manager owns routine operations; engineering owns provenance/versioning/rollback mechanics. End-to-end evidence remains incomplete.",
-      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73\u2013\u00a76; evidence/release-readiness-evidence.json",
+      "evidence": "Provenance and mechanics are real but end-to-end change control is not: the active branch was rotated and re-executed with recorded run/check identifiers and report SHA-256 values, and D8 contract validation run 35122242888 passed structurally while reporting BLOCKED/REJECT. No deployed approval, artifact promotion, communication or restore-based rollback decision path was exercised. evidence/production-like-execution/execution-ledger.json",
       "production_closure": true
     },
     {
@@ -365,7 +365,7 @@
       "area": "Overall production authorization",
       "state": "REJECT",
       "scope": "Production remains REJECT until all applicable gates close in the owner-selected architecture.",
-      "evidence": "foundation-production-acceptance-ledger.json; d8_validate.py",
+      "evidence": "foundation-production-acceptance-ledger.json; d8_validate.py; evidence/production-like-execution/execution-ledger.json. Fresh genuine execution on a Docker-capable runner at d7df9ca increased real evidence but closed no gate: SEC-DEPS-01 failed again on this exact branch, restart/durability, independent-system restore, encrypted versioned backup with external key custody and rotation, deployed monitoring, TLS/Tailscale edge and rollback rehearsal all remain unproven, and the foundation restore recorded site_encryption_key_restored=false.",
       "production_closure": true
     }
   ],

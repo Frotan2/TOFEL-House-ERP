@@ -1,0 +1,1137 @@
+{
+  "schema_version": 1,
+  "artifact": "production-like-execution-ledger",
+  "generated_at_utc": "2026-09-16T16:51:48.641070+00:00",
+  "purpose": "Probe-by-probe classification of the production-like readiness harness execution requested for the current release review. Every PASS is tied to an actually executed test with a run identifier. Preflight, static, mocked and bounded evidence is classified separately and is never counted as execution evidence.",
+  "classification_vocabulary": {
+    "PASS (EXECUTED)": "An actual test ran against real services/runtime and its result is recorded in immutable evidence.",
+    "PASS (EXECUTED) / SCOPED": "Executed, but the harness itself states a scope limit; the limit is reproduced verbatim.",
+    "PARTIAL": "Some sub-probes genuinely executed and passed; other named sub-probes did not execute and stay BLOCKED.",
+    "BLOCKED": "Required sub-probe was not executed anywhere; no claim is made.",
+    "ENVIRONMENT-BLOCKED": "The requested host/runner cannot provide the capability; recorded instead of simulated.",
+    "PASS / BOUNDED": "Real local harness execution with synthetic filesystem-shaped fixtures; explicitly not production evidence.",
+    "PASS / STATIC": "Source/contract inspection only; no runtime.",
+    "FAIL (EXECUTED)": "An actual test ran and genuinely failed. Recorded as a defect, never reclassified."
+  },
+  "execution_venues": {
+    "requested_local_sandbox": {
+      "identity": "Arena.ai Agent Mode e2b sandbox (e2b.local)",
+      "host": {
+        "hostname": "e2b.local",
+        "kernel": "6.1.158+",
+        "os": "Linux-6.1.158+-x86_64-with-glibc2.36",
+        "python": "3.11.2",
+        "arch": "x86_64"
+      },
+      "determination": {
+        "docker_engine": "ENVIRONMENT-BLOCKED",
+        "docker_compose": "ENVIRONMENT-BLOCKED",
+        "apt_package_install": "ENVIRONMENT-BLOCKED",
+        "sufficient_cpu_ram_disk": "FAIL",
+        "isolated_test_data_and_services": "PARTIAL (filesystem only; no container/service isolation)"
+      },
+      "docker_engine": "ENVIRONMENT-BLOCKED",
+      "docker_compose": "ENVIRONMENT-BLOCKED",
+      "reason": [
+        "No docker, docker-compose or podman binary is installed and /var/run/docker.sock does not exist.",
+        "Docker Engine cannot be installed: the Debian apt mirrors (deb.debian.org) and download.docker.com are both unreachable from this sandbox, so apt-get update fails and no package index exists.",
+        "/lib/modules is absent, so kernel modules required for container networking/storage cannot be loaded, and /proc is mounted read-only.",
+        "Resources are below the production-like envelope: 2 vCPU and ~3.8 GiB RAM, against a full Frappe/ERPNext/Education/HRMS bench plus MariaDB and Redis.",
+        "Consequence: every live-service probe (MariaDB durability/restart, Redis persistence/restart recovery, deployed Frappe runtime, TLS/edge, monitoring delivery) is ENVIRONMENT-BLOCKED on this host and must be executed on a Docker-capable runner instead."
+      ],
+      "evidence": "local-runner-capability-probe.json",
+      "evidence_sha256": "d42a00f281fc5a95c5aceef9d4567bc2b8191ad0941c6dab7a14061e64bbadb4",
+      "conclusion": "This host cannot execute the production-like harness. Per the evidence rules it is recorded as ENVIRONMENT-BLOCKED and no local check-only or preflight result is substituted for execution evidence."
+    },
+    "authorized_docker_runner": {
+      "identity": "GitHub-hosted ubuntu-24.04 Actions runner (ephemeral)",
+      "runner_image": "ubuntu24",
+      "runner_image_version": "20260907.300.1",
+      "docker_engine_version": "28.0.4 28.0.4",
+      "docker_compose_version": "2.38.2",
+      "provides": [
+        "Docker Engine",
+        "Docker Compose",
+        "isolated synthetic sites/databases/services",
+        "ephemeral disposable host"
+      ],
+      "branch": "arena/01a0aafe-tofel-house-erp",
+      "commit": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+      "runs": {
+        "foundation_runner_qualification": {
+          "run": "35122242676",
+          "conclusion": "success",
+          "check": "104882875418",
+          "report_sha256": "4f1ad7b9bb09a2c5d5933d5ed8490eb42b2ef0e513d1235a4378165d536e5963",
+          "evidence": "hosted-runner-35122242676.json"
+        },
+        "foundation_runtime_validation": {
+          "run": "35122242581",
+          "conclusion": "failure",
+          "checks": [
+            "104889030990",
+            "104889035777"
+          ],
+          "runtime_report_sha256": "e3964eb242e1bb467725e7a194ff3a7b76535d3afedbc9c5a0c8c77629eb984b",
+          "remaining_gate_report_sha256": "a1ac7cd78d0ddb5dbd4888f459f38232850083c34562f4b1cd29fec509e6025b",
+          "evidence": [
+            "hosted-runtime-35122242581.json",
+            "hosted-remaining-gates-35122242581.json"
+          ]
+        },
+        "placement_synthetic_content_qualification": {
+          "run": "35122242728",
+          "conclusion": "success",
+          "checks": [
+            "104885938426",
+            "104885934034"
+          ],
+          "runner_report_sha256": "1fc72a2420f96f9727d80346c00670b73c8d4ae43cef6e010319ef36e6e911f9",
+          "native_report_sha256": "094111f63a8f4b44e483bfd534a71b404c14b0e87c093477e0a633390ff42251",
+          "evidence": [
+            "hosted-placement-runner-35122242728.json",
+            "hosted-placement-native-checks-35122242728.json"
+          ]
+        },
+        "foundation_frontend_candidate_review": {
+          "run": "35122242647",
+          "conclusion": "failure",
+          "check": "104882992093",
+          "report_sha256": "17d40562f62cddc6168bef34838f128d6dbaa2257a0ab0048739c2c28c6abfb1",
+          "evidence": "hosted-frontend-35122242647.json"
+        },
+        "d8_operations_contract_validation": {
+          "run": "35122242888",
+          "conclusion": "success",
+          "check": "104882627814"
+        }
+      }
+    },
+    "local_bounded_harness": {
+      "identity": "Arena sandbox filesystem (no containers)",
+      "command": [
+        "python3 tools/foundation/release_readiness_evidence.py --output docs/engineering/evidence/release-readiness-evidence.json --artifact-dir docs/engineering/evidence/release-readiness",
+        "python3 -m unittest tests.foundation.test_release_readiness_evidence -v",
+        "python3 tools/foundation/d8_validate.py --contract docs/engineering/d8-operational-contract.template.json",
+        "python3 -m unittest discover -s tests -p 'test_*.py'",
+        "node tests/foundation/test_command_pages.cjs"
+      ],
+      "openssl": "OpenSSL 3.0.20",
+      "evidence": [
+        "local-bounded-release-readiness-evidence.json",
+        "local-bounded-encrypted-restore-manifest.json"
+      ],
+      "evidence_sha256": {
+        "release_readiness": "1b88d8341eef8668c84362e048470fd77c61198b59840b397d193d16429342cc",
+        "restore_manifest": "82529b6749f67e77a056231d970a59c6b49eaadfb4209680cd638205b02aabbb"
+      },
+      "classification": "PASS / BOUNDED - real execution of a synthetic fixture harness; never production evidence"
+    }
+  },
+  "requested_probes": [
+    {
+      "id": 1,
+      "requirement": "MariaDB startup, health, restart persistence, and data durability",
+      "classification": "PARTIAL",
+      "executed_pass": [
+        {
+          "probe": "container start + healthcheck",
+          "run": "35122242676",
+          "observed": {
+            "healthy": true,
+            "last_state": "healthy",
+            "polls": 5
+          },
+          "detail": "Pinned mariadb image started detached with --health-cmd 'healthcheck.sh --connect --innodb_initialized', 2s interval, 30 retries; polled to healthy."
+        },
+        {
+          "probe": "image identity",
+          "run": "35122242676",
+          "observed": [
+            "mariadb@sha256:8b5f33ebd85d1775657e974ed10434128bb493c80e826ceaa54074fd1a92a112"
+          ]
+        },
+        {
+          "probe": "version + charset/collation",
+          "run": "35122242676",
+          "observed": "SELECT VERSION() matched the pinned selected_version prefix; @@character_set_server/@@collation_server == utf8mb4/utf8mb4_unicode_ci"
+        },
+        {
+          "probe": "transactional atomicity",
+          "run": "35122242676",
+          "observed": "INSERT inside START TRANSACTION then ROLLBACK; SELECT COUNT(*) returned 0"
+        },
+        {
+          "probe": "MariaDB hosting real bench sites",
+          "run": "35122242728",
+          "observed": "start-mariadb exit 0 in 8.233s; three real sites created against it (placement-test, placement-second, placement-restore)"
+        },
+        {
+          "probe": "MariaDB client + four foundation sites",
+          "run": "35122242581",
+          "observed": "mariadb  Ver 15.1 Distrib 10.11.14-MariaDB, for debian-linux-gnu (x86_64) using  EditLine wrapper",
+          "sites": [
+            "foundation.localhost",
+            "restore.localhost",
+            "recovery.localhost",
+            "upstream-tests.localhost"
+          ]
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "restart persistence",
+          "reason": "No MariaDB restart was executed. The only restart probe is scoped to Gunicorn/RQ and states verbatim: \"No Redis or database restart\"."
+        },
+        {
+          "probe": "data durability across process/host loss",
+          "reason": "A rolled-back transaction proves atomicity, not durability. No kill -9 / power-loss / volume-loss / crash-recovery probe exists in the harness."
+        },
+        {
+          "probe": "durability on the owner-selected local/server + Tailscale host",
+          "reason": "Executed only on an ephemeral disposable runner, not the selected production-like host."
+        }
+      ],
+      "bounded_only": [],
+      "static_only": [],
+      "d8_gate": "durability",
+      "d8_gate_state": "BLOCKED"
+    },
+    {
+      "id": 2,
+      "requirement": "Redis persistence and restart recovery",
+      "classification": "PARTIAL",
+      "executed_pass": [
+        {
+          "probe": "container start + PING/PONG + version",
+          "run": "35122242676",
+          "observed": {
+            "digest": [
+              "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+            ],
+            "ping": "PONG"
+          }
+        },
+        {
+          "probe": "two real Redis instances (queue + cache) for the bench",
+          "run": "35122242728",
+          "observed": [
+            "start-redis-queue exit 0",
+            "start-redis-cache exit 0"
+          ]
+        },
+        {
+          "probe": "cache marker survived an application restart",
+          "run": "35122242581",
+          "observed": {
+            "cache_value_preserved": true,
+            "native_record_preserved": true,
+            "previously_queued_job_status": "finished"
+          }
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "Redis persistence (RDB/AOF) configuration and durability",
+          "reason": "No persistence directive was configured or verified; containers ran with image defaults and no BGSAVE/SAVE/AOF probe exists."
+        },
+        {
+          "probe": "Redis restart recovery",
+          "reason": "Not executed. Harness limitation verbatim: \"No Redis or database restart\"."
+        },
+        {
+          "probe": "queue/in-flight job semantics after a Redis loss",
+          "reason": "Harness limitation verbatim: \"No exactly-once or in-flight job claim\"."
+        }
+      ],
+      "bounded_only": [],
+      "static_only": [],
+      "d8_gate": "durability",
+      "d8_gate_state": "BLOCKED"
+    },
+    {
+      "id": 3,
+      "requirement": "Versioned encrypted backups with external key custody and rotation",
+      "classification": "BLOCKED",
+      "executed_pass": [
+        {
+          "probe": "real native backup with SHA-256 over database and both file trees",
+          "run": "35122242728",
+          "observed": {
+            "database": {
+              "bytes": 1266947,
+              "sha256": "0e25af257844eecfbe0ca9e690efbf65ed9eb908eb951bd18823ee207c48fcc8"
+            },
+            "private_files": {
+              "bytes": 10240,
+              "sha256": "067f3712288c2a1fd830f37c78e7ee3879703c86408dc6c8f96cb327f71e9b5b"
+            },
+            "public_files": {
+              "bytes": 10240,
+              "sha256": "6685ecbb65075505bf76c8e34d1834a2cbdee0f260865d62ff950d222028e1cd"
+            }
+          }
+        },
+        {
+          "probe": "real native backup + hardened backup on the foundation stack",
+          "run": "35122242581",
+          "observed": {
+            "backup": {
+              "database": {
+                "bytes": 1155855,
+                "sha256": "9aad16baa470599a43a28e316b343c3600436f91f0e7b2f430e4c3997205701e"
+              },
+              "private_files": {
+                "bytes": 10240,
+                "sha256": "7d700fadfd44b5e632981d65e838a90dd93c90c023853a9cee0dffb540107ea1"
+              },
+              "public_files": {
+                "bytes": 10240,
+                "sha256": "d8d4f9a58d3815584b0c37bc100cbb80ebac9d152ad595773367df0f8906fef6"
+              }
+            },
+            "hardened_backup": {
+              "database": {
+                "bytes": 1159791,
+                "sha256": "bc1324f9ec7b8d8a782f5d98f77563684054c9d3f37192c83b5bba72c2928126"
+              },
+              "private_files": {
+                "bytes": 10240,
+                "sha256": "7d700fadfd44b5e632981d65e838a90dd93c90c023853a9cee0dffb540107ea1"
+              },
+              "public_files": {
+                "bytes": 10240,
+                "sha256": "d8d4f9a58d3815584b0c37bc100cbb80ebac9d152ad595773367df0f8906fef6"
+              }
+            }
+          }
+        }
+      ],
+      "executed_fail": [
+        {
+          "probe": "site encryption key restored after the foundation restore",
+          "run": "35122242581",
+          "observed": false,
+          "detail": "GENUINE DEFECT: site_encryption_key_restored is false on the foundation hardened restore path in run 35122242581. The separate placement product restore in run 35122242728 reports true (true). Both results are recorded as observed; neither is averaged, reclassified or waived. Encrypted-content key custody is therefore NOT proven across the stack."
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "multiple retained backup versions on the native stack",
+          "reason": "The native harness takes a single backup per run; no version series, retention count or rotation window was executed."
+        },
+        {
+          "probe": "encryption of the native backup at rest",
+          "reason": "bench backup produced plain SQL/tar archives; no encryption step was executed against them."
+        },
+        {
+          "probe": "external key custody and rotation",
+          "reason": "No key was held outside the system, no rotation event was executed, and the foundation restore actually failed to carry the site encryption key."
+        },
+        {
+          "probe": "selected production destination/custody/retention",
+          "reason": "Owner has not selected a destination; nothing was deployed."
+        }
+      ],
+      "bounded_only": [
+        {
+          "probe": "versioned encrypted backup + rotation + HMAC + external key boundary",
+          "status": "PASS / BOUNDED",
+          "observed": {
+            "encryption": "system OpenSSL AES-256-CBC with PBKDF2",
+            "authentication": "HMAC-SHA256",
+            "hmac_verified": true,
+            "versions": "three created, version 1 rotated, versions 2 and 3 retained",
+            "key_custody": "PASS / BOUNDED",
+            "external_key_not_archived": true
+          },
+          "limit": "Real execution, but over synthetic filesystem fixtures in a temporary workspace on one machine. Explicitly not production evidence and does not close the D8 backup-restore gate."
+        }
+      ],
+      "static_only": [],
+      "d8_gate": "backup-restore",
+      "d8_gate_state": "BLOCKED"
+    },
+    {
+      "id": 4,
+      "requirement": "Destructive/recovery test followed by restore into a genuinely independent system/environment",
+      "classification": "PARTIAL",
+      "executed_pass": [
+        {
+          "probe": "restore into a separate site AND separate database with source credentials not copied",
+          "run": "35122242728",
+          "observed": {
+            "separate_database": true,
+            "source_db_credentials_copied": false,
+            "site_encryption_key_restored": true,
+            "site": "placement-restore.localhost"
+          },
+          "checks": [
+            "backup-placement-test-with-files",
+            "new-placement-restore-site",
+            "restore-placement-test-with-files",
+            "migrate-placement-restore-site",
+            "verify-product-restore-snapshot"
+          ]
+        },
+        {
+          "probe": "restore + secured re-verification on the foundation stack",
+          "run": "35122242581",
+          "observed": {
+            "restore_separate_database": true,
+            "restore_result": "5/5 pass",
+            "restore_secured_result": "7/7 pass",
+            "sites": [
+              "restore.localhost",
+              "recovery.localhost"
+            ]
+          }
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "restore into a genuinely INDEPENDENT system/environment",
+          "reason": "Every restore target was another site/database on the SAME ephemeral runner host, same Docker daemon, same filesystem and same MariaDB server process. No second host, VM, region or independent environment was provisioned. This does not satisfy the owner requirement of recovery onto another system."
+        },
+        {
+          "probe": "destructive trigger (deliberate data loss/corruption/host loss)",
+          "reason": "No destructive event was executed against the live stack; the source system was left intact and the restore ran alongside it."
+        },
+        {
+          "probe": "measured recovery objective",
+          "reason": "No RPO/RTO was measured and none is invented; the owner has not supplied a numeric objective."
+        }
+      ],
+      "bounded_only": [
+        {
+          "probe": "restore onto another system",
+          "status": "PASS / BOUNDED",
+          "observed": {
+            "source_system": "local-source-system",
+            "restore_system": "independent-restore-system",
+            "same_tree": true,
+            "source_tree_sha256": "11eb3a0dacb7924ed2d789c2ec3457e9b5b360bcfd3ef9e055529d39d427a929",
+            "restored_tree_sha256": "11eb3a0dacb7924ed2d789c2ec3457e9b5b360bcfd3ef9e055529d39d427a929"
+          },
+          "limit": "'Another system' here means a separate directory on the same machine. Real execution, synthetic fixtures, not an independent host."
+        }
+      ],
+      "static_only": [],
+      "d8_gate": "recovery",
+      "d8_gate_state": "BLOCKED"
+    },
+    {
+      "id": 5,
+      "requirement": "Database and file integrity before/after recovery",
+      "classification": "PASS (EXECUTED) / SCOPED",
+      "executed_pass": [
+        {
+          "probe": "snapshot captured before backup and verified after restore",
+          "run": "35122242728",
+          "checks": [
+            "capture-product-restore-snapshot",
+            "verify-product-restore-snapshot"
+          ],
+          "observed": {
+            "status": "pass",
+            "private_file_sha256_verified": true,
+            "doctypes_verified": {
+              "TH Placement Item Revision": 39,
+              "TH Placement Attempt": 18,
+              "TH Placement Decision": 7,
+              "TH Admission Decision": 6,
+              "Program Enrollment": 3,
+              "Student Group": 3,
+              "Course Schedule": 4,
+              "Student Attendance": 8,
+              "TH Instructor Contract": 5,
+              "TH Teaching Assignment": 3,
+              "TH Correction Policy": 1,
+              "TH Correction Request": 2,
+              "Fees": 2,
+              "Sales Invoice": 4
+            }
+          },
+          "detail": "14 doctypes compared by exact record count across placement, admission, enrollment, teaching, finance and native Fees/Sales Invoice, plus a private File SHA-256 comparison."
+        },
+        {
+          "probe": "database + private/public file archive digests before restore",
+          "run": "35122242728",
+          "observed": {
+            "database": {
+              "bytes": 1266947,
+              "sha256": "0e25af257844eecfbe0ca9e690efbf65ed9eb908eb951bd18823ee207c48fcc8"
+            },
+            "private_files": {
+              "bytes": 10240,
+              "sha256": "067f3712288c2a1fd830f37c78e7ee3879703c86408dc6c8f96cb327f71e9b5b"
+            },
+            "public_files": {
+              "bytes": 10240,
+              "sha256": "6685ecbb65075505bf76c8e34d1834a2cbdee0f260865d62ff950d222028e1cd"
+            }
+          }
+        },
+        {
+          "probe": "post-restore authorization and isolation re-verification",
+          "run": "35122242581",
+          "observed": {
+            "isolation_recovered": "47/47 pass",
+            "restore_secured": "7/7 pass"
+          }
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "whole-database checksum equality",
+          "reason": "Integrity is proven by representative per-doctype record counts and one private-file SHA-256, not a full schema+data checksum or row-level comparison of every table."
+        },
+        {
+          "probe": "integrity comparison across independent systems",
+          "reason": "Both sides of the comparison were on the same host (see probe 4)."
+        }
+      ],
+      "bounded_only": [
+        {
+          "probe": "full source/restore tree equality",
+          "status": "PASS / BOUNDED",
+          "observed": {
+            "database_state_sha256": "f9a5bf36868bddaa79f95c6ad131cde7857852769a02c914ba94f091aebf6d54",
+            "same_tree": true
+          },
+          "limit": "Synthetic fixture tree, real hashing. Bounded, not production."
+        }
+      ],
+      "static_only": [],
+      "d8_gate": "durability",
+      "d8_gate_state": "BLOCKED",
+      "scope_limit": "Executed and passing within a disposable synthetic restore on one runner; it does not make the D8 durability gate PASS because that gate requires deployed local/server state, key and host durability."
+    },
+    {
+      "id": 6,
+      "requirement": "Native Frappe/ERPNext/Education runtime with actual authorization/branch-isolation behavior",
+      "classification": "PASS (EXECUTED) / SCOPED-SYNTHETIC",
+      "executed_pass": [
+        {
+          "probe": "real bench with the pinned native apps",
+          "run": "35122242728",
+          "observed": {
+            "installed_apps": [
+              "frappe",
+              "erpnext",
+              "education",
+              "payments",
+              "hrms",
+              "foundation_security",
+              "toefl_house"
+            ],
+            "source_revisions": {
+              "frappe": "988e54f3c4c291e2077a83809663f123731abe76",
+              "erpnext": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+              "education": "93bc7075753369457919720690f80c6d2207b5f2",
+              "payments": "cca07d9f9392e2ea0e521c5975151db9e4b6c321",
+              "hrms": "a4768b441cff346def505e27f2a2229ee1e05b9b"
+            }
+          }
+        },
+        {
+          "probe": "native acceptance suite",
+          "run": "35122242728",
+          "observed": {
+            "checks": 542,
+            "pass": 542
+          }
+        },
+        {
+          "probe": "two isolated native sites for isolation behavior",
+          "run": "35122242728",
+          "observed": [
+            "placement-test.localhost",
+            "placement-second.localhost"
+          ]
+        },
+        {
+          "probe": "authorization isolation over real HTTP",
+          "run": "35122242581",
+          "observed": {
+            "isolation_result": "47/47 pass",
+            "guardian_browser": "6/6 pass (own REST/RPC/file 200 vs other 403)",
+            "http_restricted": "10/10 pass"
+          }
+        },
+        {
+          "probe": "upstream native security suites",
+          "run": "35122242581",
+          "observed": [
+            {
+              "module": "frappe.core.doctype.user_permission.test_user_permission",
+              "status": "pass",
+              "tests_run": 10,
+              "site": "upstream-tests.localhost"
+            },
+            {
+              "module": "frappe.core.doctype.docshare.test_docshare",
+              "status": "pass",
+              "tests_run": 15,
+              "site": "upstream-tests.localhost"
+            }
+          ]
+        },
+        {
+          "probe": "native app pins unchanged after the run",
+          "run": "35122242728",
+          "observed": [
+            "unchanged-frappe",
+            "unchanged-erpnext",
+            "unchanged-education",
+            "unchanged-payments",
+            "unchanged-hrms"
+          ]
+        },
+        {
+          "probe": "worker/scheduler/socketio liveness",
+          "run": "35122242581",
+          "observed": {
+            "worker": true,
+            "scheduler": true,
+            "socketio": true
+          }
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "owner-selected multi-branch (Company/Branch) isolation across read/write/submit/export/file/background-job paths in a deployed topology",
+          "reason": "The executed isolation is native per-site/per-user permission containment on synthetic data across two disposable sites. It is not a deployed multi-branch runtime proof, so the D8 branch-isolation requirement stays BLOCKED / NOT PROVEN."
+        },
+        {
+          "probe": "any production or customer-data runtime",
+          "reason": "Synthetic-only guard is REQUIRED and was enforced (toefl_house_synthetic_only enabled on every site)."
+        }
+      ],
+      "bounded_only": [],
+      "static_only": [
+        {
+          "probe": "native-first authority boundary",
+          "status": "PASS / STATIC",
+          "limit": "Source/contract inspection; no runtime authority."
+        }
+      ],
+      "d8_gate": "authorization-isolation",
+      "d8_gate_state": "PASS (scoped); branch isolation remains BLOCKED",
+      "scope_limit": "Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20"
+    },
+    {
+      "id": 7,
+      "requirement": "Authentication/session/offboarding/emergency-revocation behavior",
+      "classification": "PARTIAL",
+      "executed_pass": [
+        {
+          "probe": "emergency role revocation invalidates an existing session over real HTTP",
+          "run": "35122242728",
+          "observed": [
+            "http-role-revocation-old-session-denied"
+          ]
+        },
+        {
+          "probe": "revoked scheduler identity denied on its old session",
+          "run": "35122242728",
+          "observed": [
+            "http-teaching-revoked-scheduler-old-session-denied"
+          ]
+        },
+        {
+          "probe": "cross-site session replay denied",
+          "run": "35122242581",
+          "observed": [
+            "cross-site-session-replay-denied"
+          ]
+        },
+        {
+          "probe": "live session revocation stops document and task realtime delivery",
+          "run": "35122242581",
+          "observed": {
+            "live-session-revocation-stops-document-and-task-delivery": {
+              "revoked_delivery": false
+            }
+          }
+        },
+        {
+          "probe": "session captured before backup is valid on the source site (200) and denied on the recovery site (403)",
+          "run": "35122242581",
+          "observed": "restore-secured_result 7/7 pass"
+        },
+        {
+          "probe": "real login and role provisioning across native roles",
+          "run": "35122242581",
+          "observed": {
+            "readiness": "54/54 pass",
+            "roles": [
+              "Academics User",
+              "Instructor",
+              "Accounts User",
+              "HR User",
+              "Employee",
+              "Guardian"
+            ]
+          }
+        },
+        {
+          "probe": "CSRF negative checks with positive controls",
+          "run": "35122242728",
+          "observed": {
+            "count": 13,
+            "checks": [
+              "http-csrf-negative-with-positive-control",
+              "http-config-csrf-negative-with-positive-control",
+              "http-alloc-csrf-negative-with-positive-control",
+              "http-deliver-csrf-negative-with-positive-control"
+            ]
+          }
+        },
+        {
+          "probe": "guest and outsider denial on private resources",
+          "run": "35122242581",
+          "observed": [
+            "rest-other-write-denied",
+            "rpc-other-write-denied",
+            "proxy-private-guest",
+            "guest-student-denied",
+            "cross-site-session-replay-denied",
+            "unprovisioned-student-denied-to-alpha"
+          ]
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "offboarding as an operational process",
+          "reason": "No HR-driven deprovisioning workflow, credential/API-key rotation, mailbox/token cleanup or long-horizon access review was executed. Only immediate revocation effects were tested."
+        },
+        {
+          "probe": "audit retention over time",
+          "reason": "No retention window, archival or expiry behavior was executed."
+        },
+        {
+          "probe": "offboarding on the deployed local/server + Tailscale environment",
+          "reason": "Not deployed; nothing to test."
+        }
+      ],
+      "bounded_only": [
+        {
+          "probe": "offboarding preserves history while removing active access",
+          "status": "PASS / BOUNDED",
+          "limit": "Real execution of a bounded model over synthetic fixtures; not a deployed offboarding process."
+        },
+        {
+          "probe": "native Version audit shape",
+          "status": "PASS / BOUNDED",
+          "limit": "Model/static shape check, not deployed audit retention."
+        }
+      ],
+      "static_only": [],
+      "d8_gate": "authorization-isolation / observability",
+      "d8_gate_state": "PASS (scoped) for revocation mechanics; offboarding process BLOCKED"
+    },
+    {
+      "id": 8,
+      "requirement": "Monitoring, alert delivery, retention, and fail-closed behavior",
+      "classification": "BLOCKED",
+      "executed_pass": [
+        {
+          "probe": "native observability probes",
+          "run": "35122242728",
+          "observed": [
+            "release-observability-probes"
+          ],
+          "detail": "Native Error Log persist/retrieve/cleanup roundtrip, active Scheduled Job Type registry and health ping, executed on the real runtime."
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "alert delivery to a real receiver",
+          "reason": "No monitoring stack, alert route, email/webhook/chat receiver or delivery attempt was executed on the native runtime."
+        },
+        {
+          "probe": "log/metric/audit retention",
+          "reason": "No retention period, rotation, archival or expiry was configured or verified."
+        },
+        {
+          "probe": "deployed fail-closed behavior on a missing/broken receiver",
+          "reason": "Only the bounded local model proves a missing receiver fails closed. That is not deployed observability evidence."
+        },
+        {
+          "probe": "incident response",
+          "reason": "No incident process, runbook execution or on-call path exists to test."
+        }
+      ],
+      "bounded_only": [
+        {
+          "probe": "missing-receiver fail-closed",
+          "status": "BLOCKED / NOT PROVEN",
+          "limit": "Bounded local model. The repository deliberately reports this as a technical proof, not an observability gate pass."
+        }
+      ],
+      "static_only": [],
+      "d8_gate": "observability",
+      "d8_gate_state": "BLOCKED"
+    },
+    {
+      "id": 9,
+      "requirement": "Deployment edge/session/TLS boundaries appropriate to the current local/server + Tailscale phase",
+      "classification": "PARTIAL",
+      "executed_pass": [
+        {
+          "probe": "CSRF token assignment present per site and role over real HTTP",
+          "run": "35122242581",
+          "observed": [
+            "foundation.localhost-validation-alpha@example.test-portal-csrf-present",
+            "foundation.localhost-validation-beta@example.test-portal-csrf-present",
+            "foundation.localhost-Administrator-portal-csrf-present",
+            "restore.localhost-Administrator-portal-csrf-present",
+            "csrf-negative-and-positive-write-controls",
+            "foundation.localhost-validation-alpha@example.test-portal-csrf-present"
+          ]
+        },
+        {
+          "probe": "private-file authorization boundary including guest and post-share-attempt isolation",
+          "run": "35122242581",
+          "observed": [
+            "proxy-private-own",
+            "proxy-private-other",
+            "proxy-private-guest",
+            "private-file-still-isolated-after-share-attempts"
+          ]
+        },
+        {
+          "probe": "cross-site session replay denied",
+          "run": "35122242581",
+          "observed": [
+            "cross-site-session-replay-denied"
+          ]
+        },
+        {
+          "probe": "REST/RPC write denial for non-owners",
+          "run": "35122242581",
+          "observed": [
+            "rest-other-write-denied",
+            "rpc-other-write-denied"
+          ]
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "TLS termination and certificate behavior",
+          "reason": "All hosted HTTP was plain http://127.0.0.1:8000 with Host-header site routing. No TLS listener, certificate, HSTS, redirect or cipher suite was exercised."
+        },
+        {
+          "probe": "Tailscale network boundary",
+          "reason": "No Tailscale daemon, tailnet, ACL or identity was present on the runner; the owner-selected authorized-staff access path is untested."
+        },
+        {
+          "probe": "reverse proxy / public edge / cookie security attributes in the selected topology",
+          "reason": "No proxy or edge tier was deployed. Secure/SameSite cookie behavior under the real edge was not observed."
+        },
+        {
+          "probe": "future internet-hosted provider/hostname/DNS/public edge",
+          "reason": "Owner has not selected it; nothing invented or tested."
+        }
+      ],
+      "bounded_only": [],
+      "static_only": [],
+      "d8_gate": "topology-edge-session",
+      "d8_gate_state": "BLOCKED"
+    },
+    {
+      "id": 10,
+      "requirement": "Full artifact-based upgrade and rollback rehearsal",
+      "classification": "PARTIAL",
+      "executed_pass": [
+        {
+          "probe": "isolated artifact-based Frappe patch upgrade on a five-app bundle",
+          "run": "35122242581",
+          "observed": {
+            "status": "pass",
+            "checks": "33/33 pass",
+            "from_commit": "33bf510b17afcaaa857ed38b921d8e9e50dcd232",
+            "to_commit": "988e54f3c4c291e2077a83809663f123731abe76"
+          },
+          "detail": "Previous release cloned and SHA-verified, isolated bench init, new upgrade site created, upgrade applied while the other four app revisions were held fixed."
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "rollback rehearsal on the native stack",
+          "reason": "Not executed. The upgrade harness scope states verbatim: \"Isolated five-upstream-app bundle with a Frappe patch upgrade; other app revisions held fixed; not rollback or full production acceptance\"."
+        },
+        {
+          "probe": "full-bundle upgrade of ERPNext/Education/HRMS/payments and the owned security extension",
+          "reason": "Only Frappe was moved; the other pins were deliberately held fixed."
+        },
+        {
+          "probe": "artifact promotion, approval and communication around the upgrade",
+          "reason": "No deployed release pipeline exists; change control evidence is absent."
+        }
+      ],
+      "bounded_only": [
+        {
+          "probe": "versioned artifact rollback restores prior hashes",
+          "status": "PASS / BOUNDED",
+          "limit": "Real execution over local artifacts (release A -> B -> A hash restoration); not a deployed full-bundle rollback."
+        }
+      ],
+      "static_only": [],
+      "d8_gate": "upgrade-rollback / change-control",
+      "d8_gate_state": "BLOCKED"
+    },
+    {
+      "id": 11,
+      "requirement": "Capacity/availability observations; no invented owner-level numeric SLOs",
+      "classification": "BLOCKED / NOT SELECTED",
+      "executed_pass": [],
+      "observations_only": [
+        {
+          "observation": "runner class",
+          "value": "GitHub-hosted ubuntu-24.04, image 20260907.300.1, Docker 28.0.4 28.0.4, Compose 2.38.2"
+        },
+        {
+          "observation": "MariaDB reached healthy",
+          "value": "in 5 polls at a 2s interval"
+        },
+        {
+          "observation": "measured setup timings (seconds)",
+          "value": {
+            "start-mariadb": 8.233,
+            "bench-init": 25.973,
+            "new-placement-test.localhost": 21.597,
+            "install-erpnext": 38.481,
+            "install-hrms": 21.113,
+            "migrate": 12.462,
+            "native-acceptance": 28.084,
+            "backup-with-files": 5.207,
+            "restore-with-files": 8.098
+          }
+        },
+        {
+          "observation": "synthetic dataset scale exercised",
+          "value": {
+            "TH Placement Item Revision": 39,
+            "TH Placement Attempt": 18,
+            "TH Placement Decision": 7,
+            "TH Admission Decision": 6,
+            "Program Enrollment": 3,
+            "Student Group": 3,
+            "Course Schedule": 4,
+            "Student Attendance": 8,
+            "TH Instructor Contract": 5,
+            "TH Teaching Assignment": 3,
+            "TH Correction Policy": 1,
+            "TH Correction Request": 2,
+            "Fees": 2,
+            "Sales Invoice": 4
+          }
+        },
+        {
+          "observation": "concurrent process liveness",
+          "value": {
+            "worker": true,
+            "scheduler": true,
+            "socketio": true
+          }
+        }
+      ],
+      "blocked": [
+        {
+          "probe": "load, concurrency, soak, overload or failover testing",
+          "reason": "No load generator, concurrency ramp, saturation or failover probe was executed. Single-operator synthetic flows only."
+        },
+        {
+          "probe": "availability measurement",
+          "reason": "No uptime, failover or recovery-time measurement exists."
+        },
+        {
+          "probe": "numeric capacity/availability objective",
+          "reason": "NOT SELECTED by the owner. No number is invented, assumed or back-derived here, per the explicit instruction and the D8 authority boundary."
+        }
+      ],
+      "bounded_only": [],
+      "static_only": [],
+      "d8_gate": "capacity-availability",
+      "d8_gate_state": "BLOCKED",
+      "note": "These are descriptive observations about a disposable runner, not capacity or availability claims, and not an SLO."
+    }
+  ],
+  "sec_deps_01": {
+    "state": "UPSTREAM-BLOCKED / REJECT",
+    "weakened": false,
+    "waiver_or_override_granted": false,
+    "executed_evidence": {
+      "run": "35122242581",
+      "commit": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+      "ref": "refs/heads/arena/01a0aafe-tofel-house-erp",
+      "restricted_checks": {
+        "total": 116,
+        "pass": 114,
+        "fail": [
+          "hosted-full-stack-dependency-audit",
+          "hosted-frontend-advisory-audit"
+        ]
+      },
+      "failure_verbatim": "Restricted policy regressions failed: hosted-full-stack-dependency-audit: exit 1; hosted-frontend-advisory-audit: exit 1",
+      "npm_advisory_audit": {
+        "status": "fail",
+        "source": "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk",
+        "checked_at_utc": "2026-09-16T16:40:15.433892+00:00",
+        "packages_with_findings": 21,
+        "total_findings": 57,
+        "by_severity": {
+          "moderate": 26,
+          "low": 4,
+          "high": 27
+        },
+        "example_package": "@tiptap/core"
+      },
+      "resolved_stack_audit": {
+        "status": "fail",
+        "python_package_names": 161,
+        "node_package_names": 572,
+        "python_osv_findings": 14,
+        "affected_python_packages": [
+          "pdfkit",
+          "pypdf",
+          "setuptools",
+          "weasyprint"
+        ]
+      },
+      "frontend_candidate_review": {
+        "run": "35122242647",
+        "status": "fail",
+        "production_pins_changed": false,
+        "production_gate_passed": false,
+        "removed_advisories": [
+          "https://github.com/advisories/GHSA-22p9-wv53-3rq4",
+          "https://github.com/advisories/GHSA-23c5-xmqv-rm74",
+          "https://github.com/advisories/GHSA-28wg-ghj8-5hjv",
+          "https://github.com/advisories/GHSA-2m8v-j782-fhvr",
+          "https://github.com/advisories/GHSA-2v37-7h3g-55p8",
+          "https://github.com/advisories/GHSA-38c4-r59v-3vqw",
+          "https://github.com/advisories/GHSA-3h5v-q93c-6h6q",
+          "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp",
+          "https://github.com/advisories/GHSA-3ppc-4f35-3m26",
+          "https://github.com/advisories/GHSA-3v7f-55p6-f55p",
+          "https://github.com/advisories/GHSA-3xgq-45jj-v275",
+          "https://github.com/advisories/GHSA-48c2-rrv3-qjmp",
+          "https://github.com/advisories/GHSA-58qx-3vcg-4xpx",
+          "https://github.com/advisories/GHSA-5j98-mcp5-4vw2",
+          "https://github.com/advisories/GHSA-677m-j7p3-52f9",
+          "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+          "https://github.com/advisories/GHSA-6v5v-wf23-fmfq",
+          "https://github.com/advisories/GHSA-73wf-gq98-2v4g",
+          "https://github.com/advisories/GHSA-7r86-cg39-jmmj",
+          "https://github.com/advisories/GHSA-8jhw-289h-jh2g",
+          "https://github.com/advisories/GHSA-952p-6rrq-rcjv",
+          "https://github.com/advisories/GHSA-96hv-2xvq-fx4p",
+          "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj",
+          "https://github.com/advisories/GHSA-c83g-rgw3-j3cx",
+          "https://github.com/advisories/GHSA-f886-m6hf-6m8v",
+          "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+          "https://github.com/advisories/GHSA-grv7-fg5c-xmjg",
+          "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+          "https://github.com/advisories/GHSA-mwcw-c2x4-8c55",
+          "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+          "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+          "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+          "https://github.com/advisories/GHSA-v245-v573-v5vm",
+          "https://github.com/advisories/GHSA-v6h2-p8h4-qcjw",
+          "https://github.com/advisories/GHSA-xwg4-73v4-xw9w"
+        ],
+        "introduced_advisories": [
+          "https://github.com/advisories/GHSA-93m4-6634-74q7"
+        ],
+        "adopted": false
+      }
+    },
+    "interpretation": "Advisory matches are not exploitability or reachability proof, a full SBOM, OS-package coverage or container-image CVE coverage. They are nonetheless a real, re-executed failure of a production gate on the current active branch, so SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT and blocks production authorization. No candidate frontend was adopted and no production pin was changed."
+  },
+  "release_decision": {
+    "production_authorization": "REJECT",
+    "production_enabled": false,
+    "synthetic_only_guard": "REQUIRED",
+    "d8_overall_gate_state": "BLOCKED",
+    "sec_deps_01": "UPSTREAM-BLOCKED / REJECT",
+    "numeric_capacity_or_availability_slo_invented": false,
+    "numeric_rpo_rto_invented": false,
+    "pr_merged": false,
+    "d8_gate_states_unchanged": true,
+    "gates_that_newly_passed": [
+      [],
+      "No D8 release gate flips to PASS from this execution. Every executed pass is scoped/synthetic or partial, and each corresponding D8 gate keeps its prior BLOCKED/REJECT state."
+    ],
+    "rationale": "Fresh genuine execution on a Docker-capable runner materially increases the amount of real evidence and confirms the native runtime, authorization containment, backup/restore mechanics and integrity verification behave as designed. It does not close the D8 gates because: MariaDB/Redis restart persistence and durability were never executed; restore never reached a genuinely independent system and no destructive trigger was run; versioned encrypted backup with external key custody and rotation exists only as a bounded local proof while the foundation restore actually failed to carry the site encryption key; deployed monitoring, alert delivery, retention and fail-closed behavior were not exercised; no TLS or Tailscale boundary was tested; rollback was never rehearsed; and SEC-DEPS-01 fails again on this exact branch. Production therefore remains REJECT."
+  },
+  "environment_and_run_identifiers": {
+    "active_branch": "arena/01a0aafe-tofel-house-erp",
+    "execution_commit": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+    "prior_review_commit": "60c777e81c679b7b7940c01045247102d51db024",
+    "branch_rotation_commit": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+    "requested_commit_d3705e6": {
+      "exists": false,
+      "verification": [
+        "git cat-file -t d3705e6 -> fatal: Not a valid object name",
+        "git fsck --lost-found --dangling -> no dangling objects",
+        "git log --all --oneline -> only 60c777e and 9eccff9 existed locally",
+        "gh api repos/Frotan2/TOFEL-House-ERP/commits/d3705e6 -> HTTP 422 No commit found for SHA",
+        "gh api search/commits?q=repo:Frotan2/TOFEL-House-ERP+d3705e6 -> total_count 0",
+        "grep -rn d3705e6 across the working tree -> no reference"
+      ],
+      "conclusion": "The commit named in the request does not exist in this repository on any branch, in any dangling object, or on GitHub. It was not fabricated, guessed or substituted. The active branch tip at the start of this pass was 60c777e, identical to the already-pushed prior-session head, so there was no unpushed commit to publish. The branch was published to GitHub and all work in this pass is committed on top of it as d7df9ca and descendants."
+    },
+    "runs": {
+      "35122242676": "Foundation runner qualification - success",
+      "35122242581": "Foundation runtime validation - failure (SEC-DEPS-01)",
+      "35122242728": "Placement synthetic content qualification - success (542/542)",
+      "35122242647": "Foundation frontend candidate review - failure (advisory gate)",
+      "35122242888": "D8 operations contract validation - success"
+    },
+    "checks": {
+      "104882875418": "Foundation runner evidence",
+      "104889030990": "Foundation runtime evidence",
+      "104889035777": "Foundation remaining gate evidence",
+      "104885938426": "Placement runner result",
+      "104885934034": "Placement native checks",
+      "104882992093": "Foundation frontend candidate evidence",
+      "104882627814": "D8 validate"
+    },
+    "evidence_transport": "Runner artifact ZIPs and workflow logs are hosted on Azure blob / results-receiver endpoints that return EOF from this environment. Evidence was retrieved through the repository's own sanctioned Checks-API transport (tools/foundation/publish_evidence.py), which publishes the complete sanitized report losslessly, and each retrieved report is archived here with its SHA-256."
+  },
+  "reproducible_commands": {
+    "on_the_authorized_docker_runner": "Executed automatically by push to the active branch; manual re-run: gh workflow run foundation-runtime.yml --ref arena/01a0aafe-tofel-house-erp -f profile=hardened",
+    "local_verification": [
+      "python3 tools/foundation/d8_validate.py --contract docs/engineering/d8-operational-contract.template.json",
+      "python3 -m unittest discover -s tests -p 'test_*.py'",
+      "python3 tools/foundation/release_readiness_evidence.py --output docs/engineering/evidence/production-like-execution/local-bounded-release-readiness-evidence.json --artifact-dir <temp-artifact-dir>",
+      "node tests/foundation/test_realtime_guard.cjs",
+      "node tests/foundation/test_command_pages.cjs"
+    ],
+    "environment_capability_probe": "See local-runner-capability-probe.json; every command and raw output is recorded inline in that artifact.",
+    "evidence_retrieval": "gh api repos/Frotan2/TOFEL-House-ERP/check-runs/<check_id> --jq .output.text  (gzip+base64 transport decoded when >58000 bytes)"
+  },
+  "integrity": {
+    "generated_at_utc": "2026-09-16T16:54:38.131004+00:00",
+    "archived_evidence_sha256": {
+      "hosted-frontend-35122242647.json": "17d40562f62cddc6168bef34838f128d6dbaa2257a0ab0048739c2c28c6abfb1",
+      "hosted-placement-native-checks-35122242728.json": "094111f63a8f4b44e483bfd534a71b404c14b0e87c093477e0a633390ff42251",
+      "hosted-placement-runner-35122242728.json": "1fc72a2420f96f9727d80346c00670b73c8d4ae43cef6e010319ef36e6e911f9",
+      "hosted-remaining-gates-35106268963-prior-head.json": "87bcbb769b2b7bfe35844c29c1b2c2dd57a2a6cc981cd868ccfb8d73edab067a",
+      "hosted-remaining-gates-35122242581.json": "a1ac7cd78d0ddb5dbd4888f459f38232850083c34562f4b1cd29fec509e6025b",
+      "hosted-runner-35106268946-prior-head.json": "012f41c676510b3a3d5a868b993b70a69b5af58684d00c82fd8ea82125957996",
+      "hosted-runner-35122242676.json": "4f1ad7b9bb09a2c5d5933d5ed8490eb42b2ef0e513d1235a4378165d536e5963",
+      "hosted-runtime-35106268963-prior-head.json": "3464276d1770341c19268cae13518175fab8bf70c47d85f6de905c9c2999b2d4",
+      "hosted-runtime-35122242581.json": "e3964eb242e1bb467725e7a194ff3a7b76535d3afedbc9c5a0c8c77629eb984b",
+      "local-bounded-encrypted-restore-manifest.json": "82529b6749f67e77a056231d970a59c6b49eaadfb4209680cd638205b02aabbb",
+      "local-bounded-release-readiness-evidence.json": "1b88d8341eef8668c84362e048470fd77c61198b59840b397d193d16429342cc",
+      "local-d8-validate.json": "e39c9fad0ce393541af0a21ab193e8768db4f31d597a74d98e00cc283022d32e",
+      "local-runner-capability-probe.json": "d42a00f281fc5a95c5aceef9d4567bc2b8191ad0941c6dab7a14061e64bbadb4",
+      "local-unittest-313.txt": "6d95cec0565e3ae2ea04e63dec3ecfad6c4076bb61c772c87a081c465d615562"
+    },
+    "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED."
+  }
+}

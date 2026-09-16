@@ -1,0 +1,103 @@
+{
+  "baseline_commit": "14cd64e",
+  "commands": [
+    "python3 tools/foundation/release_readiness_evidence.py --output docs/engineering/evidence/release-readiness-evidence.json --artifact-dir docs/engineering/evidence/release-readiness",
+    "python3 -m unittest tests.foundation.test_release_readiness_evidence -v",
+    "python3 tools/foundation/d8_validate.py --contract docs/engineering/d8-operational-contract.template.json",
+    "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "node tests/foundation/test_command_pages.cjs"
+  ],
+  "evidence_artifact": "/tmp/bounded/release-readiness/encrypted-restore-manifest.json",
+  "production_enabled": false,
+  "production_state": "REJECT",
+  "proofs": {
+    "auditability": {
+      "event_digest": "38adfee0399dd496c9a37fc1761c4e1ca84144c9950d7af06b2b9ef6e60d6429",
+      "native_audit_model": "Version",
+      "status": "PASS / BOUNDED"
+    },
+    "branch_isolation": {
+      "bounded_model": "branch-scope predicate and aggregate separation passed",
+      "reason": "The application checkout has no deployed native branch runtime/fixture evidence; this model is not production authorization.",
+      "status": "BLOCKED / NOT PROVEN"
+    },
+    "durable_db_and_file_preservation": {
+      "database_state_preserved": true,
+      "private_and_public_files_preserved": true,
+      "status": "PASS / BOUNDED",
+      "tree_digest_equal": true
+    },
+    "encrypted_versioned_backup": {
+      "hmac_verified": true,
+      "openssl_aes_256_cbc_pbkdf2": true,
+      "status": "PASS / BOUNDED",
+      "versions_created": [
+        1,
+        2,
+        3
+      ],
+      "versions_retained": [
+        2,
+        3
+      ]
+    },
+    "key_custody_boundary": {
+      "key_external_to_archive": true,
+      "key_not_in_restore_tree": true,
+      "status": "PASS / BOUNDED"
+    },
+    "monitoring_alerting": {
+      "bounded_alert_delivery": true,
+      "missing_receiver_fail_closed": true,
+      "status": "BLOCKED / NOT PROVEN"
+    },
+    "native_first": {
+      "authority": "native User and Version; no new authority ledger",
+      "status": "PASS / STATIC"
+    },
+    "offboarding_emergency_revocation": {
+      "active_access_revoked": true,
+      "historical_digest_preserved": true,
+      "status": "PASS / BOUNDED"
+    },
+    "restore_on_another_system": {
+      "database_state_sha256": "f9a5bf36868bddaa79f95c6ad131cde7857852769a02c914ba94f091aebf6d54",
+      "decrypted_archive": true,
+      "external_key_not_archived": true,
+      "hmac_verified": true,
+      "private_and_public_files_preserved": true,
+      "restore_system": "independent-restore-system",
+      "restored_tree_sha256": "11eb3a0dacb7924ed2d789c2ec3457e9b5b360bcfd3ef9e055529d39d427a929",
+      "same_tree": true,
+      "source_system": "local-source-system",
+      "source_tree_sha256": "11eb3a0dacb7924ed2d789c2ec3457e9b5b360bcfd3ef9e055529d39d427a929",
+      "status": "PASS / BOUNDED",
+      "version": 3
+    },
+    "rollback_change_control": {
+      "release_a_sha256": "0db586c428ec394a502df27172b77dc7175cb72e51f37a80e393675e57b22de7",
+      "rollback_restored": true,
+      "status": "PASS / BOUNDED"
+    }
+  },
+  "release_gate_state": {
+    "authorization_isolation": "PASS / SCOPED; PRODUCTION NOT PROVEN",
+    "backup_restore": "BLOCKED / PRODUCTION CUSTODY NOT PROVEN",
+    "capacity_availability": "BLOCKED / NO OWNER NUMERIC OBJECTIVE",
+    "change_control": "BLOCKED / DEPLOYED RELEASE/ROLLBACK EVIDENCE NOT PROVEN",
+    "dependency_security": "REJECT / SEC-DEPS-01 UPSTREAM-BLOCKED",
+    "domain_qualification": "PASS / SCOPED EXISTING HOSTED EVIDENCE",
+    "durability": "BLOCKED / DEPLOYED DB/REDIS/HOST DURABILITY NOT PROVEN",
+    "observability": "BLOCKED / DEPLOYED MONITORING NOT PROVEN",
+    "ownership": "PASS / SCOPED OWNER DECISION + CHARTER",
+    "production_authorization": "REJECT",
+    "realtime": "PASS / SCOPED EXISTING EVIDENCE",
+    "recovery": "BLOCKED / INDEPENDENT PRODUCTION-LIKE EVIDENCE NOT PROVEN",
+    "topology_edge_session": "BLOCKED / DEPLOYED CURRENT BOUNDARY NOT PROVEN",
+    "upgrade_rollback": "BLOCKED / DEPLOYED FULL-BUNDLE EVIDENCE NOT PROVEN"
+  },
+  "schema_version": 1,
+  "scope": "Bounded synthetic evidence harness; no production site, credentials, customer data, provider or deployment probe",
+  "security_dependency_state": "UPSTREAM-BLOCKED / REJECT",
+  "synthetic_only_guard": "REQUIRED"
+}

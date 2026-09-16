@@ -10,9 +10,11 @@ Date: 2026-09-16 · Owner-decision baseline: `14cd64e` · Active branch:
 | Production authorization | **REJECT** |
 | Production enabled | **false** |
 | Synthetic-only guard | **REQUIRED and unchanged** |
-| SEC-DEPS-01 | **UPSTREAM-BLOCKED / REJECT** |
-| D8 overall | **BLOCKED** |
-| Numeric capacity/availability objective | **NOT SELECTED / BLOCKED** |
+| SEC-DEPS-01 | **UPSTREAM-BLOCKED / REJECT** (re-executed and failed again on the active branch, run `35122242581`) |
+| D8 overall | **BLOCKED** (no gate flipped to PASS by the fresh execution) |
+| Numeric capacity/availability objective | **NOT SELECTED / BLOCKED** (none invented) |
+| Requested local execution host | **ENVIRONMENT-BLOCKED** (no Docker Engine/Compose; see §8.1) |
+| Production-like execution on a Docker-capable runner | **EXECUTED** at `d7df9ca7` — 5 runs, probe-by-probe classification in §8 |
 
 This is the canonical release-readiness report for the closure pass. It separates
 owner decisions from technical evidence and does not treat a bounded harness,
@@ -20,6 +22,12 @@ static inspection, documentation, or synthetic product result as production proo
 No deployment, production credentials, customer data, public provider, hostname,
 DNS, off-site destination, numeric RPO/RTO, capacity target or availability target
 was invented or enabled.
+
+**§8 records the production-like execution pass** requested for this release
+review: what was genuinely executed on a Docker-capable runner, what was only
+bounded/static/preflight, and what the runner could not provide. The
+machine-readable probe-by-probe classification is
+[`evidence/production-like-execution/execution-ledger.json`](evidence/production-like-execution/execution-ledger.json).
 
 The machine-readable run result is
 [`evidence/release-readiness-evidence.json`](evidence/release-readiness-evidence.json).
@@ -85,6 +93,13 @@ authorization.
 | D8 contract integrity | **PASS / STRUCTURAL** | `python3 tools/foundation/d8_validate.py --contract docs/engineering/d8-operational-contract.template.json`; report remains `BLOCKED`, `REJECT`, and `SEC-DEPS-01` remains rejected |
 
 ## 4. Remaining BLOCKED/REJECT gates
+
+Every gate below was re-examined against the fresh Docker-runner execution in
+§8. Where §8 records genuinely executed sub-probes, they are cited there and in
+the D8 matrix `evidence` fields; none of them closes the gate, because in each
+case the specific production-like requirement (restart/durability, independent
+system, encryption key custody and rotation, deployed monitoring, TLS/Tailscale
+edge, rollback rehearsal, capacity objective) was **not** executed.
 
 | Gate | Final state | Why it remains open |
 |---|---|---|
@@ -275,3 +290,142 @@ security dependency hard stop remains.
 **Final production authorization: REJECT.** Do not enable production, relax the
 synthetic-only guard, waive or reinterpret SEC-DEPS-01, relabel bounded synthetic
 proof as production evidence, or merge this PR.
+
+## 8. Production-like execution pass on the active branch (2026-09-16)
+
+This section records the requested production-like readiness execution. It keeps
+executed evidence strictly separate from preflight, static, mocked and bounded
+evidence, and it records unavailable capabilities as BLOCKED or
+ENVIRONMENT-BLOCKED instead of simulating success.
+
+Machine-readable ledger:
+[`evidence/production-like-execution/execution-ledger.json`](evidence/production-like-execution/execution-ledger.json).
+Every archived report carries a SHA-256 in that ledger.
+
+### 8.1 Named commit `d3705e6` does not exist
+
+The pass was asked to resume from commit `d3705e6`. That object does not exist
+and was not fabricated, guessed or substituted:
+
+| Verification | Result |
+|---|---|
+| `git cat-file -t d3705e6` | `fatal: Not a valid object name d3705e6` |
+| `git fsck --lost-found --dangling` | no dangling or lost objects |
+| `git log --all --oneline` | only `60c777e` and `9eccff9` existed locally |
+| `gh api repos/Frotan2/TOFEL-House-ERP/commits/d3705e6` | HTTP **422** — "No commit found for SHA: d3705e6" |
+| `gh api search/commits?q=repo:Frotan2/TOFEL-House-ERP+d3705e6` | `total_count: 0` |
+| `grep -rn d3705e6` across the working tree | no reference |
+
+At the start of the pass the active branch `arena/01a0aafe-tofel-house-erp` was
+at `60c777e81c679b7b7940c01045247102d51db024` with a clean tree — byte-identical
+to the already-pushed prior-session head — and the branch itself did not yet
+exist on GitHub. There was therefore **no unpushed commit to publish**. The
+branch was published to GitHub, and all work in this pass is committed on top of
+it as `d7df9ca766cd3039d68051ca83cdc8be5e834452` and descendants.
+
+### 8.2 The requesting host cannot execute the harness (ENVIRONMENT-BLOCKED)
+
+The local sandbox was probed rather than assumed
+([capability probe](evidence/production-like-execution/local-runner-capability-probe.json),
+all commands and raw outputs inline):
+
+- No `docker`, `docker-compose` or `podman` binary; `/var/run/docker.sock` absent.
+- Docker cannot be installed: `deb.debian.org` and `download.docker.com` are both
+  unreachable (`apt-get update` fails, `apt-cache policy docker.io` is empty),
+  while `pypi.org`, `github.com` and `registry.npmjs.org` return 200 — a
+  selective egress allowlist, not a general outage.
+- `/lib/modules` is absent so container storage/networking modules cannot be
+  loaded, and `/proc` is mounted read-only.
+- Envelope: 2 vCPU, ~3.8 GiB RAM, ~20 GiB disk — below a production-like
+  Frappe/ERPNext/Education/HRMS stack plus MariaDB and Redis.
+
+Determination: **ENVIRONMENT-BLOCKED** for Docker Engine, Docker Compose and
+package installation. Per the evidence rules, no local check-only or preflight
+result (including `evidence/phase-2/docker-preflight.json`) was promoted to
+execution evidence.
+
+### 8.3 Authorized Docker-capable venue and the runs actually executed
+
+The harness's own guards authorize an ephemeral GitHub-hosted runner, which
+genuinely provides Docker Engine, Docker Compose, sufficient resources and
+permission to create isolated synthetic sites, databases and services. The
+executable branch boundary in `tools/session_branch.py` was rotated from
+`arena/01a0a9f7-tofel-house-erp` to the current session branch using the
+procedure that module documents — canonical value, workflow filters, hosted
+guards and qualification tests in one change — because an unrotated boundary
+makes the checkout fail its own branch-qualification test and prevents any
+hosted execution on the active branch. Recorded historical provenance was left
+untouched.
+
+Execution commit `d7df9ca766cd3039d68051ca83cdc8be5e834452` on
+`arena/01a0aafe-tofel-house-erp`, runner image `ubuntu24` / `20260907.300.1`,
+**Docker 28.0.4**, **Compose 2.38.2**:
+
+| Workflow | Run | Conclusion | Evidence |
+|---|---:|---|---|
+| Foundation runner qualification | [`35122242676`](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/35122242676) | **success** — 18/18 | Check `104882875418` |
+| Placement synthetic content qualification | [`35122242728`](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/35122242728) | **success** — 542/542 native, 101/101 runner | Checks `104885934034`, `104885938426` |
+| Foundation runtime validation | [`35122242581`](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/35122242581) | **failure** — SEC-DEPS-01 | Checks `104889030990`, `104889035777` |
+| Foundation frontend candidate review | [`35122242647`](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/35122242647) | **failure** — not adopted | Check `104882992093` |
+| D8 operations contract validation | [`35122242888`](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/35122242888) | **success** — structural, reports BLOCKED/REJECT | Check `104882627814` |
+
+Runner artifact ZIPs and workflow logs are hosted on Azure blob /
+results-receiver endpoints that return `EOF` from this environment, so evidence
+was retrieved through the repository's own sanctioned Checks-API transport
+(`tools/foundation/publish_evidence.py`), which publishes the complete sanitized
+report losslessly. Each retrieved report is archived under
+`evidence/production-like-execution/` with its SHA-256.
+
+### 8.4 Probe-by-probe classification
+
+| # | Requested probe | Classification | Executed and genuinely proven | Not executed — remains open |
+|---:|---|---|---|---|
+| 1 | MariaDB startup, health, restart persistence, durability | **PARTIAL** | Start to `healthy` in 5 polls; version; `utf8mb4`/`utf8mb4_unicode_ci`; `START TRANSACTION`/`ROLLBACK` count 0; pinned digest `sha256:8b5f33eb…`; hosting three real bench sites | MariaDB restart persistence; crash/power-loss/volume-loss durability; durability on the selected local/server host |
+| 2 | Redis persistence and restart recovery | **PARTIAL** | Queue and cache instances started; `PING`→`PONG`; version; digest `sha256:75934ddb…`; cache marker survived an app restart | RDB/AOF persistence; Redis restart recovery; in-flight/exactly-once job semantics |
+| 3 | Versioned encrypted backups, external key custody, rotation | **BLOCKED** | Real backups with SHA-256 over database, private and public files, plus a hardened variant | Version series and retention; encryption at rest; external custody; rotation. **Executed defect:** run `35122242581` reports `site_encryption_key_restored=false` (run `35122242728` reports `true`); both recorded, neither reclassified |
+| 4 | Destructive/recovery then restore into a genuinely independent system | **PARTIAL** | Restore into a separate site **and** separate database, `source_db_credentials_copied=false`; post-restore authorization re-verification | Independent system/environment (all targets were the same ephemeral host); destructive trigger; measured recovery objective |
+| 5 | Database and file integrity before/after recovery | **PASS (EXECUTED) / SCOPED** | Snapshot captured before backup and verified after restore across 14 doctypes by exact record count; `private_file_sha256_verified=true` | Whole-database checksum equality; cross-system comparison |
+| 6 | Native Frappe/ERPNext/Education runtime with authorization/branch isolation | **PASS (EXECUTED) / SCOPED-SYNTHETIC** | Real bench with frappe, erpnext, education, payments, hrms, `foundation_security`, `toefl_house`; 542/542 native checks; two isolated sites; isolation 47/47; guardian browser 6/6 (own 200 vs other 403); upstream `user_permission` 10 and `docshare` 15 pass; all five app pins unchanged | Deployed multi-branch (Company/Branch) isolation across read/write/submit/export/file/job paths |
+| 7 | Authentication/session/offboarding/emergency revocation | **PARTIAL** | `http-role-revocation-old-session-denied`; `http-teaching-revoked-scheduler-old-session-denied`; `cross-site-session-replay-denied`; `live-session-revocation-stops-document-and-task-delivery`; source session 200 vs recovery site 403; readiness 54/54 | Offboarding as an operational process; credential/key rotation; audit retention over time |
+| 8 | Monitoring, alert delivery, retention, fail-closed | **BLOCKED** | `release-observability-probes`: native Error Log roundtrip, Scheduled Job Type registry, health ping | Alert receiver and delivery; retention/rotation/archival; deployed fail-closed behavior; incident response |
+| 9 | Edge/session/TLS boundaries for the local/server + Tailscale phase | **PARTIAL** | CSRF token presence per site/role; 13 CSRF negative-with-positive-control checks; private-file own/other/guest isolation; `private-file-still-isolated-after-share-attempts`; REST/RPC write denial | TLS termination/certificates/HSTS; reverse proxy and public edge; cookie attributes under the real edge; the Tailscale tailnet/ACL boundary (all traffic was plain `http://127.0.0.1:8000`) |
+| 10 | Full artifact-based upgrade and rollback rehearsal | **PARTIAL** | Isolated artifact-based Frappe patch upgrade 33/33, `33bf510b…` → `988e54f3…`, other four pins held fixed | Rollback rehearsal (explicitly out of the harness scope); full-bundle upgrade; promotion/approval/communication |
+| 11 | Capacity/availability observations, no invented SLOs | **BLOCKED / NOT SELECTED** | Descriptive timings and runner envelope only | Any load, concurrency, soak, overload, failover or availability measurement. **No numeric objective invented** |
+
+Tally: 2 executed-and-scoped passes, 6 partial, 3 blocked. **No D8 release gate
+flips to PASS.**
+
+### 8.5 Separately classified, never counted as execution evidence
+
+- **PASS / BOUNDED** — real local execution over synthetic fixtures: versioned
+  encrypted backup with OpenSSL AES-256-CBC + PBKDF2, HMAC-SHA256, three
+  versions with v1 rotated, external key absent from the restore tree,
+  alternate-directory restore with equal tree digests, offboarding/history
+  preservation, audit shape, alert fail-closed on a missing receiver, artifact
+  rollback A→B→A
+  ([`local-bounded-release-readiness-evidence.json`](evidence/production-like-execution/local-bounded-release-readiness-evidence.json),
+  [`local-bounded-encrypted-restore-manifest.json`](evidence/production-like-execution/local-bounded-encrypted-restore-manifest.json)).
+  Its own `branch_isolation` and `monitoring_alerting` proofs report
+  **BLOCKED / NOT PROVEN**.
+- **PASS / STRUCTURAL** — D8 validator and contract tests: exit 0 while
+  reporting BLOCKED, REJECT, `production_enabled=false`, synthetic-only
+  REQUIRED, SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT,
+  `checkout_branch_matches_active=true`
+  ([`local-d8-validate.json`](evidence/production-like-execution/local-d8-validate.json)).
+- **Local suite** — 313 Python tests pass; realtime guard PASS; D10
+  command-page/native-dialog smoke PASS (14 pages)
+  ([`local-unittest-313.txt`](evidence/production-like-execution/local-unittest-313.txt)).
+- **PREFLIGHT** — `evidence/phase-2/docker-preflight.json` remains toolchain
+  availability only and is explicitly not execution evidence.
+
+### 8.6 Hard stops preserved
+
+`production_enabled=false`, production authorization **REJECT**, synthetic-only
+guard **REQUIRED**, SEC-DEPS-01 **UPSTREAM-BLOCKED / REJECT**, D8 overall
+**BLOCKED**. The validator's pinned active-branch runtime assertion was moved to
+the genuine current run and its historical pin retained under
+`prior_active_branch_provenance`; it additionally forbids the active branch from
+ever reporting a passing Foundation runtime or a true phase2/security/product
+flag while SEC-DEPS-01 is open. No gate was weakened, waived or reinterpreted,
+no bounded or static result was relabelled as production evidence, and PR #2 was
+**not** merged.

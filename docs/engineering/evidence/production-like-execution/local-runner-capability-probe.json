@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "artifact": "local-runner-capability-probe",
+  "purpose": "Determine whether THIS sandbox runner can execute the production-like readiness harness (Docker Engine + Docker Compose + sufficient CPU/RAM/disk + permission to create isolated test data and services). This is a capability determination only. It is NOT execution evidence for any D8 production-readiness probe and must never be counted as one.",
+  "probed_at_utc": "2026-09-16T16:31:00.412535+00:00",
+  "host": {
+    "hostname": "e2b.local",
+    "kernel": "6.1.158+",
+    "os": "Linux-6.1.158+-x86_64-with-glibc2.36",
+    "python": "3.11.2",
+    "arch": "x86_64"
+  },
+  "sandbox_identity": "Arena.ai Agent Mode e2b sandbox (e2b.local)",
+  "checks": {
+    "docker_binary_present": {
+      "observed": null,
+      "status": "missing"
+    },
+    "docker_compose_binary_present": {
+      "observed": null,
+      "status": "missing"
+    },
+    "podman_binary_present": {
+      "observed": null,
+      "status": "missing"
+    },
+    "docker_daemon_socket": {
+      "observed": false,
+      "status": "missing"
+    },
+    "docker_version": {
+      "command": "docker version 2>&1 | head -5",
+      "exit_code": 0,
+      "stdout": "/bin/sh: 1: docker: not found",
+      "stderr": ""
+    },
+    "docker_info": {
+      "command": "timeout 20 docker info 2>&1 | head -5",
+      "exit_code": 0,
+      "stdout": "timeout: failed to run command \u2018docker\u2019: No such file or directory",
+      "stderr": ""
+    },
+    "docker_compose_version": {
+      "command": "docker compose version 2>&1 | head -3",
+      "exit_code": 0,
+      "stdout": "/bin/sh: 1: docker: not found",
+      "stderr": ""
+    },
+    "kernel_modules_dir": {
+      "observed": false,
+      "status": "missing"
+    },
+    "proc_writable": {
+      "command": "test -w /proc/sys/kernel/hostname && echo writable || echo read-only",
+      "exit_code": 0,
+      "stdout": "read-only",
+      "stderr": ""
+    },
+    "cpu_count": {
+      "observed": 2
+    },
+    "memory": {
+      "command": "free -b | awk '/^Mem:/{print $2}'",
+      "exit_code": 0,
+      "stdout": "4131278848",
+      "stderr": ""
+    },
+    "disk_root": {
+      "command": "df -B1 --output=avail / | tail -1",
+      "exit_code": 0,
+      "stdout": "20687974400",
+      "stderr": ""
+    },
+    "overlay_fs": {
+      "command": "grep -c overlay /proc/filesystems",
+      "exit_code": 0,
+      "stdout": "1",
+      "stderr": ""
+    },
+    "seccomp": {
+      "command": "grep Seccomp: /proc/self/status",
+      "exit_code": 0,
+      "stdout": "Seccomp:\t0",
+      "stderr": ""
+    },
+    "id": {
+      "command": "id",
+      "exit_code": 0,
+      "stdout": "uid=1001(user) gid=1001(user) groups=1001(user),27(sudo),100(users)",
+      "stderr": ""
+    },
+    "sudo_available": {
+      "command": "sudo -n true 2>&1 && echo yes || echo no",
+      "exit_code": 0,
+      "stdout": "yes",
+      "stderr": ""
+    },
+    "pid1": {
+      "command": "ps -p 1 -o comm=",
+      "exit_code": 0,
+      "stdout": "systemd",
+      "stderr": ""
+    },
+    "egress_pypi": {
+      "command": "timeout 20 curl -sS -o /dev/null -w '%{http_code}' https://pypi.org/simple/ 2>&1 | tail -1",
+      "exit_code": 0,
+      "stdout": "200",
+      "stderr": ""
+    },
+    "egress_github": {
+      "command": "timeout 20 curl -sS -o /dev/null -w '%{http_code}' https://github.com 2>&1 | tail -1",
+      "exit_code": 0,
+      "stdout": "200",
+      "stderr": ""
+    },
+    "egress_npm_registry": {
+      "command": "timeout 20 curl -sS -o /dev/null -w '%{http_code}' https://registry.npmjs.org/ 2>&1 | tail -1",
+      "exit_code": 0,
+      "stdout": "200",
+      "stderr": ""
+    },
+    "egress_debian_apt_mirror": {
+      "command": "timeout 20 curl -sS -o /dev/null -w '%{http_code}' http://deb.debian.org/debian/dists/bookworm/InRelease 2>&1 | tail -1",
+      "exit_code": 0,
+      "stdout": "000",
+      "stderr": ""
+    },
+    "egress_docker_download": {
+      "command": "timeout 20 curl -sS -o /dev/null -w '%{http_code}' https://download.docker.com/linux/debian/gpg 2>&1 | tail -1",
+      "exit_code": 0,
+      "stdout": "000",
+      "stderr": ""
+    },
+    "apt_update": {
+      "command": "sudo apt-get update 2>&1 | tail -4",
+      "exit_code": 0,
+      "stdout": "W: Failed to fetch http://deb.debian.org/debian/dists/bookworm/InRelease  Connection failed [IP: 151.101.2.132 80]\nW: Failed to fetch http://deb.debian.org/debian/dists/bookworm-updates/InRelease  Connection failed [IP: 151.101.66.132 80]\nW: Failed to fetch http://deb.debian.org/debian-security/dists/bookworm-security/InRelease  Connection failed [IP: 151.101.2.132 80]\nW: Some index files failed to download. They have been ignored, or old ones used instead.",
+      "stderr": ""
+    },
+    "apt_policy_docker_io": {
+      "command": "apt-cache policy docker.io 2>&1 | head -6",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "openssl_version": {
+      "command": "openssl version",
+      "exit_code": 0,
+      "stdout": "OpenSSL 3.0.20 7 Apr 2026 (Library: OpenSSL 3.0.20 7 Apr 2026)",
+      "stderr": ""
+    },
+    "python_version": {
+      "command": "python3 --version",
+      "exit_code": 0,
+      "stdout": "Python 3.11.2",
+      "stderr": ""
+    },
+    "node_version": {
+      "command": "node --version",
+      "exit_code": 0,
+      "stdout": "v22.22.3",
+      "stderr": ""
+    }
+  },
+  "determination": {
+    "docker_engine": "ENVIRONMENT-BLOCKED",
+    "docker_compose": "ENVIRONMENT-BLOCKED",
+    "apt_package_install": "ENVIRONMENT-BLOCKED",
+    "sufficient_cpu_ram_disk": "FAIL",
+    "isolated_test_data_and_services": "PARTIAL (filesystem only; no container/service isolation)"
+  },
+  "reasoning": [
+    "No docker, docker-compose or podman binary is installed and /var/run/docker.sock does not exist.",
+    "Docker Engine cannot be installed: the Debian apt mirrors (deb.debian.org) and download.docker.com are both unreachable from this sandbox, so apt-get update fails and no package index exists.",
+    "/lib/modules is absent, so kernel modules required for container networking/storage cannot be loaded, and /proc is mounted read-only.",
+    "Resources are below the production-like envelope: 2 vCPU and ~3.8 GiB RAM, against a full Frappe/ERPNext/Education/HRMS bench plus MariaDB and Redis.",
+    "Consequence: every live-service probe (MariaDB durability/restart, Redis persistence/restart recovery, deployed Frappe runtime, TLS/edge, monitoring delivery) is ENVIRONMENT-BLOCKED on this host and must be executed on a Docker-capable runner instead."
+  ],
+  "authorized_execution_venue": {
+    "name": "GitHub-hosted ubuntu-24.04 Actions runner",
+    "why": "It genuinely provides Docker Engine and Docker Compose, sufficient CPU/RAM/disk and permission to create isolated synthetic sites, databases and services. This is the venue the repository's hosted guards already authorize.",
+    "observed_docker_version_at_prior_head": "28.0.4",
+    "observed_compose_version_at_prior_head": "2.38.2"
+  },
+  "classification": "CAPABILITY-DETERMINATION / NOT EXECUTION EVIDENCE"
+}
