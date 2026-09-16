@@ -46,7 +46,12 @@ def main():
         p=subprocess.run([str(a) for a in args],cwd=cwd or lab,env=env,text=True,capture_output=True,timeout=timeout)
         (evidence/(label+'.txt')).write_text(redact(p.stdout+p.stderr))
         report['checks'].append(dict(name=label,exit_code=p.returncode,seconds=round(time.monotonic()-started,3)))
-        if p.returncode:raise RuntimeError(f'{label} failed (exit {p.returncode}); see retained log')
+        if p.returncode:
+            # Surface the redacted tail of the failed step in the runner-result
+            # annotation itself: retained-log artifacts are not always reachable
+            # from every evidence-retrieval environment.
+            tail=redact(p.stdout+p.stderr).strip()[-2500:]
+            raise RuntimeError(f'{label} failed (exit {p.returncode}); see retained log\n--- {label} log tail ---\n{tail}')
         return p.stdout.strip()
     def bench(label,*args):return run(label,[lab/'tools/bin/bench',*args],benchdir)
     try:
