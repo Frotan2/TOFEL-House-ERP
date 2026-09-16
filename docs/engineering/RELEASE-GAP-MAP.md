@@ -118,9 +118,9 @@ platform/warehouse (prohibited), any new ERP-adjacent platform.
 | R1 | Workspaces + hosted proof | — | done (run 35049742120) |
 | R2 | Query-Report registers + hosted proof | R1 merged (shares suite) | done (run 35049742120); D9 remainder owner-gated |
 | R3 | Export/attachment containment proofs + observability probes | R2 merged | **DONE** — run 35053305607 @ 46e5040, 533/533 |
-| R4 | Owner decision packet (D1–D8 one-page asks, current state per gate) | — | yes |
-| R5 | Upstream tracking evidence: realtime non-exposure grep, dependency advisory triage summary, upgrade-path note | — | yes |
-| RC | Release Candidate dossier: consolidated evidence index (runs, SHAs, gates, deferrals) | R1–R5 | — |
+| R4 | Owner decision packet (one-page asks, current state per gate) | — | **DONE** — docs/engineering/OWNER-DECISIONS.md (D1–D10, 2026-09-16) |
+| R5 | Upstream tracking evidence: realtime non-exposure grep, dependency advisory triage summary, upgrade-path note | — | **DONE** — docs/engineering/UPSTREAM-TRACKING.md (grep: 0 emit sites; advisories triaged; upgrade path + hazards, 2026-09-16) |
+| RC | Release Candidate dossier: consolidated evidence index (runs, SHAs, gates, deferrals) | R1–R5 | **DONE** — docs/engineering/RELEASE-CANDIDATE-DOSSIER.md (implemented surface QUALIFIED; production REJECT) |
 
 Parallelization note: this environment executes sequentially; R2/R3/R5
 are marked parallel-safe because they touch disjoint files (separate
