@@ -124,7 +124,7 @@ platform/warehouse (prohibited), any new ERP-adjacent platform.
 | T1 | D2 teaching compensation: `TH Instructor Contract` (+skill-term/adjustment children) + `TH Teaching Assignment` doctypes, fixtures, guarded command surface | Owner answer 2026-09-16 | **DONE** — shipped @ 8c92e2f; qualified in run 35066349129 |
 | T2 | D2 hosted checks: multi-instructor/skill facts, effective dating, duplicate-payable prevention, idempotent calc, fixed-salary exclusion, audit chain | T1 merged (shares suite) | **DONE** — run 35066349129 @ fa02137, **536/536**; checks `teaching-compensation-contract-authority`, `teaching-assignment-facts`, `teaching-compensation-calculation` |
 | T3 | D10 (ii): role-based report/page surfaces for API-first staff roles (no native reads; containment unchanged) | — | parallel-safe w/ T1/T2 |
-| T4 | D3 framework: guarded correction/refund command framework, approval terms configurable (owner terms pending) | T1 done | **in execution** |
+| T4 | D3 framework: guarded correction/refund command framework, approval terms configurable (owner terms pending) | T1 done | **DONE** — run 35069740378 @ ed2d81d, **539/539**; checks `finance-correction-*` (fail-closed, SoD/window/dual-key, native credit-note posting). v1 scope: full-amount corrections of TH placement invoices; partials + Fees-side await owner exact terms (refused fail-closed) |
 | T5 | D8: role-based operational ownership charter (roles/responsibilities; humans/contracts remain owner's) | — | docs; parallel-safe |
 
 Owner gate dispositions (2026-09-16): D1 defer · D2 unlocked (T1/T2) ·

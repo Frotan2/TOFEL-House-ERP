@@ -40,9 +40,10 @@ gates). Each row is a full green run of the entire suite at that point:
 | A13 containment | 35008705885 | `5b5a044` | 523/523 | Bypass-route containment (RPC/REST/edit/cancel/amend seams; report SHA-256 `a66a1b5d…`) |
 | R1+R2 release surfaces | 35049742120 | `69a8a95` | 530/530 | Workspaces (visibility model, no-escalation), query-report registers, probe-user restoration |
 | R3 read-side + observability | 35053305607 | `46e5040` | 533/533 | Attachment parent-gate, list/export/print denial, Error Log/scheduler/ping probes |
-| **D2 teaching compensation (current)** | **35066349129** | **`fa02137`** | **536/536** | Contract authority, skill-area assignment facts, native Additional Salary calculation path |
+| D2 teaching compensation | 35066349129 | `fa02137` | 536/536 | Contract authority, skill-area assignment facts, native Additional Salary calculation path |
+| **D3 correction framework (current)** | **35069740378** | **`ed2d81d`** | **539/539** | Fail-closed policy carrier, SoD/window/dual-key denials, native credit-note posting with GL proof |
 
-All release/D2 check IDs in the current suite (13):
+All release/D2/D3 check IDs in the current suite (16):
 `release-probe-users-restored`, `release-workspaces-configured`,
 `release-workspace-role-visibility`,
 `release-workspace-no-privilege-escalation`,
@@ -50,7 +51,9 @@ All release/D2 check IDs in the current suite (13):
 `release-registers-facts-only`, `release-attachment-paths-guarded`,
 `release-read-export-print-paths-denied`, `release-observability-probes`,
 `teaching-compensation-contract-authority`,
-`teaching-assignment-facts`, `teaching-compensation-calculation`.
+`teaching-assignment-facts`, `teaching-compensation-calculation`,
+`finance-correction-fail-closed`, `finance-correction-sod-and-window`,
+`finance-correction-posting`.
 
 Diagnostic runs kept for the record (failures that produced decisive
 evidence): 35046096047 (invigilator module-gate — D10 root cause),

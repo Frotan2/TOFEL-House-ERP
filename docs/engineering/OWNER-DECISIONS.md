@@ -121,7 +121,7 @@ independently satisfied.
 |---|---|---|
 | D1 | **Defer** | A06 stays unstarted |
 | D2 | **Unlocked — contract-driven teaching compensation** (full business+technical requirement received; rates/terms remain owner configuration) | **EXECUTED & QUALIFIED** — T1/T2 hosted-proven (run 35066349129 @ fa02137, 536/536); design: TEACHING-COMPENSATION-DESIGN.md |
-| D3 | **Framework approved; exact terms later** | Guarded correction/refund command framework with configurable approval terms; no windows/partial-policy invented |
+| D3 | **Framework approved; exact terms later** | **FRAMEWORK SHIPPED & QUALIFIED** — run 35069740378 @ ed2d81d, 539/539. Fail-closed until you configure: approver role + correction window (TH Correction Policy). Remaining owner asks: partial-refund terms, Fees-side correction scope |
 | D4 | **Defer advanced policy** | Narrow hosted-proven remedy stands; SEC-GUARDIAN-01 full closure stays deferred with portals |
 | D5 | **Native basic lifecycle; advanced policy later** | A05/A11 stay unstarted |
 | D6a | **Tax not configured yet** | No tax configuration anywhere; recorded as decision, not omission |
