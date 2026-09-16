@@ -108,7 +108,10 @@ not yield a compliant staff Workspace (diagnostic run 35048606232).
 Auditor and Finance Officer Workspace/report surfaces remain shipped and
 hosted-proven (run 35049742120). **Unblocks:** a separately role-gated
 native Page command surface, whose client can call only existing guarded
-commands and must receive fresh hosted proof before it is qualified.
+commands. **Qualified evidence:** current-branch run `35073376790` at
+`3587700110d21816b239779c93c32f4060cd3c63`, 542/542 checks, proved the
+13 Page records/assets, each of 12 role-specific Page audiences plus
+seven non-members, and no native-read escalation.
 
 ---
 
@@ -134,4 +137,4 @@ independently satisfied.
 | D7 | **Defer; raw reports now** | Registers stay raw-facts-only (matches shipped state) |
 | D8 | **Define role-based operational ownership** | **T5 DELIVERED** — [Operational Ownership Charter](OPERATIONAL-OWNERSHIP-CHARTER.md) derives the shipped role matrix and D8 responsibility slots. Named human/contractual assignments, topology and operating evidence remain owner work; production stays REJECT. |
 | D9 | **(d) No separate register** | Gate CLOSED at status quo; attendance facts via guarded APIs only |
-| D10 | **(ii) Role-based report/page surfaces** | T3 Page implementation is authorized only as a no-new-authority command surface. Existing scoped TH reads are documented; no native Education/ERPNext read is granted. Qualification remains required. |
+| D10 | **(ii) Role-based report/page surfaces** | **T3 EXECUTED & QUALIFIED** — 13 native Pages (role-filtered command centre + 12 one-role action Pages), no new native Education/ERPNext authority; run 35073376790 @ 3587700, **542/542**. |
