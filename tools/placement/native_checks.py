@@ -2978,6 +2978,8 @@ def main():
                         type=ctype)).insert()
             emps={}
             cur=frappe.db.get_value('Company',comp,'default_currency') or 'USD'
+            if not frappe.db.exists('Gender','Other'):
+                frappe.get_doc(dict(doctype='Gender',gender='Other')).insert()
             for label in ('One','Two'):
                 ename=frappe.db.get_value('Employee',{'employee_name':'SYN Employee '+label},'name')
                 if not ename:
