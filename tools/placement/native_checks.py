@@ -2948,7 +2948,7 @@ def main():
             entry=frappe.log_error(marker)
             frappe.db.commit()
             row=frappe.get_doc('Error Log',entry.name)
-            assert marker in ((row.title or '')+(row.error or '')),(row.title,str(row.error)[:120])
+            assert marker in ((row.method or '')+(row.error or '')),(row.method,str(row.error)[:120])
             frappe.delete_doc('Error Log',entry.name,ignore_permissions=True)
             frappe.db.commit()
             observed['error_log_roundtrip']=entry.name
