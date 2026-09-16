@@ -2960,6 +2960,213 @@ def main():
             observed['ping']='pong'
             return observed
         check('release-observability-probes',observability_probes)
+        # --- D2 contract-driven teaching compensation (owner requirement
+        # 2026-09-16). Contract authority + skill-area assignment facts +
+        # the single native Additional Salary input path. Rates/terms are
+        # fixture data; no policy value is invented.
+        from toefl_house.teaching import compensation as tcomp
+        CON='TH Instructor Contract';ASSIGN='TH Teaching Assignment';ADS='Additional Salary'
+        SK1,SK2,SK3='Speaking & Listening','Writing & Grammar','Reading & Vocabulary'
+        def comp_fixtures():
+            frappe.set_user('Administrator')
+            comp='SYN Teaching House'
+            for cname,ctype in (('SYN Teaching Pay','Earning'),('SYN Contract Deduction','Deduction')):
+                if not frappe.db.exists('Salary Component',{'salary_component_name':cname}):
+                    frappe.get_doc(dict(doctype='Salary Component',salary_component_name=cname,
+                        type=ctype)).insert()
+            emps={}
+            for label in ('One','Two'):
+                ename=frappe.db.get_value('Employee',{'employee_name':'SYN Employee '+label},'name')
+                if not ename:
+                    emp=frappe.get_doc(dict(doctype='Employee',first_name='SYN Employee '+label,
+                        employee_name='SYN Employee '+label,company=comp,status='Active',
+                        date_of_joining='2026-01-01')).insert()
+                    ename=emp.name
+                emps[label]=ename
+                if not frappe.db.exists('Salary Structure','SYN Teaching Structure'):
+                    frappe.get_doc(dict(doctype='Salary Structure',name='SYN Teaching Structure',
+                        company=comp,payroll_frequency='Monthly',
+                        earnings=[dict(salary_component='SYN Teaching Pay',
+                                       amount_based_on_formula=0,amount=1)])).insert()
+                if not frappe.db.get_value('Salary Structure Assignment',{'employee':ename,'docstatus':1},'name'):
+                    ssa=frappe.get_doc(dict(doctype='Salary Structure Assignment',employee=ename,
+                        salary_structure='SYN Teaching Structure',from_date='2026-01-01',
+                        company=comp,base=0))
+                    ssa.insert();ssa.submit()
+            frappe.db.commit()
+            return dict(company=comp,earning='SYN Teaching Pay',deduction='SYN Contract Deduction',
+                        emps=emps)
+        cfx=comp_fixtures()
+        def contract_authority():
+            frappe.set_user('Administrator')
+            slips_before=frappe.db.count('Salary Slip')
+            terms_one=[dict(skill=SK1,unit_of_payment='SYN Session',rate=12.5,payable_quantity=40),
+                       dict(skill=SK2,unit_of_payment='SYN Session',rate=10,payable_quantity=40)]
+            adj_one=[dict(adjustment_type='Bonus',amount=50,effective_date='2026-09-10',
+                          approver=users['finance_officer'],reason='SYN approved bonus')]
+            r1=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_contract_one_0000001','SYN Instructor One',cfx['emps']['One'],'Skill-Based',
+                'SYN class skill coverage','Monthly','2026-01-01','',
+                'SYN fixture conditions',terms_one,adj_one))
+            r2=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_contract_two_0000001','SYN Instructor Two',cfx['emps']['Two'],'Skill-Based',
+                'SYN class skill coverage','Monthly','2026-01-01','',
+                '',[dict(skill=SK3,unit_of_payment='SYN Session',rate=15,payable_quantity=20)],
+                [dict(adjustment_type='Deduction',amount=25,effective_date='2026-09-05',
+                      approver=users['finance_officer'],reason='SYN approved deduction')]))
+            fixed=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_contract_left_00001','SYN Instructor Left',cfx['emps']['One'],'Fixed Salary',
+                'SYN native salary structure','Monthly','2026-01-01'))
+            # only the finance side may create contracts
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.create_teaching_contract(
+                'tc_denied_sched_00001','SYN Instructor One',cfx['emps']['One'],'Skill-Based',
+                'SYN basis','Monthly','2026-01-01'))),('scheduler created a contract')
+            assert denied(lambda:as_user('outsider',lambda:tcomp.create_teaching_contract(
+                'tc_denied_outs_000001','SYN Instructor One',cfx['emps']['One'],'Skill-Based',
+                'SYN basis','Monthly','2026-01-01'))),('outsider created a contract')
+            # model invariants and window uniqueness
+            assert denied(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_fixed_terms_00001','SYN Instructor Left',cfx['emps']['One'],'Fixed Salary',
+                'SYN basis','Monthly','2026-01-01','',
+                '',terms_one))),( 'fixed-salary contract accepted skill terms')
+            assert denied(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_overlap_000000001','SYN Instructor One',cfx['emps']['One'],'Skill-Based',
+                'SYN basis','Monthly','2026-06-01'))),('overlapping active contract accepted')
+            # supersession: history stays reproducible
+            rev=as_user('finance_officer',lambda:tcomp.revise_teaching_contract(
+                'tc_revise_one_000001',r1['name'],'Skill-Based','SYN class skill coverage',
+                'Monthly','2026-10-01','',
+                'SYN fixture conditions',[dict(skill=SK1,unit_of_payment='SYN Session',rate=13,
+                                               payable_quantity=40)],[]))
+            frappe.set_user('Administrator')
+            old=frappe.get_doc(CON,r1['name'])
+            assert old.status=='Superseded',(old.status,)
+            assert float(old.skill_terms[0].rate)==12.5,(float(old.skill_terms[0].rate),)
+            assert frappe.get_doc(CON,rev['name']).supersedes==r1['name']
+            # in-place tampering is denied even for Administrator
+            assert denied(lambda:(lambda d:(d.__setattr__('conditions','tamper'),d.save()))(
+                frappe.get_doc(CON,r1['name']))),('contract edited outside a command')
+            # read containment: compensation terms are finance-sensitive
+            frappe.set_user('Administrator')
+            cdoc=frappe.get_doc(CON,r1['name'])
+            assert not as_user('teaching_scheduler',lambda:frappe.has_permission(CON,'read',cdoc)),('scheduler reads contracts')
+            assert not as_user('outsider',lambda:frappe.has_permission(CON,'read',cdoc)),('outsider reads contracts')
+            assert as_user('finance_auditor',lambda:frappe.has_permission(CON,'read',cdoc)),('finance auditor denied contract read')
+            frappe.set_user('Administrator')
+            assert frappe.db.count('Salary Slip')==slips_before
+            frappe.db.commit()
+            return {'contracts':{'one':r1['name'],'two':r2['name'],'fixed':fixed['name'],
+                                 'revised':rev['name']},
+                    'supersession_reproducible':True,'scheduler_contract_denied':True,
+                    'outsider_contract_denied':True,'tamper_denied':True,
+                    'scheduler_contract_read_denied':True}
+        cauth=check('teaching-compensation-contract-authority',contract_authority)
+        def assignment_facts():
+            frappe.set_user('Administrator')
+            c1,c2,fixed=cauth['contracts']['one'],cauth['contracts']['two'],cauth['contracts']['fixed']
+            a1=as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_one_sk1_001','SYN-GRP-MAIN-1',SK1,'SYN Instructor One',c1,'2026-09-01'))
+            a2=as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_one_sk2_001','SYN-GRP-MAIN-1',SK2,'SYN Instructor One',c1,'2026-09-01'))
+            a3=as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_two_sk3_001','SYN-GRP-MAIN-2',SK3,'SYN Instructor Two',c2,'2026-09-01'))
+            # one instructor holds a skill area per class window
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_dup_0000001','SYN-GRP-MAIN-1',SK1,'SYN Instructor Two',c2,'2026-09-01'))),('duplicate skill-area assignment accepted')
+            # contract must belong to the assigned instructor and be assignable
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_mix_0000001','SYN-GRP-MAIN-2',SK1,'SYN Instructor Two',c1,'2026-09-01'))),('cross-instructor contract accepted')
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_fixed_00001','SYN-GRP-MAIN-1',SK1,'SYN Instructor Left',fixed,'2026-09-01'))),('fixed-salary contract assigned per skill')
+            # separation of responsibilities: finance may not write teaching facts
+            assert denied(lambda:as_user('finance_officer',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_off_0000001','SYN-GRP-MAIN-1',SK1,'SYN Instructor One',c1,'2026-09-01'))),('officer assigned a skill')
+            assert denied(lambda:as_user('outsider',lambda:tcomp.assign_teaching_skill(
+                'tc_assign_outs_000001','SYN-GRP-MAIN-1',SK1,'SYN Instructor One',c1,'2026-09-01'))),('outsider assigned a skill')
+            # ending records the end date once; facts are immutable
+            ended=as_user('teaching_scheduler',lambda:tcomp.end_teaching_assignment(
+                'tc_end_two_000000001',a2['name'],'2026-09-15'))
+            assert ended['effective_end']=='2026-09-15'
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.end_teaching_assignment(
+                'tc_end_two_again_0001',a2['name'],'2026-09-20'))),('end date rewritten')
+            assert denied(lambda:(lambda d:(d.__setattr__('skill',SK3),d.save()))(
+                frappe.get_doc(ASSIGN,a1['name']))),('assignment facts edited outside a command')
+            # read containment on teaching facts
+            frappe.set_user('Administrator')
+            adoc=frappe.get_doc(ASSIGN,a1['name'])
+            assert as_user('teaching_scheduler',lambda:frappe.has_permission(ASSIGN,'read',adoc))
+            assert as_user('teaching_auditor',lambda:frappe.has_permission(ASSIGN,'read',adoc))
+            assert not as_user('outsider',lambda:frappe.has_permission(ASSIGN,'read',adoc)),('outsider reads assignments')
+            frappe.set_user('Administrator')
+            try:rows=as_user('outsider',lambda:frappe.get_list(ASSIGN,fields=['name']))
+            except frappe.PermissionError:rows=[]
+            frappe.set_user('Administrator')
+            assert not rows,('assignment list leaked',len(rows))
+            frappe.db.commit()
+            return {'assignments':{'a1':a1['name'],'a2':a2['name'],'a3':a3['name']},
+                    'one_instructor_two_skills':True,'two_classes_covered':True,
+                    'duplicate_skill_denied':True,'fixed_assign_denied':True,
+                    'officer_assign_denied':True,'outsider_assignment_read_denied':True}
+        afacts=check('teaching-assignment-facts',assignment_facts)
+        def compensation_calculation():
+            frappe.set_user('Administrator')
+            slips_before=frappe.db.count('Salary Slip')
+            ads_before=frappe.db.count(ADS)
+            a=afacts['assignments']
+            # deductions require the explicit owner-provided deduction component
+            assert denied(lambda:as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_nodeduct_0001','2026-09-01','2026-09-30',cfx['company'],cfx['earning']))),('deduction posted without a deduction component')
+            assert frappe.db.count(ADS)==ads_before,('partial posting survived the denial')
+            res=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_full_00000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],
+                cfx['deduction']))
+            frappe.set_user('Administrator')
+            assert res['assignments']==3,(res['assignments'],)
+            assert res['adjustments_posted']==2,(res['adjustments_posted'],)
+            assert frappe.db.count(ADS)==ads_before+5,(frappe.db.count(ADS),ads_before)
+            # amounts come from the contract that was effective for the period
+            # (12.5 pre-revision rate, not the 13.0 successor) and the audit
+            # chain links every payable row back to its teaching fact
+            for aname,expected,econtract in ((a['a1'],500.0,cauth['contracts']['one']),
+                                             (a['a2'],400.0,cauth['contracts']['one']),
+                                             (a['a3'],300.0,cauth['contracts']['two'])):
+                row=frappe.db.get_value(ADS,{'ref_doctype':ASSIGN,'ref_docname':aname,
+                    'payroll_date':'2026-09-30','disabled':0},['name','amount','salary_component'],as_dict=True)
+                assert row and float(row.amount)==expected,(aname,row and float(row.amount))
+                assert row.salary_component==cfx['earning']
+                linked=frappe.get_doc(ASSIGN,aname)
+                assert linked.contract==econtract,(aname,linked.contract,econtract)
+            bonus=frappe.db.get_value(ADS,{'ref_doctype':CON,'ref_docname':cauth['contracts']['one'],
+                'payroll_date':'2026-09-30','disabled':0},['name','amount','type'],as_dict=True)
+            assert bonus and float(bonus.amount)==50.0,(bonus,)
+            deduct=frappe.db.get_value(ADS,{'ref_doctype':CON,'ref_docname':cauth['contracts']['two'],
+                'payroll_date':'2026-09-30','disabled':0},['name','amount','type','salary_component'],as_dict=True)
+            assert deduct and float(deduct.amount)==25.0 and deduct.type=='Deduction',(deduct,)
+            assert deduct.salary_component==cfx['deduction']
+            # the request-key receipt replays without re-posting
+            replay=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_full_00000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],
+                cfx['deduction']))
+            frappe.set_user('Administrator')
+            assert replay==res,('receipt replay diverged')
+            assert frappe.db.count(ADS)==ads_before+5
+            # a fresh run over the same period never double-pays
+            rerun=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_rerun_0000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],
+                cfx['deduction']))
+            frappe.set_user('Administrator')
+            assert rerun['skipped_existing']==5 and not rerun['posted'],(rerun['skipped_existing'],rerun['posted'])
+            assert frappe.db.count(ADS)==ads_before+5
+            # no second engine: slips/statutory math stay untouched and native
+            assert frappe.db.count('Salary Slip')==slips_before
+            assert frappe.db.count('TH Placement Audit Event')>0
+            frappe.db.commit()
+            return {'payroll_inputs':5,'amounts':{'a1':500.0,'a2':400.0,'a3':300.0,
+                    'bonus':50.0,'deduction':25.0},
+                    'pre_revision_rate_used':True,'duplicate_pay_prevented':True,
+                    'receipt_idempotent':True,'salary_slips_untouched':True,
+                    'audit_chain_ref_fields':True}
+        check('teaching-compensation-calculation',compensation_calculation)
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}

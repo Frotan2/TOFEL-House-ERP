@@ -31,6 +31,11 @@ def after_migrate():
     frappe.db.add_index("TH Admission Decision", ["placement_decision"], "th_admission_placement")
     frappe.db.add_index("TH Admission Decision", ["native_student"], "th_admission_student")
     frappe.db.add_index("TH Admission Decision", ["status"], "th_admission_status")
+    # D2 teaching compensation lookups (overlap windows are command-enforced).
+    frappe.db.add_index("TH Instructor Contract", ["instructor", "status"], "th_contract_instructor_status")
+    frappe.db.add_index("TH Teaching Assignment", ["student_group", "skill"], "th_assignment_group_skill")
+    frappe.db.add_index("TH Teaching Assignment", ["contract"], "th_assignment_contract")
+    frappe.db.add_index("TH Teaching Assignment", ["instructor", "effective_start"], "th_assignment_instructor_start")
 
 
 def after_install():

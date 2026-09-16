@@ -15,6 +15,8 @@ KINDS = {
     "TH Placement Course Map Revision": "course_map",
     "TH Placement Decision": "decision",
     "TH Admission Decision": "admission_decision",
+    "TH Instructor Contract": "contract",
+    "TH Teaching Assignment": "assignment",
 }
 TABLES = {
     "item": "`tabTH Placement Item Revision`",
@@ -31,6 +33,8 @@ TABLES = {
     "course_map": "`tabTH Placement Course Map Revision`",
     "decision": "`tabTH Placement Decision`",
     "admission_decision": "`tabTH Admission Decision`",
+    "contract": "`tabTH Instructor Contract`",
+    "assignment": "`tabTH Teaching Assignment`",
 }
 LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
 STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score", "decision")
@@ -60,6 +64,13 @@ def query(kind, user=None):
     if kind in ("audit", "operation"):
         return "1=1" if roles & {"Placement Auditor", "Admission Auditor", "Enrollment Auditor",
                                  "Teaching Auditor", "Finance Auditor"} else "1=0"
+    # D2 compensation records are finance-sensitive: evaluated before the
+    # Placement Publisher fall-through so placement breadth never reaches them.
+    if kind == "contract":
+        return "1=1" if roles & {"Finance Officer", "Finance Auditor"} else "1=0"
+    if kind == "assignment":
+        return "1=1" if roles & {"Teaching Scheduler", "Teaching Auditor",
+                                 "Finance Officer", "Finance Auditor"} else "1=0"
     if "Placement Publisher" in roles:
         return "1=1"
     if kind in ("case", "attempt", "exposure", "response") and "Placement Invigilator" in roles:
@@ -97,3 +108,5 @@ def query_score(user=None): return query("score", user)
 def query_course_map(user=None): return query("course_map", user)
 def query_decision(user=None): return query("decision", user)
 def query_admission_decision(user=None): return query("admission_decision", user)
+def query_contract(user=None): return query("contract", user)
+def query_assignment(user=None): return query("assignment", user)

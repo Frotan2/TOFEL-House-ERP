@@ -29,8 +29,52 @@ class ProtectedRecord(Document):
                 raise frappe.PermissionError("Published content and revision identity are immutable")
         if before and self.doctype == "TH Placement Key Revision":
             raise frappe.PermissionError("Key versions are append-only")
+        if before and self.doctype == "TH Instructor Contract":
+            self._validate_contract(before)
+        if before and self.doctype == "TH Teaching Assignment":
+            self._validate_assignment(before)
         if before and self.doctype in CONFIG_DOCTYPES:
             self._validate_config(before)
+
+    def _validate_contract(self, before):
+        """Contracts are immutable; the only legal change is supersession.
+
+        Historical compensation must stay reproducible from the contract
+        that was effective for the period, so terms, identity and windows
+        never change in place: a change is a new effective-dated contract
+        that supersedes this one.
+        """
+        if self.status == before.status:
+            raise frappe.PermissionError("Contracts are immutable; a change requires a superseding revision")
+        if not (before.status == "Active" and self.status == "Superseded"):
+            raise frappe.PermissionError("Illegal contract status transition")
+        for field in ("instructor", "employee", "compensation_model", "assignment_basis",
+                      "payment_frequency", "effective_start", "effective_end",
+                      "conditions", "supersedes"):
+            if before.get(field) != self.get(field):
+                raise frappe.PermissionError("Only the contract status may change on supersession")
+
+        def terms(doc):
+            return [(t.skill, str(t.rate), t.payable_quantity, str(t.unit_of_payment),
+                     t.minimum_amount, t.maximum_amount) for t in (doc.skill_terms or [])]
+
+        def adjustments(doc):
+            return [(a.adjustment_type, str(a.amount), str(a.effective_date), a.approver, a.reason)
+                    for a in (doc.adjustments or [])]
+
+        if terms(before) != terms(self) or adjustments(before) != adjustments(self):
+            raise frappe.PermissionError("Contract terms and adjustments are immutable on supersession")
+
+    def _validate_assignment(self, before):
+        """Teaching facts are immutable; only a not-yet-recorded end may be set once."""
+        for field in ("student_group", "skill", "instructor", "contract",
+                      "course_schedule", "effective_start"):
+            if before.get(field) != self.get(field):
+                raise frappe.PermissionError("Teaching assignment facts are immutable")
+        if before.effective_end and self.effective_end != before.effective_end:
+            raise frappe.PermissionError("A recorded assignment end date is final")
+        if self.effective_end and str(self.effective_end) < str(self.effective_start):
+            raise frappe.ValidationError("Assignment end precedes assignment start")
 
     def _validate_config(self, before):
         if before.code != self.code or before.revision != self.revision or before.owner != self.owner:

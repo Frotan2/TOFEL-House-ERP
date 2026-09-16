@@ -475,6 +475,13 @@ def can_read(kind, roles, actor, owner, status=None):
     if kind in ("audit", "operation"):
         return bool(roles & {"Placement Auditor", "Admission Auditor", "Enrollment Auditor",
                              "Teaching Auditor", "Finance Auditor"})
+    # D2 compensation records are finance-sensitive: evaluated before the
+    # Placement Publisher fall-through so placement breadth never reaches them.
+    if kind == "contract":
+        return bool(roles & {"Finance Officer", "Finance Auditor"})
+    if kind == "assignment":
+        return bool(roles & {"Teaching Scheduler", "Teaching Auditor",
+                             "Finance Officer", "Finance Auditor"})
     if "Placement Publisher" in roles:
         return True
     # Invigilator may operate the Digital session and read the operational
@@ -505,3 +512,81 @@ def can_read(kind, roles, actor, owner, status=None):
     if kind == "key":
         return "Placement Author" in roles and owner == actor
     return False
+
+
+# --- D2 teaching compensation (owner requirement 2026-09-16) -------------
+# The three contracted teaching skill areas and the contractual models are
+# owner-given vocabulary. Rates, quantities, limits and terms are always
+# owner-entered contract data; nothing here supplies a default value.
+TEACHING_SKILLS = ("Speaking & Listening", "Writing & Grammar", "Reading & Vocabulary")
+COMPENSATION_MODELS = ("Fixed Salary", "Skill-Based", "Hybrid")
+ADJUSTMENT_TYPES = ("Bonus", "Deduction")
+CONTRACT_STATUSES = ("Active", "Superseded")
+OPEN_END = "9999-12-31"
+MAX_AMOUNT = 10 ** 9
+MAX_QUANTITY = 10 ** 6
+
+
+def validate_skill(value):
+    if value not in TEACHING_SKILLS:
+        raise ValueError("Skill must be one of the three contracted teaching skill areas")
+    return value
+
+
+def validate_compensation_model(value):
+    if value not in COMPENSATION_MODELS:
+        raise ValueError("Compensation model must be explicitly one of: " + ", ".join(COMPENSATION_MODELS))
+    return value
+
+
+def validate_positive_amount(value, label):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be numeric")
+    value = float(value)
+    if not (0 < value <= MAX_AMOUNT):
+        raise ValueError(f"{label} must be a positive bounded amount")
+    return value
+
+
+def validate_optional_amount(value, label):
+    if value in (None, "", 0):
+        return None
+    return validate_positive_amount(value, label)
+
+
+def validate_payable_quantity(value):
+    if isinstance(value, bool) or not isinstance(value, int) or not (1 <= value <= MAX_QUANTITY):
+        raise ValueError("Payable quantity must be a positive bounded integer")
+    return value
+
+
+def validate_effective_window(start, end):
+    start = validate_schedule_date(start)
+    if end in (None, ""):
+        return start, None
+    end = validate_schedule_date(end)
+    if end < start:
+        raise ValueError("Effective end precedes effective start")
+    return start, end
+
+
+def windows_overlap(a_start, a_end, b_start, b_end):
+    """Inclusive overlap for effective windows; None end means open-ended."""
+    return a_start <= (b_end or OPEN_END) and b_start <= (a_end or OPEN_END)
+
+
+def compute_skill_payable(quantity, rate, minimum=None, maximum=None):
+    """Apply declared contract terms to a payable quantity.
+
+    This is contract-term application, not a payroll engine: no statutory,
+    tax or deduction logic lives here (that remains in the native HRMS
+    Salary Slip), and no rounding policy beyond two-decimal currency.
+    """
+    if minimum is not None and maximum is not None and minimum > maximum:
+        raise ValueError("Contract minimum exceeds contract maximum")
+    amount = round(validate_payable_quantity(quantity) * validate_positive_amount(rate, "Rate"), 2)
+    if minimum is not None and amount < minimum:
+        amount = round(float(minimum), 2)
+    if maximum is not None and amount > maximum:
+        amount = round(float(maximum), 2)
+    return amount

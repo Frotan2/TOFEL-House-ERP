@@ -48,6 +48,13 @@ KIND_ROLES = {
     "record_attendance": "Attendance Recorder",
     "issue_tuition_fees": "Finance Officer",
     "issue_placement_fee": "Finance Officer",
+    # D2 teaching compensation: contracts and payroll calculation are the
+    # finance/payroll side; skill-area assignment facts stay teaching ops.
+    "create_teaching_contract": "Finance Officer",
+    "revise_teaching_contract": "Finance Officer",
+    "assign_teaching_skill": "Teaching Scheduler",
+    "end_teaching_assignment": "Teaching Scheduler",
+    "calculate_teaching_compensation": "Finance Officer",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -59,6 +66,7 @@ DOCTYPES = {
     "TH Placement Response", "TH Placement Score",
     "TH Placement Course Map Revision", "TH Placement Decision",
     "TH Admission Decision",
+    "TH Instructor Contract", "TH Teaching Assignment",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision",
                    "TH Placement Course Map Revision")
