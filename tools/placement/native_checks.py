@@ -2977,6 +2977,10 @@ def main():
                     frappe.get_doc(dict(doctype='Salary Component',salary_component=cname,
                         type=ctype)).insert()
             emps={}
+            ins={}
+            for label in ('SYN Instructor One','SYN Instructor Two','SYN Instructor Left'):
+                ins[label.split()[-1]]=frappe.db.get_value('Instructor',{'instructor_name':label},'name')
+                assert ins[label.split()[-1]],('teaching catalog instructor missing',label)
             cur=frappe.db.get_value('Company',comp,'default_currency') or 'USD'
             if not frappe.db.exists('Gender','Other'):
                 frappe.get_doc(dict(doctype='Gender',gender='Other')).insert()
@@ -3004,7 +3008,7 @@ def main():
                     ssa.insert();ssa.submit()
             frappe.db.commit()
             return dict(company=comp,earning='SYN Teaching Pay',deduction='SYN Contract Deduction',
-                        emps=emps)
+                        emps=emps,ins=ins)
         cfx=comp_fixtures()
         def contract_authority():
             frappe.set_user('Administrator')
@@ -3014,32 +3018,32 @@ def main():
             adj_one=[dict(adjustment_type='Bonus',amount=50,effective_date='2026-09-10',
                           approver=users['finance_officer'],reason='SYN approved bonus')]
             r1=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
-                'tc_contract_one_0000001','SYN Instructor One',cfx['emps']['One'],'Skill-Based',
+                'tc_contract_one_0000001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
                 'SYN class skill coverage','Monthly','2026-01-01','',
                 'SYN fixture conditions',terms_one,adj_one))
             r2=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
-                'tc_contract_two_0000001','SYN Instructor Two',cfx['emps']['Two'],'Skill-Based',
+                'tc_contract_two_0000001',cfx['ins']['Two'],cfx['emps']['Two'],'Skill-Based',
                 'SYN class skill coverage','Monthly','2026-01-01','',
                 '',[dict(skill=SK3,unit_of_payment='SYN Session',rate=15,payable_quantity=20)],
                 [dict(adjustment_type='Deduction',amount=25,effective_date='2026-09-05',
                       approver=users['finance_officer'],reason='SYN approved deduction')]))
             fixed=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
-                'tc_contract_left_00001','SYN Instructor Left',cfx['emps']['One'],'Fixed Salary',
+                'tc_contract_left_00001',cfx['ins']['Left'],cfx['emps']['One'],'Fixed Salary',
                 'SYN native salary structure','Monthly','2026-01-01'))
             # only the finance side may create contracts
             assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.create_teaching_contract(
-                'tc_denied_sched_00001','SYN Instructor One',cfx['emps']['One'],'Skill-Based',
+                'tc_denied_sched_00001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
                 'SYN basis','Monthly','2026-01-01'))),('scheduler created a contract')
             assert denied(lambda:as_user('outsider',lambda:tcomp.create_teaching_contract(
-                'tc_denied_outs_000001','SYN Instructor One',cfx['emps']['One'],'Skill-Based',
+                'tc_denied_outs_000001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
                 'SYN basis','Monthly','2026-01-01'))),('outsider created a contract')
             # model invariants and window uniqueness
             assert denied(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
-                'tc_fixed_terms_00001','SYN Instructor Left',cfx['emps']['One'],'Fixed Salary',
+                'tc_fixed_terms_00001',cfx['ins']['Left'],cfx['emps']['One'],'Fixed Salary',
                 'SYN basis','Monthly','2026-01-01','',
                 '',terms_one))),( 'fixed-salary contract accepted skill terms')
             assert denied(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
-                'tc_overlap_000000001','SYN Instructor One',cfx['emps']['One'],'Skill-Based',
+                'tc_overlap_000000001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
                 'SYN basis','Monthly','2026-06-01'))),('overlapping active contract accepted')
             # supersession: history stays reproducible
             rev=as_user('finance_officer',lambda:tcomp.revise_teaching_contract(
@@ -3074,24 +3078,24 @@ def main():
             frappe.set_user('Administrator')
             c1,c2,fixed=cauth['contracts']['one'],cauth['contracts']['two'],cauth['contracts']['fixed']
             a1=as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
-                'tc_assign_one_sk1_001','SYN-GRP-MAIN-1',SK1,'SYN Instructor One',c1,'2026-09-01'))
+                'tc_assign_one_sk1_001','SYN-GRP-MAIN-1',SK1,cfx['ins']['One'],c1,'2026-09-01'))
             a2=as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
-                'tc_assign_one_sk2_001','SYN-GRP-MAIN-1',SK2,'SYN Instructor One',c1,'2026-09-01'))
+                'tc_assign_one_sk2_001','SYN-GRP-MAIN-1',SK2,cfx['ins']['One'],c1,'2026-09-01'))
             a3=as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
-                'tc_assign_two_sk3_001','SYN-GRP-MAIN-2',SK3,'SYN Instructor Two',c2,'2026-09-01'))
+                'tc_assign_two_sk3_001','SYN-GRP-MAIN-2',SK3,cfx['ins']['Two'],c2,'2026-09-01'))
             # one instructor holds a skill area per class window
             assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
-                'tc_assign_dup_0000001','SYN-GRP-MAIN-1',SK1,'SYN Instructor Two',c2,'2026-09-01'))),('duplicate skill-area assignment accepted')
+                'tc_assign_dup_0000001','SYN-GRP-MAIN-1',SK1,cfx['ins']['Two'],c2,'2026-09-01'))),('duplicate skill-area assignment accepted')
             # contract must belong to the assigned instructor and be assignable
             assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
-                'tc_assign_mix_0000001','SYN-GRP-MAIN-2',SK1,'SYN Instructor Two',c1,'2026-09-01'))),('cross-instructor contract accepted')
+                'tc_assign_mix_0000001','SYN-GRP-MAIN-2',SK1,cfx['ins']['Two'],c1,'2026-09-01'))),('cross-instructor contract accepted')
             assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
-                'tc_assign_fixed_00001','SYN-GRP-MAIN-1',SK1,'SYN Instructor Left',fixed,'2026-09-01'))),('fixed-salary contract assigned per skill')
+                'tc_assign_fixed_00001','SYN-GRP-MAIN-1',SK1,cfx['ins']['Left'],fixed,'2026-09-01'))),('fixed-salary contract assigned per skill')
             # separation of responsibilities: finance may not write teaching facts
             assert denied(lambda:as_user('finance_officer',lambda:tcomp.assign_teaching_skill(
-                'tc_assign_off_0000001','SYN-GRP-MAIN-1',SK1,'SYN Instructor One',c1,'2026-09-01'))),('officer assigned a skill')
+                'tc_assign_off_0000001','SYN-GRP-MAIN-1',SK1,cfx['ins']['One'],c1,'2026-09-01'))),('officer assigned a skill')
             assert denied(lambda:as_user('outsider',lambda:tcomp.assign_teaching_skill(
-                'tc_assign_outs_000001','SYN-GRP-MAIN-1',SK1,'SYN Instructor One',c1,'2026-09-01'))),('outsider assigned a skill')
+                'tc_assign_outs_000001','SYN-GRP-MAIN-1',SK1,cfx['ins']['One'],c1,'2026-09-01'))),('outsider assigned a skill')
             # ending records the end date once; facts are immutable
             ended=as_user('teaching_scheduler',lambda:tcomp.end_teaching_assignment(
                 'tc_end_two_000000001',a2['name'],'2026-09-15'))
