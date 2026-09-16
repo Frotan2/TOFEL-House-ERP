@@ -54,17 +54,21 @@ class RuntimeDependencyAuditTests(unittest.TestCase):
         self.assertEqual(report["status"], "fail")
         self.assertEqual(report["node"]["advisory_entries"], 1)
         self.assertEqual(report["node"]["finding_summary"], [{
-            "package": "example", "id": 7, "url": "https://example.test/advisory",
-            "title": None, "severity": None, "vulnerable_versions": None, "cwe": [],
+            "package": "example", "installed_versions": ["1.0.0"], "id": 7,
+            "url": "https://example.test/advisory", "title": None, "severity": None,
+            "vulnerable_versions": None, "cwe": [],
         }])
         self.assertEqual(report["python"]["osv"]["findings"][0]["id"], "PYSEC-1")
         self.assertEqual(report["containers"]["status"], "inventory_only")
 
     def test_malformed_npm_advisory_response_is_rejected(self):
+        packages = {"example": ["1.0.0"]}
         with self.assertRaisesRegex(RuntimeError, "malformed"):
-            audit_stack.npm_finding_summary({"example": {"id": 7}})
+            audit_stack.npm_finding_summary({"example": {"id": 7}}, packages)
         with self.assertRaisesRegex(RuntimeError, "identifier"):
-            audit_stack.npm_finding_summary({"example": [{}]})
+            audit_stack.npm_finding_summary({"example": [{}]}, packages)
+        with self.assertRaisesRegex(RuntimeError, "malformed"):
+            audit_stack.npm_finding_summary({"unexpected": []}, packages)
 
     def test_images_require_digest_pins(self):
         with self.assertRaisesRegex(ValueError, "sha256"):

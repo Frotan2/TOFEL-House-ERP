@@ -89,17 +89,20 @@ def npm_advisories(packages: dict[str, list[str]]) -> dict[str, Any]:
     return findings
 
 
-def npm_finding_summary(advisories: dict[str, Any]) -> list[dict[str, Any]]:
-    """Normalize npm's advisory response into non-secret, portable triage facts."""
+def npm_finding_summary(advisories: dict[str, Any],
+                        packages: dict[str, list[str]]) -> list[dict[str, Any]]:
+    """Normalize npm's response with the exact queried versions for triage."""
     findings: list[dict[str, Any]] = []
     for package, matches in sorted(advisories.items()):
-        if not isinstance(package, str) or not isinstance(matches, list):
+        if (not isinstance(package, str) or not isinstance(matches, list)
+                or package not in packages):
             raise RuntimeError("npm advisory response is malformed")
         for advisory in matches:
             if not isinstance(advisory, dict) or advisory.get("id") is None:
                 raise RuntimeError("npm returned an advisory without an identifier")
             findings.append({
                 "package": package,
+                "installed_versions": packages[package],
                 "id": advisory["id"],
                 "url": advisory.get("url"),
                 "title": advisory.get("title"),
@@ -165,7 +168,7 @@ def report_for(args: argparse.Namespace) -> dict[str, Any]:
     python_packages = installed_python_inventory()
     node_packages, node_roots = combined_node_inventory(args.node_modules)
     npm = npm_advisories(node_packages)
-    npm_findings = npm_finding_summary(npm)
+    npm_findings = npm_finding_summary(npm, node_packages)
     osv = osv_pypi_advisories(python_packages)
     npm_entries = len(npm_findings)
     report = {
