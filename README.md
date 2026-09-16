@@ -5,8 +5,12 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
+Active engineering branch: `arena/01a0a9f7-tofel-house-erp`. Historical hosted
+runs retain their original branch provenance; see
+[branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
+
 **Placement is CLOSED / QUALIFIED** for the bounded synthetic isolated build
-(session branch `arena/01a0a13b-tofel-house-erp`). Hosted run `34932512626`
+(historical qualifying branch `arena/01a0a13b-tofel-house-erp`). Hosted run `34932512626`
 on commit `4571e6c`: 332/332 native checks, 86/86 runner steps, production
 **REJECT**. Do not reopen Placement. See
 [PLACEMENT-CLOSURE.md](docs/domain/PLACEMENT-CLOSURE.md) and the

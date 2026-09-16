@@ -1,6 +1,6 @@
 # TOEFL House ERP — Owner Decision Packet (R4)
 
-Date: 2026-09-16 · Active branch: `arena/01a0a942-tofel-house-erp`
+Date: 2026-09-16 · Active branch: `arena/01a0a9f7-tofel-house-erp`
 **Production remains REJECT.** Nothing here invents a business rule —
 every gate below is a decision that only the owner may make; engineering
 state is stated exactly as evidenced in the Release Gap Map.

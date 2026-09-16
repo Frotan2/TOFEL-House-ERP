@@ -9,7 +9,6 @@
   "verification": "evidence/phase-2/dependency-operations-hosted-verification.json",
   "current_branch_requalification": {
     "date": "2026-09-16",
-    "branch": "arena/01a0a942-tofel-house-erp",
     "foundation_runtime": {
       "run": "35084695840",
       "commit": "955e4cd5eedc34b90f4fbfce047339e18558f1f2",
@@ -31,7 +30,9 @@
       "status": "pass_scoped",
       "observed": "542/542 native checks passed. Bench SQL/public/private-file backup restored to a separate synthetic site/database; representative count/name digests across 14 doctypes and a private File SHA-256 passed. Source database credentials were not copied; the site encryption key was restored for encrypted content.",
       "limits": "One disposable hosted runner only; not full Placement requalification, offsite backup, independent-host disaster recovery, production topology, key custody, RPO/RTO, SLA, or availability proof. Production remains REJECT."
-    }
+    },
+    "active_branch": "arena/01a0a9f7-tofel-house-erp",
+    "evidence_branch": "arena/01a0a942-tofel-house-erp"
   },
   "items": [
     {

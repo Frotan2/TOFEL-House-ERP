@@ -1,6 +1,6 @@
 # TOEFL House ERP — Release Candidate Dossier
 
-Date: 2026-09-16 · Active branch: `arena/01a0a942-tofel-house-erp`
+Date: 2026-09-16 · Active branch: `arena/01a0a9f7-tofel-house-erp`
 **Production: REJECT.** This dossier consolidates the evidence index
 for Release Candidate status of the *implemented* product surface.
 RC definition (from the Release Gap Map): every engineer-executable gap
@@ -41,7 +41,7 @@ gates). Each row is a full green run of the entire suite at that point:
 | R3 read-side + observability | 35053305607 | `46e5040` | 533/533 | Attachment parent-gate, list/export/print denial, Error Log/scheduler/ping probes |
 | D2 teaching compensation | 35066349129 | `fa02137` | 536/536 | Contract authority, skill-area assignment facts, native Additional Salary calculation path |
 | D3 correction framework | 35069740378 | `ed2d81d` | 539/539 | Fail-closed policy carrier, SoD/window/dual-key denials, native credit-note posting with GL proof |
-| **T3 D10(ii) command Pages (current branch)** | **35073376790** | **`3587700`** | **542/542** | 13 role-gated Page records/assets; 12 member audiences + 7 non-members; `app_home`; native no-escalation proof (report SHA-256 `54112b38…`) |
+| **T3 D10(ii) command Pages (recorded hosted proof)** | **35073376790** | **`3587700`** | **542/542** | 13 role-gated Page records/assets; 12 member audiences + 7 non-members; `app_home`; native no-escalation proof (report SHA-256 `54112b38…`) |
 
 All release/D2/D3/T3 check IDs in the current suite (19):
 `release-probe-users-restored`, `release-workspaces-configured`,
@@ -137,7 +137,7 @@ evidence): 35046096047 (invigilator module-gate — D10 root cause),
    exposure proven nil — UPSTREAM-TRACKING.md §1).
 3. **Deployment-scope operations** — independent-host DR, measured restart
    downtime, HA, full-bundle upgrade/rollback, public TLS/proxy qualification,
-   capacity, and monitoring operation (D8). The current branch additionally
+   capacity, and monitoring operation (D8). The recorded hosted qualification additionally
    proved a disposable product SQL/files backup and separate-site restore in
    `35076449739` at `ebe7767`, with 542/542 native checks. It is explicitly
    not independent-host, production, RPO/RTO, SLA, or availability evidence;

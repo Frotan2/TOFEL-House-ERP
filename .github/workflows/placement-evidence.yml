@@ -1,8 +1,8 @@
 name: Placement evidence recovery
 on:
   push:
-    branches: [arena/01a09bf3-tofel-house-erp]
-    paths: [.github/workflows/placement-evidence.yml, tools/placement/recover_evidence.py]
+    branches: [arena/01a0a9f7-tofel-house-erp]
+    paths: [.github/workflows/placement-evidence.yml, tools/placement/recover_evidence.py, tools/session_branch.py]
   workflow_dispatch:
     inputs:
       source_run:
@@ -15,7 +15,7 @@ permissions:
   checks: write
 jobs:
   recover:
-    if: github.ref == 'refs/heads/arena/01a09bf3-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0a9f7-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

@@ -2,9 +2,10 @@ name: Foundation runtime validation
 
 on:
   push:
-    branches: [arena/01a0a942-tofel-house-erp]
+    branches: [arena/01a0a9f7-tofel-house-erp]
     paths:
       - .github/workflows/foundation-runtime.yml
+      - tools/session_branch.py
       - tools/foundation/runtime_*.py
       - tools/foundation/runtime_*.mjs
       - tools/foundation/runtime_*.cjs
@@ -30,7 +31,7 @@ concurrency:
 
 jobs:
   runtime:
-    if: github.ref == 'refs/heads/arena/01a0a942-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0a9f7-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

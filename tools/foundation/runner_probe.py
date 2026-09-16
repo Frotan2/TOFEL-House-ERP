@@ -17,15 +17,12 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-# Explicitly authorized hosted session branches: prior session branches
-# (foundation workflows + previous placement build) and this session.
-AUTHORIZED_REFS = (
-    "refs/heads/arena/01a09bf3-tofel-house-erp",
-    "refs/heads/arena/01a0a055-tofel-house-erp",
-    "refs/heads/arena/01a0a13b-tofel-house-erp",
-    "refs/heads/arena/01a0a496-tofel-house-erp",
-    "refs/heads/arena/01a0a942-tofel-house-erp",
-)
+sys.path.insert(0, str(ROOT / "tools"))
+from session_branch import ACTIVE_REF
+
+# Qualification is deliberately restricted to the current Arena session.
+# Historical runs remain evidence; they are not executable authorization.
+AUTHORIZED_REFS = (ACTIVE_REF,)
 
 
 def main() -> int:

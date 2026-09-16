@@ -1,7 +1,7 @@
 # TOEFL House ERP — Release Gap Map & Execution Plan
 
 Date: 2026-09-16 · Role: technical & product release leader · Active branch:
-`arena/01a0a942-tofel-house-erp`
+`arena/01a0a9f7-tofel-house-erp`
 **Production remains REJECT. Nothing is deployed. No qualified domain is
 reopened. No business rule, price, grading policy or legal/tax assumption
 is invented anywhere in this plan.**
@@ -19,7 +19,7 @@ is invented anywhere in this plan.**
   see [CONTAINMENT-A13.md](../domain/CONTAINMENT-A13.md).
 - The current **542-check** suite is a single connected end-to-end lifecycle
   proof (placement → admission → enrollment → teaching → finance → containment
-  → release surfaces), re-executed on every code push. Current-branch run
+  → release surfaces), re-executed on every code push. Recorded hosted run
   `35073376790` at `3587700110d21816b239779c93c32f4060cd3c63` passed 542/542,
   including the T3 Page records/assets, role visibility and no-escalation
   checks. Integration is continuously proven, not separately asserted.

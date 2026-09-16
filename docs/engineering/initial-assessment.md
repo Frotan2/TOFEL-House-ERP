@@ -16,7 +16,7 @@ Frappe is a strong candidate because the code already provides integrated academ
 |---|---|
 | Connected repository | `Frotan2/TOFEL-House-ERP`, https://github.com/Frotan2/TOFEL-House-ERP |
 | Authoritative base | `main`, initial commit `9eccff957cadf036a3ac6f8208540a110148e67b` |
-| Working branch | `arena/01a09bf3-tofel-house-erp`; session-fixed, already branched from base |
+| Historical assessment branch | `arena/01a09bf3-tofel-house-erp`; session-fixed at the time of reconnaissance |
 | GitHub default branch | `main` |
 | Origin | Connected owned repository; no upstream remote |
 | Fork/derivative status | GitHub `isFork=false`, parent absent; one initial commit and README only. No evidence of copied upstream code or mirror history |
@@ -194,7 +194,7 @@ For distributed GPL-covered combined/derivative software, plan corresponding-sou
 ## 10. Repository, branch and application policy
 
 - Keep this repository as owned product source/integration documentation; upstream repositories remain dependencies. Do not fork merely because GitHub allows it, nor place upstream app copies inside this checkout.
-- This session works only on `arena/01a09bf3-tofel-house-erp`; submit a PR to `main` after review. No branch switch, history rewrite or direct default-branch change. Future sessions should use their authorized feature branches, with protected PR-only integration, required checks and architecture/security/finance review for relevant changes. Branch/ruleset configuration needs an authorized maintainer to verify.
+- That historical reconnaissance session worked only on `arena/01a09bf3-tofel-house-erp`; submit a PR to `main` after review. No branch switch, history rewrite or direct default-branch change. Future sessions should use their authorized feature branches, with protected PR-only integration, required checks and architecture/security/finance review for relevant changes. Branch/ruleset configuration needs an authorized maintainer to verify.
 - Initially create **one owned Frappe app**, proposed package `toefl_house`, rather than one app per department. Proposed internal modules: Admissions & Placement; Academic Operations (links/orchestration only); Institute Configuration & Localization; Reporting. Small payment/notification adapters may live in the app when approved. Split reusable language-institute logic from TOEFL House branding/configuration logically; extract a reusable app only after real reuse warrants it.
 - Upstream owns authentication, DocType engine, canonical students/enrollments/academic records, CRM, accounting and employee/payroll. Owned code owns placement policies/attempts/decisions, language-level progression rules, institute-specific approvals, controlled links, translations and workflow UX.
 - Never modify `apps/frappe`, `apps/erpnext`, `apps/education` or `apps/hrms` in production; never edit generated assets, vendor dependencies or upstream DocType JSON in-place. For required fixes use reviewed upstream contributions or explicitly tracked temporary patch exceptions. No blind monkeypatching.

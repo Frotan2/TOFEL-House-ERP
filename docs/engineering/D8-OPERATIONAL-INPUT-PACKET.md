@@ -21,10 +21,10 @@ T3, or T5 scope.
 | Product execution is synthetically contained | `toefl_house.security.require_synthetic()` requires `toefl_house_synthetic_only=1`, `allow_tests=1`, and a designated qualification site. It is a production hard stop, not a deployment configuration. |
 | T3 command pages are contained | Hosted run `35073376790` at `3587700110d21816b239779c93c32f4060cd3c63` passed 542/542; it did not add native Education/ERPNext authority. |
 | T5 makes code-derived responsibilities reviewable | The charter records shipped role boundaries and the operational responsibility slots; it assigns no human or production service. |
-| Foundation runner prerequisites are repeatable on the active session branch | Hosted run `35075532841` at `d84f1c9bdcfe704a2fdcde213e4891b8f49f090b` passed its controlled runner/download/service probe. Its own report sets `phase2_gate_passed: false`; it is not an ERP or production approval. |
+| Foundation runner prerequisites were repeatable on the historical qualification branch | Hosted run `35075532841` at `d84f1c9bdcfe704a2fdcde213e4891b8f49f090b` passed its controlled runner/download/service probe. Its own report sets `phase2_gate_passed: false`; it is not an ERP or production approval. |
 | Earlier Foundation recovery evidence is bounded | The acceptance ledger records same-controlled-runner separate-site restore evidence. It explicitly is not independent-host DR, key-custody, retention, RPO/RTO, or production approval. |
 
-### Current-branch engineering evidence (still synthetic)
+### Latest recorded engineering evidence (still synthetic; historical run provenance retained)
 
 | Evidence | Actual observation | Limit that remains |
 |---|---|---|

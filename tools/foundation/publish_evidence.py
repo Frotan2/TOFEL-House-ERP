@@ -14,20 +14,19 @@ import os
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+ROOT = Path(__file__).resolve().parents[2]
+import sys
+sys.path.insert(0, str(ROOT / "tools"))
+from session_branch import ACTIVE_REF
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", type=Path)
     parser.add_argument("--name", default="Foundation runner evidence")
     args = parser.parse_args()
-    # Explicitly authorized hosted session branches: prior session branches
-    # and this placement build session branch.
-    if os.environ.get("GITHUB_REF") not in (
-            "refs/heads/arena/01a09bf3-tofel-house-erp",
-            "refs/heads/arena/01a0a055-tofel-house-erp",
-            "refs/heads/arena/01a0a13b-tofel-house-erp",
-            "refs/heads/arena/01a0a496-tofel-house-erp",
-            "refs/heads/arena/01a0a942-tofel-house-erp"):
+    # Publishing is restricted to the current hosted session branch.
+    if os.environ.get("GITHUB_REF") != ACTIVE_REF:
         raise SystemExit("Evidence publication is restricted to the authorized branch")
     raw = args.report.read_bytes()
     report = json.loads(raw)

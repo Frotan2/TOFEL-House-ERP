@@ -1,19 +1,33 @@
 """Keep active hosted qualifications bound to the Arena session branch."""
 from pathlib import Path
+import subprocess
+import sys
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BRANCH = "arena/01a0a942-tofel-house-erp"
-REF = "refs/heads/" + BRANCH
+sys.path.insert(0, str(ROOT / "tools"))
+from session_branch import ACTIVE_BRANCH as BRANCH, ACTIVE_REF as REF
 
 
 class CurrentBranchQualificationTests(unittest.TestCase):
+    def test_checkout_is_the_active_session_branch(self):
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        self.assertEqual(result.stdout.strip(), BRANCH)
+
     def test_foundation_workflows_trigger_and_gate_the_active_branch(self):
         for workflow in (
             "foundation-runtime.yml",
             "foundation-runner.yml",
             "foundation-frontend-review.yml",
+            "placement-content.yml",
+            "placement-evidence.yml",
         ):
             source = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
             self.assertIn(f"branches: [{BRANCH}]", source, workflow)
@@ -24,16 +38,17 @@ class CurrentBranchQualificationTests(unittest.TestCase):
         runtime = (ROOT / "tools/foundation/runtime_install.py").read_text(encoding="utf-8")
         frontend = (ROOT / "tools/foundation/frontend_experiment.py").read_text(encoding="utf-8")
         for source, label in ((runtime, "runtime"), (frontend, "frontend")):
-            self.assertIn(REF, source, label)
+            self.assertIn("from session_branch import ACTIVE_REF", source, label)
             self.assertNotIn("arena/01a09bf3-tofel-house-erp", source, label)
+            self.assertNotIn("arena/01a0a942-tofel-house-erp", source, label)
         self.assertIn("--initial-branch", runtime)
-        self.assertIn(BRANCH, runtime)
+        self.assertIn("ACTIVE_REF.removeprefix", runtime)
 
     def test_shared_runner_and_evidence_transport_allow_the_active_ref(self):
         runner = (ROOT / "tools/foundation/runner_probe.py").read_text(encoding="utf-8")
         publisher = (ROOT / "tools/foundation/publish_evidence.py").read_text(encoding="utf-8")
-        self.assertIn(f'"{REF}"', runner)
-        self.assertIn(f'"{REF}"', publisher)
+        self.assertIn("AUTHORIZED_REFS = (ACTIVE_REF,)", runner)
+        self.assertIn("if os.environ.get(\"GITHUB_REF\") != ACTIVE_REF", publisher)
 
 
 if __name__ == "__main__":

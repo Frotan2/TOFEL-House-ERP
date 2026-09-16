@@ -13,6 +13,8 @@ from urllib.request import urlopen
 from seed_yarn_mirror import entries_from_lock, verify
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+from session_branch import ACTIVE_REF
 EVIDENCE = ROOT / '.foundation/frontend-experiment-evidence'
 
 
@@ -37,7 +39,7 @@ def seed(lock, mirror):
 
 
 def main():
-    if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('GITHUB_REF') != 'refs/heads/arena/01a0a942-tofel-house-erp':
+    if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('GITHUB_REF') != ACTIVE_REF:
         raise SystemExit('Authorized hosted branch only')
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     lab = Path(os.environ['RUNNER_TEMP']) / 'foundation-frontend-experiment'

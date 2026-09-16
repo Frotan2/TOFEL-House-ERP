@@ -11,14 +11,15 @@ import ast
 import json
 import re
 from pathlib import Path
+import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+from session_branch import ACTIVE_BRANCH as SESSION_BRANCH, ACTIVE_REF as SESSION_REF
+
 NATIVE = ROOT / "tools/placement/native_checks.py"
 SECURITY = ROOT / "apps/toefl_house/toefl_house/security.py"
-
-SESSION_BRANCH = "arena/01a0a942-tofel-house-erp"
-SESSION_REF = "refs/heads/" + SESSION_BRANCH
 
 AUTHOR_ONLY = frozenset({"second_author", "other"})
 DUAL_ROLE = "author"
@@ -481,14 +482,18 @@ class SessionBranchLockTests(unittest.TestCase):
 
     def test_run_native_locked_to_this_session_branch(self):
         src = (ROOT / "tools/placement/run_native.py").read_text(encoding="utf-8")
-        self.assertIn("BRANCH = '%s'" % SESSION_REF, src)
-        self.assertIn("'%s'" % SESSION_BRANCH, src)
+        self.assertIn("from session_branch import ACTIVE_BRANCH, ACTIVE_REF", src)
+        self.assertIn("BRANCH = ACTIVE_REF", src)
+        self.assertIn("ACTIVE_BRANCH", src)
+        self.assertNotIn("arena/01a0a942-tofel-house-erp", src)
 
     def test_probe_and_evidence_authorize_this_session_branch(self):
         probe = (ROOT / "tools/foundation/runner_probe.py").read_text(encoding="utf-8")
         evidence = (ROOT / "tools/foundation/publish_evidence.py").read_text(encoding="utf-8")
-        self.assertIn('"%s"' % SESSION_REF, probe)
-        self.assertIn('"%s"' % SESSION_REF, evidence)
+        self.assertIn("from session_branch import ACTIVE_REF", probe)
+        self.assertIn("from session_branch import ACTIVE_REF", evidence)
+        self.assertNotIn("arena/01a0a942-tofel-house-erp", probe)
+        self.assertNotIn("arena/01a0a942-tofel-house-erp", evidence)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,6 @@
   "scope": "Static document/source verification only; not architecture approval, implementation authorization or runtime qualification",
   "result": "CONSISTENT_FOR_REVIEW_WITH_CONDITIONAL_AND_BLOCKED_DECISIONS",
   "baseline_commit": "e0cafcd5bab2851dec3c3b7917c81ef174816094",
-  "authorized_branch": "arena/01a09bf3-tofel-house-erp",
   "main_commit_unchanged": "9eccff957cadf036a3ac6f8208540a110148e67b",
   "architecture_approved": false,
   "implementation_authorized": false,
@@ -264,5 +263,8 @@
     "docs/domain/review-status.json": "72835f64c3542d08c2f66e83cfaf26efc5844a197d1acd290df5c65a69be612a",
     "docs/domain/workflows.md": "2479a0f85d9f31f1490f1c271425491b78e61cb330a53719b028e8925d5a8a5d"
   },
-  "manifest_note": "Audit excludes its own hash to avoid circularity. Baseline is the pre-gate commit; final gate commit SHA is reported after commit. This JSON is a review artifact, not a test pass or approval."
+  "manifest_note": "Audit excludes its own hash to avoid circularity. Baseline is the pre-gate commit; final gate commit SHA is reported after commit. This JSON is a review artifact, not a test pass or approval.",
+  "active_branch": "arena/01a0a9f7-tofel-house-erp",
+  "evidence_branch": "arena/01a09bf3-tofel-house-erp",
+  "branch_note": "The evidence branch is historical provenance; active qualification is restricted to the current Arena session branch."
 }

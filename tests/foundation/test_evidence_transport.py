@@ -6,11 +6,16 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
-path=Path(__file__).resolve().parents[2]/'tools/foundation/publish_evidence.py'
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+from session_branch import ACTIVE_REF
+
+path=ROOT/'tools/foundation/publish_evidence.py'
 spec=importlib.util.spec_from_file_location('publisher',path)
 publisher=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(publisher)
@@ -24,7 +29,7 @@ class EvidenceTransportTests(unittest.TestCase):
     def publish(self,report):
         with tempfile.TemporaryDirectory() as directory:
             source=Path(directory)/'report.json';source.write_text(json.dumps(report))
-            env={'GITHUB_REF':'refs/heads/arena/01a0a942-tofel-house-erp','GITHUB_SHA':'synthetic-sha','GITHUB_REPOSITORY':'owned/example','GITHUB_TOKEN':'synthetic-test-token'}
+            env={'GITHUB_REF':ACTIVE_REF,'GITHUB_SHA':'synthetic-sha','GITHUB_REPOSITORY':'owned/example','GITHUB_TOKEN':'synthetic-test-token'}
             with patch.dict(os.environ,env),patch('sys.argv',['publish',str(source)]),patch.object(publisher,'urlopen',return_value=Response()) as send:
                 publisher.main()
                 return json.loads(send.call_args.args[0].data)

@@ -7,13 +7,23 @@ import os
 from pathlib import Path
 import subprocess
 
-if os.environ.get('GITHUB_ACTIONS')!='true' or os.environ.get('GITHUB_REF')!='refs/heads/arena/01a09bf3-tofel-house-erp':
+ROOT=Path(__file__).resolve().parents[2]
+sys_path = ROOT / 'tools'
+import sys
+sys.path.insert(0, str(sys_path))
+from session_branch import ACTIVE_REF
+
+# This workflow runs from the active session branch. The source branch below
+# is historical evidence provenance and is checked separately; it is not an
+# authorization to execute qualification on that old branch.
+HISTORICAL_SOURCE_BRANCH='arena/01a09bf3-tofel-house-erp'
+if os.environ.get('GITHUB_ACTIONS')!='true' or os.environ.get('GITHUB_REF')!=ACTIVE_REF:
     raise SystemExit('Authorized hosted branch only')
 run=os.environ['SOURCE_RUN']
 if not run.isdigit():raise SystemExit('Numeric source run required')
-root=Path(__file__).resolve().parents[2];out=root/'.foundation/recovered-placement'/run;out.mkdir(parents=True,exist_ok=True)
+out=ROOT/'.foundation/recovered-placement'/run;out.mkdir(parents=True,exist_ok=True)
 metadata=json.loads(subprocess.check_output(['gh','api',f'repos/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{run}']))
-if metadata['head_branch']!='arena/01a09bf3-tofel-house-erp' or metadata['name']!='Placement synthetic content qualification':
+if metadata['head_branch']!=HISTORICAL_SOURCE_BRANCH or metadata['name']!='Placement synthetic content qualification':
     raise SystemExit('Not an authorized placement qualification source')
 subprocess.run(['gh','run','download',run,'--name',f'placement-content-{run}-{metadata["run_attempt"]}','--dir',str(out/'artifact')],check=True)
 # Read only the runner's sanitized report/log directory, never site configs/backups.
