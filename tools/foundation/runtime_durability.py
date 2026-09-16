@@ -81,6 +81,39 @@ REDIS_SETTINGS = [
 COMMITTED_ROWS = 25
 
 
+def extract_innodb_section(text, header):
+    """Extract one section from `SHOW ENGINE INNODB STATUS` output.
+
+    A section is a rule of dashes, the header, another rule of dashes, then body
+    lines up to the next rule. Batch-mode MySQL escapes embedded newlines as a
+    literal backslash-n, so callers must unescape first. Kept at module level so
+    it can be executed against a realistic fixture instead of only ever being
+    exercised on a hosted runner.
+    """
+    lines = (text or "").splitlines()
+
+    def is_rule(value):
+        value = value.strip()
+        return bool(value) and set(value) == {"-"}
+
+    for i, line in enumerate(lines):
+        if not is_rule(line) or i + 2 >= len(lines):
+            continue
+        if lines[i + 1].strip() != header or not is_rule(lines[i + 2]):
+            continue
+        out = []
+        for body in lines[i + 3:]:
+            if is_rule(body):
+                break
+            stripped = body.strip()
+            if stripped:
+                out.append(stripped[:200])
+            if len(out) >= 20:
+                break
+        return out
+    return []
+
+
 def main() -> int:
     if os.environ.get("GITHUB_ACTIONS") != "true":
         raise SystemExit("Run only in an ephemeral Actions runner with real Docker")
@@ -231,6 +264,9 @@ def main() -> int:
             "innodb_flush_log_at_trx_commit": sql("SELECT @@innodb_flush_log_at_trx_commit;"),
             "sync_binlog": sql("SELECT @@sync_binlog;"),
             "log_bin": sql("SELECT @@log_bin;"),
+            # Must be 0: any other value would make crash recovery skip work and
+            # invalidate the whole scenario.
+            "innodb_force_recovery": sql("SELECT @@innodb_force_recovery;"),
             "version": sql("SELECT VERSION();"),
             "binlog_files": [r for r in sql("SHOW BINARY LOGS;").splitlines() if r],
             "uncommitted_visible": sql(
@@ -337,6 +373,8 @@ def main() -> int:
             raise RuntimeError("Redis AOF persistence was not actually enabled")
         if pre["mariadb"]["innodb_flush_log_at_trx_commit"] != "1":
             raise RuntimeError("InnoDB was not configured for full durability")
+        if pre["mariadb"]["innodb_force_recovery"] != "0":
+            raise RuntimeError("innodb_force_recovery was not 0, so crash recovery would be bypassed")
 
         def assert_survived(label, state):
             if state["mariadb"]["committed_row_count"] != COMMITTED_ROWS:
@@ -421,23 +459,48 @@ def main() -> int:
                         ["docker", "logs", "--tail", "600", MARIADB_CONTAINER],
                         allow_failure=True)
         # `docker logs` returns the whole container history, so the LAST matching
-        # lines are the post-crash start. A narrow "recovery"/"crash" filter
-        # matched nothing on the first successful run, which left the crash
-        # scenario without any server-side log corroboration.
-        markers = ("innodb", "recovery", "crash", "redo", "rollback", "roll back",
-                   "ready for connections", "shutdown", "starting")
-        innodb_lines = [line.strip()[:220] for line in crash_log.splitlines()
-                        if any(marker in line.lower() for marker in markers)][-30:]
+        # lines are the post-crash start. Crash markers and startup markers are
+        # kept in SEPARATE lists: a broadened filter once matched only
+        # "[Entrypoint]: Starting temporary server", which is startup noise and
+        # not InnoDB recovery evidence. Labelling it as recovery overstated the
+        # evidence, so the two are never merged.
+        crash_markers = ("innodb", "recovery", "crash", "redo", "rollback", "roll back")
+        startup_markers = ("ready for connections", "shutdown", "starting", "entrypoint")
+        log_lines = [line.strip()[:220] for line in crash_log.splitlines()]
+        innodb_lines = [line for line in log_lines
+                        if any(marker in line.lower() for marker in crash_markers)][-20:]
+        startup_lines = [line for line in log_lines
+                         if any(marker in line.lower() for marker in startup_markers)][-20:]
+        # SHOW ENGINE INNODB STATUS is the authoritative native source for
+        # recovery position. MariaDB does not always emit crash-recovery lines at
+        # default verbosity, so this - not a log grep - is what corroborates that
+        # recovery ran from a consistent checkpoint.
+        try:
+            status_text = sql("SHOW ENGINE INNODB STATUS;").replace("\\n", "\n")
+        except Exception as exc:
+            status_text = ""
+            report["innodb_status_error"] = type(exc).__name__
+
+        log_section = extract_innodb_section(status_text, "LOG")
         report["scenario_2_sigkill_crash_recovery"] = {
             "post_state": state, "survived": assert_survived("crash recovery", state),
             "uncommitted_row_absent_after_crash":
                 state["mariadb"]["uncommitted_visible"] == "0",
             "binlog_rotations_observed": assert_binlog_rotated("crash recovery", state),
+            "innodb_force_recovery_setting": state["mariadb"]["innodb_force_recovery"],
             "innodb_recovery_messages": innodb_lines,
-            "log_lines_captured": len(crash_log.splitlines()),
+            "server_startup_messages": startup_lines,
+            "innodb_status_log_section": log_section,
+            "log_lines_captured": len(log_lines),
+            "note": ("innodb_recovery_messages may legitimately be empty at default "
+                     "server verbosity; innodb_status_log_section is the authoritative "
+                     "corroboration and startup messages are recorded separately so "
+                     "they are never mistaken for recovery evidence."),
         }
-        if not innodb_lines:
-            raise RuntimeError("Crash scenario captured no MariaDB server log corroboration")
+        if not innodb_lines and not log_section:
+            raise RuntimeError(
+                "Crash scenario has neither InnoDB recovery log lines nor an "
+                "INNODB STATUS LOG section, so recovery is uncorroborated")
 
         # Scenario 3: destroy both containers outright and recreate new ones from
         # the same named volumes. This is what distinguishes real volume

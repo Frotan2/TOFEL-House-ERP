@@ -19,6 +19,10 @@ import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "foundation"))
+
+from runtime_durability import extract_innodb_section  # noqa: E402
+
 PROBE = (ROOT / "tools/foundation/runtime_durability.py").read_text(encoding="utf-8")
 WORKFLOW = (ROOT / ".github/workflows/foundation-durability.yml").read_text(encoding="utf-8")
 MATRIX = (ROOT / "docs/engineering/foundation-version-matrix.json").read_text(encoding="utf-8")
@@ -130,8 +134,26 @@ class ScenarioCoverageTests(unittest.TestCase):
         for marker in ('"innodb"', '"recovery"', '"redo"', '"rollback"',
                        '"ready for connections"', '"shutdown"'):
             self.assertIn(marker, PROBE)
-        self.assertIn('raise RuntimeError("Crash scenario captured no MariaDB server log corroboration")', PROBE)
         self.assertIn('"log_lines_captured"', PROBE)
+        self.assertIn("SHOW ENGINE INNODB STATUS", PROBE)
+        self.assertIn('raise RuntimeError(\n                "Crash scenario has neither InnoDB recovery log lines nor an "', PROBE)
+
+    def test_crash_and_startup_log_lines_are_never_merged(self):
+        """A broadened filter once matched only '[Entrypoint]: Starting temporary
+        server' and reported it under innodb_recovery_messages, which overstated
+        the evidence. Startup noise must be recorded separately."""
+        self.assertIn('crash_markers = ("innodb", "recovery", "crash", "redo", "rollback", "roll back")', PROBE)
+        self.assertIn('startup_markers = ("ready for connections", "shutdown", "starting", "entrypoint")', PROBE)
+        self.assertIn('"innodb_recovery_messages": innodb_lines', PROBE)
+        self.assertIn('"server_startup_messages": startup_lines', PROBE)
+        self.assertIn('"innodb_status_log_section": log_section', PROBE)
+        self.assertIn("never mistaken for recovery evidence", PROBE)
+
+    def test_innodb_force_recovery_must_be_zero(self):
+        """Any other value makes crash recovery skip work and voids the scenario."""
+        self.assertIn('sql("SELECT @@innodb_force_recovery;")', PROBE)
+        self.assertIn('if pre["mariadb"]["innodb_force_recovery"] != "0":', PROBE)
+        self.assertIn('raise RuntimeError("innodb_force_recovery was not 0, so crash recovery would be bypassed")', PROBE)
 
     def test_recreation_is_proven_to_produce_new_containers(self):
         self.assertIn("{{.Id}}", PROBE)
@@ -207,6 +229,71 @@ class EvidenceHonestyTests(unittest.TestCase):
         self.assertIn('"index_digest"', PROBE)
         self.assertIn("resolved_platform_digests", PROBE)
         self.assertIn("{{json .RepoDigests}}", PROBE)
+
+
+INNODB_STATUS_FIXTURE = """=====================================
+2026-09-16 18:58:01 INNODB MONITOR OUTPUT
+=====================================
+-----------------
+BACKGROUND THREAD
+-----------------
+srv_master_thread loops: 12
+-------------------------------------
+SEMAPHORES
+-------------------------------------
+OS WAIT ARRAY INFO: reservation count 5
+---
+LOG
+---
+Log sequence number 98765
+Log flushed up to 98765
+Last checkpoint at 98765
+0 pending log flushes, 0 pending chkp writes
+----------------------
+BUFFER POOL AND MEMORY
+----------------------
+Total large memory allocated 68157440
+"""
+
+
+class InnodbStatusParserTests(unittest.TestCase):
+    """Executed against a realistic fixture.
+
+    This caught a real defect: the first implementation stopped on the dash rule
+    that *closes* the header, so it returned only ['LOG'].
+    """
+
+    def test_extracts_only_the_requested_section_body(self):
+        self.assertEqual(extract_innodb_section(INNODB_STATUS_FIXTURE, "LOG"), [
+            "Log sequence number 98765", "Log flushed up to 98765",
+            "Last checkpoint at 98765",
+            "0 pending log flushes, 0 pending chkp writes"])
+
+    def test_does_not_leak_past_the_end_of_the_section(self):
+        for line in extract_innodb_section(INNODB_STATUS_FIXTURE, "LOG"):
+            self.assertNotIn("BUFFER POOL", line)
+            self.assertNotIn("Total large memory", line)
+        self.assertNotIn("LOG", extract_innodb_section(INNODB_STATUS_FIXTURE, "LOG"))
+
+    def test_handles_headers_with_different_rule_widths(self):
+        self.assertEqual(extract_innodb_section(INNODB_STATUS_FIXTURE, "SEMAPHORES"),
+                         ["OS WAIT ARRAY INFO: reservation count 5"])
+        self.assertEqual(extract_innodb_section(INNODB_STATUS_FIXTURE, "BACKGROUND THREAD"),
+                         ["srv_master_thread loops: 12"])
+
+    def test_missing_section_and_empty_input_return_empty(self):
+        self.assertEqual(extract_innodb_section(INNODB_STATUS_FIXTURE, "NONEXISTENT"), [])
+        self.assertEqual(extract_innodb_section("", "LOG"), [])
+        self.assertEqual(extract_innodb_section(None, "LOG"), [])
+
+    def test_unclosed_header_is_not_matched(self):
+        self.assertEqual(extract_innodb_section("---\nLOG\nLog sequence number 1\n", "LOG"), [])
+
+    def test_lines_are_truncated_and_capped(self):
+        self.assertEqual(extract_innodb_section("---\nLOG\n---\n" + "x" * 400 + "\n", "LOG"),
+                         ["x" * 200])
+        many = "---\nLOG\n---\n" + "".join(f"line {i}\n" for i in range(50))
+        self.assertEqual(len(extract_innodb_section(many, "LOG")), 20)
 
 
 class WorkflowContractTests(unittest.TestCase):
