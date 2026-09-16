@@ -96,7 +96,7 @@ def set_managed_role(request_key, user, role, enabled):
         raise frappe.ValidationError(str(exc)) from exc
     if not isinstance(user, str) or not user or user in PROTECTED_USERS:
         raise frappe.ValidationError("Protected or invalid User")
-    if role not in MANAGED_ROLES:
+    if not isinstance(role, str) or role not in MANAGED_ROLES:
         raise frappe.ValidationError("Role is not managed by this controlled surface")
     if isinstance(enabled, str):
         if enabled not in {"0", "1"}:
@@ -106,9 +106,14 @@ def set_managed_role(request_key, user, role, enabled):
         enabled = bool(enabled)
     else:
         raise frappe.ValidationError("enabled must be boolean-like")
-    if role == "General Manager" and user == frappe.session.user and not enabled:
+    if user == frappe.session.user and not enabled and role in {"General Manager", "Course Owner"}:
         raise frappe.ValidationError("The acting Course Owner cannot revoke its own operational role")
 
+    # Lock the native User before checking the request receipt. This serializes
+    # concurrent retries for the same target without introducing a second lock
+    # table or operation ledger; the row lock is held through the native User
+    # change and its Version audit insert.
+    target = frappe.get_doc("User", user, for_update=True)
     prior = frappe.get_list(
         "Version",
         filters={"ref_doctype": "User", "docname": user, "data": ["like", f"%{request_key}%"]},
@@ -121,18 +126,21 @@ def set_managed_role(request_key, user, role, enabled):
             recorded = json.loads(prior[0]["data"])
         except (TypeError, ValueError) as exc:
             raise frappe.ValidationError("Existing audit record is not valid") from exc
+        if not isinstance(recorded, dict):
+            raise frappe.ValidationError("Existing audit record is not valid")
         if recorded.get("managed_role") != role or recorded.get("enabled") != enabled:
             raise frappe.ValidationError("Idempotency key conflicts with an existing role change")
         return {
             "user": user,
             "role": role,
             "enabled": enabled,
-            "changed": True,
+            # Older native receipts predate the explicit field and only exist
+            # for real changes, so retain their historical replay semantics.
+            "changed": bool(recorded.get("changed", True)),
             "replayed": True,
             "audit_authority": "Version",
         }
 
-    target = frappe.get_doc("User", user)
     current = set(target.get_roles())
     already = (role in current) == enabled
     if not already:
@@ -145,23 +153,24 @@ def set_managed_role(request_key, user, role, enabled):
     else:
         after = current
 
-    # Native Version is the audit authority. The request key makes retries
-    # reviewable without creating a parallel operation/role ledger.
-    if not already:
-        version = frappe.get_doc({
-            "doctype": "Version",
-            "ref_doctype": "User",
-            "docname": user,
-            "data": json.dumps({
-                "changed_by": frappe.session.user,
-                "request_key": request_key,
-                "managed_role": role,
-                "enabled": enabled,
-                "before_roles": sorted(current),
-                "after_roles": sorted(after),
-            }, sort_keys=True),
-        })
-        version.insert(ignore_permissions=True)
+    # Native Version is the audit authority. Record even a no-op so the
+    # request key binds the requested operation and cannot later be reused for
+    # a different role or state.
+    version = frappe.get_doc({
+        "doctype": "Version",
+        "ref_doctype": "User",
+        "docname": user,
+        "data": json.dumps({
+            "changed_by": frappe.session.user,
+            "request_key": request_key,
+            "managed_role": role,
+            "enabled": enabled,
+            "changed": not already,
+            "before_roles": sorted(current),
+            "after_roles": sorted(after),
+        }, sort_keys=True),
+    })
+    version.insert(ignore_permissions=True)
     return {
         "user": user,
         "role": role,

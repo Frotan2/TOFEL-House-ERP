@@ -97,7 +97,7 @@ authorization.
 | Durability | **BLOCKED** | File/database fixture preservation is bounded; deployed MariaDB/Redis/configuration/key/host durability and loss/restart evidence are not proven |
 | Branch isolation | **BLOCKED / NOT PROVEN** | The evidence run passes a bounded branch-scope/aggregate model, but the checkout has no deployed native branch runtime/fixture proof across read/write/submit/export/file/job paths |
 | Change control | **BLOCKED** | Static provenance and local rollback pass in bounded scope; deployed approval, artifact promotion, communication and restore-based rollback evidence is absent |
-| SEC-DEPS-01 | **UPSTREAM-BLOCKED / REJECT** | Latest active-branch Foundation runtime `35090904508` remains failed on dependency/frontend advisory gates; Checks `104787576338` and `104787579362`, SHA-256 values recorded in the acceptance ledger |
+| SEC-DEPS-01 | **UPSTREAM-BLOCKED / REJECT** | Closure evidence records Foundation runtime `35090904508` as failed on dependency/frontend advisory gates; independent exact-PR-head run `35101709287` is separately tracked below and cannot waive this hard stop |
 | Production authorization | **REJECT** | It is downstream of every applicable gate above and the dependency hard stop |
 
 The bounded alerting harness is intentionally reported as a technical proof, not
@@ -138,6 +138,123 @@ versioned backup mechanics, alternate-directory restore, data/file preservation,
 external key boundary, offboarding preservation, native Version audit shape,
 fail-closed alert behavior and artifact rollback. It does **not** have proof of
 the deployed production architecture required by the owner-selected D8 contract.
+
+## 7. Final independent audit of PR #2
+
+Audit target: PR [#2](https://github.com/Frotan2/TOFEL-House-ERP/pull/2), exact
+head `16d0d2ac97390999ed4a5ff54fc38b6d2d5ce2dc`, base `main` at
+`9eccff957cadf036a3ac6f8208540a110148e67b`. This section is an independent
+review record; it does not replace the owner-decision record or turn scoped
+qualification into production evidence.
+
+### Diff provenance, scope, and repository hygiene
+
+GitHub reports **352 files changed, 63,852 additions, and 1 deletion**. This is
+explained by repository history, not by a 63k-line product feature diff:
+`origin/main` is an unrelated one-commit history containing only `README.md`, and
+`git merge-base origin/main HEAD` returns no merge base. The PR comparison
+therefore presents the active repository baseline as additions. The active tree
+contains 352 tracked files: 142 Python, 116 JSON, 53 Markdown, 12 curated
+execution logs, 9 text, 6 YAML, 5 CommonJS, 3 ESM, 2 TOML, 2 JavaScript, one
+`.gitignore`, and one reviewed evidence lockfile.
+
+The file-by-file review found no `node_modules`, vendored source, build/dist or
+coverage tree, bytecode, database/archive artifact, or duplicate repository
+history. The logs, hosted JSON, and candidate lockfile are under the curated
+`docs/engineering/evidence/phase-2/` evidence boundary and are referenced by
+reports or review tooling; they are not runtime output accidentally committed at
+repository root. A repository-local secret scan found no private keys, GitHub
+personal tokens, AWS access keys, or generic quoted secret assignments. The
+`.gitignore` excludes live site data, credentials, backups, runtime artifacts,
+bytecode, and dependency trees.
+
+### Native-first authority and duplication review
+
+The 22 custom TOEFL House DocTypes are limited to placement qualification,
+admission decision workflow, teaching/finance extensions, allocation guards,
+operations, audit, and configuration revisions. None is named or implemented as
+a Student, Course, Enrollment, Attendance, Invoice, Payment, Payroll, Permission,
+Ledger, or Branch authority. The code references native Education/Frappe/ERPNext/
+HRMS authorities for Student Applicant/Student, Program Enrollment, Course and
+Program data, Student Group, Course Schedule, Student Attendance, Sales Invoice,
+Fees, Company/Branch, User/Role/User Permission, Employee, and payroll records.
+The control centre adds no parallel role, branch, accounting, student, payroll,
+or operation ledger.
+
+Native authority remains a scoped/static conclusion only where the deployment is
+not present. Multi-branch isolation is not claimed: the implementation uses the
+native Company/Branch and permission model, while native cross-branch read/write,
+submit, export, file, and background-job isolation remain a blocked release gate.
+
+### Administration Control Centre and security review
+
+`administration.py` is a controlled facade, not a replacement authority. The
+native Page is limited to Course Owner and General Manager; the snapshot is
+non-sensitive readiness/attention projection; only Course Owner may mutate an
+allow-listed managed role. Protected `Administrator` and `Guest` identities and
+self-revocation of the acting operational role are rejected. Role assignment is
+performed on native `User`, serialized with a native row lock, and recorded in
+native `Version`; no custom role or permission ledger is introduced. Native Users,
+Roles, User Permissions, Companies, Branches, and System Settings remain routes to
+native authorities, and the page grants no implicit document permissions.
+
+The audit found and fixed four related implementation defects on the active
+branch: an already-satisfied role request did not create a receipt and could
+reuse its idempotency key for a different request; concurrent retries could race
+before receipt lookup; malformed non-object Version JSON could raise an
+uncontrolled attribute error; and non-string role input could raise a type error.
+The fix records no-op requests in native Version, locks the native User before
+receipt lookup, validates the decoded record and role type, returns the recorded
+`changed` state on replay, and blocks self-revocation of the acting operational
+role. No other independently reproducible Administration Control Centre defect
+was found.
+
+This does not claim deployed offboarding, session revocation, branch runtime
+isolation, production backup custody, or unrestricted native permission safety;
+those remain evidence gates and are intentionally not manufactured by this PR.
+The bounded offboarding harness preserves history while removing active access,
+but it is not deployed evidence.
+
+### Canonical-document reconciliation and validation
+
+The canonical owner-decision record, D8 matrix, acceptance ledger, release dossier,
+gap map, machine-readable evidence, and this report agree on the required hard
+stops: production authorization `REJECT`, `production_enabled=false`,
+synthetic-only `REQUIRED`, and `SEC-DEPS-01=UPSTREAM-BLOCKED / REJECT`. The
+acceptance ledger's `latest_branch_head_at_reconciliation` is historical
+qualification provenance, not a claim about this PR head; older hosted run
+references in the closure packet are retained as historical evidence. This
+report now identifies the exact PR-head checks separately to avoid treating those
+older references as current status.
+
+Independent local results after the audit fix:
+
+| Validation | Result |
+|---|---|
+| Governance and bounded evidence tests | **4 passed** |
+| Full Python test discovery | **311 passed** |
+| D8 contract validator | **exit 0; intentional BLOCKED/REJECT report** |
+| Realtime guard | **PASS** |
+| D10 command-page and native-dialog smoke | **PASS** |
+| Secret, generated-content, duplicate-authority and scope scans | **PASS within repository/static scope** |
+
+Exact GitHub Actions results for the audited head at the time of this report:
+D8 operations contract run `35101709220` completed **SUCCESS**. Foundation runtime
+run `35101709287` was still **IN_PROGRESS** when this audit record was written;
+its final result is not represented as a pass. The runtime workflow's completed
+pre-install steps passed, but the pinned foundation installation gate remained
+pending. The exact head and run IDs must be rechecked after any subsequent commit.
+
+### Independent audit conclusion
+
+The PR delta is a history-baseline artifact plus a coherent, intentionally
+scoped application/evidence tree; it is not evidence of vendoring or accidental
+repository duplication. Native authority and the controlled governance facade
+are structurally aligned, with the idempotency/concurrency defects above fixed
+and covered by governance-source assertions. The PR remains **not production
+ready** because the selected D8 deployment/recovery/branch/observability/
+capacity/durability/change-control evidence is not independently proven and the
+security dependency hard stop remains.
 
 **Final production authorization: REJECT.** Do not enable production, relax the
 synthetic-only guard, waive or reinterpret SEC-DEPS-01, relabel bounded synthetic
