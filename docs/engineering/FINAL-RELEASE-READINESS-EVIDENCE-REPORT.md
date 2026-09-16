@@ -693,8 +693,31 @@ defect. Commit `e92c66e` fixes it:
    implementation stopped on the dash rule that *closes* the header and returned
    only `['LOG']`.
 
-Commit `e92c66e` still needs its own hosted durability PASS, recorded here as
-outstanding rather than assumed.
+**Commit `e92c66e` has now produced its own hosted PASS.** Run `35138416558` at
+commit `fd94e8f`, check `104936842736`, conclusion **success**, report status
+**pass**. This is the authoritative durability evidence, because it is the first
+run in which the crash scenario is corroborated by an authoritative native source
+rather than a log grep:
+
+- `innodb_recovery_messages` is correctly **empty** — MariaDB 11.8 emits no
+  crash-recovery lines at default verbosity, and the probe no longer fills that
+  field with startup noise to make it look non-empty.
+- The entrypoint lines that were previously mislabeled as recovery evidence now
+  sit in their own `server_startup_messages` field.
+- `SHOW ENGINE INNODB STATUS` supplies the real recovery position: log sequence
+  number `52305` equal to log flushed up to `52305`, pages flushed up to `51911`,
+  last checkpoint at `51911`.
+- `innodb_force_recovery` reads back `0`, proving crash recovery was not bypassed.
+- The binary-log progression is enforced and held: `2 → 3 → 4 → 5`.
+- All three scenarios again preserved row count 25 and CRC32 checksum
+  `51945241053` exactly; the negative control again confirmed the data lived in
+  the volume; new container IDs again confirmed genuine replacement.
+
+The run would now fail closed if neither a genuine InnoDB log line nor an
+`INNODB STATUS` LOG section were present, so this evidence cannot silently
+degrade back into a mislabeled grep match. Archived as
+`evidence/production-like-execution/hosted-durability-35138416558.json`, SHA-256
+`b5bd967bfa51c84040911404a3c32f2170baace6388c3a81016c5c4f0596fd9b`.
 
 `tests/foundation/test_durability_contract.py`, 27 tests, guards the contract,
 including an executed check that the probe refuses to run outside an ephemeral

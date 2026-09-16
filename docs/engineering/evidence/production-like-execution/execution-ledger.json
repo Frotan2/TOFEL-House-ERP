@@ -1115,7 +1115,7 @@
     "evidence_retrieval": "gh api repos/Frotan2/TOFEL-House-ERP/check-runs/<check_id> --jq .output.text  (gzip+base64 transport decoded when >58000 bytes)"
   },
   "integrity": {
-    "generated_at_utc": "2026-09-16T19:03:02.717244+00:00",
+    "generated_at_utc": "2026-09-16T19:07:22.443749+00:00",
     "archived_evidence_sha256": {
       "hosted-frontend-35122242647.json": "17d40562f62cddc6168bef34838f128d6dbaa2257a0ab0048739c2c28c6abfb1",
       "hosted-placement-native-checks-35122242728.json": "094111f63a8f4b44e483bfd534a71b404c14b0e87c093477e0a633390ff42251",
@@ -1138,7 +1138,8 @@
       "hosted-remaining-gates-35133062884.json": "981ac18610ae0fb9c744645123922cd7ea78882969f8316ee3416d9ad99a2dda",
       "hosted-durability-35135793802.json": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65",
       "hosted-durability-35137645608.json": "6f9b379d132ed131d38e68647397b9b9f197312fe5312990e75c191fd0da408b",
-      "hosted-runtime-35135793582.json": "6cfb435d86f3ba0dcb04c8a939cfaf850b4317d00eff3f0442eb6e13e2ad77d5"
+      "hosted-runtime-35135793582.json": "6cfb435d86f3ba0dcb04c8a939cfaf850b4317d00eff3f0442eb6e13e2ad77d5",
+      "hosted-durability-35138416558.json": "b5bd967bfa51c84040911404a3c32f2170baace6388c3a81016c5c4f0596fd9b"
     },
     "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED.",
     "regenerated_at_utc": "2026-09-16T17:36:45.589585+00:00"
@@ -1315,7 +1316,7 @@
     "None outstanding for the site_encryption_key_restored=false defect: CLOSED with genuine hosted evidence at run 35133062884 / commit 58bd4d1 on both restore cycles.",
     "Container-level durability is now genuinely EXECUTED: run 35135793802 at 866396a passed real MariaDB and Redis graceful restart, SIGKILL crash-recovery and container destruction with recreation from the same named volume, plus a negative control. Commit 699ad7e then made the binary-log rotation an enforced invariant and required server-side crash-log corroboration; that stricter probe still needs its own hosted PASS.",
     "Standing release blockers, updated. CLOSED: site_encryption_key_restored=false. EXECUTED but gate still BLOCKED: container-level MariaDB/Redis durability. UNCHANGED: restore has never reached a genuinely independent system and no destructive trigger has been run; versioned encrypted backup with external key custody and rotation is bounded-only, and the site encryption key is still generated and copied by the same ephemeral runner rather than held under separate custody; configuration, private/public file and encryption-key durability are unproven; deployed monitoring, alert delivery and retention are untested; no TLS or Tailscale boundary has been exercised; rollback has never been rehearsed; the owner durability references required by D8-DURABLE-STATE are NOT SELECTED; SEC-DEPS-01 needs a coherent maintained upstream stack migration and has failed at three commits on this branch (d7df9ca, c891949, 58bd4d1); and the owner has selected no numeric capacity/availability objective.",
-    "RESOLVED: the GitHub credential outage ended and commits 699ad7e and 9b96199 were pushed; the stricter durability probe then produced its own hosted PASS at run 35137645608. A further evidence-labelling defect found by that run is fixed in commit e92c66e, which still needs its own hosted durability PASS."
+    "RESOLVED: the GitHub credential outage ended, commits 699ad7e and 9b96199 were pushed, and the stricter durability probe produced its own hosted PASS at run 35137645608. That run then exposed a mislabeled evidence field, fixed in commit e92c66e, which has now also produced a hosted PASS at run 35138416558. No durability item remains outstanding at the container level."
   ],
   "pr_2_update": {
     "action": "comment posted (the only update available from this session)",
@@ -1574,6 +1575,42 @@
       },
       "evidence_quality_defect_found_by_this_run": "innodb_recovery_messages contained exactly one line, '[Entrypoint]: Starting temporary server'. That is container startup noise, not InnoDB crash recovery, so the non-empty check was satisfied while the label overstated the evidence. Commit e92c66e separates crash markers from startup markers, records SHOW ENGINE INNODB STATUS's LOG section as the authoritative native source, and requires innodb_force_recovery=0 so recovery cannot be silently bypassed.",
       "note": "The substantive durability proof was never affected: identical CRC32 checksum, identical row count, rolled-back uncommitted transaction and enforced binlog rotation were all present. The defect was in how one corroborating field was labelled, and it is recorded here rather than quietly corrected."
+    },
+    "honest_labelling_rerun": {
+      "run_id": "35138416558",
+      "commit": "fd94e8f760205a3e5bc7aae236bd896813634388",
+      "check_run": "104936842736",
+      "conclusion": "success",
+      "report_status": "pass",
+      "archived_evidence": "hosted-durability-35138416558.json",
+      "archived_evidence_sha256": "b5bd967bfa51c84040911404a3c32f2170baace6388c3a81016c5c4f0596fd9b",
+      "binlog_rotation_progression": {
+        "pre_state": 2,
+        "graceful restart": 3,
+        "crash recovery": 4,
+        "volume persistence after container destruction": 5
+      },
+      "innodb_force_recovery": "0",
+      "innodb_status_log_section": [
+        "Log sequence number 52305",
+        "Log flushed up to   52305",
+        "Pages flushed up to 51911",
+        "Last checkpoint at  51911"
+      ],
+      "innodb_recovery_messages": [],
+      "server_startup_messages_captured": true,
+      "all_scenarios_survived_identically": {
+        "committed_row_count": 25,
+        "payload_crc32_sum": 51945241053,
+        "uncommitted_visible": "0"
+      },
+      "negative_control": {
+        "table_present_after_volume_loss": "0",
+        "confirms_data_lived_in_the_volume": true
+      },
+      "new_containers_created": true,
+      "why_this_run_is_the_authoritative_durability_evidence": "It is the first run in which the crash scenario is corroborated by an authoritative native source rather than a log grep. innodb_recovery_messages is correctly EMPTY - MariaDB 11.8 emits no crash-recovery lines at default verbosity - and the previously mislabeled startup noise now sits in its own server_startup_messages field. SHOW ENGINE INNODB STATUS supplies the real recovery position (log sequence number 52305 equal to log flushed up to 52305, last checkpoint at 51911), and innodb_force_recovery=0 proves recovery was not bypassed. The run would now fail closed if neither a genuine InnoDB log line nor an INNODB STATUS LOG section were present.",
+      "recorded_at_utc": "2026-09-16T19:07:22.443749+00:00"
     }
   }
 }

@@ -369,7 +369,7 @@
       "known_evidence_gap_in_this_run": "SUPERSEDED: innodb_recovery_messages was empty in run 35135793802 because the log filter matched only 'recovery'/'crash'. Commit 699ad7e broadened it and run 35137645608 then showed the broadened filter matching only startup noise, which commit e92c66e corrects by separating the two and adding INNODB STATUS as the authoritative source.",
       "gate_effect": "NONE. The durability gate remains BLOCKED. Its area also covers configuration, private/public file and encryption-key durability, none of which is proven; host or region loss, storage-array failure, off-site replication, HA and failover are unproven; application-level workflow correctness after recovery is unproven; and the owner durability references required by D8-DURABLE-STATE remain NOT SELECTED and are not invented here. production_state remains REJECT and production_enabled remains false.",
       "regression_coverage": "tests/foundation/test_durability_contract.py, 27 tests; full suite 371 tests pass locally; d8_validate.py exits 0 with no gate drift.",
-      "blocked_on": "RESOLVED. Credentials were restored; 699ad7e and 9b96199 were pushed and run 35137645608 passed. Commit e92c66e still needs its own hosted durability PASS.",
+      "blocked_on": "RESOLVED. Credentials restored; 699ad7e and 9b96199 pushed. Both the stricter probe (run 35137645608) and the honest-labelling probe (run 35138416558) have hosted PASS results.",
       "recorded_at_utc": "2026-09-16T18:48:44.369211+00:00",
       "stricter_probe_rerun": {
         "run": "35137645608",
@@ -394,6 +394,43 @@
         "negative_control_confirms_data_lived_in_the_volume": true,
         "evidence_quality_defect_found_and_fixed": "innodb_recovery_messages held one line, '[Entrypoint]: Starting temporary server' - startup noise, not InnoDB recovery. Commit e92c66e separates crash from startup markers, records SHOW ENGINE INNODB STATUS's LOG section as the authoritative native source, and requires innodb_force_recovery=0. The substantive durability proof was never affected.",
         "recorded_at_utc": "2026-09-16T19:03:25.194944+00:00"
+      },
+      "honest_labelling_rerun": {
+        "run_id": "35138416558",
+        "commit": "fd94e8f760205a3e5bc7aae236bd896813634388",
+        "check_run": "104936842736",
+        "conclusion": "success",
+        "report_status": "pass",
+        "archived_evidence": "hosted-durability-35138416558.json",
+        "archived_evidence_sha256": "b5bd967bfa51c84040911404a3c32f2170baace6388c3a81016c5c4f0596fd9b",
+        "binlog_rotation_progression": {
+          "pre_state": 2,
+          "graceful restart": 3,
+          "crash recovery": 4,
+          "volume persistence after container destruction": 5
+        },
+        "innodb_force_recovery": "0",
+        "innodb_status_log_section": [
+          "Log sequence number 52305",
+          "Log flushed up to   52305",
+          "Pages flushed up to 51911",
+          "Last checkpoint at  51911"
+        ],
+        "innodb_recovery_messages": [],
+        "server_startup_messages_captured": true,
+        "all_scenarios_survived_identically": {
+          "committed_row_count": 25,
+          "payload_crc32_sum": 51945241053,
+          "uncommitted_visible": "0"
+        },
+        "negative_control": {
+          "table_present_after_volume_loss": "0",
+          "confirms_data_lived_in_the_volume": true
+        },
+        "new_containers_created": true,
+        "why_this_run_is_the_authoritative_durability_evidence": "It is the first run in which the crash scenario is corroborated by an authoritative native source rather than a log grep. innodb_recovery_messages is correctly EMPTY - MariaDB 11.8 emits no crash-recovery lines at default verbosity - and the previously mislabeled startup noise now sits in its own server_startup_messages field. SHOW ENGINE INNODB STATUS supplies the real recovery position (log sequence number 52305 equal to log flushed up to 52305, last checkpoint at 51911), and innodb_force_recovery=0 proves recovery was not bypassed. The run would now fail closed if neither a genuine InnoDB log line nor an INNODB STATUS LOG section were present.",
+        "recorded_at_utc": "2026-09-16T19:07:22.443749+00:00",
+        "evidence_archive": "evidence/production-like-execution/hosted-durability-35138416558.json"
       }
     }
   },
