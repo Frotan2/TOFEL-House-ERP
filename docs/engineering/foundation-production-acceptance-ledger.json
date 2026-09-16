@@ -141,10 +141,29 @@
   },
   "active_branch_qualification": {
     "date": "2026-09-16",
+    "branch": "arena/01a0aafe-tofel-house-erp",
+    "qualification_commit": null,
+    "classification": "pending_not_executed",
+    "foundation_runtime": {
+      "run": null,
+      "head_branch": "arena/01a0aafe-tofel-house-erp",
+      "head_sha": null,
+      "status": "pending_not_executed",
+      "observed": "No hosted Foundation runtime has been executed on this branch yet. The branch boundary was rotated from arena/01a0a9f7-tofel-house-erp on 2026-09-16; the previous branch's runtime record is preserved unchanged under prior_active_branch_provenance and is not counted here.",
+      "phase2_gate_passed": false,
+      "security_gate_passed": false,
+      "product_implementation_authorized": false,
+      "limits": "A pending record is not evidence. SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT and this block may never be set to a passing state without an actual hosted run on this branch."
+    },
+    "prior_active_branch": "arena/01a0a9f7-tofel-house-erp",
+    "qualification_scope": "No active-branch hosted qualification has been recorded yet. All prior run evidence belongs to arena/01a0a9f7-tofel-house-erp and is retained under prior_active_branch_provenance."
+  },
+  "prior_active_branch_provenance": {
+    "date": "2026-09-16",
     "branch": "arena/01a0a9f7-tofel-house-erp",
     "qualification_commit": "6e7ccb99fc9d5f80fe550aa187787c56d72fea47",
     "latest_branch_head_at_reconciliation": "6e7ccb99fc9d5f80fe550aa187787c56d72fea47",
-    "classification": "hosted_synthetic_qualification_only",
+    "classification": "historical_provenance",
     "placement": {
       "run": "35090760614",
       "head_branch": "arena/01a0a9f7-tofel-house-erp",
@@ -242,7 +261,8 @@
     "latest_completed_runtime_commit": "6e7ccb99fc9d5f80fe550aa187787c56d72fea47",
     "latest_completed_runtime_status": "fail_reject",
     "prior_qualification_commit": "33b86aed6f8ea4b5997c50f0d1173f4f85af6dea",
-    "qualification_scope": "Latest Foundation runtime is qualified at the latest branch head; Placement, Foundation runner, frontend candidate and evidence-recovery records remain bound to their recorded earlier active-branch commit."
+    "qualification_scope": "Latest Foundation runtime is qualified at the latest branch head; Placement, Foundation runner, frontend candidate and evidence-recovery records remain bound to their recorded earlier active-branch commit.",
+    "provenance_note": "Recorded qualification runs for the previous Arena session branch. Branch, commit, run and check identities are unchanged by the 2026-09-16 boundary rotation and must not be re-labelled as an execution on the current active branch."
   },
   "d8_decision_matrix": "d8-production-operations-decision-matrix.json",
   "d8_contract_template": "d8-operational-contract.template.json",

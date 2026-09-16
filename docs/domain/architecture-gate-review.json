@@ -264,7 +264,7 @@
     "docs/domain/workflows.md": "2479a0f85d9f31f1490f1c271425491b78e61cb330a53719b028e8925d5a8a5d"
   },
   "manifest_note": "Audit excludes its own hash to avoid circularity. Baseline is the pre-gate commit; final gate commit SHA is reported after commit. This JSON is a review artifact, not a test pass or approval.",
-  "active_branch": "arena/01a0a9f7-tofel-house-erp",
+  "active_branch": "arena/01a0aafe-tofel-house-erp",
   "evidence_branch": "arena/01a09bf3-tofel-house-erp",
   "branch_note": "The evidence branch is historical provenance; active qualification is restricted to the current Arena session branch."
 }

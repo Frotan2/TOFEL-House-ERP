@@ -7,5 +7,5 @@ intentionally changed, and update the workflow branch filters and tests in the
 same change.
 """
 
-ACTIVE_BRANCH = "arena/01a0a9f7-tofel-house-erp"
+ACTIVE_BRANCH = "arena/01a0aafe-tofel-house-erp"
 ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH

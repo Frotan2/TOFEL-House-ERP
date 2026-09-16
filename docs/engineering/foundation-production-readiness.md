@@ -231,7 +231,7 @@ unavailable from this sandbox. No configurations, backups or credentials are pub
 ## Reproduction and decision boundary
 
 ```sh
-gh workflow run foundation-runtime.yml --ref arena/01a0a9f7-tofel-house-erp -f profile=hardened
+gh workflow run foundation-runtime.yml --ref arena/01a0aafe-tofel-house-erp -f profile=hardened
 gh run watch RUN_ID --exit-status
 ```
 

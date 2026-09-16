@@ -1,7 +1,7 @@
 # Foundation architecture decision — maintenance and production risk
 
 **Decision date:** 2026-09-16
-**Active branch:** `arena/01a0a9f7-tofel-house-erp`
+**Active branch:** `arena/01a0aafe-tofel-house-erp`
 **Status:** Recommended architecture direction; production release remains blocked
 **Production / Phase 2 recommendation:** **REJECT current acceptance**  
 **Selected strategy:** **Controlled upstream-aligned frontend upgrade path (option 2)**
