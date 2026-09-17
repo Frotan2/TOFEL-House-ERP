@@ -274,14 +274,41 @@ def main() -> int:
                   [str(bench), "--site", SITE, "backup", "--with-files"],
                   cwd=bench_dir, timeout=1200)
         backup_dir = site_dir / "private" / "backups"
-        database = max(backup_dir.glob("*-database.sql.gz"), key=lambda p: p.stat().st_mtime_ns)
-        private_files = max(backup_dir.glob("*-private-files.tar"),
-                            key=lambda p: p.stat().st_mtime_ns)
-        public_candidates = [p for p in backup_dir.glob("*-files.tar")
-                             if "-private-files" not in p.name]
-        if not public_candidates:
-            raise RuntimeError("No public-files archive was produced by the backup")
-        public_files = max(public_candidates, key=lambda p: p.stat().st_mtime_ns)
+        # frappe's set_backup_file_name appends "-enc" to every artifact name when
+        # System Settings encrypt_backup is on, so the globs must accept both the
+        # encrypted and the unencrypted forms. Which form actually appeared is
+        # recorded below rather than assumed.
+        def newest(pattern, what, exclude=None):
+            matches = [path for path in backup_dir.glob(pattern)
+                       if not (exclude and exclude in path.name)]
+            if not matches:
+                raise RuntimeError(
+                    "No " + what + " was produced by bench backup in " + str(backup_dir)
+                    + "; present: " + str(sorted(p.name for p in backup_dir.iterdir())))
+            return max(matches, key=lambda p: p.stat().st_mtime_ns)
+
+        database = newest("*-database*.sql.gz", "database dump")
+        private_files = newest("*-private-files*.tar", "private-files archive")
+        public_files = newest("*-files*.tar", "public-files archive", exclude="-private-files")
+        report["backup_file_names"] = {
+            "database": database.name, "private_files": private_files.name,
+            "public_files": public_files.name,
+            "all_files_in_backup_directory": sorted(p.name for p in backup_dir.iterdir()),
+            "enc_suffix_explained": (
+                "frappe.utils.backups.set_backup_file_name appends '-enc' to the database dump, "
+                "both file archives and the site config backup when System Settings "
+                "encrypt_backup is on, so the suffix is the native signal that the encryption "
+                "branch was taken"),
+            "enc_suffix_present_on": {
+                label: "-enc" in path.name
+                for label, path in (("database", database), ("private_files", private_files),
+                                    ("public_files", public_files))},
+        }
+        if not all(report["backup_file_names"]["enc_suffix_present_on"].values()):
+            raise RuntimeError(
+                "encrypt_backup is on but bench backup did not use the -enc naming, so the "
+                "encryption branch was not taken: "
+                + json.dumps(report["backup_file_names"]["enc_suffix_present_on"]))
 
         # Assert the encryption rather than trusting the setting. `bench restore`
         # decides whether to decrypt by running `file` and looking for AES, so if
@@ -328,6 +355,17 @@ def main() -> int:
             for name in STAGED_NAMES}
         site_config_backups = sorted(p.name for p in backup_dir.glob("*site_config*.json"))
         report["backup_site_config_excluded"] = site_config_backups
+        report["site_config_backup_is_plaintext"] = {
+            "names": site_config_backups,
+            "gpg_does_not_cover_it": (
+                "frappe's backup_encryption() passes only the database dump and both file "
+                "archives to gpg; the '-enc' suffix on the site config backup is a filename "
+                "convention, not encryption, so that file holds db_password, encryption_key and "
+                "backup_encryption_key in clear text"),
+            "consequence": ("the staged payload is built from an explicit allowlist of three "
+                            "artifacts plus two digests-only documents, so the site config "
+                            "backup never travels"),
+        }
         if not site_config_backups:
             # Not a failure of the probe, but the exclusion claim would be empty.
             report["backup_site_config_excluded_note"] = (

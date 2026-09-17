@@ -363,8 +363,18 @@ def main() -> int:
                   [str(bench), "--site", SITE, "backup", "--with-files"],
                   cwd=bench_dir, timeout=1200)
         backup_dir = bench_dir / "sites" / SITE / "private" / "backups"
-        rotated_dump = max(backup_dir.glob("*-database.sql.gz"),
-                           key=lambda p: p.stat().st_mtime_ns)
+        # Same "-enc" naming frappe applies when encrypt_backup is on, which it is
+        # on this site, so the glob accepts both forms and the name is recorded.
+        dumps = sorted(backup_dir.glob("*-database*.sql.gz"),
+                       key=lambda p: p.stat().st_mtime_ns)
+        if not dumps:
+            raise RuntimeError("The post-rotation backup produced no database dump in "
+                               + str(backup_dir))
+        rotated_dump = dumps[-1]
+        report["rotated_backup_file_name"] = {
+            "name": rotated_dump.name, "enc_suffix_present": "-enc" in rotated_dump.name,
+            "dumps_present": sorted(p.name for p in backup_dir.glob("*-database*.sql.gz")),
+        }
         description = probe.run("detect-encryption-of-rotated-backup",
                                 ["file", "--brief", str(rotated_dump)], quiet=True)
         if "AES" not in description:

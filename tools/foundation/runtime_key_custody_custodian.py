@@ -130,6 +130,28 @@ def main() -> int:
             raise RuntimeError("Issued key is not usable by Frappe: " + label + " "
                                + str(validation["reason"]))
 
+    def _keys_are_safe_to_hand_to_gpg_unquoted():
+        """Frappe passes the backup key to gpg on a command line, unquoted.
+
+        A key beginning with '-' would be parsed as an option, gpg would fail, and
+        frappe catches that failure, prints 'Files are stored without encryption'
+        and carries on - leaving a plaintext backup under an '-enc' filename. The
+        generator refuses such keys; this records that every issued key is safe,
+        so the control is proved rather than assumed.
+        """
+        observed = {}
+        for (epoch, role_key), key in sorted(issued.items()):
+            safety = custody.command_line_safety(key)
+            observed[f"epoch{epoch}-{role_key}"] = safety
+            if not safety["safe_to_pass_unquoted"]:
+                raise AssertionError(
+                    "An issued key cannot be passed to gpg unquoted: "
+                    + f"epoch{epoch}-{role_key} " + json.dumps(safety))
+        return observed
+
+    check("keys-issued-are-safe-to-pass-to-gpg-unquoted",
+          _keys_are_safe_to_hand_to_gpg_unquoted)
+
     shares = {}
     for (epoch, role_key), key in issued.items():
         shares[(epoch, role_key)] = custody.split_key(key)

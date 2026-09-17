@@ -116,6 +116,49 @@ class KeyFormatValidation(unittest.TestCase):
         self.assertFalse(report["valid"])
 
 
+class CommandLineSafety(unittest.TestCase):
+    """Frappe hands the backup key to gpg unquoted, so shape is not enough."""
+
+    def test_generated_keys_never_begin_with_a_dash(self):
+        # The url-safe base64 alphabet includes '-', so roughly one key in 64
+        # would otherwise start with a dash and be parsed by gpg as an option.
+        for _ in range(200):
+            key = custody.generate_native_key()
+            self.assertFalse(key.startswith("-"), key)
+            self.assertTrue(custody.validate_key_format(key)["valid"])
+
+    def test_rejecting_a_leading_dash_does_not_change_the_key_shape(self):
+        key = custody.generate_native_key()
+        validation = custody.validate_key_format(key)
+        self.assertTrue(validation["valid"])
+        self.assertEqual(validation["characters"], custody.KEY_CHARACTERS)
+        self.assertEqual(validation["decoded_bytes"], custody.KEY_BYTES)
+
+    def test_a_leading_dash_is_reported_unsafe(self):
+        safety = custody.command_line_safety("-" + "A" * 43)
+        self.assertTrue(safety["leading_dash"])
+        self.assertFalse(safety["safe_to_pass_unquoted"])
+
+    def test_a_normal_key_is_safe_despite_inert_punctuation(self):
+        # '-' and '_' inside the value and the trailing '=' padding are inert
+        # inside a single shell word, so they must not be reported as unsafe.
+        safety = custody.command_line_safety("abc-DEF_ghi=" + "A" * 32)
+        self.assertFalse(safety["leading_dash"])
+        self.assertEqual(safety["shell_metacharacters"], [])
+        self.assertTrue(safety["safe_to_pass_unquoted"])
+
+    def test_shell_metacharacters_are_reported_unsafe(self):
+        for character in (" ", "'", "$", "`", "|", ";", "\n"):
+            safety = custody.command_line_safety("abc" + character + "def")
+            self.assertFalse(safety["safe_to_pass_unquoted"], character)
+            self.assertIn(character, safety["shell_metacharacters"])
+
+    def test_the_report_says_why_the_check_exists(self):
+        safety = custody.command_line_safety(custody.generate_native_key())
+        self.assertIn("backup_encryption", safety["checked_because"])
+        self.assertIn("without encryption", safety["checked_because"])
+
+
 class Fingerprint(unittest.TestCase):
     def test_fingerprint_is_deterministic(self):
         key = custody.generate_native_key()

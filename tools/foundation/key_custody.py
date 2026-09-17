@@ -78,8 +78,53 @@ OBSERVATION_ONLY = {
 
 
 def generate_native_key():
-    """A key in exactly the format ``Fernet.generate_key()`` produces."""
-    return base64.urlsafe_b64encode(os.urandom(KEY_BYTES)).decode()
+    """A key in exactly the format ``Fernet.generate_key()`` produces.
+
+    cryptography's ``Fernet.generate_key()`` is ``urlsafe_b64encode(urandom(32))``,
+    and the url-safe alphabet includes ``-``, so a generated key can begin with
+    one. That matters for the backup key: at the pinned revision frappe passes it
+    to gpg unquoted - ``utils/backups.py backup_encryption()`` builds
+    ``gpg --yes --passphrase {passphrase} --pinentry-mode loopback -c {path}`` -
+    so a leading dash is parsed as an option, gpg fails, and frappe catches the
+    error, prints "Files are stored without encryption" and continues. The result
+    is a plaintext backup sitting under an ``-enc`` filename, which is the worst
+    possible outcome for a control that exists to keep backups confidential.
+
+    Rejecting a leading dash costs about 0.02 bits of entropy and removes a
+    failure mode the framework itself does not guard against. The operator probe
+    still asserts the artifacts are detected as AES by ``file``, so the guard here
+    is defence in depth rather than the only thing standing between the run and a
+    silently unencrypted backup.
+    """
+    while True:
+        key = base64.urlsafe_b64encode(os.urandom(KEY_BYTES)).decode()
+        if not key.startswith("-"):
+            return key
+
+
+SHELL_METACHARACTERS = " \t\n\"'`$\\|&;<>()*?[]{}!#~"
+
+
+def command_line_safety(key):
+    """Report whether a key can be handed to gpg on a command line unquoted.
+
+    Frappe does exactly that with ``backup_encryption_key``, so this is a native
+    interoperability requirement rather than a stylistic preference. Only a
+    leading dash changes how the argument is parsed; ``-`` and ``_`` elsewhere and
+    the trailing ``=`` padding are inert inside a single shell word.
+    """
+    text = str(key)
+    metacharacters = sorted({character for character in text
+                             if character in SHELL_METACHARACTERS})
+    return {
+        "leading_dash": text.startswith("-"),
+        "shell_metacharacters": metacharacters,
+        "safe_to_pass_unquoted": not text.startswith("-") and not metacharacters,
+        "checked_because": (
+            "frappe.utils.backups.backup_encryption() passes backup_encryption_key to gpg "
+            "unquoted, and on failure prints 'Files are stored without encryption' and "
+            "continues, so an unsafe key yields a plaintext backup under an -enc filename"),
+    }
 
 
 def validate_key_format(key):
