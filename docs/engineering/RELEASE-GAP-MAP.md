@@ -8,6 +8,13 @@ is invented anywhere in this plan.**
 
 ## 0. Verified current state (evidence, not narrative)
 
+> **Canonical remaining-blockers matrix:** see
+> [PRODUCTION-READINESS-CLOSURE-2026-09-17.md](PRODUCTION-READINESS-CLOSURE-2026-09-17.md).
+> It reconciles all 14 D8 release gates against hosted evidence at commit
+> `da8b36a` — status, exact run/check, what is proven, what is not, and the
+> precise condition required to close each. Outcome: **NO-GO**, production
+> **REJECT**, D8 **BLOCKED**, SEC-DEPS-01 unchanged.
+
 - **Branch-boundary rotation (2026-09-17).** The Arena session branch changed, so
   the canonical pin, all 10 workflow filters, the current-status headers, the
   governance JSON `active_branch` fields and the qualification tests were rotated
