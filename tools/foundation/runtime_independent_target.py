@@ -63,17 +63,30 @@ EXPECTED_PAYLOAD = ("database.sql.gz", "manifest.json", "private-files.tar",
 def independence_verdict(source_host, target_host):
     """Compare the two halves' recorded host identities.
 
-    Two separate GitHub Actions jobs get two separate ephemeral VMs, so the
-    hostname and the per-boot kernel identifier must both differ. If either
-    matches, the "independent" recovery is not independent and the probe must
-    fail rather than report a weaker result as a stronger one.
+    The discriminators are infrastructure facts, not labels:
+
+    * ``kernel_boot_id`` is a UUID generated at every kernel boot. Two jobs on one
+      live system necessarily share it, so a difference proves two separate kernel
+      instances. This is the primary requirement.
+    * ``docker_daemon_id`` is the container runtime's own persisted UUID, so a
+      difference proves two separate container runtimes and therefore two separate
+      datastores.
+
+    ``hostname`` is deliberately NOT a discriminator. Hosted run 35143620884
+    observed both halves reporting the identical hostname ``runnervmlun5p`` while
+    their kernel boot ids, runner names and Docker daemon ids all differed: the
+    platform hands the same generated hostname to different ephemeral VMs. A label
+    the platform reuses cannot prove separation, and requiring it to differ would
+    reject genuinely independent systems - so it is recorded, and its agreement or
+    disagreement is reported as an observation only.
+
+    Missing evidence fails closed: an absent identifier is never treated as
+    "different", because that would turn a gap into a pass.
     """
-    differing = {
-        "hostname": source_host.get("hostname") != target_host.get("hostname"),
-        "kernel_boot_id": source_host.get("kernel_boot_id") != target_host.get("kernel_boot_id"),
-        "runner_name": source_host.get("runner_name") != target_host.get("runner_name"),
-        "job": source_host.get("job") != target_host.get("job"),
-    }
+    def differs(key):
+        source, target = source_host.get(key), target_host.get(key)
+        return bool(source) and bool(target) and source != target
+
     verdict = {
         "source_hostname": source_host.get("hostname"),
         "target_hostname": target_host.get("hostname"),
@@ -81,17 +94,24 @@ def independence_verdict(source_host, target_host):
         "target_job": target_host.get("job"),
         "source_run_id": source_host.get("run_id"),
         "target_run_id": target_host.get("run_id"),
-        "hostname_differs": differing["hostname"],
-        "kernel_boot_id_differs": differing["kernel_boot_id"],
-        "runner_name_differs": differing["runner_name"],
-        "job_differs": differing["job"],
+        "source_runner_name": source_host.get("runner_name"),
+        "target_runner_name": target_host.get("runner_name"),
+        "kernel_boot_id_differs": differs("kernel_boot_id"),
+        "docker_daemon_id_differs": differs("docker_daemon_id"),
+        "runner_name_differs": differs("runner_name"),
+        "job_differs": differs("job"),
+        "hostname_matches": source_host.get("hostname") == target_host.get("hostname"),
+        "hostname_used_as_a_discriminator": False,
+        "hostname_note": ("The platform reuses generated hostnames across separate ephemeral "
+                          "VMs, observed in run 35143620884, so a hostname is recorded as an "
+                          "observation and never as proof of separation or of sameness."),
         "shared_filesystem": False,
         "shared_containers": False,
         "shared_volumes": False,
         "shared_backup_channel": "github-actions-artifact-only",
     }
-    verdict["independent"] = bool(verdict["hostname_differs"]
-                                  and verdict["kernel_boot_id_differs"])
+    verdict["independent"] = bool(verdict["kernel_boot_id_differs"]
+                                  and verdict["docker_daemon_id_differs"])
     return verdict
 
 
@@ -206,12 +226,6 @@ def main() -> int:
 
     try:
         identity = json.loads((PAYLOAD / "source-identity.json").read_text())
-        report["independence"] = independence_verdict(identity["machine_identity"],
-                                                      report["machine_identity"])
-        if not report["independence"]["independent"]:
-            raise RuntimeError(
-                "Both halves ran on the same live system, so this is not an independent "
-                "recovery: " + json.dumps(report["independence"]))
 
         # Integrity across the artifact transfer, against what the source recorded.
         transferred = payload_digests()
@@ -227,6 +241,40 @@ def main() -> int:
         start_services(probe, components, secret_file)
         report["mariadb_health"] = wait_mariadb_healthy(probe)
         install_mariadb_client(probe)
+
+        # Independence is judged only once the container runtime's own identifier is
+        # known, and only from infrastructure facts rather than reusable labels.
+        report["machine_identity"]["docker_daemon_id"] = report["docker_daemon_id"]
+        report["independence"] = independence_verdict(identity["machine_identity"],
+                                                      report["machine_identity"])
+        if not report["independence"]["independent"]:
+            raise RuntimeError(
+                "Both halves ran on the same live system, so this is not an independent "
+                "recovery: " + json.dumps(report["independence"]))
+
+        # Functional corroboration, observed rather than assumed. Had the two halves
+        # shared one live system, the source's working directory, its archived site
+        # and its database would still be visible from here.
+        source_lab = Path(identity["source_lab_path"])
+        source_archived = source_lab / "bench" / "archived" / "sites"
+        schema_count = probe.run(
+            "source-database-absent-from-target-datastore",
+            ["docker", "exec", "--interactive", "--env", "MYSQL_PWD", MARIADB_CONTAINER,
+             "mariadb", "--user=root", "--batch", "--skip-column-names", "-e",
+             "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='"
+             + identity["source_database_name"] + "';"],
+            quiet=True, env={"MYSQL_PWD": root_password})
+        report["no_shared_state_observed"] = {
+            "source_lab_path_present_on_target": source_lab.exists(),
+            "source_archived_site_present_on_target": source_archived.exists(),
+            "source_database_schema_count_on_target": schema_count,
+            "source_database_present_in_target_datastore": schema_count != "0",
+        }
+        if source_lab.exists() or source_archived.exists() or schema_count != "0":
+            raise RuntimeError(
+                "The target can see the source's private state, so the two halves are not "
+                "separate systems: " + json.dumps(report["no_shared_state_observed"]))
+
         report["target_revisions"] = clone_pinned_sources(
             probe, components, source_dir, ("frappe", "erpnext"))
         if report["target_revisions"] != identity["source_revisions"]:

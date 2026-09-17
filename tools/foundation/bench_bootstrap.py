@@ -187,6 +187,10 @@ def start_services(probe, components, secret_file):
         "redis": {"image_digest": redis,
                   "selected_version": components["redis"]["selected_version"]},
     }
+    # The container runtime's own persisted UUID. Unlike a hostname this is not a
+    # reusable label: two jobs on one live system necessarily share it.
+    probe.report["docker_daemon_id"] = probe.run(
+        "docker-daemon-id", ["docker", "info", "--format", "{{.ID}}"], quiet=True)
 
 
 def install_mariadb_client(probe):

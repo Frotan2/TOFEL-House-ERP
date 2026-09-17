@@ -88,12 +88,20 @@ def main() -> int:
         start_services(probe, components, secret_file)
         report["mariadb_health"] = wait_mariadb_healthy(probe)
         install_mariadb_client(probe)
+        # Recorded into the identity so the independent system compares a
+        # container-runtime fact rather than a hostname label the platform reuses.
+        report["machine_identity"]["docker_daemon_id"] = report["docker_daemon_id"]
         report["source_revisions"] = clone_pinned_sources(
             probe, components, source_dir, ("frappe", "erpnext"))
         bench = build_bench(probe, components, lab, source_dir, bench_dir, python_bin)
         new_site(probe, bench, bench_dir, SITE, root_password, db_password, admin_password)
         report["installed_apps"] = install_apps(probe, bench, bench_dir, SITE, ["erpnext"])
         probe.run("migrate", [str(bench), "--site", SITE, "migrate"], cwd=bench_dir, timeout=1800)
+        site_dir = bench_dir / "sites" / SITE
+        db_name = json.loads((site_dir / "site_config.json").read_text())["db_name"]
+        # Published so the independent system can prove its own datastore does not
+        # already contain this database, which a shared system would.
+        report["source_database_name"] = db_name
 
         env_backup = dict(os.environ)
         env_backup["FOUNDATION_TEST_PASSWORD"] = test_password
@@ -149,6 +157,8 @@ def main() -> int:
             "role": "source", "site": SITE,
             "run_id": report["run_id"], "commit": report["commit"],
             "machine_identity": report["machine_identity"],
+            "source_lab_path": str(lab),
+            "source_database_name": db_name,
             "source_revisions": report["source_revisions"],
             "installed_apps": report["installed_apps"],
             "backup_sha256": {
@@ -185,8 +195,6 @@ def main() -> int:
         # Destructive trigger: the native, supported way to remove a site, which
         # drops its database and deletes its directory including private and
         # public files. Recovery on the other system is therefore real.
-        site_dir = bench_dir / "sites" / SITE
-        db_name = json.loads((site_dir / "site_config.json").read_text())["db_name"]
         report["pre_destruction"] = {
             "site_directory_exists": site_dir.exists(),
             "database_name": db_name,

@@ -122,71 +122,136 @@ class NoMockTests(unittest.TestCase):
 
 
 class IndependenceTests(unittest.TestCase):
-    """Independence is a verified fact, never an assumption from the job name."""
+    """Judged from infrastructure facts, never from labels the platform reuses."""
 
     def _host(self, **overrides):
-        host = {"hostname": "fv-abc123", "kernel_boot_id": "boot-1", "runner_name": "Hosted 1",
+        host = {"hostname": "fv-abc123", "kernel_boot_id": "boot-1",
+                "docker_daemon_id": "daemon-1", "runner_name": "GitHub Actions 1",
                 "job": "source", "run_id": "1"}
         host.update(overrides)
         return host
 
-    def test_different_hosts_are_independent(self):
-        verdict = target.independence_verdict(self._host(),
-                                             self._host(hostname="fv-xyz789",
-                                                        kernel_boot_id="boot-2",
-                                                        runner_name="Hosted 2", job="target"))
+    def _other(self, **overrides):
+        host = {"hostname": "fv-xyz789", "kernel_boot_id": "boot-2",
+                "docker_daemon_id": "daemon-2", "runner_name": "GitHub Actions 2",
+                "job": "target", "run_id": "1"}
+        host.update(overrides)
+        return host
+
+    def test_separate_systems_are_independent(self):
+        verdict = target.independence_verdict(self._host(), self._other())
         self.assertTrue(verdict["independent"])
-        self.assertTrue(verdict["hostname_differs"])
         self.assertTrue(verdict["kernel_boot_id_differs"])
+        self.assertTrue(verdict["docker_daemon_id_differs"])
         self.assertFalse(verdict["shared_filesystem"])
         self.assertFalse(verdict["shared_containers"])
         self.assertFalse(verdict["shared_volumes"])
+        self.assertEqual(verdict["shared_backup_channel"], "github-actions-artifact-only")
 
-    def test_same_host_is_not_independent(self):
-        verdict = target.independence_verdict(self._host(), self._host(job="target"))
-        self.assertFalse(verdict["independent"])
-        self.assertFalse(verdict["hostname_differs"])
+    def test_an_identical_hostname_does_not_defeat_independence(self):
+        """Observed in hosted run 35143620884: both halves reported runnervmlun5p
+        while their boot ids, runner names and Docker daemon ids all differed.
+        Requiring a hostname to differ would reject genuinely separate VMs."""
+        verdict = target.independence_verdict(
+            self._host(hostname="runnervmlun5p", runner_name="GitHub Actions 1000002453"),
+            self._other(hostname="runnervmlun5p", runner_name="GitHub Actions 1000002454"))
+        self.assertTrue(verdict["hostname_matches"])
+        self.assertFalse(verdict["hostname_used_as_a_discriminator"])
+        self.assertTrue(verdict["independent"])
 
-    def test_matching_boot_id_alone_defeats_independence(self):
-        """A reused host with a different label is still the same live system."""
-        verdict = target.independence_verdict(self._host(),
-                                             self._host(hostname="fv-other", job="target"))
+    def test_the_hostname_note_records_why_it_is_not_a_discriminator(self):
+        verdict = target.independence_verdict(self._host(), self._other())
+        self.assertIn("reuses generated hostnames", verdict["hostname_note"])
+        self.assertIn("35143620884", verdict["hostname_note"])
+        self.assertIn("never as proof of separation or of sameness", verdict["hostname_note"])
+
+    def test_a_shared_kernel_boot_id_defeats_independence(self):
+        """One live kernel is one live system, whatever the other labels say."""
+        verdict = target.independence_verdict(self._host(), self._other(kernel_boot_id="boot-1"))
         self.assertFalse(verdict["kernel_boot_id_differs"])
         self.assertFalse(verdict["independent"])
 
-    def test_missing_boot_id_is_not_treated_as_different(self):
-        """Absent evidence must not be laundered into a passing comparison."""
-        source = self._host()
-        del source["kernel_boot_id"]
-        other = self._host(hostname="fv-other")
-        del other["kernel_boot_id"]
-        self.assertFalse(target.independence_verdict(source, other)["independent"])
+    def test_a_shared_container_runtime_defeats_independence(self):
+        """The same daemon means the same datastore, so recovery is not separate."""
+        verdict = target.independence_verdict(self._host(), self._other(docker_daemon_id="daemon-1"))
+        self.assertFalse(verdict["docker_daemon_id_differs"])
+        self.assertFalse(verdict["independent"])
+
+    def test_missing_identifiers_fail_closed_rather_than_counting_as_different(self):
+        for key in ("kernel_boot_id", "docker_daemon_id"):
+            source, other = self._host(), self._other()
+            del source[key]
+            del other[key]
+            self.assertFalse(target.independence_verdict(source, other)["independent"], key)
+
+    def test_an_empty_identifier_is_not_treated_as_evidence(self):
+        for empty in ("", None):
+            verdict = target.independence_verdict(self._host(kernel_boot_id=empty), self._other())
+            self.assertFalse(verdict["kernel_boot_id_differs"])
+            self.assertFalse(verdict["independent"])
 
     def test_verdict_records_both_identities_for_audit(self):
-        verdict = target.independence_verdict(self._host(),
-                                             self._host(hostname="fv-other",
-                                                        kernel_boot_id="boot-2", job="target"))
+        verdict = target.independence_verdict(self._host(), self._other())
         for key in ("source_hostname", "target_hostname", "source_job", "target_job",
-                    "source_run_id", "target_run_id"):
+                    "source_run_id", "target_run_id", "source_runner_name",
+                    "target_runner_name"):
             self.assertIn(key, verdict)
 
     def test_target_fails_closed_when_the_verdict_is_not_independent(self):
         self.assertIn('if not report["independence"]["independent"]:', TARGET)
         self.assertIn("this is not an independent", TARGET)
 
-    def test_machine_identity_records_a_per_boot_identifier(self):
+    def test_independence_is_judged_after_the_runtime_identifier_is_known(self):
+        self.assertLess(TARGET.index('report["machine_identity"]["docker_daemon_id"]'),
+                        TARGET.index("independence_verdict(identity"))
+
+    def test_both_halves_record_the_container_runtime_identifier(self):
+        for label, text in (("source", SOURCE), ("target", TARGET)):
+            self.assertIn('report["machine_identity"]["docker_daemon_id"]', text, label)
+        self.assertIn('"docker-daemon-id"', BOOTSTRAP)
+        self.assertIn("reusable label", BOOTSTRAP)
+
+    def test_machine_identity_records_a_per_boot_identifier_when_present(self):
+        """Executed: the primary discriminator must be read from the kernel."""
         identity = machine_identity()
-        self.assertIn("hostname", identity)
+        boot_id = Path("/proc/sys/kernel/random/boot_id")
+        if boot_id.exists():
+            self.assertEqual(identity["kernel_boot_id"], boot_id.read_text().strip())
+        else:
+            self.assertNotIn("kernel_boot_id", identity)
+
+    def test_machine_identity_publishes_no_network_address(self):
+        identity = machine_identity()
         self.assertTrue(identity["hostname"])
-        # No IP address is published: it identifies runner infrastructure and
-        # adds nothing beyond the hostname and boot id.
         for key in identity:
             self.assertNotIn("ip", key.lower())
             self.assertNotIn("address", key.lower())
 
-    def test_both_halves_record_their_identity(self):
-        self.assertIn('"machine_identity": machine_identity()', SOURCE)
-        self.assertIn('"machine_identity": machine_identity()', TARGET)
+
+class SharedStateAbsenceTests(unittest.TestCase):
+    """Separation is also observed functionally, not only inferred from ids."""
+
+    def test_the_target_observes_the_absence_of_source_state(self):
+        self.assertIn('"no_shared_state_observed"', TARGET)
+        self.assertIn("source-database-absent-from-target-datastore", TARGET)
+        self.assertIn('identity["source_lab_path"]', TARGET)
+        self.assertIn('identity["source_database_name"]', TARGET)
+
+    def test_any_visible_source_state_fails_closed(self):
+        self.assertIn("The target can see the source's private state", TARGET)
+        self.assertIn('if source_lab.exists() or source_archived.exists() or schema_count != "0":',
+                      TARGET)
+
+    def test_the_database_check_queries_the_server_not_the_filesystem(self):
+        self.assertIn("information_schema.schemata", TARGET)
+
+    def test_the_source_publishes_what_the_target_must_not_be_able_to_see(self):
+        self.assertIn('"source_lab_path": str(lab)', SOURCE)
+        self.assertIn('"source_database_name": db_name', SOURCE)
+
+    def test_the_absence_check_runs_before_the_restore(self):
+        self.assertLess(TARGET.index("source-database-absent-from-target-datastore"),
+                        TARGET.index('"restore-database-and-files"'))
 
 
 class DestructiveTriggerTests(unittest.TestCase):
