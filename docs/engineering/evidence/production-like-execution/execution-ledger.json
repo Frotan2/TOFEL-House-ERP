@@ -1139,10 +1139,12 @@
       "hosted-durability-35135793802.json": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65",
       "hosted-durability-35137645608.json": "6f9b379d132ed131d38e68647397b9b9f197312fe5312990e75c191fd0da408b",
       "hosted-runtime-35135793582.json": "6cfb435d86f3ba0dcb04c8a939cfaf850b4317d00eff3f0442eb6e13e2ad77d5",
-      "hosted-durability-35138416558.json": "b5bd967bfa51c84040911404a3c32f2170baace6388c3a81016c5c4f0596fd9b"
+      "hosted-durability-35138416558.json": "b5bd967bfa51c84040911404a3c32f2170baace6388c3a81016c5c4f0596fd9b",
+      "hosted-independent-source-35170062251.json": "9c054dd6e41f57d5f073bbe06e2116bf1ec66b9a48fab1d30b7ec48f9f7df1b5",
+      "hosted-independent-target-35170062251.json": "ea23e9f922eb736eea21437a06db1e5ca0a4d0c223b1ea001268a8720de48cb1"
     },
     "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED.",
-    "regenerated_at_utc": "2026-09-16T17:36:45.589585+00:00"
+    "regenerated_at_utc": "2026-09-17T01:52:12.895781+00:00"
   },
   "corroborating_reruns_at_evidence_commit": {
     "commit": "c891949e7a30267f34a3365eaf9103d925dc42eb",
@@ -1316,7 +1318,9 @@
     "None outstanding for the site_encryption_key_restored=false defect: CLOSED with genuine hosted evidence at run 35133062884 / commit 58bd4d1 on both restore cycles.",
     "Container-level durability is now genuinely EXECUTED: run 35135793802 at 866396a passed real MariaDB and Redis graceful restart, SIGKILL crash-recovery and container destruction with recreation from the same named volume, plus a negative control. Commit 699ad7e then made the binary-log rotation an enforced invariant and required server-side crash-log corroboration; that stricter probe still needs its own hosted PASS.",
     "Standing release blockers, updated. CLOSED: site_encryption_key_restored=false. EXECUTED but gate still BLOCKED: container-level MariaDB/Redis durability. UNCHANGED: restore has never reached a genuinely independent system and no destructive trigger has been run; versioned encrypted backup with external key custody and rotation is bounded-only, and the site encryption key is still generated and copied by the same ephemeral runner rather than held under separate custody; configuration, private/public file and encryption-key durability are unproven; deployed monitoring, alert delivery and retention are untested; no TLS or Tailscale boundary has been exercised; rollback has never been rehearsed; the owner durability references required by D8-DURABLE-STATE are NOT SELECTED; SEC-DEPS-01 needs a coherent maintained upstream stack migration and has failed at three commits on this branch (d7df9ca, c891949, 58bd4d1); and the owner has selected no numeric capacity/availability objective.",
-    "RESOLVED: the GitHub credential outage ended, commits 699ad7e and 9b96199 were pushed, and the stricter durability probe produced its own hosted PASS at run 35137645608. That run then exposed a mislabeled evidence field, fixed in commit e92c66e, which has now also produced a hosted PASS at run 35138416558. No durability item remains outstanding at the container level."
+    "RESOLVED: the GitHub credential outage ended, commits 699ad7e and 9b96199 were pushed, and the stricter durability probe produced its own hosted PASS at run 35137645608. That run then exposed a mislabeled evidence field, fixed in commit e92c66e, which has now also produced a hosted PASS at run 35138416558. No durability item remains outstanding at the container level.",
+    "P3 CLOSED BY EXECUTION: restore has now reached a genuinely independent system and a real destructive trigger has been run. Run 35170062251 at commit 1378ce4 (workflow 'Foundation independent-system recovery'; source check run 105041393483 with 29/29 checks passing and target check run 105042127143 with 31/31 passing, both jobs conclusion success) destroyed the source site with native `bench drop-site --no-backup` - database _0da0781ed64f67b4 present then absent, site directory and both files gone - and a SECOND ephemeral VM rebuilt bench at the identical pinned revisions and recovered from the transferred backup alone: 12 ToDo plus 12 Note records with matching name digests, the private file (552 bytes, is_private=1) and the public file (551 bytes, is_private=0) with matching on-disk SHA-256 and their File documents, frappe  16.33.1 HEAD and erpnext 16.34.2 HEAD, and a usable application over HTTP: ping pong, login 200 as Administrator with a session cookie, source-created record 56uqdlb6cp readable with content matching the manifest and all 12 listed, both files served with digests matching, and the privacy boundary intact (private 403 anonymously, public 200 anonymously). Independence is verified rather than assumed: kernel_boot_id, runner_name and dmi_product_uuid all differ, and the target observed that the source's lab directory, archived site and database are all absent from it. This supersedes the 'UNCHANGED: restore has never reached a genuinely independent system' clause of the preceding entry. STILL NOT PROVEN, so the recovery and backup-restore gates stay BLOCKED: key retrieval and external key custody with rotation (P4), session revocation on recovery, measured RPO/RTO against an owner-selected target, an external backup destination with versioned encrypted backup sets and retention, host/region loss, and any non-synthetic workload. The source-encrypted field was recovered intact but is undecryptable on the target - asserted as an expected failure with distinct key fingerprints recorded - which is the concrete evidence that P4 is a separate requirement.",
+    "OPEN BLOCKER - GitHub credential outage during the P3 evidence paperwork. Commit 4b32c3944d1a089ec196358e603186c3f0fb4faf (P3 evidence: archived run 35170062251 check runs, execution-ledger independent_recovery_execution, D8 matrix recovery/backup-restore evidence, regenerated release-readiness-evidence.json, acceptance ledger, report section 10, release gap map section 1.6) is complete and verified locally - 511 tests pass, d8_validate exits 0, all 25 integrity-map entries verify against disk - but it is NOT PUSHED, and the PR #2 comment for P3 is PREPARED but NOT POSTED. `gh auth status` reports 'The github.com token in GH_TOKEN is no longer valid' and the REST API returns 'Bad credentials'. Nothing was inferred, fabricated or backdated while the outage was open: the archived P3 evidence was fetched from the Checks API before the credential expired, and every identifier added in this commit was verified programmatically against those archives or resolved with `git cat-file`. Recovery steps are recorded in pr_2_update.p3_comment_status and in evidence/production-like-execution/PR2-COMMENT-P3.md. This entry must be superseded by a posted comment id and a pushed tip, not deleted."
   ],
   "pr_2_update": {
     "action": "comment posted (the only update available from this session)",
@@ -1334,7 +1338,30 @@
       "head_sha": "60c777e81c679b7b7940c01045247102d51db024",
       "base_ref": "main"
     },
-    "constraint": "PR #2's head branch is arena/01a0a9f7-tofel-house-erp while this session is fixed to arena/01a0aafe-tofel-house-erp, so no commit could be pushed to PR #2's head branch and the PR's head SHA is unchanged at 60c777e. A comment is the only form of update available. The PR was NOT merged and production was NOT enabled."
+    "constraint": "PR #2's head branch is arena/01a0a9f7-tofel-house-erp while this session is fixed to arena/01a0aafe-tofel-house-erp, so no commit could be pushed to PR #2's head branch and the PR's head SHA is unchanged at 60c777e. A comment is the only form of update available. The PR was NOT merged and production was NOT enabled.",
+    "p3_comment_status": {
+      "action": "PREPARED, NOT POSTED - recorded as a blocker, not as a completed update",
+      "body_source": "docs/engineering/evidence/production-like-execution/PR2-COMMENT-P3.body.md",
+      "body_bytes": 7631,
+      "body_sha256": "11e24405c7ad3e1dfc849e279e73ad79838810db1f82c65a1017b28f81030435",
+      "instructions_file": "docs/engineering/evidence/production-like-execution/PR2-COMMENT-P3.md",
+      "reason_not_posted": "The GitHub credential in this sandbox expired while the P3 evidence paperwork was being committed: gh auth status reported 'The github.com token in GH_TOKEN is no longer valid', the REST API returned 'Bad credentials', and git push failed with 'could not read Username for \"https://github.com\": terminal prompts disabled'. The same failure mode is recorded in FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md section 9.4 and resolved on a later turn.",
+      "outage_resolved": true,
+      "local_commits_lost_to_reclone": [
+        "4b32c3944d1a089ec196358e603186c3f0fb4faf",
+        "e5fdb6b (outage record)"
+      ],
+      "reclone_recovery": "Authentication was restored on a later turn, but the sandbox had also been re-cloned: HEAD sat at 60c777e with only two commits reachable, the branch ref origin/arena/01a0aafe-tofel-house-erp was absent, and both local commits had ceased to exist as git objects. The remote tip was verified intact at 1378ce4 via `git ls-remote`, the arena refspec was re-added to remote.origin.fetch, and HEAD plus index were realigned with `git reset --mixed origin/arena/01a0aafe-tofel-house-erp`, which leaves the working tree alone. The working tree held the persisted snapshot, so `git status` then listed exactly the eleven paths this record covers and nothing else. Content was re-verified before re-committing rather than assumed: all 25 integrity-map entries match the files on disk, both P3 archive hashes are byte-identical to the values fetched from the Checks API before the outage (9c054dd6e41f57d5f073bbe06e2116bf1ec66b9a48fab1d30b7ec48f9f7df1b5 and ea23e9f922eb736eea21437a06db1e5ca0a4d0c223b1ea001268a8720de48cb1), the prepared comment body is unchanged at 7631 bytes with a matching SHA-256, 511 tests pass and d8_validate exits 0. The lost commit SHAs are recorded here as history only: they were never pushed and no longer resolve, so nothing in this ledger cites them as a live reference.",
+      "recommitted_as": "see the commit that carries this record; the lost SHAs are not reused",
+      "pushed_tip_at_outage": "1378ce426a6093948eb96f88fcf7a5ba3b1a90c2",
+      "recorded_at_utc": "2026-09-17T02:06:24.552355+00:00",
+      "recovery_steps": [
+        "git push origin arena/01a0aafe-tofel-house-erp (verify it fast-forwards from exactly 1378ce4)",
+        "gh pr comment 2 --repo Frotan2/TOFEL-House-ERP --body-file docs/engineering/evidence/production-like-execution/PR2-COMMENT-P3.body.md",
+        "record the resulting comment id and the d8-operations-contract run id beside the P3 evidence"
+      ],
+      "constraint_unchanged": "PR #2's head branch is arena/01a0a9f7-tofel-house-erp while this session is fixed to arena/01a0aafe-tofel-house-erp, so no commit can be pushed to PR #2's head branch; a comment is the only form of update available. The PR is NOT merged and production is NOT enabled."
+    }
   },
   "encryption_key_defect_closure": {
     "defect": "site_encryption_key_restored=false",
@@ -1612,5 +1639,411 @@
       "why_this_run_is_the_authoritative_durability_evidence": "It is the first run in which the crash scenario is corroborated by an authoritative native source rather than a log grep. innodb_recovery_messages is correctly EMPTY - MariaDB 11.8 emits no crash-recovery lines at default verbosity - and the previously mislabeled startup noise now sits in its own server_startup_messages field. SHOW ENGINE INNODB STATUS supplies the real recovery position (log sequence number 52305 equal to log flushed up to 52305, last checkpoint at 51911), and innodb_force_recovery=0 proves recovery was not bypassed. The run would now fail closed if neither a genuine InnoDB log line nor an INNODB STATUS LOG section were present.",
       "recorded_at_utc": "2026-09-16T19:07:22.443749+00:00"
     }
+  },
+  "independent_recovery_execution": {
+    "classification": "EXECUTED / HOSTED REAL STACK / GENUINELY INDEPENDENT TARGET SYSTEM",
+    "claim_being_tested": "P3 - restore onto a genuinely independent execution environment or system, NOT the same host, under an explicit destructive scenario, proving database recovery, private and public file recovery, and application usability afterwards.",
+    "closed": true,
+    "workflow": "Foundation independent-system recovery (.github/workflows/foundation-independent-recovery.yml)",
+    "workflow_run": 35170062251,
+    "commit": "1378ce426a6093948eb96f88fcf7a5ba3b1a90c2",
+    "ref": "refs/heads/arena/01a0aafe-tofel-house-erp",
+    "jobs": {
+      "source": "independent-source",
+      "target": "independent-target",
+      "source_checks": 29,
+      "source_checks_passed": 29,
+      "target_checks": 31,
+      "target_checks_passed": 31,
+      "source_check_run": 105041393483,
+      "target_check_run": 105042127143
+    },
+    "evidence": {
+      "source_artifact": "hosted-independent-source-35170062251.json",
+      "source_sha256": "9c054dd6e41f57d5f073bbe06e2116bf1ec66b9a48fab1d30b7ec48f9f7df1b5",
+      "target_artifact": "hosted-independent-target-35170062251.json",
+      "target_sha256": "ea23e9f922eb736eea21437a06db1e5ca0a4d0c223b1ea001268a8720de48cb1",
+      "canonical_form": "json.dumps(d, indent=2, sort_keys=True) + trailing newline",
+      "retrieval": "gh api repos/Frotan2/TOFEL-House-ERP/check-runs/<id> --jq '.output.text'"
+    },
+    "stack": {
+      "frappe": "988e54f3c4c291e2077a83809663f123731abe76",
+      "erpnext": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+      "source_revisions_match_target": true,
+      "target_revisions": {
+        "erpnext": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+        "frappe": "988e54f3c4c291e2077a83809663f123731abe76"
+      },
+      "installed_apps": [
+        "erpnext"
+      ],
+      "recovered_apps": [
+        "frappe  16.33.1 HEAD",
+        "erpnext 16.34.2 HEAD"
+      ],
+      "services": {
+        "mariadb": {
+          "image_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+          "selected_version": "11.8.9"
+        },
+        "redis": {
+          "image_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+          "selected_version": "8.6.6"
+        }
+      },
+      "mariadb_dump_binary": "/usr/bin/mariadb-dump",
+      "mariadb_health": {
+        "source": {
+          "healthy": true,
+          "polls": 4
+        },
+        "target": {
+          "healthy": true,
+          "polls": 5
+        }
+      },
+      "mocks_or_simulations_used": false
+    },
+    "independence": {
+      "verdict": "INDEPENDENT - verified, not assumed",
+      "independent": true,
+      "kernel_boot_id": {
+        "source": "3e203ccd-91de-4ae4-bce4-b9d4cd57fccc",
+        "target": "3b90e489-ea12-4791-b1be-5a733358f34c",
+        "differs": true,
+        "role": "REQUIRED DISCRIMINATOR"
+      },
+      "runner_name": {
+        "source": "GitHub Actions 1000002465",
+        "target": "GitHub Actions 1000002466",
+        "differs": true,
+        "role": "REQUIRED DISCRIMINATOR"
+      },
+      "dmi_product_uuid": {
+        "source": "f30d2adb-8684-4f24-8d6f-e89d8332aff4",
+        "target": "1a670b47-5c62-428e-a9c2-a4dfed34c761",
+        "differs": true,
+        "available": true,
+        "role": "CORROBORATING DISCRIMINATOR"
+      },
+      "job": {
+        "source": "source",
+        "target": "target",
+        "differs": true
+      },
+      "hostname": {
+        "source": "runnervmlun5p",
+        "target": "runnervmlun5p",
+        "matches": true,
+        "used_as_a_discriminator": false,
+        "role": "OBSERVATION ONLY",
+        "disproved_by_run": 35143620884,
+        "note": "The platform reuses generated hostnames across separate ephemeral VMs, observed in run 35143620884, so a hostname is recorded as an observation and never as proof of separation or of sameness."
+      },
+      "docker_daemon_id": {
+        "source": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+        "target": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+        "differs": false,
+        "used_as_a_discriminator": false,
+        "role": "OBSERVATION ONLY",
+        "disproved_by_run": 35168111875,
+        "note": "The runner image ships a pre-generated daemon key, so separate VMs from the same image report the same id; observed in run 35168111875. Recorded as an observation only."
+      },
+      "shared_filesystem": false,
+      "shared_volumes": false,
+      "shared_containers": false,
+      "shared_backup_channel": "github-actions-artifact-only",
+      "no_shared_state_observed": {
+        "source_archived_site_present_on_target": false,
+        "source_database_present_in_target_datastore": false,
+        "source_database_schema_count_on_target": "0",
+        "source_lab_path_present_on_target": false
+      },
+      "source_only_artifacts_absent_from_target": [
+        "source.localhost"
+      ]
+    },
+    "destructive_scenario": {
+      "command": "bench --site source.localhost drop-site --no-backup --db-root-password <runner-generated, never printed>",
+      "check": "destructive-drop-site",
+      "database_name": "_0da0781ed64f67b4",
+      "pre_destruction": {
+        "database_name": "_0da0781ed64f67b4",
+        "database_present": "1",
+        "private_file_present": true,
+        "public_file_present": true,
+        "site_directory_exists": true
+      },
+      "post_destruction": {
+        "database_present": "0",
+        "private_file_present": false,
+        "public_file_present": false,
+        "site_directory_exists": false
+      },
+      "source_destroyed": true,
+      "recovery_depends_on_the_staged_backup": true,
+      "target_confirms_source_was_destroyed_first": true,
+      "target_observed_no_shared_state": {
+        "source_archived_site_present_on_target": false,
+        "source_database_present_in_target_datastore": false,
+        "source_database_schema_count_on_target": "0",
+        "source_lab_path_present_on_target": false
+      },
+      "interpretation": "A real destructive trigger ran before any transfer: the database was dropped and the site directory plus both files were removed, with drop-site explicitly told not to archive. Nothing survived on the source to fall back on, so everything the target recovered came from the transferred backup alone."
+    },
+    "payload_created_on_source": {
+      "run_tag": "9dd48926d613",
+      "manifest_sha256": "83f3977d0cc49c4510110230142fbb487b7c4685720e9324c21a324c7101389d",
+      "manifest_run_tag": "9dd48926d613",
+      "doctypes": {
+        "Note": {
+          "count": 12,
+          "names_sha256": "57915d42bc8e3670c433b2cee3492b1f5dd3507146c8e483277167f2b93dd7ec"
+        },
+        "ToDo": {
+          "count": 12,
+          "names_sha256": "91cf06f5905b023815c9623bc8875aff320c4e706589b3213ef11cb5ed53de83"
+        }
+      },
+      "files": {
+        "independent-recovery-private.txt": {
+          "attached_to": "56uqdlb6cp",
+          "bytes": 552,
+          "content_sha256": "71341c10963fe3d8ee227816ff52aa2f36454249a909fb7821cd6d357e8b9539",
+          "file_url": "/private/files/independent-recovery-private.txt",
+          "is_private": 1,
+          "on_disk_sha256": "71341c10963fe3d8ee227816ff52aa2f36454249a909fb7821cd6d357e8b9539"
+        },
+        "independent-recovery-public.txt": {
+          "attached_to": null,
+          "bytes": 551,
+          "content_sha256": "7a23149573cad9b33f4edc87c7fa674b0f80dc71e44c1de5fadc18d5bda64426",
+          "file_url": "/files/independent-recovery-public.txt",
+          "is_private": 0,
+          "on_disk_sha256": "7a23149573cad9b33f4edc87c7fa674b0f80dc71e44c1de5fadc18d5bda64426"
+        }
+      },
+      "encrypted_field": {
+        "ciphertext_sha256": "a7319fb71a7ce1bd5aef33aa45050f8ffec7cd74b779af8cfca99b1569abb118",
+        "decrypts_on_source": true,
+        "field": "User.Administrator.api_secret",
+        "source_key_sha256": "433059bd7bb94a9c18e3cfcc3779d9ba65d992ed6c5d34c283098d08f9471291"
+      }
+    },
+    "staged_backup_payload": {
+      "database.sql.gz": {
+        "bytes": 880248,
+        "sha256": "d160d3a3051ae19f4d5eac953adbb57918f257017823b3c69409bcf759a9640f"
+      },
+      "manifest.json": {
+        "bytes": 1936,
+        "sha256": "2c120545838a760fde007d31212143fe1431f1c43d38cd8882fe713929d9121f"
+      },
+      "private-files.tar": {
+        "bytes": 10240,
+        "sha256": "3b47e0428a5c2603cf370459f2c7a632b1ce79267fca70d2982e05e2692f38ba"
+      },
+      "public-files.tar": {
+        "bytes": 10240,
+        "sha256": "843cc6f860dc9458f90b5615285c9a93ef308424bbfb6bafbbd0a26082a521c4"
+      },
+      "source-identity.json": {
+        "bytes": 1479,
+        "sha256": "3f7d115339fa9547ea7e6ee83a55c7f8c8a6aade73700bc0ea3df62f44bacda4"
+      }
+    },
+    "payload_integrity_on_target": {
+      "database.sql.gz": {
+        "bytes": 880248,
+        "matches_source_record": true,
+        "sha256": "d160d3a3051ae19f4d5eac953adbb57918f257017823b3c69409bcf759a9640f"
+      },
+      "manifest.json": {
+        "bytes": 1936,
+        "sha256": "2c120545838a760fde007d31212143fe1431f1c43d38cd8882fe713929d9121f"
+      },
+      "private-files.tar": {
+        "bytes": 10240,
+        "matches_source_record": true,
+        "sha256": "3b47e0428a5c2603cf370459f2c7a632b1ce79267fca70d2982e05e2692f38ba"
+      },
+      "public-files.tar": {
+        "bytes": 10240,
+        "matches_source_record": true,
+        "sha256": "843cc6f860dc9458f90b5615285c9a93ef308424bbfb6bafbbd0a26082a521c4"
+      },
+      "source-identity.json": {
+        "bytes": 1479,
+        "sha256": "3f7d115339fa9547ea7e6ee83a55c7f8c8a6aade73700bc0ea3df62f44bacda4"
+      }
+    },
+    "secret_hygiene": {
+      "backup_site_config_excluded": [
+        "20260917_065751-source_localhost-site_config_backup.json"
+      ],
+      "staged_payload_contains_no_secrets": true,
+      "encryption_key_not_supplied_to_restore": {
+        "native_option_available": "--encryption-key",
+        "reason": "Plaintext key material must not travel through an artifact, so the recovered site runs under its own generated key and fields the source encrypted stay intact but undecryptable here.",
+        "used": false
+      },
+      "admin_credential_is_the_targets_own": {
+        "reason": "The backup carries the source's password hash but not its plaintext, so the recovering system establishes its own credential.",
+        "set_with_native_command": "bench set-admin-password",
+        "source_admin_password_transferred": false
+      },
+      "keys_differ_between_systems": true,
+      "no_plaintext_secret_in_repository_artifacts": true,
+      "statement": "The site config backup that frappe writes beside the dumps - which holds the database password and the site encryption key - is excluded from staging by an explicit allowlist, the staged text is scanned for every generated secret, `bench restore --encryption-key` is deliberately unused, and the recovering system sets its own Administrator credential with native `bench set-admin-password`. No plaintext secret travels in any artifact or appears in this ledger; only SHA-256 fingerprints are recorded."
+    },
+    "recovery_on_independent_system": {
+      "site": "recovered.localhost",
+      "restored_into_a_separate_database": true,
+      "database_records": {
+        "Note": {
+          "names_sha256_matches": true,
+          "recovered": 12
+        },
+        "ToDo": {
+          "names_sha256_matches": true,
+          "recovered": 12
+        }
+      },
+      "record_name_digests_match_source": true,
+      "files": {
+        "independent-recovery-private.txt": {
+          "bytes": 552,
+          "file_document_recovered": true,
+          "is_private": 1,
+          "on_disk_sha256_matches": true,
+          "path": "private/files/independent-recovery-private.txt"
+        },
+        "independent-recovery-public.txt": {
+          "bytes": 551,
+          "file_document_recovered": true,
+          "is_private": 0,
+          "on_disk_sha256_matches": true,
+          "path": "public/files/independent-recovery-public.txt"
+        }
+      },
+      "file_digests_match_source": true,
+      "recovered_apps": [
+        "frappe  16.33.1 HEAD",
+        "erpnext 16.34.2 HEAD"
+      ],
+      "checks": [
+        "database-records-recovered-on-independent-system",
+        "private-and-public-files-recovered-on-independent-system",
+        "source-encrypted-field-is-intact-but-undecryptable-here"
+      ]
+    },
+    "usability_after_recovery": {
+      "http_through_nginx_front_proxy": {
+        "attempts": 1,
+        "ping_message": "pong",
+        "reachable": true
+      },
+      "authenticated_session": {
+        "logged_in_as": "Administrator",
+        "login_http_status": 200,
+        "session_cookie_set": true
+      },
+      "source_created_record_readable": {
+        "all_source_records_listed": true,
+        "content_matches_manifest": true,
+        "doctype": "ToDo",
+        "http_status": 200,
+        "name": "56uqdlb6cp",
+        "records_listed_over_http": 12
+      },
+      "files_served_over_http": {
+        "independent-recovery-private.txt": {
+          "bytes": 552,
+          "file_url": "/private/files/independent-recovery-private.txt",
+          "http_status": 200,
+          "is_private": 1,
+          "served_sha256_matches_manifest": true
+        },
+        "independent-recovery-public.txt": {
+          "bytes": 551,
+          "file_url": "/files/independent-recovery-public.txt",
+          "http_status": 200,
+          "is_private": 0,
+          "served_sha256_matches_manifest": true
+        }
+      },
+      "privacy_boundary_survived_recovery": {
+        "private_anonymous_status": 403,
+        "private_denied_without_session": true,
+        "public_anonymous_status": 200,
+        "public_served_anonymously_with_matching_content": true,
+        "public_served_by": "nginx-static-public-directory"
+      },
+      "note": "Usability is proven over real HTTP through an nginx front proxy in front of Gunicorn, configured as the pinned bench template configures production, and the login is a real session cookie held by the same client used for every later read. The privacy boundary is exercised from both sides: the private file is refused anonymously and served to the session, the public file is served anonymously by nginx from the recovered public directory."
+    },
+    "encrypted_field_limitation_asserted": {
+      "ciphertext_recovered_intact": true,
+      "decrypts_on_target": false,
+      "keys_differ": true,
+      "source_key_sha256": "433059bd7bb94a9c18e3cfcc3779d9ba65d992ed6c5d34c283098d08f9471291",
+      "target_key_sha256": "249d33a6e5be6f964053670f4fc1060389d631b2e24cbb2ded5f191d33b50a11",
+      "conclusion": "Database and files recovered; source-encrypted field is intact but undecryptable here because the key was never transferred. Closing this requires separately controlled external key custody, which is a distinct requirement.",
+      "classification": "EXPECTED FAILURE, asserted rather than hidden - this is the executed evidence that external key custody (P4) is a distinct outstanding requirement"
+    },
+    "not_proven_by_this_probe_verbatim": [
+      "Recovery onto a different cloud provider, region or physical datacentre",
+      "Restoring with the source encryption key, so decryption of source-encrypted fields needs separately controlled external key custody",
+      "Recovery time and recovery point objectives, which need an owner-selected target",
+      "Off-site or air-gapped backup storage, retention and rotation",
+      "TLS termination and the Tailscale boundary, exercised separately",
+      "Any production workload, since all data here is synthetic"
+    ],
+    "additional_scope_limits": [
+      "Both halves are GitHub-hosted runners from the same pool: kernel_boot_id, runner_name and dmi_product_uuid prove separate ephemeral VMs, not separate providers, regions or datacentres. Loss of a host, region or provider remains unexercised.",
+      "The backup moves through a GitHub Actions artifact between two ephemeral VMs. There is no off-site or air-gapped destination, no versioned encrypted backup set, no retention policy and no rotation.",
+      "Session revocation on recovery, which D8-BACKUP-RECOVERY also requires, is not exercised.",
+      "No RPO or RTO is measured against an owner-selected objective, because no owner objective exists and none is invented. Step timings are in the check logs but are not a qualification.",
+      "Every record, file and credential is synthetic and generated inside the run; no production workload is exercised."
+    ],
+    "defects_found_and_fixed_by_execution": [
+      {
+        "run": 35141452778,
+        "check": "verify-target-independence",
+        "detail": "The independence verdict compared only runner_name and hostname and treated a Docker daemon id as corroborating. Both halves reported hostname runnervmlun5p, so a genuinely independent pair failed closed on a recycled image name."
+      },
+      {
+        "run": 35142455523,
+        "check": "verify-target-independence",
+        "detail": "After demoting hostname to an observation, /sys/class/dmi/id/product_uuid proved unreadable for the non-root runner user, so the corroborating discriminator had no value and the verdict failed closed on a missing identifier. The reader now falls back across the DMI and firmware paths and reports availability explicitly instead of silently degrading."
+      },
+      {
+        "run": 35143620884,
+        "check": "verify-target-independence",
+        "detail": "GitHub-hosted runners genuinely reuse hostnames across separate VMs: both halves reported runnervmlun5p while kernel_boot_id and runner_name differed. Hostname is not a valid discriminator and is now recorded as an observation annotated with this run."
+      },
+      {
+        "run": 35168111875,
+        "check": "verify-target-independence",
+        "detail": "Both halves also reported the same Docker daemon id because the runner image ships a pre-generated /etc/docker/key.json rather than generating one per boot. Daemon id is likewise demoted to an annotated observation; /proc/sys/kernel/random/boot_id and the Actions runner name are required to differ, with dmi_product_uuid corroborating when readable."
+      },
+      {
+        "run": 35168996127,
+        "check": "prove-recovered-application-usable-over-http",
+        "detail": "Login returned HTTP 401 although every other read succeeded. Root cause at pinned frappe 988e54f3: the _new_site restore path calls install_app(force=False, set_as_patched=not source_sql), so with a source SQL file after_install never runs and the --admin-password stashed in frappe.conf is never applied to Administrator. `bench --site <site> set-admin-password` was added after migrate, and the recovering system now sets its own credential so recovery never depends on a source secret."
+      },
+      {
+        "run": 35169957724,
+        "check": "prove-recovered-application-usable-over-http",
+        "detail": "Login, ping and record reads then all passed, but the private file download returned HTTP 500. Root cause: frappe.utils.response.send_private_file answers an X-Use-X-Accel-Redirect request with the header X-Accel-Redirect: /protected/private/files/<name> and no body, and the generated nginx config had no /protected/ location, so nginx could not resolve the internal offload. Fixed in commit 1378ce4 by declaring the internal /protected/ location the pinned bench template declares, ahead of the /files/ rules so the earlier regex cannot win, and pinned by contract tests."
+      }
+    ],
+    "gate_state_after_execution": "BLOCKED - no D8 release gate flips to PASS from this execution. recovery and backup-restore stay BLOCKED because D8-BACKUP-RECOVERY additionally requires key retrieval, session revocation and a measured RPO/RTO against an owner-selected target, none of which is proven here, and no owner objective has been invented.",
+    "reproducible_commands": [
+      "gh run view 35170062251 --repo Frotan2/TOFEL-House-ERP",
+      "gh api repos/Frotan2/TOFEL-House-ERP/check-runs/105041393483 --jq '.output.text'",
+      "gh api repos/Frotan2/TOFEL-House-ERP/check-runs/105042127143 --jq '.output.text'",
+      "python -m unittest discover -s tests -q",
+      "python tools/foundation/d8_validate.py"
+    ]
   }
 }

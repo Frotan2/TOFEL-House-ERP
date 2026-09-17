@@ -1,7 +1,7 @@
 # TOEFL House ERP — Release Gap Map & Execution Plan
 
-Date: 2026-09-16 · Role: technical & product release leader · Active branch:
-`arena/01a0aafe-tofel-house-erp`
+Date: 2026-09-16 · Gap-closure addendum: 2026-09-17 (§1.6) · Role: technical &
+product release leader · Active branch: `arena/01a0aafe-tofel-house-erp`
 **Production remains REJECT. Nothing is deployed. No qualified domain is
 reopened. No business rule, price, grading policy or legal/tax assumption
 is invented anywhere in this plan.**
@@ -66,7 +66,10 @@ is invented anywhere in this plan.**
 - D8 engineering now has a hosted disposable product SQL/public-files/private-files
   backup and distinct-site restore rehearsal: run `35076449739` at `ebe7767`
   passed its 542 native checks and restore verifier. This does not reopen a
-  qualified domain or satisfy independent-host/production recovery. Exact
+  qualified domain, and on its own it did not satisfy independent-host
+  recovery; a destructive independent-system rehearsal was later executed at
+  the separate-VM level (run `35170062251`, §1.6 and report §10), while
+  production recovery remains unproven. Exact
   boundary, retained initial failure, and remaining owner inputs:
   [D8 operational-input packet](D8-OPERATIONAL-INPUT-PACKET.md).
 
@@ -154,9 +157,17 @@ invent business rules.
   progress events with business payloads (R5 records the grep evidence).
 
 ### 1.6 Operational gates (deployment-scope; cannot be closed without deploy)
-Independent-host disaster recovery, measured restart downtime, HA,
+Measured restart downtime, HA, recovery onto a different provider/region/datacentre,
+key retrieval from separately controlled external custody, session revocation on
+recovery, a measured RPO/RTO against an owner-selected objective,
 full-bundle upgrade/rollback, public TLS/proxy qualification, capacity,
-branch-isolation runtime proof and deployed monitoring operation (D8). The
+branch-isolation runtime proof and deployed monitoring operation (D8).
+Independent-host recovery is no longer wholly unexercised: a destructive
+recovery onto a provably separate ephemeral VM has been executed (run
+`35170062251`, see the table below and
+[FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md §10](FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md)),
+which is a separate *machine*, not a separate provider, region or datacentre,
+and it does not close the `recovery` gate. The
 final closure harness supplies bounded encrypted SQL/files-shaped preservation,
 revocation, audit, alert fail-closed and rollback evidence; it is tracked in
 [FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md](FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md)
@@ -168,15 +179,20 @@ remain blocked until an authorized deployment target exists — running them
 The production-like execution pass on the active branch
 ([execution ledger](evidence/production-like-execution/execution-ledger.json))
 separates what a real Docker runner genuinely proved from what it structurally
-cannot prove, so the remaining asks are precise rather than generic:
+cannot prove, so the remaining asks are precise rather than generic. The
+gap-closure passes P1–P3 (execution-ledger sections
+`encryption_key_defect_closure`, `durability_probe_execution` and
+`independent_recovery_execution`; report §9 and §10) moved several cells from
+the blocked column into the executed column — those cells are marked with their
+run identifiers below. No row was moved wholesale, and no gate changed state:
 
 | Operational ask | Genuinely executed on a Docker runner | Still structurally blocked |
 |---|---|---|
-| MariaDB | Startup, healthcheck to healthy, version, charset/collation, transaction rollback, hosting three real bench sites (`35122242676`, `35122242728`) | Restart persistence, crash/power-loss/volume-loss durability, durability on the selected local/server host |
-| Redis | Startup of queue and cache instances, PING/PONG, version, cache marker surviving an app restart (`35122242676`, `35122242728`, `35122242581`) | RDB/AOF persistence configuration, Redis restart recovery, in-flight/exactly-once job semantics after a Redis loss |
-| Backup | Real bench backup with SHA-256 over database, private files and public files; hardened variant (`35122242728`, `35122242581`) | Multiple retained versions, encryption at rest, external key custody, rotation, selected destination. Run `35122242581` recorded `site_encryption_key_restored=false` — a real defect, not reclassified |
-| Recovery | Restore into a separate site **and** separate database with source credentials not copied; post-restore integrity and authorization re-verification (`35122242728`, `35122242581`) | Restore onto a genuinely independent system/environment, destructive trigger, measured recovery objective |
-| Integrity | Snapshot before backup verified after restore across 14 doctypes by exact record count plus a private-file SHA-256 (`35122242728`) | Whole-database checksum equality; comparison across independent systems |
+| MariaDB | Startup, healthcheck to healthy, version, charset/collation, transaction rollback, hosting three real bench sites (`35122242676`, `35122242728`). **P2:** graceful restart, SIGKILL crash-recovery with InnoDB rolling back an open transaction, and container destruction with recreation from the same named volume — `innodb_flush_log_at_trx_commit=1`, `sync_binlog=1` and `log_bin=1` read back from the live server, binary-log rotation proving each real restart, and a negative control confirming the data lived in the volume (`35135793802`, `35137645608`, `35138416558`). **P3:** a destroyed site's database recovered onto a separate VM (`35170062251`) | Power-loss durability and volume loss on the selected local/server host, durability across host or region failure, measured restart downtime against a recovery objective |
+| Redis | Startup of queue and cache instances, PING/PONG, version, cache marker surviving an app restart (`35122242676`, `35122242728`, `35122242581`). **P2:** RDB/AOF persistence configured and read back from the live server (`aof_enabled=1`, `appendfsync always`, `aof_last_write_status=ok`, `rdb_last_bgsave_status=ok`), with value and 25-item queue digests surviving graceful restart, SIGKILL crash and recreation from the same named volume (`35135793802`, `35137645608`, `35138416558`) | In-flight/exactly-once job semantics after a Redis loss, persistence across host or region failure |
+| Backup | Real bench backup with SHA-256 over database, private files and public files; hardened variant (`35122242728`, `35122242581`). **P3:** `bench backup --with-files` staged through an explicit five-file allowlist that excludes the site-config backup Frappe writes beside the dumps, scanned for every generated secret, transferred to a separate VM and verified byte-for-byte there (`35170062251`). **P1:** the `site_encryption_key_restored=false` defect recorded by run `35122242581` is **CLOSED** — the key is initialized natively before the first backup and its survival is proven three ways (fingerprint match, real `get_decrypted_password()` of pre-backup ciphertext, byte-identical ciphertext digest) at `35133062884`, independently reproduced at `35135793582` | Multiple retained versions, encryption at rest, external key custody, rotation, selected destination. The closed P1 defect stays recorded as a real defect that was found by execution, not reclassified |
+| Recovery | Restore into a separate site **and** separate database with source credentials not copied; post-restore integrity and authorization re-verification (`35122242728`, `35122242581`). **P3:** a real destructive trigger — `bench drop-site --no-backup`, database present then absent, site directory and both files gone — followed by restore onto a provably separate ephemeral VM (differing `kernel_boot_id`, `runner_name` and `dmi_product_uuid`; no shared filesystem, volume or container), recovering both record sets by name digest, the private and public files byte-exact with their File documents, and an application usable over real HTTP through nginx/Gunicorn including the private-file privacy boundary (`35170062251`) | Restore onto a different provider, region or datacentre; key retrieval and external key custody with rotation — the source-encrypted field is recovered intact but undecryptable on the target, asserted as an expected failure; session revocation on recovery; a measured recovery objective against an owner-selected RPO/RTO |
+| Integrity | Snapshot before backup verified after restore across 14 doctypes by exact record count plus a private-file SHA-256 (`35122242728`). **P3:** comparison **across independent systems** — per-doctype record-name SHA-256 digests and per-file on-disk SHA-256 digests matched between the destroyed source's manifest and the recovered target, and served-content digests matched over HTTP (`35170062251`); **P2:** whole-table row-level payload checksum equality across four real disruptions, single host (`35135793802`) | Whole-database checksum equality compared *across* independent systems |
 | Edge/session/TLS | CSRF token presence per site/role, 13 CSRF negative-with-positive-control checks, cross-site session replay denial, private-file own/other/guest isolation (`35122242581`, `35122242728`) | TLS termination/certificates/HSTS, reverse proxy and public edge, cookie attributes under the real edge, the Tailscale tailnet/ACL boundary |
 | Monitoring | Native Error Log roundtrip, Scheduled Job Type registry, health ping (`35122242728`) | Alert receiver and delivery, retention/rotation/archival, deployed fail-closed behavior, incident response |
 | Upgrade/rollback | Isolated artifact-based Frappe patch upgrade, 33/33, other four pins held fixed (`35122242581`) | Rollback rehearsal, full-bundle upgrade of ERPNext/Education/HRMS/payments and the owned extension, promotion/approval/communication |

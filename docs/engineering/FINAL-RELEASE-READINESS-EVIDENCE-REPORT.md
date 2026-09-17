@@ -1,7 +1,8 @@
 # TOEFL House ERP — Final Production Readiness Evidence Closure
 
 Date: 2026-09-16 · Owner-decision baseline: `14cd64e` · Active branch:
-`arena/01a0aafe-tofel-house-erp`
+`arena/01a0aafe-tofel-house-erp` · Gap-closure addenda: §9 (2026-09-16),
+§10 (2026-09-17)
 
 ## 1. Final authorization state
 
@@ -15,6 +16,9 @@ Date: 2026-09-16 · Owner-decision baseline: `14cd64e` · Active branch:
 | Numeric capacity/availability objective | **NOT SELECTED / BLOCKED** (none invented) |
 | Requested local execution host | **ENVIRONMENT-BLOCKED** (no Docker Engine/Compose; see §8.1) |
 | Production-like execution on a Docker-capable runner | **EXECUTED** at `d7df9ca7` — 5 runs, probe-by-probe classification in §8 |
+| `site_encryption_key_restored=false` defect (P1) | **CLOSED** with hosted evidence — run `35133062884` at `58bd4d1`, independently reproduced by run `35135793582` (§9.1) |
+| Container-level MariaDB/Redis durability (P2) | **EXECUTED** — runs `35135793802`, `35137645608` and `35138416558`; the `durability` gate stays **BLOCKED** because its area is wider (§9.2) |
+| Independent-system recovery (P3) | **EXECUTED** at `1378ce4` — run `35170062251`: real destructive trigger, then recovery on a provably separate VM with HTTP usability proven; the `recovery` gate stays **BLOCKED** (§10) |
 
 This is the canonical release-readiness report for the closure pass. It separates
 owner decisions from technical evidence and does not treat a bounded harness,
@@ -28,6 +32,14 @@ review: what was genuinely executed on a Docker-capable runner, what was only
 bounded/static/preflight, and what the runner could not provide. The
 machine-readable probe-by-probe classification is
 [`evidence/production-like-execution/execution-ledger.json`](evidence/production-like-execution/execution-ledger.json).
+
+**§9 and §10 record the gap-closure passes** that followed on the same branch:
+P1 closed the `site_encryption_key_restored=false` defect, P2 executed real
+container-level MariaDB and Redis durability, and P3 executed a destructive
+recovery onto a genuinely independent system. Every one of those results comes
+from real execution on hosted infrastructure, each is classified separately from
+the bounded harness, and **none of them flips a D8 gate** — the bounded synthetic
+evidence below is not upgraded by any of it.
 
 The machine-readable run result is
 [`evidence/release-readiness-evidence.json`](evidence/release-readiness-evidence.json).
@@ -95,21 +107,27 @@ authorization.
 ## 4. Remaining BLOCKED/REJECT gates
 
 Every gate below was re-examined against the fresh Docker-runner execution in
-§8. Where §8 records genuinely executed sub-probes, they are cited there and in
-the D8 matrix `evidence` fields; none of them closes the gate, because in each
-case the specific production-like requirement (restart/durability, independent
-system, encryption key custody and rotation, deployed monitoring, TLS/Tailscale
-edge, rollback rehearsal, capacity objective) was **not** executed.
+§8 and against the gap-closure executions in §9 and §10. Where those sections
+record genuinely executed sub-probes, they are cited there and in the D8 matrix
+`evidence` fields; none of them closes a gate. Two of the requirements listed
+here have now been executed for real — container-level datastore restart and
+crash durability (§9.2) and recovery onto an independent system under a
+destructive trigger (§10) — and each corresponding gate still stays **BLOCKED**
+because its area is wider than the executed sub-probe. The rest remain **not**
+executed: external encryption key custody and rotation with proven key
+retrieval, session revocation on recovery, a measured RPO/RTO against an
+owner-selected objective, deployed monitoring, TLS/Tailscale edge, full-bundle
+rollback rehearsal and any capacity objective.
 
 | Gate | Final state | Why it remains open |
 |---|---|---|
-| Recovery | **BLOCKED** | The encrypted alternate-directory harness is bounded evidence only; no independent production-like host, live DB/Redis recovery, key custody process or measured recovery objective exists |
-| Backup/restore | **BLOCKED** | No selected production destination/custody/retention deployment or real production backup exists; future off-site destination remains unselected |
+| Recovery | **BLOCKED** | A separate-infrastructure rehearsal is now **EXECUTED** (§10, run `35170062251` at `1378ce4`): a real destructive `bench drop-site --no-backup`, then recovery on a provably separate VM with the database, both file trees and HTTP usability verified, including the private-file privacy boundary. The bounded encrypted alternate-directory harness remains bounded and is not upgraded. Still absent: key retrieval — the source-encrypted field is recovered intact but undecryptable on the target — external key custody with rotation, session revocation on recovery, host/region loss, and a measured RPO/RTO against an owner-selected objective |
+| Backup/restore | **BLOCKED** | A real `bench backup --with-files` set has now been produced, secret-scanned, transferred and verified byte-for-byte on a separate system, where `bench restore` recovered database, files and a usable application (§10). Still absent: a selected production destination, external key custody, versioned encrypted backup sets, retention and rotation on the native stack; the future off-site destination remains unselected |
 | Upgrade/rollback | **BLOCKED** | Local artifact rollback harness is not a full-bundle deployed upgrade/rollback rehearsal |
 | Observability/incident | **BLOCKED** | Local alert model proves missing receivers fail closed, but no deployed logs/metrics/alert receiver/retention/incident evidence exists |
 | Topology/edge/session | **BLOCKED** | Current Tailscale/local requirement is selected, but deployed network/session/TLS/CSRF/private-file/realtime evidence is absent; future public edge is unselected |
 | Capacity/availability | **BLOCKED / NOT SELECTED** | No owner numeric objective was supplied; no claim is made |
-| Durability | **BLOCKED** | File/database fixture preservation is bounded; deployed MariaDB/Redis/configuration/key/host durability and loss/restart evidence are not proven |
+| Durability | **BLOCKED** | Container-level MariaDB/Redis graceful restart, SIGKILL crash-recovery and container destruction with recreation from the same named volume are now **EXECUTED** against real servers, with persistence settings read back from the running instances and a negative control (§9.2, runs `35135793802`, `35137645608`, `35138416558`). File/database fixture preservation remains bounded. Still absent: host-loss drills beyond a single host, persistence verified across a host or region failure, queued/in-flight job handling under failure, configuration and key durability, and integrity measured against defined recovery objectives |
 | Branch isolation | **BLOCKED / NOT PROVEN** | The evidence run passes a bounded branch-scope/aggregate model, but the checkout has no deployed native branch runtime/fixture proof across read/write/submit/export/file/job paths |
 | Change control | **BLOCKED** | Static provenance and local rollback pass in bounded scope; deployed approval, artifact promotion, communication and restore-based rollback evidence is absent |
 | SEC-DEPS-01 | **UPSTREAM-BLOCKED / REJECT** | Closure evidence records Foundation runtime `35090904508` as failed on dependency/frontend advisory gates; independent exact-PR-head run `35101709287` is separately tracked below and cannot waive this hard stop |
@@ -783,3 +801,209 @@ prior-run commits recorded in earlier sessions, all confirmed present in the
 and was **wrong**; it was detected by this check, replaced with the output of
 `git rev-parse 866396a`, and annotated as machine-resolved. Hand-transcribed
 identifiers are not acceptable in an evidence ledger.
+
+## 10. P3 — recovery onto a genuinely independent system is EXECUTED (2026-09-17)
+
+**Status: EXECUTED on hosted infrastructure and CLOSED as a probe. No gate
+changed state.** Run `35170062251` at commit `1378ce4` on branch
+`arena/01a0aafe-tofel-house-erp`, workflow *Foundation independent-system
+recovery* (`.github/workflows/foundation-independent-recovery.yml`), both jobs
+`success`: source check run `105041393483` (29/29 checks pass) and target
+check run `105042127143` (31/31 pass). `mocks_or_simulations_used=false` on
+both halves.
+
+This closes the third gap-closure priority: restore onto a genuinely
+independent execution environment — **not** the same host — under an explicit
+destructive scenario, proving database recovery, private and public file
+recovery, and application usability afterwards. The prior evidence in §8
+restored only into another directory on the *same* ephemeral runner, which was
+correctly classified as bounded and never called independent.
+
+### 10.1 Two separate machines, verified rather than assumed
+
+The target job refuses to proceed unless independence is demonstrated. Two
+identifiers were **disproved as discriminators by execution** during this work
+and are now recorded as observations only, each annotated in the evidence with
+the run that disproved it:
+
+| Identifier | Source | Target | Role |
+|---|---|---|---|
+| `kernel_boot_id` | `3e203ccd-91de-4ae4-bce4-b9d4cd57fccc` | `3b90e489-ea12-4791-b1be-5a733358f34c` | **required to differ** — differs: true |
+| Actions `runner_name` | `GitHub Actions 1000002465` | `GitHub Actions 1000002466` | **required to differ** — differs: true |
+| `dmi_product_uuid` | `f30d2adb-8684-4f24-8d6f-e89d8332aff4` | `1a670b47-5c62-428e-a9c2-a4dfed34c761` | corroborating — differs: true, readable: true |
+| `hostname` | `runnervmlun5p` | `runnervmlun5p` | observation only — run `35143620884` proved the platform reuses generated hostnames across separate VMs |
+| Docker daemon id | `a4efb8b6-20f9-46f4-b827-91ac0547be3a` | `a4efb8b6-20f9-46f4-b827-91ac0547be3a` | observation only — run `35168111875` proved the runner image ships a pre-generated `/etc/docker/key.json` |
+
+Shared state is `false` for filesystem, volumes and containers; the only
+shared channel is `github-actions-artifact-only`. The target then positively
+confirmed it was not looking at the source's machine:
+{"source_archived_site_present_on_target": false,
+"source_database_present_in_target_datastore": false,
+"source_database_schema_count_on_target": "0",
+"source_lab_path_present_on_target": false}. Missing identifiers fail the
+verdict closed rather than silently degrading it.
+
+### 10.2 The destructive trigger ran before anything was transferred
+
+The source destroyed its own site with the native command `bench --site
+source.localhost drop-site --no-backup --db-root-password <runner-generated,
+never printed>`. `--no-backup` is explicit: nothing was archived to fall back
+on.
+
+| State | Before | After |
+|---|---|---|
+| Database `_0da0781ed64f67b4` present | `1` | `0` |
+| Site directory exists | true | false |
+| Private file present | true | false |
+| Public file present | true | false |
+
+`source_destroyed=true`, and the target independently records
+`source_site_was_destroyed_before_recovery=true`. Everything the target
+recovered therefore came from the transferred backup alone.
+
+### 10.3 Database and file recovery on the independent system
+
+The target rebuilt bench from scratch at the identical pinned revisions —
+frappe `988e54f3c4c291e2…` and erpnext `4048fb70e14d1843…`, byte-identical to
+the source — started real MariaDB `11.8.9` and Redis `8.6.6` containers pinned
+by image digest, restored into `recovered.localhost` with a separate database,
+and migrated. Recovered applications: `frappe 16.33.1 HEAD` and `erpnext
+16.34.2 HEAD`.
+
+| Recovered | Result |
+|---|---|
+| ToDo records | 12 of 12, name-digest match: true |
+| Note records | 12 of 12, name-digest match: true |
+| `independent-recovery-private.txt` | 552 bytes at `private/files/independent-recovery-private.txt`, `is_private=1`, on-disk SHA-256 match: true, File document recovered: true |
+| `independent-recovery-public.txt` | 551 bytes at `public/files/independent-recovery-public.txt`, `is_private=0`, on-disk SHA-256 match: true, File document recovered: true |
+
+The transferred payload was verified byte-for-byte before use:
+`database.sql.gz` 880248 bytes sha256 `d160d3a3051ae19f…`, `private-files.tar`
+10240 bytes, `public-files.tar` 10240 bytes, each
+`matches_source_record=true`, plus `manifest.json` and `source-identity.json`.
+
+### 10.4 The recovered application is usable over real HTTP
+
+Usability was proven through an nginx front proxy in front of Gunicorn,
+configured the way the pinned bench template configures production — not by
+calling Python APIs in-process.
+
+| Check | Result |
+|---|---|
+| Site reachable through the proxy | true, `ping` → `pong` in 1 attempt(s) |
+| Authenticated session | login HTTP 200 as `Administrator`, session cookie set: true |
+| Source-created record readable | `ToDo` `56uqdlb6cp` HTTP 200, content matches manifest: true, all source records listed: true (12) |
+| `independent-recovery-private.txt` served | `/private/files/independent-recovery-private.txt` HTTP 200, 552 bytes, served digest matches manifest: true |
+| `independent-recovery-public.txt` served | `/files/independent-recovery-public.txt` HTTP 200, 551 bytes, served digest matches manifest: true |
+| Privacy boundary survived recovery | private anonymous HTTP 403 (denied: true), public anonymous HTTP 200 served by `nginx-static-public-directory` with matching content |
+
+The privacy boundary matters here for a specific reason: the private file is
+served by an nginx `internal` offload that Frappe triggers with `X-Accel-
+Redirect`, so a recovery that restored the bytes but broke the routing would
+look fine on disk and fail over HTTP. It was exercised from both sides —
+refused anonymously, served to the session.
+
+### 10.5 Secret hygiene, and the limitation asserted rather than hidden
+
+No plaintext secret was staged, transferred or committed. The site config
+backup that Frappe writes beside the dumps — which holds the database password
+and the site encryption key — is excluded from staging by an explicit five-
+file allowlist (["20260917_065751-source_localhost-site_config_backup.json"]),
+the staged text is scanned for every generated secret
+(`staged_payload_contains_no_secrets=true`), `bench restore --encryption-key`
+exists and is **deliberately unused** (`used=false`), and the recovering
+system sets its own Administrator credential with native `bench set-admin-
+password` (`source_admin_password_transferred=false`), so recovery never
+depends on a source secret. Only SHA-256 fingerprints appear in any artifact.
+
+The consequence is asserted in the evidence as an **expected failure**, not
+smoothed over: the field the source encrypted
+(`User.Administrator.api_secret`) came back with its ciphertext intact
+(`ciphertext_recovered_intact=true`) but is undecryptable on the target
+(`decrypts_on_target=false`), because the keys differ — source
+`433059bd7bb94a9c…`, target `249d33a6e5be6f96…`. That executed failure is the
+concrete evidence that P4 (separately controlled external key custody with
+rotation, and proven key retrieval) is a distinct outstanding requirement.
+
+### 10.6 Six defects this workflow found and forced to be fixed
+
+None of these were visible to inspection; each was produced by actually
+running the recovery on hosted infrastructure, and each is recorded with its
+root cause in `execution-ledger.json` under
+`independent_recovery_execution.defects_found_and_fixed_by_execution`.
+
+| Run | Failed check | Root cause and fix |
+|---|---|---|
+| `35141452778` | `verify-target-independence` | Independence compared only `runner_name` and `hostname` and treated a Docker daemon id as corroborating; both halves reported `runnervmlun5p`, so a genuinely independent pair failed closed on a recycled image name. |
+| `35142455523` | `verify-target-independence` | `/sys/class/dmi/id/product_uuid` was unreadable for the non-root runner user, so the corroborating discriminator had no value and the verdict failed closed on a missing identifier; the reader now falls back across DMI/firmware paths and reports availability explicitly. |
+| `35143620884` | `verify-target-independence` | Proved GitHub-hosted runners reuse hostnames across separate VMs — `hostname` demoted to an annotated observation. |
+| `35168111875` | `verify-target-independence` | Proved the runner image ships a pre-generated `/etc/docker/key.json`, so separate VMs report one daemon id — daemon id demoted to an annotated observation; boot id and runner name are the required discriminators. |
+| `35168996127` | `prove-recovered-application-usable-over-http` | Login returned HTTP 401 while every other read passed. At pinned frappe `988e54f3c4c291e2…` the `_new_site` restore path calls `install_app(force=False, set_as_patched=not source_sql)`, so `after_install` never runs and the `--admin-password` stashed in `frappe.conf` is never applied; `bench set-admin-password` added after migrate. |
+| `35169957724` | `prove-recovered-application-usable-over-http` | Private file download returned HTTP 500. `frappe.utils.response.send_private_file` answers an `X-Use-X-Accel-Redirect` request with `X-Accel-Redirect: /protected/private/files/<name>` and no body, and the generated nginx config had no `/protected/` location; fixed in `1378ce4` by declaring that `internal` location ahead of the `/files/` rules, pinned by contract tests. |
+
+### 10.7 Why the gates stay BLOCKED
+
+No D8 release gate flips to PASS from this execution, and none is downgraded
+either. `recovery` and `backup-restore` stay **BLOCKED** because `D8-BACKUP-
+RECOVERY` requires more than a successful separate-system restore: it requires
+key retrieval, session revocation and a measured RPO/RTO. Key retrieval is
+disproved by omission in §10.5, session revocation on recovery is not
+exercised, and no RPO/RTO is measured because no owner objective is selected
+and none was invented. Both halves are GitHub-hosted runners from one pool, so
+loss of a host, region or provider is unexercised, and the backup travelled
+through a GitHub Actions artifact rather than an off-site destination with
+versioning, retention and rotation. All data is synthetic.
+backup-restore stay BLOCKED because D8-BACKUP-RECOVERY additionally requires
+key retrieval, session revocation and a measured RPO/RTO against an owner-
+selected target, none of which is proven here, and no owner objective has been
+invented. Specifically: `D8-BACKUP-RECOVERY` also requires key retrieval,
+session revocation and a measured RPO/RTO. Key retrieval is disproven-by-
+omission above, session revocation on recovery is not exercised, and no
+RPO/RTO is measured because no owner objective is selected and none was
+invented. Both halves are also GitHub-hosted runners from one pool, so loss of
+a host, region or provider is unexercised, and the backup travelled through a
+GitHub Actions artifact rather than an off-site destination with versioning,
+retention and rotation. All data is synthetic.
+
+The probe's own scope limits are recorded verbatim in the evidence under
+`not_proven_by_this_probe`, and are reproduced here without softening:
+
+- Recovery onto a different cloud provider, region or physical datacentre
+- Restoring with the source encryption key, so decryption of source-encrypted fields needs separately controlled external key custody
+- Recovery time and recovery point objectives, which need an owner-selected target
+- Off-site or air-gapped backup storage, retention and rotation
+- TLS termination and the Tailscale boundary, exercised separately
+- Any production workload, since all data here is synthetic
+
+`release-readiness-evidence.json` `release_gate_state.recovery` was
+regenerated from its generator
+(`tools/foundation/release_readiness_evidence.py`) and now reads `BLOCKED /
+SEPARATE-SYSTEM REHEARSAL EXECUTED; KEY RETRIEVAL, SESSION REVOCATION AND
+MEASURED RPO/RTO NOT PROVEN`, replacing the stale `BLOCKED / INDEPENDENT
+PRODUCTION-LIKE EVIDENCE NOT PROVEN`. It still begins with `BLOCKED`, as
+`tools/foundation/d8_validate.py` requires. The archived bounded snapshot
+`evidence/production-like-execution/local-bounded-release-readiness-
+evidence.json` was deliberately **not** edited: it is historical provenance
+pinned by hash in the ledger's integrity map.
+
+### 10.8 Evidence references
+
+| Artifact | SHA-256 |
+|---|---|
+| `evidence/production-like-execution/hosted-independent-source-35170062251.json` | `9c054dd6e41f57d5f073bbe06e2116bf1ec66b9a48fab1d30b7ec48f9f7df1b5` |
+| `evidence/production-like-execution/hosted-independent-target-35170062251.json` | `ea23e9f922eb736eea21437a06db1e5ca0a4d0c223b1ea001268a8720de48cb1` |
+| `evidence/production-like-execution/execution-ledger.json` § `independent_recovery_execution` | integrity map now holds 25 archived artifacts, all verified against disk |
+
+```bash
+gh run view 35170062251 --repo Frotan2/TOFEL-House-ERP
+gh api repos/Frotan2/TOFEL-House-ERP/check-runs/105041393483 --jq '.output.text'
+gh api repos/Frotan2/TOFEL-House-ERP/check-runs/105042127143 --jq '.output.text'
+python -m unittest discover -s tests -q
+python tools/foundation/d8_validate.py
+```
+Both archived artifacts are the check runs' own `output.text`, re-serialized
+in the ledger's canonical form (`json.dumps(d, indent=2, sort_keys=True) +
+trailing newline`); the hashes above are of those exact bytes. Retrieval: `gh
+api repos/Frotan2/TOFEL-House-ERP/check-runs/<id> --jq '.output.text'`. `gh
+run view --log` and `gh run download` do not work for these runs, which is why
+the Checks API is the transport.

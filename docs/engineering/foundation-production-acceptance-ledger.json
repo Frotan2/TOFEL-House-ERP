@@ -82,12 +82,12 @@
     {
       "id": "datastore-host-durability",
       "status": "not_qualified",
-      "closure": "Controlled MariaDB/Redis restart and host-loss drills, configured persistence, queued/in-flight job handling and data integrity against defined recovery objectives."
+      "closure": "PARTIALLY EXERCISED, STILL NOT QUALIFIED. Container-level MariaDB and Redis graceful restart, SIGKILL crash-recovery and container destruction with recreation from the same named volume are now genuinely executed with effective settings read back from the running servers (run 35135793802 at commit 866396a, evidence hosted-durability-35135793802.json). Still required to close: host-loss drills beyond a single host, configured persistence verified across a host or region failure, queued and in-flight job handling under failure, and data integrity measured against defined recovery objectives, which need an owner-selected RPO/RTO that does not exist and was not invented."
     },
     {
       "id": "rollback-independent-host-recovery",
       "status": "not_qualified",
-      "closure": "Rehearse supported rollback or restore-based rollback, independent-host encrypted recovery and key availability/session revocation; define RPO/RTO and measure them."
+      "closure": "PARTIALLY EXERCISED, STILL NOT QUALIFIED. Independent-host recovery is now executed on separate infrastructure (run 35170062251 at commit 1378ce4, item independent-system-recovery-execution), including a real destructive trigger and full database, file and HTTP-usability verification. Still required to close: rehearse supported rollback or restore-based rollback with real versioned artifacts; encrypted recovery WITH key availability from separately controlled external custody, plus rotation; session revocation on recovery; and an owner-defined RPO/RTO that is then measured. None of those is proven, so this item stays not_qualified."
     },
     {
       "id": "capacity-monitoring-operations",
@@ -106,6 +106,14 @@
       "observed": "A reproducible bounded harness created three encrypted backup versions, rotated to two retained versions, restored version three into a separate system directory, verified source/restore tree equality, and exercised bounded offboarding, audit, branch-model, alert fail-closed, native-authority and rollback checks.",
       "limits": "No production site, independent host, live MariaDB/Redis, deployed Tailscale edge, monitoring receiver, native branch runtime, measured RPO/RTO, capacity objective, or production authorization. Bounded proofs do not close D8 gates.",
       "closure": "Retain as scoped engineering evidence only. Production remains REJECT and SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT."
+    },
+    {
+      "id": "independent-system-recovery-execution",
+      "status": "pass_scoped",
+      "evidence": "evidence/production-like-execution/hosted-independent-source-35170062251.json; evidence/production-like-execution/hosted-independent-target-35170062251.json; evidence/production-like-execution/execution-ledger.json#independent_recovery_execution; run 35170062251 at commit 1378ce4 (source check 105041393483, target check 105042127143)",
+      "observed": "Executed on GitHub-hosted infrastructure, not simulated. A source VM built the pinned stack, created synthetic state (12 ToDo and 12 Note records, one private and one public file, one field encrypted with the site key), took a real `bench backup --with-files`, and then destroyed itself with native `bench drop-site --no-backup`: database _0da0781ed64f67b4 present then absent, site directory and both files gone. A SECOND ephemeral VM, proven independent by differing kernel_boot_id, runner_name and dmi_product_uuid with no shared filesystem, volume or container, rebuilt bench at the identical pinned revisions and recovered from the transferred backup alone: both record sets with name digests matching, the private file (552 bytes, is_private=1) and the public file (551 bytes, is_private=0) byte-exact on disk with their File documents, frappe  16.33.1 HEAD and erpnext 16.34.2 HEAD, and a usable application over real HTTP through nginx in front of Gunicorn: ping pong, login 200 as Administrator with a session cookie, a source-created record readable with content matching the manifest and all records listed, both files served with digests matching, and the privacy boundary intact (private refused anonymously, public served anonymously). No mock or simulation was used, and no plaintext secret was staged: the site config backup was excluded, the staged text was scanned, `bench restore --encryption-key` was deliberately not used, and the target set its own Administrator credential.",
+      "limits": "Both halves are GitHub-hosted runners from one pool, so this proves separate ephemeral VMs, not a separate cloud, region or datacentre, and host or region loss is unexercised. The source encryption key never travelled, so the source-encrypted field is recovered intact but undecryptable on the target (asserted as an expected failure, with distinct key fingerprints recorded) - key retrieval and external key custody with rotation are unproven. Session revocation on recovery is unexercised. No RPO/RTO is measured, because no owner objective is selected and none was invented. The backup travelled through a GitHub Actions artifact, so there is no off-site destination, versioning, retention or rotation. All data is synthetic.",
+      "closure": "Recorded as executed scoped evidence only. It does not flip any D8 gate: recovery and backup-restore remain BLOCKED, d8_gate_state remains BLOCKED, this ledger's recommendation remains REJECT, production_authorization remains REJECT and production_enabled remains false. Closing recovery still needs external key custody with rotation and proven key retrieval, session revocation on recovery, an owner-selected RPO/RTO with a measured result, and an external versioned encrypted backup destination with retention."
     }
   ],
   "architecture_decision": "foundation-architecture-decision.json",
@@ -551,5 +559,93 @@
     "unresolved": "Numeric capacity/availability objective, future internet provider/hostname/DNS/public edge, future off-site backup destination, numeric RPO/RTO, and separately deferred domain policies.",
     "does_not_authorize_production": true
   },
-  "release_readiness_evidence": "release-readiness-evidence.json"
+  "release_readiness_evidence": "release-readiness-evidence.json",
+  "production_like_gap_closure": {
+    "date": "2026-09-17",
+    "branch": "arena/01a0aafe-tofel-house-erp",
+    "authority": "evidence/production-like-execution/execution-ledger.json; d8-production-operations-decision-matrix.json",
+    "classification": "EXECUTED / HOSTED REAL STACK - separate from the bounded synthetic harness in release-readiness-evidence.json, which stays PASS / BOUNDED and is not upgraded by any of this.",
+    "gates_flipped_to_pass": [],
+    "statement": "No D8 release gate flips to PASS from this work. Every executed pass is scoped or partial, each corresponding gate keeps its prior BLOCKED or REJECT state, this ledger's recommendation stays REJECT, production_authorization stays REJECT and production_enabled stays false. No owner numeric objective was invented: capacity-availability stays BLOCKED with no selected target, and no RPO/RTO figure appears anywhere in this closure. SEC-DEPS-01 stays UPSTREAM-BLOCKED / REJECT - no version was forced, no lock overridden, no package forked, no advisory suppressed and no gate downgraded.",
+    "p1_site_encryption_key_defect": {
+      "status": "CLOSED",
+      "classification": "EXECUTED-HOSTED",
+      "root_cause": "Frappe writes encryption_key into sites/<site>/site_config.json lazily, on the first call to frappe.utils.password.get_encryption_key(); bench new-site does not create it. foundation.localhost installs only erpnext/education/payments/hrms, so nothing triggered key generation before the first backup. The harness then copied the key with `if \"encryption_key\" in original_config:` - a silent no-op - and reported the omission as a passive observation instead of failing the run. placement-test.localhost installs toefl_house, whose after_install() calls get_encryption_key(), which is why that path reported true and masked the defect.",
+      "proof_run": "35133062884",
+      "proof_commit": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
+      "independent_reproduction_run": "35135793582",
+      "independent_reproduction_commit": "866396a127164090c41db9ff1bc310ade555409f",
+      "does_not_upgrade": "This closes one named recovery defect on the same disposable hosted runner. It is not production qualification. Restore still runs on the same host as the source, no destructive trigger has been exercised, external key custody and rotation remain bounded-only, and the recovery and backup-restore gates remain BLOCKED."
+    },
+    "p2_container_durability": {
+      "status": "EXECUTED-HOSTED",
+      "run_id": "35135793802",
+      "commit": "866396a127164090c41db9ff1bc310ade555409f",
+      "check_run": "104927987397",
+      "workflow": "Foundation datastore durability",
+      "archived_evidence": "hosted-durability-35135793802.json",
+      "archived_evidence_sha256": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65",
+      "mocks_or_simulations_used": false,
+      "conclusion": "Container-level MariaDB and Redis restart, crash-recovery and named-volume persistence are now genuinely executed and PASS. The durability gate remains BLOCKED because its area is broader than container restarts."
+    },
+    "p3_independent_system_recovery": {
+      "status": "EXECUTED / CLOSED AS A PROBE; GATES STILL BLOCKED",
+      "run_id": "35170062251",
+      "commit": "1378ce426a6093948eb96f88fcf7a5ba3b1a90c2",
+      "source_check_run": "105041393483",
+      "target_check_run": "105042127143",
+      "source_checks": "29/29",
+      "target_checks": "31/31",
+      "archived_evidence": [
+        "hosted-independent-source-35170062251.json",
+        "hosted-independent-target-35170062251.json"
+      ],
+      "archived_evidence_sha256": [
+        "9c054dd6e41f57d5f073bbe06e2116bf1ec66b9a48fab1d30b7ec48f9f7df1b5",
+        "ea23e9f922eb736eea21437a06db1e5ca0a4d0c223b1ea001268a8720de48cb1"
+      ],
+      "independence_verdict": "INDEPENDENT - verified, not assumed",
+      "required_discriminators": {
+        "kernel_boot_id_differs": true,
+        "runner_name_differs": true,
+        "dmi_product_uuid_differs": true
+      },
+      "observation_only_identifiers": {
+        "hostname": "matches - disproved as a discriminator by run 35143620884",
+        "docker_daemon_id": "matches - disproved as a discriminator by run 35168111875"
+      },
+      "destructive_trigger": "bench --site source.localhost drop-site --no-backup --db-root-password <runner-generated, never printed>",
+      "mocks_or_simulations_used": false,
+      "encrypted_field_limitation": {
+        "decrypts_on_target": false,
+        "keys_differ": true,
+        "source_key_sha256": "433059bd7bb94a9c18e3cfcc3779d9ba65d992ed6c5d34c283098d08f9471291",
+        "target_key_sha256": "249d33a6e5be6f964053670f4fc1060389d631b2e24cbb2ded5f191d33b50a11",
+        "conclusion": "Database and files recovered; source-encrypted field is intact but undecryptable here because the key was never transferred. Closing this requires separately controlled external key custody, which is a distinct requirement."
+      },
+      "not_proven": [
+        "Recovery onto a different cloud provider, region or physical datacentre",
+        "Restoring with the source encryption key, so decryption of source-encrypted fields needs separately controlled external key custody",
+        "Recovery time and recovery point objectives, which need an owner-selected target",
+        "Off-site or air-gapped backup storage, retention and rotation",
+        "TLS termination and the Tailscale boundary, exercised separately",
+        "Any production workload, since all data here is synthetic",
+        "Both halves are GitHub-hosted runners from the same pool: kernel_boot_id, runner_name and dmi_product_uuid prove separate ephemeral VMs, not separate providers, regions or datacentres. Loss of a host, region or provider remains unexercised.",
+        "The backup moves through a GitHub Actions artifact between two ephemeral VMs. There is no off-site or air-gapped destination, no versioned encrypted backup set, no retention policy and no rotation.",
+        "Session revocation on recovery, which D8-BACKUP-RECOVERY also requires, is not exercised.",
+        "No RPO or RTO is measured against an owner-selected objective, because no owner objective exists and none is invented. Step timings are in the check logs but are not a qualification.",
+        "Every record, file and credential is synthetic and generated inside the run; no production workload is exercised."
+      ],
+      "defects_found_and_fixed_by_execution": 6
+    },
+    "p4_key_custody": {
+      "status": "NOT STARTED - next",
+      "requirement": "Executable production-like external key custody with rotation and restoration using separately controlled key material; no plaintext secret in any repository artifact.",
+      "why_p3_does_not_cover_it": "Run 35170062251 deliberately left `bench restore --encryption-key` unused so no key material travelled, which is why the source-encrypted field is intact but undecryptable on the target. That executed failure is the evidence that P4 is a separate requirement."
+    },
+    "p5_operational_boundaries": {
+      "status": "NOT STARTED",
+      "requirement": "Exercise the intended TLS/Tailscale boundary, monitoring and alert delivery with retention, and rollback using real versioned artifacts, kept clearly separate from synthetic and bounded evidence."
+    }
+  }
 }

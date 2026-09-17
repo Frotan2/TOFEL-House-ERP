@@ -288,7 +288,11 @@ def run_evidence(output: Path | None = None, artifact_dir: Path | None = None) -
                 "domain_qualification": "PASS / SCOPED EXISTING HOSTED EVIDENCE",
                 "authorization_isolation": "PASS / SCOPED; PRODUCTION NOT PROVEN",
                 "dependency_security": "REJECT / SEC-DEPS-01 UPSTREAM-BLOCKED",
-                "recovery": "BLOCKED / INDEPENDENT PRODUCTION-LIKE EVIDENCE NOT PROVEN",
+                # Run 35170062251 executed a real destructive trigger and a recovery onto a separate
+                # ephemeral system, so the old "independent evidence not proven" wording is stale. The
+                # gate stays BLOCKED: D8-BACKUP-RECOVERY also requires key retrieval, session
+                # revocation and a measured RPO/RTO, and no owner objective exists to measure against.
+                "recovery": "BLOCKED / SEPARATE-SYSTEM REHEARSAL EXECUTED; KEY RETRIEVAL, SESSION REVOCATION AND MEASURED RPO/RTO NOT PROVEN",
                 "backup_restore": "BLOCKED / PRODUCTION CUSTODY NOT PROVEN",
                 "upgrade_rollback": "BLOCKED / DEPLOYED FULL-BUNDLE EVIDENCE NOT PROVEN",
                 "realtime": "PASS / SCOPED EXISTING EVIDENCE",
