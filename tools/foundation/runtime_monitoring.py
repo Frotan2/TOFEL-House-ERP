@@ -209,6 +209,20 @@ def main() -> int:
                     yield from flatten(item)
 
         declared = sorted({method for method in flatten(events) if "." in method})
+        # Scheduled Job Type rows are created by the scheduler's own sync step, so a
+        # site that has never run one can have an empty registry. Syncing it natively
+        # first is what makes the comparison meaningful: without this the check would
+        # be measuring whether a scheduler had happened to run, not whether declared
+        # work is registered. Allowed to fail because the function's location differs
+        # between releases, and the read below reports the truth either way.
+        sync_raw = site_execute("sync-scheduled-job-type-registry",
+                                "frappe.utils.scheduler.sync_jobs", None, allow_failure=True)
+        report["scheduler_registry_sync"] = {
+            "attempted": True,
+            "succeeded": not any(check["name"] == "sync-scheduled-job-type-registry"
+                                 and check["status"] == "fail" for check in report["checks"]),
+            "reply_tail": (sync_raw or "")[-200:],
+        }
         registry_names = list_doctype("scheduled-job-type-registry", "Scheduled Job Type",
                                       ["name"])
         # Discover which field this checkout stores the method in, rather than guessing
@@ -302,14 +316,32 @@ def main() -> int:
             raise RuntimeError("Alert delivery does not fail closed: " + fail_closed["reason"])
 
         # --- 5. Backup retention, with the limit below the number taken ---
+        site_config = bench_dir / "sites" / SITE / "site_config.json"
+
+        def configured_limit():
+            return extract_json(site_config.read_text()).get("backup_limit")
+
+        # bench accepts the site either as a global --site option or as its own flag,
+        # depending on release. Try the form the rest of this repository uses, confirm
+        # the value actually landed in site_config.json, and only then fall back -
+        # because a retention limit that was never written would make the pruning
+        # observation meaningless rather than merely wrong.
         probe.run("configure-backup-retention-limit",
                   [str(bench), "--site", SITE, "set-config", "backup_limit", str(BACKUP_LIMIT)],
-                  cwd=bench_dir)
-        configured = extract_json((bench_dir / "sites" / SITE / "site_config.json").read_text())
-        report["configured_backup_limit"] = configured.get("backup_limit")
-        if configured.get("backup_limit") != BACKUP_LIMIT:
-            raise RuntimeError("The retention limit was not written to site config: "
-                               + json.dumps(configured.get("backup_limit")))
+                  cwd=bench_dir, allow_failure=True)
+        if configured_limit() != BACKUP_LIMIT:
+            probe.run("configure-backup-retention-limit-alternate-form",
+                      [str(bench), "set-config", "--site", SITE, "backup_limit",
+                       str(BACKUP_LIMIT)], cwd=bench_dir, allow_failure=True)
+        report["configured_backup_limit"] = configured_limit()
+        report["retention_limit_written_by"] = next(
+            (check["name"] for check in reversed(report["checks"])
+             if check["name"].startswith("configure-backup-retention-limit")
+             and check["status"] == "pass"), None)
+        if report["configured_backup_limit"] != BACKUP_LIMIT:
+            raise RuntimeError("The retention limit was not written to site config by either "
+                               "invocation form; site_config holds "
+                               + json.dumps(report["configured_backup_limit"]))
         backups = bench_dir / "sites" / SITE / "private" / "backups"
         taken_names = []
         for index in range(BACKUPS_TAKEN):
