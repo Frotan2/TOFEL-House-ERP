@@ -179,7 +179,7 @@
       "check": "105191311853",
       "report_sha256": "62be04f6881f3b8d4ddb60f26c20c9fca3f619bc102634c92cc822136c908afb",
       "observed": "Frozen baseline and isolated candidate were both installed, built and compared. 20 of 22 checks pass; baseline-audit and candidate-audit both exit 1 on the npm advisory gate, with 1 advisory introduced and 35 removed against the frozen baseline. production_pins_changed false, production_gate_passed false, and application and Frappe UI source unchanged. The candidate remains NOT ADOPTED.",
-      "limits": "Candidate is not adopted and is not a remediation or production approval. This gate has failed on every one of its 9 runs since b1381eb for the same reason."
+      "limits": "Candidate is not adopted and is not a remediation or production approval. This gate has failed on every one of its 10 runs since b1381eb (34823670550 through 35222291762), always on the npm advisory audit and never on the build, install, constraints or module-graph checks."
     },
     "d8_contract": {
       "run": "35218007901",
