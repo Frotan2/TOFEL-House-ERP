@@ -639,9 +639,143 @@
       "defects_found_and_fixed_by_execution": 6
     },
     "p4_key_custody": {
-      "status": "NOT STARTED - next",
+      "status": "EXECUTED / CLOSED AS A PROBE; GATES STILL BLOCKED",
       "requirement": "Executable production-like external key custody with rotation and restoration using separately controlled key material; no plaintext secret in any repository artifact.",
-      "why_p3_does_not_cover_it": "Run 35170062251 deliberately left `bench restore --encryption-key` unused so no key material travelled, which is why the source-encrypted field is intact but undecryptable on the target. That executed failure is the evidence that P4 is a separate requirement."
+      "why_p3_does_not_cover_it": "Run 35170062251 deliberately left `bench restore --encryption-key` unused so no key material travelled, which is why the source-encrypted field is intact but undecryptable on the target. That executed failure is the evidence that P4 is a separate requirement.",
+      "run_id": "35179445639",
+      "commit": "252345ed8df256d8679db93f835cdf2995318077",
+      "workflow": ".github/workflows/foundation-key-custody.yml",
+      "custodian_check_run": "105068259227",
+      "operator_check_run": "105068842511",
+      "recovery_check_run": "105069423253",
+      "custodian_checks": "10/10",
+      "operator_checks": "29/29",
+      "recovery_checks": "34/37 passing plus 3 REQUIRED FAILURES (negative controls)",
+      "archived_evidence": [
+        "hosted-key-custodian-35179445639.json",
+        "hosted-key-operator-35179445639.json",
+        "hosted-key-recovery-35179445639.json"
+      ],
+      "archived_evidence_sha256": [
+        "b70a5d9370013d8c5827dc787600640f048331d38d3258a37c6e2f489d74342b",
+        "4da48bf94c8f60f8edd8866ac16124f027e63564669db87c0c0015e550153086",
+        "215729b6747157a63721695dfd825a6093319c5f53cdf85083998d5ee9a132b3"
+      ],
+      "three_separate_machines": "SEPARATE MACHINES - verified, not assumed",
+      "required_discriminators": {
+        "kernel_boot_id_differs": true,
+        "runner_name_differs": true,
+        "dmi_product_uuid_differs": true,
+        "pairs_compared": 3
+      },
+      "observation_only_identifiers": {
+        "hostname": "matches on all three (runnervmlun5p) - disproved as a discriminator by run 35143620884",
+        "docker_daemon_id": "absent on the custodian, which started no container, and shared by the operator and the recovery system - disproved as a discriminator by run 35168111875"
+      },
+      "keys_under_custody": {
+        "encryption_key": "site key protecting __Auth ciphertext, installed with frappe.installer.update_site_config",
+        "backup_encryption_key": "backup key passed by bench backup to gpg -c and by bench restore to gpg -d when System Settings encrypt_backup is on",
+        "distinct_native_keys": true,
+        "epochs": [
+          1,
+          2
+        ],
+        "fingerprints": {
+          "epoch1_encryption_key": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+          "epoch1_backup_encryption_key": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+          "epoch2_encryption_key": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+          "epoch2_backup_encryption_key": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0"
+        },
+        "split_method": "xor-one-time-pad-over-key-bytes",
+        "channels": [
+          "a",
+          "b"
+        ],
+        "custody_manifest_sha256": "72fd408ec262abbf94f10b336146424c6a3a984786e6bbc69db62d445ec4d966"
+      },
+      "retrieval_proved_load_bearing": {
+        "restore_without_any_key": "exit 1 - 'Encrypted backup file detected. Decrypting using site config. / Decryption failed.'",
+        "restore_with_a_real_key_from_the_wrong_epoch": "exit 1 - 'Decrypting using provided key. / Decryption failed.'",
+        "single_channel_reconstruction": "does not reproduce the fingerprint",
+        "cross_epoch_shares": "do not reproduce the fingerprint",
+        "negative_controls_ran_on_copies": true,
+        "staged_payload_byte_identical_afterwards": true
+      },
+      "encrypted_backup_at_rest": {
+        "artifacts_detected_as": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512",
+        "database_sha256": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7",
+        "database_bytes": 245422,
+        "detection_asserted_with_the_file_command": "the same test bench restore applies when deciding whether to decrypt",
+        "site_config_backup_excluded_because_gpg_does_not_cover_it": true
+      },
+      "p3_limitation_closed": {
+        "then": {
+          "run": 35170062251,
+          "decrypts_on_target": false,
+          "reason": "no key travelled with the backup"
+        },
+        "now": {
+          "run": 35179445639,
+          "decrypts_on_target": true,
+          "reason": "the key was retrieved from separate custody channels"
+        },
+        "ciphertext_sha256_identical_across_the_two_machines": true,
+        "plaintext_digest_matches_the_operators_record": true,
+        "plaintext_published": false
+      },
+      "rotation": {
+        "native_single_command_exists": false,
+        "composed_from": [
+          "frappe.utils.password.decrypt(encryption_key=old)",
+          "frappe.utils.password.set_encrypted_password",
+          "frappe.installer.update_site_config"
+        ],
+        "site_key_orphaning_is_the_native_consequence": true,
+        "native_error_recorded": "ValidationError: Failed to decrypt key User.Administrator.api_secret - Encryption key is invalid! Please check site_config.json",
+        "ciphertext_changed": true,
+        "plaintext_digest_unchanged": true,
+        "epoch_1_key_decrypts_after_rotation": false,
+        "epoch_2_key_decrypts": true,
+        "a_key_custody_never_issued_decrypts": false,
+        "backup_key_rotated_and_proved_at_the_gpg_layer": {
+          "epoch_2_key_opens_the_new_backup": "gpg exit 0, 245301 bytes",
+          "epoch_1_key_rejected": "gpg exit 2",
+          "new_backup_detected_as_aes": true
+        }
+      },
+      "destructive_trigger": "bench drop-site custody-operator.localhost --no-backup --db-root-password <runner-generated, never printed>, followed by removal of the archived site directory because it holds both plaintext keys",
+      "secret_hygiene": {
+        "plaintext_key_in_any_published_artifact": false,
+        "plaintext_key_surviving_destruction_on_the_operator_machine": false,
+        "secrets_scanned_for": 7,
+        "leaks_found": 0,
+        "masking": "::add-mask:: applied to every key and generated password before any command could echo it",
+        "keys_passed_to_in_bench_scripts_via": "environment variables, never argv"
+      },
+      "mocks_or_simulations_used": false,
+      "contract_tests": "tests/foundation/test_key_custody_contract.py - 67 tests",
+      "defects_found_and_fixed_by_execution": [
+        "frappe appends an '-enc' suffix to every backup artifact name when encrypt_backup is on, so globs written for unencrypted names matched nothing (run 35178965074 died on 'max() iterable argument is empty' after a successful backup); fixed in 252345e",
+        "frappe interpolates backup_encryption_key into the gpg command unquoted and on failure prints 'Files are stored without encryption' and continues, so a key beginning with '-' - about one in 64 - would silently yield a plaintext backup under an '-enc' filename; the generator now refuses a leading dash and the AES detection assertion catches it regardless"
+      ],
+      "environment_blocked": {
+        "external_secret_store": "repository Actions secrets are not accessible to this session's credential (HTTP 403 Resource not accessible by integration; no admin permission), so no KMS, HSM or secret store could be provisioned. Recorded rather than worked around by weakening the model.",
+        "consequence": "custody is a bounded split-share model across two artifact channels and is explicitly NOT a trust boundary: any job able to download both channels can reconstruct the keys. Retrieval, rotation and decryption are proven; authorization of key release is not."
+      },
+      "not_proven": [
+        "A hardware security module, a cloud KMS or an owner-provisioned secret store",
+        "Authorization of key release: any job able to download both channels can reconstruct the keys",
+        "A rotation ceremony held at a different time from issuance",
+        "Key revocation, custodian-side destruction and custody audit logging",
+        "Custody-channel durability beyond the 14-day artifact retention window; no versioned or off-site key store",
+        "HTTP usability after rotation, which run 35170062251 proved for recovery but not for a rotated key",
+        "A second full restore under the rotated backup key; proven at the gpg layer instead",
+        "Session revocation on recovery, which D8-BACKUP-RECOVERY also requires",
+        "Any RPO or RTO measured against an owner objective, because none exists and none is invented",
+        "A product app under custody: the rehearsal site is frappe-only, recorded as a scope limit",
+        "Any production workload: every key, record, file and credential is synthetic",
+        "Separate providers, regions or datacentres: three GitHub-hosted runners from one pool prove three separate ephemeral VMs only"
+      ]
     },
     "p5_operational_boundaries": {
       "status": "NOT STARTED",

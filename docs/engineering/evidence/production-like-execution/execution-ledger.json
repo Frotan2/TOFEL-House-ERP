@@ -1089,7 +1089,9 @@
       "35122242581": "Foundation runtime validation - failure (SEC-DEPS-01)",
       "35122242728": "Placement synthetic content qualification - success (542/542)",
       "35122242647": "Foundation frontend candidate review - failure (advisory gate)",
-      "35122242888": "D8 operations contract validation - success"
+      "35122242888": "D8 operations contract validation - success",
+      "35179445639": "Foundation external key custody - success (custodian 10/10, operator 29/29, recovery 37 checks with 3 required failures)",
+      "35178965074": "Foundation external key custody - failure (operator artifact discovery; superseded by 35179445639)"
     },
     "checks": {
       "104882875418": "Foundation runner evidence",
@@ -1098,7 +1100,10 @@
       "104885938426": "Placement runner result",
       "104885934034": "Placement native checks",
       "104882992093": "Foundation frontend candidate evidence",
-      "104882627814": "D8 validate"
+      "104882627814": "D8 validate",
+      "105068259227": "Foundation key custody - custodian system",
+      "105068842511": "Foundation key custody - operator system",
+      "105069423253": "Foundation key custody - recovery system"
     },
     "evidence_transport": "Runner artifact ZIPs and workflow logs are hosted on Azure blob / results-receiver endpoints that return EOF from this environment. Evidence was retrieved through the repository's own sanctioned Checks-API transport (tools/foundation/publish_evidence.py), which publishes the complete sanitized report losslessly, and each retrieved report is archived here with its SHA-256."
   },
@@ -1141,10 +1146,13 @@
       "hosted-runtime-35135793582.json": "6cfb435d86f3ba0dcb04c8a939cfaf850b4317d00eff3f0442eb6e13e2ad77d5",
       "hosted-durability-35138416558.json": "b5bd967bfa51c84040911404a3c32f2170baace6388c3a81016c5c4f0596fd9b",
       "hosted-independent-source-35170062251.json": "9c054dd6e41f57d5f073bbe06e2116bf1ec66b9a48fab1d30b7ec48f9f7df1b5",
-      "hosted-independent-target-35170062251.json": "ea23e9f922eb736eea21437a06db1e5ca0a4d0c223b1ea001268a8720de48cb1"
+      "hosted-independent-target-35170062251.json": "ea23e9f922eb736eea21437a06db1e5ca0a4d0c223b1ea001268a8720de48cb1",
+      "hosted-key-custodian-35179445639.json": "b70a5d9370013d8c5827dc787600640f048331d38d3258a37c6e2f489d74342b",
+      "hosted-key-operator-35179445639.json": "4da48bf94c8f60f8edd8866ac16124f027e63564669db87c0c0015e550153086",
+      "hosted-key-recovery-35179445639.json": "215729b6747157a63721695dfd825a6093319c5f53cdf85083998d5ee9a132b3"
     },
     "statement": "Every PASS (EXECUTED) entry in this ledger cites a run identifier and a check name that were read back from GitHub's own API for commit d7df9ca on branch arena/01a0aafe-tofel-house-erp. Nothing is inferred, carried over from a prior branch, or relabelled. Bounded, static and preflight results are listed in separate fields and are never counted as execution evidence. Where the runner could not provide a capability the entry is BLOCKED or ENVIRONMENT-BLOCKED.",
-    "regenerated_at_utc": "2026-09-17T01:52:12.895781+00:00"
+    "regenerated_at_utc": "2026-09-17T04:00:45.515277+00:00"
   },
   "corroborating_reruns_at_evidence_commit": {
     "commit": "c891949e7a30267f34a3365eaf9103d925dc42eb",
@@ -1321,7 +1329,9 @@
     "RESOLVED: the GitHub credential outage ended, commits 699ad7e and 9b96199 were pushed, and the stricter durability probe produced its own hosted PASS at run 35137645608. That run then exposed a mislabeled evidence field, fixed in commit e92c66e, which has now also produced a hosted PASS at run 35138416558. No durability item remains outstanding at the container level.",
     "P3 CLOSED BY EXECUTION: restore has now reached a genuinely independent system and a real destructive trigger has been run. Run 35170062251 at commit 1378ce4 (workflow 'Foundation independent-system recovery'; source check run 105041393483 with 29/29 checks passing and target check run 105042127143 with 31/31 passing, both jobs conclusion success) destroyed the source site with native `bench drop-site --no-backup` - database _0da0781ed64f67b4 present then absent, site directory and both files gone - and a SECOND ephemeral VM rebuilt bench at the identical pinned revisions and recovered from the transferred backup alone: 12 ToDo plus 12 Note records with matching name digests, the private file (552 bytes, is_private=1) and the public file (551 bytes, is_private=0) with matching on-disk SHA-256 and their File documents, frappe  16.33.1 HEAD and erpnext 16.34.2 HEAD, and a usable application over HTTP: ping pong, login 200 as Administrator with a session cookie, source-created record 56uqdlb6cp readable with content matching the manifest and all 12 listed, both files served with digests matching, and the privacy boundary intact (private 403 anonymously, public 200 anonymously). Independence is verified rather than assumed: kernel_boot_id, runner_name and dmi_product_uuid all differ, and the target observed that the source's lab directory, archived site and database are all absent from it. This supersedes the 'UNCHANGED: restore has never reached a genuinely independent system' clause of the preceding entry. STILL NOT PROVEN, so the recovery and backup-restore gates stay BLOCKED: key retrieval and external key custody with rotation (P4), session revocation on recovery, measured RPO/RTO against an owner-selected target, an external backup destination with versioned encrypted backup sets and retention, host/region loss, and any non-synthetic workload. The source-encrypted field was recovered intact but is undecryptable on the target - asserted as an expected failure with distinct key fingerprints recorded - which is the concrete evidence that P4 is a separate requirement.",
     "OPEN BLOCKER - GitHub credential outage during the P3 evidence paperwork. Commit 4b32c3944d1a089ec196358e603186c3f0fb4faf (P3 evidence: archived run 35170062251 check runs, execution-ledger independent_recovery_execution, D8 matrix recovery/backup-restore evidence, regenerated release-readiness-evidence.json, acceptance ledger, report section 10, release gap map section 1.6) is complete and verified locally - 511 tests pass, d8_validate exits 0, all 25 integrity-map entries verify against disk - but it is NOT PUSHED, and the PR #2 comment for P3 is PREPARED but NOT POSTED. `gh auth status` reports 'The github.com token in GH_TOKEN is no longer valid' and the REST API returns 'Bad credentials'. Nothing was inferred, fabricated or backdated while the outage was open: the archived P3 evidence was fetched from the Checks API before the credential expired, and every identifier added in this commit was verified programmatically against those archives or resolved with `git cat-file`. Recovery steps are recorded in pr_2_update.p3_comment_status and in evidence/production-like-execution/PR2-COMMENT-P3.md. This entry must be superseded by a posted comment id and a pushed tip, not deleted.",
-    "SUPERSEDES THE PRECEDING OPEN BLOCKER: the GitHub credential outage is resolved and the P3 evidence paperwork is pushed and the PR #2 comment is posted. Commit 300c17328e4775cffcb3a7c2e3967f765770bf25 fast-forwarded the active branch from exactly 1378ce4 (verified with git ls-remote), PR #2 comment 5707849459 was posted at 2026-09-17T03:06:28Z verbatim from the staged body (GitHub's 7580 characters equals the staged file's 7631 UTF-8 bytes decoded, with 28 multibyte characters), and the D8 operations contract validation run 35176912094 passed at the new tip. PR #2 remains OPEN and unmerged with its head SHA unchanged at 60c777e, because this session is fixed to arena/01a0aafe-tofel-house-erp and cannot push to the PR's head branch. The sandbox re-clone that accompanied the outage cost two local commits; recovery is recorded in pr_2_update.p3_comment_status.reclone_recovery and in evidence/production-like-execution/PR2-COMMENT-P3.md, and the content was re-verified against the remote tip rather than assumed. The Foundation runtime workflow at 1378ce4 (run 35170062199) still fails on SEC-DEPS-01 alone - 119/121 checks pass, only the dependency and frontend advisory audits fail - so the /protected/ nginx change introduced no regression and the dependency gate was left untouched. NEXT: P4 external key custody with rotation and proven key retrieval, then P5 TLS/Tailscale boundary, monitoring and alert delivery with retention, and rollback using real versioned artifacts."
+    "SUPERSEDES THE PRECEDING OPEN BLOCKER: the GitHub credential outage is resolved and the P3 evidence paperwork is pushed and the PR #2 comment is posted. Commit 300c17328e4775cffcb3a7c2e3967f765770bf25 fast-forwarded the active branch from exactly 1378ce4 (verified with git ls-remote), PR #2 comment 5707849459 was posted at 2026-09-17T03:06:28Z verbatim from the staged body (GitHub's 7580 characters equals the staged file's 7631 UTF-8 bytes decoded, with 28 multibyte characters), and the D8 operations contract validation run 35176912094 passed at the new tip. PR #2 remains OPEN and unmerged with its head SHA unchanged at 60c777e, because this session is fixed to arena/01a0aafe-tofel-house-erp and cannot push to the PR's head branch. The sandbox re-clone that accompanied the outage cost two local commits; recovery is recorded in pr_2_update.p3_comment_status.reclone_recovery and in evidence/production-like-execution/PR2-COMMENT-P3.md, and the content was re-verified against the remote tip rather than assumed. The Foundation runtime workflow at 1378ce4 (run 35170062199) still fails on SEC-DEPS-01 alone - 119/121 checks pass, only the dependency and frontend advisory audits fail - so the /protected/ nginx change introduced no regression and the dependency gate was left untouched. NEXT: P4 external key custody with rotation and proven key retrieval, then P5 TLS/Tailscale boundary, monitoring and alert delivery with retention, and rollback using real versioned artifacts.",
+    "P4 CLOSED BY EXECUTION: external key custody with rotation and restoration using separately controlled key material is now genuinely executed, and the limitation run 35170062251 asserted is closed. Run 35179445639 at commit 252345ed8df256d8679db93f835cdf2995318077 (workflow 'Foundation external key custody', .github/workflows/foundation-key-custody.yml, conclusion success) ran THREE separate ephemeral VMs: custodian check run 105068259227 with 10/10 checks, operator check run 105068842511 with 29/29, recovery check run 105069423253 with 37 checks of which 34 pass and 3 are REQUIRED FAILURES (two negative-control restores and one gpg decryption with the wrong epoch's key). The custodian issued four keys - two roles (encryption_key, backup_encryption_key) across two epochs - in native Fernet shape (44 url-safe base64 characters, 32 decoded bytes), split each by XOR one-time pad into two shares published to two separately named artifact channels, and published only SHA-256 fingerprints (epoch1 site 7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7, epoch1 backup 3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29, epoch2 site 82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a, epoch2 backup 718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0; manifest sha256 72fd408ec262abbf94f10b336146424c6a3a984786e6bbc69db62d445ec4d966, identical on the operator). The operator reconstructed both epoch 1 keys from the two channels, verified each against the custodian's fingerprint, installed them with frappe.installer.update_site_config - the same call get_encryption_key() makes when it generates one lazily, with zero pre-existing Fernet-encrypted __Auth rows so nothing was orphaned - enabled System Settings encrypt_backup, created synthetic state (6 ToDo and 6 Note records, one private and one public file, and a native encrypted User.Administrator.api_secret whose ciphertext sha256 is 3ecadda32e98f7187b7f6cbec890348b02571e290d82f6fa75918958fc499a7e), and ran a real `bench backup --with-files` whose three artifacts `file` reports as 'PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512' (database.sql.gz 245422 bytes sha256 0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7, private-files.tar 301 bytes, public-files.tar 298 bytes). The payload is an explicit five-file allowlist; the site config backup frappe writes beside the dumps (20260917_092002-custody-operator_localhost-site_config_backup-enc.json) was excluded because gpg covers only the dump and both tars, so that file holds db_password plus both keys in clear text despite its '-enc' name. Seven generated secrets were scanned for across every staged byte with zero leaks. The operator then destroyed itself with `bench drop-site --no-backup` (database _9b96f4509c396e9c present then absent, site directory and both files gone), removed the archived site directory that drop-site leaves behind because it holds both plaintext keys, and scanned its whole lab and .foundation tree to prove no plaintext key survives anywhere on the machine. A THIRD VM then proved retrieval is load-bearing BEFORE using it: `bench restore` with no key exits 1 with frappe's own 'Encrypted backup file detected. Decrypting using site config. / Decryption failed.', and restore with a real key from the WRONG epoch exits 1 with 'Decrypting using provided key. / Decryption failed.'; both ran on copies and the staged payload was digest-verified byte-identical afterwards. Only then did it restore with the retrieved backup key, migrate, set its own Administrator credential with native `bench set-admin-password`, install the retrieved site key, and DECRYPT the field the operator encrypted: decrypts_on_target=true with the plaintext digest matching the operator's record and the ciphertext digest identical to the operator's, which closes the limitation run 35170062251 asserted (decrypts_on_target=false, 'no key travelled with the backup'). Rotation followed, composed from native primitives because Frappe has no rotation command: ciphertext written under epoch 1 stopped decrypting with frappe's own message ('Encryption key is invalid! Please check site_config.json ... If you have recently restored the site, you may need to copy the site_config.'), was re-encrypted under epoch 2 (ciphertext sha256 changed to 33a3905533f08c36d8892c983e993735f11dcfe8e8691efca5d7de99ea46cacd, plaintext digest unchanged, readable again), and the boundaries were then verified three ways - epoch 1 key fails, epoch 2 key succeeds, a key custody never issued fails. The backup key rotated through the same native path and a new backup was taken under it, detected as AES, and shown to open with the epoch 2 key (gpg exit 0, 245301 bytes) while the epoch 1 key is rejected (gpg exit 2). Independence of all three roles is verified rather than assumed: kernel_boot_id, runner_name and dmi_product_uuid differ for all three pairs, while hostname matches on all three (runnervmlun5p) and the Docker daemon id is absent on the custodian and shared by the other two - both recorded as observations only, each annotated with the run that disproved it as a discriminator (35143620884 and 35168111875). No mocks or simulations were used by any role, and no plaintext key appears in any published artifact. THIS SUPERSEDES the clause 'versioned encrypted backup with external key custody and rotation exists only as a bounded local proof while the foundation restore actually failed to carry the site encryption key' in release_decision AS TO KEY CUSTODY, ROTATION AND THE RESTORE CARRYING A KEY: those are now executed on the real stack. It does NOT supersede the rest of that clause - multi-version backup sets, an off-site destination, retention and rotation of backup SETS remain bounded-local-only - and it does not change any gate. Two defects were found and fixed by execution: frappe appends an '-enc' suffix to every backup artifact name when encrypt_backup is on (run 35178965074 died on 'max() iterable argument is empty' after a successful backup), and frappe passes backup_encryption_key to gpg unquoted so a key beginning with '-' would silently yield a plaintext backup under an '-enc' filename - about one generated key in 64 - which the generator now refuses and the AES detection assertion would catch anyway. STILL NOT PROVEN, so D8 BACKUP-RECOVERY, D8-DURABLE-STATE and the overall gate stay BLOCKED and production_authorization stays REJECT: no HSM, KMS or owner-provisioned secret store (repository Actions secrets return HTTP 403 to this session's credential, recorded as ENVIRONMENT-BLOCKED rather than worked around), so custody is a bounded split-share model and explicitly NOT a trust boundary; no authorization control over key release, since any job able to download both channels can reconstruct the keys; no rotation ceremony separated in time from issuance; no revocation, custodian-side destruction or custody audit log; no key store durability beyond the 14-day artifact retention window; no HTTP usability after rotation; no second full restore under the rotated backup key; no session revocation on recovery; no RPO or RTO measured against an owner objective, because none exists and none is invented; a frappe-only rehearsal site with no product app; and three GitHub-hosted runners from one pool, which proves three separate ephemeral VMs and not three separate providers, regions or datacentres. Every key, record, file and credential is synthetic.",
+    "OPEN BLOCKER - GitHub credential outage during the P4 evidence paperwork, the same failure mode as the P3 paperwork outage recorded two entries above. Beginning at 2026-09-17T04:09Z `gh auth status` reports 'The github.com token in GH_TOKEN is no longer valid', the REST API returns 'Bad credentials', and `git push` fails with 'fatal: could not read Username for https://github.com: terminal prompts disabled'. Retried across three windows totalling about 53 minutes (04:09-04:21, 04:23-04:49, 04:52-05:02 UTC) without recovery. WHAT THE OUTAGE DID NOT COST: the executed P4 evidence is already published and cannot be lost - commits 9a19e83 (the custody harness and workflow) and 252345e (the -enc naming and gpg passphrase fixes) are pushed, and run 35179445639 completed success on GitHub with custodian check 105068259227 (10/10), operator check 105068842511 (29/29) and recovery check 105069423253 (37 checks, 34 pass and 3 required failures). All three payloads were fetched from the Checks API and archived to hosted-key-custodian-35179445639.json, hosted-key-operator-35179445639.json and hosted-key-recovery-35179445639.json BEFORE the credential expired, and all three hashes were verified against the integrity map, which now holds 28 artifacts all matching disk. WHAT REMAINS UNPUBLISHED: three local commits - 6c22a7c (P4 canonical evidence: ledger key_custody_execution, D8 matrix backup-restore and durability evidence, acceptance ledger p4_key_custody, gap map section 1.6 Key custody row, report section 11, regenerated release-readiness-evidence.json and its strengthened wording test), f6f9f32 (the prepared PR #2 comment body plus the outage record) and 4b94aa7 (the three native backup-encryption hazards appended to UPSTREAM-TRACKING.md section 5) - and the PR #2 comment itself, whose body is prepared verbatim at 12405 bytes with sha256 e096460c38b7b051321e69999ea15862f77c71dcafb3d2afd8af1250df81439b in PR2-COMMENT-P4.body.md. NOTHING WAS INFERRED, FABRICATED OR BACKDATED while the outage was open: every identifier in the paperwork was verified programmatically against the archived payloads or resolved with git rev-parse, the full local suite passes 578 tests, tools/foundation/d8_validate.py exits 0, and an independent re-scan of every tracked file confirmed that no token in the repository hashes to any of the four key fingerprints issued by run 35179445639 and that the three archives contain zero key-shaped tokens. The unpushed, unposted state is recorded here as an open blocker rather than reported as done. REMAINING STEPS, in order: push and verify it fast-forwards from exactly 252345e; post the comment with the command in PR2-COMMENT-P4.md; record the comment id and URL plus the validating run ids at the new tip in pr_2_update.p4_comment_status; and if the sandbox was re-cloned while the outage was open, follow the recovery sequence in PR2-COMMENT-P3.md rather than assuming the working tree matches the remote tip."
   ],
   "pr_2_update": {
     "action": "comment posted (the only update available from this session)",
@@ -1392,6 +1402,49 @@
           "failure_profile": "SEC-DEPS-01 ONLY, unchanged: 119 of 121 checks pass and the two failures are hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit; the remaining-gates job fails on resolved_stack_dependencies and advisories (21 npm packages, source registry.npmjs.org bulk advisories). No nginx, recovery or usability check failed, so the /protected/ location change in 1378ce4 introduced no regression.",
           "action_taken": "NONE - the dependency gate was not forced, overridden, forked, suppressed or downgraded, per the standing instruction. It remains UPSTREAM-BLOCKED / REJECT."
         }
+      }
+    },
+    "p4_comment_status": {
+      "state": "PREPARED, NOT POSTED - GitHub credential outage",
+      "body_file": "docs/engineering/evidence/production-like-execution/PR2-COMMENT-P4.body.md",
+      "body_bytes": 12405,
+      "body_sha256": "e096460c38b7b051321e69999ea15862f77c71dcafb3d2afd8af1250df81439b",
+      "record_file": "docs/engineering/evidence/production-like-execution/PR2-COMMENT-P4.md",
+      "post_command": "gh pr comment 2 --repo Frotan2/TOFEL-House-ERP --body-file docs/engineering/evidence/production-like-execution/PR2-COMMENT-P4.body.md",
+      "outage": {
+        "observed": [
+          "gh auth status -> The github.com token in GH_TOKEN is no longer valid",
+          "gh api repos/Frotan2/TOFEL-House-ERP -> Bad credentials",
+          "git push -> fatal: could not read Username for 'https://github.com': terminal prompts disabled"
+        ],
+        "first_observed_utc": "2026-09-17T04:09Z",
+        "retried_until_utc": "2026-09-17T05:02Z",
+        "same_failure_mode_as": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md section 9.4 and PR2-COMMENT-P3.md",
+        "retry_windows_utc": [
+          "04:09-04:21",
+          "04:23-04:49",
+          "04:52-05:02"
+        ],
+        "total_observed_minutes": 53,
+        "resolved": true,
+        "resolution": "Authentication was restored on a later turn, and as with the P3 outage the sandbox had also been re-cloned: HEAD sat at 60c777e with only two commits reachable (60c777e, 9eccff9), the ref origin/arena/01a0aafe-tofel-house-erp did not exist locally, and the four paperwork commits had ceased to exist as git objects. The working tree still held the persisted snapshot of the completed paperwork, so nothing was lost.",
+        "recovery_sequence_executed": [
+          "git ls-remote origin refs/heads/arena/01a0aafe-tofel-house-erp -> 252345ed8df256d8679db93f835cdf2995318077, confirming the published tip was intact and the executed work was not lost",
+          "git config --add remote.origin.fetch '+refs/heads/arena/01a0aafe-tofel-house-erp:refs/remotes/origin/arena/01a0aafe-tofel-house-erp' - a fresh clone only fetches main",
+          "git fetch origin -> [new branch] arena/01a0aafe-tofel-house-erp",
+          "git reset --mixed origin/arena/01a0aafe-tofel-house-erp -> realigns HEAD and the index to 252345e WITHOUT touching the working tree",
+          "git status --porcelain -> listed exactly the 14 paths this paperwork covers and nothing else, which is the check that the snapshot and the real tip were reconciled rather than assumed",
+          "Content re-verified before re-committing: all 28 entries in the integrity map match the files on disk; the three P4 archive hashes are byte-identical to the values recorded in key_custody_execution.evidence and in the integrity map; all three archives are in canonical form with status=pass, run_id=35179445639 and commit=252345e; the prepared comment body is unchanged at 12405 bytes with a matching SHA-256; the three ledgers round-trip as indent=2 without sort_keys; every gate state is unchanged; and an independent re-scan of every file in the tree found no token hashing to any of the four fingerprints issued by the run"
+        ]
+      },
+      "what_the_outage_did_not_cost": "The executed evidence is already published: commits 9a19e83 and 252345e are pushed and run 35179445639 completed success on GitHub, and all three evidence payloads were fetched from the Checks API and archived with hash verification before the credential expired. Only the paperwork commit was unpushed.",
+      "not_reported_as_done": true,
+      "lost_commit_shas_history_only": {
+        "note": "These four commits carried the paperwork while the outage was open. They were never pushed and no longer resolve after the re-clone, so nothing in the evidence cites them as a live reference - the same discipline applied to the nonexistent commit d3705e6 named at the start of this pass. Their content is preserved in the single re-committed paperwork commit.",
+        "6c22a7c": "P4: record executed external key custody in the canonical evidence",
+        "f6f9f32": "P4: prepare the PR #2 comment and record the credential outage",
+        "4b94aa7": "Record the three native backup-encryption hazards P4 execution found",
+        "f0252eb": "P4: record the credential outage as an open blocker, not as done"
       }
     }
   },
@@ -2086,5 +2139,556 @@
       "independent_recovery_conclusion": "success",
       "statement": "The two workflows ran from the same push. The recovery workflow is fully green on both jobs; the runtime workflow fails only on the dependency hard stop, which is a standing REJECT and is not evidence about recovery."
     }
+  },
+  "key_custody_execution": {
+    "classification": "EXECUTED / HOSTED REAL STACK / THREE SEPARATE EPHEMERAL SYSTEMS",
+    "claim_being_tested": "P4 - an executable, production-like external key custody model for the keys that actually protect this stack, proving rotation and restoration using separately controlled key material, with no plaintext secret in any repository artifact. Concretely: close the limitation run 35170062251 asserted, that a source-encrypted field is recovered intact but undecryptable because no key travelled.",
+    "closed": true,
+    "workflow": "Foundation external key custody (.github/workflows/foundation-key-custody.yml)",
+    "workflow_run": 35179445639,
+    "commit": "252345ed8df256d8679db93f835cdf2995318077",
+    "prior_attempt": {
+      "run": 35178965074,
+      "commit": "9a19e83198c2c21103217135631448a35d92e485",
+      "result": "custodian success, operator failure, recovery skipped",
+      "defect": "bench backup with System Settings encrypt_backup on names every artifact with an '-enc' suffix (frappe utils/backups.py set_backup_file_name at the pinned revision), so globs written for unencrypted names matched nothing and the probe died on 'max() iterable argument is empty' after a successful backup",
+      "fixed_in": "252345ed8df256d8679db93f835cdf2995318077",
+      "evidence_value": "the failed run still published evidence proving key retrieval, native key installation with zero pre-existing ciphertext, encrypt_backup=1 and synthetic state creation; those checks are not reused as passes here"
+    },
+    "ref": "refs/heads/arena/01a0aafe-tofel-house-erp",
+    "jobs": {
+      "custodian": "Key custody - separate custodian system",
+      "operator": "Key custody - operating system",
+      "recovery": "Key custody - recovery system",
+      "custodian_checks": 10,
+      "custodian_checks_passed": 10,
+      "operator_checks": 29,
+      "operator_checks_passed": 29,
+      "recovery_checks": 37,
+      "recovery_checks_passed": 34,
+      "recovery_checks_required_to_fail": 3,
+      "recovery_required_failures": [
+        "negative-control-restore-without-key (exit 1)",
+        "negative-control-restore-with-wrong-epoch-key (exit 1)",
+        "gpg-decrypt-rotated-backup-with-epoch_1_key (exit 2)"
+      ],
+      "custodian_check_run": 105068259227,
+      "operator_check_run": 105068842511,
+      "recovery_check_run": 105069423253,
+      "conclusion": "success"
+    },
+    "evidence": {
+      "custodian_artifact": "hosted-key-custodian-35179445639.json",
+      "custodian_sha256": "b70a5d9370013d8c5827dc787600640f048331d38d3258a37c6e2f489d74342b",
+      "operator_artifact": "hosted-key-operator-35179445639.json",
+      "operator_sha256": "4da48bf94c8f60f8edd8866ac16124f027e63564669db87c0c0015e550153086",
+      "recovery_artifact": "hosted-key-recovery-35179445639.json",
+      "recovery_sha256": "215729b6747157a63721695dfd825a6093319c5f53cdf85083998d5ee9a132b3",
+      "canonical_form": "json.dumps(d, indent=2, sort_keys=True) + trailing newline",
+      "retrieval": "gh api repos/Frotan2/TOFEL-House-ERP/check-runs/<id> --jq '.output.text'",
+      "reproduce": "python3 -m unittest tests.foundation.test_key_custody_contract -q  # 67 tests"
+    },
+    "keys_under_custody": {
+      "roles": {
+        "encryption_key": "Site key. Protects native encrypted Password fields stored in __Auth. Installed with frappe.installer.update_site_config, the same call frappe.utils.password.get_encryption_key() makes when it generates one lazily; installer.py at the pinned revision never writes it.",
+        "backup_encryption_key": "Backup key. Protects the backup artifacts: bench backup passes it to `gpg --passphrase <key> -c` over the database dump and both file archives when System Settings encrypt_backup is on, and bench restore passes it to `gpg -d`."
+      },
+      "distinct_native_keys": true,
+      "restore_encryption_key_installs_a_site_key": false,
+      "correction_recorded": "`bench restore --encryption-key` decrypts an encrypted backup; it does NOT install the site encryption_key. Verified against frappe/commands/site.py _restore and frappe/utils/backups.py decrypt_backup at revision 988e54f3. The two keys are kept apart throughout this evidence.",
+      "format": {
+        "characters": 44,
+        "decoded_bytes": 32,
+        "matches": "Fernet.generate_key() output shape",
+        "all_four_valid": true
+      },
+      "split_method": "xor-one-time-pad-over-key-bytes",
+      "channels": [
+        "a",
+        "b"
+      ],
+      "reconstruction_requires": "both channels",
+      "epochs_issued": [
+        1,
+        2
+      ],
+      "fingerprints": {
+        "epoch1-encryption_key": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+        "epoch1-backup_encryption_key": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+        "epoch2-encryption_key": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+        "epoch2-backup_encryption_key": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0"
+      },
+      "rotation_lineage": {
+        "encryption_key": {
+          "epoch1": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+          "epoch2": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+          "keys_differ": true
+        },
+        "backup_encryption_key": {
+          "epoch1": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+          "epoch2": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0",
+          "keys_differ": true
+        }
+      },
+      "manifest_sha256": "72fd408ec262abbf94f10b336146424c6a3a984786e6bbc69db62d445ec4d966",
+      "manifest_sha256_agrees_between_custodian_and_operator": true,
+      "fingerprints_agree_between_custodian_and_operator": true,
+      "fingerprints_agree_between_operator_and_recovery": {
+        "epoch1_encryption_key": true,
+        "epoch1_backup_encryption_key": true,
+        "epoch2_encryption_key": true
+      },
+      "plaintext_published_anywhere": false
+    },
+    "custody_model": {
+      "split_method": "xor-one-time-pad-over-key-bytes",
+      "channels": [
+        "a",
+        "b"
+      ],
+      "reconstruction_requires": "both channels",
+      "separation_is_structural_not_a_trust_boundary": true,
+      "reason": "Both channels live in the same artifact system, so an adversary who can read both can reconstruct the key. What is proven is that the backup alone yields no key, that neither channel alone yields a key, and that retrieval from custody is what makes restoration possible. A production custodian must be a KMS, an HSM or an owner-provisioned secret store.",
+      "external_secret_store_available": false,
+      "external_secret_store_status": "ENVIRONMENT-BLOCKED: repository Actions secrets are not accessible to this session's credential (HTTP 403 Resource not accessible by integration; no admin permission), so a real external store could not be provisioned. Recorded rather than worked around by weakening the model."
+    },
+    "retrieval_proved_load_bearing": {
+      "share_level_controls": {
+        "channel_a_alone": {
+          "reconstructed": true,
+          "fingerprint_matches": false
+        },
+        "channel_b_alone": {
+          "reconstructed": true,
+          "fingerprint_matches": false
+        },
+        "epoch1_a_with_epoch2_b": {
+          "reconstructed": true,
+          "fingerprint_matches": false
+        }
+      },
+      "restore_without_any_key": {
+        "exit_code": 1,
+        "failed_as_required": true,
+        "output_tail": "Encrypted backup file detected. Decrypting using site config.\nDecryption failed. Please provide a valid key and try again.\n",
+        "required_to_fail": true
+      },
+      "restore_with_a_real_key_from_the_wrong_epoch": {
+        "exit_code": 1,
+        "failed_as_required": true,
+        "output_tail": "Encrypted backup file detected. Decrypting using provided key.\nDecryption failed. Please provide a valid key and try again.\n",
+        "required_to_fail": true
+      },
+      "both_ran_on_copies": true,
+      "staged_payload_untouched": {
+        "sha256_before": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7",
+        "sha256_after": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7",
+        "unchanged": true,
+        "why_it_matters": "frappe's decrypt_backup renames the dump to .gpg and renames it back in a finally block, so a failed attempt must leave the staged payload byte-identical; the real restore consumes the original file and must not be handed a damaged one."
+      },
+      "why_it_matters": "If either restore had succeeded, the encrypted backup would not have needed custody at all and the decryption claim would be empty. frappe's own output is recorded verbatim: 'Encrypted backup file detected. Decrypting using site config. / Decryption failed.' without a key, and 'Decrypting using provided key. / Decryption failed.' with the wrong epoch's key.",
+      "negative_control_site_dropped": true
+    },
+    "encrypted_backup_at_rest": {
+      "command": "bench --site custody-operator.localhost backup --with-files",
+      "system_setting": {
+        "system_setting": "encrypt_backup",
+        "value": 1,
+        "effect": "bench backup now runs gpg --passphrase <backup_encryption_key> -c over the database dump and both file tars",
+        "field_is_native": "Check field on System Settings, default 0"
+      },
+      "artifacts": {
+        "database.sql.gz": {
+          "bytes": 245422,
+          "sha256": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7",
+          "file_says": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 .",
+          "aes_detected": true
+        },
+        "private-files.tar": {
+          "bytes": 301,
+          "sha256": "1f2a3d9e939e5d54a80e0d44e0a2d2a7c1e33e0b7e77601b0796324a25573cdb",
+          "file_says": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 .",
+          "aes_detected": true
+        },
+        "public-files.tar": {
+          "bytes": 298,
+          "sha256": "5019b0713a4354260e9fea8aff427e25f81e2a203abcb9c915ca9f1c68d99583",
+          "file_says": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 .",
+          "aes_detected": true
+        }
+      },
+      "enc_suffix_present_on": {
+        "database": true,
+        "private_files": true,
+        "public_files": true
+      },
+      "detection_asserted_rather_than_assumed": "`file` was run over all three artifacts and the probe fails if any is not detected as AES, because that is the exact test bench restore applies when deciding whether to decrypt. This matters more than it looks: frappe's backup_encryption() catches a gpg failure, prints 'Files are stored without encryption' and continues, so an '-enc' filename alone is not proof of encryption.",
+      "site_config_backup_excluded": {
+        "names": [
+          "20260917_092002-custody-operator_localhost-site_config_backup-enc.json"
+        ],
+        "gpg_does_not_cover_it": "frappe's backup_encryption() passes only the database dump and both file archives to gpg; the '-enc' suffix on the site config backup is a filename convention, not encryption, so that file holds db_password, encryption_key and backup_encryption_key in clear text",
+        "consequence": "the staged payload is built from an explicit allowlist of three artifacts plus two digests-only documents, so the site config backup never travels"
+      },
+      "staged_payload_scan": {
+        "secrets_scanned": [
+          "admin_password",
+          "api_secret",
+          "db_password",
+          "epoch1_backup_key",
+          "epoch1_site_key",
+          "epoch2_site_key",
+          "root_password"
+        ],
+        "leaks": {},
+        "clean": true
+      },
+      "staged_allowlist": [
+        "database.sql.gz",
+        "manifest.json",
+        "operator-identity.json",
+        "private-files.tar",
+        "public-files.tar"
+      ]
+    },
+    "restoration_with_a_key_from_custody": {
+      "restore_command": "bench --site custody-recovered.localhost restore <database.sql.gz> --db-root-password <generated> --admin-password <generated> --encryption-key <retrieved backup key> --with-public-files <tar> --with-private-files <tar>",
+      "payload_integrity_before_restore": {
+        "database.sql.gz": {
+          "bytes": 245422,
+          "sha256": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7",
+          "matches_source_record": true
+        },
+        "private-files.tar": {
+          "bytes": 301,
+          "sha256": "1f2a3d9e939e5d54a80e0d44e0a2d2a7c1e33e0b7e77601b0796324a25573cdb",
+          "matches_source_record": true
+        },
+        "public-files.tar": {
+          "bytes": 298,
+          "sha256": "5019b0713a4354260e9fea8aff427e25f81e2a203abcb9c915ca9f1c68d99583",
+          "matches_source_record": true
+        },
+        "manifest.json": {
+          "bytes": 1418,
+          "sha256": "9adafa8487b7d786fbe7acd8a49bd857b272e6302cf3117f3c58c7603ab25629",
+          "matches_source_record": null
+        },
+        "operator-identity.json": {
+          "bytes": 1903,
+          "sha256": "e1010250c00f77dfc4665095bc9858f59ad6349dd561630c1ed55722a1d14c3b",
+          "matches_source_record": null
+        }
+      },
+      "operator_database_absent_on_the_recovery_machine_before_restore": "0",
+      "revisions_match_the_operator": true,
+      "ciphertext_recovered_intact": {
+        "ciphertext_sha256": "3ecadda32e98f7187b7f6cbec890348b02571e290d82f6fa75918958fc499a7e",
+        "matches_the_operators_record": true,
+        "survived_backup_restore": true
+      },
+      "ciphertext_sha256_equals_the_operators_record": true,
+      "retrieved_key_installed_natively": {
+        "installed_with": "frappe.installer.update_site_config",
+        "site_key_fingerprint": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+        "backup_key_fingerprint": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+        "frappe_generates_the_same_key_lazily": "frappe.utils.password.get_encryption_key() calls update_site_config with a Fernet.generate_key() value, so a custodian-issued key is installed through the same native path",
+        "encrypted_auth_rows_before_install": 1,
+        "ciphertext_orphaned_by_the_install": 0,
+        "invariant": "every pre-existing Fernet-encrypted __Auth row decrypts under the key being installed, so nothing is stranded; user passwords are bcrypt with encrypted=0 and are unaffected by the site key"
+      },
+      "closes_the_limitation_run_35170062251_asserted": {
+        "then": {
+          "run": 35170062251,
+          "decrypts_on_target": false,
+          "reason": "no key travelled with the backup"
+        },
+        "now": {
+          "run": "35179445639",
+          "decrypts_on_target": true,
+          "reason": "the key was retrieved from separate custody channels"
+        },
+        "plaintext_published": false
+      },
+      "decrypts_on_target": true,
+      "plaintext_digest_matches_the_operators_record": true,
+      "records_and_files": {
+        "ToDo": {
+          "recovered": 6,
+          "names_sha256_matches": true
+        },
+        "Note": {
+          "recovered": 6,
+          "names_sha256_matches": true
+        },
+        "key-custody-private.txt": {
+          "bytes": 547,
+          "on_disk_sha256_matches": true,
+          "file_document_recovered": true,
+          "is_private": 1
+        },
+        "key-custody-public.txt": {
+          "bytes": 546,
+          "on_disk_sha256_matches": true,
+          "file_document_recovered": true,
+          "is_private": 0
+        }
+      },
+      "admin_credential": {
+        "operator_admin_password_transferred": false,
+        "set_with_native_command": "bench set-admin-password"
+      },
+      "recovered_apps": [
+        "frappe 16.33.1 HEAD"
+      ]
+    },
+    "rotation": {
+      "native_single_command_exists": false,
+      "site_key": {
+        "orphaning_is_the_native_consequence": {
+          "rotated_to_fingerprint": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+          "old_ciphertext_decrypts_after_rotation": false,
+          "native_error": "ValidationError: Failed to decrypt key User.Administrator.api_secret<br><br>Encryption key is invalid! Please check site_config.json<br><br>If you have recently restored the site, you may need to copy the site_config.",
+          "why": "Frappe has no key-rotation command; decrypt() itself tells an operator who changed the key to restore the original site_config.json, so orphaned ciphertext is the expected native consequence of rotation without re-encryption"
+        },
+        "re_encrypted_through_native_primitives": {
+          "composed_from": [
+            "frappe.utils.password.decrypt(encryption_key=old)",
+            "frappe.utils.password.set_encrypted_password",
+            "frappe.installer.update_site_config"
+          ],
+          "native_single_command_exists": false,
+          "old_ciphertext_sha256": "3ecadda32e98f7187b7f6cbec890348b02571e290d82f6fa75918958fc499a7e",
+          "new_ciphertext_sha256": "33a3905533f08c36d8892c983e993735f11dcfe8e8691efca5d7de99ea46cacd",
+          "ciphertext_changed": true,
+          "readable_after_rotation": true,
+          "plaintext_sha256_unchanged": true
+        },
+        "boundaries": {
+          "post_rotation_ciphertext_sha256": "33a3905533f08c36d8892c983e993735f11dcfe8e8691efca5d7de99ea46cacd",
+          "outcomes": {
+            "epoch_1_key": {
+              "decrypts": false,
+              "error": "ValidationError"
+            },
+            "epoch_2_key": {
+              "decrypts": true,
+              "plaintext_sha256_matches": true
+            },
+            "a_key_custody_never_issued": {
+              "decrypts": false,
+              "error": "ValidationError"
+            }
+          },
+          "rotation_is_real": true
+        },
+        "site_config_holds_epoch_2": {
+          "site_key_fingerprint": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+          "matches_epoch_2": true,
+          "epoch_1_key_absent_from_config": true
+        }
+      },
+      "backup_key": {
+        "installed_through_the_native_config_path": {
+          "installed_with": "frappe.installer.update_site_config",
+          "backup_key_fingerprint": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0",
+          "epoch_1_backup_key_absent_from_config": true,
+          "effect": "the next bench backup passes this key to gpg, so the artifact it produces can only be opened with it",
+          "proof_is_in_the_probe": "the recovery probe takes a backup after this step and shows gpg -d succeeds with epoch 2 and fails with epoch 1"
+        },
+        "post_rotation_backup_is_encrypted": {
+          "file_says": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 .",
+          "aes_detected": true
+        },
+        "decryption_outcomes": {
+          "epoch_2_key": {
+            "exit_code": 0,
+            "opened": true,
+            "bytes": 245301,
+            "decrypted_sha256": "1213c80646856c8db50746cd9985b68fb93adac061e5a00dfc672a1d33015ae0",
+            "required_to": "open the artifact"
+          },
+          "epoch_1_key": {
+            "exit_code": 2,
+            "opened": false,
+            "bytes": 0,
+            "decrypted_sha256": null,
+            "required_to": "be rejected"
+          }
+        },
+        "epoch_2_key_opens_it": true,
+        "epoch_1_key_rejected": true,
+        "proved_at_the_gpg_layer_rather_than_by_a_second_full_restore": "A second bench restore would cost another several minutes and prove nothing beyond what gpg already proves here: the artifact taken after rotation is opened by the rotated key and not by the previous one. The full restore path was already proven above with the epoch 1 key."
+      },
+      "rotation_lineage_keys_differ": {
+        "encryption_key": true,
+        "backup_encryption_key": true
+      }
+    },
+    "destruction_and_secret_hygiene": {
+      "operator_destructive_trigger": "bench drop-site custody-operator.localhost --no-backup --db-root-password <generated>",
+      "pre_destruction": {
+        "site_directory_exists": true,
+        "database_name": "_9b96f4509c396e9c",
+        "private_file_present": true,
+        "public_file_present": true,
+        "site_config_holds_both_keys": true,
+        "database_present": "1"
+      },
+      "post_destruction": {
+        "site_directory_exists": false,
+        "private_file_present": false,
+        "public_file_present": false,
+        "database_present": "0"
+      },
+      "archived_site_directory_removed": {
+        "present_after_drop_site": [
+          "custody-operator.localhost"
+        ],
+        "held_plaintext_keys": true,
+        "removed": true,
+        "reason": "bench drop-site archives the site directory, and the archived site_config.json holds both plaintext keys, so custody requires removing it; leaving it would mean plaintext key material survived on the operator machine after destruction."
+      },
+      "no_plaintext_key_survives_destruction": {
+        "scanned_roots": [
+          "/home/runner/work/_temp/foundation-key-custody-operator",
+          "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/.foundation"
+        ],
+        "survivors": [],
+        "clean": true,
+        "meaning": "The only surviving copies of this key material are the shares in the two custody channels, which this machine never held in reconstructed form after destruction."
+      },
+      "custodian_plaintext_key_destruction": {
+        "in_memory_bindings_dropped": true,
+        "erasure_provable": false,
+        "reason": "CPython gives no memory-erasure guarantee, so this is recorded as a limit rather than claimed as a property. What is proven is that no plaintext key was written to any file, that only shares persist, and that this virtual machine is destroyed when the job ends.",
+        "vm_destroyed_at_job_end": true
+      },
+      "operator_payload_scan": {
+        "secrets_scanned": [
+          "admin_password",
+          "api_secret",
+          "db_password",
+          "epoch1_backup_key",
+          "epoch1_site_key",
+          "epoch2_site_key",
+          "root_password"
+        ],
+        "leaks": {},
+        "clean": true
+      },
+      "recovery_published_evidence_scan": {
+        "secrets_scanned": [
+          "admin_password",
+          "db_password",
+          "epoch1_backup_key",
+          "epoch1_site_key",
+          "epoch2_backup_key",
+          "epoch2_site_key",
+          "root_password"
+        ],
+        "leaks": {},
+        "clean": true
+      },
+      "masking": "Every key and generated password was passed to ::add-mask:: before any command could echo it, and every recorded command, output tail and report is passed through the probe's redactor before it is written.",
+      "keys_passed_to_in_bench_scripts_via_environment_not_argv": true
+    },
+    "independence": {
+      "verdict": "SEPARATE MACHINES",
+      "roles": [
+        "custodian",
+        "operator",
+        "recovery"
+      ],
+      "every_pair_separate": true,
+      "missing_required_identifiers": [],
+      "kernel_boot_id": {
+        "custodian": "ada63831-02a2-4c68-bbcb-edbbce8aac37",
+        "operator": "98d290d1-03aa-45cc-9e31-dafffaa2966f",
+        "recovery": "963ba2b7-ead2-408a-bc96-a0cdcb321b43"
+      },
+      "runner_name": {
+        "custodian": "GitHub Actions 1000002471",
+        "operator": "GitHub Actions 1000002472",
+        "recovery": "GitHub Actions 1000002473"
+      },
+      "dmi_product_uuid": {
+        "custodian": "9eef88c7-9b19-4c8d-80e0-87c4b1f654ea",
+        "operator": "44738f95-e4c7-4fda-9ccc-c6c3e79d0d92",
+        "recovery": "08428be9-f3f7-4476-8e3e-dc0f48b07fdd"
+      },
+      "dmi_product_uuid_pairs_compared": 3,
+      "corroborated_by_dmi_product_uuid": true,
+      "hostname": {
+        "values": {
+          "custodian": "runnervmlun5p",
+          "operator": "runnervmlun5p",
+          "recovery": "runnervmlun5p"
+        },
+        "matches": true,
+        "used_as_a_discriminator": false,
+        "role": "OBSERVATION ONLY",
+        "disproved_by_run": 35143620884,
+        "note": "All three jobs reported runnervmlun5p, a third observation of the platform reusing generated hostnames across separate ephemeral VMs."
+      },
+      "docker_daemon_id": {
+        "values": {
+          "custodian": null,
+          "operator": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+          "recovery": "a4efb8b6-20f9-46f4-b827-91ac0547be3a"
+        },
+        "used_as_a_discriminator": false,
+        "role": "OBSERVATION ONLY",
+        "disproved_by_run": 35168111875,
+        "note": "The custodian started no container so it has no daemon id; the operator and the recovery system report the same pre-generated id the runner image ships."
+      },
+      "shared_filesystem": false,
+      "shared_volumes": false,
+      "shared_containers": false,
+      "shared_channels": [
+        "github-actions-artifact: custody channel a",
+        "github-actions-artifact: custody channel b",
+        "github-actions-artifact: fingerprint manifest",
+        "github-actions-artifact: encrypted backup payload"
+      ]
+    },
+    "stack": {
+      "frappe": "988e54f3c4c291e2077a83809663f123731abe76",
+      "erpnext": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+      "operator_revisions_match_recovery": true,
+      "installed_apps": [],
+      "recovered_apps": [
+        "frappe 16.33.1 HEAD"
+      ],
+      "product_app_not_installed": {
+        "reason": "Both custody keys protect framework-level surfaces - __Auth ciphertext and the backup artifacts - which behave identically with or without a product app. Independent-system recovery run 35170062251 already proved the full pinned stack recovers, so installing erpnext here would add runtime and failure surface without adding custody evidence."
+      },
+      "scope_limit_recorded": "The custody rehearsal runs a frappe-only site. Both keys protect framework-level surfaces - __Auth ciphertext and the backup artifacts - which behave identically with or without a product app, and run 35170062251 already proved the full pinned stack (frappe 988e54f3 + erpnext 4048fb70) recovers onto a separate machine.",
+      "mocks_or_simulations_used": false,
+      "all_three_roles_report_no_mocks": true
+    },
+    "gpg_interoperability_defect_found_by_reading_the_pinned_source": {
+      "finding": "frappe utils/backups.py backup_encryption() interpolates backup_encryption_key into a shell command unquoted: `gpg --yes --passphrase {passphrase} --pinentry-mode loopback -c {filelocation}`. The url-safe base64 alphabet includes '-', so a key beginning with a dash is parsed by gpg as an option, gpg fails, and frappe catches the exception, prints 'Files are stored without encryption' and continues - leaving a plaintext backup under an '-enc' filename.",
+      "likelihood": "about one generated key in 64 begins with '-'",
+      "upstream_fix_proposed": false,
+      "mitigation_applied_here": "key_custody.generate_native_key() refuses a leading dash, at a cost of about 0.02 bits of entropy; command_line_safety() records the reason and the custodian asserts every issued key is safe to pass to gpg unquoted",
+      "defence_in_depth": "the operator still runs `file` over all three artifacts and fails if any is not detected as AES, so a silently unencrypted backup cannot pass",
+      "production_implication": "an operator who lets Frappe generate its own backup key has roughly a 1-in-64 chance of silently storing backups unencrypted; this is recorded for the owner rather than fixed upstream"
+    },
+    "not_proven": [
+      "A hardware security module, a cloud KMS or an owner-provisioned secret store. Repository Actions secrets are not accessible to this session's credential (HTTP 403 Resource not accessible by integration; no admin permission), so custody is modeled structurally across two artifact channels and is explicitly NOT a trust boundary.",
+      "Authorization of key release: any job able to download both channels can reconstruct the keys. Retrieval is proven; access control over retrieval is not.",
+      "A rotation ceremony held at a different time from issuance: both epochs are issued in one custodian job so that rotation can be proven at all on ephemeral infrastructure.",
+      "Key revocation, destruction on the custodian side, and custody audit logging.",
+      "Durability of the custody channels beyond the 14-day artifact retention window; there is no off-site or versioned key store.",
+      "HTTP usability after rotation: rotation is proven through the native API and at the gpg layer. Run 35170062251 proved HTTP usability for recovery, but not for a rotated key.",
+      "A second full restore under the rotated backup key; proven at the gpg layer instead.",
+      "Session revocation on recovery, which D8-BACKUP-RECOVERY also requires.",
+      "Any RPO or RTO measured against an owner objective, because no owner objective exists and none is invented here.",
+      "A product app under custody: the rehearsal site is frappe-only, as recorded above.",
+      "Any production workload: every key, record, file and credential is synthetic and generated inside the run.",
+      "All three roles are GitHub-hosted runners from the same pool. kernel_boot_id, runner_name and dmi_product_uuid prove three separate ephemeral VMs, not three separate providers, regions or datacentres."
+    ],
+    "defects_found_and_fixed_by_execution": 2
   }
 }

@@ -1,0 +1,770 @@
+{
+  "archived_site_directory_removed": {
+    "held_plaintext_keys": true,
+    "present_after_drop_site": [
+      "custody-operator.localhost"
+    ],
+    "reason": "bench drop-site archives the site directory, and the archived site_config.json holds both plaintext keys, so custody requires removing it; leaving it would mean plaintext key material survived on the operator machine after destruction.",
+    "removed": true
+  },
+  "artifact_name": "operator-result.json",
+  "backup_artifacts_are_encrypted_at_rest": {
+    "database.sql.gz": {
+      "aes_detected": true,
+      "file_says": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 .",
+      "gpg_detected": false
+    },
+    "private-files.tar": {
+      "aes_detected": true,
+      "file_says": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 .",
+      "gpg_detected": false
+    },
+    "public-files.tar": {
+      "aes_detected": true,
+      "file_says": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 .",
+      "gpg_detected": false
+    }
+  },
+  "backup_encryption_enabled": {
+    "effect": "bench backup now runs gpg --passphrase <backup_encryption_key> -c over the database dump and both file tars",
+    "field_is_native": "Check field on System Settings, default 0",
+    "system_setting": "encrypt_backup",
+    "value": 1
+  },
+  "backup_file_names": {
+    "all_files_in_backup_directory": [
+      "20260917_092002-custody-operator_localhost-database-enc.sql.gz",
+      "20260917_092002-custody-operator_localhost-files-enc.tar",
+      "20260917_092002-custody-operator_localhost-private-files-enc.tar",
+      "20260917_092002-custody-operator_localhost-site_config_backup-enc.json"
+    ],
+    "database": "20260917_092002-custody-operator_localhost-database-enc.sql.gz",
+    "enc_suffix_explained": "frappe.utils.backups.set_backup_file_name appends '-enc' to the database dump, both file archives and the site config backup when System Settings encrypt_backup is on, so the suffix is the native signal that the encryption branch was taken",
+    "enc_suffix_present_on": {
+      "database": true,
+      "private_files": true,
+      "public_files": true
+    },
+    "private_files": "20260917_092002-custody-operator_localhost-private-files-enc.tar",
+    "public_files": "20260917_092002-custody-operator_localhost-files-enc.tar"
+  },
+  "backup_site_config_excluded": [
+    "20260917_092002-custody-operator_localhost-site_config_backup-enc.json"
+  ],
+  "checks": [
+    {
+      "command": [
+        "docker",
+        "version",
+        "--format",
+        "{{.Client.Version}} {{.Server.Version}}"
+      ],
+      "exit_code": 0,
+      "name": "docker-version",
+      "seconds": 0.012,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-indep-mariadb",
+        "--mount",
+        "type=bind,source=/home/runner/work/_temp/foundation-key-custody-operator/db-password,target=/run/secrets/db-password,readonly",
+        "--env",
+        "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password",
+        "--env",
+        "MARIADB_ROOT_HOST=%",
+        "--publish",
+        "127.0.0.1:13306:3306",
+        "--health-cmd",
+        "healthcheck.sh --connect --innodb_initialized",
+        "--health-interval",
+        "2s",
+        "--health-retries",
+        "60",
+        "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+        "--character-set-server=utf8mb4",
+        "--collation-server=utf8mb4_unicode_ci"
+      ],
+      "exit_code": 0,
+      "name": "start-mariadb",
+      "seconds": 6.398,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-indep-redis-queue",
+        "--publish",
+        "127.0.0.1:11379:6379",
+        "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+      ],
+      "exit_code": 0,
+      "name": "start-foundation-indep-redis-queue",
+      "seconds": 0.197,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-indep-redis-cache",
+        "--publish",
+        "127.0.0.1:12379:6379",
+        "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+      ],
+      "exit_code": 0,
+      "name": "start-foundation-indep-redis-cache",
+      "seconds": 0.338,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "sudo",
+        "apt-get",
+        "install",
+        "-y",
+        "--no-install-recommends",
+        "mariadb-client",
+        "file"
+      ],
+      "exit_code": 0,
+      "name": "mariadb-client-install",
+      "seconds": 2.905,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "mariadb",
+        "--version"
+      ],
+      "exit_code": 0,
+      "name": "mariadb-client-version",
+      "seconds": 0.155,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe"
+      ],
+      "exit_code": 0,
+      "name": "clone-frappe",
+      "seconds": 0.003,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/frappe"
+      ],
+      "exit_code": 0,
+      "name": "origin-frappe",
+      "seconds": 0.001,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "988e54f3c4c291e2077a83809663f123731abe76"
+      ],
+      "exit_code": 0,
+      "name": "fetch-frappe",
+      "seconds": 4.988,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "name": "checkout-frappe",
+      "seconds": 0.24,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "verify-frappe",
+      "seconds": 0.001,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext"
+      ],
+      "exit_code": 0,
+      "name": "clone-erpnext",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/erpnext"
+      ],
+      "exit_code": 0,
+      "name": "origin-erpnext",
+      "seconds": 0.001,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd"
+      ],
+      "exit_code": 0,
+      "name": "fetch-erpnext",
+      "seconds": 7.184,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "name": "checkout-erpnext",
+      "seconds": 0.333,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "verify-erpnext",
+      "seconds": 0.001,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+        "-m",
+        "venv",
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools"
+      ],
+      "exit_code": 0,
+      "name": "bench-tools-venv",
+      "seconds": 2.242,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "frappe-bench==5.31.0",
+        "uv==0.11.6"
+      ],
+      "exit_code": 0,
+      "name": "bench-tools-install",
+      "seconds": 4.681,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench",
+        "init",
+        "/home/runner/work/_temp/foundation-key-custody-operator/bench",
+        "--frappe-path",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe",
+        "--python",
+        "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+        "--no-backups",
+        "--skip-redis-config-generation",
+        "--no-procfile",
+        "--skip-assets",
+        "--verbose"
+      ],
+      "exit_code": 0,
+      "name": "bench-init",
+      "seconds": 26.535,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_cache",
+        "redis://127.0.0.1:12379"
+      ],
+      "exit_code": 0,
+      "name": "config-redis_cache",
+      "seconds": 1.261,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_queue",
+        "redis://127.0.0.1:11379"
+      ],
+      "exit_code": 0,
+      "name": "config-redis_queue",
+      "seconds": 0.316,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_socketio",
+        "redis://127.0.0.1:11379"
+      ],
+      "exit_code": 0,
+      "name": "config-redis_socketio",
+      "seconds": 0.357,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench",
+        "get-app",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext"
+      ],
+      "exit_code": 0,
+      "name": "get-app-erpnext",
+      "seconds": 16.417,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench",
+        "new-site",
+        "custody-operator.localhost",
+        "--db-type",
+        "mariadb",
+        "--db-host",
+        "127.0.0.1",
+        "--db-port",
+        "13306",
+        "--db-root-password",
+        "[REDACTED]",
+        "--db-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--mariadb-user-host-login-scope",
+        "%"
+      ],
+      "exit_code": 0,
+      "name": "new-site",
+      "seconds": 31.751,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench",
+        "--site",
+        "custody-operator.localhost",
+        "migrate"
+      ],
+      "exit_code": 0,
+      "name": "migrate",
+      "seconds": 3.516,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_key_custody_data.py",
+        "install-keys",
+        "custody-operator.localhost"
+      ],
+      "exit_code": 0,
+      "name": "install-keys",
+      "seconds": 0.739,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_key_custody_data.py",
+        "create",
+        "custody-operator.localhost"
+      ],
+      "exit_code": 0,
+      "name": "create",
+      "seconds": 1.194,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench",
+        "--site",
+        "custody-operator.localhost",
+        "backup",
+        "--with-files"
+      ],
+      "exit_code": 0,
+      "name": "backup-with-files-under-encryption",
+      "seconds": 1.794,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench",
+        "drop-site",
+        "custody-operator.localhost",
+        "--db-root-password",
+        "[REDACTED]",
+        "--no-backup"
+      ],
+      "exit_code": 0,
+      "name": "destructive-drop-site",
+      "seconds": 1.427,
+      "status": "pass"
+    }
+  ],
+  "commit": "252345ed8df256d8679db93f835cdf2995318077",
+  "created_state": {
+    "doctypes": {
+      "Note": {
+        "count": 6,
+        "names_sha256": "8c49691bbdab64007bf2c21b87d0e8ac0971a3c8b266d259076a20c4a28ef36f"
+      },
+      "ToDo": {
+        "count": 6,
+        "names_sha256": "1b11418ac758637353dca626b75d902ab94308f8a9cfd998c162bad46714eb86"
+      }
+    },
+    "encrypted_field": {
+      "ciphertext_sha256": "3ecadda32e98f7187b7f6cbec890348b02571e290d82f6fa75918958fc499a7e",
+      "decrypts_on_operator": true,
+      "encrypted_under_site_key_fingerprint": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+      "field": "User.Administrator.api_secret",
+      "plaintext_sha256": "759764cfafc69f960fc5692ed1e0bd695d9330a60316a15f9a3cdc081060ef9b"
+    },
+    "files": {
+      "key-custody-private.txt": {
+        "attached_to": "oh3g1pvipj",
+        "bytes": 547,
+        "file_url": "/private/files/key-custody-private.txt",
+        "is_private": 1,
+        "on_disk_sha256": "e0482b597aca063351609dff2434826df20c3ab079258a4606f5f2a289ebae59"
+      },
+      "key-custody-public.txt": {
+        "attached_to": null,
+        "bytes": 546,
+        "file_url": "/files/key-custody-public.txt",
+        "is_private": 0,
+        "on_disk_sha256": "cd45463ac8837974e60799bf4513e5578357344758b2a27c9a5788d8c1238c9b"
+      }
+    },
+    "key_fingerprints": {
+      "backup_key": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+      "site_key": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7"
+    }
+  },
+  "custody_channels": {
+    "a": [
+      "epoch1-backup_encryption_key.json",
+      "epoch1-encryption_key.json",
+      "epoch2-backup_encryption_key.json",
+      "epoch2-encryption_key.json"
+    ],
+    "b": [
+      "epoch1-backup_encryption_key.json",
+      "epoch1-encryption_key.json",
+      "epoch2-backup_encryption_key.json",
+      "epoch2-encryption_key.json"
+    ]
+  },
+  "custody_manifest": {
+    "entries": 4,
+    "epochs": [
+      1,
+      2
+    ],
+    "rotation_lineage": {
+      "backup_encryption_key": {
+        "epoch1": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+        "epoch2": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0",
+        "keys_differ": true
+      },
+      "encryption_key": {
+        "epoch1": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+        "epoch2": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+        "keys_differ": true
+      }
+    },
+    "sha256": "72fd408ec262abbf94f10b336146424c6a3a984786e6bbc69db62d445ec4d966",
+    "split_method": "xor-one-time-pad-over-key-bytes"
+  },
+  "custody_negative_controls_before_use": {
+    "channel_a_alone": {
+      "error": null,
+      "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+      "fingerprint_matches": false,
+      "reconstructed": true
+    },
+    "channel_b_alone": {
+      "error": null,
+      "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+      "fingerprint_matches": false,
+      "reconstructed": true
+    },
+    "epoch1_a_with_epoch2_b": {
+      "error": null,
+      "fingerprint": "13c7837567b98ae319af646c37efe08480522655811ed16f0c0b80adb9372370",
+      "fingerprint_matches": false,
+      "reconstructed": true
+    }
+  },
+  "docker_daemon_id": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+  "installed_apps": [],
+  "key_retrieval": {
+    "channels_required": [
+      "a",
+      "b"
+    ],
+    "plaintext_published": false,
+    "retrieved": {
+      "epoch1-backup_encryption_key": {
+        "channels_combined": [
+          "a",
+          "b"
+        ],
+        "fingerprint": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+        "matches_custody_manifest": true,
+        "native_fernet_format": {
+          "characters": 44,
+          "decoded_bytes": 32,
+          "matches": "the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept",
+          "valid": true
+        }
+      },
+      "epoch1-encryption_key": {
+        "channels_combined": [
+          "a",
+          "b"
+        ],
+        "fingerprint": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+        "matches_custody_manifest": true,
+        "native_fernet_format": {
+          "characters": 44,
+          "decoded_bytes": 32,
+          "matches": "the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept",
+          "valid": true
+        }
+      },
+      "epoch2-backup_encryption_key": {
+        "channels_combined": [
+          "a",
+          "b"
+        ],
+        "fingerprint": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0",
+        "matches_custody_manifest": true,
+        "native_fernet_format": {
+          "characters": 44,
+          "decoded_bytes": 32,
+          "matches": "the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept",
+          "valid": true
+        }
+      },
+      "epoch2-encryption_key": {
+        "channels_combined": [
+          "a",
+          "b"
+        ],
+        "fingerprint": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+        "matches_custody_manifest": true,
+        "native_fernet_format": {
+          "characters": 44,
+          "decoded_bytes": 32,
+          "matches": "the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept",
+          "valid": true
+        }
+      }
+    },
+    "verified_by": "SHA-256 fingerprint comparison against the custodian's manifest"
+  },
+  "keys_installed_natively": {
+    "backup_key_fingerprint": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+    "ciphertext_orphaned_by_the_install": 0,
+    "encrypted_auth_rows_before_install": 0,
+    "frappe_generates_the_same_key_lazily": "frappe.utils.password.get_encryption_key() calls update_site_config with a Fernet.generate_key() value, so a custodian-issued key is installed through the same native path",
+    "installed_with": "frappe.installer.update_site_config",
+    "invariant": "every pre-existing Fernet-encrypted __Auth row decrypts under the key being installed, so nothing is stranded; user passwords are bcrypt with encrypted=0 and are unaffected by the site key",
+    "site_key_fingerprint": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7"
+  },
+  "machine_identity": {
+    "cpu_count": 4,
+    "dmi_product_uuid": "44738f95-e4c7-4fda-9ccc-c6c3e79d0d92",
+    "docker_daemon_id": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+    "github_action": "__run_4",
+    "hostname": "runnervmlun5p",
+    "job": "operator",
+    "kernel_boot_id": "98d290d1-03aa-45cc-9e31-dafffaa2966f",
+    "machine": "x86_64",
+    "mem_total_kb": 16373452,
+    "python": "3.12.3",
+    "run_id": "35179445639",
+    "runner_image": "ubuntu24",
+    "runner_image_version": "20260907.300.1",
+    "runner_name": "GitHub Actions 1000002472",
+    "runner_os": "Linux",
+    "uptime_seconds": 203.8
+  },
+  "manifest_sha256": "9adafa8487b7d786fbe7acd8a49bd857b272e6302cf3117f3c58c7603ab25629",
+  "mariadb_client": {
+    "dump_binary": "/usr/bin/mariadb-dump",
+    "preferred_over_mysqldump_because": "MariaDB has no information_schema.COLUMN_STATISTICS, which the Oracle client queries unconditionally",
+    "version": "mariadb  Ver 15.1 Distrib 10.11.14-MariaDB, for debian-linux-gnu (x86_64) using  EditLine wrapper"
+  },
+  "mariadb_health": {
+    "healthy": true,
+    "polls": 4
+  },
+  "mocks_or_simulations_used": false,
+  "no_plaintext_key_survives_destruction": {
+    "clean": true,
+    "meaning": "The only surviving copies of this key material are the shares in the two custody channels, which this machine never held in reconstructed form after destruction.",
+    "scanned_roots": [
+      "/home/runner/work/_temp/foundation-key-custody-operator",
+      "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/.foundation"
+    ],
+    "survivors": []
+  },
+  "operator_database_name": "_9b96f4509c396e9c",
+  "operator_destroyed": true,
+  "operator_revisions": {
+    "erpnext": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+    "frappe": "988e54f3c4c291e2077a83809663f123731abe76"
+  },
+  "post_destruction": {
+    "database_present": "0",
+    "private_file_present": false,
+    "public_file_present": false,
+    "site_directory_exists": false
+  },
+  "pre_destruction": {
+    "database_name": "_9b96f4509c396e9c",
+    "database_present": "1",
+    "private_file_present": true,
+    "public_file_present": true,
+    "site_config_holds_both_keys": true,
+    "site_directory_exists": true
+  },
+  "product_app_not_installed": {
+    "reason": "Both custody keys protect framework-level surfaces - __Auth ciphertext and the backup artifacts - which behave identically with or without a product app. Independent-system recovery run 35170062251 already proved the full pinned stack recovers, so installing erpnext here would add runtime and failure surface without adding custody evidence."
+  },
+  "recovery_depends_on_custody_and_the_staged_backup": true,
+  "ref": "refs/heads/arena/01a0aafe-tofel-house-erp",
+  "role": "operator",
+  "run_id": "35179445639",
+  "scope": "Operator system for external key custody: run a real site on keys retrieved from separate custody channels, produce an encrypted backup, then destroy the site and every local copy of the key material",
+  "services": {
+    "mariadb": {
+      "image_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+      "selected_version": "11.8.9"
+    },
+    "redis": {
+      "image_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+      "selected_version": "8.6.6"
+    }
+  },
+  "site": "custody-operator.localhost",
+  "site_config_backup_is_plaintext": {
+    "consequence": "the staged payload is built from an explicit allowlist of three artifacts plus two digests-only documents, so the site config backup never travels",
+    "gpg_does_not_cover_it": "frappe's backup_encryption() passes only the database dump and both file archives to gpg; the '-enc' suffix on the site config backup is a filename convention, not encryption, so that file holds db_password, encryption_key and backup_encryption_key in clear text",
+    "names": [
+      "20260917_092002-custody-operator_localhost-site_config_backup-enc.json"
+    ]
+  },
+  "staged_payload": {
+    "database.sql.gz": {
+      "bytes": 245422,
+      "sha256": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7"
+    },
+    "manifest.json": {
+      "bytes": 1418,
+      "sha256": "9adafa8487b7d786fbe7acd8a49bd857b272e6302cf3117f3c58c7603ab25629"
+    },
+    "operator-identity.json": {
+      "bytes": 1903,
+      "sha256": "e1010250c00f77dfc4665095bc9858f59ad6349dd561630c1ed55722a1d14c3b"
+    },
+    "private-files.tar": {
+      "bytes": 301,
+      "sha256": "1f2a3d9e939e5d54a80e0d44e0a2d2a7c1e33e0b7e77601b0796324a25573cdb"
+    },
+    "public-files.tar": {
+      "bytes": 298,
+      "sha256": "5019b0713a4354260e9fea8aff427e25f81e2a203abcb9c915ca9f1c68d99583"
+    }
+  },
+  "staged_payload_scan": {
+    "clean": true,
+    "leaks": {},
+    "secrets_scanned": [
+      "admin_password",
+      "api_secret",
+      "db_password",
+      "epoch1_backup_key",
+      "epoch1_site_key",
+      "epoch2_site_key",
+      "root_password"
+    ]
+  },
+  "status": "pass"
+}

@@ -1,0 +1,479 @@
+{
+  "artifact_name": "custodian-result.json",
+  "channels": {
+    "channel-a": {
+      "files": [
+        "epoch1-backup_encryption_key.json",
+        "epoch1-encryption_key.json",
+        "epoch2-backup_encryption_key.json",
+        "epoch2-encryption_key.json"
+      ],
+      "sha256": {
+        "epoch1-backup_encryption_key.json": "9fff355e4c8fb481e577844814ab9e4c47b437a042aabb845404cf2ce111d3cf",
+        "epoch1-encryption_key.json": "738c4719196d6bdea7987501d6532437cbf6102188c622bf30d95b9eca900420",
+        "epoch2-backup_encryption_key.json": "3a8c71872e85724811eb03bb8b358dd18ae17f08a5f465ccb086f206e565d4ec",
+        "epoch2-encryption_key.json": "e50197decf22118a670884f68668af103490ef40f15cf6ee9fb3c57d58e9ffd3"
+      }
+    },
+    "channel-b": {
+      "files": [
+        "epoch1-backup_encryption_key.json",
+        "epoch1-encryption_key.json",
+        "epoch2-backup_encryption_key.json",
+        "epoch2-encryption_key.json"
+      ],
+      "sha256": {
+        "epoch1-backup_encryption_key.json": "77568da1f6afd6dc88815e6fea6510fbd9f7137e7821d8102cb003666213b41a",
+        "epoch1-encryption_key.json": "123cf6082026162ad64464a68cc30629c68089929f5b753b694c4416f9f9fae8",
+        "epoch2-backup_encryption_key.json": "ebe849de32b571977b0ab4cd7d93856a1675e6c350cc334b1ef484fbe67c74de",
+        "epoch2-encryption_key.json": "8a86fa8332ae9781d3917b8fe2b2592696b8bee3b4711e2b66c94966451b7e72"
+      }
+    }
+  },
+  "checks": [
+    {
+      "name": "custodian-runs-without-the-product-stack",
+      "observation": {
+        "bench_present_on_this_machine": false,
+        "database_started": false,
+        "docker_invoked": false,
+        "frappe_imported": false,
+        "site_created": false,
+        "stdlib_only": true
+      },
+      "status": "pass"
+    },
+    {
+      "name": "keys-issued-in-native-fernet-format",
+      "observation": {
+        "epoch1-backup_encryption_key": {
+          "characters": 44,
+          "decoded_bytes": 32,
+          "reason": null,
+          "valid": true
+        },
+        "epoch1-encryption_key": {
+          "characters": 44,
+          "decoded_bytes": 32,
+          "reason": null,
+          "valid": true
+        },
+        "epoch2-backup_encryption_key": {
+          "characters": 44,
+          "decoded_bytes": 32,
+          "reason": null,
+          "valid": true
+        },
+        "epoch2-encryption_key": {
+          "characters": 44,
+          "decoded_bytes": 32,
+          "reason": null,
+          "valid": true
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "name": "keys-issued-are-safe-to-pass-to-gpg-unquoted",
+      "observation": {
+        "epoch1-backup_encryption_key": {
+          "checked_because": "frappe.utils.backups.backup_encryption() passes backup_encryption_key to gpg unquoted, and on failure prints 'Files are stored without encryption' and continues, so an unsafe key yields a plaintext backup under an -enc filename",
+          "leading_dash": false,
+          "safe_to_pass_unquoted": true,
+          "shell_metacharacters": []
+        },
+        "epoch1-encryption_key": {
+          "checked_because": "frappe.utils.backups.backup_encryption() passes backup_encryption_key to gpg unquoted, and on failure prints 'Files are stored without encryption' and continues, so an unsafe key yields a plaintext backup under an -enc filename",
+          "leading_dash": false,
+          "safe_to_pass_unquoted": true,
+          "shell_metacharacters": []
+        },
+        "epoch2-backup_encryption_key": {
+          "checked_because": "frappe.utils.backups.backup_encryption() passes backup_encryption_key to gpg unquoted, and on failure prints 'Files are stored without encryption' and continues, so an unsafe key yields a plaintext backup under an -enc filename",
+          "leading_dash": false,
+          "safe_to_pass_unquoted": true,
+          "shell_metacharacters": []
+        },
+        "epoch2-encryption_key": {
+          "checked_because": "frappe.utils.backups.backup_encryption() passes backup_encryption_key to gpg unquoted, and on failure prints 'Files are stored without encryption' and continues, so an unsafe key yields a plaintext backup under an -enc filename",
+          "leading_dash": false,
+          "safe_to_pass_unquoted": true,
+          "shell_metacharacters": []
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "name": "neither-share-reveals-the-key-it-hides",
+      "observation": {
+        "epoch1-backup_encryption_key": {
+          "fingerprint": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+          "neither_share_reveals_the_key": true,
+          "shares": {
+            "share_a": {
+              "characters": 44,
+              "contains_key": false,
+              "equals_key": false,
+              "fingerprint_equals_key_fingerprint": false
+            },
+            "share_b": {
+              "characters": 44,
+              "contains_key": false,
+              "equals_key": false,
+              "fingerprint_equals_key_fingerprint": false
+            }
+          },
+          "shares_differ_from_each_other": true
+        },
+        "epoch1-encryption_key": {
+          "fingerprint": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+          "neither_share_reveals_the_key": true,
+          "shares": {
+            "share_a": {
+              "characters": 44,
+              "contains_key": false,
+              "equals_key": false,
+              "fingerprint_equals_key_fingerprint": false
+            },
+            "share_b": {
+              "characters": 44,
+              "contains_key": false,
+              "equals_key": false,
+              "fingerprint_equals_key_fingerprint": false
+            }
+          },
+          "shares_differ_from_each_other": true
+        },
+        "epoch2-backup_encryption_key": {
+          "fingerprint": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0",
+          "neither_share_reveals_the_key": true,
+          "shares": {
+            "share_a": {
+              "characters": 44,
+              "contains_key": false,
+              "equals_key": false,
+              "fingerprint_equals_key_fingerprint": false
+            },
+            "share_b": {
+              "characters": 44,
+              "contains_key": false,
+              "equals_key": false,
+              "fingerprint_equals_key_fingerprint": false
+            }
+          },
+          "shares_differ_from_each_other": true
+        },
+        "epoch2-encryption_key": {
+          "fingerprint": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+          "neither_share_reveals_the_key": true,
+          "shares": {
+            "share_a": {
+              "characters": 44,
+              "contains_key": false,
+              "equals_key": false,
+              "fingerprint_equals_key_fingerprint": false
+            },
+            "share_b": {
+              "characters": 44,
+              "contains_key": false,
+              "equals_key": false,
+              "fingerprint_equals_key_fingerprint": false
+            }
+          },
+          "shares_differ_from_each_other": true
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "name": "both-shares-together-reconstruct-the-issued-key",
+      "observation": {
+        "epoch1-backup_encryption_key": {
+          "error": null,
+          "fingerprint": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+          "fingerprint_matches": true,
+          "reconstructed": true
+        },
+        "epoch1-encryption_key": {
+          "error": null,
+          "fingerprint": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+          "fingerprint_matches": true,
+          "reconstructed": true
+        },
+        "epoch2-backup_encryption_key": {
+          "error": null,
+          "fingerprint": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0",
+          "fingerprint_matches": true,
+          "reconstructed": true
+        },
+        "epoch2-encryption_key": {
+          "error": null,
+          "fingerprint": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+          "fingerprint_matches": true,
+          "reconstructed": true
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "name": "a-single-share-does-not-reconstruct-the-key",
+      "observation": {
+        "epoch1-backup_encryption_key": {
+          "share_a_alone": {
+            "error": null,
+            "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          },
+          "share_b_alone": {
+            "error": null,
+            "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          }
+        },
+        "epoch1-encryption_key": {
+          "share_a_alone": {
+            "error": null,
+            "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          },
+          "share_b_alone": {
+            "error": null,
+            "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          }
+        },
+        "epoch2-backup_encryption_key": {
+          "share_a_alone": {
+            "error": null,
+            "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          },
+          "share_b_alone": {
+            "error": null,
+            "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          }
+        },
+        "epoch2-encryption_key": {
+          "share_a_alone": {
+            "error": null,
+            "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          },
+          "share_b_alone": {
+            "error": null,
+            "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          }
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "name": "shares-from-different-epochs-do-not-reconstruct",
+      "observation": {
+        "backup_encryption_key": {
+          "epoch1_share_a_with_epoch2_share_b": {
+            "error": null,
+            "fingerprint": "efc1468feb4b2955f89a2103ca2ea63ffd2edba91dc13e9cae2465ec4ea6aa1b",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          },
+          "epoch2_share_a_with_epoch1_share_b": {
+            "error": null,
+            "fingerprint": "fc4294108060feeb035c4898365d72bc028e6a3947c7e428129886cd96345a8f",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          }
+        },
+        "encryption_key": {
+          "epoch1_share_a_with_epoch2_share_b": {
+            "error": null,
+            "fingerprint": "13c7837567b98ae319af646c37efe08480522655811ed16f0c0b80adb9372370",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          },
+          "epoch2_share_a_with_epoch1_share_b": {
+            "error": null,
+            "fingerprint": "5b1da0f7d94c7d49f4e8a96f40477da0172ac747e9eb6eb67ff12e73fe1f0733",
+            "fingerprint_matches": false,
+            "reconstructed": true
+          }
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "name": "published-manifest-carries-fingerprints-and-no-key-material",
+      "observation": {
+        "entries": 4,
+        "fingerprints_only": true,
+        "manifest_bytes": 3961,
+        "plaintext_found": []
+      },
+      "status": "pass"
+    },
+    {
+      "name": "each-channel-holds-only-its-own-shares",
+      "observation": {
+        "channel-a": {
+          "files": [
+            "epoch1-backup_encryption_key.json",
+            "epoch1-encryption_key.json",
+            "epoch2-backup_encryption_key.json",
+            "epoch2-encryption_key.json"
+          ],
+          "other_channel_shares_found": [],
+          "own_shares_present": true,
+          "plaintext_keys_found": []
+        },
+        "channel-b": {
+          "files": [
+            "epoch1-backup_encryption_key.json",
+            "epoch1-encryption_key.json",
+            "epoch2-backup_encryption_key.json",
+            "epoch2-encryption_key.json"
+          ],
+          "other_channel_shares_found": [],
+          "own_shares_present": true,
+          "plaintext_keys_found": []
+        }
+      },
+      "status": "pass"
+    },
+    {
+      "name": "no-plaintext-key-was-written-to-disk",
+      "observation": {
+        "clean": true,
+        "files_scanned_root": "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/.foundation",
+        "hits": []
+      },
+      "status": "pass"
+    }
+  ],
+  "commit": "252345ed8df256d8679db93f835cdf2995318077",
+  "custody_model": {
+    "channels": [
+      "a",
+      "b"
+    ],
+    "external_secret_store_available": false,
+    "external_secret_store_status": "ENVIRONMENT-BLOCKED: repository Actions secrets are not accessible to this session's credential (HTTP 403 Resource not accessible by integration; no admin permission), so a real external store could not be provisioned. Recorded rather than worked around by weakening the model.",
+    "reason": "Both channels live in the same artifact system, so an adversary who can read both can reconstruct the key. What is proven is that the backup alone yields no key, that neither channel alone yields a key, and that retrieval from custody is what makes restoration possible. A production custodian must be a KMS, an HSM or an owner-provisioned secret store.",
+    "reconstruction_requires": "both channels",
+    "separation_is_structural_not_a_trust_boundary": true,
+    "split_method": "xor-one-time-pad-over-key-bytes"
+  },
+  "issued_keys": {
+    "epoch1-backup_encryption_key": {
+      "channel_a_file": ".foundation/key-custody/channel-a/epoch1-backup_encryption_key.json",
+      "channel_b_file": ".foundation/key-custody/channel-b/epoch1-backup_encryption_key.json",
+      "fingerprint": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+      "format": {
+        "characters": 44,
+        "decoded_bytes": 32,
+        "reason": null,
+        "valid": true
+      }
+    },
+    "epoch1-encryption_key": {
+      "channel_a_file": ".foundation/key-custody/channel-a/epoch1-encryption_key.json",
+      "channel_b_file": ".foundation/key-custody/channel-b/epoch1-encryption_key.json",
+      "fingerprint": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+      "format": {
+        "characters": 44,
+        "decoded_bytes": 32,
+        "reason": null,
+        "valid": true
+      }
+    },
+    "epoch2-backup_encryption_key": {
+      "channel_a_file": ".foundation/key-custody/channel-a/epoch2-backup_encryption_key.json",
+      "channel_b_file": ".foundation/key-custody/channel-b/epoch2-backup_encryption_key.json",
+      "fingerprint": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0",
+      "format": {
+        "characters": 44,
+        "decoded_bytes": 32,
+        "reason": null,
+        "valid": true
+      }
+    },
+    "epoch2-encryption_key": {
+      "channel_a_file": ".foundation/key-custody/channel-a/epoch2-encryption_key.json",
+      "channel_b_file": ".foundation/key-custody/channel-b/epoch2-encryption_key.json",
+      "fingerprint": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+      "format": {
+        "characters": 44,
+        "decoded_bytes": 32,
+        "reason": null,
+        "valid": true
+      }
+    }
+  },
+  "machine_identity": {
+    "cpu_count": 4,
+    "dmi_product_uuid": "9eef88c7-9b19-4c8d-80e0-87c4b1f654ea",
+    "github_action": "__run_2",
+    "hostname": "runnervmlun5p",
+    "job": "custodian",
+    "kernel_boot_id": "ada63831-02a2-4c68-bbcb-edbbce8aac37",
+    "machine": "x86_64",
+    "mem_total_kb": 16372440,
+    "python": "3.12.3",
+    "run_id": "35179445639",
+    "runner_image": "ubuntu24",
+    "runner_image_version": "20260907.300.1",
+    "runner_name": "GitHub Actions 1000002471",
+    "runner_os": "Linux",
+    "uptime_seconds": 33.2
+  },
+  "manifest": {
+    "bytes": 3961,
+    "epochs": [
+      1,
+      2
+    ],
+    "path": ".foundation/key-custody/manifest/custody-manifest.json",
+    "rotation_lineage": {
+      "backup_encryption_key": {
+        "epoch1": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+        "epoch2": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0",
+        "keys_differ": true
+      },
+      "encryption_key": {
+        "epoch1": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+        "epoch2": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+        "keys_differ": true
+      }
+    },
+    "sha256": "72fd408ec262abbf94f10b336146424c6a3a984786e6bbc69db62d445ec4d966"
+  },
+  "mocks_or_simulations_used": false,
+  "not_proven_by_this_probe": [
+    "A hardware security module, a cloud KMS or an owner-provisioned secret store: none is accessible to this session, so custody is modeled structurally across two artifact channels and is explicitly not a trust boundary",
+    "Key retrieval under authentication or authorization control: any job that can download both artifacts can reconstruct the keys, which is the limit above",
+    "A rotation ceremony held at a different time from issuance: both epochs are issued in one job here so that rotation can be proven at all on ephemeral infrastructure",
+    "Custody of a key that protects real customer data: every key here is generated for this run and every value it protects is synthetic",
+    "Durability of the custody channels beyond the artifact retention window",
+    "Anything about the site or the backup: this role never sees either"
+  ],
+  "plaintext_key_destruction": {
+    "erasure_provable": false,
+    "in_memory_bindings_dropped": true,
+    "reason": "CPython gives no memory-erasure guarantee, so this is recorded as a limit rather than claimed as a property. What is proven is that no plaintext key was written to any file, that only shares persist, and that this virtual machine is destroyed when the job ends.",
+    "vm_destroyed_at_job_end": true
+  },
+  "ref": "refs/heads/arena/01a0aafe-tofel-house-erp",
+  "role": "custodian",
+  "run_id": "35179445639",
+  "scope": "External key custody: issuance and splitting of the two native Frappe keys for two epochs, on a machine that never builds the product stack and never sees a site or a backup",
+  "status": "pass"
+}

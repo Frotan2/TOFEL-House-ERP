@@ -2,7 +2,7 @@
 
 Date: 2026-09-16 · Owner-decision baseline: `14cd64e` · Active branch:
 `arena/01a0aafe-tofel-house-erp` · Gap-closure addenda: §9 (2026-09-16),
-§10 (2026-09-17)
+§10 (2026-09-17), §11 (2026-09-17)
 
 ## 1. Final authorization state
 
@@ -33,10 +33,12 @@ bounded/static/preflight, and what the runner could not provide. The
 machine-readable probe-by-probe classification is
 [`evidence/production-like-execution/execution-ledger.json`](evidence/production-like-execution/execution-ledger.json).
 
-**§9 and §10 record the gap-closure passes** that followed on the same branch:
-P1 closed the `site_encryption_key_restored=false` defect, P2 executed real
-container-level MariaDB and Redis durability, and P3 executed a destructive
-recovery onto a genuinely independent system. Every one of those results comes
+**§9, §10 and §11 record the gap-closure passes** that followed on the same
+branch: P1 closed the `site_encryption_key_restored=false` defect, P2 executed
+real container-level MariaDB and Redis durability, P3 executed a destructive
+recovery onto a genuinely independent system, and P4 executed external custody
+of both native keys across three separate systems, including restoration with a
+retrieved key and rotation. Every one of those results comes
 from real execution on hosted infrastructure, each is classified separately from
 the bounded harness, and **none of them flips a D8 gate** — the bounded synthetic
 evidence below is not upgraded by any of it.
@@ -107,22 +109,23 @@ authorization.
 ## 4. Remaining BLOCKED/REJECT gates
 
 Every gate below was re-examined against the fresh Docker-runner execution in
-§8 and against the gap-closure executions in §9 and §10. Where those sections
-record genuinely executed sub-probes, they are cited there and in the D8 matrix
-`evidence` fields; none of them closes a gate. Two of the requirements listed
-here have now been executed for real — container-level datastore restart and
-crash durability (§9.2) and recovery onto an independent system under a
-destructive trigger (§10) — and each corresponding gate still stays **BLOCKED**
-because its area is wider than the executed sub-probe. The rest remain **not**
-executed: external encryption key custody and rotation with proven key
-retrieval, session revocation on recovery, a measured RPO/RTO against an
-owner-selected objective, deployed monitoring, TLS/Tailscale edge, full-bundle
-rollback rehearsal and any capacity objective.
+§8 and against the gap-closure executions in §9, §10 and §11. Where those
+sections record genuinely executed sub-probes, they are cited there and in the
+D8 matrix `evidence` fields; none of them closes a gate. Three of the
+requirements listed here have now been executed for real — container-level
+datastore restart and crash durability (§9.2), recovery onto an independent
+system under a destructive trigger (§10), and external key custody with
+retrieval and rotation across three separate systems (§11) — and each
+corresponding gate still stays **BLOCKED** because its area is wider than the
+executed sub-probe. The rest remain **not** executed: session revocation on
+recovery, a measured RPO/RTO against an owner-selected objective, deployed
+monitoring, TLS/Tailscale edge, full-bundle rollback rehearsal and any capacity
+objective.
 
 | Gate | Final state | Why it remains open |
 |---|---|---|
-| Recovery | **BLOCKED** | A separate-infrastructure rehearsal is now **EXECUTED** (§10, run `35170062251` at `1378ce4`): a real destructive `bench drop-site --no-backup`, then recovery on a provably separate VM with the database, both file trees and HTTP usability verified, including the private-file privacy boundary. The bounded encrypted alternate-directory harness remains bounded and is not upgraded. Still absent: key retrieval — the source-encrypted field is recovered intact but undecryptable on the target — external key custody with rotation, session revocation on recovery, host/region loss, and a measured RPO/RTO against an owner-selected objective |
-| Backup/restore | **BLOCKED** | A real `bench backup --with-files` set has now been produced, secret-scanned, transferred and verified byte-for-byte on a separate system, where `bench restore` recovered database, files and a usable application (§10). Still absent: a selected production destination, external key custody, versioned encrypted backup sets, retention and rotation on the native stack; the future off-site destination remains unselected |
+| Recovery | **BLOCKED** | A separate-infrastructure rehearsal is now **EXECUTED** (§10, run `35170062251` at `1378ce4`): a real destructive `bench drop-site --no-backup`, then recovery on a provably separate VM with the database, both file trees and HTTP usability verified, including the private-file privacy boundary. **Key retrieval is now EXECUTED too** (§11, run `35179445639` at `252345e`): a third VM restored an *encrypted* backup using a key retrieved from separate custody, after proving by required failure that it could not restore without it, and decrypted the field §10 recorded as undecryptable. The bounded encrypted alternate-directory harness remains bounded and is not upgraded. Still absent: custody inside a real trust boundary (KMS/HSM/owner secret store — ENVIRONMENT-BLOCKED), session revocation on recovery, host/region loss, HTTP usability *after* a rotation, and a measured RPO/RTO against an owner-selected objective |
+| Backup/restore | **BLOCKED** | A real `bench backup --with-files` set has now been produced, secret-scanned, transferred and verified byte-for-byte on a separate system, where `bench restore` recovered database, files and a usable application (§10). **Encryption at rest and key rotation are now EXECUTED** (§11, run `35179445639`): the same backup taken with System Settings `encrypt_backup` on leaves the machine as AES-256 GPG ciphertext — asserted with the `file` command, which is the same test `bench restore` applies — under keys issued by a separate custodian, and both keys were then rotated with the boundaries verified. Still absent: a selected production destination, versioned backup **sets**, retention, rotation of backup sets rather than of keys, custody in a real trust boundary, and session revocation; the future off-site destination remains unselected |
 | Upgrade/rollback | **BLOCKED** | Local artifact rollback harness is not a full-bundle deployed upgrade/rollback rehearsal |
 | Observability/incident | **BLOCKED** | Local alert model proves missing receivers fail closed, but no deployed logs/metrics/alert receiver/retention/incident evidence exists |
 | Topology/edge/session | **BLOCKED** | Current Tailscale/local requirement is selected, but deployed network/session/TLS/CSRF/private-file/realtime evidence is absent; future public edge is unselected |
@@ -1007,3 +1010,272 @@ trailing newline`); the hashes above are of those exact bytes. Retrieval: `gh
 api repos/Frotan2/TOFEL-House-ERP/check-runs/<id> --jq '.output.text'`. `gh
 run view --log` and `gh run download` do not work for these runs, which is why
 the Checks API is the transport.
+
+
+## 11. P4 — external key custody with rotation is EXECUTED (2026-09-17)
+
+**Status: EXECUTED on hosted infrastructure and CLOSED as a probe. No gate
+changed state.** Run `35179445639` at commit `252345e` on branch
+`arena/01a0aafe-tofel-house-erp`, workflow *Foundation external key custody*
+(`.github/workflows/foundation-key-custody.yml`), conclusion `success`:
+custodian check run `105068259227` (10/10 checks pass), operator check run
+`105068842511` (29/29) and recovery check run `105069423253` (37 checks, of
+which 34 pass and **3 are required failures**). `mocks_or_simulations_used=false`
+in all three roles.
+
+This closes the fourth gap-closure priority and, with it, the specific
+limitation §10 asserted rather than hid: there, the source-encrypted field was
+recovered intact but **undecryptable** on the target because no key travelled
+(`decrypts_on_target=false`). Here the same field decrypts, with the key obtained
+from separate custody rather than from the backup (`decrypts_on_target=true`).
+
+### 11.1 Two native keys, and the correction that mattered
+
+Frappe has **two** distinct keys, and conflating them would have produced
+evidence that looked right and meant nothing:
+
+| Key | Protects | Installed / used by |
+|---|---|---|
+| `encryption_key` | `__Auth` ciphertext for native encrypted Password fields | `frappe.installer.update_site_config` — the same call `get_encryption_key()` makes when it generates one lazily |
+| `backup_encryption_key` | the backup artifacts, via `gpg --passphrase <key> -c` when System Settings `encrypt_backup` is on | `bench restore --encryption-key` passes it to `gpg -d` |
+
+`bench restore --encryption-key` **decrypts a backup**; it does **not** install a
+site key. Verified against `frappe/commands/site.py` `_restore` and
+`frappe/utils/backups.py` `decrypt_backup` at the pinned revision `988e54f3`. An
+earlier reading of this task assumed the flag installed the site key; had that
+assumption gone untested, the probe would have "restored with the source key"
+while never actually installing it, and the decryption claim would have been
+false.
+
+Two further facts were read from the pinned source and then asserted at runtime
+rather than trusted: `installer.py` never writes `encryption_key` (zero
+mentions), and `update_password()` stores user passwords — Administrator's
+included — as bcrypt hashes with `encrypted=0`, so they are unaffected by the
+site key. Together these mean installing a custodian-issued key on a fresh site
+strands nothing, and both roles assert that invariant explicitly: the operator
+recorded `encrypted_auth_rows_before_install=0`, and the recovery system
+verified that the one pre-existing ciphertext row (the operator's, restored from
+the backup) decrypts under the key it was about to install.
+
+### 11.2 Three separate machines, verified rather than assumed
+
+The recovery job refuses to publish a pass unless all three roles are proven to
+have run on separate machines, using the discriminator model §10 established —
+including its two corrections, so hostname and Docker daemon id are recorded as
+observations only and each is annotated with the run that disproved it:
+
+| Identifier | Custodian | Operator | Recovery | Role |
+|---|---|---|---|---|
+| `kernel_boot_id` | `ada63831-…` | `98d290d1-…` | `963ba2b7-…` | **REQUIRED** — differs |
+| `runner_name` | `GitHub Actions 1000002471` | `…1000002472` | `…1000002473` | **REQUIRED** — differs |
+| `dmi_product_uuid` | `9eef88c7-…` | `44738f95-…` | `08428be9-…` | corroborating — differs, all 3 pairs |
+| `hostname` | `runnervmlun5p` | `runnervmlun5p` | `runnervmlun5p` | OBSERVATION ONLY — matches (run `35143620884`) |
+| `docker_daemon_id` | absent (no container started) | `a4efb8b6-…` | `a4efb8b6-…` | OBSERVATION ONLY — shared (run `35168111875`) |
+
+Verdict: `SEPARATE MACHINES`, `every_pair_separate=true` across all three pairs,
+`missing_required_identifiers=[]`. The hostname matching on all three jobs is a
+third observation of the platform reusing generated hostnames across separate
+ephemeral VMs — which is exactly why it is never used as a discriminator. The
+operator also observed that the recovery machine did **not** already hold its
+database before the restore (`operator_database_absent_before_restore="0"`).
+
+### 11.3 Retrieval was proved load-bearing before it was used
+
+A custody rehearsal in which the backup could have been restored anyway would
+prove nothing, so the recovery system ran two **required failures** first, both
+on copies of the dump so the staged payload could not be damaged:
+
+| Attempt | Result | Frappe's own output |
+|---|---|---|
+| `bench restore` with **no** key | exit `1` | `Encrypted backup file detected. Decrypting using site config.` / `Decryption failed. Please provide a valid key and try again.` |
+| `bench restore` with a **real key from the wrong epoch** | exit `1` | `Encrypted backup file detected. Decrypting using provided key.` / `Decryption failed. Please provide a valid key and try again.` |
+
+The wrong-epoch control matters more than a random string would: it is a key
+custody genuinely issued, for the same role, one epoch later, and it still
+cannot open the artifact. After both attempts the staged dump was
+digest-verified byte-identical (`sha256_before == sha256_after`), which is not a
+formality — frappe's `decrypt_backup` renames the dump to `.gpg` and renames it
+back in a `finally` block, so a failed attempt could in principle have left the
+real restore with a damaged file. Share-level controls were run too: neither
+channel alone reproduces the fingerprint, and shares from different epochs do
+not either.
+
+### 11.4 The backup was encrypted at rest, asserted not assumed
+
+`bench backup --with-files` ran with System Settings `encrypt_backup=1`, and all
+three artifacts were checked with the `file` command — the same test
+`bench restore` applies when deciding whether to decrypt:
+
+| Artifact | Bytes | `file` reports |
+|---|---|---|
+| `database.sql.gz` | 245422 (sha256 `0f337270c29dcf5e…`) | `PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512` |
+| `private-files.tar` | 301 | same |
+| `public-files.tar` | 298 | same |
+
+This assertion is load-bearing rather than decorative, because frappe's
+`backup_encryption()` catches a gpg failure, prints *"Files are stored without
+encryption"* and **continues** — so an `-enc` filename is not by itself evidence
+of encryption. Every artifact carried the `-enc` suffix **and** was detected as
+AES.
+
+The payload left the machine through an explicit five-file allowlist. Frappe
+also writes `20260917_092002-custody-operator_localhost-site_config_backup-enc.json`
+beside the dumps; gpg does **not** cover it, so despite its `-enc` name that file
+holds `db_password` and both keys in clear text, and it was excluded. Seven
+generated secrets were scanned for across every staged byte: zero leaks.
+
+### 11.5 Restoration, and the limitation §10 asserted is closed
+
+The recovery system rebuilt bench at the identical pinned revisions, created an
+empty site, and restored with the backup key retrieved from custody
+(`--encryption-key`, plus both file archives). It then migrated, set its **own**
+Administrator credential with native `bench set-admin-password`
+(`operator_admin_password_transferred=false`), installed the retrieved site key
+through `frappe.installer.update_site_config`, and verified:
+
+| Check | Result |
+|---|---|
+| Ciphertext recovered intact | sha256 `3ecadda32e98f718…` — **identical to the operator's record** |
+| Retrieved key installed | fingerprint `7ca9c12dcd0a0297…` — matches the custodian's epoch 1 site key |
+| **Field decrypts on the recovery system** | **`decrypts_on_target=true`**, plaintext digest matches the operator's record |
+| Records | 6 ToDo and 6 Note, name digests matching |
+| Files | private (547 bytes, `is_private=1`) and public (546 bytes), on-disk digests matching, both File documents recovered |
+
+`plaintext_published=false` throughout: the value is compared by digest, never
+recorded.
+
+### 11.6 Rotation of both keys, composed because Frappe has no command for it
+
+Frappe has no key-rotation command, so rotation was composed from native
+primitives and the composition is recorded as composed rather than presented as
+native:
+
+1. **The native consequence first.** After installing the epoch 2 site key, the
+   epoch 1 ciphertext stopped decrypting, with frappe's own message:
+   `ValidationError: Failed to decrypt key User.Administrator.api_secret …
+   Encryption key is invalid! Please check site_config.json … If you have
+   recently restored the site, you may need to copy the site_config.` That is the
+   framework documenting that rotating a key orphans existing ciphertext.
+2. **Re-encryption.** `decrypt(…, encryption_key=old)` →
+   `set_encrypted_password` → `update_site_config`. The ciphertext changed
+   (`3ecadda3…` → `33a39055…`), the plaintext digest did **not**, and the value
+   reads back.
+3. **Boundaries, three ways.** Epoch 1 key: fails. Epoch 2 key: succeeds with a
+   matching plaintext digest. A key custody never issued: fails.
+4. **The backup key too**, through the same native config path — and then proved
+   cryptographically rather than by paying for a second full restore: a new
+   backup was taken under epoch 2, detected as AES, and `gpg -d` **succeeded
+   with the epoch 2 key** (exit 0, 245301 bytes) while the **epoch 1 key was
+   rejected** (exit 2).
+
+Rotation lineage was published by the custodian as fingerprints only, with
+`keys_differ=true` for both roles.
+
+### 11.7 Destruction, and no plaintext key left behind
+
+The operator destroyed itself with native `bench drop-site --no-backup`
+(database `_9b96f4509c396e9c` present then absent, site directory and both files
+gone) and then went one step further than §10 did: `drop-site` moves the site
+directory into `<bench>/archived/sites`, and that archived `site_config.json`
+holds **both plaintext keys**, so the archive was removed and the removal
+verified. The whole lab and `.foundation` tree were then scanned for all four
+keys: `survivors=[]`, `clean=true`. After that job, the only key material
+anywhere was one share per channel in two artifacts.
+
+The custodian drops its in-memory bindings and its VM is destroyed at job end,
+but it records honestly that **erasure is not provable** — CPython offers no
+memory-erasure guarantee — rather than claiming a property it cannot support.
+
+### 11.8 Two defects this pass found, and one recorded for the owner
+
+1. **`-enc` naming (fixed).** Run `35178965074` died on `max() iterable argument
+   is empty` *after* a successful backup: `utils/backups.py`
+   `set_backup_file_name()` appends `-enc` to every artifact name when
+   `encrypt_backup` is on, so globs written for unencrypted names matched
+   nothing. Fixed in `252345e`; both probes now accept either form, record the
+   names that appeared, and fail if the suffix is missing while encryption is
+   enabled.
+2. **Unquoted gpg passphrase (mitigated, and reported).** `backup_encryption()`
+   interpolates the backup key into a shell command unquoted. The url-safe
+   base64 alphabet includes `-`, so a key beginning with a dash is parsed by gpg
+   as an option, gpg fails, and frappe prints *"Files are stored without
+   encryption"* and continues — leaving a **plaintext backup under an `-enc`
+   filename**. About one generated key in 64 would hit this. The generator now
+   refuses a leading dash (≈0.02 bits), `command_line_safety()` records why, the
+   custodian asserts every issued key is safe to pass unquoted, and the AES
+   detection assertion would catch it regardless. **This is recorded for the
+   owner as a framework behaviour, not silently mitigated**: an operator who lets
+   Frappe generate its own backup key has roughly a 1-in-64 chance of storing
+   backups unencrypted. No upstream change was proposed or made.
+
+### 11.9 Why the gates stay BLOCKED
+
+Custody here is a **bounded split-share model, not a trust boundary**, and the
+evidence says so in those words. Repository Actions secrets are not accessible
+to this session's credential (`gh secret list` → HTTP 403 *Resource not
+accessible by integration*; no admin permission), so no KMS, HSM or
+owner-provisioned secret store could be provisioned. That is recorded as
+**ENVIRONMENT-BLOCKED** rather than worked around by weakening the model, and no
+gate was downgraded to compensate. Both channels live in the same artifact
+system, so any job able to download both can reconstruct the keys: retrieval is
+proven, **authorization of key release is not**.
+
+Also unproven, and the reason `recovery`, `backup-restore`, `durability` and the
+overall gate keep their prior states: no rotation ceremony separated in time
+from issuance (both epochs are issued in one custodian job so rotation can be
+proven at all on ephemeral infrastructure); no revocation, custodian-side
+destruction or custody audit log; no channel durability beyond the 14-day
+artifact retention window and no versioned or off-site key store; no HTTP
+usability after rotation (§10 proved HTTP usability for recovery, not for a
+rotated key); no second full restore under the rotated backup key (proved at the
+gpg layer instead); no session revocation on recovery; no RPO/RTO measured
+against an owner objective, because none exists and none was invented; a
+frappe-only rehearsal site with no product app, recorded as a scope limit since
+both keys protect framework-level surfaces that behave identically either way;
+and three GitHub-hosted runners from one pool, which proves three separate
+ephemeral VMs and not three separate providers, regions or datacentres. Every
+key, record, file and credential is synthetic.
+
+`encryption_key_custody_reference` and `site_configuration_custody_reference`
+remain **NOT SELECTED**: executing a custody *model* is not an owner selection of
+a custody *destination*, and no owner numeric objective was invented.
+
+The probe's own scope limits are recorded verbatim in each role's evidence under
+`not_proven_by_this_probe` and in the ledger's `key_custody_execution.not_proven`,
+and are reproduced above without softening.
+
+`release-readiness-evidence.json` `release_gate_state.recovery` and
+`.backup_restore` were regenerated from their generator
+(`tools/foundation/release_readiness_evidence.py`) so the stale "KEY RETRIEVAL …
+NOT PROVEN" and "PRODUCTION CUSTODY NOT PROVEN" wording no longer overstates the
+gap; both still begin with `BLOCKED`, as `tools/foundation/d8_validate.py`
+requires. The archived bounded snapshot
+`evidence/production-like-execution/local-bounded-release-readiness-evidence.json`
+was deliberately **not** edited: it is historical provenance pinned by hash in
+the ledger's integrity map.
+
+### 11.10 Evidence references
+
+| Artifact | SHA-256 |
+|---|---|
+| `evidence/production-like-execution/hosted-key-custodian-35179445639.json` | `b70a5d9370013d8c5827dc787600640f048331d38d3258a37c6e2f489d74342b` |
+| `evidence/production-like-execution/hosted-key-operator-35179445639.json` | `4da48bf94c8f60f8edd8866ac16124f027e63564669db87c0c0015e550153086` |
+| `evidence/production-like-execution/hosted-key-recovery-35179445639.json` | `215729b6747157a63721695dfd825a6093319c5f53cdf85083998d5ee9a132b3` |
+| `evidence/production-like-execution/execution-ledger.json` § `key_custody_execution` | integrity map now holds 28 archived artifacts, all verified against disk |
+
+```bash
+gh run view 35179445639 --repo Frotan2/TOFEL-House-ERP
+gh api repos/Frotan2/TOFEL-House-ERP/check-runs/105068259227 --jq '.output.text'
+gh api repos/Frotan2/TOFEL-House-ERP/check-runs/105068842511 --jq '.output.text'
+gh api repos/Frotan2/TOFEL-House-ERP/check-runs/105069423253 --jq '.output.text'
+python3 -m unittest tests.foundation.test_key_custody_contract -q   # 67 tests
+python tools/foundation/d8_validate.py
+```
+The three archived artifacts are the check runs' own `output.text`,
+re-serialized in the ledger's canonical form (`json.dumps(d, indent=2,
+sort_keys=True) + trailing newline`); the hashes above are of those exact bytes.
+Retrieval: `gh api repos/Frotan2/TOFEL-House-ERP/check-runs/<id> --jq
+'.output.text'`, because `gh run view --log` and `gh run download` do not work
+for these runs. The prior failed attempt is preserved as provenance: run
+`35178965074` at `9a19e83`, whose published evidence is **not** reused as a pass
+anywhere in this report.

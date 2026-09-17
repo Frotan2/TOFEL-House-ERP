@@ -1,0 +1,1055 @@
+{
+  "admin_credential_is_the_recovery_systems_own": {
+    "operator_admin_password_transferred": false,
+    "set_with_native_command": "bench set-admin-password"
+  },
+  "artifact_name": "recovery-result.json",
+  "backup_decrypted_with_key_from_custody": {
+    "applied_to": [
+      "database.sql.gz",
+      "public-files.tar",
+      "private-files.tar"
+    ],
+    "key_source": "reconstructed from custody channels a and b, fingerprint-verified",
+    "native_option": "bench restore --encryption-key",
+    "note": "frappe applies the same key to the file tars whenever --encryption-key is set, which is correct here because bench backup encrypted all three with the one backup_encryption_key."
+  },
+  "backup_encryption_enabled_on_recovery_site": {
+    "effect": "bench backup now runs gpg --passphrase <backup_encryption_key> -c over the database dump and both file tars",
+    "field_is_native": "Check field on System Settings, default 0",
+    "system_setting": "encrypt_backup",
+    "value": 1
+  },
+  "backup_key_rotation": {
+    "decryption_outcomes": {
+      "epoch_1_key": {
+        "bytes": 0,
+        "decrypted_sha256": null,
+        "exit_code": 2,
+        "opened": false,
+        "required_to": "be rejected"
+      },
+      "epoch_2_key": {
+        "bytes": 245301,
+        "decrypted_sha256": "1213c80646856c8db50746cd9985b68fb93adac061e5a00dfc672a1d33015ae0",
+        "exit_code": 0,
+        "opened": true,
+        "required_to": "open the artifact"
+      }
+    },
+    "epoch_1_key_does_not": true,
+    "epoch_2_key_opens_it": true,
+    "rotated_backup_is_encrypted": {
+      "aes_detected": true,
+      "file_says": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512 ."
+    },
+    "why_no_second_full_restore": "A second bench restore would cost another several minutes and prove nothing beyond what gpg already proves here: the artifact taken after rotation is opened by the rotated key and not by the previous one. The full restore path was already proven above with the epoch 1 key."
+  },
+  "checks": [
+    {
+      "command": [
+        "docker",
+        "version",
+        "--format",
+        "{{.Client.Version}} {{.Server.Version}}"
+      ],
+      "exit_code": 0,
+      "name": "docker-version",
+      "seconds": 0.014,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-indep-mariadb",
+        "--mount",
+        "type=bind,source=/home/runner/work/_temp/foundation-key-custody-recovery/db-password,target=/run/secrets/db-password,readonly",
+        "--env",
+        "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password",
+        "--env",
+        "MARIADB_ROOT_HOST=%",
+        "--publish",
+        "127.0.0.1:13306:3306",
+        "--health-cmd",
+        "healthcheck.sh --connect --innodb_initialized",
+        "--health-interval",
+        "2s",
+        "--health-retries",
+        "60",
+        "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+        "--character-set-server=utf8mb4",
+        "--collation-server=utf8mb4_unicode_ci"
+      ],
+      "exit_code": 0,
+      "name": "start-mariadb",
+      "seconds": 4.946,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-indep-redis-queue",
+        "--publish",
+        "127.0.0.1:11379:6379",
+        "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+      ],
+      "exit_code": 0,
+      "name": "start-foundation-indep-redis-queue",
+      "seconds": 0.149,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "docker",
+        "run",
+        "--detach",
+        "--name",
+        "foundation-indep-redis-cache",
+        "--publish",
+        "127.0.0.1:12379:6379",
+        "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+      ],
+      "exit_code": 0,
+      "name": "start-foundation-indep-redis-cache",
+      "seconds": 0.143,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "sudo",
+        "apt-get",
+        "install",
+        "-y",
+        "--no-install-recommends",
+        "mariadb-client",
+        "file"
+      ],
+      "exit_code": 0,
+      "name": "mariadb-client-install",
+      "seconds": 3.101,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "mariadb",
+        "--version"
+      ],
+      "exit_code": 0,
+      "name": "mariadb-client-version",
+      "seconds": 0.004,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/frappe"
+      ],
+      "exit_code": 0,
+      "name": "clone-frappe",
+      "seconds": 0.012,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/frappe",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/frappe"
+      ],
+      "exit_code": 0,
+      "name": "origin-frappe",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/frappe",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "988e54f3c4c291e2077a83809663f123731abe76"
+      ],
+      "exit_code": 0,
+      "name": "fetch-frappe",
+      "seconds": 5.406,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/frappe",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "name": "checkout-frappe",
+      "seconds": 0.281,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/frappe",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "verify-frappe",
+      "seconds": 0.001,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "init",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/erpnext"
+      ],
+      "exit_code": 0,
+      "name": "clone-erpnext",
+      "seconds": 0.002,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/erpnext",
+        "remote",
+        "add",
+        "origin",
+        "https://github.com/frappe/erpnext"
+      ],
+      "exit_code": 0,
+      "name": "origin-erpnext",
+      "seconds": 0.001,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/erpnext",
+        "fetch",
+        "--depth",
+        "1",
+        "origin",
+        "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd"
+      ],
+      "exit_code": 0,
+      "name": "fetch-erpnext",
+      "seconds": 6.753,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/erpnext",
+        "checkout",
+        "--detach",
+        "FETCH_HEAD"
+      ],
+      "exit_code": 0,
+      "name": "checkout-erpnext",
+      "seconds": 0.385,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "git",
+        "-C",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/erpnext",
+        "rev-parse",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "name": "verify-erpnext",
+      "seconds": 0.001,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+        "-m",
+        "venv",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools"
+      ],
+      "exit_code": 0,
+      "name": "bench-tools-venv",
+      "seconds": 2.219,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "frappe-bench==5.31.0",
+        "uv==0.11.6"
+      ],
+      "exit_code": 0,
+      "name": "bench-tools-install",
+      "seconds": 2.566,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "init",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/bench",
+        "--frappe-path",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/frappe",
+        "--python",
+        "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+        "--no-backups",
+        "--skip-redis-config-generation",
+        "--no-procfile",
+        "--skip-assets",
+        "--verbose"
+      ],
+      "exit_code": 0,
+      "name": "bench-init",
+      "seconds": 25.093,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_cache",
+        "redis://127.0.0.1:12379"
+      ],
+      "exit_code": 0,
+      "name": "config-redis_cache",
+      "seconds": 1.057,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_queue",
+        "redis://127.0.0.1:11379"
+      ],
+      "exit_code": 0,
+      "name": "config-redis_queue",
+      "seconds": 0.336,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "set-config",
+        "--global",
+        "redis_socketio",
+        "redis://127.0.0.1:11379"
+      ],
+      "exit_code": 0,
+      "name": "config-redis_socketio",
+      "seconds": 0.335,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "get-app",
+        "--skip-assets",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/sources/erpnext"
+      ],
+      "exit_code": 0,
+      "name": "get-app-erpnext",
+      "seconds": 22.941,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "new-site",
+        "custody-negative.localhost",
+        "--db-type",
+        "mariadb",
+        "--db-host",
+        "127.0.0.1",
+        "--db-port",
+        "13306",
+        "--db-root-password",
+        "[REDACTED]",
+        "--db-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--mariadb-user-host-login-scope",
+        "%"
+      ],
+      "exit_code": 0,
+      "name": "new-site-for-negative-controls",
+      "seconds": 16.875,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "--site",
+        "custody-negative.localhost",
+        "restore",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/negative-controls/no-key-database.sql.gz",
+        "--db-root-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]"
+      ],
+      "exit_code": 1,
+      "name": "negative-control-restore-without-key",
+      "output_tail": "Encrypted backup file detected. Decrypting using site config.\nDecryption failed. Please provide a valid key and try again.\n",
+      "seconds": 0.487,
+      "status": "fail"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "--site",
+        "custody-negative.localhost",
+        "restore",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/negative-controls/wrong-epoch-database.sql.gz",
+        "--db-root-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--encryption-key",
+        "[REDACTED]"
+      ],
+      "exit_code": 1,
+      "name": "negative-control-restore-with-wrong-epoch-key",
+      "output_tail": "Encrypted backup file detected. Decrypting using provided key.\nDecryption failed. Please provide a valid key and try again.\n",
+      "seconds": 0.464,
+      "status": "fail"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "drop-site",
+        "custody-negative.localhost",
+        "--db-root-password",
+        "[REDACTED]",
+        "--no-backup"
+      ],
+      "exit_code": 0,
+      "name": "drop-negative-control-site",
+      "seconds": 0.686,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "new-site",
+        "custody-recovered.localhost",
+        "--db-type",
+        "mariadb",
+        "--db-host",
+        "127.0.0.1",
+        "--db-port",
+        "13306",
+        "--db-root-password",
+        "[REDACTED]",
+        "--db-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--mariadb-user-host-login-scope",
+        "%"
+      ],
+      "exit_code": 0,
+      "name": "new-empty-site-for-custody-recovery",
+      "seconds": 14.848,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "--site",
+        "custody-recovered.localhost",
+        "restore",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/.foundation/key-custody-operator/payload/database.sql.gz",
+        "--db-root-password",
+        "[REDACTED]",
+        "--admin-password",
+        "[REDACTED]",
+        "--encryption-key",
+        "[REDACTED]",
+        "--with-public-files",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/.foundation/key-custody-operator/payload/public-files.tar",
+        "--with-private-files",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/.foundation/key-custody-operator/payload/private-files.tar"
+      ],
+      "exit_code": 0,
+      "name": "restore-encrypted-backup-with-key-from-custody",
+      "seconds": 2.93,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "--site",
+        "custody-recovered.localhost",
+        "migrate"
+      ],
+      "exit_code": 0,
+      "name": "restore-migrate",
+      "seconds": 3.746,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "--site",
+        "custody-recovered.localhost",
+        "set-admin-password",
+        "[REDACTED]"
+      ],
+      "exit_code": 0,
+      "name": "set-admin-password-on-recovered-site",
+      "seconds": 0.697,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_key_custody_data.py",
+        "install-keys",
+        "custody-recovered.localhost"
+      ],
+      "exit_code": 0,
+      "name": "install-keys",
+      "seconds": 0.715,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_key_custody_data.py",
+        "verify",
+        "custody-recovered.localhost"
+      ],
+      "exit_code": 0,
+      "name": "verify",
+      "seconds": 0.636,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/bench/env/bin/python",
+        "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_key_custody_data.py",
+        "rotate",
+        "custody-recovered.localhost"
+      ],
+      "exit_code": 0,
+      "name": "rotate",
+      "seconds": 0.64,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "/home/runner/work/_temp/foundation-key-custody-recovery/tools/bin/bench",
+        "--site",
+        "custody-recovered.localhost",
+        "backup",
+        "--with-files"
+      ],
+      "exit_code": 0,
+      "name": "backup-under-the-rotated-backup-key",
+      "seconds": 2.224,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "gpg",
+        "--yes",
+        "--pinentry-mode",
+        "loopback",
+        "--passphrase",
+        "[REDACTED]",
+        "-o",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/negative-controls/opened-with-epoch_2_key.sql.gz",
+        "-d",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/negative-controls/rotated-database.sql.gz.gpg"
+      ],
+      "exit_code": 0,
+      "name": "gpg-decrypt-rotated-backup-with-epoch_2_key",
+      "seconds": 0.1,
+      "status": "pass"
+    },
+    {
+      "command": [
+        "gpg",
+        "--yes",
+        "--pinentry-mode",
+        "loopback",
+        "--passphrase",
+        "[REDACTED]",
+        "-o",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/negative-controls/opened-with-epoch_1_key.sql.gz",
+        "-d",
+        "/home/runner/work/_temp/foundation-key-custody-recovery/negative-controls/rotated-database.sql.gz.gpg"
+      ],
+      "exit_code": 2,
+      "name": "gpg-decrypt-rotated-backup-with-epoch_1_key",
+      "output_tail": "gpg: AES256.CFB encrypted data\ngpg: encrypted with 1 passphrase\ngpg: decryption failed: Bad session key\n",
+      "seconds": 0.1,
+      "status": "fail"
+    }
+  ],
+  "closes_the_limitation_run_35170062251_asserted": {
+    "now": {
+      "decrypts_on_target": true,
+      "reason": "the key was retrieved from separate custody channels",
+      "run": "35179445639"
+    },
+    "plaintext_published": false,
+    "then": {
+      "decrypts_on_target": false,
+      "reason": "no key travelled with the backup",
+      "run": 35170062251
+    }
+  },
+  "commit": "252345ed8df256d8679db93f835cdf2995318077",
+  "custody_negative_controls": {
+    "channel_a_alone": {
+      "error": null,
+      "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+      "fingerprint_matches": false,
+      "reconstructed": true
+    },
+    "channel_b_alone": {
+      "error": null,
+      "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+      "fingerprint_matches": false,
+      "reconstructed": true
+    },
+    "epoch1_a_with_epoch2_b": {
+      "error": null,
+      "fingerprint": "13c7837567b98ae319af646c37efe08480522655811ed16f0c0b80adb9372370",
+      "fingerprint_matches": false,
+      "reconstructed": true
+    }
+  },
+  "docker_daemon_id": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+  "key_retrieval": {
+    "channels_required": [
+      "a",
+      "b"
+    ],
+    "fingerprints_agree_with_the_operator": {
+      "epoch1_backup_encryption_key": true,
+      "epoch1_encryption_key": true,
+      "epoch2_encryption_key": true
+    },
+    "plaintext_key_received_from_the_backup": false,
+    "plaintext_published": false,
+    "verified_by": "SHA-256 fingerprints published by the custodian and by the operator, compared against keys reconstructed here from both channels"
+  },
+  "machine_identity": {
+    "cpu_count": 4,
+    "dmi_product_uuid": "08428be9-f3f7-4476-8e3e-dc0f48b07fdd",
+    "docker_daemon_id": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+    "github_action": "__run_4",
+    "hostname": "runnervmlun5p",
+    "job": "recovery",
+    "kernel_boot_id": "963ba2b7-ead2-408a-bc96-a0cdcb321b43",
+    "machine": "x86_64",
+    "mem_total_kb": 16373452,
+    "python": "3.12.3",
+    "run_id": "35179445639",
+    "runner_image": "ubuntu24",
+    "runner_image_version": "20260907.300.1",
+    "runner_name": "GitHub Actions 1000002473",
+    "runner_os": "Linux",
+    "uptime_seconds": 65.0
+  },
+  "mariadb_client": {
+    "dump_binary": "/usr/bin/mariadb-dump",
+    "preferred_over_mysqldump_because": "MariaDB has no information_schema.COLUMN_STATISTICS, which the Oracle client queries unconditionally",
+    "version": "mariadb  Ver 15.1 Distrib 10.11.14-MariaDB, for debian-linux-gnu (x86_64) using  EditLine wrapper"
+  },
+  "mariadb_health": {
+    "healthy": true,
+    "polls": 4
+  },
+  "mocks_or_simulations_used": false,
+  "negative_control_site_dropped": true,
+  "negative_controls_left_no_recoverable_copy": {
+    "scratch_sql_copies_removed": true,
+    "why": "each negative-control attempt ran on a copy of the dump so the staged payload was never handed to a failing gpg run; the copies are deleted here so the only encrypted dump left on this machine is the one the real restore consumed."
+  },
+  "not_proven_by_this_probe": [
+    "A hardware security module, a cloud KMS or an owner-provisioned secret store: repository Actions secrets are not accessible to this session's credential (HTTP 403, no admin permission), so custody is modeled structurally across two artifact channels and is explicitly not a trust boundary",
+    "Authorization of key release: any job able to download both channels can reconstruct the keys, so retrieval is proven but access control over retrieval is not",
+    "A rotation ceremony held at a different time from issuance: both epochs are issued in one custodian job so rotation can be proven at all on ephemeral infrastructure",
+    "A native rotation command: Frappe has none, so rotation is composed from native primitives and recorded as composed",
+    "Key revocation or destruction on the custodian side, and custody audit logging",
+    "HTTP usability after rotation: rotation is proven through the native API and at the gpg layer. Independent-system recovery run 35170062251 proved HTTP usability for recovery, but not for a rotated key",
+    "A second full restore under the rotated backup key: proven at the gpg layer instead, as recorded above",
+    "Any production workload: every key, record, file and credential here is synthetic and generated for this run"
+  ],
+  "operator_database_absent_before_restore": "0",
+  "payload_intact_after_restore": {
+    "database.sql.gz": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7",
+    "private-files.tar": "1f2a3d9e939e5d54a80e0d44e0a2d2a7c1e33e0b7e77601b0796324a25573cdb",
+    "public-files.tar": "5019b0713a4354260e9fea8aff427e25f81e2a203abcb9c915ca9f1c68d99583"
+  },
+  "payload_integrity": {
+    "database.sql.gz": {
+      "bytes": 245422,
+      "matches_source_record": true,
+      "sha256": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7"
+    },
+    "manifest.json": {
+      "bytes": 1418,
+      "matches_source_record": null,
+      "sha256": "9adafa8487b7d786fbe7acd8a49bd857b272e6302cf3117f3c58c7603ab25629"
+    },
+    "operator-identity.json": {
+      "bytes": 1903,
+      "matches_source_record": null,
+      "sha256": "e1010250c00f77dfc4665095bc9858f59ad6349dd561630c1ed55722a1d14c3b"
+    },
+    "private-files.tar": {
+      "bytes": 301,
+      "matches_source_record": true,
+      "sha256": "1f2a3d9e939e5d54a80e0d44e0a2d2a7c1e33e0b7e77601b0796324a25573cdb"
+    },
+    "public-files.tar": {
+      "bytes": 298,
+      "matches_source_record": true,
+      "sha256": "5019b0713a4354260e9fea8aff427e25f81e2a203abcb9c915ca9f1c68d99583"
+    }
+  },
+  "payload_untouched_by_the_negative_controls": {
+    "sha256_after": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7",
+    "sha256_before": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7",
+    "unchanged": true,
+    "why_it_matters": "frappe's decrypt_backup renames the dump to .gpg and renames it back in a finally block, so a failed attempt must leave the staged payload byte-identical; the real restore consumes the original file and must not be handed a damaged one."
+  },
+  "published_evidence_scan": {
+    "clean": true,
+    "leaks": {},
+    "secrets_scanned": [
+      "admin_password",
+      "db_password",
+      "epoch1_backup_key",
+      "epoch1_site_key",
+      "epoch2_backup_key",
+      "epoch2_site_key",
+      "root_password"
+    ]
+  },
+  "recovered_apps": [
+    "frappe 16.33.1 HEAD"
+  ],
+  "recovery_verification": [
+    {
+      "name": "source-ciphertext-recovered-intact",
+      "observation": {
+        "ciphertext_sha256": "3ecadda32e98f7187b7f6cbec890348b02571e290d82f6fa75918958fc499a7e",
+        "matches_the_operators_record": true,
+        "survived_backup_restore": true
+      },
+      "status": "pass"
+    },
+    {
+      "name": "retrieved-key-material-is-installed-on-the-recovered-site",
+      "observation": {
+        "backup_key_fingerprint": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+        "installed_site_key_fingerprint": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+        "matches_custody_fingerprint": true
+      },
+      "status": "pass"
+    },
+    {
+      "name": "source-encrypted-field-decrypts-with-the-key-retrieved-from-custody",
+      "observation": {
+        "closes": "the limitation asserted by run 35170062251, where decrypts_on_target was false",
+        "decrypts_on_target": true,
+        "plaintext_published": false,
+        "plaintext_sha256_matches_the_operators_record": true
+      },
+      "status": "pass"
+    },
+    {
+      "name": "records-and-both-file-trees-recovered",
+      "observation": {
+        "Note": {
+          "names_sha256_matches": true,
+          "recovered": 6
+        },
+        "ToDo": {
+          "names_sha256_matches": true,
+          "recovered": 6
+        },
+        "key-custody-private.txt": {
+          "bytes": 547,
+          "file_document_recovered": true,
+          "is_private": 1,
+          "on_disk_sha256_matches": true
+        },
+        "key-custody-public.txt": {
+          "bytes": 546,
+          "file_document_recovered": true,
+          "is_private": 0,
+          "on_disk_sha256_matches": true
+        }
+      },
+      "status": "pass"
+    }
+  ],
+  "ref": "refs/heads/arena/01a0aafe-tofel-house-erp",
+  "restore_with_the_wrong_epoch_key_must_fail": {
+    "exit_code": 1,
+    "failed_as_required": true,
+    "output_tail": "Encrypted backup file detected. Decrypting using provided key.\nDecryption failed. Please provide a valid key and try again.\n",
+    "required_to_fail": true
+  },
+  "restore_without_any_key_must_fail": {
+    "exit_code": 1,
+    "failed_as_required": true,
+    "output_tail": "Encrypted backup file detected. Decrypting using site config.\nDecryption failed. Please provide a valid key and try again.\n",
+    "required_to_fail": true
+  },
+  "restored_into_a_separate_database": true,
+  "retrieved_keys_installed_natively": {
+    "backup_key_fingerprint": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+    "ciphertext_orphaned_by_the_install": 0,
+    "encrypted_auth_rows_before_install": 1,
+    "frappe_generates_the_same_key_lazily": "frappe.utils.password.get_encryption_key() calls update_site_config with a Fernet.generate_key() value, so a custodian-issued key is installed through the same native path",
+    "installed_with": "frappe.installer.update_site_config",
+    "invariant": "every pre-existing Fernet-encrypted __Auth row decrypts under the key being installed, so nothing is stranded; user passwords are bcrypt with encrypted=0 and are unaffected by the site key",
+    "site_key_fingerprint": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7"
+  },
+  "role": "recovery",
+  "rotated_backup_file_name": {
+    "dumps_present": [
+      "20260917_092309-custody-recovered_localhost-database-enc.sql.gz"
+    ],
+    "enc_suffix_present": true,
+    "name": "20260917_092309-custody-recovered_localhost-database-enc.sql.gz"
+  },
+  "rotation": {
+    "backup-key-rotated-through-the-native-config-path": {
+      "backup_key_fingerprint": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0",
+      "effect": "the next bench backup passes this key to gpg, so the artifact it produces can only be opened with it",
+      "epoch_1_backup_key_absent_from_config": true,
+      "installed_with": "frappe.installer.update_site_config",
+      "proof_is_in_the_probe": "the recovery probe takes a backup after this step and shows gpg -d succeeds with epoch 2 and fails with epoch 1"
+    },
+    "ciphertext-re-encrypted-under-the-new-key-through-native-primitives": {
+      "ciphertext_changed": true,
+      "composed_from": [
+        "frappe.utils.password.decrypt(encryption_key=old)",
+        "frappe.utils.password.set_encrypted_password",
+        "frappe.installer.update_site_config"
+      ],
+      "native_single_command_exists": false,
+      "new_ciphertext_sha256": "33a3905533f08c36d8892c983e993735f11dcfe8e8691efca5d7de99ea46cacd",
+      "old_ciphertext_sha256": "3ecadda32e98f7187b7f6cbec890348b02571e290d82f6fa75918958fc499a7e",
+      "plaintext_sha256_unchanged": true,
+      "readable_after_rotation": true
+    },
+    "rotating-the-site-key-orphans-ciphertext-written-under-the-old-key": {
+      "native_error": "ValidationError: Failed to decrypt key User.Administrator.api_secret<br><br>Encryption key is invalid! Please check site_config.json<br><br>If you have recently restored the site, you may need to copy the site_config.",
+      "old_ciphertext_decrypts_after_rotation": false,
+      "rotated_to_fingerprint": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+      "why": "Frappe has no key-rotation command; decrypt() itself tells an operator who changed the key to restore the original site_config.json, so orphaned ciphertext is the expected native consequence of rotation without re-encryption"
+    },
+    "site-config-holds-the-rotated-key": {
+      "epoch_1_key_absent_from_config": true,
+      "matches_epoch_2": true,
+      "site_key_fingerprint": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a"
+    },
+    "the-old-key-no-longer-decrypts-and-the-new-key-does": {
+      "outcomes": {
+        "a_key_custody_never_issued": {
+          "decrypts": false,
+          "error": "ValidationError"
+        },
+        "epoch_1_key": {
+          "decrypts": false,
+          "error": "ValidationError"
+        },
+        "epoch_2_key": {
+          "decrypts": true,
+          "plaintext_sha256_matches": true
+        }
+      },
+      "post_rotation_ciphertext_sha256": "33a3905533f08c36d8892c983e993735f11dcfe8e8691efca5d7de99ea46cacd",
+      "rotation_is_real": true
+    }
+  },
+  "run_id": "35179445639",
+  "scope": "Recovery system for external key custody: retrieve key material from separate custody channels, prove retrieval is load-bearing, restore an encrypted backup, decrypt what the operator encrypted, then rotate both keys",
+  "separate_machines": {
+    "corroborated_by_dmi_product_uuid": true,
+    "dmi_product_uuid_pairs_compared": 3,
+    "every_pair_separate": true,
+    "missing_required_identifiers": [],
+    "pairs": [
+      {
+        "dmi_product_uuid": {
+          "available": true,
+          "differs": true,
+          "left": "9eef88c7-9b19-4c8d-80e0-87c4b1f654ea",
+          "right": "44738f95-e4c7-4fda-9ccc-c6c3e79d0d92"
+        },
+        "docker_daemon_id": {
+          "left": null,
+          "matches": false,
+          "note": "The runner image ships a pre-generated /etc/docker/key.json, so separate VMs report one daemon id; disproved by run 35168111875",
+          "right": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+          "role": "OBSERVATION ONLY",
+          "used_as_a_discriminator": false
+        },
+        "hostname": {
+          "left": "runnervmlun5p",
+          "matches": true,
+          "note": "GitHub-hosted runners reuse generated hostnames across separate ephemeral VMs; disproved as a discriminator by run 35143620884",
+          "right": "runnervmlun5p",
+          "role": "OBSERVATION ONLY",
+          "used_as_a_discriminator": false
+        },
+        "kernel_boot_id": {
+          "both_present": true,
+          "differs": true,
+          "left": "ada63831-02a2-4c68-bbcb-edbbce8aac37",
+          "right": "98d290d1-03aa-45cc-9e31-dafffaa2966f"
+        },
+        "left": "custodian",
+        "right": "operator",
+        "runner_name": {
+          "both_present": true,
+          "differs": true,
+          "left": "GitHub Actions 1000002471",
+          "right": "GitHub Actions 1000002472"
+        },
+        "separate": true
+      },
+      {
+        "dmi_product_uuid": {
+          "available": true,
+          "differs": true,
+          "left": "9eef88c7-9b19-4c8d-80e0-87c4b1f654ea",
+          "right": "08428be9-f3f7-4476-8e3e-dc0f48b07fdd"
+        },
+        "docker_daemon_id": {
+          "left": null,
+          "matches": false,
+          "note": "The runner image ships a pre-generated /etc/docker/key.json, so separate VMs report one daemon id; disproved by run 35168111875",
+          "right": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+          "role": "OBSERVATION ONLY",
+          "used_as_a_discriminator": false
+        },
+        "hostname": {
+          "left": "runnervmlun5p",
+          "matches": true,
+          "note": "GitHub-hosted runners reuse generated hostnames across separate ephemeral VMs; disproved as a discriminator by run 35143620884",
+          "right": "runnervmlun5p",
+          "role": "OBSERVATION ONLY",
+          "used_as_a_discriminator": false
+        },
+        "kernel_boot_id": {
+          "both_present": true,
+          "differs": true,
+          "left": "ada63831-02a2-4c68-bbcb-edbbce8aac37",
+          "right": "963ba2b7-ead2-408a-bc96-a0cdcb321b43"
+        },
+        "left": "custodian",
+        "right": "recovery",
+        "runner_name": {
+          "both_present": true,
+          "differs": true,
+          "left": "GitHub Actions 1000002471",
+          "right": "GitHub Actions 1000002473"
+        },
+        "separate": true
+      },
+      {
+        "dmi_product_uuid": {
+          "available": true,
+          "differs": true,
+          "left": "44738f95-e4c7-4fda-9ccc-c6c3e79d0d92",
+          "right": "08428be9-f3f7-4476-8e3e-dc0f48b07fdd"
+        },
+        "docker_daemon_id": {
+          "left": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+          "matches": true,
+          "note": "The runner image ships a pre-generated /etc/docker/key.json, so separate VMs report one daemon id; disproved by run 35168111875",
+          "right": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+          "role": "OBSERVATION ONLY",
+          "used_as_a_discriminator": false
+        },
+        "hostname": {
+          "left": "runnervmlun5p",
+          "matches": true,
+          "note": "GitHub-hosted runners reuse generated hostnames across separate ephemeral VMs; disproved as a discriminator by run 35143620884",
+          "right": "runnervmlun5p",
+          "role": "OBSERVATION ONLY",
+          "used_as_a_discriminator": false
+        },
+        "kernel_boot_id": {
+          "both_present": true,
+          "differs": true,
+          "left": "98d290d1-03aa-45cc-9e31-dafffaa2966f",
+          "right": "963ba2b7-ead2-408a-bc96-a0cdcb321b43"
+        },
+        "left": "operator",
+        "right": "recovery",
+        "runner_name": {
+          "both_present": true,
+          "differs": true,
+          "left": "GitHub Actions 1000002472",
+          "right": "GitHub Actions 1000002473"
+        },
+        "separate": true
+      }
+    ],
+    "roles": [
+      "custodian",
+      "operator",
+      "recovery"
+    ],
+    "verdict": "SEPARATE MACHINES"
+  },
+  "services": {
+    "mariadb": {
+      "image_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+      "selected_version": "11.8.9"
+    },
+    "redis": {
+      "image_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+      "selected_version": "8.6.6"
+    }
+  },
+  "site": "custody-recovered.localhost",
+  "state_manifest_sha256": "3b5ffe115df593482cb2dfb6d5f7a571bc78c00d30474661f29f6d668741441d",
+  "status": "pass",
+  "target_revisions": {
+    "erpnext": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd",
+    "frappe": "988e54f3c4c291e2077a83809663f123731abe76"
+  }
+}

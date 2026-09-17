@@ -184,3 +184,68 @@ performed on that combination.
 - No v17/develop jump without full re-qualification; MariaDB/Redis
   stay aligned to the frappe_docker recipe line (11.8 / 8.6), not the
   newest observed majors.
+
+## 5. Native backup-encryption hazards found by execution (P4, run `35179445639`)
+
+All three were found while exercising real `bench backup` / `bench restore` with
+System Settings `encrypt_backup=1` at the pinned revision frappe `988e54f3`, and
+each is cited to the pinned source rather than to inspection. None is an upgrade
+hazard; all three are **current** behaviour of the pinned stack that any
+operational runbook must account for.
+
+**5.1 `backup_encryption_key` is passed to gpg unquoted, and failure is
+non-fatal.** `frappe/utils/backups.py` `backup_encryption()` builds
+
+```
+gpg --yes --passphrase {passphrase} --pinentry-mode loopback -c {filelocation}
+```
+
+with the key interpolated directly, runs it through `execute_in_shell`, and wraps
+it in `try/except` that prints *"Error occurred during encryption. Files are
+stored without encryption."* and **continues**. Two consequences:
+
+- The url-safe base64 alphabet includes `-`, so a key whose first character is a
+  dash is parsed by gpg as an option. `Fernet.generate_key()` produces such a key
+  roughly **once in 64**. The result is a **plaintext** database dump and file
+  archives, left under filenames that still say `-enc`, with the backup command
+  exiting successfully.
+- Because the failure is caught, nothing downstream fails. An operator would have
+  to read the console output of the backup job to notice.
+
+Mitigation adopted here (local, not upstream): the custody generator refuses a
+leading dash, `key_custody.command_line_safety()` records why, the custodian
+asserts every issued key is safe to pass unquoted, and the probes run `file` over
+every artifact and fail unless it reports AES — which is the same test
+`bench restore` applies before deciding to decrypt. **Runbook implication for the
+owner:** after any backup, verify the artifacts are actually ciphertext
+(`file <artifact>` must report `PGP symmetric key encrypted data - AES …`) rather
+than trusting the `-enc` suffix or a zero exit code. No upstream issue was filed
+and no fork was made.
+
+**5.2 Every artifact is renamed with an `-enc` suffix when encryption is on.**
+`set_backup_file_name()` appends `-enc` to the database dump, both file archives
+*and* the site config backup. Tooling that globs for `*-database.sql.gz` or
+`*-files.tar` — the natural thing to write, and what the first attempt at this
+probe did — matches **nothing** and finds no backup at all. Run `35178965074`
+failed on exactly this after a successful backup. Any retention, rotation,
+off-site copy or verification job must accept both forms.
+
+**5.3 The site config backup is *not* encrypted, despite its `-enc` filename.**
+`backup_encryption()` passes only `(backup_path_db, backup_path_files,
+backup_path_private_files)` to gpg. `backup_path_conf` is absent from that tuple,
+so `<ts>-<site>-site_config_backup-enc.json` is written in **clear text** and
+contains `db_password`, `encryption_key` and `backup_encryption_key`. It sits in
+`sites/<site>/private/backups` beside the encrypted artifacts, is included in any
+directory-level copy of the backup tree, and survives `bench backup` retention
+logic like any other file. Two operational consequences, both handled by the
+custody probes and both needed in a runbook:
+
+- a backup destination must be selected by **allowlist** (dump plus the two
+  archives), never by copying the backups directory, or the keys travel with the
+  backup and encryption at rest is void;
+- `bench drop-site` moves the site directory into `<bench>/archived/sites`, and
+  that archived `site_config.json` holds both keys in clear text, so destroying a
+  site does not by itself remove the key material from the host.
+
+These are recorded as findings, not as accepted risks: `production_authorization`
+remains `REJECT` and the `backup-restore` gate remains `BLOCKED`.
