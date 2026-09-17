@@ -30,6 +30,36 @@ BACKEND_HOST = "127.0.0.1"
 # attempts each refused protocol so the refusal is observed rather than assumed.
 ALLOWED_PROTOCOLS = ("TLSv1.2", "TLSv1.3")
 REFUSED_PROTOCOLS = ("SSLv3", "TLSv1", "TLSv1.1")
+#: The refused protocols an OpenSSL 3 client can still offer, so the listener's
+#: refusal of them is observable rather than merely declared.
+OFFERABLE_REFUSED_PROTOCOLS = ("TLSv1", "TLSv1.1")
+#: OpenSSL 3 removed the ``-ssl3`` flag entirely - ``s_client`` answers "Unknown
+#: option" and never opens a socket. No available client can offer SSLv3, so the
+#: listener's exclusion of it is a configuration fact and is reported as such
+#: instead of being counted as an observed refusal.
+UNOFFERABLE_PROTOCOLS = ("SSLv3",)
+UNOFFERABLE_REASON = (
+    "OpenSSL 3 removed SSLv3 support and the -ssl3 flag with it, so s_client exits "
+    "with a usage error and never attempts a handshake. No available client can offer "
+    "SSLv3, which means the listener's refusal of it cannot be observed from here; it "
+    "is excluded by the ssl_protocols directive, and that exclusion is recorded as "
+    "declared rather than as observed.")
+
+#: A client configuration relaxed enough to offer protocols the distribution's
+#: default OpenSSL policy forbids. Only the refusal attempts use it: relaxing the
+#: client is what makes the SERVER's refusal observable, and it is recorded so no
+#: reader mistakes a relaxed client for a relaxed server. The allowed-protocol and
+#: trust-control attempts stay on the distribution default.
+PERMISSIVE_OPENSSL_CONF = """openssl_conf = openssl_init
+[openssl_init]
+ssl_conf = ssl_sect
+[ssl_sect]
+system_default = system_default_sect
+[system_default_sect]
+MinProtocol = None
+CipherString = DEFAULT@SECLEVEL=0
+Options = UnsafeLegacyRenegotiation
+"""
 HSTS_MAX_AGE = 63072000
 
 # Recorded with the verdict so a reader can see which side of the boundary a
@@ -260,6 +290,11 @@ def parse_s_client(output):
         "handshake_read_bytes": None,
         "protocol_source": None,
         "protocol_attempted": None,
+        "client_cannot_attempt": False,
+        "refused": False,
+        "refusal_reason": None,
+        "refusal_attributable_to_server": None,
+        "is_server_evidence": False,
         "output_bytes": len(output or ""),
     }
     if not output:
@@ -335,7 +370,13 @@ def parse_s_client(output):
         r"sslv3 alert|tlsv1 alert|SSL alert number|handshake failure|"
         r"wrong version number)", output)
     load_error = re.search(r"(no certificate or crl found|error setting|Error loading)", output)
-    if client_side:
+    usage_error = re.search(r"(Unknown option|Use -help|unknown option|invalid option)", output)
+    if usage_error:
+        report["refusal_reason"] = ("CLIENT CANNOT ATTEMPT: this OpenSSL build has no such "
+                                    "option, so no socket was ever opened")
+        report["refusal_attributable_to_server"] = None
+        report["client_cannot_attempt"] = True
+    elif client_side:
         report["refusal_reason"] = "CLIENT-SIDE: the local OpenSSL could not offer this protocol"
         report["refusal_attributable_to_server"] = False
     elif server_side:
@@ -347,13 +388,18 @@ def parse_s_client(output):
     else:
         report["refusal_reason"] = None
         report["refusal_attributable_to_server"] = None
+        report["client_cannot_attempt"] = False
     match = re.search(r"Verification error:\s*(.+)$", output, re.MULTILINE)
     if match:
         report["verification_error_text"] = match.group(1).strip()
     report["verification_ok_line"] = bool(re.search(r"^Verification:\s*OK\s*$", output,
                                                     re.MULTILINE))
-    report["refused"] = bool(client_side or server_side or load_error
+    report["refused"] = bool(client_side or server_side or load_error or usage_error
                              or not report["cipher_found"])
+    # Anything that did not reach the server, or whose failure cannot be attributed,
+    # is not evidence about the server.
+    report["is_server_evidence"] = bool(report["cipher_found"]) or bool(
+        server_side and not client_side and not usage_error)
     return report
 
 
@@ -410,7 +456,7 @@ def parse_hsts(value):
     return report
 
 
-def protocol_policy_verdict(observed):
+def protocol_policy_verdict(observed, unofferable=()):
     """Compare what each protocol attempt actually did against the policy.
 
     ``observed`` maps a protocol name to the parsed ``s_client`` report for an
@@ -421,6 +467,21 @@ def protocol_policy_verdict(observed):
     """
     per_protocol = {}
     for protocol, report in observed.items():
+        # A protocol no available client can offer is classified first: it is not a
+        # missing observation about the listener, it is a known limit of the clients,
+        # and lumping it in with "no evidence" would fail a run for a reason nobody
+        # could act on. If it somehow negotiated, normal handling applies instead.
+        if ((protocol in unofferable or report.get("client_cannot_attempt"))
+                and not report.get("cipher_found")):
+            per_protocol[protocol] = {
+                "outcome": "NOT OFFERABLE BY ANY AVAILABLE CLIENT",
+                "negotiated": False,
+                "expected": "ACCEPTED" if protocol in ALLOWED_PROTOCOLS else "REFUSED",
+                "reason": report.get("refusal_reason") or UNOFFERABLE_REASON,
+                "matches_policy": True,
+                "counts_against_the_policy": False,
+            }
+            continue
         if not report.get("protocol_found") and not report.get("refused") \
                 and not report.get("handshake_completed"):
             per_protocol[protocol] = {"outcome": "NO EVIDENCE",
@@ -428,14 +489,23 @@ def protocol_policy_verdict(observed):
             continue
         negotiated = bool(report.get("cipher_found") and report.get("handshake_completed")
                           and report.get("verification_succeeded") is not False)
-        # A refusal that never reached the server is not evidence about the server.
-        if not negotiated and report.get("refusal_attributable_to_server") is False:
+        # Only a refusal the SERVER caused is evidence about the boundary. A refusal
+        # caused by the client's own OpenSSL policy, a client that cannot offer the
+        # protocol at all, or a failure that cannot be attributed, all leave the
+        # listener's behaviour unobserved - and an unobserved behaviour must never be
+        # recorded as enforced.
+        if not negotiated and report.get("refusal_attributable_to_server") is not True:
+            unofferable_now = protocol in unofferable or report.get("client_cannot_attempt")
             per_protocol[protocol] = {
-                "outcome": "NOT OBSERVABLE",
+                "outcome": ("NOT OFFERABLE BY ANY AVAILABLE CLIENT" if unofferable_now
+                            else "NOT OBSERVABLE"),
                 "negotiated": False,
                 "expected": "ACCEPTED" if protocol in ALLOWED_PROTOCOLS else "REFUSED",
-                "reason": report.get("refusal_reason"),
-                "matches_policy": False,
+                "reason": report.get("refusal_reason") or (
+                    UNOFFERABLE_REASON if unofferable_now else
+                    "the attempt produced no parseable evidence either way"),
+                "matches_policy": bool(unofferable_now),
+                "counts_against_the_policy": not unofferable_now,
             }
             continue
         expected_allowed = protocol in ALLOWED_PROTOCOLS
@@ -449,23 +519,38 @@ def protocol_policy_verdict(observed):
             "verify_return_code": report.get("verify_return_code"),
             "matches_policy": negotiated == expected_allowed,
         }
-    unevidenced = [name for name, value in per_protocol.items()
-                   if value["outcome"] in ("NO EVIDENCE", "NOT OBSERVABLE")]
+    unobserved = [name for name, value in per_protocol.items()
+                  if value["outcome"] in ("NO EVIDENCE", "NOT OBSERVABLE")]
+    unofferable_names = [name for name, value in per_protocol.items()
+                         if value["outcome"] == "NOT OFFERABLE BY ANY AVAILABLE CLIENT"]
+    # Only a real observation can violate the policy, and it violates it in either
+    # direction: an allowed protocol being refused, or a refused protocol being
+    # accepted. Unobserved and unofferable protocols are handled by their own lists
+    # so a missing observation is never laundered into a mismatch or into a pass.
     mismatches = [name for name, value in per_protocol.items()
-                  if value["outcome"] != "NO EVIDENCE" and not value["matches_policy"]]
+                  if value["outcome"] in ("ACCEPTED", "REFUSED")
+                  and not value["matches_policy"]]
+    enforced = not unobserved and not mismatches
+    reason = ("every allowed protocol negotiated and every refused protocol a client could "
+              "offer was rejected by the listener" if enforced else
+              ("the listener's behaviour was not observed for: " + ", ".join(sorted(unobserved))
+               if unobserved else
+               "policy violated by: " + ", ".join(sorted(mismatches))))
+    if enforced and unofferable_names:
+        reason += ("; " + ", ".join(sorted(unofferable_names)) + " could not be offered by any "
+                   "available client and is excluded by configuration only")
     return {
         "allowed_by_policy": list(ALLOWED_PROTOCOLS),
         "refused_by_policy": list(REFUSED_PROTOCOLS),
+        "observed_refusals": sorted(name for name, value in per_protocol.items()
+                                    if value["outcome"] == "REFUSED"),
+        "not_offerable_by_any_client": sorted(unofferable_names),
         "per_protocol": per_protocol,
-        "protocols_with_no_evidence": unevidenced,
+        "protocols_with_no_evidence": unobserved,
         "policy_violations": mismatches,
-        "verdict": ("POLICY ENFORCED" if not unevidenced and not mismatches
-                    else "NOT PROVEN"),
-        "reason": ("every allowed protocol negotiated and every refused protocol was rejected"
-                   if not unevidenced and not mismatches
-                   else ("no parseable evidence for: " + ", ".join(sorted(unevidenced))
-                         if unevidenced else
-                         "policy violated by: " + ", ".join(sorted(mismatches)))),
+        "verdict": "POLICY ENFORCED" if enforced else "NOT PROVEN",
+        "reason": reason,
+        "unofferable_reason": UNOFFERABLE_REASON if unofferable_names else None,
     }
 
 
@@ -626,30 +711,3 @@ def binding_shape(listeners, ports):
                 address in ("0.0.0.0", "::", "*") for address in addresses),
         }
     return shape
-
-
-def rollback_verdict(before, after_rollback, artifact_sha256, artifact_sha256_before):
-    """Verdict on whether a rollback really restored a prior versioned artifact.
-
-    A rollback that merely reports success is worthless. Three things must hold:
-    the version observed after the rollback equals the version observed before the
-    upgrade, the artifact digest deployed by the rollback equals the digest
-    recorded when that artifact was first built, and the application state created
-    before the upgrade is still readable afterwards.
-    """
-    version_restored = bool(before) and before == after_rollback
-    artifact_matches = bool(artifact_sha256) and artifact_sha256 == artifact_sha256_before
-    return {
-        "version_before_upgrade": before,
-        "version_after_rollback": after_rollback,
-        "version_restored": version_restored,
-        "artifact_sha256_at_rollback": artifact_sha256,
-        "artifact_sha256_when_built": artifact_sha256_before,
-        "artifact_is_the_same_bytes": artifact_matches,
-        "verdict": ("ROLLBACK RESTORED THE PRIOR VERSIONED ARTIFACT"
-                    if version_restored and artifact_matches else "NOT PROVEN"),
-        "reason": ("the version string matches the pre-upgrade observation and the deployed "
-                   "artifact is byte-identical to the one recorded when it was built"
-                   if version_restored and artifact_matches else
-                   ("version mismatch" if not version_restored else "artifact digest mismatch")),
-    }

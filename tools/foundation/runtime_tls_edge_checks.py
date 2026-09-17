@@ -66,19 +66,113 @@ def peer_certificate_sha256(host, port, cafile):
     return hashlib.sha256(der).hexdigest(), negotiated
 
 
-def s_client(port, *, protocol=None, cafile=None, verify_hostname=None):
+#: Protocol ranges offered through Python's own TLS stack. ``ssl.TLSVersion.SSLv3``
+#: exists as a member but OpenSSL 3 cannot offer it, so SSLv3 stays unofferable.
+PYTHON_PROTOCOL_RANGES = {
+    "TLSv1.2": ("TLSv1_2", "TLSv1_2"),
+    "TLSv1.3": ("TLSv1_3", "TLSv1_3"),
+    "TLSv1": ("TLSv1", "TLSv1"),
+    "TLSv1.1": ("TLSv1_1", "TLSv1_1"),
+}
+
+
+def python_tls_attempt(host, port, minimum_name, maximum_name):
+    """Offer a pinned protocol range using Python's TLS stack.
+
+    Python sets the version bounds through OpenSSL's C API
+    (``SSL_CTX_set_min_proto_version``), which is not subject to the distribution's
+    ``openssl.cnf`` policy. That policy is exactly what stops ``s_client`` from
+    offering TLS 1.0 or 1.1 on a hardened image - and a client that never opens a
+    socket cannot show that the listener refused anything. This is therefore the
+    client that can actually observe the refusal, and it is a second independent
+    implementation rather than a workaround layered on the first.
+    """
+    import warnings
+
+    minimum = getattr(ssl.TLSVersion, minimum_name)
+    maximum = getattr(ssl.TLSVersion, maximum_name)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    # The protocol version is what is under test here, not the chain: the chain and
+    # hostname are verified separately, with verification turned on.
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            context.minimum_version = minimum
+            context.maximum_version = maximum
+            with socket.create_connection((host, int(port)), timeout=30) as plain:
+                with context.wrap_socket(plain, server_hostname=host) as secure:
+                    return {"client": "python ssl", "negotiated": secure.version(),
+                            "cipher": secure.cipher()[0], "error": None,
+                            "offered_range": [minimum_name, maximum_name]}
+    except Exception as exc:  # noqa: BLE001 - the refusal text is the evidence
+        return {"client": "python ssl", "negotiated": None, "cipher": None,
+                "error": f"{type(exc).__name__}: {exc}"[:300],
+                "offered_range": [minimum_name, maximum_name]}
+
+
+def parse_python_attempt(attempt):
+    """Express a Python TLS attempt in the same shape the openssl parser returns.
+
+    The refusal text Python raises (``tlsv1 alert protocol version``) carries the
+    same alert the listener sent, so the shared parser attributes it identically
+    instead of a second, divergent classification being invented here.
+    """
+    if attempt["negotiated"]:
+        report = edge.parse_s_client(
+            f"New, {attempt['negotiated']}, Cipher is {attempt['cipher']}\n"
+            f"Verify return code: 0 (ok)\n")
+        report["protocol"] = attempt["negotiated"]
+        report["protocol_found"] = True
+    else:
+        report = edge.parse_s_client(attempt["error"] or "")
+    report["client"] = "python ssl"
+    report["python_error"] = attempt["error"]
+    return report
+
+
+def effective_observation(*reports):
+    """Pick the observation that actually says something about the listener.
+
+    A negotiated cipher is server evidence; so is a refusal the server caused. An
+    attempt the client could not make is not, and is only used if nothing better
+    exists - which leaves the verdict NOT PROVEN rather than quietly passing.
+    """
+    for report in reports:
+        if report.get("cipher_found"):
+            return report, report.get("client") or "openssl s_client"
+    for report in reports:
+        if report.get("refusal_attributable_to_server") is True:
+            return report, report.get("client") or "openssl s_client"
+    return reports[0], "neither client produced server-attributable evidence"
+
+
+def s_client(port, *, protocol=None, cafile=None, verify_hostname=None, openssl_conf=None):
     """One ``openssl s_client`` attempt, with stdout and stderr combined.
 
     The refusal evidence lives on stderr (``tlsv1 alert protocol version``) while
     the negotiation summary is on stdout, so both are needed to parse honestly.
+
+    ``openssl_conf`` points at a relaxed client configuration. It is used only for
+    the protocols the listener is supposed to refuse: a distribution's default
+    OpenSSL policy forbids offering TLS 1.0 and 1.1 at all, and a client that never
+    opens a socket cannot show that the SERVER refused anything. Relaxing the client
+    is what makes the server's refusal observable. It is recorded per attempt so no
+    reader mistakes a relaxed client for a relaxed server, and the allowed-protocol
+    and trust-control attempts stay on the distribution default.
     """
     command = edge.s_client_command(port, protocol=protocol, cafile=cafile,
                                     verify_hostname=verify_hostname, servername=SITE)
+    environment = dict(os.environ)
+    if openssl_conf:
+        environment["OPENSSL_CONF"] = str(openssl_conf)
     completed = subprocess.run(command, capture_output=True, text=True, timeout=90,
-                               input="", check=False)
+                               input="", env=environment, check=False)
     return {
         "command": command,
         "exit_code": completed.returncode,
+        "relaxed_client_policy": bool(openssl_conf),
         "output": (completed.stdout or "") + (completed.stderr or ""),
     }
 
@@ -227,23 +321,76 @@ def main() -> int:
     check("independent-tls-client-agrees-on-all-three-controls", _python_tls_controls)
 
     def _protocol_matrix():
+        # A relaxed client policy, used only for the refusal attempts.
+        relaxed = certs.parent / "openssl-relaxed.cnf"
+        relaxed.write_text(edge.PERMISSIVE_OPENSSL_CONF)
         attempts = {}
-        for protocol in edge.ALLOWED_PROTOCOLS + edge.REFUSED_PROTOCOLS:
-            attempt = s_client(https_port, protocol=protocol, cafile=ca,
-                               verify_hostname=SITE)
-            parsed = edge.parse_s_client(attempt["output"])
-            parsed["exit_code"] = attempt["exit_code"]
+        excerpts = {}
+        for protocol in edge.ALLOWED_PROTOCOLS + edge.OFFERABLE_REFUSED_PROTOCOLS:
+            relax = protocol in edge.OFFERABLE_REFUSED_PROTOCOLS
+            attempt = s_client(https_port, protocol=protocol, cafile=ca, verify_hostname=SITE,
+                               openssl_conf=relaxed if relax else None)
+            from_openssl = edge.parse_s_client(attempt["output"])
+            from_openssl["exit_code"] = attempt["exit_code"]
+            from_openssl["relaxed_client_policy"] = attempt["relaxed_client_policy"]
+            from_openssl["client"] = "openssl s_client"
+            low, high = PYTHON_PROTOCOL_RANGES[protocol]
+            python_attempt = python_tls_attempt(SITE, https_port, low, high)
+            from_python = parse_python_attempt(python_attempt)
+            parsed, source = effective_observation(from_openssl, from_python)
+            parsed["observed_through"] = source
+            parsed["openssl_observation"] = {
+                "outcome": ("ACCEPTED" if from_openssl.get("cipher_found") else "not negotiated"),
+                "protocol": from_openssl.get("protocol"),
+                "refusal_reason": from_openssl.get("refusal_reason"),
+                "server_attributable": from_openssl.get("refusal_attributable_to_server"),
+                "relaxed_client_policy": attempt["relaxed_client_policy"],
+            }
+            parsed["python_observation"] = {
+                "negotiated": python_attempt["negotiated"],
+                "cipher": python_attempt["cipher"],
+                "error": python_attempt["error"],
+                "server_attributable": from_python.get("refusal_attributable_to_server"),
+            }
             attempts[protocol] = parsed
-        verdict = edge.protocol_policy_verdict(attempts)
+            # Artifacts from a hosted run are not always retrievable, so the raw
+            # negotiation text travels in the published evidence: without it a
+            # NOT OBSERVABLE outcome cannot be diagnosed.
+            excerpts[protocol] = {
+                "exit_code": attempt["exit_code"],
+                "relaxed_client_policy": attempt["relaxed_client_policy"],
+                "output_excerpt": attempt["output"][-900:],
+                "observed_through": source,
+                "python_error": python_attempt["error"],
+                "python_negotiated": python_attempt["negotiated"],
+            }
+        for protocol in edge.UNOFFERABLE_PROTOCOLS:
+            # OpenSSL 3 has no -ssl3 flag: the attempt would exit with a usage error
+            # and never open a socket, which is not evidence about the listener.
+            attempts[protocol] = edge.parse_s_client("")
+            attempts[protocol]["client_cannot_attempt"] = True
+            attempts[protocol]["refusal_attributable_to_server"] = None
+            attempts[protocol]["refusal_reason"] = edge.UNOFFERABLE_REASON
+            excerpts[protocol] = {"attempted": False, "reason": edge.UNOFFERABLE_REASON}
+
+        verdict = edge.protocol_policy_verdict(attempts,
+                                               unofferable=edge.UNOFFERABLE_PROTOCOLS)
         result["verdicts"]["tls_protocol_policy"] = verdict
-        result["verdicts"]["tls_protocol_attempts"] = attempts
+        result["verdicts"]["tls_protocol_attempts"] = excerpts
         if verdict["verdict"] != "POLICY ENFORCED":
             raise AssertionError("TLS protocol policy not enforced: " + json.dumps(
                 {"reason": verdict["reason"],
-                 "outcomes": {k: v["outcome"] for k, v in verdict["per_protocol"].items()}}))
+                 "outcomes": {k: v["outcome"] for k, v in verdict["per_protocol"].items()},
+                 "excerpts": {k: v.get("output_excerpt", "")[-400:] for k, v in excerpts.items()}}))
         return {"policy": verdict["verdict"], "reason": verdict["reason"],
                 "outcomes": {k: v["outcome"] for k, v in verdict["per_protocol"].items()},
-                "ciphers": {k: v.get("cipher") for k, v in attempts.items()}}
+                "observed_refusals": verdict["observed_refusals"],
+                "not_offerable_by_any_client": verdict["not_offerable_by_any_client"],
+                "ciphers": {k: v.get("cipher") for k, v in attempts.items()},
+                "relaxed_client_policy_used_for": sorted(
+                    k for k, v in attempts.items() if v.get("relaxed_client_policy")),
+                "note": ("The client policy was relaxed only to offer the refused protocols; "
+                         "the listener's own policy is unchanged and is what rejected them.")}
 
     check("tls-protocol-policy-enforced-at-the-listener", _protocol_matrix)
 

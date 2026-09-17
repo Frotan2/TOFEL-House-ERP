@@ -28,8 +28,11 @@ This contract keeps that honest without touching a network:
   by the server, because only the second is evidence about the boundary;
 * the tailnet verdict cannot be upgraded: no auth key, no node, no ACL. It reports
   the binding shape and classifies the rest ENVIRONMENT-BLOCKED;
-* the rollback verdict requires a matching version *and* a byte-identical artifact
-  digest, so a rollback that merely claims success does not pass.
+* a wildcard listener binding is distinguished from an explicit one, decoding the
+  address the kernel actually bound rather than a host:port string.
+
+The rollback verdict lives in ``test_operational_rollback_contract.py``, with the
+helpers it belongs to.
 
 Boundary with the existing coverage: ``test_independent_recovery_contract.py`` and
 ``runtime_independent_usability.py`` exercise the plaintext proxy and the
@@ -400,6 +403,168 @@ class ProtocolPolicyVerdict(unittest.TestCase):
         self.assertEqual(verdict["protocols_with_no_evidence"], ["TLSv1.2"])
 
 
+class UnobservableProtocolAttempts(unittest.TestCase):
+    """The failure hosted run 35197870620 exposed, and the fix for it.
+
+    That run reported TLSv1.2 and TLSv1.3 ACCEPTED and SSLv3 REFUSED, with TLSv1 and
+    TLSv1.1 NOT OBSERVABLE. The inconsistency was the tell: ``-ssl3`` is not a valid
+    OpenSSL 3 flag, so s_client printed a usage error and never opened a socket. The
+    old verdict matched neither a client-side nor a server-side pattern, treated the
+    unattributable result as a refusal, and counted it as enforcement - a silent
+    false pass. Meanwhile the image's OpenSSL policy stopped the client from offering
+    TLS 1.0 and 1.1 at all, so the listener's refusal of those was never observed.
+    """
+
+    USAGE_ERROR = "s_client: Unknown option: -ssl3\ns_client: Use -help for summary.\n"
+    CLIENT_REFUSAL = "error:0A00045F:SSL routines::no protocols available\n"
+
+    def real(self):
+        return {
+            "TLSv1.2": edge.parse_s_client(TLS12_WITH_CA),
+            "TLSv1.3": edge.parse_s_client(TLS13_WITH_CA),
+            "TLSv1": edge.parse_s_client(TLS10_REFUSED),
+            "TLSv1.1": edge.parse_s_client(TLS11_REFUSED),
+        }
+
+    def test_a_usage_error_is_not_a_refusal(self):
+        parsed = edge.parse_s_client(self.USAGE_ERROR)
+        self.assertTrue(parsed["client_cannot_attempt"])
+        self.assertIsNone(parsed["refusal_attributable_to_server"])
+        self.assertFalse(parsed["is_server_evidence"])
+        self.assertIn("CLIENT CANNOT ATTEMPT", parsed["refusal_reason"])
+
+    def test_an_unattributable_result_never_counts_as_enforcement(self):
+        observed = self.real()
+        observed["TLSv1"] = edge.parse_s_client("some unrelated failure with no TLS content")
+        verdict = edge.protocol_policy_verdict(observed, unofferable=edge.UNOFFERABLE_PROTOCOLS)
+        self.assertEqual(verdict["verdict"], "NOT PROVEN")
+        self.assertIn("TLSv1", verdict["protocols_with_no_evidence"])
+        self.assertNotIn("TLSv1", verdict["observed_refusals"])
+
+    def test_an_unofferable_protocol_is_recorded_and_excluded_not_passed(self):
+        observed = self.real()
+        unofferable = edge.parse_s_client("")
+        unofferable["client_cannot_attempt"] = True
+        observed["SSLv3"] = unofferable
+        verdict = edge.protocol_policy_verdict(observed, unofferable=edge.UNOFFERABLE_PROTOCOLS)
+        self.assertEqual(verdict["verdict"], "POLICY ENFORCED")
+        self.assertEqual(verdict["not_offerable_by_any_client"], ["SSLv3"])
+        self.assertEqual(verdict["observed_refusals"], ["TLSv1", "TLSv1.1"])
+        self.assertEqual(verdict["per_protocol"]["SSLv3"]["outcome"],
+                         "NOT OFFERABLE BY ANY AVAILABLE CLIENT")
+        self.assertIn("could not be offered by any available client", verdict["reason"])
+        self.assertIn("OpenSSL 3 removed SSLv3", verdict["unofferable_reason"])
+
+    def test_an_unofferable_protocol_that_negotiates_is_still_a_violation(self):
+        observed = self.real()
+        observed["SSLv3"] = edge.parse_s_client(TLS12_WITH_CA)
+        verdict = edge.protocol_policy_verdict(observed, unofferable=edge.UNOFFERABLE_PROTOCOLS)
+        self.assertEqual(verdict["verdict"], "NOT PROVEN")
+
+    def test_a_client_policy_refusal_is_not_server_evidence(self):
+        observed = self.real()
+        observed["TLSv1.1"] = edge.parse_s_client(self.CLIENT_REFUSAL)
+        verdict = edge.protocol_policy_verdict(observed, unofferable=edge.UNOFFERABLE_PROTOCOLS)
+        self.assertEqual(verdict["verdict"], "NOT PROVEN")
+        self.assertIn("TLSv1.1", verdict["protocols_with_no_evidence"])
+
+    def test_an_allowed_protocol_being_refused_is_a_violation(self):
+        # Regression: a rewrite of the mismatch detection once lost this direction.
+        for allowed in ("TLSv1.2", "TLSv1.3"):
+            observed = self.real()
+            observed[allowed] = edge.parse_s_client(TLS11_REFUSED)
+            verdict = edge.protocol_policy_verdict(observed,
+                                                   unofferable=edge.UNOFFERABLE_PROTOCOLS)
+            self.assertEqual(verdict["verdict"], "NOT PROVEN", allowed)
+            self.assertIn(allowed, verdict["policy_violations"])
+
+    def test_a_refused_protocol_being_accepted_is_a_violation(self):
+        for refused in ("TLSv1", "TLSv1.1"):
+            observed = self.real()
+            observed[refused] = edge.parse_s_client(TLS12_WITH_CA)
+            verdict = edge.protocol_policy_verdict(observed,
+                                                   unofferable=edge.UNOFFERABLE_PROTOCOLS)
+            self.assertEqual(verdict["verdict"], "NOT PROVEN", refused)
+            self.assertIn(refused, verdict["policy_violations"])
+
+    def test_the_relaxed_client_configuration_targets_the_right_settings(self):
+        conf = edge.PERMISSIVE_OPENSSL_CONF
+        self.assertIn("MinProtocol = None", conf)
+        self.assertIn("CipherString = DEFAULT@SECLEVEL=0", conf)
+        self.assertIn("[system_default_sect]", conf)
+        # Relaxing the client is only legitimate if it is recorded as having happened.
+        self.assertEqual(edge.OFFERABLE_REFUSED_PROTOCOLS, ("TLSv1", "TLSv1.1"))
+        self.assertEqual(edge.UNOFFERABLE_PROTOCOLS, ("SSLv3",))
+        self.assertEqual(set(edge.ALLOWED_PROTOCOLS) | set(edge.REFUSED_PROTOCOLS),
+                         {"TLSv1.2", "TLSv1.3", "TLSv1", "TLSv1.1", "SSLv3"})
+        self.assertTrue(set(edge.OFFERABLE_REFUSED_PROTOCOLS) <= set(edge.REFUSED_PROTOCOLS))
+
+
+class TwoClientCorroboration(unittest.TestCase):
+    """The second TLS client is what makes a hardened image's refusal observable."""
+
+    def setUp(self):
+        import importlib.util
+        path = ROOT / "tools" / "foundation" / "runtime_tls_edge_checks.py"
+        spec = importlib.util.spec_from_file_location("tls_checks", path)
+        self.checks = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.checks)
+
+    def test_a_negotiated_python_attempt_parses_as_accepted(self):
+        parsed = self.checks.parse_python_attempt(
+            {"client": "python ssl", "negotiated": "TLSv1.3",
+             "cipher": "TLS_AES_256_GCM_SHA384", "error": None})
+        self.assertTrue(parsed["cipher_found"])
+        self.assertEqual(parsed["protocol"], "TLSv1.3")
+        self.assertEqual(parsed["client"], "python ssl")
+
+    def test_a_python_refusal_is_attributed_to_the_server(self):
+        # This is the real text Python raises when a TLS 1.2+ listener refuses 1.1.
+        parsed = self.checks.parse_python_attempt(
+            {"client": "python ssl", "negotiated": None, "cipher": None,
+             "error": ("SSLError: [SSL: TLSV1_ALERT_PROTOCOL_VERSION] tlsv1 alert protocol "
+                       "version (_ssl.c:992)")})
+        self.assertFalse(parsed["cipher_found"])
+        self.assertTrue(parsed["refused"])
+        self.assertTrue(parsed["refusal_attributable_to_server"])
+        self.assertIn("SERVER-SIDE", parsed["refusal_reason"])
+
+    def test_the_client_that_produced_server_evidence_is_the_one_used(self):
+        blocked = edge.parse_s_client("error:0A00045F:SSL routines::no protocols available")
+        blocked["client"] = "openssl s_client"
+        refused = self.checks.parse_python_attempt(
+            {"client": "python ssl", "negotiated": None, "cipher": None,
+             "error": "SSLError: [SSL: TLSV1_ALERT_PROTOCOL_VERSION] tlsv1 alert protocol version"})
+        chosen, source = self.checks.effective_observation(blocked, refused)
+        self.assertEqual(source, "python ssl")
+        self.assertTrue(chosen["refusal_attributable_to_server"])
+
+    def test_a_negotiated_cipher_wins_over_any_refusal_text(self):
+        negotiated = edge.parse_s_client(TLS12_WITH_CA)
+        refused = self.checks.parse_python_attempt(
+            {"client": "python ssl", "negotiated": None, "cipher": None, "error": "SSLError: x"})
+        chosen, source = self.checks.effective_observation(refused, negotiated)
+        self.assertTrue(chosen["cipher_found"])
+        self.assertEqual(source, "openssl s_client")
+
+    def test_when_neither_client_reached_the_server_that_is_said_plainly(self):
+        blocked = edge.parse_s_client("no protocols available")
+        unable = self.checks.parse_python_attempt(
+            {"client": "python ssl", "negotiated": None, "cipher": None,
+             "error": "ValueError: unsupported protocol version"})
+        chosen, source = self.checks.effective_observation(blocked, unable)
+        self.assertIn("neither client", source)
+        self.assertFalse(chosen["cipher_found"])
+
+    def test_every_offerable_protocol_has_a_python_range(self):
+        for protocol in edge.ALLOWED_PROTOCOLS + edge.OFFERABLE_REFUSED_PROTOCOLS:
+            self.assertIn(protocol, self.checks.PYTHON_PROTOCOL_RANGES)
+            low, high = self.checks.PYTHON_PROTOCOL_RANGES[protocol]
+            import ssl
+            self.assertTrue(hasattr(ssl.TLSVersion, low), protocol)
+            self.assertTrue(hasattr(ssl.TLSVersion, high), protocol)
+
+
 class TrustVerdict(unittest.TestCase):
     def test_real_observations_prove_verification_is_enforced(self):
         verdict = edge.trust_verdict(
@@ -534,31 +699,6 @@ class KernelListenerDecoder(unittest.TestCase):
         self.assertEqual(edge.decode_proc_net_listeners(""), [])
         self.assertEqual(edge.decode_proc_net_listeners(None), [])
         self.assertEqual(edge.decode_proc_net_listeners("garbage without colons"), [])
-
-
-class RollbackVerdict(unittest.TestCase):
-    def test_matching_version_and_digest_is_proven(self):
-        verdict = edge.rollback_verdict("frappe 16.33.1 HEAD", "frappe 16.33.1 HEAD",
-                                        "abc123", "abc123")
-        self.assertEqual(verdict["verdict"], "ROLLBACK RESTORED THE PRIOR VERSIONED ARTIFACT")
-        self.assertTrue(verdict["version_restored"])
-        self.assertTrue(verdict["artifact_is_the_same_bytes"])
-
-    def test_a_version_mismatch_fails_closed(self):
-        verdict = edge.rollback_verdict("frappe 16.33.1 HEAD", "frappe 16.34.0 HEAD",
-                                        "abc123", "abc123")
-        self.assertEqual(verdict["verdict"], "NOT PROVEN")
-        self.assertEqual(verdict["reason"], "version mismatch")
-
-    def test_a_digest_mismatch_fails_closed(self):
-        verdict = edge.rollback_verdict("frappe 16.33.1 HEAD", "frappe 16.33.1 HEAD",
-                                        "abc123", "def456")
-        self.assertEqual(verdict["verdict"], "NOT PROVEN")
-        self.assertEqual(verdict["reason"], "artifact digest mismatch")
-
-    def test_empty_observations_fail_closed(self):
-        self.assertEqual(edge.rollback_verdict("", "", "", "")["verdict"], "NOT PROVEN")
-        self.assertEqual(edge.rollback_verdict("v1", "v1", "", "")["verdict"], "NOT PROVEN")
 
 
 if __name__ == "__main__":
