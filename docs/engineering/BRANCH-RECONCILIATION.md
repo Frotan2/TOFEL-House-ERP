@@ -26,32 +26,50 @@ provenance on 2026-09-16. The acceptance ledger keeps both in an ordered chain:
 (`arena/01a0aafe-tofel-house-erp`) and `earlier_active_branch_provenance`
 (`arena/01a0a9f7-tofel-house-erp`).
 
-### The active branch has no hosted evidence
+### The active branch now carries its own hosted evidence — and it is a REJECT
 
-A rotation moves the boundary, not the evidence. No hosted workflow has been
-executed on `arena/01a0aef4-tofel-house-erp`, so
-`active_branch_qualification.hosted_execution_state` is
-`NOT_EXECUTED_ON_THIS_BRANCH` and that block deliberately carries **no** run,
-check, commit or report identifier. `tools/foundation/d8_validate.py` fails
-closed on this state: attaching any execution identity to it, or populating its
-evidence sub-blocks, is a contract error, so an older branch's run cannot be
-re-labelled as an execution here. The D8 report surfaces the state as
-`active_branch_hosted_execution`.
+A rotation moves the boundary, not the evidence. Immediately after the 2026-09-17
+rotation no hosted workflow had run on `arena/01a0aef4-tofel-house-erp`, so
+`hosted_execution_state` was recorded as `NOT_EXECUTED_ON_THIS_BRANCH`, carrying
+**no** run, check, commit or report identifier.
 
-Before the 2026-09-17 rotation this was a latent trap: the validator required
+That absence has since been closed by execution rather than by re-labelling. All
+five named workflows — `foundation-runtime.yml`, `foundation-runner.yml`,
+`placement-content.yml`, `foundation-frontend-review.yml` and
+`d8-operations-contract.yml` — were genuinely re-executed on this branch at commit
+`e8da889b22589a5d64f7843ecaf5d11d9260424c`, together with the operational-
+boundaries, durability, key-custody, independent-recovery and owned-suite gates.
+The state is now:
+
+| Field | Value |
+| --- | --- |
+| `hosted_execution_state` | `EXECUTED` |
+| `session_branch.ACTIVE_RUNTIME_STATE` | `EXECUTED` |
+| `session_branch.ACTIVE_RUNTIME_RUN` | `35218007937` |
+| `foundation_runtime.status` | `fail_reject` (SEC-DEPS-01) |
+| `production_state` | `REJECT` |
+
+`tools/foundation/d8_validate.py` asserts **both** the `fail_reject` status and
+that exact run id, so the pin cannot be silently swapped for a different or
+passing run while SEC-DEPS-01 is open. **The Foundation runtime rejected exactly
+as predicted**: 119 of 121 restricted checks pass, with
+`hosted-full-stack-dependency-audit` and `hosted-frontend-advisory-audit` failing.
+Re-execution moved the evidence onto this branch; it changed no outcome.
+
+Before the rotation this was a latent trap: the validator required
 `active_branch_qualification.foundation_runtime.run` to equal a pinned run id, so
 a rotation could only be recorded by asserting a run that never happened on the
-new branch. Recording the absence explicitly is the honest alternative and it
-changes no gate: production remains **REJECT** and D8 remains **BLOCKED**.
+new branch. The explicit-absence state was the honest fix for that, and it was
+exercised for real rather than being theoretical. **Its guards were not deleted**
+— `ActiveBranchEvidenceTests` still drives them by forcing `NOT_EXECUTED`, so a
+future rotation back to that state remains fail-closed. A mirror-image test now
+also rejects a ledger that claims the absence while the boundary records an
+execution.
 
-To close it, re-run `foundation-runtime.yml`, `foundation-runner.yml`,
-`placement-content.yml`, `foundation-frontend-review.yml` and
-`d8-operations-contract.yml` on the active branch, then set
-`session_branch.ACTIVE_RUNTIME_STATE = "EXECUTED"`, pin the real run id in
-`ACTIVE_RUNTIME_RUN`, and replace the active block with the observed results in
-the same change.
+The D8 report surfaces the state as `active_branch_hosted_execution`.
 
-The branch is not a production approval. Production remains **REJECT**.
+The branch is not a production approval. Production remains **REJECT** and D8
+remains **BLOCKED**.
 
 ## Historical evidence boundary
 

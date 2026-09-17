@@ -65,13 +65,17 @@ class D8ContractTests(unittest.TestCase):
 
 
 class ActiveBranchEvidenceTests(unittest.TestCase):
-    """A rotated active branch may have no hosted run; that absence is validated.
+    """The active branch now carries real hosted evidence, and it must stay honest.
 
-    The previous validator required `active_branch_qualification.foundation_runtime.run`
-    to equal a pinned run id. A branch rotation therefore could not be recorded
-    without asserting a run that never happened on the new branch. These tests pin
-    the replacement: the absence is explicit, carries no execution identity, and
-    cannot be filled in by re-labelling an older branch's evidence.
+    This class originally pinned the opposite situation: a rotated branch with no
+    hosted run at all, where the danger was that the absence would be filled in by
+    re-labelling an older branch's run. All five named workflows have since been
+    genuinely re-executed on this branch, so the block records observed results.
+
+    Both dangers are still tested. The EXECUTED path is pinned to one exact run id
+    that must be a REJECT while SEC-DEPS-01 is open, so it cannot be swapped for a
+    passing run. The NOT_EXECUTED path keeps its own guards, driven here by forcing
+    that state explicitly, so a future rotation back to it is still fail-closed.
     """
 
     def setUp(self):
@@ -92,21 +96,79 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
             finally:
                 d8.LEDGER_PATH = original
 
-    def test_active_branch_records_an_explicit_absence_of_execution(self):
-        self.assertEqual(self.active["hosted_execution_state"], d8.ACTIVE_RUNTIME_NOT_EXECUTED)
-        self.assertEqual(d8.ACTIVE_RUNTIME_STATE, d8.ACTIVE_RUNTIME_NOT_EXECUTED)
-        self.assertIsNone(d8.ACTIVE_RUNTIME_RUN)
+    def _run_forcing_not_executed(self, mutate):
+        """Drive the NOT_EXECUTED guards with both sides of the state consistent."""
+        ledger = copy.deepcopy(self.ledger)
+        block = ledger["active_branch_qualification"]
+        block["hosted_execution_state"] = d8.ACTIVE_RUNTIME_NOT_EXECUTED
         for key in d8.EXECUTION_EVIDENCE_KEYS:
-            self.assertNotIn(key, self.active, f"{key} must be empty while NOT_EXECUTED")
+            block.pop(key, None)
+        mutate(ledger)
+        original_path, original_state = d8.LEDGER_PATH, d8.ACTIVE_RUNTIME_STATE
+        with tempfile.NamedTemporaryFile("w", suffix=".json") as handle:
+            json.dump(ledger, handle)
+            handle.flush()
+            d8.LEDGER_PATH = Path(handle.name)
+            d8.ACTIVE_RUNTIME_STATE = d8.ACTIVE_RUNTIME_NOT_EXECUTED
+            try:
+                return d8.run(d8.TEMPLATE_PATH)
+            finally:
+                d8.LEDGER_PATH = original_path
+                d8.ACTIVE_RUNTIME_STATE = original_state
+
+    # --- the EXECUTED path -------------------------------------------------
+
+    def test_active_branch_records_its_real_hosted_execution(self):
+        self.assertEqual(self.active["hosted_execution_state"], "EXECUTED")
+        self.assertEqual(d8.ACTIVE_RUNTIME_STATE, "EXECUTED")
+        runtime = self.active["foundation_runtime"]
+        self.assertEqual(runtime["run"], d8.ACTIVE_RUNTIME_RUN)
+        self.assertEqual(runtime["head_branch"], d8.ACTIVE_BRANCH)
+        self.assertEqual(runtime["head_sha"], self.active["qualification_commit"])
+        # Every evidence subblock the validator knows about must be present.
+        for key in d8.EXECUTION_EVIDENCE_KEYS:
+            self.assertIn(key, self.active, f"{key} is missing from the active block")
+
+    def test_the_active_runtime_must_be_a_reject_while_sec_deps_01_is_open(self):
+        self.assertEqual(self.active["foundation_runtime"]["status"], "fail_reject")
+        for flag in ("phase2_gate_passed", "security_gate_passed",
+                     "product_implementation_authorized"):
+            self.assertIs(self.active["foundation_runtime"][flag], False, flag)
         self.assertEqual(self.active["production_state"], "REJECT")
         self.assertFalse(self.active["production_authorized"])
 
-    def test_report_discloses_that_the_active_branch_has_no_hosted_run(self):
+    def test_the_active_runtime_run_may_not_be_swapped_for_another(self):
+        """The pin is asserted by value, so a different run cannot be substituted."""
+        def mutate(ledger):
+            ledger["active_branch_qualification"]["foundation_runtime"]["run"] = "35122242581"
+        with self.assertRaises(d8.ContractError):
+            self._run_with(mutate)
+
+    def test_the_active_runtime_may_not_claim_a_pass(self):
+        def mutate(ledger):
+            ledger["active_branch_qualification"]["foundation_runtime"]["status"] = "pass"
+        with self.assertRaises(d8.ContractError):
+            self._run_with(mutate)
+
+    def test_the_active_runtime_gate_flags_may_not_be_relaxed(self):
+        for flag in ("phase2_gate_passed", "security_gate_passed",
+                     "product_implementation_authorized"):
+            with self.subTest(flag=flag):
+                def mutate(ledger, flag=flag):
+                    ledger["active_branch_qualification"]["foundation_runtime"][flag] = True
+                with self.assertRaises(d8.ContractError):
+                    self._run_with(mutate)
+
+    def test_report_discloses_the_execution_without_relaxing_any_gate(self):
         report = d8.run(d8.TEMPLATE_PATH)
-        self.assertEqual(report["active_branch_hosted_execution"], d8.ACTIVE_RUNTIME_NOT_EXECUTED)
-        self.assertIn("has NO hosted execution", report["warning"])
+        self.assertEqual(report["active_branch_hosted_execution"], "EXECUTED")
+        # The absence warning must be gone, and no gate may have moved because of it.
+        self.assertNotIn("has NO hosted execution", report["warning"])
         self.assertEqual(report["production_state"], "REJECT")
         self.assertEqual(report["d8_gate_state"], "BLOCKED")
+        self.assertEqual(report["sec_deps"], "UPSTREAM-BLOCKED / REJECT")
+
+    # --- the NOT_EXECUTED path, still fail-closed -------------------------
 
     def test_a_not_executed_block_may_not_carry_run_identity(self):
         for field in ("run", "runtime_check", "head_sha", "report_sha256", "commit"):
@@ -114,7 +176,7 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
                 def mutate(ledger, field=field):
                     ledger["active_branch_qualification"]["evidence"] = {field: "35122242581"}
                 with self.assertRaises(d8.ContractError):
-                    self._run_with(mutate)
+                    self._run_forcing_not_executed(mutate)
 
     def test_a_not_executed_block_may_not_populate_evidence_subblocks(self):
         for key in d8.EXECUTION_EVIDENCE_KEYS:
@@ -122,24 +184,34 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
                 def mutate(ledger, key=key):
                     ledger["active_branch_qualification"][key] = {"status": "fail_reject"}
                 with self.assertRaises(d8.ContractError):
-                    self._run_with(mutate)
+                    self._run_forcing_not_executed(mutate)
+
+    def test_a_not_executed_block_may_not_relax_the_production_posture(self):
+        def mutate(ledger):
+            ledger["active_branch_qualification"]["production_state"] = "APPROVED"
+        with self.assertRaises(d8.ContractError):
+            self._run_forcing_not_executed(mutate)
 
     def test_claiming_execution_the_boundary_does_not_record_is_rejected(self):
         def mutate(ledger):
             ledger["active_branch_qualification"]["hosted_execution_state"] = "EXECUTED"
         original = d8.ACTIVE_RUNTIME_STATE
-        d8.ACTIVE_RUNTIME_STATE = "NOT_EXECUTED_ON_THIS_BRANCH"
+        d8.ACTIVE_RUNTIME_STATE = d8.ACTIVE_RUNTIME_NOT_EXECUTED
         try:
             with self.assertRaises(d8.ContractError):
                 self._run_with(mutate)
         finally:
             d8.ACTIVE_RUNTIME_STATE = original
 
-    def test_a_not_executed_block_may_not_relax_the_production_posture(self):
+    def test_claiming_no_execution_the_boundary_does_record_is_rejected(self):
+        """The mirror image: dropping back to an absence is equally a drift."""
         def mutate(ledger):
-            ledger["active_branch_qualification"]["production_state"] = "APPROVED"
+            ledger["active_branch_qualification"]["hosted_execution_state"] = (
+                d8.ACTIVE_RUNTIME_NOT_EXECUTED)
         with self.assertRaises(d8.ContractError):
             self._run_with(mutate)
+
+    # --- provenance separation -------------------------------------------
 
     def test_each_previous_session_branch_keeps_its_own_pinned_run(self):
         self.assertEqual(d8.PRIOR_ACTIVE_RUNTIME_RUN, "35122242581")
@@ -152,25 +224,38 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
             self.assertEqual(block["classification"], "historical_provenance")
             self.assertEqual(block["foundation_runtime"]["status"], "fail_reject")
 
-    def test_the_pinned_prior_run_belongs_to_the_previous_branch_not_the_active_one(self):
-        """The evidence that could be re-labelled genuinely is another branch's.
+    def test_no_identifier_of_a_previous_branch_run_leaks_into_the_active_block(self):
+        """Re-labelling another branch's run as this branch's is still blocked.
 
-        This is why the explicit-absence state matters: run 35122242581 executed
-        on the previous session branch, so presenting it as an execution on the
-        active branch would be false. The validator blocks that by refusing any
-        execution identity inside a NOT_EXECUTED block (asserted above) and by
-        refusing an EXECUTED claim the session boundary does not record.
+        Only execution *identity* is compared. Status enums such as
+        ``fail_reject`` legitimately recur across branches - two honest REJECTs on
+        different branches should not be reported as leakage - whereas a run id,
+        commit, check id or report digest appearing in both would mean the active
+        block is citing another branch's execution.
         """
-        runtime = self.ledger["prior_active_branch_provenance"]["foundation_runtime"]
-        self.assertEqual(runtime["run"], d8.PRIOR_ACTIVE_RUNTIME_RUN)
-        self.assertEqual(runtime["head_branch"], d8.PRIOR_ACTIVE_BRANCH)
-        self.assertNotEqual(runtime["head_branch"], d8.ACTIVE_BRANCH)
-        # None of that run's identifiers may appear in the active block.
         serialized = json.dumps(self.active)
-        for field, value in runtime.items():
-            if isinstance(value, str) and len(value) >= 8 and field != "head_branch":
+        for label, block in (("prior", self.ledger["prior_active_branch_provenance"]),
+                             ("earlier", self.ledger["earlier_active_branch_provenance"])):
+            runtime = block["foundation_runtime"]
+            self.assertEqual(runtime["run"],
+                             d8.PRIOR_ACTIVE_RUNTIME_RUN if label == "prior"
+                             else d8.EARLIER_ACTIVE_RUNTIME_RUN)
+            self.assertNotEqual(runtime["head_branch"], d8.ACTIVE_BRANCH)
+            for field, value in runtime.items():
+                # `head_branch` is excluded deliberately: the active block *names*
+                # the previous branch as its rotation origin, which is provenance
+                # and not a claim that the run happened here.
+                if field not in d8.EXECUTION_IDENTITY_FIELDS or not isinstance(value, str):
+                    continue
+                if field == "head_branch":
+                    continue
                 self.assertNotIn(value, serialized,
-                                 f"prior-branch {field} leaked into the active block")
+                                 f"{label}-branch {field} leaked into the active block")
+
+    def test_the_active_run_id_is_not_any_previous_branch_run(self):
+        self.assertNotIn(d8.ACTIVE_RUNTIME_RUN,
+                         (d8.PRIOR_ACTIVE_RUNTIME_RUN, d8.EARLIER_ACTIVE_RUNTIME_RUN),
+                         "the active branch pins a run that belongs to an earlier branch")
 
 
 if __name__ == "__main__":

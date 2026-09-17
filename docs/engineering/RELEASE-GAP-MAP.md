@@ -11,13 +11,24 @@ is invented anywhere in this plan.**
 - **Branch-boundary rotation (2026-09-17).** The Arena session branch changed, so
   the canonical pin, all 10 workflow filters, the current-status headers, the
   governance JSON `active_branch` fields and the qualification tests were rotated
-  in one change. **No hosted workflow has been executed on the active branch.**
-  `active_branch_qualification.hosted_execution_state` is
-  `NOT_EXECUTED_ON_THIS_BRANCH`, that block deliberately carries no run/check/
-  commit/report identity, and `tools/foundation/d8_validate.py` fails closed if
-  any is attached — so an older branch's run cannot be re-labelled as an
-  execution here. Every run cited below is historical provenance. Full findings:
+  in one change. At that moment no hosted workflow had run on the active branch,
+  so `hosted_execution_state` was recorded as the explicit, validated absence
+  `NOT_EXECUTED_ON_THIS_BRANCH` carrying no run/check/commit/report identity, and
+  `tools/foundation/d8_validate.py` failed closed if any was attached — so an
+  older branch's run could not be re-labelled as an execution here. Full findings:
   [ENGINEERING-REVIEW-2026-09-17.md](ENGINEERING-REVIEW-2026-09-17.md).
+- **The active branch has since been executed, and it rejected (2026-09-17).** All
+  five named hosted workflows were genuinely re-executed at commit
+  `e8da889b22589a5d64f7843ecaf5d11d9260424c`, so `hosted_execution_state` is now
+  `EXECUTED` and `session_branch.ACTIVE_RUNTIME_RUN` pins the real run
+  `35218007937`. `validate_active_branch_qualification()` asserts both the
+  `fail_reject` status and that exact run id, so the pin cannot be swapped for a
+  passing run. **Foundation runtime rejected on SEC-DEPS-01** (119/121 checks
+  pass; `hosted-full-stack-dependency-audit` and `hosted-frontend-advisory-audit`
+  fail) — precisely the outcome predicted before re-execution. The
+  `NOT_EXECUTED` guards were not deleted: they are still exercised by forcing that
+  state, so a future rotation back to it stays fail-closed. Runs belonging to
+  earlier session branches remain historical provenance.
 - **Working tree is green and now gated.** `python3 -m unittest discover -s tests
   -t .` passes 665/665 (it was 629 with **2 failures** before the rotation),
   `ruff check .` is clean under a no-suppression `E9,F` ruleset, both Node suites

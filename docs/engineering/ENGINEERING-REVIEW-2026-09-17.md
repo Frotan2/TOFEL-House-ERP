@@ -403,21 +403,50 @@ through `upload-artifact`/`download-artifact`, both passed
 
 ## 3. What remains
 
-### 3.1 Engineer-executable — but it must be executed, not asserted
+### 3.1 Engineer-executable — the largest item, now executed rather than asserted
 
-**The active branch has no hosted evidence.** This is the single largest open
-item and it is stated plainly rather than papered over: every hosted run in this
-repository executed on an earlier session branch. Nothing here is a run on
-`arena/01a0aef4-tofel-house-erp`.
+**The active branch had no hosted evidence. It now does, and it is a REJECT.**
 
-To close it: re-run `foundation-runtime.yml`, `foundation-runner.yml`,
-`placement-content.yml`, `foundation-frontend-review.yml` and
-`d8-operations-contract.yml` on the active branch, then set
-`ACTIVE_RUNTIME_STATE = "EXECUTED"`, pin the real run id in
-`ACTIVE_RUNTIME_RUN`, and replace the active ledger block with the observed
-results in the same change. Expected outcome on current pins: Foundation runtime
-still **fails** SEC-DEPS-01. Re-running will not turn it green and must not be
-presented as if it might.
+When this review was written, the single largest open item was that every hosted
+run in the repository had executed on an earlier session branch, and nothing was
+a run on `arena/01a0aef4-tofel-house-erp`. That has since been closed by
+execution, following the documented procedure exactly: all five named workflows
+were re-executed on this branch at commit
+`e8da889b22589a5d64f7843ecaf5d11d9260424c`, `ACTIVE_RUNTIME_STATE` was set to
+`"EXECUTED"`, the real run id was pinned in `ACTIVE_RUNTIME_RUN`, and the active
+ledger block was replaced with the observed results in the same change.
+
+| Gate | Run @ `e8da889` | Result |
+| --- | --- | --- |
+| Foundation runtime validation | `35218007937` | **fail** — 119/121 checks; SEC-DEPS-01 |
+| Foundation runner qualification | `35218007958` | pass — 18/18 |
+| Placement content qualification | `35218007995` | pass — 101/101 steps, 542/542 native |
+| Foundation frontend candidate review | `35218007871` | **fail** — npm advisory gate (not adopted) |
+| D8 operations contract | `35218007901` | pass — structural, D8 still BLOCKED |
+| Foundation operational boundaries | `35218007814` | pass — 38/38, POLICY ENFORCED |
+| Datastore durability | `35218008053` | pass |
+| External key custody | `35218007872` | pass |
+| Independent-system recovery | `35218007835` | pass |
+| Owned suite | `35218007896` | pass |
+
+**The prediction held.** This review said, before re-execution, that Foundation
+runtime would still fail SEC-DEPS-01 and that re-running would not turn it green.
+It did not. Two of 121 checks fail — `hosted-full-stack-dependency-audit` and
+`hosted-frontend-advisory-audit` — and the ledger records `fail_reject` with
+`phase2_gate_passed`, `security_gate_passed` and
+`product_implementation_authorized` all `false`. Re-execution moved the evidence
+onto this branch; it changed no outcome, and it is not presented as if it had.
+
+`validate_active_branch_qualification()` asserts both the `fail_reject` status and
+the exact pinned run id, so the pin cannot be swapped for a passing run while
+SEC-DEPS-01 is open. The `NOT_EXECUTED_ON_THIS_BRANCH` guards were **not**
+deleted: `ActiveBranchEvidenceTests` still drives them by forcing that state, so a
+future rotation back to it stays fail-closed, and a new mirror-image test rejects
+a ledger claiming the absence while the boundary records an execution.
+
+**What remains in this category is therefore only what SEC-DEPS-01 itself
+requires** — an upstream remediation that does not currently exist (§3.4) — plus
+the owner decisions in §3.2 and the deployment-gated items in §3.3.
 
 ### 3.2 Owner-gated — engineering cannot start these without inventing policy
 

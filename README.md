@@ -20,12 +20,17 @@ evidence-recovery path, an unfiltered archive extraction, and the absence of any
 static-analysis or whole-suite gate were all fixed. Owned suite: **665 tests
 pass**, ruff clean, both Node suites pass, D8 validator BLOCKED / REJECT.
 
-**No hosted workflow has been executed on the active branch.** Every run cited
-below executed on an earlier session branch and is historical provenance, not
-current execution. The D8 report states this as
-`active_branch_hosted_execution: NOT_EXECUTED_ON_THIS_BRANCH`. Re-running the
-hosted workflows is the first remaining engineer-executable item, and on current
-pins Foundation runtime is expected to fail SEC-DEPS-01 again.
+**The active branch now carries its own hosted evidence, and it is a REJECT.**
+All five named hosted workflows were re-executed on
+`arena/01a0aef4-tofel-house-erp` at commit `e8da889`, so
+`active_branch_hosted_execution` is now `EXECUTED` and the ledger's
+`active_branch_qualification` block holds those observed run, check and report
+identifiers. **Foundation runtime rejected on SEC-DEPS-01 exactly as predicted**
+(run `35218007937`: 119/121 checks pass, `hosted-full-stack-dependency-audit` and
+`hosted-frontend-advisory-audit` fail). Re-executing moved the evidence onto this
+branch; it changed no outcome. Production remains **REJECT** and D8 remains
+**BLOCKED**. Runs cited further below that belong to earlier session branches are
+historical provenance and are labelled as such.
 
 **Production-like execution pass (2026-09-16, commit `d7df9ca`):** the readiness
 harness was re-executed on a genuine Docker-capable runner (ubuntu-24.04, Docker

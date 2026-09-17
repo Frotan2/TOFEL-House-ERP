@@ -21,11 +21,18 @@ ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 # attached to it, so the state cannot be used to smuggle a fabricated pass.
 #
 # While SEC-DEPS-01 is open, any Foundation runtime run that does exist on the
-# active branch must be a REJECT. When the workflows are re-executed here, set
-# ACTIVE_RUNTIME_STATE to "EXECUTED", set ACTIVE_RUNTIME_RUN to the real run id,
-# and update the ledger's active_branch_qualification block in the same change.
-ACTIVE_RUNTIME_STATE = "NOT_EXECUTED_ON_THIS_BRANCH"
-ACTIVE_RUNTIME_RUN = None
+# active branch must be a REJECT. tools/foundation/d8_validate.py asserts both the
+# status and this exact run id, so the pin cannot be silently swapped for a
+# different or passing run.
+#
+# All five hosted workflows named by the documented rotation procedure were
+# genuinely re-executed on this branch at commit
+# e8da889b22589a5d64f7843ecaf5d11d9260424c, and the ledger's
+# active_branch_qualification block was replaced with those observed results in
+# the same change. The Foundation runtime REJECTED on SEC-DEPS-01 exactly as
+# predicted; re-executing did not and could not turn it green.
+ACTIVE_RUNTIME_STATE = "EXECUTED"
+ACTIVE_RUNTIME_RUN = "35218007937"
 
 # Historical provenance pins: the last Foundation runtime executed on each
 # previous Arena session branch. These are evidence identity, never current
