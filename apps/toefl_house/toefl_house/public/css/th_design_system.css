@@ -1,0 +1,539 @@
+/*
+ * TOEFL House design system.
+ *
+ * Scope discipline: this sheet never redeclares a Frappe, Bootstrap or ERPNext
+ * selector. Every rule is namespaced under a `th-` class or a `th-` custom
+ * property, so the platform UI keeps its own authority and a Frappe upgrade
+ * cannot silently fight this stylesheet. Where the native control is already
+ * right (buttons, dialogs, form controls, tables) it is left alone and only
+ * spacing/typography rhythm is applied around it.
+ *
+ * The sheet is intentionally small. It exists to make the role command pages
+ * read as one product: a consistent type scale, consistent status vocabulary,
+ * and honest loading / empty / error states instead of a blank screen.
+ */
+
+/* ------------------------------------------------------------------ tokens */
+
+:root {
+	/* Type scale - a 1.2 ratio keeps dense operational screens calm. */
+	--th-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+		"Helvetica Neue", Arial, "Noto Sans", sans-serif;
+	--th-fs-eyebrow: 0.6875rem; /* 11px - uppercase section labels */
+	--th-fs-meta: 0.75rem;      /* 12px - secondary/hint text */
+	--th-fs-body: 0.8125rem;    /* 13px - default operational text */
+	--th-fs-lead: 0.9375rem;    /* 15px - emphasised body */
+	--th-fs-title: 1.0625rem;   /* 17px - card and section titles */
+	--th-fs-display: 1.375rem;  /* 22px - page title */
+
+	--th-lh-tight: 1.3;
+	--th-lh-body: 1.55;
+
+	--th-fw-regular: 400;
+	--th-fw-medium: 500;
+	--th-fw-semibold: 600;
+
+	/* Spacing - 4px base, never odd values, so rows stay visually aligned. */
+	--th-space-1: 0.25rem;
+	--th-space-2: 0.5rem;
+	--th-space-3: 0.75rem;
+	--th-space-4: 1rem;
+	--th-space-5: 1.5rem;
+	--th-space-6: 2rem;
+	--th-space-7: 3rem;
+
+	--th-radius-sm: 4px;
+	--th-radius-md: 6px;
+	--th-radius-lg: 10px;
+	--th-radius-pill: 999px;
+
+	/* Ink - neutral ramp, deliberately cool so long reading stays easy. */
+	--th-ink: #1b2430;
+	--th-ink-muted: #5b6779;
+	--th-ink-faint: #8792a3;
+	--th-surface: #ffffff;
+	--th-surface-sunken: #f6f8fa;
+	--th-surface-raised: #ffffff;
+	--th-line: #e3e8ef;
+	--th-line-strong: #cdd5e0;
+
+	/* Brand accent - used for emphasis only, never as large fill, so the
+	 * eye is drawn to the next action rather than to decoration. */
+	--th-accent: #1f5fa8;
+	--th-accent-ink: #ffffff;
+	--th-accent-soft: #eaf1fa;
+
+	/* Status vocabulary - exactly five tones. The same tone always means the
+	 * same thing on every page, which is what makes a glance trustworthy. */
+	--th-ok: #1a7f4b;
+	--th-ok-soft: #e7f4ec;
+	--th-info: #1f5fa8;
+	--th-info-soft: #eaf1fa;
+	--th-warn: #9a6700;
+	--th-warn-soft: #fdf3dc;
+	--th-danger: #b42318;
+	--th-danger-soft: #fdecea;
+	--th-neutral: #5b6779;
+	--th-neutral-soft: #f1f4f8;
+
+	/* Elevation - one soft shadow for raised cards, nothing heavier, so the
+	 * interface stays flat and print-friendly. */
+	--th-shadow-1: 0 1px 2px rgba(27, 36, 48, 0.06), 0 1px 3px rgba(27, 36, 48, 0.05);
+	--th-shadow-2: 0 4px 12px rgba(27, 36, 48, 0.08);
+
+	--th-focus-ring: 0 0 0 3px rgba(31, 95, 168, 0.35);
+
+	--th-duration: 140ms;
+	--th-easing: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+/* ------------------------------------------------------------- page chrome */
+
+.th-page {
+	font-family: var(--th-font-sans);
+	color: var(--th-ink);
+	font-size: var(--th-fs-body);
+	line-height: var(--th-lh-body);
+	padding-block: var(--th-space-4) var(--th-space-7);
+}
+
+.th-page-header {
+	margin-bottom: var(--th-space-5);
+	padding-bottom: var(--th-space-4);
+	border-bottom: 1px solid var(--th-line);
+}
+
+.th-eyebrow {
+	font-size: var(--th-fs-eyebrow);
+	font-weight: var(--th-fw-semibold);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--th-ink-faint);
+	margin: 0 0 var(--th-space-2);
+}
+
+.th-page-title {
+	font-size: var(--th-fs-display);
+	font-weight: var(--th-fw-semibold);
+	line-height: var(--th-lh-tight);
+	letter-spacing: -0.01em;
+	margin: 0 0 var(--th-space-2);
+	color: var(--th-ink);
+}
+
+/* The purpose line answers "why am I here" without restating the title. */
+.th-page-purpose {
+	font-size: var(--th-fs-lead);
+	color: var(--th-ink-muted);
+	max-width: 68ch;
+	margin: 0;
+}
+
+/* Standing reminder that the page grants nothing. Deliberately de-emphasised:
+ * it matters for trust but must not compete with the work. */
+.th-page-assurance {
+	font-size: var(--th-fs-meta);
+	color: var(--th-ink-faint);
+	max-width: 72ch;
+	margin: var(--th-space-3) 0 0;
+	padding-left: var(--th-space-3);
+	border-left: 2px solid var(--th-line);
+}
+
+.th-section {
+	margin-bottom: var(--th-space-6);
+}
+
+.th-section-title {
+	font-size: var(--th-fs-title);
+	font-weight: var(--th-fw-semibold);
+	margin: 0 0 var(--th-space-3);
+	color: var(--th-ink);
+}
+
+/* ------------------------------------------------------------- action grid */
+
+.th-grid {
+	display: grid;
+	gap: var(--th-space-4);
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+}
+
+.th-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--th-space-2);
+	background: var(--th-surface-raised);
+	border: 1px solid var(--th-line);
+	border-radius: var(--th-radius-lg);
+	padding: var(--th-space-4);
+	box-shadow: var(--th-shadow-1);
+	transition: border-color var(--th-duration) var(--th-easing),
+		box-shadow var(--th-duration) var(--th-easing),
+		transform var(--th-duration) var(--th-easing);
+}
+
+.th-card:hover {
+	border-color: var(--th-line-strong);
+	box-shadow: var(--th-shadow-2);
+}
+
+/* Lift rather than colour-shift: colour is reserved for status meaning, so a
+ * hover affordance must not be mistaken for a state change. */
+.th-card:hover,
+.th-card:focus-within {
+	transform: translateY(-1px);
+}
+
+.th-card-title {
+	font-size: var(--th-fs-title);
+	font-weight: var(--th-fw-semibold);
+	line-height: var(--th-lh-tight);
+	margin: 0;
+	color: var(--th-ink);
+}
+
+.th-card-hint {
+	font-size: var(--th-fs-meta);
+	color: var(--th-ink-muted);
+	margin: 0;
+	flex-grow: 1;
+}
+
+.th-card-footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--th-space-2);
+	margin-top: var(--th-space-2);
+}
+
+/* The primary action sits last so the eye reads title -> purpose -> action,
+ * which is the order a trained operator actually scans. */
+.th-card-footer .th-action {
+	margin-inline-start: auto;
+}
+
+.th-role-chip {
+	font-size: var(--th-fs-eyebrow);
+	font-weight: var(--th-fw-semibold);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--th-accent);
+	background: var(--th-accent-soft);
+	border-radius: var(--th-radius-sm);
+	padding: var(--th-space-1) var(--th-space-2);
+}
+
+/* ------------------------------------------------------------------ status */
+
+/* A pill, not coloured text: colour alone is not an accessible signal, so the
+ * tone always ships with a visible word. */
+.th-status {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--th-space-1);
+	font-size: var(--th-fs-eyebrow);
+	font-weight: var(--th-fw-semibold);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	border-radius: var(--th-radius-pill);
+	padding: var(--th-space-1) var(--th-space-3);
+	white-space: nowrap;
+	border: 1px solid transparent;
+}
+
+.th-status--ok      { color: var(--th-ok);      background: var(--th-ok-soft);      border-color: color-mix(in srgb, var(--th-ok) 24%, transparent); }
+.th-status--info    { color: var(--th-info);    background: var(--th-info-soft);    border-color: color-mix(in srgb, var(--th-info) 24%, transparent); }
+.th-status--warn    { color: var(--th-warn);    background: var(--th-warn-soft);    border-color: color-mix(in srgb, var(--th-warn) 24%, transparent); }
+.th-status--danger  { color: var(--th-danger);  background: var(--th-danger-soft);  border-color: color-mix(in srgb, var(--th-danger) 24%, transparent); }
+.th-status--neutral { color: var(--th-neutral); background: var(--th-neutral-soft); border-color: color-mix(in srgb, var(--th-neutral) 24%, transparent); }
+
+/* ------------------------------------------------------------------ alerts */
+
+.th-alert {
+	display: flex;
+	gap: var(--th-space-3);
+	border-radius: var(--th-radius-md);
+	padding: var(--th-space-3) var(--th-space-4);
+	font-size: var(--th-fs-body);
+	border: 1px solid transparent;
+}
+
+.th-alert--warn   { color: var(--th-warn);   background: var(--th-warn-soft);   border-color: color-mix(in srgb, var(--th-warn) 24%, transparent); }
+.th-alert--danger { color: var(--th-danger); background: var(--th-danger-soft); border-color: color-mix(in srgb, var(--th-danger) 24%, transparent); }
+.th-alert--info   { color: var(--th-info);   background: var(--th-info-soft);   border-color: color-mix(in srgb, var(--th-info) 24%, transparent); }
+
+.th-alert-title {
+	font-weight: var(--th-fw-semibold);
+	margin: 0 0 var(--th-space-1);
+}
+
+.th-alert-body {
+	margin: 0;
+	font-size: var(--th-fs-meta);
+}
+
+/* ---------------------------------------------------------- result feedback */
+
+/* Replaces the previous behaviour of printing raw JSON at the operator. The
+ * payload is still available in full under `details`, so nothing is hidden
+ * from an auditor - it is simply no longer the first thing a person reads. */
+.th-result {
+	display: flex;
+	flex-direction: column;
+	gap: var(--th-space-3);
+}
+
+.th-result-heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--th-space-3);
+}
+
+.th-result-summary {
+	font-size: var(--th-fs-lead);
+	margin: 0;
+	color: var(--th-ink);
+}
+
+/* Fact list - the human-readable projection of a command response. */
+.th-facts {
+	display: grid;
+	grid-template-columns: minmax(9rem, max-content) 1fr;
+	gap: var(--th-space-2) var(--th-space-4);
+	margin: 0;
+	padding: 0;
+	font-size: var(--th-fs-body);
+}
+
+.th-facts dt {
+	color: var(--th-ink-muted);
+	font-weight: var(--th-fw-medium);
+	margin: 0;
+}
+
+.th-facts dd {
+	margin: 0;
+	color: var(--th-ink);
+	/* Identifiers are machine strings: tabular figures stop them jittering and
+	 * `anywhere` stops one long name from breaking the dialog layout. */
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+
+/* Raw payload, collapsed by default but never removed. */
+.th-result-raw {
+	font-size: var(--th-fs-meta);
+	color: var(--th-ink-muted);
+}
+
+.th-result-raw summary {
+	cursor: pointer;
+	font-weight: var(--th-fw-medium);
+	border-radius: var(--th-radius-sm);
+}
+
+.th-result-raw pre {
+	margin: var(--th-space-2) 0 0;
+	padding: var(--th-space-3);
+	background: var(--th-surface-sunken);
+	border: 1px solid var(--th-line);
+	border-radius: var(--th-radius-md);
+	font-size: var(--th-fs-meta);
+	max-height: 18rem;
+	overflow: auto;
+}
+
+/* ------------------------------------------------- loading / empty / error */
+
+/* These three states are the difference between "the product is thinking" and
+ * "the product is broken". Without them a slow call looks like a dead page. */
+.th-skeleton {
+	background: linear-gradient(
+		90deg,
+		var(--th-surface-sunken) 25%,
+		color-mix(in srgb, var(--th-line) 60%, transparent) 37%,
+		var(--th-surface-sunken) 63%
+	);
+	background-size: 400% 100%;
+	animation: th-shimmer 1.4s ease-in-out infinite;
+	border-radius: var(--th-radius-sm);
+	color: transparent;
+	min-height: 1em;
+}
+
+@keyframes th-shimmer {
+	0%   { background-position: 100% 50%; }
+	100% { background-position: 0 50%; }
+}
+
+.th-loading {
+	display: flex;
+	align-items: center;
+	gap: var(--th-space-3);
+	color: var(--th-ink-muted);
+	font-size: var(--th-fs-body);
+	padding: var(--th-space-3) 0;
+}
+
+.th-spinner {
+	inline-size: 1rem;
+	block-size: 1rem;
+	border: 2px solid var(--th-line-strong);
+	border-top-color: var(--th-accent);
+	border-radius: 50%;
+	animation: th-spin 0.7s linear infinite;
+	flex: none;
+}
+
+@keyframes th-spin {
+	to { transform: rotate(360deg); }
+}
+
+.th-empty {
+	text-align: center;
+	color: var(--th-ink-muted);
+	padding: var(--th-space-6) var(--th-space-4);
+	border: 1px dashed var(--th-line-strong);
+	border-radius: var(--th-radius-lg);
+	background: var(--th-surface-sunken);
+}
+
+.th-empty-title {
+	font-size: var(--th-fs-lead);
+	font-weight: var(--th-fw-medium);
+	color: var(--th-ink);
+	margin: 0 0 var(--th-space-2);
+}
+
+.th-empty-body {
+	margin: 0;
+	font-size: var(--th-fs-body);
+	max-width: 52ch;
+	margin-inline: auto;
+}
+
+.th-error-title {
+	font-weight: var(--th-fw-semibold);
+	margin: 0 0 var(--th-space-1);
+}
+
+/* -------------------------------------------------------- native controls */
+
+/* Rhythm only. Native button/dialog/table styling stays authoritative so the
+ * app keeps looking like a healthy Frappe installation. */
+.th-page .btn {
+	border-radius: var(--th-radius-md);
+	font-weight: var(--th-fw-medium);
+}
+
+.th-page .btn-sm {
+	padding-block: var(--th-space-2);
+}
+
+.th-route-group {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--th-space-2);
+}
+
+.th-route-group .btn {
+	margin: 0;
+}
+
+/* ------------------------------------------------------------ accessibility */
+
+/* A visible focus ring on every interactive element, including the ones
+ * Frappe renders for us. Keyboard-only operation is a daily requirement for
+ * reception staff working from a keyboard, not an optional extra. */
+.th-page :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+	outline: none;
+	box-shadow: var(--th-focus-ring);
+	border-radius: var(--th-radius-sm);
+}
+
+.th-visually-hidden {
+	position: absolute;
+	inline-size: 1px;
+	block-size: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* ------------------------------------------------------------ responsiveness */
+
+/* Desktop-first because that is the operational reality, but the grid and fact
+ * list must survive a tablet held by a manager walking a branch. */
+@media (max-width: 767.98px) {
+	.th-page {
+		padding-block: var(--th-space-3) var(--th-space-5);
+	}
+
+	.th-page-title {
+		font-size: 1.1875rem;
+	}
+
+	/* A two-column fact list is unreadable when narrow, so collapse to a
+	 * stacked label/value pair rather than truncating values. */
+	.th-facts {
+		grid-template-columns: 1fr;
+		gap: 0;
+	}
+
+	.th-facts dt {
+		margin-top: var(--th-space-2);
+	}
+
+	.th-card-footer .th-action {
+		margin-inline-start: 0;
+		inline-size: 100%;
+	}
+}
+
+/* ------------------------------------------------------ reduced motion / HC */
+
+@media (prefers-reduced-motion: reduce) {
+	.th-skeleton,
+	.th-spinner {
+		animation: none;
+	}
+
+	.th-card {
+		transition: none;
+	}
+
+	.th-card:hover,
+	.th-card:focus-within {
+		transform: none;
+	}
+}
+
+/* Keep status meaning legible when the OS forces its own palette: the words
+ * remain, and borders survive even where colour does not. */
+@media (forced-colors: active) {
+	.th-status,
+	.th-alert,
+	.th-card {
+		border: 1px solid CanvasText;
+	}
+}
+
+@media print {
+	.th-page-assurance,
+	.th-result-raw,
+	.th-skeleton,
+	.th-spinner {
+		display: none;
+	}
+
+	.th-card {
+		box-shadow: none;
+		break-inside: avoid;
+	}
+}

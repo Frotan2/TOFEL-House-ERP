@@ -59,6 +59,7 @@ jobs:
         run: |
           node tests/foundation/test_realtime_guard.cjs
           node tests/foundation/test_command_pages.cjs
+          node tests/foundation/test_design_system.cjs
 
       - name: D8 contract validator must stay BLOCKED / REJECT
         run: |

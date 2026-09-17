@@ -175,7 +175,9 @@ const client = {
 	frappe: {
 		pages: {}, user_roles: ["Placement Invigilator"],
 		provide(dotted) { let target = client; for (const part of dotted.split(".")) target = target[part] ||= {}; },
-		require(_paths, callback) { callback(); },
+		// Frappe's real signature is require(paths, callback?) - the callback is
+		// optional, and app asset loading legitimately passes none.
+		require(_paths, callback) { if (callback) callback(); },
 		ui: { make_app_page() { return { main: jq("<main") }; }, Dialog },
 		msgprint() { throw new Error("authorized invigilator should render actions"); },
 		show_alert() {},

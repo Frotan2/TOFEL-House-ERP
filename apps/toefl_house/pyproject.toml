@@ -12,7 +12,7 @@ requires-python = ">=3.14"
 toefl_house = [
   "modules.txt", "patches.txt", "fixtures/*.json",
   "*/doctype/*/*.json", "*/report/*/*.json", "*/workspace/*/*.json",
-  "*/page/*/*.json", "public/js/*.js"
+  "*/page/*/*.json", "public/js/*.js", "public/css/*.css"
 ]
 
 [tool.setuptools.packages.find]

@@ -279,9 +279,151 @@ frappe.provide("toefl_house.command_pages");
 		dialog.show();
 	}
 
+	/*
+	 * Response projection.
+	 *
+	 * Command responses used to be handed to staff as raw JSON inside a <pre>.
+	 * That is legible to an engineer and unusable to a receptionist, and it
+	 * forced every operator to learn the server's field names to know whether
+	 * an action succeeded. The payload is now projected into a headline, one
+	 * status pill and an ordered fact list. The original response is still
+	 * shown in full inside a collapsed section, so an auditor sees exactly what
+	 * the server returned - this changes the reading order, never the record.
+	 *
+	 * Presentation only: no value here is computed, defaulted or reinterpreted.
+	 * Anything the server did not send is simply absent from the list rather
+	 * than invented, and an unrecognised status falls back to a neutral tone.
+	 */
+	const FACT_LABELS = Object.freeze({
+		name: "Record",
+		attempt: "Attempt",
+		item: "Item",
+		item_name: "Item revision",
+		revision: "Revision",
+		version: "Version now",
+		expected_version: "Version expected",
+		status: "Status",
+		subject: "Subject",
+		purpose: "Purpose",
+		reason: "Reason",
+		program: "Programme",
+		course: "Course",
+		academic_year: "Academic year",
+		student_applicant: "Applicant",
+		student_group: "Class",
+		student_email_id: "Student email",
+		customer: "Customer",
+		placement_decision: "Placement decision",
+		blueprint: "Blueprint",
+		policy: "Policy",
+		config: "Configuration",
+		content_hash: "Content hash",
+		skill_terms: "Skill terms",
+		ordinal: "Ordinal",
+		option_id: "Selected option",
+		missing: "Missing",
+		instructor: "Teacher",
+		to_time: "Ends at",
+		from_time: "Starts at",
+	});
+
+	/* Tones are presentational. They must never imply an outcome the server did
+	 * not state, so an unmapped status is neutral rather than assumed good. */
+	const STATUS_TONES = Object.freeze({
+		active: "ok", approved: "ok", completed: "ok", passed: "ok",
+		published: "ok", released: "ok", submitted: "ok", success: "ok", verified: "ok",
+		draft: "info", pending: "info", open: "info", review: "info",
+		scheduled: "info", "in progress": "info",
+		conditional: "warn", deferred: "warn", partial: "warn", warning: "warn",
+		hold: "warn", "on hold": "warn",
+		rejected: "danger", cancelled: "danger", canceled: "danger",
+		failed: "danger", blocked: "danger", error: "danger", expired: "danger",
+		withdrawn: "danger",
+	});
+
+	/* Keys are stable identifiers, not prose, so they are never translated and
+	 * stay comparable with the raw payload below. */
+	const UNTRANSLATED_KEYS = Object.freeze(Object.keys(FACT_LABELS).concat(["request_key"]));
+
+	function escapeText(value) {
+		return String(value)
+			.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+	}
+
+	function isShown(fieldname, value) {
+		if (value === undefined || value === null || value === "") return false;
+		if (Array.isArray(value)) return value.length > 0;
+		// The request key is transport, not a business fact the operator asked
+		// about, so it stays out of the readable summary.
+		return !UNTRANSLATED_KEYS.includes(fieldname) || fieldname !== "request_key";
+	}
+
+	function factLabel(fieldname) {
+		return FACT_LABELS[fieldname] || fieldname
+			.replace(/_/g, " ")
+			.replace(/^./, (character) => character.toUpperCase());
+	}
+
+	function statusTone(value) {
+		const key = String(value).trim().toLowerCase();
+		return STATUS_TONES[key] || "neutral";
+	}
+
+	function statusMarkup(value) {
+		const tone = statusTone(value);
+		return `<span class="th-status th-status--${tone}">${escapeText(value)}</span>`;
+	}
+
+	/* Lists such as `missing` read better as a sentence than as JSON syntax. */
+	function factValue(value) {
+		if (Array.isArray(value)) return escapeText(value.join(", "));
+		if (typeof value === "boolean") return escapeText(value ? "Yes" : "No");
+		if (typeof value === "object") return escapeText(JSON.stringify(value));
+		return escapeText(value);
+	}
+
+	function factRows(payload) {
+		if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
+		return Object.entries(payload)
+			.filter(([fieldname, value]) => fieldname !== "status" && isShown(fieldname, value))
+			.map(([fieldname, value]) =>
+				`<dt>${escapeText(factLabel(fieldname))}</dt><dd>${factValue(value)}</dd>`)
+			.join("");
+	}
+
+	/* The headline answers "did that work?" before any detail is read. */
+	function resultHeadline(label, payload) {
+		const status = payload && typeof payload === "object" && !Array.isArray(payload)
+			? payload.status : undefined;
+		if (status === undefined) return text(label) + " " + text("completed.");
+		const tone = statusTone(status);
+		if (tone === "danger") return text(label) + " " + text("did not complete.") + " " + escapeText(status) + ".";
+		if (tone === "warn") return text(label) + " " + text("needs attention.") + " " + escapeText(status) + ".";
+		return text(label) + " " + text("succeeded.") + " " + escapeText(status) + ".";
+	}
+
+	function resultMarkup(label, payload) {
+		const hasFacts = Boolean(factRows(payload));
+		const status = payload && typeof payload === "object" && !Array.isArray(payload)
+			? payload.status : undefined;
+		return [
+			"<div class='th-result'>",
+			"<div class='th-result-heading'>",
+			status === undefined ? "" : statusMarkup(status),
+			`<p class='th-result-summary'>${resultHeadline(label, payload)}</p>`,
+			"</div>",
+			hasFacts ? `<dl class='th-facts'>${factRows(payload)}</dl>` : "",
+			"<details class='th-result-raw'>",
+			`<summary>${text("Full server response")}</summary>`,
+			`<pre>${escapeText(JSON.stringify(payload, null, 2))}</pre>`,
+			"</details>",
+			"</div>",
+		].join("");
+	}
+
 	function resultMessage(label, result) {
-		const message = $("<pre class='small mb-0'></pre>").text(JSON.stringify(result, null, 2)).prop("outerHTML");
-		frappe.msgprint({ title: text(label + " result"), message, wide: true });
+		frappe.msgprint({ title: text(label + " result"), message: resultMarkup(label, result), wide: true });
 	}
 
 	function runCommand(command) {
@@ -310,51 +452,176 @@ frappe.provide("toefl_house.command_pages");
 		dialog.show();
 	}
 
-	function addDescription(page, description) {
-		$("<p class='text-muted mb-3'></p>").text(text(description)).appendTo(page.body);
-		$("<p class='small text-muted mb-3'></p>")
-			.text(text("This UI does not grant permission. The server validates the assigned role, request key, state and separation controls for every command."))
-			.appendTo(page.body);
+	/*
+	 * Asset loading.
+	 *
+	 * The stylesheet is pulled through frappe.require rather than an
+	 * `app_include_css` hook on purpose: require is lazy, is already the
+	 * platform's asset mechanism, and cannot break application boot if the file
+	 * is absent, whereas a bad include hook fails every page load for every
+	 * user. Loading is idempotent because a page may be revisited in one
+	 * session.
+	 */
+	const STYLESHEET = "/assets/toefl_house/css/th_design_system.css";
+	let stylesheetLoaded = false;
+
+	function ensureStyleSheet() {
+		if (stylesheetLoaded) return;
+		stylesheetLoaded = true;
+		if (typeof frappe.require === "function") frappe.require(STYLESHEET);
+	}
+
+	/*
+	 * Page header.
+	 *
+	 * Every surface answers the same three questions in the same place: what is
+	 * this, why am I here, and what does this page not do. Repeating that
+	 * structure across all fourteen pages is what makes the app read as one
+	 * product instead of fourteen unrelated screens.
+	 */
+	function renderHeader(page, surface) {
+		const header = $("<div class='th-page-header'></div>").appendTo(page.body);
+		$("<p class='th-eyebrow'></p>").text(text("TOEFL House")).appendTo(header);
+		$("<h1 class='th-page-title'></h1>").text(text(surface.title)).appendTo(header);
+		$("<p class='th-page-purpose'></p>").text(text(surface.description)).appendTo(header);
+		$("<p class='th-page-assurance'></p>")
+			.text(text("This page grants no permission. The server validates the assigned role, request key, state and separation controls for every action."))
+			.appendTo(header);
+	}
+
+	function section(parent, title) {
+		const block = $("<section class='th-section'></section>").appendTo(parent);
+		$("<h2 class='th-section-title'></h2>").text(text(title)).appendTo(block);
+		return block;
+	}
+
+	/* An action card. One primary button per card, always last, so scanning
+	 * title -> purpose -> action is the same motion on every page. */
+	function actionCard(grid, title, hint, buttonLabel, onClick) {
+		const card = $("<article class='th-card'></article>").appendTo(grid);
+		$("<h3 class='th-card-title'></h3>").text(text(title)).appendTo(card);
+		if (hint) $("<p class='th-card-hint'></p>").text(text(hint)).appendTo(card);
+		const footer = $("<div class='th-card-footer'></div>").appendTo(card);
+		return $("<button type='button' class='btn btn-primary btn-sm th-action'></button>")
+			.text(text(buttonLabel))
+			.on("click", onClick)
+			.appendTo(footer);
 	}
 
 	function renderActionPage(wrapper, surface) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: text(surface.title), single_column: true });
-		addDescription(page, surface.description);
-		const actions = $("<div class='row'></div>").appendTo(page.body);
+		ensureStyleSheet();
+		if (page.main && page.main.addClass) page.main.addClass("th-page");
+		renderHeader(page, surface);
+
+		const block = section(page.body, text("Available actions"));
+		const grid = $("<div class='th-grid'></div>").appendTo(block);
 		surface.commands.forEach((command) => {
-			const column = $("<div class='col-sm-6 col-lg-4 mb-3'></div>").appendTo(actions);
-			const card = $("<div class='border rounded p-3 h-100'></div>").appendTo(column);
-			$("<h5 class='mb-2'></h5>").text(text(command.label)).appendTo(card);
-			$("<p class='small text-muted'></p>")
-				.text(text("Opens the existing guarded command form; no document search is performed."))
-				.appendTo(card);
-			$("<button type='button' class='btn btn-primary btn-sm'></button>")
-				.text(text("Open command"))
-				.on("click", () => runCommand(command))
-				.appendTo(card);
+			actionCard(
+				grid,
+				command.label,
+				"Opens the guarded command form. No document search is performed.",
+				"Open command",
+				() => runCommand(command),
+			);
+		});
+	}
+
+	/*
+	 * The attention list is the only part of the desk that shows state a person
+	 * must act on, so it needs the states a live call can actually produce.
+	 * Before this it rendered a single "Loading..." line that stayed on screen
+	 * forever if the call failed, which is indistinguishable from a hang.
+	 */
+
+	/* DOM counterpart of statusMarkup(). Both exist because msgprint takes an
+	 * HTML string while the desk body is built with jQuery; neither trusts the
+	 * server's text, so both go through escapeText() or .text(). */
+	function statusElement(value) {
+		return $("<span class='th-status'></span>")
+			.addClass("th-status--" + statusTone(value))
+			.text(text(String(value)));
+	}
+
+	function alertVariant(state) {
+		const tone = statusTone(state);
+		if (tone === "danger") return "danger";
+		if (tone === "warn") return "warn";
+		return "info";
+	}
+
+	function renderAttention(attention, snapshot) {
+		attention.empty();
+		$("<h2 class='th-section-title'></h2>").text(text("System attention")).appendTo(attention);
+
+		const states = $("<p class='th-page-purpose'></p>").appendTo(attention);
+		states.append(text("Production: "));
+		statusElement(snapshot.production_state || "REJECT").appendTo(states);
+		states.append(text(" · Deployment: "));
+		statusElement(snapshot.deployment_phase || "UNVERIFIED").appendTo(states);
+
+		const items = snapshot.operational_attention || [];
+		if (!items.length) {
+			const empty = $("<div class='th-empty'></div>").appendTo(attention);
+			$("<p class='th-empty-title'></p>").text(text("Nothing needs attention")).appendTo(empty);
+			$("<p class='th-empty-body'></p>")
+				.text(text("No release attention items were reported for your roles."))
+				.appendTo(empty);
+			return;
+		}
+		items.forEach((item) => {
+			const alert = $("<div class='th-alert th-alert--" + alertVariant(item.state) + "'></div>")
+				.appendTo(attention);
+			const body = $("<div></div>").appendTo(alert);
+			$("<p class='th-alert-title'></p>")
+				.text(text(item.id + " — " + item.state))
+				.appendTo(body);
+			$("<p class='th-alert-body'></p>").text(text(item.detail)).appendTo(body);
 		});
 	}
 
 	function renderAdminPage(wrapper, surface) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: text(surface.title), single_column: true });
-		addDescription(page, surface.description);
-		const attention = $("<div class='mb-4'></div>").appendTo(page.body);
-		$("<h4></h4>").text(text("System attention")).appendTo(attention);
-		$("<p class='text-muted'></p>").text(text("Loading the role-scoped readiness projection...")).appendTo(attention);
+		ensureStyleSheet();
+		if (page.main && page.main.addClass) page.main.addClass("th-page");
+		renderHeader(page, surface);
+
+		const attention = section(page.body, text("System attention"));
+		// A real loading state: the previous version printed static text that
+		// never changed if the projection call failed.
+		const loading = $("<div class='th-loading'></div>").appendTo(attention);
+		$("<span class='th-spinner' aria-hidden='true'></span>").appendTo(loading);
+		$("<span></span>").text(text("Loading the role-scoped readiness projection…")).appendTo(loading);
+		$("<span class='th-visually-hidden' role='status'></span>")
+			.text(text("Loading"))
+			.appendTo(loading);
+
 		frappe.call({
 			method: "toefl_house.administration.get_control_center_snapshot",
 			callback(response) {
+				renderAttention(attention, response.message || {});
+			},
+			error() {
+				// Say what failed instead of leaving a spinner that implies the
+				// server is merely slow.
 				attention.empty();
-				$("<h4></h4>").text(text("System attention")).appendTo(attention);
-				const snapshot = response.message || {};
-				$("<p class='mb-2'></p>").text(text(`Production: ${snapshot.production_state || "REJECT"} · Deployment: ${snapshot.deployment_phase || "UNVERIFIED"}`)).appendTo(attention);
-				(snapshot.operational_attention || []).forEach((item) => {
-					$("<div class='alert alert-warning py-2 mb-2'></div>").text(text(`${item.id}: ${item.state} — ${item.detail}`)).appendTo(attention);
-				});
+				$("<h2 class='th-section-title'></h2>").text(text("System attention")).appendTo(attention);
+				const alert = $("<div class='th-alert th-alert--danger'></div>").appendTo(attention);
+				$("<div></div>").appendTo(alert);
+				$("<p class='th-alert-title'></p>")
+					.text(text("Readiness projection unavailable"))
+					.appendTo(alert);
+				$("<p class='th-alert-body'></p>")
+					.text(text("The attention list could not be loaded. Existing permissions are unaffected; reload this page to retry."))
+					.appendTo(alert);
 			},
 		});
-		const controls = $("<div class='row'></div>").appendTo(page.body);
-		$("<h4 class='col-12'></h4>").text(text("Native control routes")).appendTo(controls);
+
+		const controls = section(page.body, text("Native control routes"));
+		$("<p class='th-card-hint'></p>")
+			.text(text("These open the native authorities that own identity, role and branch scope. This page creates no parallel record."))
+			.appendTo(controls);
+		const group = $("<div class='th-route-group'></div>").appendTo(controls);
 		const routes = [
 			["Users", ["List", "User"]], ["Roles", ["List", "Role"]],
 			["User Permissions", ["List", "User Permission"]],
@@ -362,40 +629,67 @@ frappe.provide("toefl_house.command_pages");
 			["System Settings", ["Form", "System Settings"]],
 		];
 		routes.forEach(([label, route]) => {
-			$("<button type='button' class='btn btn-secondary btn-sm m-1'></button>")
+			$("<button type='button' class='btn btn-secondary btn-sm'></button>")
 				.text(text(label))
 				.on("click", () => frappe.set_route(...route))
-				.appendTo(controls);
+				.appendTo(group);
 		});
-		$("<button type='button' class='btn btn-primary btn-sm m-1'></button>")
+		$("<button type='button' class='btn btn-primary btn-sm'></button>")
 			.text(text("Manage TOEFL role assignment"))
 			.on("click", manageAdminRole)
-			.appendTo(controls);
+			.appendTo(group);
 	}
 
 	function renderLandingPage(wrapper, surface) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: text(surface.title), single_column: true });
-		addDescription(page, surface.description);
-		const actions = $("<div class='row'></div>").appendTo(page.body);
-		Object.entries(PAGE_SURFACES)
-			.filter(([, candidate]) => !candidate.landing && (
-				candidate.admin
-					? candidate.roles.some((role) => frappe.user.has_role(role))
-					: candidate.role && frappe.user.has_role(candidate.role)
-			))
-			.forEach(([name, candidate]) => {
-				const column = $("<div class='col-sm-6 col-lg-4 mb-3'></div>").appendTo(actions);
-				const card = $("<div class='border rounded p-3 h-100'></div>").appendTo(column);
-				$("<h5 class='mb-2'></h5>").text(text(candidate.title)).appendTo(card);
-				$("<p class='small text-muted'></p>").text(text(candidate.admin ? candidate.roles.join(" / ") : candidate.role)).appendTo(card);
-				$("<button type='button' class='btn btn-primary btn-sm'></button>")
-					.text(text("Open page"))
-					.on("click", () => frappe.set_route(name))
-					.appendTo(card);
-			});
+		ensureStyleSheet();
+		if (page.main && page.main.addClass) page.main.addClass("th-page");
+		renderHeader(page, surface);
+
+		const block = section(page.body, text("Your work areas"));
+		const grid = $("<div class='th-grid'></div>").appendTo(block);
+
+		const available = Object.entries(PAGE_SURFACES).filter(([, candidate]) => !candidate.landing && (
+			candidate.admin
+				? candidate.roles.some((role) => frappe.user.has_role(role))
+				: candidate.role && frappe.user.has_role(candidate.role)
+		));
+
+		/* An account with no assigned operational role used to get a blank page
+		 * with no explanation, which reads as a broken system rather than as a
+		 * permissions fact. Name the cause and the remedy instead. */
+		if (!available.length) {
+			const empty = $("<div class='th-empty'></div>").appendTo(block);
+			$("<p class='th-empty-title'></p>")
+				.text(text("No work areas assigned yet"))
+				.appendTo(empty);
+			$("<p class='th-empty-body'></p>")
+				.text(text("This account has no TOEFL House operational role. Ask a Course Owner or General Manager to assign one."))
+				.appendTo(empty);
+			return;
+		}
+
+		available.forEach(([name, candidate]) => {
+			const card = actionCard(
+				grid,
+				candidate.title,
+				candidate.description || "",
+				"Open page",
+				() => frappe.set_route(name),
+			);
+			$("<span class='th-role-chip'></span>")
+				.text(text(candidate.admin ? candidate.roles.join(" / ") : candidate.role))
+				.prependTo(card.closest(".th-card").find(".th-card-footer"));
+		});
 	}
 
 	toefl_house.command_pages.surfaces = PAGE_SURFACES;
+	// Presentation helpers are exported for the static contract suite, in the
+	// same spirit as `surfaces` above. They carry no authority: every command
+	// still resolves through the whitelisted server endpoints.
+	toefl_house.command_pages.resultMarkup = resultMarkup;
+	toefl_house.command_pages.statusTone = statusTone;
+	toefl_house.command_pages.stylesheet = STYLESHEET;
 	Object.entries(PAGE_SURFACES).forEach(([name, surface]) => {
 		frappe.pages[name] = frappe.pages[name] || {};
 		frappe.pages[name].on_page_load = (wrapper) => {
