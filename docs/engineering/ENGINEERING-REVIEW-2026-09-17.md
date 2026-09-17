@@ -304,6 +304,34 @@ A listener that genuinely accepts TLS 1.0 still resolves to `NOT PROVEN` with
 `@SECLEVEL=0` does not change it), so the *client-capability* half of defect 2 is
 reasoned about, not reproduced. The raw-ClientHello path is verified end to end.
 
+**Then verified on the runner.** Run `35216709160` @ `37e4bff` — the same
+workflow that failed on two consecutive session branches — completed `pass` with
+38 checks and no failures. Its published report:
+
+| Field | Before (runs 35197870620 / 35214660151) | After (run 35216709160) |
+| --- | --- | --- |
+| `verdicts` keys | `['tailscale_boundary']` | `['tailscale_boundary', 'tls_protocol_policy', 'certificate_verification']` |
+| `client_checks` | absent | present |
+| `tls_protocol_policy.verdict` | `null` (check never reached a verdict) | `POLICY ENFORCED` |
+| `protocols_with_no_evidence` | `["TLSv1", "TLSv1.1"]` | `[]` |
+| TLSv1 / TLSv1.1 | `NOT OBSERVABLE` | `REFUSED`, `resolved_by: "raw ClientHello (policy-independent)"`, `alert_description: "protocol_version"` |
+| `required_refusals_observed` | never published | `protocols_rejected_by_the_listener: ["SSLv3","TLSv1","TLSv1.1"]`, `…not_evidence: []`, `complete: true` |
+
+The alert the runner's listener returned to the raw ClientHello —
+`protocol_version` — is the same alert observed locally, so the instrument
+behaved identically in both places.
+
+**A third defect surfaced from that report and is fixed here.** The published
+verdicts carried no `tls_protocol_raw_client_hello`, even though the probe wrote
+it: `runtime_tls_edge.py` ingested a *hardcoded pair* of verdict keys, so the new
+instrument's own record was silently discarded — the same evidence-loss failure
+mode as defect 1, one layer above it. The key is now published, and
+`test_the_raw_client_hello_evidence_is_published_and_not_whitelisted_away` fails
+if any verdict key the probe writes is neither published nor deliberately
+withheld. The full `s_client` transcripts (`tls_protocol_attempts`) remain in the
+retained artifact only: they embed certificate PEM and would dominate the
+published summary without changing any verdict. 675 → 685 tests.
+
 ### F10 — Every workflow ran on deprecated action runtimes, and nothing in the suite noticed
 
 GitHub deprecated the Node.js 20 action runtime on 2025-09-19. Every run in this
@@ -358,9 +386,18 @@ from the audit. Proved load-bearing by mutation — reverting one checkout pin t
 the retired SHA, annotating a v5.1.0 SHA as v4.4.0, and substituting the mutable
 tag `actions/checkout@v5` each produce failures; restoring passes.
 
-**Not verified by a hosted run at the time of writing.** The rotation is pushed,
-but the claim "these pins work on the runner" rests on the API-resolved
-`runs.using` values and the runner-version check, not on an observed green run.
+**Verified on the runner by controlled comparison.** The identical annotation
+query was run against both commits:
+
+| Commit | Runs sampled | Node 20 deprecation annotation |
+| --- | --- | --- |
+| `f813a5c` (old pins) | 35214660202, 35214660234, 35214660271 | **present in all 3**, naming `actions/checkout@11d5960a…` and `actions/upload-artifact@ea165f8d…` |
+| `e8da889` (new pins) | 35218007896, 35218008053, 35218007835, 35218007901 | **absent in all 4** |
+
+The new pins also did not disturb the workflows that depend on them most: the
+key-custody and independent-recovery runs, which pass artifacts between jobs
+through `upload-artifact`/`download-artifact`, both passed
+(35218007872, 35218007835).
 
 ---
 
