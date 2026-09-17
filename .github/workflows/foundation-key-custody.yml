@@ -1,0 +1,232 @@
+name: Foundation external key custody
+
+# Exercises a production-like custody model for the two keys that actually protect
+# this stack: `encryption_key`, which protects native encrypted Password fields in
+# `__Auth`, and `backup_encryption_key`, which protects backup artifacts through
+# gpg. Three jobs means three separate ephemeral virtual machines.
+#
+# The custodian holds the keys and publishes nothing but SHA-256 fingerprints. The
+# operator retrieves them, runs a real site on them, produces an encrypted backup,
+# then destroys the site, the archived site directory that would otherwise keep
+# both plaintext keys, and every local copy. The recovery system retrieves the same
+# keys from the two custody channels and proves the retrieval is load-bearing
+# before it uses them: restoring without a key must fail, and restoring with a real
+# key from the wrong epoch must fail too. Only then does it restore, decrypt the
+# field the operator encrypted, and rotate both keys.
+#
+# Custody is split across two artifact channels because this session's GitHub
+# credential cannot create repository secrets (HTTP 403, no admin permission), so no
+# external secret store is available to hold a wrapping key. That is recorded in the
+# evidence as ENVIRONMENT-BLOCKED and the split is explicitly not a trust boundary:
+# any job able to download both channels can reconstruct the keys. What is proven is
+# the operational model - separate control, verified retrieval, rotation, and
+# decryption on a machine that never saw the operator - not an access-control
+# boundary that GitHub Actions artifacts cannot provide.
+on:
+  push:
+    branches: [arena/01a0aafe-tofel-house-erp]
+    paths:
+      - .github/workflows/foundation-key-custody.yml
+      - tools/foundation/bench_bootstrap.py
+      - tools/foundation/key_custody.py
+      - tools/foundation/runtime_key_custody_custodian.py
+      - tools/foundation/runtime_key_custody_operator.py
+      - tools/foundation/runtime_key_custody_recovery.py
+      - tools/foundation/runtime_key_custody_data.py
+      - tools/foundation/runtime_independent_data.py
+      - tools/foundation/runner_probe.py
+      - tools/foundation/publish_evidence.py
+      - tests/foundation/test_key_custody_contract.py
+      - docs/engineering/foundation-component-sources.json
+      - docs/engineering/foundation-version-matrix.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: foundation-key-custody-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  custodian:
+    if: github.ref == 'refs/heads/arena/01a0aafe-tofel-house-erp'
+    name: Key custody - separate custodian system
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test key custody contract guards
+        run: python3 -m unittest tests.foundation.test_key_custody_contract -q
+      - name: Issue key material on this custodian system
+        run: python3 tools/foundation/runtime_key_custody_custodian.py
+      - name: Publish sanitized custodian evidence
+        if: always() && hashFiles('.foundation/key-custody-evidence/custodian-result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/foundation/publish_evidence.py
+          .foundation/key-custody-evidence/custodian-result.json
+          --name 'Foundation key custody - separate custodian system'
+      - name: Hand custody channel A to the operating and recovery systems
+        if: always() && hashFiles('.foundation/key-custody/channel-a/*.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: key-custody-channel-a-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody/channel-a/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Hand custody channel B to the operating and recovery systems
+        if: always() && hashFiles('.foundation/key-custody/channel-b/*.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: key-custody-channel-b-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody/channel-b/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Hand the fingerprint manifest to the operating and recovery systems
+        if: always() && hashFiles('.foundation/key-custody/manifest/custody-manifest.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: key-custody-manifest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody/manifest/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain custodian evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: foundation-key-custodian-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  operator:
+    if: github.ref == 'refs/heads/arena/01a0aafe-tofel-house-erp'
+    name: Key custody - operating system
+    needs: custodian
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Install pinned Yarn CLI
+        run: npm install --global yarn@1.22.22
+      - name: Establish fresh compatible Python and services
+        run: python3 tools/foundation/runner_probe.py
+      - name: Confirm GPG is available for encrypted backups
+        run: |
+          command -v gpg >/dev/null || sudo apt-get update
+          command -v gpg >/dev/null || sudo apt-get install -y --no-install-recommends gnupg
+          gpg --version | head -1
+      - name: Receive custody channel A
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: key-custody-channel-a-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody/channel-a/
+      - name: Receive custody channel B
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: key-custody-channel-b-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody/channel-b/
+      - name: Receive the fingerprint manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: key-custody-manifest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody/manifest/
+      - name: Run a real site on custodian-issued keys, back it up encrypted, then destroy it
+        run: python3 tools/foundation/runtime_key_custody_operator.py
+      - name: Publish sanitized operator evidence
+        if: always() && hashFiles('.foundation/key-custody-operator-evidence/operator-result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/foundation/publish_evidence.py
+          .foundation/key-custody-operator-evidence/operator-result.json
+          --name 'Foundation key custody - operating system'
+      - name: Hand the encrypted backup to the recovery system
+        if: always() && hashFiles('.foundation/key-custody-operator/payload/database.sql.gz') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: key-custody-payload-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody-operator/payload/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain operator evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: foundation-key-operator-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody-operator-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  recovery:
+    if: github.ref == 'refs/heads/arena/01a0aafe-tofel-house-erp'
+    name: Key custody - recovery system
+    needs: operator
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Install pinned Yarn CLI
+        run: npm install --global yarn@1.22.22
+      - name: Establish fresh compatible Python and services
+        run: python3 tools/foundation/runner_probe.py
+      - name: Confirm GPG is available to decrypt the backup
+        run: |
+          command -v gpg >/dev/null || sudo apt-get update
+          command -v gpg >/dev/null || sudo apt-get install -y --no-install-recommends gnupg
+          gpg --version | head -1
+      - name: Receive custody channel A
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: key-custody-channel-a-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody/channel-a/
+      - name: Receive custody channel B
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: key-custody-channel-b-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody/channel-b/
+      - name: Receive the fingerprint manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: key-custody-manifest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody/manifest/
+      - name: Receive the encrypted backup
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: key-custody-payload-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody-operator/payload/
+      - name: Retrieve the keys, prove retrieval is required, restore, decrypt, and rotate
+        run: python3 tools/foundation/runtime_key_custody_recovery.py
+      - name: Publish sanitized recovery evidence
+        if: always() && hashFiles('.foundation/key-custody-recovery-evidence/recovery-result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/foundation/publish_evidence.py
+          .foundation/key-custody-recovery-evidence/recovery-result.json
+          --name 'Foundation key custody - recovery system'
+      - name: Retain recovery evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: foundation-key-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/key-custody-recovery-evidence/
+          if-no-files-found: error
+          retention-days: 14
