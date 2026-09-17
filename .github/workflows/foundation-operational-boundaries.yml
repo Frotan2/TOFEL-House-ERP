@@ -20,9 +20,22 @@ name: Foundation operational boundaries
 # bound to, decoded from /proc/net/tcp rather than from a tool's summary - is reported,
 # and nothing more.
 #
-# Rollback and monitoring/retention jobs follow in this same workflow. Neither upgrades
-# a release gate: `production_authorization` stays REJECT until every release
-# requirement is genuinely proven, and the dependency gate SEC-DEPS-01 is untouched.
+# The rollback job makes the same site travel v16.33.0 -> the pinned current commit ->
+# back to v16.33.0, restoring a backup whose digest was registered when it was taken.
+# It has to distinguish a rollback from a claim about one, so code identity comes from
+# the checked-out revision, artifact identity from a re-digest of the store the
+# rollback deployed from, and data identity from unchanged `creation` timestamps -
+# which is what separates preserved rows from rows that were deleted and re-created.
+#
+# The monitoring job writes an error through Frappe's own logging path and reads it
+# back, compares the scheduler registry against the scheduler events the installed code
+# actually declares, delivers an alert to a real SMTP sink holding a real socket, then
+# removes that sink and requires the failure to be reported rather than swallowed, and
+# exercises a backup retention limit set below the number of backups taken.
+#
+# None of this upgrades a release gate: `production_authorization` stays REJECT until
+# every release requirement is genuinely proven, and the dependency gate SEC-DEPS-01 is
+# untouched.
 on:
   push:
     branches: [arena/01a0aafe-tofel-house-erp]
@@ -33,9 +46,18 @@ on:
       - tools/foundation/runtime_tls_edge.py
       - tools/foundation/runtime_tls_edge_checks.py
       - tools/foundation/runtime_tls_edge_state.py
+      - tools/foundation/operational_rollback.py
+      - tools/foundation/runtime_rollback.py
+      - tools/foundation/runtime_rollback_state.py
+      - tools/foundation/monitoring_retention.py
+      - tools/foundation/smtp_sink.py
+      - tools/foundation/runtime_monitoring.py
+      - tools/foundation/runtime_monitoring_mail.py
       - tools/foundation/runner_probe.py
       - tools/foundation/publish_evidence.py
       - tests/foundation/test_tls_edge_contract.py
+      - tests/foundation/test_operational_rollback_contract.py
+      - tests/foundation/test_monitoring_contract.py
       - docs/engineering/foundation-component-sources.json
       - docs/engineering/foundation-version-matrix.json
   workflow_dispatch:
@@ -88,5 +110,81 @@ jobs:
         with:
           name: foundation-tls-edge-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/tls-edge-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  rollback:
+    if: github.ref == 'refs/heads/arena/01a0aafe-tofel-house-erp'
+    name: Operational boundaries - versioned rollback
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Install pinned Yarn CLI
+        run: npm install --global yarn@1.22.22
+      - name: Establish fresh compatible Python and services
+        run: python3 tools/foundation/runner_probe.py
+      - name: Test the rollback contract guards
+        run: python3 -m unittest tests.foundation.test_operational_rollback_contract -q
+      - name: Deploy v1, upgrade, then roll back from the registered artifact
+        run: python3 tools/foundation/runtime_rollback.py
+      - name: Publish sanitized rollback evidence
+        if: always() && hashFiles('.foundation/rollback-evidence/rollback-result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/foundation/publish_evidence.py
+          .foundation/rollback-evidence/rollback-result.json
+          --name 'Foundation operational boundaries - versioned rollback'
+      - name: Retain rollback evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: foundation-rollback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/rollback-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  monitoring:
+    if: github.ref == 'refs/heads/arena/01a0aafe-tofel-house-erp'
+    name: Operational boundaries - monitoring, alerts and retention
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Install pinned Yarn CLI
+        run: npm install --global yarn@1.22.22
+      - name: Establish fresh compatible Python and services
+        run: python3 tools/foundation/runner_probe.py
+      - name: Test the monitoring and retention contract guards
+        run: python3 -m unittest tests.foundation.test_monitoring_contract -q
+      - name: Exercise error logging, alert delivery to a real receiver, and retention
+        run: python3 tools/foundation/runtime_monitoring.py
+      - name: Publish sanitized monitoring evidence
+        if: always() && hashFiles('.foundation/monitoring-evidence/monitoring-result.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 tools/foundation/publish_evidence.py
+          .foundation/monitoring-evidence/monitoring-result.json
+          --name 'Foundation operational boundaries - monitoring, alerts and retention'
+      - name: Retain monitoring evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: foundation-monitoring-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/monitoring-evidence/
           if-no-files-found: error
           retention-days: 14
