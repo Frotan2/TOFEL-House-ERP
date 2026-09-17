@@ -58,10 +58,14 @@ frappe.provide("toefl_house.command_pages");
 			title: "TOEFL House Command Centre",
 			landing: true,
 			roles: [
-				"Placement Author", "Placement Publisher", "Placement Invigilator",
-				"Placement Assessor", "Placement Reviewer", "Placement Releaser",
-				"Admission Officer", "Admission Reviewer", "Admission Approver",
-				"Enrollment Officer", "Teaching Scheduler", "Attendance Recorder",
+				"Placement Author", "Placement Publisher", "Placement Auditor",
+				"Placement Invigilator", "Placement Assessor", "Placement Reviewer",
+				"Placement Releaser", "Admission Officer", "Admission Reviewer",
+				"Admission Approver", "Admission Auditor", "Enrollment Officer",
+				"Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder",
+				"Teaching Auditor", "Finance Officer", "Finance Auditor",
+				"Course Owner", "General Manager", "Academic Manager",
+				"Finance Manager", "Reception",
 			],
 			description: "Choose the role-specific command page for a role assigned to this account. These pages open no business-document list or report.",
 		},
@@ -661,10 +665,21 @@ frappe.provide("toefl_house.command_pages");
 		if (!available.length) {
 			const empty = $("<div class='th-empty'></div>").appendTo(block);
 			$("<p class='th-empty-title'></p>")
-				.text(text("No work areas assigned yet"))
+				.text(text("No command pages for your role"))
 				.appendTo(empty);
+			/*
+			 * Wording matters here and the previous version was wrong. Reaching
+			 * this page with no cards does not mean the account has no role: the
+			 * auditor roles and Finance Officer have desk workspaces rather than
+			 * command pages, and the management roles coordinate rather than
+			 * dispatch guarded commands. Saying "no role" would have sent those
+			 * users to ask for something they already have.
+			 *
+			 * Native workspaces stay reachable from the Desk sidebar, so point
+			 * there rather than implying the account is unprovisioned.
+			 */
 			$("<p class='th-empty-body'></p>")
-				.text(text("This account has no TOEFL House operational role. Ask a Course Owner or General Manager to assign one."))
+				.text(text("Your role has no guarded command page. Registers and reports remain available from the Desk sidebar workspaces. If you expected a command page here, ask a Course Owner or General Manager to review your role assignment."))
 				.appendTo(empty);
 			return;
 		}

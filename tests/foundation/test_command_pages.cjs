@@ -13,7 +13,7 @@ const PYPROJECT = path.join(ROOT, "apps/toefl_house/pyproject.toml");
 
 const expected = {
 	"th-administration-control-centre": { module: "Placement", roles: ["Course Owner", "General Manager"] },
-	"th-command-centre": { module: "Placement", roles: ["Placement Author", "Placement Publisher", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Enrollment Officer", "Teaching Scheduler", "Attendance Recorder"] },
+	"th-command-centre": { module: "Placement", roles: ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception"] },
 	"th-placement-author": { module: "Placement", roles: ["Placement Author"] },
 	"th-placement-publisher": { module: "Placement", roles: ["Placement Publisher"] },
 	"th-placement-invigilation": { module: "Placement", roles: ["Placement Invigilator"] },
