@@ -6,6 +6,27 @@ from pathlib import Path
 import sys
 
 
+POSITIONAL_RECORD_LISTS = ("students", "applicants", "enrollments")
+
+
+def positional_record_count(expected):
+    """Return how many records a positional restore check will verify, or fail closed.
+
+    ``students``, ``applicants`` and ``enrollments`` are zipped positionally, so
+    they must be the same non-zero length. Before this guard existed a shorter or
+    empty list made ``zip()`` stop early: the loop body never ran, and the check
+    still published ``status: pass``. A restore verification that verified zero
+    records is worse than no verification, because the evidence looks identical to
+    a real pass. Kept free of any Frappe import so the guard is unit-testable.
+    """
+    counts = {name: len(expected.get(name) or []) for name in POSITIONAL_RECORD_LISTS}
+    if len(set(counts.values())) != 1 or 0 in counts.values():
+        raise AssertionError(
+            "Business report record lists are empty or disagree in length, so the restore "
+            "cannot be verified positionally: " + json.dumps(counts))
+    return counts[POSITIONAL_RECORD_LISTS[0]]
+
+
 def main():
     import frappe
     if os.environ.get("GITHUB_ACTIONS") != "true" or sys.argv[1] not in ("restore.localhost", "recovery.localhost", "upgrade.localhost"):
@@ -17,14 +38,21 @@ def main():
     try:
         frappe.connect()
         frappe.set_user("Administrator")
-        for student, applicant, enrollment in zip(expected["students"], expected["applicants"], expected["enrollments"]):
+        expected_records = positional_record_count(expected)
+        verified_records = 0
+        for student, applicant, enrollment in zip(expected["students"], expected["applicants"],
+                                                  expected["enrollments"], strict=True):
             doc = frappe.get_doc("Student", student)
             assert doc.student_applicant == applicant and doc.customer
             assert frappe.db.exists("Customer", doc.customer)
             en = frappe.get_doc("Program Enrollment", enrollment)
             assert en.docstatus == 1 and en.student == student
             assert frappe.db.exists("Course Enrollment", {"program_enrollment": enrollment, "course": expected["course"]})
-        report["checks"].append({"name": "student-applicant-customer-enrollment-links", "status": "pass"})
+            verified_records += 1
+        assert verified_records == expected_records, (
+            f"Verified {verified_records} of {expected_records} expected records")
+        report["checks"].append({"name": "student-applicant-customer-enrollment-links",
+                                 "status": "pass", "records_verified": verified_records})
         result = frappe.get_doc("Assessment Result", expected["assessment_result"])
         assert result.docstatus == 1 and result.grade == "B" and result.total_score == 75
         attendance = frappe.get_doc("Student Attendance", expected["attendance"])

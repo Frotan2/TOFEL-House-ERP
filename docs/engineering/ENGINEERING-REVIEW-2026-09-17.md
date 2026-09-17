@@ -401,6 +401,82 @@ through `upload-artifact`/`download-artifact`, both passed
 
 ---
 
+### F11 — SECURITY: the restore verifier could publish a pass having verified nothing
+
+`tools/foundation/runtime_restore.py` is the script that proves a restored site
+still holds the synthetic business records. It is invoked by
+`runtime_install.py` for both `restore-verification` and
+`hardened-recovery-invariants`, and by `runtime_upgrade.py`. It zipped three
+positional lists — `students`, `applicants`, `enrollments` — without `strict=`
+and without any length check:
+
+```python
+for student, applicant, enrollment in zip(expected["students"],
+                                          expected["applicants"],
+                                          expected["enrollments"]):
+    ...per-record assertions...
+report["checks"].append({"name": "student-applicant-customer-enrollment-links",
+                         "status": "pass"})
+```
+
+If those lists disagreed in length, or any was empty, `zip()` stopped at the
+shortest and **the loop body never executed** — then the line immediately after
+the loop appended `status: "pass"` unconditionally. Reproduced directly:
+
+| | |
+|---|---|
+| records the verifier intended to check | 3 |
+| records it actually checked | **0** |
+| status it published | **pass** |
+
+This is the worst failure shape available to an evidence-producing gate. The
+published report from a verification that checked zero records is
+byte-for-byte indistinguishable from one that checked all of them, so a silently
+truncated restore would have been recorded in the acceptance ledger as *proven*.
+Every downstream claim resting on "restore verified" would have inherited the
+falsehood with no way to detect it.
+
+**Fixed** with three layers, because `strict=True` alone is not sufficient:
+
+1. `positional_record_count(expected)` — a pure, Frappe-free guard that rejects
+   empty *or* disagreeing lists and returns the count. Empty inputs matter:
+   `zip([], [], [], strict=True)` is silent and raises nothing, so the vacuous
+   case needs its own check.
+2. `strict=True` on the loop's zip, so a future length drift fails loudly even if
+   the guard were bypassed.
+3. `verified_records` counted inside the loop and reconciled against the expected
+   count, then published as `records_verified` — so the evidence now states how
+   many records it actually checked.
+
+`tests/foundation/test_restore_verification_guard.py` (11 tests) covers matching
+lists, each disagreeing permutation, all-empty, missing and `None` lists, the
+error message naming the offending counts, and the call-site contract. Proved
+load-bearing by mutation: dropping `strict=True`, moving the guard after the
+loop, and defining the guard without calling it each fail; restoring passes.
+
+**One test defect of mine was caught by this process and fixed.** The ordering
+assertion first matched the `def` line rather than the call site, so it passed
+regardless of where the call sat — mutation 2 exposed it. Matching the
+assignment instead makes it real.
+
+**Also hardened, not a defect:** `_xor()` in `tools/foundation/key_custody.py`
+already raised on mismatched share lengths; `strict=True` was added anyway so
+that key shares can never be combined partially if that check is ever removed.
+
+**Triaged and deliberately left alone** (the remaining `zip()` sites are correct
+as written): `audit_stack.py:142` is guarded by an explicit
+`len(results) != len(batch)` raise on the line above; the three `ast.Dict`
+`keys`/`values` zips in the finance and teaching tests are equal-length by AST
+construction; `native_checks.py:2958` builds row dicts from a report's own
+columns. The six `B023` findings in `native_checks.py` are immediate-invocation
+false positives — `check()` calls `fn()` before the next iteration, so no
+closure escapes its loop. Neither rule was enabled in the `E9,F` ruleset, since
+both would go red on false positives rather than on defects.
+
+691 → 702 tests.
+
+---
+
 ## 3. What remains
 
 ### 3.1 Engineer-executable — the largest item, now executed rather than asserted

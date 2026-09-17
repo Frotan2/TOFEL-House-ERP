@@ -171,7 +171,10 @@ def key_fingerprint(key):
 def _xor(left, right):
     if len(left) != len(right):
         raise ValueError("share lengths differ, so they cannot be combined")
-    return bytes(a ^ b for a, b in zip(left, right))
+    # strict=True is redundant with the check above and deliberately so: if that
+    # check were ever removed, a silent truncation here would corrupt key shares
+    # rather than fail. Key material must never be combined partially.
+    return bytes(a ^ b for a, b in zip(left, right, strict=True))
 
 
 def split_key(key):
