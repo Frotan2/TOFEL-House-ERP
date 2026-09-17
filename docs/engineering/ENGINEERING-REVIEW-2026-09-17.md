@@ -228,6 +228,82 @@ parsing, no Frappe import. Proved load-bearing — injecting one kind into
 reverting passes. It also pins the A13 invariant that every natively guarded
 DocType carries the *same* guard on all three lifecycle seams.
 
+### F9 — CRITICAL: the TLS edge could not decide the protocol-policy check, and lost the evidence that explained why
+
+**Pre-existing and undocumented.** `foundation-operational-boundaries.yml` failed
+at the same step with the same traceback on two consecutive session branches —
+run `35197870620` on `arena/01a0aafe-tofel-house-erp` and run `35214660151` on
+this one — so it is not caused by the F1 branch rotation, and no review, gap-map
+row or ledger note recorded it before this one.
+
+Both runs failed one check:
+
+```
+AssertionError: TLS protocol policy not enforced:
+{"reason": "no parseable evidence for: TLSv1, TLSv1.1",
+ "outcomes": {"TLSv1.2": "ACCEPTED", "TLSv1.3": "ACCEPTED", "SSLv3": "REFUSED",
+              "TLSv1": "NOT OBSERVABLE", "TLSv1.1": "NOT OBSERVABLE"}}
+```
+
+The assertion itself was **correct** and was left fail-closed. Two separate
+defects sat behind it.
+
+**Defect 1 — the evidence that explained the failure was never published.**
+In `tools/foundation/runtime_tls_edge.py` the client-verification step runs
+`probe.run("verify-tls-edge-as-a-real-client", …)`, which raises on a non-zero
+exit *before* the next line reads the inner `tls-checks-result.json`. The inner
+result was written and retained in the artifact zip, but never ingested. Both
+published reports therefore carried `verdicts keys: ['tailscale_boundary']`,
+`tls_protocol_policy: null` and `has client_checks: False` — precisely the
+per-protocol transcripts and `required_refusals_observed` structure built to
+separate "refused by the listener" from "rejected by the client, therefore not
+evidence" were the thing thrown away. The gate went red with no retrievable
+explanation, and diagnosing it required a runner we could not get.
+
+*Fix:* the call is wrapped, the inner result is ingested and
+`required_refusals_observed` populated **before** the exception is re-raised, so
+fail-closed behaviour is unchanged and the evidence survives the failure.
+`summarize_refusals()` tolerates a half-finished result and publishes
+`complete: false`, `protocols_with_no_evidence_at_all` and
+`client_side_refusal_reasons` instead of a quietly empty report.
+
+**Defect 2 — the observation was undecidable on the runner's OpenSSL.** The
+distribution crypto policy stops `openssl s_client` from offering TLS 1.0/1.1 at
+all, so the "refusal" was the client's own. `protocol_flag` correctly declined to
+count it as evidence about the server — a refusal that never reached the server
+says nothing about it — and the claim stayed unproven forever on that image.
+
+*Fix:* a policy-independent instrument. `tls_edge.build_legacy_client_hello()`
+and `tls_edge.parse_tls_record()` are pure (the module's docstring promises no
+network dependency and that contract is honoured); `legacy_protocol_outcome()`
+in `runtime_tls_edge_checks.py` does the socket I/O and offers one legacy
+protocol on a raw socket. `merge_legacy_observations()` folds the result back in
+and only ever upgrades an entry already `NOT OBSERVABLE` — it cannot manufacture
+an outcome. Alert 70 (`protocol_version`), 71 (`insufficient_security`) and 40
+(`handshake_failure`) count as server-attributable refusals; a `SERVER_HELLO`
+counts as a policy violation.
+
+**Verified against real TLS servers on loopback** — not mocked, and the negative
+control was run:
+
+| Listener under test | Probe result |
+| --- | --- |
+| `minimum_version=TLSv1_2` | TLS 1.0 / 1.1 → `ALERT / protocol_version / attributable_to_server=True`; SSLv3 → `ALERT / handshake_failure / True` |
+| `minimum_version=TLSv1` + `DEFAULT@SECLEVEL=0` | TLS 1.0 → `SERVER_HELLO / negotiated 0x030x01`; TLS 1.1 → `SERVER_HELLO / 0x030x02` |
+| closed port | `NO EVIDENCE / ConnectionRefusedError / attributable=False` — never a refusal |
+
+Replaying the exact outcomes run `35214660151` published, plus those raw
+observations, yields `POLICY ENFORCED` with `protocols_with_no_evidence == []`.
+A listener that genuinely accepts TLS 1.0 still resolves to `NOT PROVEN` with
+`policy_violations == ["TLSv1"]`.
+
+10 tests added in `tests/foundation/test_tls_edge_contract.py`
+(`LegacyProtocolObservabilityTests`, `ClientEvidencePublicationTests`), 665 → 675.
+**Limit:** the runner's own crypto policy could not be reproduced in the sandbox
+(OpenSSL 3.0.20 offers TLS 1.0/1.1 fine, and `-cipher DEFAULT@SECLEVEL=2` or
+`@SECLEVEL=0` does not change it), so the *client-capability* half of defect 2 is
+reasoned about, not reproduced. The raw-ClientHello path is verified end to end.
+
 ---
 
 ## 3. What remains

@@ -37,7 +37,14 @@ Boundary with the existing coverage: ``test_independent_recovery_contract.py`` a
 same pinned nginx template. Neither upgrades a release gate; the PASS comes from
 the hosted operational-boundary run, never from this file.
 """
+import os
+import socket
+import struct
+import subprocess
 import sys
+import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -559,6 +566,249 @@ class RollbackVerdict(unittest.TestCase):
     def test_empty_observations_fail_closed(self):
         self.assertEqual(edge.rollback_verdict("", "", "", "")["verdict"], "NOT PROVEN")
         self.assertEqual(edge.rollback_verdict("v1", "v1", "", "")["verdict"], "NOT PROVEN")
+
+
+class LegacyProtocolObservabilityTests(unittest.TestCase):
+    """A legacy-protocol refusal must be attributable to the listener, not the client.
+
+    Run 35214660151 (this branch) and its historical-provenance predecessor run
+    35197870620 on the prior session branch both failed the TLS edge at exactly one
+    check with
+    ``"reason": "no parseable evidence for: TLSv1, TLSv1.1"``: the distribution
+    crypto policy stops ``openssl s_client`` from even offering TLS 1.0, so the
+    refusal it reported was the client's own and said nothing about the listener.
+    The probe correctly refused to call that POLICY ENFORCED - but the claim stayed
+    unproven and the gate stayed red. These tests pin the policy-independent
+    instrument that resolves it, exercised against real TLS servers on loopback.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import ssl
+        cls.ssl = ssl
+        cls.edge = edge
+        # Only the module-level helpers are needed; nothing here starts a check.
+        source = (ROOT / "tools/foundation/runtime_tls_edge_checks.py").read_text(encoding="utf-8")
+        namespace = {"edge": edge, "socket": socket, "struct": struct, "os": os}
+        exec(compile(source[source.index("def legacy_protocol_outcome("):
+                            source.index("def pem_to_der_sha256(")], "probe", "exec"), namespace)
+        # staticmethod: a bare function assigned to a class attribute would be
+        # bound, silently shifting every argument one place to the right.
+        cls.probe = staticmethod(namespace["legacy_protocol_outcome"])
+        cls.certificate = cls._write_certificate()
+
+    @staticmethod
+    def _write_certificate():
+        directory = Path(tempfile.mkdtemp(prefix="toefl-house-tls-"))
+        certificate = directory / "cert.pem"
+        key = directory / "key.pem"
+        subprocess.run(
+            ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-keyout", str(key),
+             "-out", str(certificate), "-days", "1", "-nodes", "-subj", "/CN=probe.test",
+             "-addext", "subjectAltName=DNS:probe.test"],
+            capture_output=True, check=True, timeout=120)
+        return certificate
+
+    def _serve(self, minimum_version, ciphers=None):
+        context = self.ssl.SSLContext(self.ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(str(self.certificate),
+                                str(self.certificate.parent / "key.pem"))
+        context.minimum_version = minimum_version
+        if ciphers:
+            context.set_ciphers(ciphers)
+        server = socket.socket()
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(("127.0.0.1", 0))
+        port = server.getsockname()[1]
+        server.listen(8)
+
+        def accept():
+            for _ in range(6):
+                try:
+                    connection, _ = server.accept()
+                except OSError:
+                    return
+                try:
+                    with context.wrap_socket(connection, server_side=True) as tls:
+                        tls.recv(16)
+                except Exception:  # noqa: BLE001 - a refused handshake is the point
+                    try:
+                        connection.close()
+                    except OSError:
+                        pass
+
+        threading.Thread(target=accept, daemon=True).start()
+        time.sleep(0.5)
+        self.addCleanup(server.close)
+        return port
+
+    def test_a_listener_that_refuses_legacy_versions_is_observed_refusing(self):
+        port = self._serve(self.ssl.TLSVersion.TLSv1_2)
+        for protocol, expected_alert in (("TLSv1", "protocol_version"),
+                                         ("TLSv1.1", "protocol_version")):
+            with self.subTest(protocol=protocol):
+                observation = self.probe("127.0.0.1", port, protocol)
+                self.assertEqual(observation["outcome"], "ALERT")
+                self.assertEqual(observation["alert_description"], expected_alert)
+                self.assertTrue(observation["refusal_attributable_to_server"],
+                                "the refusal was not attributed to the listener")
+
+    def test_a_listener_that_accepts_legacy_versions_is_observed_accepting(self):
+        """The negative control: an accepting listener must not read as refused."""
+        port = self._serve(self.ssl.TLSVersion.TLSv1, ciphers="DEFAULT@SECLEVEL=0")
+        observation = self.probe("127.0.0.1", port, "TLSv1")
+        self.assertEqual(observation["outcome"], "SERVER_HELLO")
+        self.assertEqual(observation["negotiated_version"], "0x030x01")
+        self.assertFalse(observation["refusal_attributable_to_server"])
+
+    def test_an_unreachable_listener_is_no_evidence_and_never_a_refusal(self):
+        closed = socket.socket()
+        closed.bind(("127.0.0.1", 0))
+        port = closed.getsockname()[1]
+        closed.close()
+        observation = self.probe("127.0.0.1", port, "TLSv1")
+        self.assertEqual(observation["outcome"], "NO EVIDENCE")
+        self.assertFalse(observation["refusal_attributable_to_server"])
+
+    def test_the_recorded_runner_state_resolves_to_policy_enforced(self):
+        """Replay the exact outcomes run 35214660151 published."""
+        attempts = {
+            "TLSv1.2": {"protocol_found": True, "cipher_found": True,
+                        "handshake_completed": True, "verification_succeeded": True,
+                        "protocol": "TLSv1.2", "cipher": "ECDHE-RSA-AES256-GCM-SHA384"},
+            "TLSv1.3": {"protocol_found": True, "cipher_found": True,
+                        "handshake_completed": True, "verification_succeeded": True,
+                        "protocol": "TLSv1.3", "cipher": "TLS_AES_256_GCM_SHA384"},
+            "SSLv3": {"protocol_found": False, "refused": True, "handshake_completed": False,
+                      "refusal_attributable_to_server": True, "refusal_reason": "alert"},
+            "TLSv1": {"protocol_found": False, "refused": True, "handshake_completed": False,
+                      "refusal_attributable_to_server": False,
+                      "refusal_reason": "client crypto policy"},
+            "TLSv1.1": {"protocol_found": False, "refused": True, "handshake_completed": False,
+                        "refusal_attributable_to_server": False,
+                        "refusal_reason": "client crypto policy"},
+        }
+        verdict = edge.protocol_policy_verdict(attempts)
+        self.assertEqual(verdict["verdict"], "NOT PROVEN")
+        self.assertEqual(sorted(verdict["protocols_with_no_evidence"]), ["TLSv1", "TLSv1.1"])
+
+        raw = {protocol: {"protocol": protocol, "instrument": "raw ClientHello",
+                          "outcome": "ALERT", "alert_description": "protocol_version",
+                          "refusal_attributable_to_server": True}
+               for protocol in ("TLSv1", "TLSv1.1")}
+        resolved = edge.merge_legacy_observations(verdict, raw)
+        self.assertEqual(resolved["verdict"], "POLICY ENFORCED", resolved["reason"])
+        self.assertEqual(resolved["protocols_with_no_evidence"], [])
+        for protocol in ("TLSv1", "TLSv1.1"):
+            self.assertEqual(resolved["per_protocol"][protocol]["outcome"], "REFUSED")
+            self.assertEqual(resolved["per_protocol"][protocol]["resolved_by"],
+                             "raw ClientHello")
+
+    def test_the_merge_never_softens_a_policy_violation(self):
+        """A listener that actually accepts TLS 1.0 must stay a violation."""
+        attempts = {
+            "TLSv1.2": {"protocol_found": True, "cipher_found": True,
+                        "handshake_completed": True, "verification_succeeded": True},
+            "TLSv1.3": {"protocol_found": True, "cipher_found": True,
+                        "handshake_completed": True, "verification_succeeded": True},
+            "SSLv3": {"protocol_found": False, "refused": True, "handshake_completed": False,
+                      "refusal_attributable_to_server": True},
+            "TLSv1": {"protocol_found": True, "cipher_found": True,
+                      "handshake_completed": True, "verification_succeeded": True},
+            "TLSv1.1": {"protocol_found": False, "refused": True, "handshake_completed": False,
+                        "refusal_attributable_to_server": False},
+        }
+        verdict = edge.protocol_policy_verdict(attempts)
+        self.assertEqual(verdict["verdict"], "NOT PROVEN")
+        self.assertIn("TLSv1", verdict["policy_violations"])
+        raw = {"TLSv1": {"outcome": "SERVER_HELLO", "refusal_attributable_to_server": False,
+                         "instrument": "raw ClientHello"},
+               "TLSv1.1": {"outcome": "ALERT", "alert_description": "protocol_version",
+                           "refusal_attributable_to_server": True,
+                           "instrument": "raw ClientHello"}}
+        resolved = edge.merge_legacy_observations(verdict, raw)
+        # The unobservable entry resolves, but the real violation must survive it.
+        self.assertEqual(resolved["verdict"], "NOT PROVEN")
+        self.assertEqual(resolved["policy_violations"], ["TLSv1"])
+        self.assertEqual(resolved["per_protocol"]["TLSv1"]["outcome"], "ACCEPTED")
+        self.assertEqual(resolved["per_protocol"]["TLSv1.1"]["outcome"], "REFUSED")
+        self.assertEqual(resolved["protocols_with_no_evidence"], [])
+
+    def test_an_unresolved_raw_probe_stays_not_observable(self):
+        attempts = {
+            "TLSv1.2": {"protocol_found": True, "cipher_found": True,
+                        "handshake_completed": True, "verification_succeeded": True},
+            "TLSv1.3": {"protocol_found": True, "cipher_found": True,
+                        "handshake_completed": True, "verification_succeeded": True},
+            "SSLv3": {"protocol_found": False, "refused": True, "handshake_completed": False,
+                      "refusal_attributable_to_server": True},
+            "TLSv1": {"protocol_found": False, "refused": True, "handshake_completed": False,
+                      "refusal_attributable_to_server": False},
+            "TLSv1.1": {"protocol_found": False, "refused": True, "handshake_completed": False,
+                        "refusal_attributable_to_server": False},
+        }
+        verdict = edge.protocol_policy_verdict(attempts)
+        raw = {"TLSv1": {"outcome": "NO EVIDENCE", "error": "ConnectionRefusedError",
+                         "instrument": "raw ClientHello"}}
+        resolved = edge.merge_legacy_observations(verdict, raw)
+        self.assertEqual(resolved["verdict"], "NOT PROVEN")
+        self.assertIn("TLSv1", resolved["protocols_with_no_evidence"])
+        self.assertEqual(resolved["per_protocol"]["TLSv1"]["still_unresolved_because"],
+                         "NO EVIDENCE")
+
+
+class ClientEvidencePublicationTests(unittest.TestCase):
+    """A failing client run must still publish its own evidence.
+
+    Both failing runs published a report whose ``verdicts`` held only the Tailscale
+    boundary, because ``probe.run`` raised before the inner result file was read -
+    so the per-protocol transcripts that explained the failure stayed on the
+    ephemeral runner and could not be retrieved.
+    """
+
+    def setUp(self):
+        self.source = (ROOT / "tools/foundation/runtime_tls_edge.py").read_text(encoding="utf-8")
+
+    def test_the_inner_result_is_ingested_before_the_failure_is_raised(self):
+        ingest = self.source.index('report["client_checks"] = verified["checks"]')
+        raise_ = self.source.index("raise client_error")
+        call = self.source.index('probe.run("verify-tls-edge-as-a-real-client"')
+        self.assertLess(call, ingest, "the client result is still read after the call")
+        self.assertLess(ingest, raise_, "the evidence is not kept before the failure propagates")
+        self.assertIn("except Exception as exc:", self.source[call:raise_])
+
+    def test_a_missing_client_result_is_reported_rather_than_silently_empty(self):
+        self.assertIn("ABSENT: the client probe produced no result file", self.source)
+
+    def test_the_refusal_summary_tolerates_a_half_finished_run(self):
+        source = (ROOT / "tools/foundation/runtime_tls_edge.py").read_text(encoding="utf-8")
+        start = source.index("def summarize_refusals(")
+        end = source.index("def main()")
+        namespace = {}
+        exec(compile(source[start:end], "summarize", "exec"), namespace)
+        summary = namespace["summarize_refusals"]({
+            "tls_protocol_policy": {"per_protocol": {
+                "TLSv1": {"outcome": "NOT OBSERVABLE", "reason": "client crypto policy"},
+                "SSLv3": {"outcome": "REFUSED"}}}})
+        self.assertEqual(summary["protocols_rejected_by_the_listener"], ["SSLv3"])
+        self.assertEqual(summary["protocols_rejected_by_the_client_and_therefore_not_evidence"],
+                         ["TLSv1"])
+        self.assertEqual(summary["client_side_refusal_reasons"],
+                         {"TLSv1": "client crypto policy"})
+        self.assertFalse(summary["complete"], "a half-finished run must not claim completeness")
+
+    def test_a_complete_run_reports_complete(self):
+        source = (ROOT / "tools/foundation/runtime_tls_edge.py").read_text(encoding="utf-8")
+        namespace = {}
+        exec(compile(source[source.index("def summarize_refusals("):source.index("def main()")],
+                     "summarize", "exec"), namespace)
+        summary = namespace["summarize_refusals"]({
+            "tls_protocol_policy": {"per_protocol": {"TLSv1": {"outcome": "REFUSED"}}},
+            "certificate_verification": {"verify_return_code_without_ca": 20,
+                                         "wrong_name_verify_return_code": 62}})
+        self.assertTrue(summary["complete"])
+        self.assertEqual(summary["unrelated_ca_rejected"], 20)
+        self.assertEqual(summary["hostname_mismatch_rejected"], 62)
 
 
 if __name__ == "__main__":

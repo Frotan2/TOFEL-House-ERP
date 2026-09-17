@@ -20,6 +20,7 @@ classifies that as ENVIRONMENT-BLOCKED and reports only what is genuinely
 observable - which addresses the listener is bound to.
 """
 import re
+import struct
 
 CA_COMMON_NAME = "Foundation Operational Boundary Test CA"
 EDGE_HOST = "edge.foundation.internal"
@@ -134,6 +135,73 @@ def protocol_flag(protocol):
         "SSLv3": "-ssl3", "TLSv1": "-tls1", "TLSv1.1": "-tls1_1",
         "TLSv1.2": "-tls1_2", "TLSv1.3": "-tls1_3",
     }[protocol]
+
+
+#: Record/handshake version words for the protocols a client library may refuse to
+#: offer. Ubuntu 24.04's OpenSSL is built with a system crypto policy that will not
+#: even construct a TLS 1.0 ClientHello, so ``s_client -tls1`` fails client-side and
+#: proves nothing about the listener - which is exactly what runs 35197870620 and
+#: 35214660151 recorded as NOT OBSERVABLE.
+LEGACY_VERSION_WORDS = {"SSLv3": (0x03, 0x00), "TLSv1": (0x03, 0x01), "TLSv1.1": (0x03, 0x02)}
+
+#: Cipher suites a permissive legacy listener would plausibly accept. Offering
+#: several means an ACCEPTED result cannot be blamed on offering one exotic suite.
+LEGACY_CIPHER_SUITES = (0x002F, 0x0035, 0x000A, 0x0005, 0x009C, 0x009D)
+
+TLS_ALERT_DESCRIPTIONS = {
+    0x0A: "unexpected_message", 0x14: "bad_record_mac", 0x28: "handshake_failure",
+    0x2A: "decode_error", 0x32: "certificate_unknown", 0x46: "protocol_version",
+    0x47: "insufficient_security", 0x50: "internal_error", 0x5A: "user_canceled",
+    0x64: "no_application_protocol",
+}
+
+
+def build_legacy_client_hello(protocol, random_bytes=None):
+    """A minimal, dependency-free ClientHello for a protocol version.
+
+    This is a fixed byte layout, not cryptography: no key material, no signing and
+    nothing secret. It exists only so the probe can *offer* a version its own TLS
+    library may be forbidden to offer, which turns "the client refused" into an
+    observation about the listener.
+    """
+    major, minor = LEGACY_VERSION_WORDS[protocol]
+    body = bytes((major, minor))
+    if random_bytes is None:
+        raise ValueError("random_bytes is required: this module performs no I/O")
+    body += random_bytes
+    body += b"\x00"                                    # no session id
+    suites = b"".join(struct.pack("!H", suite) for suite in LEGACY_CIPHER_SUITES)
+    body += struct.pack("!H", len(suites)) + suites
+    body += b"\x01\x00"                                # one compression method: null
+    handshake = b"\x01" + struct.pack("!I", len(body))[1:] + body
+    return bytes((0x16, major, minor)) + struct.pack("!H", len(handshake)) + handshake
+
+
+def parse_tls_record(header, payload):
+    """Classify the first record a listener sends back."""
+    if len(header) < 5:
+        return {"outcome": "NO EVIDENCE", "detail": "connection closed before any record",
+                "bytes_read": len(header)}
+    content_type, major, minor = header[0], header[1], header[2]
+    length = struct.unpack("!H", header[3:5])[0]
+    record = {"record_type": content_type, "record_version": f"{major:#04x}{minor:#04x}",
+              "record_length": length, "bytes_read": len(payload)}
+    if content_type == 0x15 and len(payload) >= 2:
+        level, description = payload[0], payload[1]
+        record.update({
+            "outcome": "ALERT", "alert_level": "fatal" if level == 2 else "warning",
+            "alert_description_code": description,
+            "alert_description": TLS_ALERT_DESCRIPTIONS.get(description, "unknown"),
+            # protocol_version (70) and insufficient_security (71) are the listener
+            # declining THIS version; anything else is a different failure.
+            "refusal_attributable_to_server": description in (0x46, 0x47, 0x28),
+        })
+        return record
+    if content_type == 0x16 and len(payload) >= 6 and payload[0] == 0x02:
+        return dict(record, outcome="SERVER_HELLO",
+                    negotiated_version=f"{payload[4]:#04x}{payload[5]:#04x}",
+                    refusal_attributable_to_server=False)
+    return dict(record, outcome="UNEXPECTED", refusal_attributable_to_server=False)
 
 
 def nginx_tls_conf(*, lab, bench_dir, site, http_port, https_port, backend_port,
@@ -449,6 +517,11 @@ def protocol_policy_verdict(observed):
             "verify_return_code": report.get("verify_return_code"),
             "matches_policy": negotiated == expected_allowed,
         }
+    return finalize_protocol_verdict(per_protocol)
+
+
+def finalize_protocol_verdict(per_protocol):
+    """Turn per-protocol observations into the policy verdict."""
     unevidenced = [name for name, value in per_protocol.items()
                    if value["outcome"] in ("NO EVIDENCE", "NOT OBSERVABLE")]
     mismatches = [name for name, value in per_protocol.items()
@@ -467,6 +540,46 @@ def protocol_policy_verdict(observed):
                          if unevidenced else
                          "policy violated by: " + ", ".join(sorted(mismatches)))),
     }
+
+
+def merge_legacy_observations(verdict, raw_observations):
+    """Resolve NOT OBSERVABLE entries using the policy-independent instrument.
+
+    ``openssl s_client -tls1`` on a distribution whose crypto policy forbids TLS 1.0
+    never reaches the listener, so the refusal it reports is the *client's* and says
+    nothing about the server. A raw ClientHello has no such policy, so its answer is
+    about the listener. This only ever upgrades an entry that was already
+    NOT OBSERVABLE: it cannot soften a REFUSED, an ACCEPTED or a policy violation,
+    and it never invents an outcome when the raw probe also got no evidence.
+    """
+    per_protocol = dict(verdict["per_protocol"])
+    for protocol, observation in raw_observations.items():
+        entry = per_protocol.get(protocol)
+        if entry is None or entry.get("outcome") != "NOT OBSERVABLE":
+            continue
+        outcome = observation.get("outcome")
+        expected_allowed = protocol in ALLOWED_PROTOCOLS
+        if outcome == "ALERT" and observation.get("refusal_attributable_to_server"):
+            resolved, negotiated = "REFUSED", False
+        elif outcome == "SERVER_HELLO":
+            resolved, negotiated = "ACCEPTED", True
+        else:
+            entry = dict(entry, still_unresolved_because=observation.get("outcome"),
+                         raw_error=observation.get("error"))
+            per_protocol[protocol] = entry
+            continue
+        per_protocol[protocol] = {
+            **entry,
+            "outcome": resolved,
+            "negotiated": negotiated,
+            "matches_policy": negotiated == expected_allowed,
+            "resolved_by": observation.get("instrument"),
+            "alert_description": observation.get("alert_description"),
+            "negotiated_version": observation.get("negotiated_version"),
+            "reason": None,
+        }
+    return finalize_protocol_verdict(per_protocol)
+
 
 
 def trust_verdict(with_ca, without_ca, wrong_name_ca=None):

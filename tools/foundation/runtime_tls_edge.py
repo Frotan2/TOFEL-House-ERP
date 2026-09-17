@@ -96,6 +96,38 @@ def listening_sockets():
     return rows
 
 
+def summarize_refusals(verdicts):
+    """Surface the negative controls, tolerating a result that stopped halfway.
+
+    A client run that fails at the protocol matrix never produces a
+    certificate-verification verdict, and the summary still has to be publishable -
+    a partial explanation is better than none, as long as it says it is partial.
+    """
+    protocol_verdict = verdicts.get("tls_protocol_policy") or {}
+    per_protocol = protocol_verdict.get("per_protocol", {})
+    trust = verdicts.get("certificate_verification") or {}
+    summary = {
+        "protocols_rejected_by_the_listener": sorted(
+            name for name, entry in per_protocol.items() if entry.get("outcome") == "REFUSED"),
+        "protocols_rejected_by_the_client_and_therefore_not_evidence": sorted(
+            name for name, entry in per_protocol.items() if entry.get("outcome") == "NOT OBSERVABLE"),
+        "protocols_with_no_evidence_at_all": sorted(
+            name for name, entry in per_protocol.items() if entry.get("outcome") == "NO EVIDENCE"),
+        "unrelated_ca_rejected": trust.get("verify_return_code_without_ca"),
+        "hostname_mismatch_rejected": trust.get("wrong_name_verify_return_code"),
+        "complete": bool(per_protocol) and bool(trust),
+        "note": ("Each refusal is observed, not assumed. A refusal caused by the client's own "
+                 "OpenSSL policy is listed separately, because it says nothing about the "
+                 "listener. complete=false means the client run stopped before every control "
+                 "was exercised."),
+    }
+    reasons = {name: entry.get("reason") for name, entry in per_protocol.items()
+               if entry.get("reason")}
+    if reasons:
+        summary["client_side_refusal_reasons"] = reasons
+    return summary
+
+
 def main() -> int:
     require_hosted_runner()
     components = load_components()
@@ -288,45 +320,48 @@ def main() -> int:
                                "boundary: " + json.dumps(shape))
 
         # --- Client-side verification, by two independent TLS implementations ---
+        # The inner result is ingested BEFORE the failure is re-raised. `probe.run`
+        # raises on a non-zero exit, so reading the file afterwards means a failing
+        # client run publishes none of its own evidence - which is exactly backwards,
+        # because the failure case is the only one that needs explaining. Runs
+        # 35197870620 and 35214660151 both failed here and both published a report
+        # whose `verdicts` held only the Tailscale boundary, so the per-protocol
+        # transcripts that would have said why stayed on the ephemeral runner.
         checks_result = EVIDENCE / "tls-checks-result.json"
-        probe.run("verify-tls-edge-as-a-real-client",
-                  [str(bench_dir / "env/bin/python"),
-                   str(ROOT / "tools/foundation/runtime_tls_edge_checks.py"), SITE],
-                  cwd=bench_dir / "sites", timeout=1200,
-                  env={"FOUNDATION_TLS_EDGE_CERTS": str(certs),
-                       "FOUNDATION_TLS_EDGE_HTTP_PORT": "8080",
-                       "FOUNDATION_TLS_EDGE_HTTPS_PORT": "8443",
-                       "FOUNDATION_TLS_EDGE_MANIFEST": str(manifest),
-                       "FOUNDATION_TLS_EDGE_CHECKS_RESULT": str(checks_result),
-                       "FOUNDATION_ADMIN_PASSWORD": admin_password})
-        verified = json.loads(checks_result.read_text())
-        report["client_checks"] = verified["checks"]
-        report["verdicts"]["tls_protocol_policy"] = verified["verdicts"]["tls_protocol_policy"]
-        report["verdicts"]["certificate_verification"] = \
-            verified["verdicts"]["certificate_verification"]
+        client_error = None
+        try:
+            probe.run("verify-tls-edge-as-a-real-client",
+                      [str(bench_dir / "env/bin/python"),
+                       str(ROOT / "tools/foundation/runtime_tls_edge_checks.py"), SITE],
+                      cwd=bench_dir / "sites", timeout=1200,
+                      env={"FOUNDATION_TLS_EDGE_CERTS": str(certs),
+                           "FOUNDATION_TLS_EDGE_HTTP_PORT": "8080",
+                           "FOUNDATION_TLS_EDGE_HTTPS_PORT": "8443",
+                           "FOUNDATION_TLS_EDGE_MANIFEST": str(manifest),
+                           "FOUNDATION_TLS_EDGE_CHECKS_RESULT": str(checks_result),
+                           "FOUNDATION_ADMIN_PASSWORD": admin_password})
+        except Exception as exc:  # noqa: BLE001 - re-raised after the evidence is kept
+            client_error = exc
+        verified = None
+        if checks_result.exists():
+            verified = json.loads(checks_result.read_text())
+            report["client_checks"] = verified["checks"]
+            for key in ("tls_protocol_policy", "certificate_verification"):
+                if key in verified.get("verdicts", {}):
+                    report["verdicts"][key] = verified["verdicts"][key]
+            report["required_refusals_observed"] = summarize_refusals(report["verdicts"])
+        else:
+            report["client_checks_evidence"] = (
+                "ABSENT: the client probe produced no result file, so no per-protocol "
+                "evidence exists to publish.")
+        if client_error is not None:
+            raise client_error
         if verified["status"] != "pass":
             failed = [check["name"] for check in verified["checks"] if check["status"] == "fail"]
             raise RuntimeError("TLS edge checks did not pass: " + json.dumps(failed))
         for required in ("POLICY ENFORCED", "VERIFICATION ENFORCED"):
             if required not in json.dumps(report["verdicts"]):
                 raise RuntimeError("Required verdict missing from the client result: " + required)
-        # The negative controls are what make the positive results meaningful, so
-        # they are surfaced from the verdicts rather than left inside the detail.
-        protocol_verdict = report["verdicts"]["tls_protocol_policy"]
-        trust = report["verdicts"]["certificate_verification"]
-        report["required_refusals_observed"] = {
-            "protocols_rejected_by_the_listener": sorted(
-                name for name, entry in protocol_verdict["per_protocol"].items()
-                if entry["outcome"] == "REFUSED"),
-            "protocols_rejected_by_the_client_and_therefore_not_evidence": sorted(
-                name for name, entry in protocol_verdict["per_protocol"].items()
-                if entry["outcome"] == "NOT OBSERVABLE"),
-            "unrelated_ca_rejected": trust["verify_return_code_without_ca"],
-            "hostname_mismatch_rejected": trust["wrong_name_verify_return_code"],
-            "note": ("Each refusal is observed, not assumed. A refusal caused by the client's own "
-                     "OpenSSL policy would be listed separately, because it says nothing about the "
-                     "listener."),
-        }
 
         # --- No key material may reach the published evidence ---
         needles = ["BEGIN PRIVATE KEY", "BEGIN RSA PRIVATE KEY", "BEGIN CERTIFICATE REQUEST",

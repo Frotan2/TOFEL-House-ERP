@@ -33,6 +33,7 @@ import os
 from pathlib import Path
 import socket
 import ssl
+import struct
 import subprocess
 import sys
 import time
@@ -46,6 +47,36 @@ SITE = edge.EDGE_HOST
 WRONG_HOST = edge.WRONG_HOST
 PRIVATE_FILE = "tls-edge-private.txt"
 PUBLIC_FILE = "tls-edge-public.txt"
+
+
+def legacy_protocol_outcome(host, port, protocol, timeout=20):
+    """Offer one legacy protocol on a raw socket and report what came back.
+
+    Lives here rather than in ``tls_edge.py`` because that module is deliberately
+    free of network dependency; the byte layout and the record parser it uses are
+    the pure, unit-tested halves.
+    """
+    observation = {"protocol": protocol, "instrument": "raw ClientHello (policy-independent)",
+                   "offered": True}
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout) as plain:
+            plain.sendall(edge.build_legacy_client_hello(protocol, os.urandom(32)))
+            plain.settimeout(timeout)
+            header = plain.recv(5)
+            payload = b""
+            if len(header) == 5:
+                want = min(struct.unpack("!H", header[3:5])[0], 512)
+                while len(payload) < want:
+                    chunk = plain.recv(want - len(payload))
+                    if not chunk:
+                        break
+                    payload += chunk
+    except (OSError, socket.timeout) as exc:
+        observation.update({"outcome": "NO EVIDENCE", "error": f"{type(exc).__name__}: {exc}",
+                            "refusal_attributable_to_server": False})
+        return observation
+    observation.update(edge.parse_tls_record(header, payload))
+    return observation
 
 
 def pem_to_der_sha256(path):
@@ -235,6 +266,19 @@ def main() -> int:
             parsed["exit_code"] = attempt["exit_code"]
             attempts[protocol] = parsed
         verdict = edge.protocol_policy_verdict(attempts)
+        # A distribution crypto policy can stop s_client from even offering TLS 1.0
+        # and 1.1, which yields NOT OBSERVABLE rather than a refusal. Runs
+        # 35197870620 and 35214660151 both stopped there. A raw ClientHello has no
+        # such policy, so it can attribute the answer to the listener. This only
+        # ever resolves an entry that was already NOT OBSERVABLE.
+        raw_observations = {}
+        for protocol in verdict["protocols_with_no_evidence"]:
+            if protocol in edge.LEGACY_VERSION_WORDS:
+                raw_observations[protocol] = legacy_protocol_outcome(
+                    SITE, https_port, protocol)
+        if raw_observations:
+            result["verdicts"]["tls_protocol_raw_client_hello"] = raw_observations
+            verdict = edge.merge_legacy_observations(verdict, raw_observations)
         result["verdicts"]["tls_protocol_policy"] = verdict
         result["verdicts"]["tls_protocol_attempts"] = attempts
         if verdict["verdict"] != "POLICY ENFORCED":
@@ -243,6 +287,7 @@ def main() -> int:
                  "outcomes": {k: v["outcome"] for k, v in verdict["per_protocol"].items()}}))
         return {"policy": verdict["verdict"], "reason": verdict["reason"],
                 "outcomes": {k: v["outcome"] for k, v in verdict["per_protocol"].items()},
+                "resolved_by_raw_client_hello": sorted(raw_observations),
                 "ciphers": {k: v.get("cipher") for k, v in attempts.items()}}
 
     check("tls-protocol-policy-enforced-at-the-listener", _protocol_matrix)
