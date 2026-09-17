@@ -313,6 +313,24 @@ def main() -> int:
         probe.run("restore-migrate", [str(bench), "--site", SITE, "migrate"],
                   cwd=bench_dir, timeout=1800)
         report["restored_into_a_separate_database"] = True
+        # ``bench restore --admin-password`` did NOT apply the password here: hosted
+        # run 35168996127 restored and verified successfully, then HTTP login
+        # returned 401. On the restore path frappe's install_db only stashes the
+        # value in frappe.conf, and install_app is not forced when the dump already
+        # lists the app, so nothing writes it to the Administrator user. The
+        # restored Administrator therefore still carries the SOURCE's password -
+        # which never travelled with the backup, as it must not. The target sets its
+        # own with the native command instead, so recovery needs no source
+        # credential at all.
+        probe.run("set-admin-password-on-recovered-site",
+                  [str(bench), "--site", SITE, "set-admin-password", admin_password],
+                  cwd=bench_dir, timeout=600)
+        report["admin_credential_is_the_targets_own"] = {
+            "source_admin_password_transferred": False,
+            "set_with_native_command": "bench set-admin-password",
+            "reason": ("The backup carries the source's password hash but not its plaintext, so "
+                       "the recovering system establishes its own credential."),
+        }
         # ``bench restore`` accepts ``--encryption-key``, and it is deliberately
         # not used. Supplying it would require the source key to travel with the
         # artifact in plaintext, which the secret policy forbids. Recorded here so

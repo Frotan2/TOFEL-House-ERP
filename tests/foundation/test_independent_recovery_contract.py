@@ -426,6 +426,22 @@ class RecoveryMechanismTests(unittest.TestCase):
         self.assertIn('"--admin-password"', TARGET)
         self.assertIn('"restore-migrate"', TARGET)
 
+    def test_the_target_sets_its_own_admin_credential_with_the_native_command(self):
+        """``bench restore --admin-password`` does not apply on the restore path:
+        hosted run 35168996127 restored and verified, then login returned 401."""
+        self.assertIn('"set-admin-password", admin_password', TARGET)
+        self.assertIn("set-admin-password-on-recovered-site", TARGET)
+        self.assertIn("returned 401", TARGET)
+        self.assertIn('report["admin_credential_is_the_targets_own"]', TARGET)
+
+    def test_no_source_credential_is_needed_to_recover(self):
+        self.assertIn('"source_admin_password_transferred": False', TARGET)
+        self.assertNotIn("site_config", " ".join(target.EXPECTED_PAYLOAD))
+
+    def test_the_credential_is_set_before_usability_is_proven(self):
+        self.assertLess(TARGET.index("set-admin-password-on-recovered-site"),
+                        TARGET.index("prove-recovered-application-usable-over-http"))
+
     def test_restore_is_not_given_the_source_encryption_key(self):
         """The native option exists and is deliberately not used."""
         start = TARGET.index('"restore-database-and-files"')
