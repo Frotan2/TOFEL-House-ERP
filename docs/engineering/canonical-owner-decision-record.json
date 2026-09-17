@@ -3,7 +3,7 @@
   "record_id": "TOFEL-HOUSE-OWNER-DECISIONS",
   "record_date": "2026-09-16",
   "authority": "Owner decisions supplied in the current engineering conversation; this record is the canonical repository representation.",
-  "active_branch": "arena/01a0aafe-tofel-house-erp",
+  "active_branch": "arena/01a0aef4-tofel-house-erp",
   "production_state": "REJECT",
   "business_authorities": {
     "system_owner": "Course Owner",
@@ -84,7 +84,8 @@
     "Numeric capacity and availability objectives.",
     "Future internet-hosted provider, hostname, DNS, and public-edge selection.",
     "Future off-site backup destination.",
-    "Deferred academic grading/progression, advanced guardian, calendar/transfer, tax, refund-term, and metrics-steward policies already recorded in OWNER-DECISIONS.md."
+    "Deferred academic grading/progression, advanced guardian, calendar/transfer, tax, refund-term, and metrics-steward policies already recorded in OWNER-DECISIONS.md.",
+    "Product license selection (D11); the declared app metadata, the README statement and the absent LICENSE file are inconsistent and are not reconciled by engineering."
   ],
   "source_documents": [
     "docs/engineering/PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md",
@@ -219,6 +220,22 @@
       "decision": "ROLE-BASED PAGES WITHOUT NEW AUTHORITY",
       "scope": "Staff command Pages use existing guarded endpoints; the Course Owner/General Manager control centre is a separate native-authority navigation/attention surface.",
       "consequence": "13 command Pages are qualified; control centre has local contract proof."
+    },
+    {
+      "id": "D11",
+      "decision": "NOT SELECTED - OWNER DECISION REQUIRED",
+      "scope": "Product license for the owned code (apps/toefl_house, apps/foundation_security, tools/, tests/). Engineering may not select a license: it is a legal grant, it is effectively irreversible once published, and it interacts with the upstream Frappe/ERPNext/Education/HRMS terms this product links against.",
+      "consequence": "Recorded as an open owner decision. No license file is added and no license header is applied. The declared-metadata inconsistency found in the 2026-09-17 review is documented, not resolved by engineering: both hooks.py files declare app_license = \"MIT\", the README states no product license has been selected, no LICENSE file exists in the repository, and GitHub reports the repository license as null.",
+      "options": "(a) MIT - matches the existing hooks.py declaration; (b) a copyleft license, which must be checked against the upstream apps' terms; (c) proprietary/all-rights-reserved - then the hooks.py declaration is wrong and must be corrected; (d) keep unlicensed. Whichever is selected, the hooks.py declaration, the README statement, a repository LICENSE file and the upstream compatibility note must be made consistent in the same change.",
+      "unblocks": "Distribution of the owned application outside this repository."
     }
-  ]
+  ],
+  "licensing": {
+    "state": "NOT SELECTED",
+    "recorded": "2026-09-17",
+    "declared_in_app_metadata": "MIT (apps/toefl_house/toefl_house/hooks.py, apps/foundation_security/foundation_security/hooks.py)",
+    "repository_license_file": "absent",
+    "readme_statement": "No product license has been selected yet.",
+    "engineering_action": "None taken. Selecting or removing a license grant is an owner decision (D11)."
+  }
 }

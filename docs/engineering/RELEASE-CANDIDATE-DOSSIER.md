@@ -1,6 +1,6 @@
 # TOEFL House ERP — Release Candidate Dossier
 
-Date: 2026-09-16 · Active branch: `arena/01a0aafe-tofel-house-erp`
+Date: 2026-09-16 · Active branch: `arena/01a0aef4-tofel-house-erp`
 **Production: REJECT.** This dossier consolidates the evidence index
 for Release Candidate status of the *implemented* product surface.
 RC definition (from the Release Gap Map): every engineer-executable gap

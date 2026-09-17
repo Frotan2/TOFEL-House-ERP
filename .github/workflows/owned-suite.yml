@@ -1,0 +1,88 @@
+name: Owned suite
+
+# The single gate for everything this repository owns and can verify without a
+# site, a database or Docker: the whole Python test tree, both Node suites, the
+# D8 contract validator and static analysis.
+#
+# Every other workflow here is path-filtered to the tooling it qualifies, so
+# before this gate existed there was no run that exercised the whole owned
+# suite. A change under apps/** did not run tests/d8; a change under tools/**
+# did not run the domain suites. Nothing in this job claims native runtime
+# qualification, production readiness or a gate change - production stays
+# REJECT and D8 stays BLOCKED regardless of the colour of this check.
+on:
+  push:
+    branches: [arena/01a0aef4-tofel-house-erp]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: owned-suite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  owned-suite:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/arena/01a0aef4-tofel-house-erp'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+
+      - name: Install hash-pinned static analysis tool into an isolated venv
+        # A venv rather than a system install: the runner image's Python is
+        # PEP 668 externally managed, and the tool must not touch it anyway.
+        run: |
+          set -euo pipefail
+          python3 -m venv .foundation/lint-venv
+          printf '%s\n' 'ruff==0.16.8 --hash=sha256:15e7d226246961db9235098333caa13063906d3851136b84c2900b82f5daa1df' \
+            > .foundation/lint-requirements.txt
+          .foundation/lint-venv/bin/python -m pip install --quiet --no-deps \
+            --require-hashes -r .foundation/lint-requirements.txt
+          test "$(.foundation/lint-venv/bin/ruff --version)" = "ruff 0.16.8"
+
+      - name: Static analysis (pyflakes + syntax)
+        run: .foundation/lint-venv/bin/ruff check .
+
+      - name: Owned Python test tree
+        run: python3 -m unittest discover -s tests -t . -v
+
+      - name: Owned Node suites
+        run: |
+          node tests/foundation/test_realtime_guard.cjs
+          node tests/foundation/test_command_pages.cjs
+
+      - name: D8 contract validator must stay BLOCKED / REJECT
+        run: |
+          python3 tools/foundation/d8_validate.py \
+            --contract docs/engineering/d8-operational-contract.template.json \
+            --output .foundation/owned-suite/d8-validate.json
+          python3 - <<'PY'
+          import json, pathlib
+          report = json.loads(pathlib.Path(".foundation/owned-suite/d8-validate.json").read_text())
+          assert report["checkout_branch_matches_active"], "checkout is not the pinned active branch"
+          assert report["d8_gate_state"] == "BLOCKED", report["d8_gate_state"]
+          assert report["production_state"] == "REJECT", report["production_state"]
+          assert report["production_enabled"] is False
+          assert report["sec_deps"] == "UPSTREAM-BLOCKED / REJECT"
+          print("D8 gate BLOCKED, production REJECT, active branch",
+                report["active_branch"], "| hosted execution:",
+                report["active_branch_hosted_execution"])
+          PY
+
+      - name: Retain owned-suite evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: owned-suite-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .foundation/owned-suite/
+          if-no-files-found: error
+          retention-days: 14

@@ -20,8 +20,10 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "foundation"))
+sys.path.insert(0, str(ROOT / "tools"))
 
 from runtime_durability import extract_innodb_section  # noqa: E402
+from session_branch import ACTIVE_BRANCH, ACTIVE_REF  # noqa: E402
 
 PROBE = (ROOT / "tools/foundation/runtime_durability.py").read_text(encoding="utf-8")
 WORKFLOW = (ROOT / ".github/workflows/foundation-durability.yml").read_text(encoding="utf-8")
@@ -298,8 +300,10 @@ class InnodbStatusParserTests(unittest.TestCase):
 
 class WorkflowContractTests(unittest.TestCase):
     def test_workflow_is_restricted_to_the_active_branch(self):
-        self.assertIn("if: github.ref == 'refs/heads/arena/01a0aafe-tofel-house-erp'", WORKFLOW)
-        self.assertIn("branches: [arena/01a0aafe-tofel-house-erp]", WORKFLOW)
+        # The boundary is read from the canonical pin, never hardcoded here, so
+        # a rotation cannot leave this file asserting a stale branch.
+        self.assertIn(f"if: github.ref == '{ACTIVE_REF}'", WORKFLOW)
+        self.assertIn(f"branches: [{ACTIVE_BRANCH}]", WORKFLOW)
 
     def test_workflow_publishes_and_retains_evidence_including_failures(self):
         self.assertIn("if: always()", WORKFLOW)

@@ -16,7 +16,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
-from session_branch import ACTIVE_BRANCH as SESSION_BRANCH, ACTIVE_REF as SESSION_REF
+from session_branch import ACTIVE_BRANCH as SESSION_BRANCH
 
 NATIVE = ROOT / "tools/placement/native_checks.py"
 SECURITY = ROOT / "apps/toefl_house/toefl_house/security.py"

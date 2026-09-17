@@ -3,7 +3,6 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 
 OLD='33bf510b17afcaaa857ed38b921d8e9e50dcd232'
 NEW='988e54f3c4c291e2077a83809663f123731abe76'

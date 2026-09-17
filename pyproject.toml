@@ -1,0 +1,26 @@
+[tool.ruff]
+# Repository-wide static analysis for the owned application, the hosted
+# qualification tooling and the test suites. Pinned in
+# .github/workflows/owned-suite.yml; run locally with `ruff check .`.
+target-version = "py311"
+line-length = 140
+extend-exclude = [
+  ".foundation",
+  "docs/engineering/evidence",
+]
+
+[tool.ruff.lint]
+# Deliberately narrow and zero-false-positive: these are correctness rules, not
+# style opinions. The 2026-09-17 review enabled them after fixing every finding;
+# F821 in particular caught a latent NameError in the evidence-recovery path that
+# no test could reach. Wider rule families (bugbear, bandit, comprehensions)
+# still report findings and are tracked as staged follow-ups in
+# docs/engineering/ENGINEERING-REVIEW-2026-09-17.md rather than being suppressed.
+select = [
+  "E9",  # syntax errors and undefined-at-runtime constructs
+  "F",   # pyflakes: undefined names, unused imports/variables, redefinitions
+]
+
+# No per-file suppressions. Every finding was fixed rather than silenced; if a
+# rule genuinely cannot apply to a file, add the narrowest possible ignore here
+# with the reason, never a blanket one.

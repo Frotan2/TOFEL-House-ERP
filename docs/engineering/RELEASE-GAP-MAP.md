@@ -1,13 +1,30 @@
 # TOEFL House ERP — Release Gap Map & Execution Plan
 
 Date: 2026-09-16 · Gap-closure addendum: 2026-09-17 (§1.6) · Role: technical &
-product release leader · Active branch: `arena/01a0aafe-tofel-house-erp`
+product release leader · Active branch: `arena/01a0aef4-tofel-house-erp`
 **Production remains REJECT. Nothing is deployed. No qualified domain is
 reopened. No business rule, price, grading policy or legal/tax assumption
 is invented anywhere in this plan.**
 
 ## 0. Verified current state (evidence, not narrative)
 
+- **Branch-boundary rotation (2026-09-17).** The Arena session branch changed, so
+  the canonical pin, all 10 workflow filters, the current-status headers, the
+  governance JSON `active_branch` fields and the qualification tests were rotated
+  in one change. **No hosted workflow has been executed on the active branch.**
+  `active_branch_qualification.hosted_execution_state` is
+  `NOT_EXECUTED_ON_THIS_BRANCH`, that block deliberately carries no run/check/
+  commit/report identity, and `tools/foundation/d8_validate.py` fails closed if
+  any is attached — so an older branch's run cannot be re-labelled as an
+  execution here. Every run cited below is historical provenance. Full findings:
+  [ENGINEERING-REVIEW-2026-09-17.md](ENGINEERING-REVIEW-2026-09-17.md).
+- **Working tree is green and now gated.** `python3 -m unittest discover -s tests
+  -t .` passes 665/665 (it was 629 with **2 failures** before the rotation),
+  `ruff check .` is clean under a no-suppression `E9,F` ruleset, both Node suites
+  pass, and `d8_validate.py` exits 0 with D8 BLOCKED / production REJECT. New
+  `.github/workflows/owned-suite.yml` runs that whole set on every push to the
+  active branch **and on every pull request** — no workflow previously triggered
+  on `pull_request`, and no single run previously exercised the whole owned tree.
 - Five domains CLOSED / QUALIFIED on the hosted synthetic runner:
   Placement `34932512626` (332/332, `4571e6c`), Admission `34941341845`
   (397/397, `4da6f1b`), Enrollment `34946981784` (425/425, `756614e`),
@@ -232,6 +249,13 @@ platform/warehouse (prohibited), any new ERP-adjacent platform.
 | T3 | D10 (ii): role-based native Page surfaces for API-first staff roles (no **additional** native reads; containment unchanged) | T5 charter + D10(ii) answer | **DONE** — 13 qualified standard command Pages + shared guarded-command client, current-branch run 35073376790 @ 3587700, **542/542**; the additional Course Owner/General Manager control-centre Page is locally contract-tested and adds no business-document authority; checks `release-command-pages-*` |
 | T4 | D3 framework: guarded correction/refund command framework, approval terms configurable (owner terms pending) | T1 done | **DONE** — run 35069740378 @ ed2d81d, **539/539**; checks `finance-correction-*` (fail-closed, SoD/window/dual-key, native credit-note posting). v1 scope: full-amount corrections of TH placement invoices; partials + Fees-side await owner exact terms (refused fail-closed) |
 | T5 | D8: code-derived operational ownership charter and canonical owner-authority reconciliation | Owner decision record 2026-09-16 | **DONE** — [OPERATIONAL-OWNERSHIP-CHARTER.md](OPERATIONAL-OWNERSHIP-CHARTER.md) and [canonical-owner-decision-record.json](canonical-owner-decision-record.json); selected engineering implementation/evidence remain blocked, production REJECT |
+| G1 | 2026-09-17 review: rotate the drifted branch boundary (canonical pin, 10 workflows, headers, governance JSON, ledger provenance chain) | — | **DONE** — 665/665 owned tests (was 629 with **2 failures**); `d8_validate.py` exit 0; no run re-executed or re-labelled |
+| G2 | Make the rotation procedure honestly followable: explicit fail-closed `NOT_EXECUTED_ON_THIS_BRANCH` state + identity rejection + per-previous-branch run pins | G1 | **DONE** — 8 `ActiveBranchEvidenceTests`; D8 report discloses `active_branch_hosted_execution`; no gate changed state |
+| G3 | Fix latent `NameError` in `tools/placement/recover_evidence.py` (undefined `root` in the evidence publish step — never reached because the recovery run failed earlier) | — | **DONE** — caught by enabling pyflakes F821 |
+| G4 | Unfiltered `tarfile.extractall()` on a decrypted archive → `extract_safely()` (`filter="data"` + refusal fallback); record the computed per-version ciphertext digests and assert fixture members survive the round trip | — | **DONE** — 4 `SafeExtractionTests`; **limit:** only the fallback branch executed here (sandbox Python 3.11.2 has no `filter` parameter) |
+| G5 | Static-analysis gate (`pyproject.toml`, `E9,F`, no suppressions) + whole-suite gate on push **and** `pull_request` (`.github/workflows/owned-suite.yml`) | G1–G4 | **DONE** — 11 pyflakes findings fixed not silenced; all 5 workflow step scripts executed locally, exit 0 |
+| G6 | Turn the two prose-only review rules into executable guards: branch-boundary classification (7 tests) and app-assembly consistency (11 tests) | — | **DONE** — both proved load-bearing by mutation, not just passing |
+| G7 | D11 product-license inconsistency (hooks declare MIT, README says none selected, no LICENSE file, GitHub reports null) | Owner decision | **OPEN — owner decision required**; recorded, not resolved by engineering |
 
 Owner gate dispositions (2026-09-16): D1 defer · D2 unlocked (T1/T2) ·
 D3 framework (T4) · D4 defer · D5 defer · D6a no tax · D6b no gateway ·

@@ -32,7 +32,6 @@ runs under its own freshly generated encryption key. What that costs is recorded
 explicitly rather than hidden, because it is the concrete evidence that external
 key custody is a separate required capability.
 """
-import hashlib
 import json
 import os
 from pathlib import Path

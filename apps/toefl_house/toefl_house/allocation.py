@@ -39,7 +39,7 @@ Selection contract (ALGORITHM_VERSION = "allocation-v1")
 """
 import time
 
-from toefl_house.policy import canonical, digest
+from toefl_house.policy import digest
 
 ALGORITHM_VERSION = "allocation-v1"
 DEFAULT_MAX_EXPANSIONS = 10000

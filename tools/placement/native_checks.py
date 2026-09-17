@@ -1,6 +1,5 @@
 """Real native DB/controller/HTTP acceptance on isolated synthetic sites only."""
 import concurrent.futures
-import copy
 from datetime import timedelta
 import json
 import os
@@ -802,7 +801,6 @@ def main():
         def score_missing_not_zero():
             assert sum(1 for item in scored['items'] if item['outcome']=='missing')==8
             assert all(item['outcome'] in ('correct','incorrect','missing') for item in scored['items'])
-            listening=scored['by_skill'].get('Listening') or scored['by_skill'].get('listening')
             # Skills use blueprint labels; missing rows are not filed as incorrect.
             assert scored['missing']==8 and scored['incorrect']>=0
             assert 'percent' not in scored and 'cutoff' not in scored and 'recommendation' not in scored
@@ -1376,7 +1374,7 @@ def main():
                 program.append('courses',dict(course='SYN-COURSE-CORE',required=1))
                 program.save()
             return {'course':'SYN-COURSE-CORE','program':'SYN-PROGRAM-GENERAL'}
-        enr_cat=check('enrollment-native-catalog',enrollment_catalog)
+        check('enrollment-native-catalog',enrollment_catalog)
         check('enrollment-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:enr.enroll_in_program('enr_out_key_00000001',dec['name']))))
         check('enrollment-author-denied',lambda:denied(lambda:as_user('second_author',lambda:enr.enroll_in_program('enr_auth_key_0000001',dec['name']))))
         check('enrollment-admission-officer-denied',lambda:denied(lambda:as_user('officer',lambda:enr.enroll_in_program('enr_off_key_00000001',dec['name']))))

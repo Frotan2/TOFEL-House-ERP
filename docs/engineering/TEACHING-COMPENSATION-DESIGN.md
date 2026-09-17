@@ -1,7 +1,7 @@
 # D2 — Teaching Compensation: Smallest-Architecture Determination
 
 Date: 2026-09-16 · Owner requirement received 2026-09-16 · Branch:
-`arena/01a0aafe-tofel-house-erp`
+`arena/01a0aef4-tofel-house-erp`
 **No rates, amounts, statutory rules, taxes or contract terms are
 invented here.** All values are owner-entered configuration. Production
 remains REJECT.

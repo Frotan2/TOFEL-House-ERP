@@ -19,7 +19,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = ROOT / "tools"
 sys.path.insert(0, str(TOOLS))
-from session_branch import ACTIVE_BRANCH, ACTIVE_RUNTIME_RUN  # noqa: E402
+from session_branch import (  # noqa: E402
+    ACTIVE_BRANCH,
+    ACTIVE_RUNTIME_RUN,
+    ACTIVE_RUNTIME_STATE,
+    EARLIER_ACTIVE_BRANCH,
+    EARLIER_ACTIVE_RUNTIME_RUN,
+    PRIOR_ACTIVE_BRANCH,
+    PRIOR_ACTIVE_RUNTIME_RUN,
+)
 
 MATRIX_PATH = ROOT / "docs/engineering/d8-production-operations-decision-matrix.json"
 TEMPLATE_PATH = ROOT / "docs/engineering/d8-operational-contract.template.json"
@@ -28,9 +36,22 @@ RELEASE_READINESS_PATH = ROOT / "docs/engineering/evidence/release-readiness-evi
 LEDGER_PATH = ROOT / "docs/engineering/foundation-production-acceptance-ledger.json"
 SECURITY_PATH = ROOT / "apps/toefl_house/toefl_house/security.py"
 
-# Historical provenance pin: the last Foundation runtime executed on the previous
-# Arena session branch. It is evidence identity, never current execution authority.
-PRIOR_ACTIVE_RUNTIME_RUN = "35090904508"
+# A rotated active branch may legitimately have no hosted execution yet. That
+# absence is an explicit, validated state: it may never carry run, check or
+# report identity, so it cannot be used to re-label an older branch's evidence
+# as an execution on the current one.
+ACTIVE_RUNTIME_NOT_EXECUTED = "NOT_EXECUTED_ON_THIS_BRANCH"
+EXECUTION_IDENTITY_FIELDS = (
+    "run", "commit", "head_sha", "head_branch", "check", "report_sha256",
+    "runtime_check", "runtime_report_sha256",
+    "remaining_gate_check", "remaining_gate_report_sha256",
+    "runner_check", "runner_report_sha256",
+    "native_check", "native_report_sha256",
+)
+EXECUTION_EVIDENCE_KEYS = (
+    "foundation_runtime", "foundation_runner", "placement",
+    "frontend_candidate", "d8_contract",
+)
 
 REQUIRED_DECISION_KEYS = {
     "current_disposition",
@@ -217,16 +238,39 @@ def validate_matrix(matrix: dict) -> tuple[dict[str, dict], list[str]]:
     return by_id, minimum
 
 
-def validate_ledger() -> None:
-    ledger = load_json(LEDGER_PATH)
-    if any(ledger.get(key) is not False for key in
-           ("phase2_gate_passed", "security_gate_passed", "product_implementation_authorized", "production_candidate_adopted")):
-        raise ContractError("acceptance ledger contains an authorization or gate drift")
-    if ledger.get("recommendation") != "REJECT":
-        raise ContractError("acceptance ledger recommendation is not REJECT")
-    active = ledger.get("active_branch_qualification", {})
+def _reject_execution_identity(block: dict, label: str) -> None:
+    """Fail closed if a NOT_EXECUTED block carries any execution identity."""
+    for key, value in block.items():
+        if isinstance(value, dict):
+            _reject_execution_identity(value, f"{label}.{key}")
+        elif key in EXECUTION_IDENTITY_FIELDS and value not in (None, ""):
+            raise ContractError(
+                f"{label} carries execution identity '{key}' while recorded as {ACTIVE_RUNTIME_NOT_EXECUTED}"
+            )
+
+
+def validate_active_branch_qualification(ledger: dict) -> str:
+    """Assert the active-branch block is either a real execution or an explicit absence."""
+    active = ledger.get("active_branch_qualification")
+    if not isinstance(active, dict):
+        raise ContractError("acceptance ledger has no active_branch_qualification block")
     if active.get("branch") != ACTIVE_BRANCH:
         raise ContractError("acceptance ledger active qualification branch drifted")
+    state = active.get("hosted_execution_state")
+
+    if state == ACTIVE_RUNTIME_NOT_EXECUTED:
+        if ACTIVE_RUNTIME_STATE != state:
+            raise ContractError("ledger records no active-branch execution but the session boundary pins one")
+        _reject_execution_identity(active, "active_branch_qualification")
+        for key in EXECUTION_EVIDENCE_KEYS:
+            if active.get(key) not in (None, {}, []):
+                raise ContractError(f"active_branch_qualification.{key} is populated while NOT_EXECUTED_ON_THIS_BRANCH")
+        if active.get("production_state") != "REJECT" or active.get("production_authorized") is not False:
+            raise ContractError("a branch without hosted execution may not relax the production posture")
+        return state
+
+    if ACTIVE_RUNTIME_STATE != "EXECUTED":
+        raise ContractError("active branch claims hosted execution the session boundary does not record")
     runtime = active.get("foundation_runtime", {})
     # Hard stop: the current active branch may never claim a passing Foundation
     # runtime while SEC-DEPS-01 is open, and the pinned active-branch run may not
@@ -236,15 +280,39 @@ def validate_ledger() -> None:
     for flag in ("phase2_gate_passed", "security_gate_passed", "product_implementation_authorized"):
         if runtime.get(flag) is not False:
             raise ContractError("acceptance ledger active runtime gate flags drifted")
-    # The pinned previous-session run is provenance and must stay exactly as recorded.
-    prior = ledger.get("prior_active_branch_provenance", {})
-    if prior.get("classification") != "historical_provenance":
-        raise ContractError("prior active-branch provenance is not explicitly historical")
-    prior_runtime = prior.get("foundation_runtime", {})
-    if prior_runtime.get("status") != "fail_reject" or prior_runtime.get("run") != PRIOR_ACTIVE_RUNTIME_RUN:
-        raise ContractError("prior active-branch runtime evidence drifted")
+    return "EXECUTED"
+
+
+def validate_provenance_block(block: object, branch: str, run_id: str, label: str) -> None:
+    """A previous session branch keeps its exact run identity and stays historical."""
+    if not isinstance(block, dict):
+        raise ContractError(f"{label} active-branch provenance block is missing")
+    if block.get("classification") != "historical_provenance":
+        raise ContractError(f"{label} active-branch provenance is not explicitly historical")
+    if block.get("branch") != branch:
+        raise ContractError(f"{label} active-branch provenance branch drifted")
+    runtime = block.get("foundation_runtime", {})
+    if runtime.get("status") != "fail_reject" or runtime.get("run") != run_id:
+        raise ContractError(f"{label} active-branch runtime evidence drifted")
+
+
+def validate_ledger() -> str:
+    ledger = load_json(LEDGER_PATH)
+    if any(ledger.get(key) is not False for key in
+           ("phase2_gate_passed", "security_gate_passed", "product_implementation_authorized", "production_candidate_adopted")):
+        raise ContractError("acceptance ledger contains an authorization or gate drift")
+    if ledger.get("recommendation") != "REJECT":
+        raise ContractError("acceptance ledger recommendation is not REJECT")
+    active_state = validate_active_branch_qualification(ledger)
+    # Each previous session branch is provenance and must stay exactly as recorded.
+    validate_provenance_block(ledger.get("prior_active_branch_provenance"),
+                              PRIOR_ACTIVE_BRANCH, PRIOR_ACTIVE_RUNTIME_RUN, "prior")
+    validate_provenance_block(ledger.get("earlier_active_branch_provenance"),
+                              EARLIER_ACTIVE_BRANCH, EARLIER_ACTIVE_RUNTIME_RUN, "earlier")
     if ledger.get("historical_branch_requalification", {}).get("classification") != "historical_provenance":
         raise ContractError("historical qualification provenance is not explicitly historical")
+    return active_state
+
 
 
 def validate_synthetic_guard() -> None:
@@ -341,7 +409,7 @@ def run(contract_path: Path) -> dict:
     validate_release_readiness_report()
     matrix = load_json(MATRIX_PATH)
     decisions, minimum = validate_matrix(matrix)
-    validate_ledger()
+    active_execution_state = validate_ledger()
     validate_synthetic_guard()
     contract = load_json(contract_path)
     gate, unresolved = validate_contract(contract, decisions)
@@ -350,6 +418,7 @@ def run(contract_path: Path) -> dict:
         "checked_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "scope": "Provider-neutral D8 contract and release-integrity validation; no deployment or infrastructure probe",
         "active_branch": ACTIVE_BRANCH,
+        "active_branch_hosted_execution": active_execution_state,
         "checkout_branch": git_branch(),
         "checkout_branch_matches_active": git_branch() == ACTIVE_BRANCH,
         "matrix": MATRIX_PATH.relative_to(ROOT).as_posix(),
@@ -379,7 +448,14 @@ def run(contract_path: Path) -> dict:
             "rollback_contract": "PASS",
             "production_enablement_guard": "PASS"
         },
-        "warning": "BLOCKED/REJECT are intentional outcomes. This report is not production qualification or deployment evidence."
+        "warning": (
+            "BLOCKED/REJECT are intentional outcomes. This report is not production qualification or deployment evidence."
+            + (
+                f" The active branch {ACTIVE_BRANCH} has NO hosted execution; every hosted run cited in this"
+                " repository is historical provenance from an earlier session branch."
+                if active_execution_state == ACTIVE_RUNTIME_NOT_EXECUTED else ""
+            )
+        )
     }
 
 

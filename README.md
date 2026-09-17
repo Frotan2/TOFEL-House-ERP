@@ -5,9 +5,27 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
-Active engineering branch: `arena/01a0aafe-tofel-house-erp`. Historical hosted
+Active engineering branch: `arena/01a0aef4-tofel-house-erp`. Historical hosted
 runs retain their original branch provenance; see
 [branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
+
+**Engineering review (2026-09-17):**
+[ENGINEERING-REVIEW-2026-09-17.md](docs/engineering/ENGINEERING-REVIEW-2026-09-17.md).
+The working tree was **red** — two qualification tests failed because the pinned
+branch boundary had drifted from the checkout. The boundary was rotated, the
+rotation procedure was made honestly followable (a rotated branch now records an
+explicit, fail-closed *absence* of hosted execution instead of being forced to
+re-label an older branch's run), and a latent `NameError` in the
+evidence-recovery path, an unfiltered archive extraction, and the absence of any
+static-analysis or whole-suite gate were all fixed. Owned suite: **665 tests
+pass**, ruff clean, both Node suites pass, D8 validator BLOCKED / REJECT.
+
+**No hosted workflow has been executed on the active branch.** Every run cited
+below executed on an earlier session branch and is historical provenance, not
+current execution. The D8 report states this as
+`active_branch_hosted_execution: NOT_EXECUTED_ON_THIS_BRANCH`. Re-running the
+hosted workflows is the first remaining engineer-executable item, and on current
+pins Foundation runtime is expected to fail SEC-DEPS-01 again.
 
 **Production-like execution pass (2026-09-16, commit `d7df9ca`):** the readiness
 harness was re-executed on a genuine Docker-capable runner (ubuntu-24.04, Docker
@@ -141,5 +159,14 @@ directly or rewrite history. Keep future customizations in the owned application
 and enforce business rules server-side. Never commit real site configuration,
 credentials, student/payroll data, database dumps or backups.
 
-No product license has been selected yet. Review the initial assessment's licensing
-section before incorporating or distributing upstream software.
+**No product license has been selected — this is open owner decision D11.** The
+declaration is currently inconsistent across three surfaces and engineering has
+deliberately not resolved it: both `hooks.py` files declare `app_license = "MIT"`,
+this README states that no license is selected, no `LICENSE` file exists in the
+repository, and GitHub reports the repository license as `null`. A license is a
+legal grant, it is effectively irreversible once published, and it constrains how
+the pinned upstream Frappe/ERPNext/Education/HRMS apps may be combined and
+distributed, so it is not an engineering choice. Options and the consistency
+requirement: [OWNER-DECISIONS.md §D11](docs/engineering/OWNER-DECISIONS.md).
+Review the initial assessment's licensing section before incorporating or
+distributing upstream software.

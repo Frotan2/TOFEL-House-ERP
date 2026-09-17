@@ -45,5 +45,5 @@ for i,data in enumerate(chunks):
           "source_commit":metadata["head_sha"],"payload_sha256":hashlib.sha256(raw).hexdigest(),
           "part":i,"parts":len(chunks),"data":data}
     target=out/f"part-{i}.json";target.write_text(json.dumps(part)+"\n")
-    subprocess.run(["python3",str(root/"tools/foundation/publish_evidence.py"),str(target),
+    subprocess.run(["python3",str(ROOT/"tools/foundation/publish_evidence.py"),str(target),
                     "--name",f"Placement recovered {run} part {i+1}/{len(chunks)}"],check=True)

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "matrix_id": "D8-PRODUCTION-OPERATIONS",
   "date": "2026-09-16",
-  "active_branch": "arena/01a0aafe-tofel-house-erp",
+  "active_branch": "arena/01a0aef4-tofel-house-erp",
   "production_state": "REJECT",
   "overall_gate_state": "BLOCKED",
   "security_dependency_state": "UPSTREAM-BLOCKED / REJECT",
@@ -236,7 +236,7 @@
     "production_state": "REJECT",
     "production_enabled": false,
     "synthetic_only_guard_must_remain_enforced": true,
-    "active_branch": "arena/01a0aafe-tofel-house-erp",
+    "active_branch": "arena/01a0aef4-tofel-house-erp",
     "historical_evidence_may_not_be_relabelled_as_active": true,
     "no_owner_waiver_for_sec_deps": true,
     "owner_decision_record": "canonical-owner-decision-record.json"

@@ -27,10 +27,11 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "foundation"))
+sys.path.insert(0, str(ROOT / "tools"))
 
 import runtime_independent_data as data  # noqa: E402
 import runtime_independent_target as target  # noqa: E402
-import runtime_independent_usability as usability  # noqa: E402
+from session_branch import ACTIVE_BRANCH, ACTIVE_REF  # noqa: E402
 from bench_bootstrap import (Probe, dmi_product_uuid,  # noqa: E402
                                machine_identity)
 
@@ -861,8 +862,9 @@ class CredentialHandlingTests(unittest.TestCase):
 
 class WorkflowContractTests(unittest.TestCase):
     def test_workflow_is_restricted_to_the_active_branch(self):
-        self.assertIn("if: github.ref == 'refs/heads/arena/01a0aafe-tofel-house-erp'", WORKFLOW)
-        self.assertIn("branches: [arena/01a0aafe-tofel-house-erp]", WORKFLOW)
+        # Read from the canonical pin so a rotation cannot strand a stale branch here.
+        self.assertIn(f"if: github.ref == '{ACTIVE_REF}'", WORKFLOW)
+        self.assertIn(f"branches: [{ACTIVE_BRANCH}]", WORKFLOW)
         self.assertEqual(WORKFLOW.count("if: github.ref =="), 2)
 
     def test_two_jobs_run_and_the_target_depends_on_the_source(self):

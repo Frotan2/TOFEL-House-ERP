@@ -1,0 +1,330 @@
+# Engineering review — 2026-09-17
+
+Date: 2026-09-17 UTC · Active branch: `arena/01a0aef4-tofel-house-erp`
+Reviewer scope: the whole repository as checked out, not a single domain.
+**Production remains REJECT. D8 remains BLOCKED. No qualified domain was
+reopened. No business rule, price, grading policy, tax, refund term or
+operational target was invented, and no license was selected.**
+
+This review answers three questions with evidence rather than narrative: is the
+working tree sound, what did the review actually find and fix, and what genuinely
+remains and why.
+
+---
+
+## 1. Method — what was actually executed
+
+Nothing below is asserted from reading alone. Every command was run against this
+checkout:
+
+| Command | Result at review start | Result now |
+|---|---|---|
+| `python3 -m unittest discover -s tests -t .` | **629 tests, 2 FAILED** | **665 tests, OK** |
+| `node tests/foundation/test_realtime_guard.cjs` | PASS | PASS |
+| `node tests/foundation/test_command_pages.cjs` | PASS (14 pages) | PASS (14 pages) |
+| `python3 tools/foundation/d8_validate.py --contract …template.json` | exit 1 — `checkout_branch_matches_active` false | exit 0 — BLOCKED / REJECT |
+| `ruff check .` (pyflakes + syntax) | **11 findings** | **All checks passed** |
+| All five `owned-suite.yml` step scripts, executed locally | — | all exit 0 |
+
+Structural checks also run: 22 DocType JSONs parse; 20 command-only DocTypes have
+matching `has_permission`, `permission_query_conditions`, `permissions.query_*`
+and `policy.can_read` coverage with no gaps; the 2 child tables correctly carry
+no `has_permission`; all 23 role fixtures referenced by `KIND_ROLES` and the
+14 command Pages exist; every `_COMMAND_PAGES` entry has a Page file. **No
+assembly drift was found** — that surface is genuinely consistent. It was,
+however, only consistent by luck: nothing enforced it, so it is now enforced by
+`tests/foundation/test_app_assembly.py` (F8).
+
+---
+
+## 2. Findings
+
+### F1 — CRITICAL: the working tree was red; the branch boundary had drifted
+
+`tools/session_branch.ACTIVE_BRANCH` pinned `arena/01a0aafe-tofel-house-erp`
+while the checkout is on `arena/01a0aef4-tofel-house-erp`. Two qualification
+tests failed as a direct result:
+
+```
+FAIL: tests.d8.test_contract.D8ContractTests.test_template_is_explicitly_blocked_and_production_disabled
+  AssertionError: False is not true          # checkout_branch_matches_active
+FAIL: tests.foundation.test_current_branch_qualification.CurrentBranchQualificationTests.test_checkout_is_the_active_session_branch
+  AssertionError: 'arena/01a0aef4-…' != 'arena/01a0aafe-…'
+```
+
+By this repository's own rule (`BRANCH-RECONCILIATION.md`, "Required review
+rule") an unclassified old branch in an active workflow, hosted guard,
+current-status header or qualification test *is* release-control drift and must
+be corrected. It was not corrected; it had been sitting there.
+
+**Fixed** by rotating the boundary per the documented procedure, in one change:
+`tools/session_branch.py`; all 10 workflow filters (22 references); 16
+current-status document headers; `active_branch` in 4 governance JSON files
+(5 occurrences — D8 matrix ×2, contract template, canonical owner record,
+architecture gate review); and the acceptance ledger.
+
+### F1a — The rotation procedure could not be followed honestly (design defect)
+
+This is the more serious half of F1, and it was invisible until the rotation was
+attempted. `d8_validate.validate_ledger()` required:
+
+```python
+runtime.get("run") != ACTIVE_RUNTIME_RUN  →  ContractError
+```
+
+i.e. the *active* branch's ledger block had to name a specific run id. After a
+rotation no hosted run exists on the new branch, so the only way to satisfy the
+old validator was to record run `35122242581` — which executed on the *previous*
+branch — as an execution on the new one. The validator structurally forced
+either a red tree or falsified evidence.
+
+**Fixed** by making the absence an explicit, validated state:
+`hosted_execution_state: NOT_EXECUTED_ON_THIS_BRANCH`. `validate_ledger()` now
+- rejects **any** execution identity (run, check, commit, SHA-256) inside such a block, at any nesting depth;
+- rejects populated `foundation_runtime` / `foundation_runner` / `placement` / `frontend_candidate` / `d8_contract` sub-blocks;
+- rejects a relaxed production posture in that block;
+- rejects an `EXECUTED` claim the session boundary does not record;
+- pins each previous branch's run separately (`PRIOR_ACTIVE_RUNTIME_RUN = 35122242581` on `01a0aafe`, `EARLIER_ACTIVE_RUNTIME_RUN = 35090904508` on `01a0a9f7`), each required to stay `historical_provenance`.
+
+The D8 report now discloses the state as `active_branch_hosted_execution` and
+says so in its `warning`. **No gate changed state**: production stays REJECT,
+D8 stays BLOCKED, SEC-DEPS-01 stays UPSTREAM-BLOCKED / REJECT.
+
+Verified by 8 new tests in `tests/d8/test_contract.py` (`ActiveBranchEvidenceTests`),
+each mutating the ledger and asserting `ContractError`.
+
+### F1b — Branch strings were duplicated in tests, so drift was guaranteed
+
+`tests/foundation/test_durability_contract.py` and
+`tests/foundation/test_independent_recovery_contract.py` each hardcoded
+`arena/01a0aafe-tofel-house-erp` twice instead of importing the canonical pin,
+so the next rotation would have stranded them exactly as this one did.
+**Fixed**: both now read `ACTIVE_BRANCH` / `ACTIVE_REF` from `session_branch`.
+
+### F2 — CRITICAL: latent `NameError` in the evidence-recovery path
+
+`tools/placement/recover_evidence.py:48` called
+
+```python
+subprocess.run(["python3", str(root/"tools/foundation/publish_evidence.py"), …])
+```
+
+but the module constant is `ROOT`. The name `root` is undefined, so the publish
+step raised `NameError` unconditionally. It survived because that line has never
+been reached: `BRANCH-RECONCILIATION.md` records that the migration push's
+recovery run `35090760612` *failed before publication* while retrieving the
+historical artifact. A dead code path in a recovery tool is exactly where a
+defect should not be allowed to live.
+
+**Fixed** (`root` → `ROOT`). Caught by enabling pyflakes (F821), which is why
+F4 below matters more than the one-line fix.
+
+### F3 — SECURITY: `tarfile.extractall()` without a filter on a decrypted archive
+
+`tools/foundation/release_readiness_evidence.py` extracted a decrypted backup
+archive with a bare `extractall`, which writes through absolute and `..` member
+paths. The HMAC in that path proves the archive was not tampered with by someone
+*without the key*; it says nothing about the member names inside it.
+
+**Fixed** with `extract_safely()`: `filter="data"` where the interpreter supports
+it (default from Python 3.14), plus an explicit fallback that refuses links,
+device nodes and any member resolving outside the destination. Verified by 4 new
+tests asserting the invariant rather than an exception type, because the two
+paths differ (the `data` filter sanitizes an absolute member into the
+destination and raises on traversal; the fallback raises on both).
+
+> **Honest limit:** this sandbox runs Python 3.11.2, whose `TarFile.extractall`
+> has no `filter` parameter — confirmed by `inspect.signature`. Only the
+> fallback branch was executed here. The `filter="data"` branch is pinned by a
+> source-contract test but was **not executed** in this environment.
+
+### F4 — No static-analysis gate existed
+
+25,653 lines of Python across `apps/`, `tools/` and `tests/` with no linter
+configured and no CI job running one. That is why F2 reached the repository.
+**Fixed**: root `pyproject.toml` with a
+narrow, zero-false-positive ruleset (`E9`, `F`) and **no per-file suppressions**;
+11 findings fixed rather than silenced — 1 undefined name (F2), 6 unused
+imports, 4 unused variables. Two of those unused variables were computed evidence
+that was being thrown away: the per-version ciphertext digests in the
+release-readiness harness are now recorded in its manifest, and the fixture
+member list is now asserted to survive the encrypted round trip path-by-path.
+
+**Wider rule families still report findings and are deliberately not suppressed
+or enabled** — they are staged follow-ups (§4), not clean bills of health:
+`TRY003` 768, `S101` 730 (asserts — legitimate in a harness), `C408` 236 (a
+Frappe idiom), `PLR2004` 233, `I001` 123, `BLE001` 32 blind excepts, `B023` 6,
+`B905` 7, `S608` 10 hardcoded SQL fragments.
+
+### F5 — No single run exercised the whole owned suite
+
+Every workflow is path-filtered to the tooling it qualifies, so:
+- a change under `apps/**` never ran `tests/d8`;
+- a change under `tools/**` never ran the domain suites;
+- **no workflow triggered on `pull_request` at all** (verified: 0 occurrences
+  across all 10 workflows at `HEAD`), despite the README requiring "reviewed
+  pull requests".
+
+**Fixed** with `.github/workflows/owned-suite.yml`: whole-tree discovery
+(`-s tests -t .`, so a new `tests/<area>` is covered automatically), both Node
+suites, hash-pinned ruff in an isolated venv, and an assertion that the D8 gate
+is still BLOCKED / production still REJECT. Runs on push to the active branch
+*and* on every pull request. `permissions: contents: read` only. All five step
+scripts were executed locally: 654 tests OK, both Node suites OK, ruff clean,
+D8 validator exit 0.
+
+### F6 — OWNER DECISION REQUIRED: the product license is declared three ways
+
+Not fixed, because it is not engineering's to fix:
+
+| Surface | States |
+|---|---|
+| `apps/toefl_house/toefl_house/hooks.py`, `apps/foundation_security/…/hooks.py` | `app_license = "MIT"` |
+| `README.md` | "No product license has been selected yet." |
+| Repository `LICENSE` file | **absent** |
+| GitHub `repos/Frotan2/TOFEL-House-ERP` `license` field | `null` (queried) |
+
+A license is a legal grant, effectively irreversible once published, and it
+constrains how the pinned upstream Frappe/ERPNext/Education/HRMS apps may be
+combined and distributed. **Recorded as D11** in the canonical owner-decision
+record and `OWNER-DECISIONS.md` with four options and an explicit consistency
+requirement. No license was selected and no `app_license` value was changed.
+
+### F7 — The documented branch-boundary rule was prose only
+
+`BRANCH-RECONCILIATION.md` states that an unclassified old branch in an active
+surface "must be corrected", but nothing enforced it — which is precisely how F1
+persisted. **Fixed** with `tests/foundation/test_branch_boundary.py` (7 tests):
+workflows may name only the active branch; any historical branch in
+`tools/`, `tests/` or `apps/` must be declared in
+`session_branch.HISTORICAL_BRANCHES` and labelled as provenance on its own line;
+current-status headers must name the active branch; and recorded evidence under
+`docs/engineering/evidence/` must **never** be rewritten to the active branch.
+
+Proved load-bearing rather than vacuous: temporarily reverting one workflow
+filter to the previous branch makes the suite fail with
+*"a stale branch in an active workflow filter is release-control drift"*;
+restoring it passes.
+
+---
+
+### F8 — App-assembly consistency was verified by hand and enforced by nothing
+
+`hooks.py` (`has_permission`, `permission_query_conditions`, `page_js`,
+`doc_events`, fixtures) has to agree with `permissions.KINDS`/`TABLES`, every
+`permissions.query_*` definition, `policy.can_read`, `security.DOCTYPES`/
+`KIND_ROLES`, the DocType JSON files, `modules.txt` and `fixtures/role.json`.
+Frappe resolves those tables at import/migrate time and fails late and
+obscurely, so a new guarded DocType added without a matching `query_*` function
+or `can_read` branch would ship silently and only surface on a live site.
+
+The review audited the whole surface and found it **consistent** — 22 DocTypes,
+20 guarded, 2 child tables correctly unguarded, 20 kinds each with a row and a
+`can_read` branch, 23 roles, 14 pages. But no test held any of it.
+
+**Fixed** with `tests/foundation/test_app_assembly.py` (11 tests): pure file
+parsing, no Frappe import. Proved load-bearing — injecting one kind into
+`permissions.KINDS` without extending `policy.can_read` produces 3 failures;
+reverting passes. It also pins the A13 invariant that every natively guarded
+DocType carries the *same* guard on all three lifecycle seams.
+
+---
+
+## 3. What remains
+
+### 3.1 Engineer-executable — but it must be executed, not asserted
+
+**The active branch has no hosted evidence.** This is the single largest open
+item and it is stated plainly rather than papered over: every hosted run in this
+repository executed on an earlier session branch. Nothing here is a run on
+`arena/01a0aef4-tofel-house-erp`.
+
+To close it: re-run `foundation-runtime.yml`, `foundation-runner.yml`,
+`placement-content.yml`, `foundation-frontend-review.yml` and
+`d8-operations-contract.yml` on the active branch, then set
+`ACTIVE_RUNTIME_STATE = "EXECUTED"`, pin the real run id in
+`ACTIVE_RUNTIME_RUN`, and replace the active ledger block with the observed
+results in the same change. Expected outcome on current pins: Foundation runtime
+still **fails** SEC-DEPS-01. Re-running will not turn it green and must not be
+presented as if it might.
+
+### 3.2 Owner-gated — engineering cannot start these without inventing policy
+
+Unchanged from the existing decision packet, now including D11:
+
+| Gate | Decision required | Blocks |
+|---|---|---|
+| D1 | Level vocabulary, sections/components, rubrics, cutoffs, grading scales | A06 academic assessment |
+| D2 | Remaining payroll posting scope (framework already shipped) | A09 full payroll |
+| D3 | Partial-refund terms, Fees-side correction scope | Finance correction v2 |
+| D4 | Identity/merge/activation, guardian delegation | A02/A03, SEC-GUARDIAN-01 |
+| D5 | Intake calendars, repeat/transfer/withdrawal semantics | A05/A11 |
+| D6 | Tax configuration; payment gateway (currently "none") | Tax, payments |
+| D7 | Metric stewards, denominators, disclosure, retention | A12 metrics layer |
+| D8 | Provider/edge, off-site destination, numeric capacity/availability, numeric RPO/RTO | Production operations |
+| **D11** | **Product license (new)** | **Distribution of the owned app** |
+
+### 3.3 Deployment-gated — cannot be closed from a repository
+
+Measured restart downtime, HA, cross-provider/region recovery, key custody in a
+real trust boundary (KMS/HSM/owner secret store), session revocation on recovery,
+measured RPO/RTO against a selected objective, full-bundle upgrade and rollback,
+public TLS/proxy qualification, capacity, and deployed monitoring operation.
+Running these "somewhere else" would be evidence theater; they stay BLOCKED until
+an authorized deployment target exists.
+
+### 3.4 Upstream-blocked
+
+**SEC-DEPS-01** remains UPSTREAM-BLOCKED / REJECT. It was not weakened, waived
+or reinterpreted by this review, and no dependency was forced, overridden,
+forked or suppressed. No credible official upstream candidate passes the gate
+yet.
+
+---
+
+## 4. Staged follow-ups (not done, and why)
+
+1. **Wider lint rules.** `B023` (6 closures capturing loop variables in
+   `tools/placement/native_checks.py`) is a real bug class, but every instance is
+   currently called within its own iteration, and that 3,432-line file is the
+   primary hosted qualification harness. Changing its lambda signatures is
+   mechanical but **cannot be verified in this environment**, so it was left
+   alone rather than shipped unverified. Do it as its own change with a hosted
+   placement run behind it.
+2. **`BLE001` blind excepts (32)** — mostly in tooling; each needs a decision
+   about what should propagate, not a blanket `# noqa`.
+3. **`S608` SQL fragments (10)** — all in the hosted runtime probes
+   (`runtime_durability.py` 4, `runtime_independent_source.py` 2,
+   `runtime_key_custody_operator.py` 2, `runtime_independent_target.py` 1,
+   `runtime_key_custody_recovery.py` 1), where the interpolated table/database
+   name is a module-level constant and no request input reaches the string.
+   `apps/toefl_house/toefl_house/permissions.py` builds
+   `permission_query_conditions` SQL too and is **not** flagged — its only
+   interpolated value goes through `frappe.db.escape`. Reviewed and considered
+   safe as written; a narrow rule exemption carrying that reasoning is the right
+   follow-up, not a rewrite.
+4. **Import ordering (`I001`, 123)** — cosmetic; enable after the correctness
+   rules have bedded in so the diff stays reviewable.
+
+---
+
+## 5. Diff summary
+
+- `tools/session_branch.py` — boundary rotated; explicit execution-state model;
+  declared historical-branch list.
+- `tools/foundation/d8_validate.py` — `validate_ledger` split into
+  `validate_active_branch_qualification` + `validate_provenance_block`; identity
+  rejection; report discloses the active-branch execution state.
+- `docs/engineering/foundation-production-acceptance-ledger.json` — ordered
+  provenance chain (`active` / `prior` / `earlier`); every run, check, commit and
+  SHA-256 identity preserved byte-for-byte; nothing re-executed or re-labelled.
+- 10 workflows rotated; `owned-suite.yml` added.
+- `tools/placement/recover_evidence.py` — undefined name fixed.
+- `tools/foundation/release_readiness_evidence.py` — safe extraction; computed
+  evidence now recorded instead of discarded.
+- 7 unused imports / variables removed across 5 files.
+- New tests: `test_branch_boundary.py` (7), `test_app_assembly.py` (11),
+  `test_owned_suite_gate.py` (6), `ActiveBranchEvidenceTests` (8),
+  `SafeExtractionTests` (4) — 629 → **665**.
+- Docs: `BRANCH-RECONCILIATION.md` rotation record, D11 in the canonical record
+  and `OWNER-DECISIONS.md`, current-status headers rotated.

@@ -120,6 +120,32 @@ def encrypted_version(source: Path, backup: Path, key_file: Path, version: int) 
     }
 
 
+def extract_safely(tar: tarfile.TarFile, destination: Path) -> None:
+    """Extract a decrypted archive without trusting its member paths.
+
+    The HMAC proves the archive was not tampered with *by someone who lacks the
+    key*; it says nothing about what member names the archive contains, and a
+    bare ``extractall`` will happily write outside ``destination`` through an
+    absolute or ``..`` member. ``filter="data"`` is the documented safe filter
+    (default from Python 3.14) and is passed explicitly so behaviour is
+    identical on older interpreters this tool may run under. The fallback keeps
+    the same guarantee where the parameter does not exist yet.
+    """
+    try:
+        tar.extractall(destination, filter="data")
+        return
+    except TypeError:  # Python < 3.12: no filter parameter
+        pass
+    root = destination.resolve()
+    for member in tar.getmembers():
+        if member.islnk() or member.issym() or not (member.isfile() or member.isdir()):
+            raise AssertionError("archive member is not a plain file or directory")
+        target = (destination / member.name).resolve()
+        if target != root and root not in target.parents:
+            raise AssertionError("archive member escapes the restore directory")
+    tar.extractall(destination)
+
+
 def restore_encrypted(backup: Path, restore: Path, key_file: Path, version: int) -> dict[str, Any]:
     cipher = backup / f"version-{version}.tar.enc"
     tag = backup / f"version-{version}.hmac"
@@ -133,7 +159,7 @@ def restore_encrypted(backup: Path, restore: Path, key_file: Path, version: int)
     run(["openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-in", str(cipher), "-out", str(plain), "-pass", f"file:{key_file}"])
     restore.mkdir(parents=True, exist_ok=True)
     with tarfile.open(plain, "r") as tar:
-        tar.extractall(restore)
+        extract_safely(tar, restore)
     plain.unlink()
     return {"version": version, "hmac_verified": True, "decrypted_archive": True}
 
@@ -256,6 +282,10 @@ def run_evidence(output: Path | None = None, artifact_dir: Path | None = None) -
         assert MARKER not in (backup / "version-3.tar.enc").read_bytes()
         # The key is outside the encrypted archive and is never copied into the restore system.
         assert not (restore / key_file.name).exists()
+        # Every fixture member the source system declares must survive the
+        # encrypted round trip, by path, not merely as an aggregate tree digest.
+        for relative in fixture["files"]:
+            assert (restore / relative).is_file(), f"fixture member missing after restore: {relative}"
         manifest = {
             "source_tree_sha256": digest_json(source_tree),
             "restored_tree_sha256": digest_json(restored_tree),
@@ -265,6 +295,10 @@ def run_evidence(output: Path | None = None, artifact_dir: Path | None = None) -
             "database_state_sha256": digest_bytes((source / "native-state.json").read_bytes()),
             "private_and_public_files_preserved": True,
             "external_key_not_archived": True,
+            # Ciphertext identity of every version actually produced, so the
+            # rotation claim below is backed by the digests rather than asserted.
+            "encrypted_versions": versions,
+            "fixture_members_restored": sorted(fixture["files"]),
         }
         write_json(artifact_dir / "encrypted-restore-manifest.json", manifest)
         report = {

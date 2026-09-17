@@ -1,6 +1,6 @@
 # TOEFL House ERP — Owner Decision Packet (R4)
 
-Date: 2026-09-16 · Active branch: `arena/01a0aafe-tofel-house-erp`
+Date: 2026-09-16 · Active branch: `arena/01a0aef4-tofel-house-erp`
 **Production remains REJECT.** Nothing here invents a business rule. This
 file is the human-readable projection and navigation document for the canonical
 [`canonical-owner-decision-record.json`](canonical-owner-decision-record.json);
@@ -138,6 +138,27 @@ commands. **Qualified evidence:** current-branch run `35073376790` at
 13 Page records/assets, each of 12 role-specific Page audiences plus
 seven non-members, and no native-read escalation.
 
+## D11 — Product license (found in the 2026-09-17 engineering review)
+**Decide (pick one):** (a) **MIT** — matches what the app metadata already
+declares; (b) a **copyleft** license — must first be checked against the
+upstream Frappe/ERPNext/Education/HRMS terms this product links against;
+(c) **proprietary / all-rights-reserved** — in which case the metadata
+declaration is wrong and must be corrected; (d) **keep it unlicensed**.
+**Why owner-only:** a license is a legal grant, it is effectively irreversible
+once published, and it constrains how the upstream apps may be combined and
+distributed. Engineering has no authority to select one, and none was selected.
+**Current state — three-way inconsistency, documented not resolved:**
+`apps/toefl_house/toefl_house/hooks.py` and
+`apps/foundation_security/foundation_security/hooks.py` both declare
+`app_license = "MIT"`; the README states *"No product license has been selected
+yet"*; there is **no** LICENSE file in the repository; and the GitHub repository
+reports its license as `null`. **Unblocks:** distribution of the owned
+application outside this repository. Whichever option is selected, the
+`hooks.py` declaration, the README statement, a repository LICENSE file and the
+upstream-compatibility note must be made consistent **in the same change**.
+
+---
+
 ---
 
 **How this packet is used:** business decisions are recorded once in the
@@ -163,3 +184,4 @@ technical gates are independently satisfied.
 | D8 | **Owner requirements selected and recorded in the canonical owner-decision record** | Authority roles, role-based access/auditability/offboarding, branch isolation, current local/Tailscale deployment, local state, encrypted versioned backup/recovery, preservation priority, configurable policy, compensation models, controlled administration, and health/attention visibility are now business inputs. Future provider/hostname/DNS/public edge, off-site destination, numeric capacity/availability, and numeric RPO/RTO remain unselected. Engineering implementation and independent evidence remain D8-BLOCKED; production stays REJECT. |
 | D9 | **(d) No separate register** | Gate CLOSED at status quo; attendance facts via guarded APIs only |
 | D10 | **(ii) Role-based report/page surfaces** | **T3 EXECUTED & QUALIFIED** — 13 native command Pages (role-filtered command centre + 12 one-role action Pages), no new native Education/ERPNext authority; run 35073376790 @ 3587700, **542/542**. The separate Course Owner/General Manager control-centre Page is a locally contract-tested governance surface and not a replacement for the qualified command evidence. |
+| D11 | **NOT SELECTED — owner decision required** | Found by the 2026-09-17 engineering review. `hooks.py` declares MIT in both apps, the README says no license is selected, no LICENSE file exists and GitHub reports `null`. Engineering selected nothing; see D11 above for the four options and the consistency requirement. |
