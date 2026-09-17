@@ -500,16 +500,25 @@ frappe.provide("toefl_house.command_pages");
 	}
 
 	/* An action card. One primary button per card, always last, so scanning
-	 * title -> purpose -> action is the same motion on every page. */
-	function actionCard(grid, title, hint, buttonLabel, onClick) {
+	 * title -> purpose -> action is the same motion on every page.
+	 *
+	 * The optional chip is rendered by the builder rather than inserted by the
+	 * caller reaching back into the DOM, because climbing from the returned
+	 * button with closest()/find() is both harder to read and impossible for the
+	 * static contract suite to exercise - a no-op fake would pass it silently. */
+	function actionCard(grid, title, hint, buttonLabel, onClick, chipLabel) {
 		const card = $("<article class='th-card'></article>").appendTo(grid);
 		$("<h3 class='th-card-title'></h3>").text(text(title)).appendTo(card);
 		if (hint) $("<p class='th-card-hint'></p>").text(text(hint)).appendTo(card);
 		const footer = $("<div class='th-card-footer'></div>").appendTo(card);
-		return $("<button type='button' class='btn btn-primary btn-sm th-action'></button>")
+		if (chipLabel) {
+			$("<span class='th-role-chip'></span>").text(text(chipLabel)).appendTo(footer);
+		}
+		$("<button type='button' class='btn btn-primary btn-sm th-action'></button>")
 			.text(text(buttonLabel))
 			.on("click", onClick)
 			.appendTo(footer);
+		return card;
 	}
 
 	function renderActionPage(wrapper, surface) {
@@ -685,16 +694,14 @@ frappe.provide("toefl_house.command_pages");
 		}
 
 		available.forEach(([name, candidate]) => {
-			const card = actionCard(
+			actionCard(
 				grid,
 				candidate.title,
 				candidate.description || "",
 				"Open page",
 				() => frappe.set_route(name),
+				candidate.admin ? candidate.roles.join(" / ") : candidate.role,
 			);
-			$("<span class='th-role-chip'></span>")
-				.text(text(candidate.admin ? candidate.roles.join(" / ") : candidate.role))
-				.prependTo(card.closest(".th-card").find(".th-card-footer"));
 		});
 	}
 
