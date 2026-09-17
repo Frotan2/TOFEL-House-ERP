@@ -321,6 +321,9 @@ def main() -> int:
             "protocols_rejected_by_the_client_and_therefore_not_evidence": sorted(
                 name for name, entry in protocol_verdict["per_protocol"].items()
                 if entry["outcome"] == "NOT OBSERVABLE"),
+            "protocols_no_available_client_can_offer": protocol_verdict[
+                "not_offerable_by_any_client"],
+            "unofferable_reason": protocol_verdict.get("unofferable_reason"),
             "unrelated_ca_rejected": trust["verify_return_code_without_ca"],
             "hostname_mismatch_rejected": trust["wrong_name_verify_return_code"],
             "note": ("Each refusal is observed, not assumed. A refusal caused by the client's own "
