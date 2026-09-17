@@ -301,30 +301,30 @@ frappe.provide("toefl_house.command_pages");
 		item_name: "Item revision",
 		revision: "Revision",
 		version: "Version now",
-		expected_version: "Version expected",
+		expected_version: "Expected version",
 		status: "Status",
-		subject: "Subject",
+		subject: "Synthetic subject",
 		purpose: "Purpose",
 		reason: "Reason",
-		program: "Programme",
+		program: "Program",
 		course: "Course",
 		academic_year: "Academic year",
-		student_applicant: "Applicant",
-		student_group: "Class",
+		student_applicant: "Student applicant",
+		student_group: "Student group",
 		student_email_id: "Student email",
 		customer: "Customer",
-		placement_decision: "Placement decision",
-		blueprint: "Blueprint",
-		policy: "Policy",
-		config: "Configuration",
+		placement_decision: "Released placement decision",
+		blueprint: "Published blueprint",
+		policy: "Published policy",
+		config: "Configuration type",
 		content_hash: "Content hash",
 		skill_terms: "Skill terms",
 		ordinal: "Ordinal",
-		option_id: "Selected option",
+		option_id: "Option ID",
 		missing: "Missing",
-		instructor: "Teacher",
-		to_time: "Ends at",
-		from_time: "Starts at",
+		instructor: "Instructor",
+		to_time: "To time",
+		from_time: "From time",
 	});
 
 	/* Tones are presentational. They must never imply an outcome the server did
@@ -690,6 +690,7 @@ frappe.provide("toefl_house.command_pages");
 	toefl_house.command_pages.resultMarkup = resultMarkup;
 	toefl_house.command_pages.statusTone = statusTone;
 	toefl_house.command_pages.stylesheet = STYLESHEET;
+	toefl_house.command_pages.factLabels = FACT_LABELS;
 	Object.entries(PAGE_SURFACES).forEach(([name, surface]) => {
 		frappe.pages[name] = frappe.pages[name] || {};
 		frappe.pages[name].on_page_load = (wrapper) => {

@@ -248,4 +248,82 @@ for (const name of Object.keys(wired.frappe.pages)) {
 		`${name} must load the design system`);
 }
 
+/* ---------------------------------------------------- terminology consistency */
+
+// The same business concept must carry one human label everywhere, or staff
+// have to learn that "Class" on one screen and "Student group" on another mean
+// the same thing. This is the defect that motivated the check: the response
+// projection labelled `student_group` as "Class" while every command form
+// labelled it "Student group".
+const { factLabels, surfaces } = loadModule().toefl_house.command_pages;
+
+// Some fieldnames carry genuinely different meanings in a request and in a
+// response, so no single label can be correct for both:
+//   - generic transport parameters reused per endpoint (`name` is the item
+//     revision in one command and the admission decision in another);
+//   - `missing`, which is a Check instruction ("mark this as missing") in the
+//     form but a list of missing items in the response.
+// Every other field denotes one concept and must read identically in both.
+const CONTEXT_DEPENDENT_FIELDNAMES = new Set([
+	"name", "reason", "status", "content", "definition", "code", "revision", "expected_version", "missing",
+]);
+
+// The exclusion set is pinned to its exact contents. Without this, widening the
+// list silently switches the check off for any field - a loophole confirmed by
+// mutation rather than hypothesised. Adding an entry must be a deliberate,
+// reasoned act, not a way to make a failure disappear.
+assert.deepStrictEqual(
+	[...CONTEXT_DEPENDENT_FIELDNAMES].sort(),
+	["code", "content", "definition", "expected_version", "missing", "name", "reason", "revision", "status"],
+	"context-dependent exclusion set changed; each entry needs a stated reason above",
+);
+
+const formLabels = new Map();
+const conflicting = new Set();
+for (const surface of Object.values(surfaces)) {
+	for (const command of surface.commands || []) {
+		for (const field of command.fields || []) {
+			const existing = formLabels.get(field.fieldname);
+			if (existing === undefined) formLabels.set(field.fieldname, field.label);
+			else if (existing !== field.label) conflicting.add(field.fieldname);
+		}
+	}
+}
+assert(formLabels.size > 20, "command forms must expose a meaningful set of labelled fields");
+
+// A fieldname may only be ambiguous if it is genuinely context-dependent. This
+// stops the pinned exclusion set from hiding a real inconsistency.
+for (const fieldname of conflicting) {
+	assert(CONTEXT_DEPENDENT_FIELDNAMES.has(fieldname),
+		`${fieldname} is labelled inconsistently across forms but is not a known context-dependent field`);
+}
+
+let overlap = 0;
+for (const [fieldname, formLabel] of formLabels) {
+	// Covers `missing`, which has a single form label and so never appears in
+	// `conflicting`, yet still cannot share one label with its response form.
+	if (conflicting.has(fieldname) || CONTEXT_DEPENDENT_FIELDNAMES.has(fieldname)) continue;
+	if (!(fieldname in factLabels)) continue;
+	overlap += 1;
+	assert.strictEqual(
+		factLabels[fieldname], formLabel,
+		`${fieldname} reads "${factLabels[fieldname]}" in results but "${formLabel}" in the form`,
+	);
+}
+assert(overlap > 0, "results and forms must share labelled fields for this check to mean anything");
+
+// Where a concept has a native Frappe authority, the label must follow it
+// rather than invent a friendlier synonym. "Instructor", "Student Group" and
+// "Program" are native doctypes, so "Teacher", "Class" and "Programme" would be
+// parallel vocabulary for the same thing - exactly the duplication this app is
+// built to avoid.
+assert.strictEqual(factLabels.student_group, "Student group",
+	"label must match the native Student Group authority, not a synonym");
+assert.strictEqual(factLabels.instructor, "Instructor",
+	"label must match the native Instructor authority, not a synonym");
+assert.strictEqual(factLabels.program, "Program",
+	"label must match the native Program authority, not a synonym");
+assert.strictEqual(factLabels.student_applicant, "Student applicant",
+	"label must match the native Student Applicant authority, not a synonym");
+
 console.log("Design system and response-projection contract OK");
