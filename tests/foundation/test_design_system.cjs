@@ -326,4 +326,104 @@ assert.strictEqual(factLabels.program, "Program",
 assert.strictEqual(factLabels.student_applicant, "Student applicant",
 	"label must match the native Student Applicant authority, not a synonym");
 
+/* --------------------------------------------------------- landing behaviour */
+
+/*
+ * The chainable stub above proves wiring but cannot prove rendering: every
+ * method returns the same object, so structure is invisible to it. These tests
+ * use a recording fake that keeps parent/child links and text, which is what
+ * makes the landing page's two real outcomes assertable.
+ */
+function recording() {
+	const nodes = [];
+	function element(markup) {
+		const node = {
+			markup: String(markup),
+			children: [],
+			texts: [],
+			classes: [],
+			handlers: {},
+			// Matches the shape the client chains on.
+			text(value) { if (value !== undefined) node.texts.push(String(value)); return node; },
+			addClass(name) { node.classes.push(String(name)); return node; },
+			appendTo(parent) { if (parent && parent.children) parent.children.push(node); return node; },
+			prependTo(parent) { if (parent && parent.children) parent.children.unshift(node); return node; },
+			append(child) { if (child && child.children) node.children.push(child); return node; },
+			empty() { node.children.length = 0; return node; },
+			on(event, callback) { (node.handlers[event] ||= []).push(callback); return node; },
+			attr() { return node; },
+			prop() { return node; },
+			find() { return element("<div>"); },
+			closest() { return element("<div>"); },
+		};
+		nodes.push(node);
+		return node;
+	}
+	const dollar = (markup) => element(markup);
+	dollar.nodes = nodes;
+	return dollar;
+}
+
+// Collect every text node below a subtree, which is how we assert on what a
+// person would actually read rather than on which methods were called.
+function allText(node) {
+	return [node.texts.join(" "), ...node.children.map(allText)].join(" ").replace(/\s+/g, " ").trim();
+}
+// Match a whole class token, not a substring: "th-card" is otherwise also
+// matched inside "th-card-title", "th-card-hint" and "th-card-footer", which
+// inflates every count fourfold.
+function countByClass(node, token) {
+	const classes = (node.markup.match(/class='([^']*)'/) || [, ""])[1].split(/\s+/);
+	const own = classes.includes(token) ? 1 : 0;
+	return own + node.children.reduce((total, child) => total + countByClass(child, token), 0);
+}
+
+function loadLanding(roles) {
+	const scoped = loadModule({ user: { has_role: (role) => roles.includes(role) } });
+	scoped.$ = recording();
+	const body = scoped.$("<body>");
+	scoped.frappe.ui = {
+		make_app_page: () => ({ body, main: scoped.$("<main>") }),
+		Dialog: class { show() {} },
+	};
+	scoped.frappe.pages["th-command-centre"].on_page_load({});
+	return { root: body, scoped };
+}
+
+// A role with work areas must see one card per work area, each carrying the
+// role it belongs to - that label is what stops a manager mistaking one
+// placement stage for another.
+const invigilator = loadLanding(["Placement Invigilator"]);
+assert.strictEqual(countByClass(invigilator.root, "th-card"), 1,
+	"an invigilator must see exactly one work area card");
+assert(allText(invigilator.root).includes("Placement Invigilator"),
+	"the card must name the role it is gated by");
+assert(allText(invigilator.root).includes("Open page"),
+	"the card must offer the action");
+assert(countByClass(invigilator.root, "th-role-chip") === 1, "the role chip must render");
+
+// Course Owner and General Manager reach the administration surface, which is
+// gated by two roles and must label itself with both.
+const owner = loadLanding(["Course Owner"]);
+assert.strictEqual(countByClass(owner.root, "th-card"), 1,
+	"a Course Owner must see the administration control centre");
+assert(allText(owner.root).includes("Course Owner / General Manager"),
+	"the shared surface must name both roles that can open it");
+
+// The empty state is the outcome nine shipped roles actually hit. It must not
+// claim the account has no role - the auditors and Finance Officer have desk
+// workspaces, so that wording sends them to ask for something they already have.
+const auditor = loadLanding(["Finance Auditor"]);
+assert.strictEqual(countByClass(auditor.root, "th-card"), 0,
+	"an auditor has no command page and must not be shown one");
+assert(countByClass(auditor.root, "th-empty") === 1, "an empty state must render instead of a blank page");
+const emptyText = allText(auditor.root);
+assert(!/no TOEFL House operational role/i.test(emptyText),
+	"must not claim the account has no role - it has one, just no command page");
+assert(/workspace/i.test(emptyText), "must point to the Desk sidebar workspaces that remain available");
+
+// An account with genuinely no role still gets a clear, non-blank outcome.
+const none = loadLanding([]);
+assert(countByClass(none.root, "th-empty") === 1, "a roleless account must see the empty state");
+
 console.log("Design system and response-projection contract OK");
