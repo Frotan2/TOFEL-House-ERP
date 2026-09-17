@@ -316,8 +316,8 @@ class WorkflowContractTests(unittest.TestCase):
                         WORKFLOW.index("python3 tools/foundation/runtime_durability.py"))
 
     def test_workflow_uses_pinned_action_references(self):
-        self.assertIn("actions/checkout@11d5960a326750d5838078e36cf38b85af677262", WORKFLOW)
-        self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", WORKFLOW)
+        self.assertIn("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09", WORKFLOW)
+        self.assertIn("actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", WORKFLOW)
         self.assertIn("persist-credentials: false", WORKFLOW)
 
     def test_workflow_permissions_are_minimal(self):

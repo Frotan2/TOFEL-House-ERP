@@ -346,7 +346,15 @@ def main() -> int:
         if checks_result.exists():
             verified = json.loads(checks_result.read_text())
             report["client_checks"] = verified["checks"]
-            for key in ("tls_protocol_policy", "certificate_verification"):
+            # Every verdict the client probe forms has to be published, not a
+            # subset of it. `tls_protocol_raw_client_hello` is the record of the
+            # policy-independent probe that resolved the legacy protocols; without
+            # it the report claims a refusal it does not show the evidence for.
+            # The full s_client transcripts (`tls_protocol_attempts`) stay in the
+            # retained artifact: they embed certificate PEM and would dominate the
+            # published summary without changing any verdict.
+            for key in ("tls_protocol_policy", "certificate_verification",
+                        "tls_protocol_raw_client_hello"):
                 if key in verified.get("verdicts", {}):
                     report["verdicts"][key] = verified["verdicts"][key]
             report["required_refusals_observed"] = summarize_refusals(report["verdicts"])

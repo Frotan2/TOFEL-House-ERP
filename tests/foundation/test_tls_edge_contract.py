@@ -37,7 +37,9 @@ Boundary with the existing coverage: ``test_independent_recovery_contract.py`` a
 same pinned nginx template. Neither upgrades a release gate; the PASS comes from
 the hosted operational-boundary run, never from this file.
 """
+import json
 import os
+import re
 import socket
 import struct
 import subprocess
@@ -46,6 +48,7 @@ import tempfile
 import threading
 import time
 import unittest
+import warnings
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -610,6 +613,9 @@ class LegacyProtocolObservabilityTests(unittest.TestCase):
         return certificate
 
     def _serve(self, minimum_version, ciphers=None):
+        # Serving TLS 1.0 here is the point of the negative control, so the
+        # deprecation warning is expected rather than a signal to change anything.
+        warnings.simplefilter("ignore", DeprecationWarning)
         context = self.ssl.SSLContext(self.ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(str(self.certificate),
                                 str(self.certificate.parent / "key.pem"))
@@ -779,6 +785,31 @@ class ClientEvidencePublicationTests(unittest.TestCase):
 
     def test_a_missing_client_result_is_reported_rather_than_silently_empty(self):
         self.assertIn("ABSENT: the client probe produced no result file", self.source)
+
+    def test_the_raw_client_hello_evidence_is_published_and_not_whitelisted_away(self):
+        """The instrument that resolved the legacy protocols must publish its record.
+
+        Run 35216709160 resolved TLS 1.0/1.1 through the raw ClientHello probe and
+        reached POLICY ENFORCED, but the published report carried no
+        ``tls_protocol_raw_client_hello``: the ingestion copied a hardcoded pair of
+        verdict keys, so the new evidence was dropped one layer above the defect
+        that had just been fixed.
+        """
+        copied = re.search(r'for key in \(([^)]*)\):\s*\n\s*if key in verified',
+                           self.source)
+        self.assertIsNotNone(copied, "the verdict ingestion no longer copies by key list")
+        keys = set(re.findall(r'"([a-z_]+)"', copied.group(1)))
+        for required in ("tls_protocol_policy", "certificate_verification",
+                         "tls_protocol_raw_client_hello"):
+            self.assertIn(required, keys,
+                          f"{required} is formed by the client probe but not published")
+        # Every verdict key the inner probe writes must be on that list.
+        inner = (ROOT / "tools/foundation/runtime_tls_edge_checks.py").read_text(encoding="utf-8")
+        written = set(re.findall(r'result\["verdicts"\]\["([a-z_]+)"\]', inner))
+        unpublished = written - keys
+        self.assertEqual(unpublished, {"tls_protocol_attempts"},
+                         "a verdict key is written by the probe but neither published nor "
+                         "deliberately withheld: " + json.dumps(sorted(unpublished)))
 
     def test_the_refusal_summary_tolerates_a_half_finished_run(self):
         source = (ROOT / "tools/foundation/runtime_tls_edge.py").read_text(encoding="utf-8")

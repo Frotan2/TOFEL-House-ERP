@@ -34,10 +34,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24.21.0
           package-manager-cache: false
@@ -59,7 +59,7 @@ jobs:
           --name 'Foundation independent recovery - source system'
       - name: Hand the backup to an independent system
         if: always() && hashFiles('.foundation/independent-recovery/payload/database.sql.gz') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: independent-recovery-payload-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/independent-recovery/payload/
@@ -67,7 +67,7 @@ jobs:
           retention-days: 14
       - name: Retain source evidence, including failures
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: foundation-independent-source-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/independent-source-evidence/
@@ -81,10 +81,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24.21.0
           package-manager-cache: false
@@ -93,7 +93,7 @@ jobs:
       - name: Establish fresh compatible Python and services
         run: python3 tools/foundation/runner_probe.py
       - name: Receive the backup on this independent system
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: independent-recovery-payload-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/independent-recovery/payload/
@@ -109,7 +109,7 @@ jobs:
           --name 'Foundation independent recovery - independent target system'
       - name: Retain target evidence, including failures
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: foundation-independent-target-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/independent-target-evidence/

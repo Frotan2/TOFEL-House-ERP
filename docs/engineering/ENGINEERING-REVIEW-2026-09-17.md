@@ -304,6 +304,64 @@ A listener that genuinely accepts TLS 1.0 still resolves to `NOT PROVEN` with
 `@SECLEVEL=0` does not change it), so the *client-capability* half of defect 2 is
 reasoned about, not reproduced. The raw-ClientHello path is verified end to end.
 
+### F10 — Every workflow ran on deprecated action runtimes, and nothing in the suite noticed
+
+GitHub deprecated the Node.js 20 action runtime on 2025-09-19. Every run in this
+repository carries the warning as an *annotation*, which no gate reads:
+
+```
+Node.js 20 is deprecated. The following actions target Node.js 20 but are being
+forced to run on Node.js 24: actions/checkout@11d5960a326750d5838078e36cf38b85af677262,
+actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+```
+
+Three of the four pinned actions declared `runs.using: node20` and were being
+force-run on a runtime their authors never tested — in a repository whose entire
+posture is "pin it, hash it, prove it". The pins were correct; the *runtime* they
+pinned was not. Because the warning is an annotation rather than a failure, the
+whole suite stayed green and nothing recorded it.
+
+**Fixed.** Each action was resolved against the GitHub API (tag each SHA carries,
+and the `runs.using` declared by that tag's `action.yml`) and rotated to the
+**lowest major that runs on Node 24** — chosen to remove the deprecation with the
+smallest behavioural delta rather than to chase the newest major:
+
+| Action | Was | Now | `runs.using` |
+| --- | --- | --- | --- |
+| `actions/checkout` | `11d5960a…` v4.4.0 | `fbc6f399…` **v5.1.0** | node24 |
+| `actions/upload-artifact` | `ea165f8d…` v4.6.2 | `b7c566a7…` **v6.0.0** | node24 |
+| `actions/download-artifact` | `d3f86a10…` v4.3.0 | `37930b1c…` **v7.0.0** | node24 |
+| `actions/setup-node` | `249970729…` v6.5.0 | unchanged | node24 already |
+
+Breaking changes were checked rather than assumed. All three new majors require
+runner ≥ 2.327.1; `download-artifact` v5's one real breaking change is scoped to
+single-artifact downloads **by ID**, and `grep` confirms no workflow passes
+`artifact-id` — all eight downloads are by `name`, so it does not apply.
+
+Two defects in the pinning discipline itself surfaced while doing this and are
+also fixed:
+
+- **Comments disagreed with the SHAs they annotated.** The refs carried four
+  different comment styles — `# v4`, `# v4.4.0`, `# v4 reference resolved
+  2026-09-13`, and none at all. Rotating the SHA alone would have left 21 refs
+  asserting a version they no longer were. All 48 are now normalized to the
+  resolved tag.
+- **The same literals were duplicated into three contract tests** — exactly the
+  F1b failure mode. They were rotated in the same change and a test now fails if
+  a retired pin reappears anywhere under `tests/`.
+
+`tests/foundation/test_workflow_action_pins.py` (9 tests) makes the property
+executable: every `uses:` reference is a full 40-char SHA, is in a table of pins
+this repository has resolved to a Node 24 release, carries a comment agreeing
+with that SHA, and every `uses:` line is parsed so a malformed one cannot vanish
+from the audit. Proved load-bearing by mutation — reverting one checkout pin to
+the retired SHA, annotating a v5.1.0 SHA as v4.4.0, and substituting the mutable
+tag `actions/checkout@v5` each produce failures; restoring passes.
+
+**Not verified by a hosted run at the time of writing.** The rotation is pushed,
+but the claim "these pins work on the runner" rests on the API-resolved
+`runs.using` values and the runner-version check, not on an observed green run.
+
 ---
 
 ## 3. What remains

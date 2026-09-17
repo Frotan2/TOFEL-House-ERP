@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       - name: Test key custody contract guards
@@ -73,7 +73,7 @@ jobs:
           --name 'Foundation key custody - separate custodian system'
       - name: Hand custody channel A to the operating and recovery systems
         if: always() && hashFiles('.foundation/key-custody/channel-a/*.json') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: key-custody-channel-a-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody/channel-a/
@@ -81,7 +81,7 @@ jobs:
           retention-days: 14
       - name: Hand custody channel B to the operating and recovery systems
         if: always() && hashFiles('.foundation/key-custody/channel-b/*.json') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: key-custody-channel-b-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody/channel-b/
@@ -89,7 +89,7 @@ jobs:
           retention-days: 14
       - name: Hand the fingerprint manifest to the operating and recovery systems
         if: always() && hashFiles('.foundation/key-custody/manifest/custody-manifest.json') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: key-custody-manifest-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody/manifest/
@@ -97,7 +97,7 @@ jobs:
           retention-days: 14
       - name: Retain custodian evidence, including failures
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: foundation-key-custodian-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody-evidence/
@@ -111,10 +111,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24.21.0
           package-manager-cache: false
@@ -128,17 +128,17 @@ jobs:
           command -v gpg >/dev/null || sudo apt-get install -y --no-install-recommends gnupg
           gpg --version | head -1
       - name: Receive custody channel A
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: key-custody-channel-a-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody/channel-a/
       - name: Receive custody channel B
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: key-custody-channel-b-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody/channel-b/
       - name: Receive the fingerprint manifest
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: key-custody-manifest-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody/manifest/
@@ -154,7 +154,7 @@ jobs:
           --name 'Foundation key custody - operating system'
       - name: Hand the encrypted backup to the recovery system
         if: always() && hashFiles('.foundation/key-custody-operator/payload/database.sql.gz') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: key-custody-payload-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody-operator/payload/
@@ -162,7 +162,7 @@ jobs:
           retention-days: 14
       - name: Retain operator evidence, including failures
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: foundation-key-operator-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody-operator-evidence/
@@ -176,10 +176,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24.21.0
           package-manager-cache: false
@@ -193,22 +193,22 @@ jobs:
           command -v gpg >/dev/null || sudo apt-get install -y --no-install-recommends gnupg
           gpg --version | head -1
       - name: Receive custody channel A
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: key-custody-channel-a-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody/channel-a/
       - name: Receive custody channel B
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: key-custody-channel-b-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody/channel-b/
       - name: Receive the fingerprint manifest
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: key-custody-manifest-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody/manifest/
       - name: Receive the encrypted backup
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: key-custody-payload-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody-operator/payload/
@@ -224,7 +224,7 @@ jobs:
           --name 'Foundation key custody - recovery system'
       - name: Retain recovery evidence, including failures
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: foundation-key-recovery-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody-recovery-evidence/

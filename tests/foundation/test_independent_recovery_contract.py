@@ -874,8 +874,8 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(WORKFLOW.count("runs-on: ubuntu-24.04"), 2)
 
     def test_the_artifact_is_the_only_channel_between_the_systems(self):
-        self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", WORKFLOW)
-        self.assertIn("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", WORKFLOW)
+        self.assertIn("actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", WORKFLOW)
+        self.assertIn("actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131", WORKFLOW)
         self.assertIn("independent-recovery-payload-", WORKFLOW)
         self.assertLess(WORKFLOW.index("upload-artifact"), WORKFLOW.index("download-artifact"))
 
@@ -884,7 +884,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("if-no-files-found: error", WORKFLOW)
 
     def test_workflow_uses_pinned_action_references(self):
-        self.assertIn("actions/checkout@11d5960a326750d5838078e36cf38b85af677262", WORKFLOW)
+        self.assertIn("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09", WORKFLOW)
         self.assertIn("actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38", WORKFLOW)
         self.assertIn("persist-credentials: false", WORKFLOW)
         self.assertNotIn("@v4\n", WORKFLOW)
