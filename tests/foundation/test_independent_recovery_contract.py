@@ -664,6 +664,20 @@ class NginxContractTests(unittest.TestCase):
     def test_private_files_are_not_served_statically(self):
         self.assertNotIn("private/files", self.conf)
 
+    def test_permitted_private_files_are_served_only_through_the_internal_location(self):
+        """frappe answers with X-Accel-Redirect to /protected/<site-relative path>;
+        without this location the response would be an empty 200."""
+        self.assertIn("location ~ ^/protected/(.*) {", self.conf)
+        self.assertIn("internal;", self.conf)
+        self.assertIn("try_files /recovered.localhost/$1 =404;", self.conf)
+
+    def test_the_proxy_asks_the_application_to_offload_private_files(self):
+        self.assertIn("proxy_set_header X-Use-X-Accel-Redirect True;", self.conf)
+
+    def test_protected_is_declared_before_the_public_file_rules(self):
+        """nginx uses the first matching regex location."""
+        self.assertLess(self.conf.index("^/protected/"), self.conf.index("^/files/"))
+
 
 class UsabilityTests(unittest.TestCase):
     def test_requests_name_the_recovered_site(self):

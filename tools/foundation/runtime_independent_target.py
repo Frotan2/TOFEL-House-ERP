@@ -150,7 +150,10 @@ def nginx_conf(lab, bench_dir):
     ``root`` at the sites directory with ``try_files /<site>/public/$uri
     @webserver`` is how bench serves public files statically while routing
     everything else - including ``/private/files/``, which Frappe gates on
-    permissions - to the application. The site is resolved from a whitelist of
+    permissions - to the application. A permitted private file comes back as an
+    ``X-Accel-Redirect`` to an internal ``/protected/`` location, declared here as
+    the pinned template declares it, so the bytes are served by nginx only after
+    the application has authorised them. The site is resolved from a whitelist of
     the Host header rather than trusting client-supplied routing.
     """
     return f"""pid {lab}/nginx.pid;
@@ -167,6 +170,14 @@ http {{
   root {bench_dir}/sites;
   if ($foundation_site = '') {{ return 444; }}
   location /assets/ {{ alias {bench_dir}/sites/assets/; }}
+  # The application answers a permitted private-file request with an
+  # X-Accel-Redirect to /protected/<site-relative path>, and nginx serves it from
+  # here. `internal` means an external request for /protected/ gets a 404: only the
+  # application, after its own permission check, can reach these bytes.
+  location ~ ^/protected/(.*) {{
+   internal;
+   try_files /{SITE}/$1 =404;
+  }}
   location ~* ^/files/.*.(htm|html|svg|xml) {{
    add_header Content-disposition "attachment";
    try_files /{SITE}/public/$uri @webserver;
