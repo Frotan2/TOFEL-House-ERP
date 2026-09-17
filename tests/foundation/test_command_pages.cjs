@@ -10,10 +10,11 @@ const SCRIPT = path.join(APP, "public/js/th_command_pages.js");
 const HOOKS = path.join(APP, "hooks.py");
 const SECURITY = path.join(APP, "security.py");
 const PYPROJECT = path.join(ROOT, "apps/toefl_house/pyproject.toml");
+const NATIVE_CHECKS = path.join(ROOT, "tools/placement/native_checks.py");
 
 const expected = {
 	"th-administration-control-centre": { module: "Placement", roles: ["Course Owner", "General Manager"] },
-	"th-command-centre": { module: "Placement", roles: ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception"] },
+	"th-command-centre": { module: "Placement", roles: ["Placement Author", "Placement Publisher", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Enrollment Officer", "Teaching Scheduler", "Attendance Recorder"] },
 	"th-placement-author": { module: "Placement", roles: ["Placement Author"] },
 	"th-placement-publisher": { module: "Placement", roles: ["Placement Publisher"] },
 	"th-placement-invigilation": { module: "Placement", roles: ["Placement Invigilator"] },
@@ -65,6 +66,47 @@ for (const [name, shape] of Object.entries(expected)) {
 	assert(surface, `${name} missing client surface`);
 	if (surface.landing || surface.admin) assert.deepStrictEqual(Array.from(surface.roles), shape.roles, name);
 	else assert.strictEqual(surface.role, shape.roles[0], name);
+}
+
+/*
+ * The hosted qualification in tools/placement/native_checks.py pins each Page's
+ * audience in PAGE_SPEC and asserts it against the installed Page, including a
+ * negative control that audit and finance audiences receive no command page at
+ * all. Nothing in this suite used to look at that file, so a Page audience could
+ * be edited here and pass every local check while breaking hosted evidence.
+ *
+ * That is not hypothetical: widening th-command-centre to every shipped role
+ * passed all 703 local tests and both Node contracts, and would have failed
+ * `release-command-pages-configured` and `release-command-page-role-visibility`,
+ * invalidating recorded proof. This tie makes that divergence a local failure.
+ */
+const nativeChecks = fs.readFileSync(NATIVE_CHECKS, "utf8");
+const specBlock = /^ {8}PAGE_SPEC=\{([\s\S]*?)\n {8}\}/m.exec(nativeChecks);
+assert(specBlock, "could not locate PAGE_SPEC in native_checks.py");
+const pageSpec = {};
+for (const [, page, module, roleList] of specBlock[1].matchAll(/'([\w-]+)':\('(\w+)',\{([^}]*)\}\)/g)) {
+	pageSpec[page] = {
+		module,
+		roles: roleList.split(",").map((role) => role.trim().replace(/^'|'$/g, "")).filter(Boolean).sort(),
+	};
+}
+// PAGE_SPEC covers the 13 D10 command pages. th-administration-control-centre is
+// deliberately absent: it is a governance surface qualified by
+// test_governance_surface.py, not a command page, so it must not be forced into
+// the command-page contract here.
+const ADMIN_PAGE = "th-administration-control-centre";
+assert(!(ADMIN_PAGE in pageSpec),
+	"the governance page must stay out of the command-page PAGE_SPEC");
+assert.strictEqual(Object.keys(pageSpec).length, Object.keys(expected).length - 1,
+	"native_checks PAGE_SPEC and the shipped command-page set have diverged in size");
+
+for (const [name, shape] of Object.entries(expected)) {
+	if (name === ADMIN_PAGE) continue;
+	const spec = pageSpec[name];
+	assert(spec, `${name} ships a Page but native_checks.py does not qualify it`);
+	assert.strictEqual(spec.module, shape.module, `${name} module differs from PAGE_SPEC`);
+	assert.deepStrictEqual([...shape.roles].sort(), spec.roles,
+		`${name} audience differs from the audience qualified by native_checks.py`);
 }
 
 const hooks = fs.readFileSync(HOOKS, "utf8");

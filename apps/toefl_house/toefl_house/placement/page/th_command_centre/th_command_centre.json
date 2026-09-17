@@ -12,9 +12,6 @@
       "role": "Placement Publisher"
     },
     {
-      "role": "Placement Auditor"
-    },
-    {
       "role": "Placement Invigilator"
     },
     {
@@ -36,43 +33,13 @@
       "role": "Admission Approver"
     },
     {
-      "role": "Admission Auditor"
-    },
-    {
       "role": "Enrollment Officer"
-    },
-    {
-      "role": "Enrollment Auditor"
     },
     {
       "role": "Teaching Scheduler"
     },
     {
       "role": "Attendance Recorder"
-    },
-    {
-      "role": "Teaching Auditor"
-    },
-    {
-      "role": "Finance Officer"
-    },
-    {
-      "role": "Finance Auditor"
-    },
-    {
-      "role": "Course Owner"
-    },
-    {
-      "role": "General Manager"
-    },
-    {
-      "role": "Academic Manager"
-    },
-    {
-      "role": "Finance Manager"
-    },
-    {
-      "role": "Reception"
     }
   ],
   "standard": "Yes",
