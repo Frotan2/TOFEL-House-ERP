@@ -31,7 +31,8 @@ sys.path.insert(0, str(ROOT / "tools" / "foundation"))
 import runtime_independent_data as data  # noqa: E402
 import runtime_independent_target as target  # noqa: E402
 import runtime_independent_usability as usability  # noqa: E402
-from bench_bootstrap import Probe, machine_identity  # noqa: E402
+from bench_bootstrap import (Probe, dmi_product_uuid,  # noqa: E402
+                               machine_identity)
 
 SOURCE = (ROOT / "tools/foundation/runtime_independent_source.py").read_text(encoding="utf-8")
 TARGET = (ROOT / "tools/foundation/runtime_independent_target.py").read_text(encoding="utf-8")
@@ -126,15 +127,15 @@ class IndependenceTests(unittest.TestCase):
 
     def _host(self, **overrides):
         host = {"hostname": "fv-abc123", "kernel_boot_id": "boot-1",
-                "docker_daemon_id": "daemon-1", "runner_name": "GitHub Actions 1",
-                "job": "source", "run_id": "1"}
+                "docker_daemon_id": "daemon-1", "dmi_product_uuid": "vm-1",
+                "runner_name": "GitHub Actions 1", "job": "source", "run_id": "1"}
         host.update(overrides)
         return host
 
     def _other(self, **overrides):
         host = {"hostname": "fv-xyz789", "kernel_boot_id": "boot-2",
-                "docker_daemon_id": "daemon-2", "runner_name": "GitHub Actions 2",
-                "job": "target", "run_id": "1"}
+                "docker_daemon_id": "daemon-2", "dmi_product_uuid": "vm-2",
+                "runner_name": "GitHub Actions 2", "job": "target", "run_id": "1"}
         host.update(overrides)
         return host
 
@@ -171,14 +172,45 @@ class IndependenceTests(unittest.TestCase):
         self.assertFalse(verdict["kernel_boot_id_differs"])
         self.assertFalse(verdict["independent"])
 
-    def test_a_shared_container_runtime_defeats_independence(self):
-        """The same daemon means the same datastore, so recovery is not separate."""
+    def test_a_shared_container_runtime_does_not_defeat_independence(self):
+        """Run 35168111875: the runner image ships a pre-generated daemon key, so
+        equal daemon ids on two separate VMs are expected and prove nothing."""
         verdict = target.independence_verdict(self._host(), self._other(docker_daemon_id="daemon-1"))
         self.assertFalse(verdict["docker_daemon_id_differs"])
+        self.assertFalse(verdict["docker_daemon_id_used_as_a_discriminator"])
+        self.assertIn("pre-generated daemon key", verdict["docker_daemon_id_note"])
+        self.assertIn("35168111875", verdict["docker_daemon_id_note"])
+        self.assertTrue(verdict["independent"])
+
+    def test_a_shared_agent_registration_defeats_independence(self):
+        """Two jobs on one VM share one runner agent."""
+        verdict = target.independence_verdict(self._host(), self._other(runner_name="GitHub Actions 1"))
+        self.assertFalse(verdict["runner_name_differs"])
         self.assertFalse(verdict["independent"])
 
+    def test_the_hypervisor_identifier_is_recorded_as_corroboration(self):
+        verdict = target.independence_verdict(self._host(), self._other())
+        self.assertTrue(verdict["dmi_product_uuid_available"])
+        self.assertTrue(verdict["dmi_product_uuid_differs"])
+
+    def test_an_unreadable_hypervisor_identifier_is_never_faked(self):
+        source = self._host()
+        del source["dmi_product_uuid"]
+        verdict = target.independence_verdict(source, self._other())
+        self.assertFalse(verdict["dmi_product_uuid_available"])
+        self.assertFalse(verdict["dmi_product_uuid_differs"])
+        # Corroboration only; independence rests on the two real discriminators.
+        self.assertTrue(verdict["independent"])
+
+    def test_dmi_probe_returns_a_value_or_none_and_never_raises(self):
+        """Executed: an unreadable identifier must be None, not a fabricated value."""
+        value = dmi_product_uuid()
+        self.assertTrue(value is None or (isinstance(value, str) and value.strip()))
+        self.assertIn('"sudo", "-n", "cat"', BOOTSTRAP)
+        self.assertIn("rather than pretending to be evidence", BOOTSTRAP)
+
     def test_missing_identifiers_fail_closed_rather_than_counting_as_different(self):
-        for key in ("kernel_boot_id", "docker_daemon_id"):
+        for key in ("kernel_boot_id", "runner_name"):
             source, other = self._host(), self._other()
             del source[key]
             del other[key]

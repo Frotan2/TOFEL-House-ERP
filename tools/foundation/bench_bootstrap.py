@@ -56,6 +56,28 @@ def load_components():
     return components
 
 
+def dmi_product_uuid():
+    """Hypervisor-assigned VM identifier, best effort.
+
+    Unlike the Docker daemon id - which the runner image ships pre-generated, so
+    every VM built from that image reports the same value - this is assigned per
+    virtual machine. Reading it needs root, so it is attempted with non-interactive
+    sudo and returns None when unavailable rather than pretending to be evidence.
+    """
+    path = Path("/sys/class/dmi/id/product_uuid")
+    if not path.exists():
+        return None
+    for command in (["cat", str(path)], ["sudo", "-n", "cat", str(path)]):
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        value = result.stdout.strip()
+        if result.returncode == 0 and value:
+            return value
+    return None
+
+
 def machine_identity():
     """Recorded, not assumed: proves the two halves ran on different systems.
 
@@ -79,6 +101,9 @@ def machine_identity():
     if boot_id.exists():
         # A per-boot identifier: two jobs on the same live host would share it.
         identity["kernel_boot_id"] = boot_id.read_text().strip()
+    product_uuid = dmi_product_uuid()
+    if product_uuid:
+        identity["dmi_product_uuid"] = product_uuid
     try:
         identity["uptime_seconds"] = round(
             float(Path("/proc/uptime").read_text().split()[0]), 1)
