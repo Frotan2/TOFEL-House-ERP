@@ -3939,10 +3939,23 @@ def main():
             assert running['value']>=2
             people={item['id']:item for item in next(
                 sect for sect in rec['sections'] if sect['id']=='people')['items']}
-            enrolled_stages=[i['stage'] for i in people.values() if i.get('stage')=='Enrolled']
-            assert enrolled_stages, 'the classified intakes must read as Enrolled (cohort derived from the real class state)'
-            assert not [i for i in people.values() if i.get('stage')=='Enrolled, no class'], \
-                'GRP_A is Active for this program and year: nobody here may read as unclassed'
+            # §5.4 Reception truth lives in lookup: the learner's stage must
+            # read from the governed class fact, not from any flag of ours.
+            sname=frappe.db.get_value('Student',second['student'],'student_name')
+            assert sname,('the synthetic student has no name to look up',second)
+            lut=sessions['receptionist'].get(base+'/api/method/toefl_house.desk.reception.lookup',
+                params={'query':sname},timeout=30)
+            assert lut.status_code==200,('reception lookup',lut.status_code,lut.text[:200])
+            lmsg=lut.json()['message']
+            assert lmsg['desk']=='th-reception-desk'
+            for word in BANNED_PLUMBING:
+                assert word not in json.dumps(lmsg),('lookup payload',word)
+            st=next((i for i in lmsg['students'] if i['id']==second['student']),None)
+            assert st and st['stage']=='Enrolled', \
+                ('D4: lookup must read the real class state (an open class exists for this level/year)',st)
+            assert not [i for i in lmsg['students'] if i['stage']=='Enrolled, no class'], \
+                'no learner here may read as unclassed while SYN-GRP-MAIN-1/2 are open'
+            assert all(i.get('stage')!='Enrolled, no class' for i in people.values())
             # U1: affordances for the acting role, same payloads, gated
             aca_sch=desk_get('academic_scheduler','academic.work')
             cls_sch={item['id']:item for item in next(
