@@ -329,6 +329,27 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Select", options: "1\n0", reqd: 1, description: "0 retires the level; refused while submitted enrollments still run on it." },
 		],
+		"toefl_house.academic.create_academic_year": [
+			{ fieldname: "name", label: "Academic year name (e.g. 2026-27)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "start_date", label: "Start date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "end_date", label: "End date", fieldtype: "Date", reqd: 1 },
+		],
+		"toefl_house.academic.create_fee_type": [
+			{ fieldname: "name", label: "Fee type name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
+		],
+		"toefl_house.academic.set_level_fee_component": [
+			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "fee_category", label: "Fee type", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "amount", label: "Amount (upsert; same type replaces its amount)", fieldtype: "Float", reqd: 1 },
+			{ fieldname: "company", label: "Company (only when several exist)", fieldtype: "Data" },
+		],
+		"toefl_house.academic.remove_level_fee_component": [
+			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "fee_category", label: "Fee type to remove", fieldtype: "Data", reqd: 1 },
+		],
 	});
 
 	/* Client-side courtesy guards for rules the server enforces anyway

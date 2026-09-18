@@ -81,7 +81,7 @@ admission/enrollment/finance commands. The alternative (family = Program,
 levels = Courses) breaks native fee granularity, because `Fee Structure` is
 keyed per Program, not per Course.
 
-## 3. What shipped (slice 1)
+## 3. What shipped (slice 1 + slice 2)
 
 - **`TH Academic Program`** (module Academic) — the family: stable `code`
   (set-once, unique), `title`, `status` (Active/Retired), description.
@@ -98,6 +98,26 @@ keyed per Program, not per Course.
   (governance precedent, deliberately NOT synthetic-gated — same boundary as
   `administration.py`), request-key idempotent, row-locked mutations,
   native `Version` audit via track_changes, refusals in business language.
+- **Fee configuration (slice 2)** — guarded commands over *native* finance
+  masters: `create_academic_year` (native `Academic Year` — required by fees,
+  enrollment and classes, yet created by nothing until now), `create_fee_type`
+  (native `Fee Category`; Education's pinned controller creates and maintains
+  the accounting `Item` itself — verified server-side `after_insert`), and
+  `set_level_fee_component` / `remove_level_fee_component` (upsert/remove of
+  `Fee Component` rows on the native `Fee Structure` keyed on the level's
+  anchored program + academic year — exactly the structure the qualified
+  Finance issuance command consumes). Managed plans stay **Draft/editable**:
+  the issuance command reads structures regardless of docstatus (verified),
+  and issued `Fees` copy their components at issuance, so a price change
+  never touches a posted document — native snapshot semantics, no invented
+  versioning on top. Safety: components must reference existing fee types;
+  the company is explicit or unambiguous (refuses when several exist); the
+  receivable account is resolved from the company's native default (refused
+  in business language when unset); a plan keeps at least one component; the
+  native "Fee Component" Item Group must exist before fee types can be
+  defined (fail closed with an administrator action, never a raw link error);
+  ambiguity (two editable structures for one program+year) is refused, not
+  guessed.
 - **Academic Setup desk** (`th-academic-setup`, audience Course Owner) —
   configuration health facts (integrity faults surface, never hide), the
   program and level queues with the *governing* duration of each level, and
@@ -217,7 +237,7 @@ suite if a future change reintroduces hard-coded policy.
   Course-Owner-only writes, native Version audit), command contracts
   (whitelisted, request-key-first, gated, never synthetic-gated, rules
   reused), registry/Page/hooks/projection ties, hard-coded-policy audit.
-- `tests/configuration/test_lifecycle.py` (6 tests) — the §33/§45 lifecycle
+- `tests/configuration/test_lifecycle.py` (11 tests) — the §33/§45 lifecycle
   against the real commands on an in-memory backend: build a program with
   ordered levels, link progression, change the duration policy, prove the new
   version governs only new dates, prove the old version is closed untouched,
@@ -230,9 +250,13 @@ suite if a future change reintroduces hard-coded policy.
 ## 9. Roadmap (each slice gated on the previous, decisions requested in parallel)
 
 1. **Shipped** — programs, levels, durations, progression, setup desk.
-2. Fee configuration orchestration: guide the Owner through native
-   `Fee Category` + `Fee Structure` per level with a preview of affected
-   future enrollments (never posted documents); fee-type catalog surface.
+2. **Shipped** — fee configuration orchestration: academic years, fee types
+   (native Fee Category + Item), per-level native fee plans with component
+   upsert/remove; the desk shows fee types, the editable plans with their
+   components and sums (display arithmetic, clearly labeled), and the
+   readiness fact "active levels without a fee plan for the current academic
+   year" — the honest preview of what would block future billing (posted
+   documents are, by native semantics, never affected).
 3. Discount rules — **blocked on OD-CP-1**; smallest model (§14) on the chosen
    policy, consumed at fee preparation, native percent discipline preserved.
 4. Refund/cancellation policy model — will carry its own OWNER DECISION

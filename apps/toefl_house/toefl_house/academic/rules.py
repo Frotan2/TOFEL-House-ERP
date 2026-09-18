@@ -156,6 +156,69 @@ def check_version_appends(rows, new_effective_from):
                 "would make history ambiguous")
 
 
+def validate_fee_amount(value):
+    """A fee component amount: positive number, bounded by a typo guard.
+
+    The ceiling is not business policy — it exists so a slipped keystroke
+    cannot silently define a nine-figure charge. The Owner's real amounts
+    are data; this only refuses implausible input.
+    """
+    if isinstance(value, str):
+        try:
+            value = float(value.strip())
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Fee amount must be a number") from exc
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("Fee amount must be a number")
+    value = float(value)
+    if value <= 0:
+        raise ValueError("Fee amount must be greater than zero")
+    if value > 100_000_000:
+        raise ValueError("Fee amount looks like a typo; the maximum accepted is 100000000")
+    return value
+
+
+def validate_component_rows(rows):
+    """A fee plan's component set: non-empty, unique categories, valid amounts.
+
+    Category is the native Fee Category name (which owns the native Item);
+    amounts are what the student is charged. This is display-and-validation
+    only — the native Fee Structure remains the money authority.
+    """
+    if not rows:
+        raise ValueError("A fee plan needs at least one fee component")
+    seen = set()
+    normalized = []
+    for row in rows:
+        category = rules_category(row)
+        if category in seen:
+            raise ValueError(f"Fee category {category} appears more than once in the plan")
+        seen.add(category)
+        amount = validate_fee_amount(row.get("amount") if isinstance(row, dict) else row)
+        normalized.append({"category": category, "amount": amount})
+    return normalized
+
+
+def rules_category(row):
+    if not isinstance(row, dict):
+        raise ValueError("Each fee component needs a fee category and an amount")
+    category = row.get("category")
+    if not isinstance(category, str) or not category.strip():
+        raise ValueError("Each fee component needs a fee category")
+    category = category.strip()
+    if len(category) > 140:
+        raise ValueError("Fee category names must be at most 140 characters")
+    return category
+
+
+def validate_year_bounds(start_date, end_date):
+    start = parse_date(start_date, "Academic year start")
+    end = parse_date(end_date, "Academic year end")
+    if end < start:
+        raise ValueError("The academic year cannot end before it starts")
+    return start, end
+
+
 def latest_version(rows):
     """The most recently effective version row, or None."""
     existing = normalize_versions(rows)

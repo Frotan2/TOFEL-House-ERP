@@ -29,16 +29,25 @@ PROGRAM = "TH Academic Program"
 LEVEL = "TH Program Level"
 DURATION = "TH Level Duration"
 ENROLLMENT = "Program Enrollment"
+YEAR = "Academic Year"
+FEE_CATEGORY = "Fee Category"
+FEE_STRUCTURE = "Fee Structure"
+FEE_ROW = "Fee Component"
 
 PROGRAM_FIELDS = ["name", "code", "title", "status", "modified"]
 LEVEL_FIELDS = ["name", "family", "code", "title", "sequence", "status",
                 "native_program", "next_level", "modified"]
 DURATION_FIELDS = ["name", "parent", "parenttype", "duration_value", "duration_unit",
                    "effective_from", "superseded_on", "reason", "set_by"]
+YEAR_FIELDS = ["name", "year_start_date", "year_end_date"]
+FEE_TYPE_FIELDS = ["name", "category_name", "description", "item"]
+FEE_PLAN_FIELDS = ["name", "program", "academic_year", "company",
+                   "receivable_account", "docstatus", "total_amount"]
+FEE_ROW_FIELDS = ["name", "parent", "parenttype", "fees_category", "amount", "idx"]
 
 
 def work():
-    """Academic Setup payload: health, programs, levels, setup actions."""
+    """Academic Setup payload: health, programs, levels, fees, setup actions."""
     require_desk_audience(SLUG)
     today = frappe.utils.today()
 
@@ -52,6 +61,15 @@ def work():
     active_enrollments = project_rows("setup", ENROLLMENT,
                                       ["name", "program", "docstatus"],
                                       filters={"docstatus": 1}, limit=LIMIT_QUEUES * 4)
+    years = project_rows("setup", YEAR, YEAR_FIELDS,
+                         order_by="year_start_date asc", limit=LIMIT_QUEUES)
+    fee_types = project_rows("setup", FEE_CATEGORY, FEE_TYPE_FIELDS,
+                             order_by="category_name asc", limit=LIMIT_QUEUES)
+    fee_plans = project_rows("setup", FEE_STRUCTURE, FEE_PLAN_FIELDS,
+                             order_by="academic_year asc, name asc", limit=LIMIT_QUEUES)
+    fee_rows = project_rows("setup", FEE_ROW, FEE_ROW_FIELDS,
+                            filters={"parenttype": FEE_STRUCTURE},
+                            order_by="idx asc", limit=LIMIT_QUEUES * 4)
 
     versions_by_level = {}
     for row in versions:
@@ -61,7 +79,72 @@ def work():
         if row.get("program"):
             usage[row["program"]] = usage.get(row["program"], 0) + 1
     levels_by_name = {row["name"]: row for row in levels}
+    levels_by_native = {row["native_program"]: row
+                        for row in levels if row.get("native_program")}
     family_titles = {row["name"]: row["title"] for row in programs}
+
+    # --- fee readiness ------------------------------------------------------
+    rows_by_plan = {}
+    for row in fee_rows:
+        rows_by_plan.setdefault(row.get("parent"), []).append(row)
+    plans_by_program = {}
+    for plan in fee_plans:
+        plans_by_program.setdefault((plan.get("program"), plan.get("academic_year")),
+                                    []).append(plan)
+    current_year = _current_year(years, today)
+    levels_without_plan = []
+    for level in levels:
+        if level["status"] != "Active" or not level.get("native_program"):
+            continue
+        if current_year and not plans_by_program.get(
+                (level["native_program"], current_year)):
+            levels_without_plan.append(level["code"])
+
+    fee_plan_items = []
+    for plan in fee_plans:
+        level = levels_by_native.get(plan.get("program"))
+        rows = rows_by_plan.get(plan["name"], [])
+        total = sum(float(row.get("amount") or 0) for row in rows)
+        detail = " · ".join(str(part) for part in (
+            plan.get("academic_year"), plan.get("company") or "",
+            f"{len(rows)} component(s)")) if rows else (
+            plan.get("academic_year") or "")
+        fee_plan_items.append({
+            "id": plan["name"],
+            "person": level["title"] if level else (plan.get("program") or ""),
+            "detail": detail,
+            "status": "Editable plan" if int(plan.get("docstatus") or 0) == 0 else "Submitted",
+            "stage": "Fee plan",
+            "stage_definition": "Native Fee Structure for the level's anchored program "
+                                "and academic year; issued Fees copy their components, "
+                                "so posted documents never change with this policy.",
+            "next": ("Components: " + ", ".join(
+                f"{row.get('fees_category')} {float(row.get('amount') or 0):g}"
+                for row in rows) + f". Sum {total:g}.") if rows
+            else "No components yet; the Finance command would refuse an empty plan.",
+            "next_role": "Course Owner" if not rows else None,
+            "waiting_since": None,
+        })
+        if level and level["status"] == "Active":
+            fee_plan_items[-1]["action"] = guided_action(
+                "Course Owner", "toefl_house.academic.set_level_fee_component",
+                "Set fee component",
+                {"level": level["code"], "academic_year": plan.get("academic_year") or ""})
+
+    fee_type_items = [{
+        "id": row["name"],
+        "person": row["category_name"],
+        "detail": (row.get("description") or "") + (
+            f" · item: {row['item']}" if row.get("item") else " · item pending"),
+        "status": "Ready" if row.get("item") else "Item pending",
+        "stage": "Fee type",
+        "stage_definition": "Native Fee Category; Education creates and maintains "
+                            "its accounting Item automatically.",
+        "next": "No action." if row.get("item") else \
+            "The accounting Item has not been created yet; open the category natively.",
+        "next_role": None,
+        "waiting_since": None,
+    } for row in fee_types]
 
     program_rows_view = []
     for program in programs:
@@ -162,6 +245,15 @@ def work():
         {"label": "Progression links configured",
          "definition": "Levels whose next level is configured.",
          "value": progression_links, "owner": "Course Owner"},
+        {"label": "Fee types defined",
+         "definition": "Native Fee Category records (each carries its own "
+                       "accounting Item).",
+         "value": len(fee_types), "owner": "Course Owner"},
+        {"label": "Active levels without a fee plan",
+         "definition": f"Active levels with no editable native Fee Structure for "
+                       f"{current_year or 'any defined academic year'}; enrollment "
+                       "of such a level cannot be billed yet.",
+         "value": len(levels_without_plan), "owner": "Course Owner"},
     ]
 
     setup_actions = [{
@@ -178,6 +270,32 @@ def work():
         "waiting_since": None,
         "action": guided_action("Course Owner", "toefl_house.academic.create_program",
                                 "Define program", {}),
+    }, {
+        "id": "new-academic-year",
+        "person": "Define an academic year",
+        "detail": "Native Academic Year; fees, enrollments and classes key on it.",
+        "status": "Ready",
+        "stage": "Setup",
+        "stage_definition": "Native Education requires Academic Year records; "
+                            "nothing else in the product creates them.",
+        "next": "Create the year with its start and end dates before fee plans.",
+        "next_role": "Course Owner",
+        "waiting_since": None,
+        "action": guided_action("Course Owner", "toefl_house.academic.create_academic_year",
+                                "Define academic year", {}),
+    }, {
+        "id": "new-fee-type",
+        "person": "Define a fee type",
+        "detail": "Native Fee Category; Education creates its accounting Item.",
+        "status": "Ready",
+        "stage": "Setup",
+        "stage_definition": "Fee types are Owner configuration, never hard-coded: "
+                            "the Owner can add a new charge without a developer.",
+        "next": "Name the charge; use it later inside a level's fee plan.",
+        "next_role": "Course Owner",
+        "waiting_since": None,
+        "action": guided_action("Course Owner", "toefl_house.academic.create_fee_type",
+                                "Define fee type", {}),
     }]
 
     return {
@@ -198,5 +316,29 @@ def work():
                     empty_title="No levels yet",
                     empty_body="Define levels inside a program; each becomes a native "
                                "Program that enrollment and fees consume."),
+            section("fees", "Fee plans (per level and academic year)", "queue",
+                    items=fee_plan_items,
+                    empty_title="No fee plans yet",
+                    empty_body="Define an academic year and fee types, then set the "
+                               "components per level; the Finance issuance command "
+                               "consumes exactly this configuration."),
+            section("fee-types", "Fee types", "queue", items=fee_type_items,
+                    empty_title="No fee types yet",
+                    empty_body="Tuition, identity card, diploma, retake examination — "
+                               "any charge the institution invents later is defined "
+                               "here, never in code."),
         ],
     }
+
+
+def _current_year(years, today):
+    """The academic year whose date range contains today, else the latest by
+    start date. A fact used for the readiness label — no policy inference."""
+    if not years:
+        return None
+    for row in years:
+        start = str(row.get("year_start_date") or "")
+        end = str(row.get("year_end_date") or "")
+        if start and end and start <= str(today) <= end:
+            return row["name"]
+    return years[-1]["name"]

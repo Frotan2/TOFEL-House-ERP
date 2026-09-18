@@ -61,9 +61,21 @@ class _Doc:
     def append(self, table, row):
         self._payload.setdefault(table, []).append(_Row(row))
 
+    def set(self, field, value):
+        """Mirror frappe Document.set for table replacement."""
+        self._payload[field] = [_Row(row) if isinstance(row, dict) else row
+                                for row in value]
+
     def insert(self, ignore_permissions=False):
         store = self._backend.store.setdefault(self.doctype, {})
-        key = self._payload.get("code") or self._payload.get("program_name") or str(len(store) + 1)
+        # Real frappe stamps docstatus 0 on insert; the fake mirrors that so
+        # docstatus filters behave.
+        self._payload.setdefault("docstatus", 0)
+        key = (self._payload.get("code") or self._payload.get("program_name")
+               or self._payload.get("academic_year_name")
+               or self._payload.get("category_name"))
+        if not key:
+            key = "EDU-FST-" + str(len(store) + 1).zfill(5)
         self.name = key
         self._payload["name"] = key
         store[key] = self
@@ -112,8 +124,12 @@ class _FakeFrappe:
         return len(rows)
 
     def get_all(self, doctype, filters=None, fields=None, **kwargs):
-        return [dict(doc._payload) for doc in self.store.get(doctype, {}).values()
-                if all(doc.get(k) == v for k, v in dict(filters or {}).items())]
+        matched = []
+        for doc in self.store.get(doctype, {}).values():
+            payload = doc._payload if hasattr(doc, "_payload") else doc
+            if all(payload.get(k) == v for k, v in dict(filters or {}).items()):
+                matched.append(dict(payload))
+        return matched
 
     def get_doc(self, doctype, name=None, for_update=False):
         if isinstance(doctype, dict):
@@ -174,6 +190,7 @@ class AcademicLifecycleTests(unittest.TestCase):
                               2, "Month", "2026-01-01", next_level="")
         academic.set_next_level("R" * 24, "STARTER", "PREP-1")
         return academic, fake
+
 
     def test_owner_builds_a_program_and_levels_through_the_gate(self):
         for academic, fake in _load_module({"Course Owner"}):
@@ -250,6 +267,100 @@ class AcademicLifecycleTests(unittest.TestCase):
             with self.assertRaises(fake.ValidationError):
                 academic.create_level("R" * 24, "GEN-ENG", "BAD CODE!", "Bad", 3,
                                       2, "Month", "2026-01-01")
+
+
+class FeeConfigurationLifecycleTests(unittest.TestCase):
+    def _fee_world(self, academic, fake):
+        """Program + level + year + fee types + a single company with defaults."""
+        AcademicLifecycleTests()._lifecycle(academic, fake)
+        academic.create_academic_year("R" * 24, "2026-27", "2026-07-01", "2027-06-30")
+        fake.store.setdefault("Item Group", {})["Fee Component"] = {"name": "Fee Component"}
+        fake.store.setdefault("Company", {})["TOEFL House"] = {
+            "name": "TOEFL House", "default_receivable_account": "Debtors - TH"}
+        for fee_type in ("Tuition Fee", "Identity Card Fee"):
+            academic.create_fee_type("R" * 24, fee_type, "")
+        return academic, fake
+
+    def _world(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._fee_world(academic, fake)
+            yield academic, fake
+
+    def test_owner_configures_a_fee_plan_component_by_component(self):
+        for academic, fake in self._world():
+            academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                             "Tuition Fee", 5000)
+            result = academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                                      "Identity Card Fee", 300)
+            self.assertEqual(result["total"], 5300.0)
+            structure = fake.store["Fee Structure"][result["fee_structure"]]
+            # The plan is the native structure keyed on the anchored program:
+            starter = fake.store["TH Program Level"]["STARTER"]
+            self.assertEqual(structure.program, starter.native_program)
+            self.assertEqual(structure.academic_year, "2026-27")
+            self.assertEqual(structure.company, "TOEFL House")
+            self.assertEqual(structure.receivable_account, "Debtors - TH")
+            self.assertEqual(int(structure.docstatus or 0), 0,
+                             "the managed plan stays editable (Draft)")
+
+    def test_upsert_updates_and_replays_without_duplicating(self):
+        for academic, fake in self._world():
+            academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                             "Tuition Fee", 5000)
+            academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                             "Tuition Fee", 6000)
+            result = academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                                      "Tuition Fee", 6000)
+            self.assertTrue(result["replayed"])
+            self.assertEqual(len(result["components"]), 1)
+            self.assertEqual(result["total"], 6000.0)
+
+    def test_removal_keeps_at_least_one_component(self):
+        for academic, fake in self._world():
+            academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                             "Tuition Fee", 5000)
+            academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                             "Identity Card Fee", 300)
+            result = academic.remove_level_fee_component("R" * 24, "STARTER",
+                                                         "2026-27", "Identity Card Fee")
+            self.assertEqual([row["category"] for row in result["components"]],
+                             ["Tuition Fee"])
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.remove_level_fee_component("R" * 24, "STARTER",
+                                                    "2026-27", "Tuition Fee")
+            self.assertIn("at least one component", str(ctx.exception))
+
+    def test_fee_refusals_name_the_missing_configuration(self):
+        for academic, fake in self._world():
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_level_fee_component("R" * 24, "STARTER", "2025-26",
+                                                 "Tuition Fee", 5000)
+            self.assertIn("2025-26 does not exist yet", str(ctx.exception))
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                                 "Diploma Fee", 5000)
+            self.assertIn("Diploma Fee does not exist yet", str(ctx.exception))
+            # Ambiguity refuses instead of guessing:
+            fake.store["Company"]["Second Co"] = {
+                "name": "Second Co", "default_receivable_account": "Debtors - S2"}
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                                 "Tuition Fee", 5000)
+            self.assertIn("More than one company", str(ctx.exception))
+            # Explicit company resolves it:
+            result = academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                                      "Tuition Fee", 5000,
+                                                      company="Second Co")
+            self.assertEqual(result["company"], "Second Co")
+
+    def test_fee_commands_refuse_the_wrong_role(self):
+        for roles in (set(), {"Finance Manager"}, {"Finance Officer"}):
+            for academic, fake in _load_module(roles):
+                with self.assertRaises(fake.PermissionError):
+                    academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                                                     "Tuition Fee", 5000)
+                with self.assertRaises(fake.PermissionError):
+                    academic.create_fee_type("R" * 24, "Sneaky Fee")
 
 
 def rules_governing(versions, on_date):

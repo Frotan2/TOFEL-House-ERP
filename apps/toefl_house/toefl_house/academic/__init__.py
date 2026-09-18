@@ -30,6 +30,9 @@ LEVEL = "TH Program Level"
 DURATION = "TH Level Duration"
 NATIVE_PROGRAM = "Program"
 ENROLLMENT = "Program Enrollment"
+YEAR = "Academic Year"
+FEE_CATEGORY = "Fee Category"
+FEE_STRUCTURE = "Fee Structure"
 
 
 def _require_course_owner():
@@ -280,6 +283,213 @@ def _as_bool(value, what):
     if isinstance(value, (int, bool)) and not isinstance(value, float):
         return bool(value)
     raise ValueError(f"{what} must be boolean-like")
+
+
+@frappe.whitelist(methods=["POST"])
+def create_academic_year(request_key, name, start_date, end_date):
+    """Define a native Academic Year (required by fees, enrollment, classes).
+
+    Native Education requires Academic Year records for Fee Structure and
+    Program Enrollment, yet nothing in the owned product created them — this
+    command closes that setup gap through the same governed gate as the rest
+    of the control plane.
+    """
+    _require_course_owner()
+    try:
+        validate_request_key(request_key)
+        clean_name = rules.validate_title(name, "Academic year name")
+        start, end = rules.validate_year_bounds(start_date, end_date)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+    if frappe.db.exists(YEAR, clean_name):
+        raise frappe.ValidationError(f"Academic year {clean_name} already exists")
+    doc = frappe.get_doc({
+        "doctype": YEAR, "academic_year_name": clean_name,
+        "year_start_date": start, "year_end_date": end,
+    })
+    doc.insert(ignore_permissions=True)
+    return {"name": doc.name, "start_date": start, "end_date": end}
+
+
+@frappe.whitelist(methods=["POST"])
+def create_fee_type(request_key, name, description=""):
+    """Define a fee type as a native Fee Category (the native Item follows).
+
+    Native Education's Fee Category controller creates and maintains the
+    accounting Item itself (verified at the pinned commit), so the Owner
+    defines the *type* and native authority owns the accounting object.
+    """
+    _require_course_owner()
+    try:
+        validate_request_key(request_key)
+        clean_name = rules.validate_title(name, "Fee type name")
+        clean_description = rules.validate_reason(description)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+    if frappe.db.exists(FEE_CATEGORY, clean_name):
+        raise frappe.ValidationError(f"Fee type {clean_name} already exists")
+    if not frappe.db.exists("Item Group", "Fee Component"):
+        raise frappe.ValidationError(
+            "The native 'Fee Component' item group is missing, so fee types "
+            "cannot receive their accounting Item. Ask the administrator to "
+            "complete the Education app setup, then retry.")
+    doc = frappe.get_doc({
+        "doctype": FEE_CATEGORY, "category_name": clean_name,
+        "description": clean_description,
+    })
+    doc.insert(ignore_permissions=True)
+    return {"name": doc.name, "item": frappe.db.get_value(FEE_CATEGORY, doc.name, "item")}
+
+
+@frappe.whitelist(methods=["POST"])
+def set_level_fee_component(request_key, level, academic_year, fee_category, amount,
+                            company=""):
+    """Configure one fee component of a level's native fee plan (upsert).
+
+    The plan is the native Fee Structure keyed on the level's anchored native
+    Program and the academic year — exactly what the qualified Finance
+    issuance command consumes. It is kept in Draft so the Owner's policy
+    stays editable; issued Fees copy their components at issuance, so
+    changing this configuration never touches a posted document.
+    """
+    _require_course_owner()
+    try:
+        validate_request_key(request_key)
+        clean_level = rules.validate_code(level)
+        clean_amount = rules.validate_fee_amount(amount)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+    level_doc = _level_doc(clean_level, for_update=True)
+    if level_doc.status != "Active":
+        raise frappe.ValidationError(
+            f"Level {clean_level} is retired; reactivate it before configuring fees")
+    if not level_doc.native_program:
+        raise frappe.ValidationError(rules.level_missing_native_message(clean_level))
+    if not frappe.db.exists(YEAR, academic_year):
+        raise frappe.ValidationError(
+            f"Academic year {academic_year} does not exist yet; define it first")
+    if not frappe.db.exists(FEE_CATEGORY, fee_category):
+        raise frappe.ValidationError(
+            f"Fee type {fee_category} does not exist yet; define it first")
+    structure = _managed_fee_structure(level_doc.native_program, academic_year, company)
+    rows = structure.get("components") or []
+    for row in rows:
+        if row.get("fees_category") == fee_category:
+            if float(row.get("amount") or 0) == float(clean_amount):
+                return _fee_plan_result(structure, clean_level, academic_year, replayed=True)
+            row.amount = clean_amount
+            structure.save(ignore_permissions=True)
+            return _fee_plan_result(structure, clean_level, academic_year)
+    structure.append("components", {"fees_category": fee_category, "amount": clean_amount})
+    structure.save(ignore_permissions=True)
+    return _fee_plan_result(structure, clean_level, academic_year)
+
+
+@frappe.whitelist(methods=["POST"])
+def remove_level_fee_component(request_key, level, academic_year, fee_category):
+    """Remove one fee component from a level's plan.
+
+    Issued Fees keep their copied components; only future issuance is
+    affected. The plan must keep at least one component.
+    """
+    _require_course_owner()
+    try:
+        validate_request_key(request_key)
+        clean_level = rules.validate_code(level)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+    level_doc = _level_doc(clean_level, for_update=True)
+    if not level_doc.native_program:
+        raise frappe.ValidationError(rules.level_missing_native_message(clean_level))
+    if not frappe.db.exists(YEAR, academic_year):
+        raise frappe.ValidationError(f"Academic year {academic_year} does not exist")
+    structure = _managed_fee_structure(level_doc.native_program, academic_year)
+    rows = structure.get("components") or []
+    remaining = [row for row in rows if row.get("fees_category") != fee_category]
+    if len(remaining) == len(rows):
+        raise frappe.ValidationError(
+            f"Fee type {fee_category} is not part of the "
+            f"{clean_level} plan for {academic_year}")
+    if not remaining:
+        raise frappe.ValidationError(
+            "A fee plan must keep at least one component; remove the whole "
+            "plan with Finance if the level should bill nothing")
+    structure.set("components", remaining)
+    structure.save(ignore_permissions=True)
+    return _fee_plan_result(structure, clean_level, academic_year)
+
+
+FEE_STRUCTURE_NAMING = "EDU-FST-.YYYY.-"  # native default from the pinned doctype
+
+
+def _managed_fee_structure(native_program, academic_year, company=""):
+    """The one editable (Draft) Fee Structure for (program, academic year).
+
+    The control plane manages Draft structures — the qualified issuance
+    command reads them regardless of docstatus, and submission would lock
+    the Owner's policy behind cancel/amend churn. More than one editable
+    structure for the same key is a configuration conflict this refuses.
+    """
+    found = frappe.db.get_all(
+        FEE_STRUCTURE,
+        filters={"program": native_program, "academic_year": academic_year,
+                 "docstatus": 0},
+        fields=["name"], order_by="name asc", limit=2)
+    if len(found) > 1:
+        raise frappe.ValidationError(
+            f"More than one editable fee structure exists for {native_program} "
+            f"in {academic_year}; keep exactly one so billing is unambiguous")
+    if found:
+        return frappe.get_doc(FEE_STRUCTURE, found[0]["name"], for_update=True)
+    company_name = _resolve_company(company)
+    receivable = frappe.db.get_value(
+        "Company", company_name, "default_receivable_account")
+    if not receivable:
+        raise frappe.ValidationError(
+            f"Company {company_name} has no default receivable account; "
+            "Finance must set it before fee plans can be configured")
+    doc = frappe.get_doc({
+        "doctype": FEE_STRUCTURE,
+        "naming_series": FEE_STRUCTURE_NAMING,
+        "program": native_program, "academic_year": academic_year,
+        "company": company_name, "receivable_account": receivable,
+        "components": [],
+    })
+    doc.insert(ignore_permissions=True)
+    return doc
+
+
+def _resolve_company(company=""):
+    """Explicit company, or the only existing one; refuse ambiguity."""
+    if isinstance(company, str) and company.strip():
+        name = company.strip()
+        if not frappe.db.exists("Company", name):
+            raise frappe.ValidationError(f"Unknown company: {name}")
+        return name
+    companies = frappe.db.get_all("Company", fields=["name"], order_by="name asc",
+                                  limit=2)
+    if not companies:
+        raise frappe.ValidationError(
+            "No company exists yet; create the company before configuring fees")
+    if len(companies) > 1:
+        raise frappe.ValidationError(
+            "More than one company exists; state which company this fee plan "
+            "belongs to")
+    return companies[0]["name"]
+
+
+def _fee_plan_result(structure, level, academic_year, replayed=False):
+    rows = structure.get("components") or []
+    return {
+        "fee_structure": structure.name,
+        "level": level,
+        "academic_year": academic_year,
+        "components": [{"category": row.get("fees_category"),
+                        "amount": float(row.get("amount") or 0)} for row in rows],
+        "total": sum(float(row.get("amount") or 0) for row in rows),
+        "company": structure.get("company"),
+        "replayed": replayed,
+    }
 
 
 def _family_of(code):

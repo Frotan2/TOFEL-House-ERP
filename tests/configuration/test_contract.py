@@ -128,6 +128,35 @@ class DurationVersionTests(unittest.TestCase):
         self.assertEqual(rules.duration_label(None), "")
 
 
+class FeeRuleTests(unittest.TestCase):
+    def test_fee_amount_bounds(self):
+        self.assertEqual(rules.validate_fee_amount("5000"), 5000.0)
+        self.assertEqual(rules.validate_fee_amount(1250.5), 1250.5)
+        for bad in (0, -1, "abc", None, True, 100_000_001):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                rules.validate_fee_amount(bad)
+
+    def test_component_rows_require_unique_nonempty_categories(self):
+        rows = rules.validate_component_rows(
+            [{"category": "Tuition Fee", "amount": 5000},
+             {"category": "ID Card Fee", "amount": "300"}])
+        self.assertEqual(rows[1]["amount"], 300.0)
+        with self.assertRaises(ValueError, msg="empty"):
+            rules.validate_component_rows([])
+        with self.assertRaises(ValueError, msg="duplicate"):
+            rules.validate_component_rows(
+                [{"category": "Tuition Fee", "amount": 1},
+                 {"category": " Tuition Fee ", "amount": 2}])
+        with self.assertRaises(ValueError, msg="no category"):
+            rules.validate_component_rows([{"amount": 5}])
+
+    def test_year_bounds(self):
+        start, end = rules.validate_year_bounds("2026-07-01", "2027-06-30")
+        self.assertEqual((start, end), ("2026-07-01", "2027-06-30"))
+        with self.assertRaises(ValueError):
+            rules.validate_year_bounds("2027-06-30", "2026-07-01")
+
+
 class ProgressionRuleTests(unittest.TestCase):
     LEVELS = {
         "A1": ("GEN", None),
@@ -234,6 +263,8 @@ class CommandContractTests(unittest.TestCase):
     COMMANDS = (
         "create_program", "create_level", "set_level_duration",
         "set_next_level", "set_program_status", "set_level_status",
+        "create_academic_year", "create_fee_type",
+        "set_level_fee_component", "remove_level_fee_component",
     )
 
     def _tree(self):
@@ -343,6 +374,23 @@ class HardCodedPolicyAuditTests(unittest.TestCase):
         self.assertEqual(offenders, [],
                          "hard-coded business policy found (move it to configuration "
                          "or, if a technical constant, rename it away from policy words)")
+
+    def test_fee_orchestration_stays_on_native_authority(self):
+        source = _module_source("__init__.py")
+        # Fee plans are NATIVE Fee Structures keyed on the anchored program;
+        # the command must keep them editable (Draft) and consumable.
+        self.assertIn('"docstatus": 0', source,
+                      "the managed fee structure must be the editable Draft")
+        self.assertIn('"naming_series": FEE_STRUCTURE_NAMING', source)
+        # Fee types are native Fee Categories; the accounting Item is created
+        # by the native controller, and the command must fail closed if the
+        # native Item Group fixture is missing.
+        self.assertIn('"doctype": FEE_CATEGORY', source)
+        self.assertIn("Item Group", source)
+        self.assertIn("'Fee Component' item group is missing", source)
+        # No parallel money model: no amounts beyond validation, no totals
+        # persisted by the control plane.
+        self.assertNotIn('"total_amount":', source)
 
     def test_no_owned_python_module_contains_fee_amounts_or_discounts(self):
         import re

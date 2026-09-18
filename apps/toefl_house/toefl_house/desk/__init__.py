@@ -205,6 +205,21 @@ PROJECTION_FIELDS = {
     ("setup", "Program Enrollment"): [
         "name", "program", "docstatus",
     ],
+    # Fee configuration (control plane slice 2): native fee masters and the
+    # editable plans per level. No GL detail beyond the resolved receivable.
+    ("setup", "Academic Year"): [
+        "name", "year_start_date", "year_end_date",
+    ],
+    ("setup", "Fee Category"): [
+        "name", "category_name", "description", "item",
+    ],
+    ("setup", "Fee Structure"): [
+        "name", "program", "academic_year", "company", "receivable_account",
+        "docstatus", "total_amount",
+    ],
+    ("setup", "Fee Component"): [
+        "name", "parent", "parenttype", "fees_category", "amount", "idx",
+    ],
 }
 
 # Hard upper bounds. A desk section never silently grows with the data.
