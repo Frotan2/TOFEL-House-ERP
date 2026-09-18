@@ -584,5 +584,133 @@ class DeskWorkSmokeTests(unittest.TestCase):
         self.assertIn("Finance", str(ctx.exception))
 
 
+class SetupDeskWorldTests(unittest.TestCase):
+    """The setup desk against a small configured world.
+
+    Source pins prove the code exists; this proves the OWNER'S ANSWERS come
+    out the other end: the progression chain reads in level order, a
+    progression/sequence mismatch is named (§32 configuration validation as
+    a visible fact), progression targets display their title (next_level
+    stores the level CODE), and each active level states its billing
+    readiness for the current academic year.
+    """
+
+    def _run(self, *, mismatch=False):
+        world = {
+            "TH Academic Program": [{
+                "name": "PROG-GEN", "code": "GEN-ENG", "title": "General English",
+                "status": "Active", "modified": "2026-09-01 10:00:00",
+            }],
+            "TH Program Level": [
+                {"name": "LVL-A1", "family": "PROG-GEN", "code": "GEN-A1",
+                 "title": "Pre-Starter", "sequence": 1, "status": "Active",
+                 "native_program": "NATIVE-A1",
+                 "next_level": "GEN-A3" if mismatch else "GEN-A2",
+                 "modified": "2026-09-01 10:00:00"},
+                {"name": "LVL-A2", "family": "PROG-GEN", "code": "GEN-A2",
+                 "title": "Starter", "sequence": 2, "status": "Active",
+                 "native_program": "NATIVE-A2", "next_level": "GEN-A3",
+                 "modified": "2026-09-01 10:00:00"},
+                {"name": "LVL-A3", "family": "PROG-GEN", "code": "GEN-A3",
+                 "title": "Prep One", "sequence": 3, "status": "Active",
+                 "native_program": "NATIVE-A3", "next_level": None,
+                 "modified": "2026-09-01 10:00:00"},
+            ],
+            "TH Level Duration": [{
+                "name": "DUR-1", "parent": "LVL-A1", "parenttype": "TH Program Level",
+                "duration_value": 2, "duration_unit": "Month",
+                "effective_from": "2026-01-01", "superseded_on": None,
+                "reason": "initial", "set_by": "owner@example.com",
+            }],
+            "Program Enrollment": [{
+                "name": "ENR-1", "program": "NATIVE-A1", "docstatus": 1,
+            }],
+            "Academic Year": [{
+                "name": "2026-2027", "year_start_date": "2026-07-01",
+                "year_end_date": "2027-06-30",
+            }],
+            "Fee Category": [{
+                "name": "FT-TUITION", "category_name": "Tuition Fee",
+                "description": "Term tuition", "item": "Tuition Fee",
+            }],
+            "Fee Structure": [{
+                "name": "FS-A1", "program": "NATIVE-A1",
+                "academic_year": "2026-2027", "company": "TOEFL House",
+                "receivable_account": "Debtors - TH", "docstatus": 0,
+                "total_amount": 5000,
+            }],
+            "Fee Component": [{
+                "name": "FC-1", "parent": "FS-A1", "parenttype": "Fee Structure",
+                "fees_category": "Tuition Fee", "amount": 5000, "idx": 1,
+            }],
+            "Program": [
+                {"name": "NATIVE-A1", "program_name": "General English — Pre-Starter"},
+                {"name": "NATIVE-A2", "program_name": "General English — Starter"},
+                {"name": "NATIVE-A3", "program_name": "General English — Prep One"},
+                {"name": "NATIVE-ORPHAN", "program_name": "Orphan Native Program"},
+            ],
+        }
+
+        def world_get_all(doctype, filters=None, fields=None, order_by=None,
+                          limit_start=None, limit_page_length=None, **kwargs):
+            rows = world.get(doctype, [])
+            filters = filters or {}
+            return [dict(row) for row in rows
+                    if all(row.get(key) == value
+                           for key, value in filters.items()
+                           if key in row or value is not None)]
+
+        module = _import_desk("setup", roles={"Course Owner"})
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        return module.work()
+
+    @staticmethod
+    def _section(payload, sid):
+        return next(sect for sect in payload["sections"] if sect["id"] == sid)
+
+    @staticmethod
+    def _item(payload, sid, item_id):
+        items = SetupDeskWorldTests._section(payload, sid)["items"]
+        return next(item for item in items if item["id"] == item_id)
+
+    def test_progression_chain_reads_in_level_order(self):
+        payload = self._run()
+        facts = self._section(payload, "progression")["facts"]
+        chain = next(fact for fact in facts if fact["label"] == "General English")
+        self.assertEqual(
+            chain["value"], "Pre-Starter → Starter → Prep One",
+            "a consistent chain must read as the plain ordered chain")
+
+    def test_progression_sequence_mismatch_is_named(self):
+        payload = self._run(mismatch=True)
+        facts = self._section(payload, "progression")["facts"]
+        chain = next(fact for fact in facts if fact["label"] == "General English")
+        self.assertIn("Pre-Starter progresses to Prep One", chain["value"])
+        self.assertIn("not to the next position (Starter)", chain["value"])
+
+    def test_progression_target_displays_the_title_not_the_code(self):
+        payload = self._run()
+        level = self._item(payload, "levels", "GEN-A1")
+        self.assertIn("Progression: Starter.", level["next"],
+                      "next_level stores the code; the desk must show the title")
+        self.assertNotIn("GEN-A2", level["next"])
+
+    def test_active_levels_state_their_billing_readiness(self):
+        payload = self._run()
+        ready = self._item(payload, "levels", "GEN-A1")
+        self.assertIn("Fee plan ready for 2026-2027.", ready["next"])
+        unready = self._item(payload, "levels", "GEN-A2")
+        self.assertIn("No complete fee plan for 2026-2027 yet.", unready["next"])
+
+    def test_the_orphan_native_program_is_audited(self):
+        payload = self._run()
+        facts = self._section(payload, "health")["facts"]
+        orphan = next(fact for fact in facts
+                      if "outside the control plane" in fact["label"])
+        self.assertEqual(orphan["value"], 1,
+                         "exactly one of the four native programs is unanchored")
+
+
 if __name__ == "__main__":
     unittest.main()

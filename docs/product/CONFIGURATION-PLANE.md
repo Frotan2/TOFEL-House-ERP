@@ -127,7 +127,17 @@ keyed per Program, not per Course.
   when the server rule lets it succeed (retire a program only with no active
   levels; retire a level only with no live enrollments), so no row dead-ends
   and no button can only fail. Part of the desk registry, the landing-page
-  strip, and every desk contract.
+  strip, and every desk contract. Two answers are computed for the Owner on
+  every load: the **progression chain** of each program reads as the plain
+  ordered chain (`Pre-Starter → Starter → Prep One`) and *names* any
+  configuration that contradicts itself (a level progressing past the next
+  position, a chain with a gap, a final level pointing onward); and every
+  active level states its **billing readiness** for the current academic
+  year ("Fee plan ready for 2026-2027." / "No complete fee plan for
+  2026-2027 yet."), so the Owner and Finance look at one truth. A
+  data-driven runtime suite exercises the desk against a configured world
+  (chains, mismatch naming, title-vs-code resolution, readiness, the
+  outside-the-plane audit) — not merely source scans.
 
 ### Integrity rules (§23, §32, §39 — all enforced)
 

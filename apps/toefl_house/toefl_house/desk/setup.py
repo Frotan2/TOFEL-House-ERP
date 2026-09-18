@@ -86,7 +86,7 @@ def work():
     for row in active_enrollments:
         if row.get("program"):
             usage[row["program"]] = usage.get(row["program"], 0) + 1
-    levels_by_name = {row["name"]: row for row in levels}
+    levels_by_code = {row["code"]: row for row in levels}
     levels_by_native = {row["native_program"]: row
                         for row in levels if row.get("native_program")}
     family_titles = {row["name"]: row["title"] for row in programs}
@@ -225,10 +225,22 @@ def work():
         else:
             next_bits.append("No duration version is effective yet.")
         if level.get("next_level"):
-            target = levels_by_name.get(level["next_level"]) or {}
+            target = levels_by_code.get(level["next_level"]) or {}
             next_bits.append(f"Progression: {target.get('title') or level['next_level']}.")
         else:
             next_bits.append("No next level configured.")
+        if level["status"] == "Active":
+            if not current_year:
+                next_bits.append("Billing readiness unknown: no academic year is defined yet.")
+            else:
+                plan_rows_for = [
+                    plan for plan in plans_by_program.get(
+                        (level.get("native_program"), current_year), [])
+                    if int(plan.get("docstatus") or 0) == 0]
+                ready = any(rows_by_plan.get(plan["name"]) for plan in plan_rows_for)
+                next_bits.append(
+                    f"Fee plan ready for {current_year}." if ready else
+                    f"No complete fee plan for {current_year} yet.")
         # §17 made visible: which duration version governed each live
         # enrollment. History stays whole; only the answer is computed.
         history = ""
@@ -284,6 +296,41 @@ def work():
         if extras:
             item["actions"] = extras
         level_rows_view.append(item)
+
+    progression_facts = []
+    for program in programs:
+        family_levels = sorted(
+            (row for row in levels if row.get("family") == program["name"]),
+            key=lambda row: int(row.get("sequence") or 0))
+        if not family_levels:
+            continue
+        titles = [row["title"] for row in family_levels]
+        issues = []
+        for index, row in enumerate(family_levels):
+            successor = (family_levels[index + 1]["code"]
+                         if index + 1 < len(family_levels) else None)
+            points_to = row.get("next_level")
+            if successor and points_to != successor:
+                if points_to:
+                    issues.append(
+                        f"{row['title']} progresses to "
+                        f"{levels_by_code.get(points_to, {}).get('title', points_to)}, "
+                        f"not to the next position ({family_levels[index + 1]['title']})")
+                else:
+                    issues.append(f"{row['title']} has no progression configured")
+            elif not successor and points_to:
+                issues.append(
+                    f"{row['title']} (last position) also points onward to "
+                    f"{levels_by_code.get(points_to, {}).get('title', points_to)}")
+        chain = " → ".join(titles)
+        if issues:
+            chain += " — " + "; ".join(issues)
+        progression_facts.append({
+            "label": program["title"],
+            "definition": "Configured progression in level order; mismatches "
+                          "between the order and the configured next level are named.",
+            "value": chain, "owner": "Course Owner",
+        })
 
     health = [
         {"label": "Active programs",
@@ -388,6 +435,10 @@ def work():
                     empty_title="No levels yet",
                     empty_body="Define levels inside a program; each becomes a native "
                                "Program that enrollment and fees consume."),
+            section("progression", "Progression chains", "facts", facts=progression_facts,
+                    empty_title="No levels to chain yet",
+                    empty_body="Define levels in order; the chain and any "
+                               "progression mismatches appear here."),
             section("fees", "Fee plans (per level and academic year)", "queue",
                     items=fee_plan_items,
                     empty_title="No fee plans yet",
