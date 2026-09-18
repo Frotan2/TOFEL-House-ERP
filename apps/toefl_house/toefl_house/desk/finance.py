@@ -167,25 +167,25 @@ def work():
 
     money_facts = [
         {"label": "Collected today",
-         "definition": "Submitted payment receipts of type Receive posted today, summed per paying-account currency.",
+         "definition": "Money received today from posted payment records, summed per receiving currency.",
          "value": _summarize(payments, "paid_amount"),
          "owner": None},
         {"label": "Invoiced today",
-         "definition": "Submitted Sales Invoice and Fees grand totals posted today, summed per currency.",
+         "definition": "Amounts billed today across invoices and tuition fees, summed per currency.",
          "value": _summarize(invoices_today + fees_today, "grand_total"),
          "owner": None},
         {"label": "Outstanding invoices",
-         "definition": "Submitted Sales Invoices with native outstanding_amount above zero.",
+         "definition": "Invoices posted and still owing money.",
          "value": len(outstanding_invoices), "owner": "Finance Officer"},
         {"label": "Outstanding tuition fees",
-         "definition": "Submitted Fees with native outstanding_amount above zero.",
+         "definition": "Issued tuition fees still owing money.",
          "value": len(outstanding_fees), "owner": "Finance Officer"},
         {"label": "Corrections pending",
          "definition": "Correction requests (invoice or tuition fee) in Requested status.",
          "value": sum(1 for row in corrections if row["status"] == "Requested"),
          "owner": "Finance Officer"},
         {"label": "Enrollments awaiting billing",
-         "definition": "Submitted Program Enrollments with no non-cancelled Fees row.",
+         "definition": "Confirmed enrollments that no issued bill covers; cancelled bills do not count.",
          "value": len(awaiting_billing), "owner": "Finance Officer"},
     ]
 
@@ -197,10 +197,11 @@ def work():
             or row.get("student_name") or row.get("student") or "",
             "detail": row.get("program") or row.get("th_placement_case") or "",
             "status": state,
-            "stage": kind,
+            # U5: staff read "Invoice"/"Tuition fee", not the doctype name.
+            "stage": {"Sales Invoice": "Invoice", "Fees": "Tuition fee"}.get(kind, kind),
             "stage_definition": (
                 "Charged {grand} {currency}; outstanding {outstanding} {currency}. "
-                "These are the native document amounts.").format(
+                "Amounts are read straight from the posted document.").format(
                     grand=row.get("grand_total") or 0, currency=row.get("currency") or "",
                     outstanding=row.get("outstanding_amount") or 0),
             "next": "Record the payment against this document." if state in ("Outstanding", "Overdue", "Unpaid")
@@ -217,7 +218,7 @@ def work():
         "detail": row.get("company") or "",
         "status": "Received",
         "stage": "Payment today",
-        "stage_definition": "Submitted Payment Entry, type Receive, posted today.",
+        "stage_definition": "A payment received, posted today.",
         "next": "No action.",
         "next_role": None,
         "waiting_since": row.get("posting_date"),
@@ -283,7 +284,7 @@ def work():
             "detail": " · ".join(part for part in (row.get("program"), row.get("academic_year")) if part),
             "status": "Unbilled",
             "stage": "Awaiting billing",
-            "stage_definition": "Submitted enrollment with no Fees record referencing it.",
+            "stage_definition": "A confirmed enrollment that no issued bill covers yet.",
             "next": next_text,
             "next_role": next_role,
             "waiting_since": row.get("enrollment_date"),

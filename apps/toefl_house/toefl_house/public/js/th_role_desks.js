@@ -443,7 +443,7 @@ frappe.provide("toefl_house.role_desks");
 		if (!fields) return;
 		const dialog = new frappe.ui.Dialog({
 			title: text(action.label),
-			fields: [{ fieldname: "request_key", label: text("Request key"), fieldtype: "Data", reqd: 1, default: newRequestKey(), description: text("Keep this exact value when retrying the same request.") }, ...fields],
+			fields: [{ fieldname: "request_key", label: text("Request reference (filled in for you)"), fieldtype: "Data", reqd: 1, read_only: 1, default: newRequestKey(), description: text("Reuse this exact value if you must retry the same request after a connection error.") }, ...fields],
 			primary_action_label: text("Run command"),
 			primary_action(values) {
 				const guard = ACTION_GUARDS[action.endpoint];

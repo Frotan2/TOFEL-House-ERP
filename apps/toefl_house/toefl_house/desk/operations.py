@@ -64,7 +64,7 @@ def _role_items(counts):
         "detail": "",
         "status": "Unstaffed" if count == 0 else "Staffed",
         "stage": "Role coverage",
-        "stage_definition": f"Enabled users holding the {role} role (native Has Role rows).",
+        "stage_definition": f"Enabled staff accounts holding the {role} role.",
         "next": "Assign a user to this role from the Administration Control Centre." if count == 0
         else "No action.",
         "next_role": "Course Owner" if count == 0 else None,
@@ -159,7 +159,7 @@ def work():
          "definition": "Admission decisions in Review.",
          "value": len(review_waiting), "owner": "Admission Approver"},
         {"label": "Enrollments awaiting a class",
-         "definition": "Submitted enrollments whose level and academic year have no class planned or running yet.",
+         "definition": "Confirmed enrollments whose level and academic year have no class planned or running yet.",
          "value": len(unclassed), "owner": "Teaching Scheduler"},
         {"label": "Classes running",
          "definition": "Classes whose lifecycle is Active (planned classes are counted under enrollment coverage instead).",

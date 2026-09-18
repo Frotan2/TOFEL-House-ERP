@@ -137,9 +137,9 @@ def work():
             "status": ("Editable plan" if int(plan.get("docstatus") or 0) == 0
                        else "Submitted (locked)"),
             "stage": "Fee plan",
-            "stage_definition": "Native Fee Structure for the level's anchored program "
-                                "and academic year; issued Fees copy their components, "
-                                "so posted documents never change with this policy.",
+            "stage_definition": "Fee Structure for the level's program and "
+                                "academic year; issued Fees copy its components, so "
+                                "posted documents never change with this policy.",
             "next": ("Components: " + ", ".join(
                 f"{row.get('fees_category')} {float(row.get('amount') or 0):g}"
                 for row in rows) + f". Sum {total:g}."
@@ -175,10 +175,11 @@ def work():
             f" · item: {row['item']}" if row.get("item") else " · item pending"),
         "status": "Ready" if row.get("item") else "Item pending",
         "stage": "Fee type",
-        "stage_definition": "Native Fee Category; Education creates and maintains "
-                            "its accounting Item automatically.",
+        "stage_definition": "Fee Category record; Education creates and "
+                            "maintains its accounting Item automatically.",
         "next": "No action." if row.get("item") else \
-            "The accounting Item has not been created yet; open the category natively.",
+            "The accounting Item has not been created yet; open the Fee "
+            "Category in Education to fix it.",
         "next_role": None,
         "waiting_since": None,
     } for row in fee_types]
@@ -192,7 +193,7 @@ def work():
             "detail": f"{len(family_levels)} level(s)",
             "status": program["status"],
             "stage": "Program",
-            "stage_definition": "Owner-defined program family; its levels are native "
+            "stage_definition": "Owner-defined program family; its levels are "
                                "Program records consumed by enrollment, fees and classes.",
             "next": "Define the first level." if not family_levels else "No action.",
             "next_role": "Course Owner" if not family_levels else None,
@@ -367,20 +368,20 @@ def work():
          "definition": "Active levels whose duration versions contain no version "
                        "effective today; new enrollments cannot state their duration.",
          "value": missing_duration, "owner": "Course Owner"},
-        {"label": "Levels missing their native anchor",
-         "definition": "Levels whose native Program link is absent. This is a "
-                       "configuration integrity fault: enrollment, fees and classes "
-                       "consume levels through that native link.",
+        {"label": "Levels missing their Program link",
+         "definition": "Levels whose Program link is absent — a "
+                       "configuration integrity fault, since enrollment, fees "
+                       "and classes reach a level through it.",
          "value": missing_native, "owner": "Course Owner"},
         {"label": "Levels in active use",
-         "definition": "Levels whose native program carries at least one submitted "
-                       "Program Enrollment; deactivation is refused for these.",
+         "definition": "Levels whose Program carries at least one "
+                       "submitted enrollment; deactivation is refused for these.",
          "value": in_use_levels, "owner": "Course Owner"},
         {"label": "Progression links configured",
          "definition": "Levels whose next level is configured.",
          "value": progression_links, "owner": "Course Owner"},
         {"label": "Fee types defined",
-         "definition": "Native Fee Category records (each carries its own "
+         "definition": "Fee Category records (each carries its own "
                        "accounting Item).",
          "value": len(fee_types), "owner": "Course Owner"},
         {"label": "Active levels without a usable fee plan",
@@ -388,15 +389,16 @@ def work():
                        "has no non-cancelled fee plan carrying components; issuance "
                        "refuses an empty plan, submitted or draft.",
          "value": len(levels_without_plan), "owner": "Course Owner"},
-        {"label": "Native programs outside the control plane",
-         "definition": "Native Education Program records no configured level "
-                       "anchors. Enrollment against them bypasses the Owner's "
-                       "structure; adopt them as levels or retire them deliberately.",
+        {"label": "Programs not claimed by any configured level",
+         "definition": "Education Program records no configured level "
+                       "uses. Enrollment against them bypasses the Owner's "
+                       "structure; adopt them as levels or retire them "
+                       "deliberately.",
          "value": sum(1 for row in native_programs
                       if row["name"] not in anchored_native),
          "owner": "Course Owner"},
         {"label": "Active discount rules",
-         "definition": "TH Discount Rule rows in Active status under Policy A.",
+         "definition": "Discount rules (TH Discount Rule) in Active status, per Policy A.",
          "value": sum(1 for row in discount_rules if row.get("status") == "Active"),
          "owner": "Course Owner"},
     ]
@@ -435,8 +437,8 @@ def work():
     setup_actions = [{
         "id": "new-program",
         "person": "Define a new program family",
-        "detail": "The family orders and governs its levels; it is not a native "
-                  "Program itself.",
+        "detail": "The family orders and governs its levels; it is not "
+                  "itself an enrollment Program.",
         "status": "Ready",
         "stage": "Setup",
         "stage_definition": "Configuration actions open the same guarded, "
@@ -449,10 +451,10 @@ def work():
     }, {
         "id": "new-academic-year",
         "person": "Define an academic year",
-        "detail": "Native Academic Year; fees, enrollments and classes key on it.",
+        "detail": "An Academic Year record; fees, enrollments and classes key on it.",
         "status": "Ready",
         "stage": "Setup",
-        "stage_definition": "Native Education requires Academic Year records; "
+        "stage_definition": "Education needs Academic Year records; "
                             "nothing else in the product creates them.",
         "next": "Create the year with its start and end dates before fee plans.",
         "next_role": "Course Owner",
@@ -462,7 +464,7 @@ def work():
     }, {
         "id": "new-fee-type",
         "person": "Define a fee type",
-        "detail": "Native Fee Category; Education creates its accounting Item.",
+        "detail": "A Fee Category record; Education creates its accounting Item.",
         "status": "Ready",
         "stage": "Setup",
         "stage_definition": "Fee types are Owner configuration, never hard-coded: "

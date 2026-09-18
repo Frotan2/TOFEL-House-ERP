@@ -161,7 +161,7 @@ def work():
          "value": sum(1 for row in groups if cohort_state(row) == "Planned"),
          "owner": "Teaching Scheduler"},
         {"label": "Enrollments awaiting a class",
-         "definition": "Submitted enrollments whose level and academic year have no class planned or running yet.",
+         "definition": "Confirmed enrollments whose level and academic year have no class planned or running yet.",
          "value": len(unclassed), "owner": "Teaching Scheduler"},
     ]
 
@@ -260,10 +260,10 @@ def work():
                           f"enrolled without a class",
                 "status": "Needs a class",
                 "stage": "Class creation",
-                "stage_definition": ("Submitted enrollments exist for this level and "
+                "stage_definition": ("Confirmed enrollments exist for this level and "
                                      "year, but no class is planned or running yet."),
                 "next": "Name the class and set its capacity; the roster is drawn "
-                        "from these submitted enrollments by the command itself.",
+                        "from these confirmed enrollments by the command itself.",
                 "next_role": "Teaching Scheduler",
                 "waiting_since": min((r.get("enrollment_date") or "") for r in intake) or None,
                 "action": action,
@@ -337,7 +337,7 @@ def _attendance_window(groups):
             "status": "Absent", "docstatus": 1})
         facts.append({
             "label": group.get("student_group_name") or group["name"],
-            "definition": f"Submitted attendance rows in the last 30 days: {recorded}. Absent: {absent}.",
+            "definition": f"Attendance marked in the last 30 days: {recorded}. Of those, absent: {absent}.",
             "value": absent,
             "owner": "Attendance Recorder",
         })

@@ -496,7 +496,7 @@ class ControlPlaneTieTests(unittest.TestCase):
 
     def test_setup_desk_audits_native_programs_outside_the_plane(self):
         source = (APP / "desk/setup.py").read_text(encoding="utf-8")
-        self.assertIn("outside the control plane", source)
+        self.assertIn("not claimed by any configured level", source)
         self.assertIn("anchored_native", source)
         init_source = (APP / "desk/__init__.py").read_text(encoding="utf-8")
         self.assertIn('("setup", "Program")', init_source)

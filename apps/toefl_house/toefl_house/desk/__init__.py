@@ -57,7 +57,7 @@ DESKS = {
     },
     "th-academic-setup": {
         "title": "TOEFL House Academic Setup",
-        "description": "The Owner's configuration control plane: programs, ordered levels, effective-dated durations and progression, consumed natively by the whole product.",
+        "description": "The Owner's configuration surface: programs, ordered levels, effective-dated durations and progression, feeding every other desk and command.",
         "roles": ["Course Owner"],
         "module": "Operations",
     },

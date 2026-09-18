@@ -741,6 +741,60 @@ class ReceptionLookupTests(unittest.TestCase):
                              "the lookup searched with untruncated text")
 
 
+class DeskPlainLanguageTests(unittest.TestCase):
+    """U5/U1-class guard: staff-visible desk text names business things.
+
+    The desk layer's contract is honesty in staff language; a regression to
+    raw doctype plumbing (Sales Invoice, Payment Entry, Student Group,
+    Has Role, docstatus...) inside any display field is exactly what the
+    Phase-1 audit logged. Finance/Owner/setup desks may cite the document
+    names their users operate on (Fee Structure, Academic Year), so those
+    strings carry the shorter ban list.
+    """
+
+    COMMON_BANNED = ("Student Group", "Program Enrollment", "Sales Invoice",
+                     "Payment Entry", "Student Applicant", "Course Schedule",
+                     "Has Role", "docstatus", "User Permission")
+    STAFF_BANNED = COMMON_BANNED + ("Fee Structure", "Fee Category", "Academic Year",
+                                    "Discount Rule", "TH Correction", "TH Placement",
+                                    "TH Admission", "TH Level", "TH Teaching",
+                                    "TH Discount")
+    DISPLAY_KEYS = {"label", "next", "definition", "stage_definition", "detail",
+                    "stage", "status", "title", "description", "empty_body",
+                    "empty_title"}
+
+    @staticmethod
+    def _strings(node):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            yield node.value
+        elif isinstance(node, ast.JoinedStr):
+            for value in node.values:
+                yield from DeskPlainLanguageTests._strings(value)
+        elif isinstance(node, ast.IfExp):
+            yield from DeskPlainLanguageTests._strings(node.body)
+            yield from DeskPlainLanguageTests._strings(node.orelse)
+
+    def test_display_fields_carry_no_doctype_plumbing(self):
+        _ast = ast
+        for module in ("reception", "academic", "lifecycle", "finance", "operations",
+                       "owner", "setup"):
+            tree = _ast.parse((DESK / f"{module}.py").read_text(encoding="utf-8"))
+            banned = self.COMMON_BANNED if module in ("finance", "owner", "setup") \
+                else self.STAFF_BANNED
+            for node in _ast.walk(tree):
+                if isinstance(node, _ast.Dict):
+                    for key, value in zip(node.keys, node.values):
+                        if not (isinstance(key, _ast.Constant)
+                                and key.value in self.DISPLAY_KEYS):
+                            continue
+                        for text in self._strings(value):
+                            for word in banned:
+                                self.assertNotIn(
+                                    word, text,
+                                    f"{module}.py embeds raw '{word}' in a "
+                                    "staff-visible desk string")
+
+
 class GuidedEndpointRegistryTests(unittest.TestCase):
     """Every guided action endpoint is a real owned whitelisted command."""
 
@@ -965,7 +1019,7 @@ class SetupDeskWorldTests(unittest.TestCase):
         payload = self._run()
         facts = self._section(payload, "health")["facts"]
         orphan = next(fact for fact in facts
-                      if "outside the control plane" in fact["label"])
+                      if "not claimed by any configured level" in fact["label"])
         self.assertEqual(orphan["value"], 1,
                          "exactly one of the four native programs is unanchored")
 

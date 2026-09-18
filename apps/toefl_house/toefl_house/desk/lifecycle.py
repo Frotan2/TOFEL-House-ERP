@@ -80,7 +80,7 @@ def admission_stage(admission_status, accepted, has_native_student):
         if has_native_student:
             return {
                 "label": "Student created",
-                "definition": "The admission is approved and a native Student exists.",
+                "definition": "The admission is approved and the learner already has a student record.",
                 "next": "Enroll the student in the program.",
                 "role": "Enrollment Officer",
                 "command": "enroll_in_program",
@@ -89,7 +89,7 @@ def admission_stage(admission_status, accepted, has_native_student):
             return {
                 "label": "Offer accepted",
                 "definition": "The offer was accepted and conversion is next.",
-                "next": "Convert the applicant into a native Student.",
+                "next": "Convert the applicant into a student record.",
                 "role": "Admission Approver",
                 "command": "convert_applicant",
             }

@@ -71,7 +71,7 @@ def cockpit():
 
     business_facts = [
         {"label": "Active students",
-         "definition": "Enabled native Student records.",
+         "definition": "Active learner records in the student register.",
          "value": students, "owner": "Admission Approver"},
         {"label": "Admissions in flight",
          "definition": "Open admission decisions (Draft, Review, Approved, Conditional).",

@@ -483,6 +483,10 @@ const hostileItem = {
 	const requestKeyField = dialog.opts.fields[0];
 	assert(requestKeyField.default && requestKeyField.default.length >= 16,
 		"a fresh idempotency key must be pre-generated");
+	assert.strictEqual(requestKeyField.read_only, 1,
+		"the key is transport, not a decision input: shown for retry, locked from editing");
+	assert(String(requestKeyField.label).includes("Request reference"),
+		"the key's label must speak staff language, not plumbing");
 	assert.strictEqual(dialog.values.name, "ADM-0001", "the server prefill must reach the dialog");
 	assert.strictEqual(dialog.values.expected_version, 2, "the version prefill must reach the dialog");
 	dialog.submit({ request_key: requestKeyField.default, name: "ADM-0001", expected_version: 2 });

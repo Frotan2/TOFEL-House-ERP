@@ -108,7 +108,7 @@ def _person_item(applicant, decisions_by_applicant, subject_to_decision):
         return _admission_item(applicant, decision)
     stage = {
         "label": "Applicant recorded",
-        "definition": "The native applicant exists but no admission decision has been opened.",
+        "definition": "The applicant is on file, but no admission decision has been opened yet.",
         "next": "Open the admission decision for this applicant.",
         "role": "Admission Officer",
         "command": "create_admission",
@@ -157,7 +157,7 @@ def _funnel(handover_count):
                                 {"status": ("in", ["Approved", "Conditional"]), "accepted": 0}),
          "owner": "Admission Officer"},
         {"label": "Active students",
-         "definition": "Enabled native Student records.",
+         "definition": "Active learner records in the student register.",
          "value": project_count("reception", STUDENT, {"enabled": 1}), "owner": None},
     ]
 
