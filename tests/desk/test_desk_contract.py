@@ -30,13 +30,44 @@ APP = ROOT / "apps/toefl_house/toefl_house"
 DESK = APP / "desk"
 
 DESK_MODULES = ("__init__", "lifecycle", "reception", "academic", "finance",
-                "operations", "owner")
+                "operations", "owner", "setup")
 
 SENSITIVE_FIELDS = {
     "answer", "content_hash", "result_json", "seed", "pool_digest",
     "key_version", "form_hash", "net_pay", "salary", "base",
     "encryption_key", "password", "secret",
 }
+
+
+def _load_pinned_schema():
+    spec = importlib.util.spec_from_file_location(
+        "th_pinned_schema", Path(__file__).with_name("pinned_schema.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+pinned_schema = _load_pinned_schema()
+
+
+def assert_columns_real(caller, doctype, columns):
+    """Every projected/filtered column must exist on the pinned authority.
+
+    The stub world answers any field name a test asks for — that neutrality
+    is what hid the D2 class (desk code querying Student Group.active, a
+    column no pinned doctype has). This guard makes the fake world schema-
+    strict: unknown doctype or unknown column fails, in every live-run
+    smoke, world test and static scan below.
+    """
+    real = pinned_schema.real_fields(doctype)
+    if real is None:
+        raise AssertionError(f"{caller}: {doctype!r} is not in the pinned schema "
+                             "ledger — a new doctype entered a desk projection "
+                             "without pinning its real fields")
+    bad = sorted({column for column in columns if column and column not in real})
+    if bad:
+        raise AssertionError(f"{caller}: {doctype} has no column(s) {bad} "
+                             "(schema fiction — D2 class)")
 
 
 def _frappe_stub(roles=()):
@@ -55,18 +86,41 @@ def _frappe_stub(roles=()):
         raise (exc or Exception)(msg)
 
     stub.throw = staticmethod(throw)
-    stub.whitelist = lambda **kwargs: (lambda func: func)
+
+    def whitelist(**kwargs):
+        """Marks the function exactly where the real frappe decorator would.
+
+        A neutralized pass-through stub hid the Academic Setup defect (D1):
+        the desk ran in-process whether or not it was exposed. Marking here
+        keeps imports callable while making the MISSING decorator observable
+        to the tie-out tests below — the closest offline mirror of the real
+        request pipeline's whitelist enforcement.
+        """
+        def decorator(func):
+            func.__frappe_whitelisted__ = True
+            func.__frappe_whitelist_methods__ = tuple(kwargs.get("methods") or ())
+            return func
+        return decorator
+
+    stub.whitelist = whitelist
     stub.session = types.SimpleNamespace(user="desk-user@example.com")
     stub.get_roles = lambda user: set(roles)
     def _db_get_all(doctype, filters=None, fields=None, order_by=None,
                     limit_start=None, limit_page_length=None, **kwargs):
+        assert_columns_real("stub get_all", doctype,
+                            list(fields or []) + list((filters or {}).keys())
+                            + ([kwargs["pluck"]] if kwargs.get("pluck") else []))
         return []
 
+    def _db_count(doctype, filters=None):
+        assert_columns_real("stub count", doctype, list((filters or {}).keys()))
+        return 0
+
     stub.db = types.SimpleNamespace(
+        count=_db_count,
         get_value=lambda *args, **kwargs: 1,
         get_all=_db_get_all,
         get_list=_db_get_all,
-        count=lambda doctype, filters=None: 0,
     )
     stub.get_all = _db_get_all
     import datetime as _datetime
@@ -149,7 +203,8 @@ class DeskGateTests(unittest.TestCase):
         return found
 
     def test_every_whitelisted_desk_endpoint_gates_on_its_audience_first(self):
-        for module in ("reception", "academic", "finance", "operations", "owner"):
+        for module in ("reception", "academic", "finance", "operations", "owner",
+                       "setup"):
             endpoints = self.whitelisted(self.trees[module])
             self.assertTrue(endpoints, f"{module} ships no whitelisted endpoint")
             for func in endpoints:
@@ -192,7 +247,8 @@ class DeskReadBoundaryTests(unittest.TestCase):
         forbidden_calls = ("frappe.get_all", "frappe.get_list", "frappe.db.get_list",
                            "frappe.db.get_all", "frappe.db.sql", "frappe.get_doc",
                            "frappe.db.insert", "frappe.db.delete", "frappe.db.count")
-        for name in ("reception", "academic", "finance", "operations", "owner"):
+        for name in ("reception", "academic", "finance", "operations", "owner",
+                     "setup"):
             for node in ast.walk(self.trees[name]):
                 if isinstance(node, ast.Call):
                     rendered = ast.unparse(node.func)
@@ -212,7 +268,8 @@ class DeskReadBoundaryTests(unittest.TestCase):
                                      f"{name} looks like it mutates a document: {line.strip()}")
 
     def test_every_projection_call_names_explicit_fields_and_a_limit(self):
-        for name in ("reception", "academic", "finance", "operations", "owner"):
+        for name in ("reception", "academic", "finance", "operations", "owner",
+                     "setup"):
             for node in ast.walk(self.trees[name]):
                 if not (isinstance(node, ast.Call) and ast.unparse(node.func) in (
                         "project_rows", "project_count")):
@@ -302,6 +359,7 @@ class DeskAudienceTieTests(unittest.TestCase):
             "th-finance-desk": "finance.work",
             "th-operations-desk": "operations.work",
             "th-owner-cockpit": "owner.cockpit",
+            "th-academic-setup": "setup.work",
         }
         for slug, dotted in module_of.items():
             self.assertIn(f'"toefl_house.desk.{dotted}"', self.client,
@@ -309,6 +367,146 @@ class DeskAudienceTieTests(unittest.TestCase):
             module, func = dotted.split(".")
             self.assertIn(f"def {func}(", desk_sources()[module],
                           f"{module}.{func} missing")
+
+
+class DeskReadEndpointExposureTests(unittest.TestCase):
+    """Every desk read endpoint the client actually names must EXIST at that
+    dotted path and be whitelisted (D1 recurrence guard).
+
+    The stub's whitelist marks decorated functions exactly where real frappe
+    would expose them, so this mirrors the HTTP request path: the client's
+    own strings are resolved (a phantom module path like
+    ``toefl_house.desk.registry.available`` fails resolution) and the
+    resolved function must carry the whitelist mark with GET/POST methods.
+    Deleting a decorator, renaming a module or moving a function off the
+    path the browser calls now fails the owned suite.
+    """
+
+    CLIENT = (APP / "public" / "js" / "th_role_desks.js").read_text(encoding="utf-8")
+
+    def _client_named_desk_methods(self):
+        import re
+        named = set(re.findall(r'"(toefl_house\.desk\.[A-Za-z_.]+)"', self.CLIENT))
+        self.assertIn("toefl_house.desk.available", named,
+                      "the client must resolve the desk registry via the real module path")
+        return named
+
+    def test_every_named_desk_method_resolves_to_a_marked_endpoint(self):
+        for dotted in sorted(self._client_named_desk_methods()):
+            with self.subTest(endpoint=dotted):
+                parts = dotted.split(".")
+                self.assertIn(parts[1], ("desk",), dotted)
+                if len(parts) == 4:
+                    module_name, func = parts[2], parts[3]
+                elif len(parts) == 3:
+                    module_name, func = "__init__", parts[2]
+                else:
+                    self.fail(f"unexpected desk method depth: {dotted}")
+                self.assertIn(module_name, DESK_MODULES, f"{dotted} has no desk module file")
+                module = _import_desk(module_name)
+                target = getattr(module, func, None)
+                self.assertIsNotNone(target, f"{dotted} does not resolve to a callable")
+                self.assertTrue(getattr(target, "__frappe_whitelisted__", False),
+                                f"{dotted} is callable but NOT whitelisted — the browser "
+                                "will be refused at the API layer (D1 class)")
+                self.assertTrue({"GET", "POST"} <= set(
+                    getattr(target, "__frappe_whitelist_methods__", ())),
+                    f"{dotted} must accept GET and POST like every desk read")
+
+
+class DeskSchemaFidelityTests(unittest.TestCase):
+    """No desk may ever query a column the pinned authority does not have.
+
+    D2 class prevention, in two layers: the PROJECTION_FIELDS allow-lists
+    are diffed against the frozen native ledgers (pinned_schema.json), and
+    every project_rows/project_count CALL SITE in every desk module is
+    scanned (doctype, projected fields, filter keys and order-by columns all
+    resolved through module constants) against the same ledgers. A future
+    upstream revision that drops a column fails here the moment the ledger
+    is regenerated — and a desk reaching for a nicer-sounding field that was
+    never real (active, currency, applicant_name) fails immediately.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.sources = desk_sources()
+        cls.trees = desk_trees()
+
+    def test_projection_allow_lists_are_schema_real(self):
+        block = _literal_block(self.sources["__init__"], "PROJECTION_FIELDS = {")
+        self.assertTrue(block)
+        for (desk, doctype), fields in block.items():
+            assert_columns_real(f"PROJECTION_FIELDS[{desk},{doctype}]", doctype, fields)
+
+    def test_every_desk_query_site_uses_real_columns(self):
+        for name in ("reception", "academic", "finance", "operations", "owner",
+                     "setup"):
+            tree = self.trees[name]
+            strings, lists = {}, {}
+            for node in tree.body:
+                if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
+                    try:
+                        value = ast.literal_eval(node.value)
+                    except Exception:
+                        continue
+                    if isinstance(value, str):
+                        strings[node.targets[0].id] = value
+                    elif isinstance(value, list):
+                        lists[node.targets[0].id] = value
+
+            def resolve(node):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    return node.value
+                if isinstance(node, ast.Name):
+                    return strings.get(node.id)
+                return None
+
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                        and node.func.id in ("project_rows", "project_count")):
+                    continue
+                args = node.args
+                self.assertTrue(len(args) >= 2, f"{name}: query without a doctype")
+                doctype = resolve(args[1])
+                self.assertIsNotNone(
+                    doctype, f"{name}:{node.lineno} doctype argument must be a "
+                             "module-level literal (keeps the ledger honest)")
+                fields, filter_node = [], None
+                if node.func.id == "project_rows":
+                    if len(args) > 2:
+                        third = args[2]
+                        if isinstance(third, ast.Name) and third.id in lists:
+                            fields = lists[third.id]
+                        else:
+                            try:
+                                fields = ast.literal_eval(third)
+                            except Exception:
+                                fields = []
+                    filter_node = args[3] if len(args) > 3 else next(
+                        (k.value for k in node.keywords if k.arg == "filters"), None)
+                else:
+                    fields = ["name"]
+                    filter_node = args[2] if len(args) > 2 else next(
+                        (k.value for k in node.keywords if k.arg == "filters"), None)
+                filter_keys = []
+                if isinstance(filter_node, ast.Dict):
+                    for key in filter_node.keys:
+                        try:
+                            filter_keys.append(ast.literal_eval(key))
+                        except Exception:
+                            filter_keys.append(None)
+                order_by = next((k for k in node.keywords if k.arg == "order_by"), None)
+                columns = list(fields) + [k for k in filter_keys if k]
+                if order_by is not None:
+                    try:
+                        clause = ast.literal_eval(order_by.value) or ""
+                    except Exception:
+                        clause = ""
+                    for part in str(clause).split(","):
+                        part = part.strip().split()
+                        if part and part[0].replace("_", "").isalnum():
+                            columns.append(part[0])
+                assert_columns_real(f"{name}:{node.lineno}", doctype, columns)
 
 
 class LifecycleStageTests(unittest.TestCase):
@@ -660,6 +858,8 @@ class SetupDeskWorldTests(unittest.TestCase):
 
         def world_get_all(doctype, filters=None, fields=None, order_by=None,
                           limit_start=None, limit_page_length=None, **kwargs):
+            assert_columns_real("setup world", doctype,
+                                list(fields or []) + list((filters or {}).keys()))
             rows = world.get(doctype, [])
             filters = filters or {}
             return [dict(row) for row in rows

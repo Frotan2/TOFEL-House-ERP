@@ -12,6 +12,7 @@ from toefl_house.desk import (
     LIMIT_LOOKUP,
     LIMIT_QUEUES,
     guided_action,
+    open_cohort_keys,
     project_count,
     project_rows,
     require_desk_audience,
@@ -28,8 +29,11 @@ ATTEMPT = "TH Placement Attempt"
 CASE = "TH Placement Case"
 STUDENT = "Student"
 ENROLLMENT = "Program Enrollment"
+GROUP = "Student Group"
+GROUP_COHORT_FIELDS = ["name", "program", "academic_year", "disabled",
+                       "th_class_status"]
 
-APPLICANT_FIELDS = ["name", "applicant_name", "student_email_id", "program",
+APPLICANT_FIELDS = ["name", "title", "student_email_id", "program",
                     "academic_year", "application_status", "creation"]
 ADMISSION_FIELDS = ["name", "student_applicant", "program", "academic_year",
                     "placement_decision", "status", "accepted", "native_student",
@@ -71,7 +75,7 @@ def _admission_item(row, decision):
         decision["status"], bool(decision.get("accepted")), bool(decision.get("native_student")))
     item = {
         "id": row["name"],
-        "person": row.get("applicant_name") or "",
+        "person": row.get("title") or "",
         "detail": row.get("program") or "",
         "status": decision["status"],
         "stage": stage["label"],
@@ -111,7 +115,7 @@ def _person_item(applicant, decisions_by_applicant, subject_to_decision):
     }
     item = {
         "id": applicant["name"],
-        "person": applicant.get("applicant_name") or applicant.get("student_email_id") or applicant["name"],
+        "person": applicant.get("title") or applicant.get("student_email_id") or applicant["name"],
         "detail": applicant.get("program") or "",
         "status": applicant.get("application_status") or "Applied",
         "stage": stage["label"],
@@ -239,7 +243,7 @@ def lookup(query):
     like = f"%{text}%"
 
     matches = project_rows("reception", APPLICANT, APPLICANT_FIELDS,
-                           filters={"applicant_name": ("like", like)},
+                           filters={"title": ("like", like)},
                            order_by="creation desc", limit=LIMIT_LOOKUP)
     seen = {row["name"] for row in matches}
     for row in project_rows("reception", APPLICANT, APPLICANT_FIELDS,
@@ -271,9 +275,19 @@ def lookup(query):
                                             "docstatus": 1},
                                    order_by="enrollment_date desc", limit=BOUNCE_WINDOW)
         enrolled = {row["student"]: row for row in enrollments}
+        # Cohort truth is the class lifecycle (planned or active), derived
+        # from the same governed fact every other surface uses — never a
+        # flag this desk would have to maintain itself.
+        group_rows = project_rows("reception", GROUP, GROUP_COHORT_FIELDS,
+                                  filters={"disabled": 0},
+                                  order_by="name asc", limit=BOUNCE_WINDOW)
+        open_cohorts = open_cohort_keys(group_rows)
         for row in student_rows:
             enrollment = enrolled.get(row["name"])
-            stage = lifecycle.enrollment_stage(bool(enrollment), False)
+            has_cohort = bool(enrollment) and (
+                enrollment.get("program"), enrollment.get("academic_year")
+            ) in open_cohorts
+            stage = lifecycle.enrollment_stage(bool(enrollment), has_cohort)
             student_items.append({
                 "id": row["name"],
                 "person": row.get("student_name") or row["name"],

@@ -757,7 +757,7 @@ frappe.provide("toefl_house.command_pages");
 		$("<span class='th-spinner' aria-hidden='true'></span>").appendTo(deskLoading);
 		$("<span></span>").text(text("Checking which desks your roles can open…")).appendTo(deskLoading);
 		frappe.call({
-			method: "toefl_house.desk.registry.available",
+			method: "toefl_house.desk.available",
 			callback(response) {
 				deskLoading.remove();
 				const desks = (response.message || {}).desks || [];

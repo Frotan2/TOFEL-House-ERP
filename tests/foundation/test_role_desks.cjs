@@ -110,6 +110,29 @@ for (const [slug, shape] of Object.entries(EXPECTED)) {
 	assert(surfaces[slug].title === shape.title, `${slug} client title drift`);
 }
 
+/* D1 recurrence guard: every read endpoint the client calls by name must
+ * exist in its desk module AND carry the real @frappe.whitelist decorator —
+ * an unexposed function passes every stubbed in-process test and still
+ * fails at the API layer on a real bench (the Academic Setup incident). */
+for (const [slug, shape] of Object.entries(EXPECTED)) {
+	const parts = shape.endpoint.split(".");
+	const func = parts.pop();
+	const deskModule = parts.pop();
+	assert.strictEqual(parts.join("."), "toefl_house.desk", `${slug}: unexpected endpoint path`);
+	const py = fs.readFileSync(path.join(APP, "desk", `${deskModule}.py`), "utf8");
+	const found = new RegExp(`^def\\s+${func}\\(`, "m").exec(py);
+	assert(found, `${shape.endpoint}: function is missing from desk/${deskModule}.py`);
+	assert(py.slice(Math.max(0, found.index - 200), found.index).includes("@frappe.whitelist"),
+		`${shape.endpoint} must stay whitelisted for the browser to call it`);
+}
+assert(/@frappe\.whitelist\([^\n]*\)\ndef available\(/.test(deskInit),
+	"the desk registry read (toefl_house.desk.available) must stay whitelisted");
+for (const [, method] of fs.readFileSync(SCRIPT, "utf8").matchAll(/"(toefl_house\.desk\.[\w.]+)"/g)) {
+	const tail = method.split(".")[2];
+	assert(["reception", "academic", "finance", "operations", "owner", "setup", "available"]
+		.includes(tail), `desk client names an unresolvable module path: ${method}`);
+}
+
 const hooks = fs.readFileSync(HOOKS, "utf8");
 for (const slug of Object.keys(EXPECTED)) {
 	assert(hooks.includes(`"${slug}"`), `${slug} is not wired in hooks.py`);
@@ -365,7 +388,7 @@ function runScenario({ workPayload, failFirstWork = false, failLookup = false })
 		},
 		call(opts) {
 			calls.push(opts);
-			if (opts.method === "toefl_house.desk.registry.available") {
+			if (opts.method === "toefl_house.desk.available") {
 				opts.callback({ message: { desks: [{ slug: "th-finance-desk", title: "TOEFL House Finance Desk" }] } });
 				return;
 			}

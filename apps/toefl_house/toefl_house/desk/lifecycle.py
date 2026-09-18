@@ -126,16 +126,16 @@ def admission_stage(admission_status, accepted, has_native_student):
 
 
 def enrollment_stage(has_submitted_enrollment, has_cohort_group):
-    """Stage after conversion, from native Program Enrollment / cohort facts.
+    """Stage after conversion, from the native enrollment and class facts.
 
-    `has_cohort_group` is a cohort fact (an active Student Group exists for the
-    enrollment's program and academic year), not a membership claim: the desk
-    never asserts a student is on a roster it cannot see.
+    `has_cohort_group` is a cohort fact (a class planned or running exists
+    for the enrollment's program and academic year), not a membership claim:
+    the desk never asserts a student is on a roster it cannot see.
     """
     if not has_submitted_enrollment:
         return {
             "label": "Awaiting enrollment",
-            "definition": "A native Student exists without a submitted Program Enrollment.",
+            "definition": "The learner record exists but no enrollment has been submitted yet.",
             "next": "Enroll the student in the program.",
             "role": "Enrollment Officer",
             "command": "enroll_in_program",
@@ -143,14 +143,14 @@ def enrollment_stage(has_submitted_enrollment, has_cohort_group):
     if not has_cohort_group:
         return {
             "label": "Enrolled, no class",
-            "definition": "The Program Enrollment is submitted and no active Student Group exists for this cohort.",
+            "definition": "The enrollment is submitted; no class is planned or running for this level and year yet.",
             "next": "Create the class cohort for this enrollment.",
             "role": "Teaching Scheduler",
             "command": "create_student_group",
         }
     return {
         "label": "Enrolled",
-        "definition": "The Program Enrollment is submitted and an active class cohort exists for this program and year.",
+        "definition": "The enrollment is submitted and a class is planned or running for this level and year.",
         "next": "Confirm the class roster and record attendance.",
         "role": "Teaching Scheduler",
         "command": None,

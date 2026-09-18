@@ -52,7 +52,7 @@ frappe.provide("toefl_house.role_desks");
 		},
 	});
 
-	const DESK_REGISTRY = "toefl_house.desk.registry.available";
+	const DESK_REGISTRY = "toefl_house.desk.available";
 
 	/* Same five tones and the same meaning as the command pages: the tone is
 	 * presentation only and an unmapped status falls back to neutral. */

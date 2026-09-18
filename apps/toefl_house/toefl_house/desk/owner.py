@@ -12,6 +12,7 @@ from toefl_house.desk import (
     BOUNCE_WINDOW,
     DESKS,
     LIMIT_QUEUES,
+    active_cohort_rows,
     project_count,
     project_rows,
     require_desk_audience,
@@ -64,8 +65,8 @@ def cockpit():
     students = project_count("management", STUDENT, {"enabled": 1})
     groups = project_rows("management", GROUP,
                           ["name", "student_group_name", "program", "academic_year",
-                           "max_strength", "course", "active"],
-                          filters={"active": 1}, order_by="student_group_name asc",
+                           "max_strength", "course", "disabled", "th_class_status"],
+                          filters={"disabled": 0}, order_by="student_group_name asc",
                           limit=LIMIT_QUEUES)
 
     business_facts = [
@@ -81,9 +82,9 @@ def cockpit():
         {"label": "Released placement results",
          "definition": "Decisions in Released status.",
          "value": released, "owner": "Placement Releaser"},
-        {"label": "Active cohorts",
-         "definition": "Active Student Group records.",
-         "value": len(groups), "owner": "Teaching Scheduler"},
+        {"label": "Classes running",
+         "definition": "Classes whose lifecycle is Active; a class counts from activation to completion.",
+         "value": len(active_cohort_rows(groups)), "owner": "Teaching Scheduler"},
     ]
 
     oldest = admissions_open[0] if admissions_open else None

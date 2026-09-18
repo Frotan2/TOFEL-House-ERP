@@ -11,7 +11,10 @@ from toefl_house.desk import (
     BOUNCE_WINDOW,
     DESKS,
     LIMIT_QUEUES,
+    active_cohort_rows,
+    cohort_state,
     guided_action,
+    open_cohort_keys,
     project_count,
     project_rows,
     require_desk_audience,
@@ -103,8 +106,8 @@ def work():
     # --- classes and today's sessions ---------------------------------------
     groups = project_rows("academic", GROUP,
                           ["name", "student_group_name", "program", "academic_year",
-                           "max_strength", "course", "active"],
-                          filters={"active": 1}, order_by="student_group_name asc",
+                           "max_strength", "course", "disabled", "th_class_status"],
+                          filters={"disabled": 0}, order_by="student_group_name asc",
                           limit=LIMIT_QUEUES)
     sessions = project_rows("academic", SCHEDULE,
                             ["name", "student_group", "instructor", "course", "room",
@@ -122,7 +125,7 @@ def work():
                                 "academic_year", "enrollment_date", "docstatus"],
                                filters={"docstatus": 1},
                                order_by="enrollment_date desc", limit=BOUNCE_WINDOW)
-    cohorts = {(row["program"], row.get("academic_year")) for row in groups}
+    cohorts = open_cohort_keys(groups)
     unclassed = [row for row in enrollments
                  if (row.get("program"), row.get("academic_year")) not in cohorts]
 
@@ -150,11 +153,15 @@ def work():
          "value": project_count("academic", ADMISSION,
                                 {"status": ("in", ["Approved", "Conditional"]), "accepted": 0}),
          "owner": "Admission Officer"},
-        {"label": "Active cohorts",
-         "definition": "Active Student Group records.",
-         "value": len(groups), "owner": "Teaching Scheduler"},
-        {"label": "Enrollments without a cohort",
-         "definition": "Submitted Program Enrollments whose program and academic year have no active Student Group.",
+        {"label": "Classes running",
+         "definition": "Classes whose lifecycle is Active — sessions can be scheduled for these.",
+         "value": len(active_cohort_rows(groups)), "owner": "Teaching Scheduler"},
+        {"label": "Classes planned, awaiting activation",
+         "definition": "Classes created but not yet activated; activating is the step that opens session scheduling.",
+         "value": sum(1 for row in groups if cohort_state(row) == "Planned"),
+         "owner": "Teaching Scheduler"},
+        {"label": "Enrollments awaiting a class",
+         "definition": "Submitted enrollments whose level and academic year have no class planned or running yet.",
          "value": len(unclassed), "owner": "Teaching Scheduler"},
     ]
 
@@ -187,20 +194,33 @@ def work():
         "action": None,
     } for row in sessions]
 
-    cohort_items = [{
-        "id": row["name"],
-        "person": row.get("student_group_name") or row["name"],
-        "detail": " · ".join(part for part in (row.get("program"),
-                                               row.get("academic_year"),
-                                               row.get("course")) if part),
-        "status": f"max {row.get('max_strength', '')}" if row.get("max_strength") else "",
-        "stage": "Active cohort",
-        "stage_definition": "Active Student Group.",
-        "next": "Check the roster before the next session.",
-        "next_role": "Teaching Scheduler",
-        "waiting_since": None,
-        "action": None,
-    } for row in groups]
+    cohort_items = []
+    for row in groups:
+        state = cohort_state(row)
+        if state == "Planned":
+            next_text = "Activate the class before its first session can be scheduled."
+            stage_definition = ("The class exists and its roster is set; activation is "
+                                "the step that opens scheduling.")
+        elif state == "Active":
+            next_text = "Check the roster before the next session."
+            stage_definition = "The class is running: sessions and attendance are open."
+        else:
+            next_text = "No action; this class is closed."
+            stage_definition = "The class lifecycle has ended (completed or cancelled)."
+        cohort_items.append({
+            "id": row["name"],
+            "person": row.get("student_group_name") or row["name"],
+            "detail": " · ".join(part for part in (row.get("program"),
+                                                   row.get("academic_year"),
+                                                   row.get("course")) if part),
+            "status": state,
+            "stage": f"Class — {state}",
+            "stage_definition": stage_definition,
+            "next": next_text,
+            "next_role": "Teaching Scheduler",
+            "waiting_since": None,
+            "action": None,
+        })
 
     assignment_items = [{
         "id": row["name"],
@@ -208,7 +228,7 @@ def work():
         "detail": " · ".join(part for part in (row.get("student_group"), row.get("skill")) if part),
         "status": row.get("effective_end") or "open",
         "stage": "Teaching assignment",
-        "stage_definition": "Skill assignment fact from the teaching compensation slice.",
+        "stage_definition": "An instructor's skill assignment for a class, from the teaching compensation records.",
         "next": "Review the assignment when a term or schedule changes.",
         "next_role": "Teaching Scheduler",
         "waiting_since": row.get("effective_start"),
@@ -232,13 +252,16 @@ def work():
                     empty_body="Every finalized attempt already has its released decision."),
             section("sessions", "Sessions today", "queue", items=session_items,
                     empty_title="No sessions scheduled today",
-                    empty_body="Course Schedule has no sessions for today. Schedule one from the Teaching Scheduling page."),
-            section("cohorts", "Active cohorts", "queue", items=cohort_items,
-                    empty_title="No active cohorts",
-                    empty_body="No active Student Group exists yet. Create one from the Teaching Scheduling page once enrollments exist."),
+                    empty_body="Nothing is scheduled for today. Plan a session for a "
+                               "running class from its row on this desk."),
+            section("classes", "Classes", "queue", items=cohort_items,
+                    empty_title="No classes yet",
+                    empty_body="Nothing is planned or running. A class can be created "
+                               "for any level and year that has submitted enrollments."),
             section("assignments", "Teaching assignments", "queue", items=assignment_items,
                     empty_title="No teaching assignments",
-                    empty_body="No skill assignment exists yet. Assign instructors to cohorts from the Teaching Scheduling page."),
+                    empty_body="No skill assignment exists yet. Instructors are assigned "
+                               "to classes from the Teaching Scheduling page."),
             section("attendance", "Attendance, last 30 days", "facts", facts=attendance_facts,
                     empty_title="No attendance recorded yet",
                     empty_body="Attendance facts appear after the first session is recorded."),

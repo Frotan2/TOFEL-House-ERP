@@ -22,7 +22,7 @@ Discipline (binding for every module in this package):
 """
 import frappe
 
-DESK_MODULES = ("reception", "academic", "finance", "operations", "owner")
+DESK_MODULES = ("reception", "academic", "finance", "operations", "owner", "setup")
 
 DESKS = {
     "th-reception-desk": {
@@ -81,12 +81,21 @@ PROJECTION_FIELDS = {
     ("reception", "Student"): [
         "name", "student_name", "student_email_id", "creation",
     ],
+    # Cohort truth for the walk-in lookup: the class lifecycle lives on the
+    # governed th_class_status custom field (planned/active classes open a
+    # cohort; completed/cancelled ones do not). No `active` column exists on
+    # the pinned native Student Group (education 93bc70757533).
+    ("reception", "Student Group"): [
+        "name", "program", "academic_year", "disabled", "th_class_status",
+    ],
     ("reception", "Program Enrollment"): [
         "name", "student", "student_name", "program", "academic_year",
         "enrollment_date", "docstatus",
     ],
     ("reception", "Student Applicant"): [
-        "name", "applicant_name", "student_email_id", "program",
+        # `title` is the pinned native full-name column (education
+        # 93bc70757533); Student Applicant has no `applicant_name` column.
+        "name", "title", "student_email_id", "program",
         "academic_year", "application_status", "creation",
     ],
     ("reception", "TH Admission Decision"): [
@@ -107,9 +116,12 @@ PROJECTION_FIELDS = {
         "status", "accepted", "native_student", "version", "modified",
         "drafted_by",
     ],
+    # The class lifecycle fact is the governed th_class_status custom field;
+    # the pinned native Student Group (education 93bc70757533) has no
+    # `active` column — `disabled` is its native archive flag.
     ("academic", "Student Group"): [
         "name", "student_group_name", "program", "academic_year",
-        "max_strength", "course", "active",
+        "max_strength", "course", "disabled", "th_class_status",
     ],
     ("academic", "Course Schedule"): [
         "name", "student_group", "instructor", "course", "room",
@@ -137,10 +149,12 @@ PROJECTION_FIELDS = {
         "posting_date", "due_date", "grand_total", "outstanding_amount",
         "currency", "company", "status", "is_return", "docstatus",
     ],
+    # Payment Entry carries no flat `currency` column on the pinned
+    # authority; the paying account's currency is the native fact.
     ("finance", "Payment Entry"): [
         "name", "payment_type", "party_type", "party", "paid_amount",
-        "received_amount", "currency", "company", "posting_date",
-        "docstatus",
+        "received_amount", "paid_from_account_currency", "company",
+        "posting_date", "docstatus",
     ],
     ("finance", "TH Correction Request"): [
         "name", "sales_invoice", "fees", "reason", "requested_amount", "status",
@@ -186,7 +200,7 @@ PROJECTION_FIELDS = {
     ],
     ("management", "Student Group"): [
         "name", "student_group_name", "program", "academic_year",
-        "max_strength", "course", "active",
+        "max_strength", "course", "disabled", "th_class_status",
     ],
     # Staffing coverage reads the native role assignment rows and the enabled
     # flag of the native User; nothing else about a user is projected.
@@ -358,6 +372,34 @@ def guided_action(role, endpoint, label, args):
     if role in viewer_roles():
         return {"role": role, "endpoint": endpoint, "label": label, "args": args}
     return None
+
+
+# The class lifecycle is the governed th_class_status fact (planned → active
+# → completed/cancelled, maintained by toefl_house.teaching.transition_class
+# alone). A cohort is OPEN while a class is planned or active and not
+# archived; completed and cancelled classes never satisfy the cohort
+# requirement again. These sets are reads of that single authority — no
+# parallel status is invented or maintained here.
+COHORT_OPEN_STATUSES = ("Planned", "Active")
+COHORT_ACTIVE_STATUSES = ("Active",)
+
+
+def cohort_state(group_row):
+    """Lifecycle state of one Student Group row from its governed facts."""
+    if int(group_row.get("disabled") or 0):
+        return "Archived"
+    return group_row.get("th_class_status") or "Planned"
+
+
+def open_cohort_keys(group_rows):
+    """(program, academic_year) pairs whose class is planned or active."""
+    return {(row.get("program"), row.get("academic_year"))
+            for row in group_rows
+            if cohort_state(row) in COHORT_OPEN_STATUSES}
+
+
+def active_cohort_rows(group_rows):
+    return [row for row in group_rows if cohort_state(row) in COHORT_ACTIVE_STATUSES]
 
 
 @frappe.whitelist(methods=["GET", "POST"])

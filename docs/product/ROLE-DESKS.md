@@ -78,7 +78,7 @@ Rules that are binding for every desk:
 | `th-owner-cockpit` | Course Owner | Operations | `toefl_house.desk.owner.cockpit` |
 | `th-academic-setup` | Course Owner | Operations | `toefl_house.desk.setup.work` |
 
-`toefl_house.desk.registry.available` tells any desk (and the command-centre
+`toefl_house.desk.available` tells any desk (and the command-centre
 landing page) which desks the *server* believes this viewer holds — the client
 never guesses roles.
 

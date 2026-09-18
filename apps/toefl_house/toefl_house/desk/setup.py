@@ -50,6 +50,7 @@ DISCOUNT_RULE_FIELDS = ["name", "code", "title", "discount_percentage", "precede
                         "status", "fee_category", "program", "description", "modified"]
 
 
+@frappe.whitelist(methods=["GET", "POST"])
 def work():
     """Academic Setup payload: health, programs, levels, fees, setup actions."""
     require_desk_audience(SLUG)

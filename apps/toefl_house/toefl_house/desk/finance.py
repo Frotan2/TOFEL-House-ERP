@@ -105,8 +105,8 @@ def work():
 
     payments = project_rows("finance", PAYMENT,
                             ["name", "payment_type", "party_type", "party", "paid_amount",
-                             "received_amount", "currency", "company", "posting_date",
-                             "docstatus"],
+                             "received_amount", "paid_from_account_currency", "company",
+                             "posting_date", "docstatus"],
                             filters={"docstatus": 1, "payment_type": "Receive",
                                      "posting_date": day},
                             order_by="posting_date desc, name desc", limit=LIMIT_TODAY)
@@ -165,7 +165,7 @@ def work():
 
     money_facts = [
         {"label": "Collected today",
-         "definition": "Submitted Payment Entry rows of type Receive posted today, summed per currency.",
+         "definition": "Submitted payment receipts of type Receive posted today, summed per paying-account currency.",
          "value": _summarize(payments, "paid_amount"),
          "owner": None},
         {"label": "Invoiced today",
@@ -220,7 +220,7 @@ def work():
         "next_role": None,
         "waiting_since": row.get("posting_date"),
         "amount": row.get("paid_amount") or row.get("received_amount") or 0,
-        "currency": row.get("currency") or "",
+        "currency": row.get("paid_from_account_currency") or "",
     } for row in payments]
 
     # §18: resolve the Owner's configured fee plan (Academic Control Plane)

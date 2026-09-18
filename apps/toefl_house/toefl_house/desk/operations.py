@@ -11,6 +11,8 @@ from toefl_house.desk import (
     BOUNCE_WINDOW,
     DESKS,
     LIMIT_QUEUES,
+    active_cohort_rows,
+    open_cohort_keys,
     project_rows,
     require_desk_audience,
     section,
@@ -124,10 +126,10 @@ def work():
                                order_by="enrollment_date desc", limit=BOUNCE_WINDOW)
     groups = project_rows("management", GROUP,
                           ["name", "student_group_name", "program", "academic_year",
-                           "max_strength", "course", "active"],
-                          filters={"active": 1}, order_by="student_group_name asc",
+                           "max_strength", "course", "disabled", "th_class_status"],
+                          filters={"disabled": 0}, order_by="student_group_name asc",
                           limit=LIMIT_QUEUES)
-    cohorts = {(row.get("program"), row.get("academic_year")) for row in groups}
+    cohorts = open_cohort_keys(groups)
     unclassed = [row for row in enrollments
                  if (row.get("program"), row.get("academic_year")) not in cohorts]
 
@@ -156,12 +158,12 @@ def work():
         {"label": "Admissions in review",
          "definition": "Admission decisions in Review.",
          "value": len(review_waiting), "owner": "Admission Approver"},
-        {"label": "Enrollments awaiting a cohort",
-         "definition": "Submitted Program Enrollments whose program and academic year have no active Student Group.",
+        {"label": "Enrollments awaiting a class",
+         "definition": "Submitted enrollments whose level and academic year have no class planned or running yet.",
          "value": len(unclassed), "owner": "Teaching Scheduler"},
-        {"label": "Active cohorts",
-         "definition": "Active Student Group records.",
-         "value": len(groups), "owner": "Teaching Scheduler"},
+        {"label": "Classes running",
+         "definition": "Classes whose lifecycle is Active (planned classes are counted under enrollment coverage instead).",
+         "value": len(active_cohort_rows(groups)), "owner": "Teaching Scheduler"},
         {"label": "Corrections pending",
          "definition": "Invoice correction requests in Requested status.",
          "value": len(corrections), "owner": "Finance Officer"},
