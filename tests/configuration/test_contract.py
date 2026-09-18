@@ -457,11 +457,20 @@ class ControlPlaneTieTests(unittest.TestCase):
         self.assertIn("Academic Setup", source,
                       "a missing plan must name its owner and where to fix it")
         self.assertIn("billing_guidance", source)
-        self.assertIn('"fee_structure": editable[0]["name"]', source,
+        self.assertIn('"fee_structure": plan["name"]', source,
                       "the configured plan must be the prefill, never a blank field")
         for literal in ("No fee plan is configured", "has no components yet",
-                        "More than one editable fee plan"):
+                        "More than one complete fee plan"):
             self.assertIn(literal, source)
+        # U9: one rule everywhere — the desk's readiness is the issuance
+        # command's own acceptance (non-cancelled + components), shared via
+        # helpers rather than a second draft-only definition per desk.
+        self.assertIn("issuable_plans", source,
+                      "billing guidance must use the shared plan-usability rule")
+        setup_source = (APP / "desk/setup.py").read_text(encoding="utf-8")
+        self.assertIn("issuable_plans", setup_source,
+                      "setup readiness must use the shared plan-usability rule")
+        self.assertIn("plan_with_components", setup_source)
         init_source = (APP / "desk/__init__.py").read_text(encoding="utf-8")
         for pair in (('("finance", "Fee Structure")',),
                      ('("finance", "Fee Component")',)):

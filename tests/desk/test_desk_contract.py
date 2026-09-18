@@ -933,5 +933,214 @@ class SetupDeskWorldTests(unittest.TestCase):
         self.assertEqual(setup_act["action"]["label"], "Define discount rule")
 
 
+class FinanceBillingGuidanceWorldTests(unittest.TestCase):
+    """U9: the awaiting-billing promise is the issuance command's own rule.
+
+    A plan counts when it is non-cancelled and carries components — draft or
+    submitted alike; empty drafts wait for the Owner, duplicates pause, and a
+    null academic year on both sides still matches (the old rule keyed plans
+    on a raw None and looked up "", so those enrollments were declared
+    unconfigured while the command would have billed them).
+    """
+
+    def _payload(self):
+        world = {
+            "Program Enrollment": [
+                {"name": "ENR-DRAFT", "student": "STU-1", "student_name": "One",
+                 "program": "SYN-P1", "academic_year": "2026", "enrollment_date":
+                 "2026-09-01", "docstatus": 1},
+                {"name": "ENR-SUB", "student": "STU-2", "student_name": "Two",
+                 "program": "SYN-P2", "academic_year": "2026", "enrollment_date":
+                 "2026-09-02", "docstatus": 1},
+                {"name": "ENR-NONE", "student": "STU-3", "student_name": "Three",
+                 "program": "SYN-P3", "academic_year": "2026", "enrollment_date":
+                 "2026-09-03", "docstatus": 1},
+                {"name": "ENR-EMPTY", "student": "STU-4", "student_name": "Four",
+                 "program": "SYN-P4", "academic_year": "2026", "enrollment_date":
+                 "2026-09-04", "docstatus": 1},
+                {"name": "ENR-TWO", "student": "STU-5", "student_name": "Five",
+                 "program": "SYN-P5", "academic_year": "2026", "enrollment_date":
+                 "2026-09-05", "docstatus": 1},
+                {"name": "ENR-NULLYEAR", "student": "STU-6", "student_name": "Six",
+                 "program": "SYN-P6", "academic_year": None, "enrollment_date":
+                 "2026-09-06", "docstatus": 1},
+                {"name": "ENR-CANCELLED", "student": "STU-7", "student_name": "Seven",
+                 "program": "SYN-P7", "academic_year": "2026", "enrollment_date":
+                 "2026-09-07", "docstatus": 1},
+            ],
+            "Fee Structure": [
+                {"name": "FS-D", "program": "SYN-P1", "academic_year": "2026",
+                 "company": "TH", "docstatus": 0},
+                {"name": "FS-S", "program": "SYN-P2", "academic_year": "2026",
+                 "company": "TH", "docstatus": 1},
+                {"name": "FS-E", "program": "SYN-P4", "academic_year": "2026",
+                 "company": "TH", "docstatus": 0},
+                {"name": "FS-G1", "program": "SYN-P5", "academic_year": "2026",
+                 "company": "TH", "docstatus": 0},
+                {"name": "FS-G2", "program": "SYN-P5", "academic_year": "2026",
+                 "company": "TH", "docstatus": 1},
+                {"name": "FS-H", "program": "SYN-P6", "academic_year": None,
+                 "company": "TH", "docstatus": 0},
+                {"name": "FS-C", "program": "SYN-P7", "academic_year": "2026",
+                 "company": "TH", "docstatus": 2},
+            ],
+            "Fee Component": [
+                {"name": "FC-1", "parent": "FS-D", "parenttype": "Fee Structure",
+                 "fees_category": "Tuition", "amount": 1000, "idx": 1},
+                {"name": "FC-2", "parent": "FS-S", "parenttype": "Fee Structure",
+                 "fees_category": "Tuition", "amount": 2000, "idx": 1},
+                {"name": "FC-3", "parent": "FS-G1", "parenttype": "Fee Structure",
+                 "fees_category": "Tuition", "amount": 500, "idx": 1},
+                {"name": "FC-4", "parent": "FS-G2", "parenttype": "Fee Structure",
+                 "fees_category": "Tuition", "amount": 600, "idx": 1},
+                {"name": "FC-5", "parent": "FS-H", "parenttype": "Fee Structure",
+                 "fees_category": "Tuition", "amount": 700, "idx": 1},
+                {"name": "FC-6", "parent": "FS-C", "parenttype": "Fee Structure",
+                 "fees_category": "Tuition", "amount": 800, "idx": 1},
+            ],
+        }
+
+        def world_get_all(doctype, filters=None, fields=None, order_by=None,
+                          limit_start=None, limit_page_length=None, **kwargs):
+            assert_columns_real("billing world", doctype,
+                                list(fields or []) + list((filters or {}).keys()))
+            rows = world.get(doctype, [])
+            filters = filters or {}
+            kept = []
+            for row in rows:
+                ok = True
+                for key, value in filters.items():
+                    cell = row.get(key)
+                    if isinstance(value, (tuple, list)) and len(value) == 2 \
+                            and isinstance(value[0], str) and value[0] in ("in", "!=", ">"):
+                        op, bound = value
+                        if op == "in" and cell not in bound:
+                            ok = False
+                        elif op == "!=" and cell == bound:
+                            ok = False
+                        elif op == ">" and not (cell is not None and cell > bound):
+                            ok = False
+                    elif cell != value:
+                        ok = False
+                if ok:
+                    kept.append(dict(row))
+            return kept
+
+        module = _import_desk("finance", roles={"Finance Manager", "Finance Officer"})
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        return module.work()
+
+    @staticmethod
+    def _billing(payload):
+        return next(sect for sect in payload["sections"] if sect["id"] == "billing")
+
+    def _item(self, payload, enrollment):
+        return next(item for item in self._billing(payload)["items"]
+                    if item["id"] == enrollment)
+
+    def test_submitted_plan_is_billed_not_blamed(self):
+        payload = self._payload()
+        item = self._item(payload, "ENR-SUB")
+        self.assertEqual(item["action"]["endpoint"],
+                         "toefl_house.finance.issue_tuition_fees")
+        self.assertEqual(item["action"]["args"]["fee_structure"], "FS-S",
+                         "a submitted plan with components is exactly what the "
+                         "issuance command accepts; the desk must prefill it (U9)")
+        self.assertNotIn("No fee plan", item["next"])
+
+    def test_draft_plan_still_prefills(self):
+        payload = self._payload()
+        item = self._item(payload, "ENR-DRAFT")
+        self.assertEqual(item["action"]["args"]["fee_structure"], "FS-D")
+
+    def test_empty_draft_names_the_owner_completion(self):
+        payload = self._payload()
+        item = self._item(payload, "ENR-EMPTY")
+        self.assertIn("has no components yet", item["next"])
+        self.assertEqual(item["next_role"], "Course Owner")
+        self.assertNotIn("action", item)
+
+    def test_no_plan_says_so(self):
+        payload = self._payload()
+        item = self._item(payload, "ENR-NONE")
+        self.assertIn("No fee plan is configured", item["next"])
+
+    def test_two_complete_plans_pause_billing(self):
+        payload = self._payload()
+        item = self._item(payload, "ENR-TWO")
+        self.assertIn("More than one complete fee plan", item["next"])
+        self.assertNotIn("action", item)
+
+    def test_null_academic_year_matches(self):
+        payload = self._payload()
+        item = self._item(payload, "ENR-NULLYEAR")
+        self.assertEqual(item["action"]["args"]["fee_structure"], "FS-H",
+                         "plan key normalization must not strand a null year")
+
+    def test_cancelled_plan_is_not_usable(self):
+        payload = self._payload()
+        item = self._item(payload, "ENR-CANCELLED")
+        self.assertIn("No fee plan is configured", item["next"],
+                      "a cancelled plan is not a configured one")
+
+
+class ManagementCorrectionsWorldTests(unittest.TestCase):
+    """D6: a correction row on the GM desk names its real target."""
+
+    def _payload(self):
+        world = {
+            "TH Correction Request": [
+                {"name": "COR-1", "sales_invoice": None, "fees": "FEE-77",
+                 "reason": "wrong amount", "requested_amount": 25000,
+                 "status": "Requested", "modified": "2026-09-15 09:00:00"},
+                {"name": "COR-2", "sales_invoice": "ACC-SINV-9", "fees": None,
+                 "reason": "duplicate charge", "requested_amount": 3000,
+                 "status": "Requested", "modified": "2026-09-16 09:00:00"},
+                {"name": "COR-3", "sales_invoice": "ACC-SINV-10", "fees": None,
+                 "reason": "already decided", "requested_amount": 10,
+                 "status": "Posted", "modified": "2026-09-10 09:00:00"},
+            ],
+        }
+
+        def world_get_all(doctype, filters=None, fields=None, order_by=None,
+                          limit_start=None, limit_page_length=None, **kwargs):
+            assert_columns_real("management world", doctype,
+                                list(fields or []) + list((filters or {}).keys()))
+            rows = world.get(doctype, [])
+            filters = filters or {}
+            kept = []
+            for row in rows:
+                ok = True
+                for key, value in filters.items():
+                    if isinstance(value, (tuple, list)) and len(value) == 2 \
+                            and isinstance(value[0], str):
+                        op, bound = value
+                        if op == "in" and row.get(key) not in bound:
+                            ok = False
+                    elif row.get(key) != value:
+                        ok = False
+                if ok:
+                    kept.append(dict(row))
+            return kept
+
+        module = _import_desk("operations", roles={"General Manager"})
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        return module.work()
+
+    def test_fees_correction_is_not_anonymous(self):
+        payload = self._payload()
+        items = {item["id"]: item for item in
+                 next(sect for sect in payload["sections"] if sect["id"] == "exceptions")["items"]}
+        self.assertIn("COR-1", items)
+        self.assertEqual(items["COR-1"]["person"], "FEE-77",
+                         "a fees correction must name the fee it targets (D6)")
+        self.assertIn("Tuition-fee correction", items["COR-1"]["detail"])
+        self.assertEqual(items["COR-2"]["person"], "ACC-SINV-9")
+        self.assertIn("Invoice correction", items["COR-2"]["detail"])
+        self.assertNotIn("COR-3", items, "only pending requests are exceptions")
+
+
 if __name__ == "__main__":
     unittest.main()

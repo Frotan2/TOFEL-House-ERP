@@ -402,6 +402,25 @@ def active_cohort_rows(group_rows):
     return [row for row in group_rows if cohort_state(row) in COHORT_ACTIVE_STATUSES]
 
 
+# Fee-plan readiness is ONE rule everywhere: the guided billing text (finance
+# desk), the Owner's configuration health (setup desk) and the issuance
+# command must never disagree about what "configured" means. issue_tuition_fees
+# consumes a structure by name and checks program/year match and components
+# (U9): the desk rule mirrors exactly that, over cancelled-free plans. Editing
+# stays a Draft-only act (toefl_house.academic manages Draft structures), so
+# the setup desk offers edit buttons only where they can succeed.
+def issuable_plans(plans_by_key, program, academic_year):
+    """Plans for (program, year) that the issuance command would accept,
+    split into those with components and empty drafts awaiting completion."""
+    candidates = [plan for plan in plans_by_key.get((program, academic_year or ""), [])
+                  if int(plan.get("docstatus") or 0) != 2]
+    return candidates
+
+
+def plan_with_components(candidates, rows_by_plan):
+    return [plan for plan in candidates if rows_by_plan.get(plan["name"])]
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def available():
     """Registry read: which desks the SERVER believes this viewer may open.

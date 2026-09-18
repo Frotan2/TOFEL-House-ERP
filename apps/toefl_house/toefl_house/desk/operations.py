@@ -100,8 +100,8 @@ def work():
                                    order_by="modified asc", limit=BOUNCE_WINDOW)
     review_waiting = [row for row in admissions_open if row["status"] == "Review"]
     corrections = project_rows("management", CORRECTION,
-                               ["name", "sales_invoice", "reason", "requested_amount",
-                                "status", "modified"],
+                               ["name", "sales_invoice", "fees", "reason",
+                                "requested_amount", "status", "modified"],
                                filters={"status": "Requested"},
                                order_by="modified asc", limit=LIMIT_QUEUES)
     attempts_running = project_rows("management", ATTEMPT,
@@ -165,7 +165,7 @@ def work():
          "definition": "Classes whose lifecycle is Active (planned classes are counted under enrollment coverage instead).",
          "value": len(active_cohort_rows(groups)), "owner": "Teaching Scheduler"},
         {"label": "Corrections pending",
-         "definition": "Invoice correction requests in Requested status.",
+         "definition": "Correction requests (invoice or tuition fee) in Requested status.",
          "value": len(corrections), "owner": "Finance Officer"},
     ]
 
@@ -197,13 +197,23 @@ def work():
             "age": _age_label(row.get("deadline_at")),
         })
     for row in corrections:
+        # A correction names whatever it targets: the invoice or the
+        # tuition-fee document — never an empty row for the fees leg (D6).
+        is_fees = bool(row.get("fees"))
+        target = row.get("fees") if is_fees else row.get("sales_invoice")
+        reason = row.get("reason") or ""
         exception_items.append({
             "id": row["name"],
-            "person": row.get("sales_invoice") or "",
-            "detail": row.get("reason") or "",
+            "person": target or row["name"],
+            "detail": ("Tuition-fee correction" if is_fees else "Invoice correction")
+                      + (f" · {reason}" if reason else ""),
             "status": row["status"],
             "stage": "Correction pending",
-            "stage_definition": "An invoice correction request is waiting for the policy-configured approver.",
+            "stage_definition": (
+                "A tuition-fee correction request is waiting for the policy-"
+                "configured approver." if is_fees else
+                "An invoice correction request is waiting for the policy-"
+                "configured approver."),
             "next": "Approve or deny the correction.",
             "next_role": "Finance Officer",
             "waiting_since": row.get("modified"),

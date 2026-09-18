@@ -16,6 +16,8 @@ from toefl_house.desk import (
     LIMIT_QUEUES,
     LIMIT_TODAY,
     guided_action,
+    issuable_plans,
+    plan_with_components,
     project_rows,
     require_desk_audience,
     section,
@@ -179,7 +181,7 @@ def work():
          "definition": "Submitted Fees with native outstanding_amount above zero.",
          "value": len(outstanding_fees), "owner": "Finance Officer"},
         {"label": "Corrections pending",
-         "definition": "Invoice correction requests in Requested status.",
+         "definition": "Correction requests (invoice or tuition fee) in Requested status.",
          "value": sum(1 for row in corrections if row["status"] == "Requested"),
          "owner": "Finance Officer"},
         {"label": "Enrollments awaiting billing",
@@ -238,34 +240,39 @@ def work():
     plans_by_key = {}
     for plan in plans:
         plans_by_key.setdefault(
-            (plan.get("program"), plan.get("academic_year")), []).append(plan)
+            (plan.get("program"), plan.get("academic_year") or ""), []).append(plan)
 
     def billing_guidance(row):
-        """Resolve the plan for one unbilled enrollment into next/action."""
-        candidates = plans_by_key.get(
-            (row.get("program"), row.get("academic_year") or ""), [])
-        editable = [plan for plan in candidates if int(plan.get("docstatus") or 0) == 0]
-        if len(editable) == 1:
-            components = rows_by_plan.get(editable[0]["name"], [])
-            if components:
-                return ("Issue the tuition fees from the configured plan for this "
-                        "level and academic year.", "Finance Officer",
-                        guided_action(
-                            "Finance Officer", "toefl_house.finance.issue_tuition_fees",
-                            "Issue tuition fees",
-                            {"program_enrollment": row["name"],
-                             "fee_structure": editable[0]["name"],
-                             "posting_date": day, "due_date": ""}))
+        """Resolve the plan for one unbilled enrollment into next/action.
+
+        U9: the promise matches the command — a plan counts when it is not
+        cancelled and carries components, submitted or draft alike. Editing
+        stays the Draft-only Owner control; issuance does not care.
+        """
+        usable = issuable_plans(plans_by_key, row.get("program"),
+                                row.get("academic_year"))
+        complete = plan_with_components(usable, rows_by_plan)
+        if len(complete) == 1:
+            plan = complete[0]
+            return ("Issue the tuition fees from the configured plan for this "
+                    "level and academic year.", "Finance Officer",
+                    guided_action(
+                        "Finance Officer", "toefl_house.finance.issue_tuition_fees",
+                        "Issue tuition fees",
+                        {"program_enrollment": row["name"],
+                         "fee_structure": plan["name"],
+                         "posting_date": day, "due_date": ""}))
+        if complete:
+            return ("More than one complete fee plan exists for this level and "
+                    "year; billing stays paused until exactly one is kept.",
+                    "Finance Officer", None)
+        if usable:
             return ("The fee plan for this level and year has no components yet; "
                     "the Course Owner completes it in Academic Setup before this "
                     "enrollment can be billed.", "Course Owner", None)
-        if not editable:
-            return ("No fee plan is configured for this level and academic year "
-                    "yet; the Course Owner defines fee plans in Academic Setup.",
-                    "Course Owner", None)
-        return ("More than one editable fee plan exists for this level and year; "
-                "billing stays paused until Finance keeps exactly one.",
-                "Finance Officer", None)
+        return ("No fee plan is configured for this level and academic year "
+                "yet; the Course Owner defines fee plans in Academic Setup.",
+                "Course Owner", None)
 
     billing_items = []
     for row in awaiting_billing[:LIMIT_QUEUES]:

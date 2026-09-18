@@ -18,6 +18,8 @@ from toefl_house.desk import (
     DESKS,
     LIMIT_QUEUES,
     guided_action,
+    issuable_plans,
+    plan_with_components,
     project_rows,
     require_desk_audience,
     section,
@@ -104,7 +106,8 @@ def work():
         rows_by_plan.setdefault(row.get("parent"), []).append(row)
     plans_by_program = {}
     for plan in fee_plans:
-        plans_by_program.setdefault((plan.get("program"), plan.get("academic_year")),
+        plans_by_program.setdefault((plan.get("program"),
+                                     plan.get("academic_year") or ""),
                                     []).append(plan)
     current_year = _current_year(years, today)
     anchored_native = {row["native_program"] for row in levels
@@ -113,8 +116,9 @@ def work():
     for level in levels:
         if level["status"] != "Active" or not level.get("native_program"):
             continue
-        if current_year and not plans_by_program.get(
-                (level["native_program"], current_year)):
+        if current_year and not plan_with_components(
+                issuable_plans(plans_by_program, level["native_program"], current_year),
+                rows_by_plan):
             levels_without_plan.append(level["code"])
 
     fee_plan_items = []
@@ -130,19 +134,27 @@ def work():
             "id": plan["name"],
             "person": level["title"] if level else (plan.get("program") or ""),
             "detail": detail,
-            "status": "Editable plan" if int(plan.get("docstatus") or 0) == 0 else "Submitted",
+            "status": ("Editable plan" if int(plan.get("docstatus") or 0) == 0
+                       else "Submitted (locked)"),
             "stage": "Fee plan",
             "stage_definition": "Native Fee Structure for the level's anchored program "
                                 "and academic year; issued Fees copy their components, "
                                 "so posted documents never change with this policy.",
             "next": ("Components: " + ", ".join(
                 f"{row.get('fees_category')} {float(row.get('amount') or 0):g}"
-                for row in rows) + f". Sum {total:g}.") if rows
+                for row in rows) + f". Sum {total:g}."
+                + ("" if int(plan.get("docstatus") or 0) == 0
+                   else " Submitted: the plan is locked against edits; "
+                        "issuance still runs from it.")) if rows
             else "No components yet; the Finance command would refuse an empty plan.",
             "next_role": "Course Owner" if not rows else None,
             "waiting_since": None,
         })
-        if level and level["status"] == "Active":
+        if level and level["status"] == "Active" and int(plan.get("docstatus") or 0) == 0:
+            # Edit actions appear only on Draft plans: the Owner's edit
+            # command manages the editable structure, so a button on a
+            # submitted plan would silently open a second draft (refusal-
+            # free by construction, per the setup desk's own rule).
             fee_plan_items[-1]["action"] = guided_action(
                 "Course Owner", "toefl_house.academic.set_level_fee_component",
                 "Set fee component",
@@ -239,14 +251,18 @@ def work():
             if not current_year:
                 next_bits.append("Billing readiness unknown: no academic year is defined yet.")
             else:
-                plan_rows_for = [
-                    plan for plan in plans_by_program.get(
-                        (level.get("native_program"), current_year), [])
-                    if int(plan.get("docstatus") or 0) == 0]
-                ready = any(rows_by_plan.get(plan["name"]) for plan in plan_rows_for)
-                next_bits.append(
-                    f"Fee plan ready for {current_year}." if ready else
-                    f"No complete fee plan for {current_year} yet.")
+                complete = plan_with_components(
+                    issuable_plans(plans_by_program, level.get("native_program"),
+                                   current_year),
+                    rows_by_plan)
+                if complete and all(int(plan.get("docstatus") or 0) == 0
+                                    for plan in complete):
+                    next_bits.append(f"Fee plan ready for {current_year}.")
+                elif complete:
+                    next_bits.append(f"Fee plan ready for {current_year} "
+                                     "(submitted and locked; issuance works).")
+                else:
+                    next_bits.append(f"No complete fee plan for {current_year} yet.")
         # §17 made visible: which duration version governed each live
         # enrollment. History stays whole; only the answer is computed.
         history = ""
@@ -367,10 +383,10 @@ def work():
          "definition": "Native Fee Category records (each carries its own "
                        "accounting Item).",
          "value": len(fee_types), "owner": "Course Owner"},
-        {"label": "Active levels without a fee plan",
-         "definition": f"Active levels with no editable native Fee Structure for "
-                       f"{current_year or 'any defined academic year'}; enrollment "
-                       "of such a level cannot be billed yet.",
+        {"label": "Active levels without a usable fee plan",
+         "definition": f"Active levels whose {current_year or 'any defined academic year'} "
+                       "has no non-cancelled fee plan carrying components; issuance "
+                       "refuses an empty plan, submitted or draft.",
          "value": len(levels_without_plan), "owner": "Course Owner"},
         {"label": "Native programs outside the control plane",
          "definition": "Native Education Program records no configured level "
