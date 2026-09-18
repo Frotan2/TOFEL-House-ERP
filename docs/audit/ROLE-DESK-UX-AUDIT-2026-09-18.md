@@ -350,14 +350,37 @@ qualification per §5/§6 is recorded with exact run IDs.
 | 6 | P1 honored by filtering, never by crashing (declared answer pinned executable; nothing invented for P2/P3) | `4ea3ab0` | `DeskBranchScopeTests` with ledger-backed `get_meta` stub | — |
 | 7 | Hosted desk qualification (audience loads, negatives, lifecycle truth, U1 prefills, D6/OD-RD-1 chain over real HTTP) | `53aae30`, fix `0c54bc2` | `tests.placement.test_native_check_arity` ✅ | placement-content `35356041546` **failed by design once**: the new `role-desk-hosted-qualification` check caught two stale finance `section(empty_body=…)` strings naming `Payment Entry`/`Program Enrollment` that the dict-only offline scan had missed (`report_sha256 593baf16…`). Fixed (`0c54bc2`) and the guard widened to `section()` kwargs, so the escape path is closed, not just the instance. GL-reversal assertion verified against pinned education `93bc70757533` `fees.py on_cancel` → `make_reverse_gl_entries`. |
 
-### State of the re-run
-`0c54bc2` (guard widened + strings fixed + confirmation the hosted GL claim
-tests real controller behavior) awaits one more hosted cycle: owned-suite and
-placement-content must both go green on that SHA before any desk-readiness
-word is written. **As of this entry the GitHub connector in the working
-session returned invalid credentials**, so the push and the qualification
-re-run are blocked on reconnecting GitHub — not on the code. No readiness is
-claimed until that cycle is green.
+### State of the re-runs — final: GREEN
+The fix rode five hosted cycles, each surfacing the next true issue and
+each fixed at its root (the point of §5/§6 being real, not decorative):
+
+| Cycle (placement-content run) | On | Outcome |
+| --- | --- | --- |
+| `35356041546` | `53aae30` | fail — finance `section(empty_body=…)` still named `Payment Entry`/`Program Enrollment`; fixed in `64884ff` |
+| `35359895735` | `82275fd` | fail — `available()` 403'd guests against its own documented empty-registry contract; fixed (`allow_guest=True`) in `82275fd`→`421c533` chain |
+| `35362218310` | `421c533` | fail — the Reception class-truth check aimed at `work()` instead of `lookup()` (harness mis-aim); fixed in `421c533`→`ca9ac7f` |
+| `35363856854` | `ca9ac7f` | fail — `Lock wait timeout`: the intentional partial-denial probe holds the fee row past savepoint rollback (InnoDB keeps those locks); fixed (explicit rollback before the worker's request; commit to re-snapshot after) in `31e6add` |
+| `35365045006` | `31e6add` | **success** — 570 checks pass; check-run `105668996321`; report SHA-256 `45a698dcd6ea5e2341eddbf335e68c5b57ea99c52d8bb10d9289a04265b49cdf` |
+
+Final gates on `31e6add`: owned-suite `35365044995` **success** (ruff
+0.16.8, 847+ Python tests, all four Node suites) and placement-content
+`35365045006` **success**, including the `role-desk-hosted-qualification`
+observation recorded in the report: six audience loads 200,
+guest/outsider/cross-audience denied, non-retargetable POST, payloads free
+of doctype plumbing, `Class — Active` from the governed lifecycle,
+lookup reads `Enrolled`, U1 prefills delivered per role, and the OD-RD-1
+fees-correction chain end to end (target `EDU-FEE-2026-00001`, request
+`ghph21s107`, replay-identical receipt, `gl_open_rows_after: 0`, desk row
+named then cleared, denial keeps the fee, re-request after denial allowed).
+
+**Foundation runtime validation** (`foundation-runtime.yml`) fails on every
+recent SHA including pre-Phase-2 ones (`b83d118`, `10939bb`): it is the
+documented SEC-DEPS-01 upstream-dependency hard stop, deliberately left
+untouched by this mission and unchanged by it — production stays REJECT.
+
+Desk-readiness for the six role desks is therefore **qualified on the real
+HTTP pipeline**; OD-RD-1 ratification is now an owner decision informed by
+green evidence — the evidence does not self-ratify.
 
 ### What the hosted failure proves
 The §5 checks were not decoration: the first real-pipeline pass executed the
