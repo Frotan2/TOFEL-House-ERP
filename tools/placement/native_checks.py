@@ -3475,7 +3475,7 @@ def main():
             # New contract work is refused
             assert unavailable(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
                 'tc_retire_contract_0001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
-                'SYN retired skill probe','Monthly','2027-06-01','2027-06-30','',
+                'SYN retired skill probe','Monthly','2027-06-01','2027-06-30',
                 '',[dict(skill='RV',unit_of_payment='SYN Session',rate=5,payable_quantity=5)],[])),
                 'is retired; only Active skills')
             # New assignment work is refused
@@ -3485,7 +3485,7 @@ def main():
             # Unknown skill codes are refused too (the master is the vocabulary)
             assert unavailable(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
                 'tc_unknown_skill_00001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
-                'SYN unknown skill probe','Monthly','2027-07-01','2027-07-31','',
+                'SYN unknown skill probe','Monthly','2027-07-01','2027-07-31',
                 '',[dict(skill='SYN-NOPE',unit_of_payment='SYN Session',rate=5,payable_quantity=5)],[])),
                 'Unknown skill')
             frappe.db.commit()
