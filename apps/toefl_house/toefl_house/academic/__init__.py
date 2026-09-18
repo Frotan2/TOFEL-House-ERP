@@ -33,6 +33,7 @@ ENROLLMENT = "Program Enrollment"
 YEAR = "Academic Year"
 FEE_CATEGORY = "Fee Category"
 FEE_STRUCTURE = "Fee Structure"
+DISCOUNT_RULE = "TH Discount Rule"
 
 
 def _require_course_owner():
@@ -523,3 +524,83 @@ def _level_result(doc, extra=None):
     if extra:
         result.update(extra)
     return result
+
+
+def _discount_rule_doc(code, for_update=False):
+    name = frappe.db.get_value(DISCOUNT_RULE, {"code": code}, "name")
+    if not name:
+        raise frappe.ValidationError(f"Unknown discount rule: {code}")
+    return frappe.get_doc(DISCOUNT_RULE, name, for_update=for_update)
+
+
+@frappe.whitelist(methods=["POST"])
+def create_discount_rule(request_key, code, title, discount_percentage,
+                         precedence=1, fee_category="", program="", description=""):
+    """Define a centralized discount rule under OD-CP-1 Policy A.
+
+    Single discount per charge line; explicit configured precedence resolves
+    competing rules. Zero or one discount only; never stacks.
+    """
+    _require_course_owner()
+    try:
+        validate_request_key(request_key)
+        clean_code = rules.validate_code(code)
+        clean_title = rules.validate_title(title, "Discount rule title")
+        clean_percent = rules.validate_discount_percentage(discount_percentage)
+        clean_precedence = rules.validate_precedence(precedence)
+        clean_description = rules.validate_reason(description)
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+
+    if frappe.db.exists(DISCOUNT_RULE, clean_code):
+        raise frappe.ValidationError(f"Discount rule {clean_code} already exists")
+
+    clean_category = ""
+    if fee_category:
+        clean_category = rules.validate_title(fee_category, "Fee category")
+        if not frappe.db.exists(FEE_CATEGORY, clean_category):
+            raise frappe.ValidationError(
+                f"Fee type {clean_category} does not exist yet; define it first")
+
+    clean_program = ""
+    if program:
+        clean_program = rules.validate_code(program)
+        if not frappe.db.exists(PROGRAM, clean_program):
+            raise frappe.ValidationError(
+                f"Program {clean_program} does not exist yet; define it first")
+
+    doc = frappe.get_doc({
+        "doctype": DISCOUNT_RULE, "code": clean_code, "title": clean_title,
+        "discount_percentage": clean_percent, "precedence": clean_precedence,
+        "status": "Active", "fee_category": clean_category or None,
+        "program": clean_program or None, "description": clean_description,
+    })
+    doc.insert(ignore_permissions=True)
+    return {
+        "name": doc.name, "code": doc.code, "title": doc.title,
+        "discount_percentage": float(doc.discount_percentage),
+        "precedence": int(doc.precedence), "status": doc.status,
+        "fee_category": doc.fee_category or "",
+        "program": doc.program or "",
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def set_discount_rule_status(request_key, code, active):
+    """Deactivate (retire) or reactivate a discount rule."""
+    _require_course_owner()
+    try:
+        validate_request_key(request_key)
+        clean_code = rules.validate_code(code)
+        flag = _as_bool(active, "active")
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+
+    doc = _discount_rule_doc(clean_code, for_update=True)
+    doc.status = "Active" if flag else "Retired"
+    doc.save(ignore_permissions=True)
+    return {
+        "name": doc.name, "code": doc.code, "title": doc.title,
+        "status": doc.status,
+    }
+

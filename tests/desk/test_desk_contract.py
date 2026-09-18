@@ -649,6 +649,13 @@ class SetupDeskWorldTests(unittest.TestCase):
                 {"name": "NATIVE-A3", "program_name": "General English — Prep One"},
                 {"name": "NATIVE-ORPHAN", "program_name": "Orphan Native Program"},
             ],
+            "TH Discount Rule": [{
+                "name": "SCHOLARSHIP-10", "code": "SCHOLARSHIP-10",
+                "title": "10% Merit Scholarship", "discount_percentage": 10.0,
+                "precedence": 10, "status": "Active", "fee_category": "Tuition Fee",
+                "program": "PROG-GEN", "description": "Scholarship",
+                "modified": "2026-09-01 10:00:00",
+            }],
         }
 
         def world_get_all(doctype, filters=None, fields=None, order_by=None,
@@ -710,6 +717,20 @@ class SetupDeskWorldTests(unittest.TestCase):
                       if "outside the control plane" in fact["label"])
         self.assertEqual(orphan["value"], 1,
                          "exactly one of the four native programs is unanchored")
+
+    def test_discounts_section_and_health_fact(self):
+        payload = self._run()
+        facts = self._section(payload, "health")["facts"]
+        disc_fact = next(fact for fact in facts if fact["label"] == "Active discount rules")
+        self.assertEqual(disc_fact["value"], 1)
+
+        disc_item = self._item(payload, "discounts", "SCHOLARSHIP-10")
+        self.assertEqual(disc_item["status"], "Active")
+        self.assertIn("10.0% discount", disc_item["detail"])
+        self.assertEqual(disc_item["action"]["label"], "Retire discount rule")
+
+        setup_act = self._item(payload, "setup", "new-discount-rule")
+        self.assertEqual(setup_act["action"]["label"], "Define discount rule")
 
 
 if __name__ == "__main__":

@@ -299,6 +299,17 @@ frappe.provide("toefl_house.role_desks");
 		"toefl_house.finance.corrections.approve_invoice_correction": [
 			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
 		],
+		"toefl_house.finance.corrections.approve_fees_correction": [
+			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
+		],
+		"toefl_house.finance.corrections.deny_fees_correction": [
+			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
+		],
+		"toefl_house.finance.corrections.request_fees_correction": [
+			{ fieldname: "fees", label: "Fees", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "requested_amount", label: "Requested amount", fieldtype: "Float", reqd: 1 },
+		],
 		"toefl_house.academic.create_program": [
 			{ fieldname: "code", label: "Program code (stable, e.g. GEN-ENG)", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
@@ -353,6 +364,19 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "fee_category", label: "Fee type to remove", fieldtype: "Data", reqd: 1 },
+		],
+		"toefl_house.academic.create_discount_rule": [
+			{ fieldname: "code", label: "Rule code (stable, e.g. SCHOLARSHIP-10)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "discount_percentage", label: "Discount percent", fieldtype: "Float", reqd: 1 },
+			{ fieldname: "precedence", label: "Precedence (higher wins)", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "fee_category", label: "Fee type (optional)", fieldtype: "Data" },
+			{ fieldname: "program", label: "Program family (optional)", fieldtype: "Data" },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
+		],
+		"toefl_house.academic.set_discount_rule_status": [
+			{ fieldname: "code", label: "Rule code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Select", options: "1\n0", reqd: 1, description: "0 retires the rule for new charges." },
 		],
 	});
 

@@ -34,6 +34,7 @@ YEAR = "Academic Year"
 FEE_CATEGORY = "Fee Category"
 FEE_STRUCTURE = "Fee Structure"
 FEE_ROW = "Fee Component"
+DISCOUNT_RULE = "TH Discount Rule"
 
 PROGRAM_FIELDS = ["name", "code", "title", "status", "modified"]
 LEVEL_FIELDS = ["name", "family", "code", "title", "sequence", "status",
@@ -45,6 +46,8 @@ FEE_TYPE_FIELDS = ["name", "category_name", "description", "item"]
 FEE_PLAN_FIELDS = ["name", "program", "academic_year", "company",
                    "receivable_account", "docstatus", "total_amount"]
 FEE_ROW_FIELDS = ["name", "parent", "parenttype", "fees_category", "amount", "idx"]
+DISCOUNT_RULE_FIELDS = ["name", "code", "title", "discount_percentage", "precedence",
+                        "status", "fee_category", "program", "description", "modified"]
 
 
 def work():
@@ -74,6 +77,8 @@ def work():
     native_programs = project_rows("setup", NATIVE_PROGRAM,
                                    ["name", "program_name"],
                                    order_by="program_name asc", limit=LIMIT_QUEUES)
+    discount_rules = project_rows("setup", DISCOUNT_RULE, DISCOUNT_RULE_FIELDS,
+                                  order_by="precedence desc, code asc", limit=LIMIT_QUEUES)
 
     versions_by_level = {}
     for row in versions:
@@ -373,7 +378,42 @@ def work():
          "value": sum(1 for row in native_programs
                       if row["name"] not in anchored_native),
          "owner": "Course Owner"},
+        {"label": "Active discount rules",
+         "definition": "TH Discount Rule rows in Active status under Policy A.",
+         "value": sum(1 for row in discount_rules if row.get("status") == "Active"),
+         "owner": "Course Owner"},
     ]
+
+    discount_rule_items = []
+    for rule in discount_rules:
+        active = rule.get("status") == "Active"
+        scope_bits = []
+        if rule.get("fee_category"):
+            scope_bits.append(f"Fee: {rule['fee_category']}")
+        if rule.get("program"):
+            scope_bits.append(f"Program: {rule['program']}")
+        scope_label = " · ".join(scope_bits) if scope_bits else "Institution-wide"
+        item = {
+            "id": rule["code"],
+            "person": rule.get("title") or rule["code"],
+            "detail": f"{rule.get('discount_percentage')}% discount · Precedence: {rule.get('precedence')} · Scope: {scope_label}",
+            "status": rule.get("status", "Active"),
+            "stage": "Policy A (Single Discount)",
+            "stage_definition": "Central discount rule catalog. Zero or one discount per charge; higher precedence resolves competing rules; never stacks.",
+            "next": "Retire this rule when it should no longer apply to new charges." if active
+                    else "Reactivate this rule to make it eligible for new charges.",
+            "next_role": "Course Owner",
+            "waiting_since": rule.get("modified"),
+        }
+        if active:
+            item["action"] = guided_action(
+                "Course Owner", "toefl_house.academic.set_discount_rule_status",
+                "Retire discount rule", {"code": rule["code"], "active": 0})
+        else:
+            item["action"] = guided_action(
+                "Course Owner", "toefl_house.academic.set_discount_rule_status",
+                "Reactivate discount rule", {"code": rule["code"], "active": 1})
+        discount_rule_items.append(item)
 
     setup_actions = [{
         "id": "new-program",
@@ -415,6 +455,18 @@ def work():
         "waiting_since": None,
         "action": guided_action("Course Owner", "toefl_house.academic.create_fee_type",
                                 "Define fee type", {}),
+    }, {
+        "id": "new-discount-rule",
+        "person": "Define a discount rule (Policy A)",
+        "detail": "Centralized discount with explicit precedence. Zero or one discount per charge line; never stacks.",
+        "status": "Ready",
+        "stage": "Setup",
+        "stage_definition": "OD-CP-1 Policy A: central discount rule catalog consumed across all modules.",
+        "next": "Configure rule code, title, discount percentage, and precedence.",
+        "next_role": "Course Owner",
+        "waiting_since": None,
+        "action": guided_action("Course Owner", "toefl_house.academic.create_discount_rule",
+                                "Define discount rule", {}),
     }]
 
     return {
@@ -450,6 +502,10 @@ def work():
                     empty_body="Tuition, identity card, diploma, retake examination — "
                                "any charge the institution invents later is defined "
                                "here, never in code."),
+            section("discounts", "Discount rules (Policy A)", "queue", items=discount_rule_items,
+                    empty_title="No discount rules yet",
+                    empty_body="Define scholarship or discount rules under Policy A; "
+                               "charges receive at most one discount according to configured precedence."),
         ],
     }
 

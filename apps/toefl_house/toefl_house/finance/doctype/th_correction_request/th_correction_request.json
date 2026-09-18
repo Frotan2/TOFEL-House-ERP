@@ -8,6 +8,7 @@
   "track_changes": 0,
   "field_order": [
     "sales_invoice",
+    "fees",
     "reason",
     "requested_amount",
     "status",
@@ -21,7 +22,14 @@
       "label": "Sales Invoice",
       "fieldtype": "Link",
       "options": "Sales Invoice",
-      "reqd": 1
+      "reqd": 0
+    },
+    {
+      "fieldname": "fees",
+      "label": "Fees",
+      "fieldtype": "Link",
+      "options": "Fees",
+      "reqd": 0
     },
     {
       "fieldname": "reason",

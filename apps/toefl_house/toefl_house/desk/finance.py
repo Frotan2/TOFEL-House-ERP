@@ -63,20 +63,23 @@ def _correction_items(rows):
     items = []
     for row in rows:
         pending = row["status"] == "Requested"
+        is_fees = bool(row.get("fees"))
+        target = row.get("fees") or row.get("sales_invoice") or ""
         item = {
             "id": row["name"],
-            "person": row.get("sales_invoice") or "",
+            "person": target,
             "detail": row.get("reason") or "",
             "status": row["status"],
             "stage": "Correction " + str(row["status"] or "").lower(),
-            "stage_definition": "Invoice correction request from the correction framework.",
+            "stage_definition": "Fees correction request." if is_fees else "Invoice correction request from the correction framework.",
             "next": "Approve or deny the request." if pending else "No action; the request is decided.",
             "next_role": (approver_role or "Finance Officer") if pending else None,
             "waiting_since": row.get("modified"),
         }
         if pending and approver_role:
-            item["action"] = guided_action(approver_role,
-                                           "toefl_house.finance.corrections.approve_invoice_correction",
+            endpoint = ("toefl_house.finance.corrections.approve_fees_correction"
+                        if is_fees else "toefl_house.finance.corrections.approve_invoice_correction")
+            item["action"] = guided_action(approver_role, endpoint,
                                            "Approve correction", {"request": row["name"]})
         elif pending:
             # No active policy: the command would deny every approval. Say so
@@ -139,9 +142,9 @@ def work():
                                     order_by="due_date asc, name asc", limit=LIMIT_QUEUES)
 
     corrections = project_rows("finance", CORRECTION,
-                               ["name", "sales_invoice", "reason", "requested_amount",
+                               ["name", "sales_invoice", "fees", "reason", "requested_amount",
                                 "status", "approved_by", "credit_note", "modified"],
-                               filters={"status": ("in", ["Requested", "Approved", "Denied"])},
+                               filters={"status": ("in", ["Requested", "Approved", "Denied", "Posted"])},
                                order_by="modified desc", limit=LIMIT_QUEUES)
 
     # Awaiting billing: submitted enrollments with no Fees row referencing them.

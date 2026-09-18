@@ -30,6 +30,9 @@ COMMANDS = {
     "request_invoice_correction": "Finance Officer",
     "approve_invoice_correction": "Finance Officer",
     "deny_invoice_correction": "Finance Officer",
+    "request_fees_correction": "Finance Officer",
+    "approve_fees_correction": "Finance Officer",
+    "deny_fees_correction": "Finance Officer",
 }
 
 
@@ -70,6 +73,7 @@ class WiringTests(unittest.TestCase):
             if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "FINANCE_COMMANDS":
                 fin = {k.value: v.value for k, v in zip(node.value.keys, node.value.values)}
         self.assertEqual(fin.get("approve_invoice_correction"), "Sales Invoice")
+        self.assertEqual(fin.get("approve_fees_correction"), "Fees")
 
     def test_protected_doctypes_and_hooks(self):
         doctypes = {elt.value for elt in _assign(ast.parse(SECURITY.read_text()), "DOCTYPES").elts}
@@ -132,7 +136,7 @@ class DocTypeShapeTests(unittest.TestCase):
                 self.assertLessEqual({"approver_role", "correction_window_days",
                                       "status", "synthetic"}, fields)
             if name == "TH Correction Request":
-                self.assertLessEqual({"sales_invoice", "reason", "requested_amount",
+                self.assertLessEqual({"sales_invoice", "fees", "reason", "requested_amount",
                                       "status", "approved_by", "credit_note",
                                       "synthetic"}, fields)
 

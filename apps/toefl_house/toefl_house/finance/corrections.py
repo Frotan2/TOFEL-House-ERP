@@ -21,6 +21,7 @@ from toefl_house.policy import digest, validate_correction_window_days
 POLICY = "TH Correction Policy"
 REQUEST = "TH Correction Request"
 INVOICE = "Sales Invoice"
+FEES = "Fees"
 
 
 def _name(value, label):
@@ -34,7 +35,8 @@ def _active_policy():
     if not rows:
         raise frappe.ValidationError(
             "No active correction policy; corrections fail closed until one is configured")
-    return frappe.get_doc(POLICY, rows[0].name)
+    name = rows[0]["name"] if isinstance(rows[0], dict) else rows[0].name
+    return frappe.get_doc(POLICY, name)
 
 
 def _require_approver(policy, actor):
@@ -207,3 +209,107 @@ def deny_invoice_correction(request_key, request):
                             after_hash=digest([req.name, "Denied"]))
 
     return _execute("deny_invoice_correction", request_key, {"request": request}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def request_fees_correction(request_key, fees, reason, requested_amount):
+    """Open a correction request for an issued tuition Fees document.
+
+    Under OD-CP-2 Option B: full-amount corrections only inside the policy
+    window; partial amounts are refused until the owner defines partial terms.
+    """
+    def work(actor):
+        policy = _active_policy()
+        fee_name = _name(fees, "Fees")
+        if not isinstance(reason, str) or not reason or len(reason) > 300:
+            raise frappe.ValidationError("Reason required")
+        if (isinstance(requested_amount, bool)
+                or not isinstance(requested_amount, (int, float))
+                or float(requested_amount) <= 0):
+            raise frappe.ValidationError("Requested amount must be a positive number")
+        if not frappe.db.exists(FEES, fee_name):
+            raise frappe.ValidationError("Unknown fee")
+        frappe.db.sql("select name from `tabFees` where name=%s for update", (fee_name,))
+        fee_row = frappe.db.get_value(FEES, fee_name,
+                                      ["docstatus", "grand_total", "posting_date"],
+                                      as_dict=True)
+        if int(fee_row.docstatus or 0) != 1:
+            raise frappe.ValidationError("Corrections require a submitted fee")
+        if round(float(fee_row.grand_total), 2) != round(float(requested_amount), 2):
+            raise frappe.ValidationError(
+                "Partial corrections await owner-defined terms; "
+                "v1 corrects the full fee amount")
+        limit = date.fromisoformat(str(fee_row.posting_date)) + timedelta(
+            days=int(policy.correction_window_days))
+        if date.today() > limit:
+            raise frappe.ValidationError("Correction window for this fee has closed")
+        if frappe.db.exists(REQUEST, {"fees": fee_name,
+                                      "status": ("in", ("Requested", "Posted"))}):
+            raise frappe.ValidationError("Fee already has an open or posted correction request")
+        request = frappe.get_doc(dict(
+            doctype=REQUEST, fees=fee_name, reason=reason,
+            requested_amount=round(float(requested_amount), 2),
+            status="Requested", synthetic=1))
+        request.flags.ignore_permissions = True
+        request.flags.ignore_links = True
+        request.insert(ignore_permissions=True)
+        result = {"name": request.name, "fees": fee_name,
+                  "requested_amount": round(float(requested_amount), 2),
+                  "status": "Requested"}
+        return result, dict(target=request.name,
+                            after_hash=digest([request.name, fee_name,
+                                               round(float(requested_amount), 2)]))
+
+    return _execute("request_fees_correction", request_key,
+                    {"fees": fees, "reason": reason,
+                     "requested_amount": requested_amount}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def approve_fees_correction(request_key, request):
+    """Approve and post the tuition Fees correction natively.
+
+    Dual key: Finance Officer command gate plus the policy-configured approver
+    role. The native money artifact is native Fees cancellation, which
+    reverses the GL receivable without any parallel ledger.
+    """
+    def work(actor):
+        policy = _active_policy()
+        _require_approver(policy, actor)
+        req = _pending_request(_name(request, "Correction request"))
+        if not req.fees:
+            raise frappe.ValidationError("Correction request is not for a Fees record")
+        fee_doc = frappe.get_doc(FEES, req.fees)
+        fee_doc.flags.ignore_permissions = True
+        fee_doc.cancel()
+        req.flags.ignore_permissions = True
+        req.status = "Posted"
+        req.approved_by = actor
+        req.save(ignore_permissions=True)
+        result = {"name": req.name, "status": "Posted", "fees": req.fees,
+                  "refunded_total": round(float(req.requested_amount), 2)}
+        return result, dict(target=req.name,
+                            before_hash=digest([req.name, "Requested"]),
+                            after_hash=digest([req.name, "Posted", req.fees]))
+
+    return _execute("approve_fees_correction", request_key, {"request": request}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def deny_fees_correction(request_key, request):
+    """Deny a pending Fees correction request; no money artifact is produced."""
+    def work(actor):
+        policy = _active_policy()
+        _require_approver(policy, actor)
+        req = _pending_request(_name(request, "Correction request"))
+        req.flags.ignore_permissions = True
+        req.status = "Denied"
+        req.approved_by = actor
+        req.save(ignore_permissions=True)
+        result = {"name": req.name, "status": "Denied"}
+        return result, dict(target=req.name,
+                            before_hash=digest([req.name, "Requested"]),
+                            after_hash=digest([req.name, "Denied"]))
+
+    return _execute("deny_fees_correction", request_key, {"request": request}, work)
+

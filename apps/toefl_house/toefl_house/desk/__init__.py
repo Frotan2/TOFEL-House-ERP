@@ -143,7 +143,7 @@ PROJECTION_FIELDS = {
         "docstatus",
     ],
     ("finance", "TH Correction Request"): [
-        "name", "sales_invoice", "reason", "requested_amount", "status",
+        "name", "sales_invoice", "fees", "reason", "requested_amount", "status",
         "approved_by", "credit_note", "modified",
     ],
     ("finance", "TH Correction Policy"): [
@@ -167,7 +167,7 @@ PROJECTION_FIELDS = {
         "name",
     ],
     ("management", "TH Correction Request"): [
-        "name", "sales_invoice", "reason", "requested_amount", "status",
+        "name", "sales_invoice", "fees", "reason", "requested_amount", "status",
         "modified",
     ],
     ("management", "TH Admission Decision"): [
@@ -209,6 +209,10 @@ PROJECTION_FIELDS = {
     ("setup", "TH Level Duration"): [
         "name", "parent", "parenttype", "duration_value", "duration_unit",
         "effective_from", "superseded_on", "reason", "set_by",
+    ],
+    ("setup", "TH Discount Rule"): [
+        "name", "code", "title", "discount_percentage", "precedence",
+        "status", "fee_category", "program", "description", "modified",
     ],
     ("setup", "Program Enrollment"): [
         "name", "program", "enrollment_date", "docstatus",

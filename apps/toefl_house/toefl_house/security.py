@@ -62,6 +62,9 @@ KIND_ROLES = {
     "request_invoice_correction": "Finance Officer",
     "approve_invoice_correction": "Finance Officer",
     "deny_invoice_correction": "Finance Officer",
+    "request_fees_correction": "Finance Officer",
+    "approve_fees_correction": "Finance Officer",
+    "deny_fees_correction": "Finance Officer",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -142,6 +145,7 @@ FINANCE_COMMANDS = {
     # the approval command posts the native credit note (a Sales Invoice
     # with is_return=1) inside the guarded context
     "approve_invoice_correction": "Sales Invoice",
+    "approve_fees_correction": "Fees",
 }
 
 

@@ -83,6 +83,29 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
         if frappe.db.exists(FEES, {"program_enrollment": pe_name,
                                    "fee_structure": fs_name, "docstatus": ("!=", 2)}):
             raise frappe.ValidationError("Tuition is already billed for this enrollment")
+
+        # Resolve centralized discount policy (OD-CP-1 Policy A: single discount per charge)
+        from toefl_house.academic import rules
+        discount_rules = frappe.db.get_all("TH Discount Rule",
+                                           filters={"status": "Active"},
+                                           fields=["code", "title", "discount_percentage",
+                                                   "precedence", "fee_category", "program"])
+        applied_discounts = []
+        fee_components = []
+        for c in components:
+            comp_row = dict(fees_category=c.fees_category, amount=c.amount)
+            winner = rules.resolve_charge_discount(
+                discount_rules, fee_category=c.fees_category, program=pe.program)
+            if winner:
+                comp_row["discount"] = winner["discount_percentage"]
+                applied_discounts.append({
+                    "fee_category": c.fees_category,
+                    "rule_code": winner["rule_code"],
+                    "rule_title": winner["rule_title"],
+                    "discount_percentage": winner["discount_percentage"],
+                })
+            fee_components.append(comp_row)
+
         company = fs.company or COMPANY
         # The framework prefills an empty `currency` field from the system
         # default; set the company's currency explicitly so the receivable is
@@ -97,8 +120,7 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             company=company, currency=company_currency,
             posting_date=posting, due_date=due,
             fee_structure=fs_name, receivable_account=fs.receivable_account,
-            components=[dict(fees_category=c.fees_category, amount=c.amount)
-                        for c in components]))
+            components=fee_components))
         fees.flags.ignore_permissions = True
         fees.insert(ignore_permissions=True)
         fees.flags.ignore_permissions = True
@@ -114,10 +136,13 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             "outstanding_amount": float(row.outstanding_amount), "currency": row.currency,
             "posting_date": posting, "due_date": due,
         }
+        if applied_discounts:
+            result["discounts_applied"] = applied_discounts
         return result, dict(target=fees.name,
                             after_hash=digest([fees.name, pe_name, fs_name, posting, due,
                                                {c.fees_category: float(c.amount)
-                                                for c in components}]))
+                                                for c in components},
+                                               applied_discounts]))
 
     return _execute("issue_tuition_fees", request_key,
                     {"program_enrollment": program_enrollment,

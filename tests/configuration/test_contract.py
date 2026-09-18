@@ -26,6 +26,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 APP = REPO / "apps/toefl_house/toefl_house"
 ACADEMIC = APP / "academic"
+sys.path.insert(0, str(REPO / "apps/toefl_house"))
 sys.path.insert(0, str(ACADEMIC))
 
 import rules  # noqa: E402  (pure module, no frappe)
@@ -230,6 +231,83 @@ class RefusalMessageTests(unittest.TestCase):
         self.assertIn("integrity", rules.level_missing_native_message("X1"))
 
 
+class DiscountRuleTests(unittest.TestCase):
+    def test_discount_percentage_validation(self):
+        self.assertEqual(rules.validate_discount_percentage("10.5"), 10.5)
+        self.assertEqual(rules.validate_discount_percentage(100), 100.0)
+        for bad in (0, -5, 100.5, "abc", None, True, False):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                rules.validate_discount_percentage(bad)
+
+    def test_precedence_validation(self):
+        self.assertEqual(rules.validate_precedence(1), 1)
+        self.assertEqual(rules.validate_precedence("10"), 10)
+        for bad in (0, -1, 1000000, "abc", None, True):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                rules.validate_precedence(bad)
+
+    def test_policy_a_single_discount_per_charge_precedence(self):
+        """OD-CP-1 Policy A: single discount per charge line; explicit precedence resolves."""
+        discount_rules = [
+            {"code": "SIBLING-5", "title": "Sibling 5%", "discount_percentage": 5.0,
+             "precedence": 1, "status": "Active"},
+            {"code": "MERIT-10", "title": "Merit 10%", "discount_percentage": 10.0,
+             "precedence": 10, "status": "Active"},
+            {"code": "EARLY-10", "title": "Early Bird 10%", "discount_percentage": 10.0,
+             "precedence": 5, "status": "Active"},
+        ]
+        winner = rules.resolve_charge_discount(discount_rules, fee_category="Tuition Fee")
+        self.assertIsNotNone(winner)
+        self.assertEqual(winner["rule_code"], "MERIT-10")
+        self.assertEqual(winner["discount_percentage"], 10.0)
+
+    def test_policy_a_never_stacks(self):
+        discount_rules = [
+            {"code": "RULE-A", "discount_percentage": 10.0, "precedence": 5, "status": "Active"},
+            {"code": "RULE-B", "discount_percentage": 15.0, "precedence": 5, "status": "Active"},
+        ]
+        # Equal precedence ties broken deterministically by highest percentage
+        winner = rules.resolve_charge_discount(discount_rules)
+        self.assertEqual(winner["rule_code"], "RULE-B")
+        self.assertEqual(winner["discount_percentage"], 15.0)
+
+    def test_applicability_filtering(self):
+        discount_rules = [
+            {"code": "TUITION-ONLY", "fee_category": "Tuition Fee", "discount_percentage": 10.0,
+             "precedence": 10, "status": "Active"},
+            {"code": "RETIRED-RULE", "fee_category": "Tuition Fee", "discount_percentage": 20.0,
+             "precedence": 20, "status": "Retired"},
+        ]
+        # Inactive rule is excluded
+        winner = rules.resolve_charge_discount(discount_rules, fee_category="Tuition Fee")
+        self.assertEqual(winner["rule_code"], "TUITION-ONLY")
+
+        # Category mismatch returns None
+        self.assertIsNone(rules.resolve_charge_discount(discount_rules, fee_category="ID Card Fee"))
+
+
+class ReportingRegisterTests(unittest.TestCase):
+    def test_canonical_definitions_exist(self):
+        from toefl_house.reporting import get_reporting_definition, all_definitions
+        defs = all_definitions()
+        self.assertIn("collected_today", defs)
+        self.assertIn("active_programs", defs)
+        self.assertIn("discount_rules_active", defs)
+        label, definition, owner = get_reporting_definition("collected_today")
+        self.assertEqual(label, "Collected today")
+        self.assertIn("Submitted Payment Entry", definition)
+
+
+class GlobalConfigurationTests(unittest.TestCase):
+    """OD-CP-3 Option A: No overrides; global configuration is the single authority."""
+
+    def test_global_configuration_has_no_branch_override_layer(self):
+        init_source = (APP / "desk/__init__.py").read_text(encoding="utf-8")
+        self.assertNotIn("Branch Program", init_source)
+        self.assertNotIn("Branch Duration", init_source)
+        self.assertNotIn("Branch Fee Structure", init_source)
+
+
 class DoctypeContractTests(unittest.TestCase):
     DOC = APP / "academic/doctype"
 
@@ -240,7 +318,8 @@ class DoctypeContractTests(unittest.TestCase):
     def test_configuration_masters_pin_identity_and_audit(self):
         for name, identity_fields in (
                 ("th_academic_program", ("code",)),
-                ("th_program_level", ("code", "family", "native_program"))):
+                ("th_program_level", ("code", "family", "native_program")),
+                ("th_discount_rule", ("code",))):
             doc = self._load(name)
             self.assertEqual(doc["module"], "Academic")
             self.assertTrue(doc.get("track_changes"),
@@ -253,7 +332,7 @@ class DoctypeContractTests(unittest.TestCase):
             self.assertTrue(fields["code"].get("unique"), f"{name}.code must be unique")
 
     def test_no_role_may_delete_configuration(self):
-        for name in ("th_academic_program", "th_program_level"):
+        for name in ("th_academic_program", "th_program_level", "th_discount_rule"):
             doc = self._load(name)
             self.assertTrue(doc["permissions"], f"{name} must declare permissions")
             for perm in doc["permissions"]:
@@ -262,7 +341,7 @@ class DoctypeContractTests(unittest.TestCase):
                 self.assertNotIn("cancel", {k for k, v in perm.items() if v == 1})
 
     def test_course_owner_is_the_only_writer(self):
-        for name in ("th_academic_program", "th_program_level"):
+        for name in ("th_academic_program", "th_program_level", "th_discount_rule"):
             doc = self._load(name)
             for perm in doc["permissions"]:
                 writers = {"write", "create"} & {k for k, v in perm.items() if v == 1}
@@ -292,6 +371,7 @@ class CommandContractTests(unittest.TestCase):
         "set_next_level", "set_program_status", "set_level_status",
         "create_academic_year", "create_fee_type",
         "set_level_fee_component", "remove_level_fee_component",
+        "create_discount_rule", "set_discount_rule_status",
     )
 
     def _tree(self):

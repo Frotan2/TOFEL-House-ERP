@@ -93,7 +93,7 @@ class ProtectedRecord(Document):
 
     def _validate_correction_request(self, before):
         """Request facts are immutable; the decision is one-shot."""
-        for field in ("sales_invoice", "reason", "requested_amount"):
+        for field in ("sales_invoice", "fees", "reason", "requested_amount"):
             if before.get(field) != self.get(field):
                 raise frappe.PermissionError("Correction request facts are immutable")
         if before.status == self.status:

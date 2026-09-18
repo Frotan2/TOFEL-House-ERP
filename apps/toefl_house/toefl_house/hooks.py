@@ -46,10 +46,12 @@ has_permission = {
                  "TH Admission Decision", "TH Instructor Contract",
                  "TH Teaching Assignment", "TH Correction Policy",
                  "TH Correction Request",
-                 "TH Academic Program", "TH Program Level")
+                 "TH Academic Program", "TH Program Level",
+                 "TH Discount Rule")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Program Level"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Discount Rule"] = "toefl_house.permissions.configuration_has_permission"
 permission_query_conditions = {
     name: "toefl_house.permissions.query_" + suffix
     for name, suffix in (
@@ -71,6 +73,7 @@ permission_query_conditions = {
 # Governance configuration is queried through the non-synthetic checker.
 permission_query_conditions["TH Academic Program"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Program Level"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Discount Rule"] = "toefl_house.permissions.configuration_query"
 override_whitelisted_methods = {
     "education.education.api.enroll_student": "toefl_house.admission.deny_enroll_student",
 }

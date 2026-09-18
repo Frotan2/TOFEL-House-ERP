@@ -50,7 +50,7 @@ CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager")
 # the synthetic-guarded DOCTYPES world. These records are governance state,
 # readable by management roles, mutable only through the guarded
 # toefl_house.academic commands (docs/product/CONFIGURATION-PLANE.md).
-GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level"}
+GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount Rule"}
 
 
 def configuration_has_permission(doc, ptype=None, user=None, **kwargs):

@@ -289,3 +289,74 @@ def level_missing_native_message(code):
     return (
         f"Level {code} has no native program anchor. This is a configuration "
         "integrity fault: contact the administrator; do not enroll against it.")
+
+
+def validate_discount_percentage(value):
+    """Discount percentage: number between >0 and <=100."""
+    if isinstance(value, str):
+        try:
+            value = float(value.strip())
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Discount percentage must be a number") from exc
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("Discount percentage must be a number")
+    val = float(value)
+    if val <= 0:
+        raise ValueError("Discount percentage must be greater than zero")
+    if val > 100.0:
+        raise ValueError("Discount percentage cannot exceed 100%")
+    return val
+
+
+def validate_precedence(value):
+    """Explicit configured precedence: whole number (higher value = higher precedence)."""
+    if isinstance(value, str) and value.strip().isdigit():
+        value = int(value.strip())
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("Precedence must be a whole number (1 = base priority)")
+    if value < 1 or value > 999999:
+        raise ValueError("Precedence must be between 1 and 999999")
+    return value
+
+
+def resolve_charge_discount(rules_list, fee_category=None, program=None):
+    """Resolve eligible discount rules under OD-CP-1 Policy A (Single Discount Per Charge).
+
+    A charge line may receive zero or one discount only. Discounts must never stack.
+    If multiple rules are eligible, the system resolves them to one applicable discount
+    according to explicit configured precedence (higher precedence wins; ties broken
+    deterministically by highest percentage, then rule code).
+    """
+    eligible = []
+    for rule in rules_list or []:
+        if rule.get("status") != "Active":
+            continue
+        rule_cat = rule.get("fee_category")
+        if rule_cat and fee_category and rule_cat != fee_category:
+            continue
+        rule_prog = rule.get("program")
+        if rule_prog and program and rule_prog != program:
+            continue
+        eligible.append(rule)
+
+    if not eligible:
+        return None
+
+    # Explicit precedence order: higher precedence wins; tie-break on percentage then code
+    eligible.sort(
+        key=lambda r: (
+            int(r.get("precedence") or 1),
+            float(r.get("discount_percentage") or 0),
+            -len(str(r.get("code") or "")),
+            str(r.get("code") or "")
+        ),
+        reverse=True
+    )
+    winner = eligible[0]
+    return {
+        "rule_code": winner.get("code") or winner.get("name"),
+        "rule_title": winner.get("title") or winner.get("code") or winner.get("name"),
+        "discount_percentage": float(winner.get("discount_percentage") or 0),
+        "precedence": int(winner.get("precedence") or 1),
+    }
+

@@ -64,12 +64,12 @@ those decisions — it prepares the carriers for them.
 | Per-level fees | **CONFIGURATION** | Native `Fee Structure` keyed on the level's native `Program` + `academic_year`; no new doctype needed |
 | Fee types (ID card, diploma, retake, tuition…) | **NATIVE** | `Fee Category` + auto `Item`; the Owner creates categories natively; our setup surface will orchestrate it (slice 2) |
 | Component discounts on a fee plan | **NATIVE** | `Fee Component.discount` percent exists natively |
-| Discount rules (catalog, eligibility, stacking) | **DEFERRED** | Model designed (below), **blocked on OD-CP-1** (stacking policy) — decision requested, other work continues |
+| Discount rules (catalog, eligibility, stacking) | **CONFIGURATION** | `TH Discount Rule` (shipped); governed by OD-CP-1 Policy A (single discount per charge, precedence resolved, no stacking) |
 | Assessment weights / pass marks / retakes | **DEFERRED (owner)** | Native carriers exist (`Assessment Plan`, `Assessment Criteria`, `Grading Scale`); policy values are D1/B04/B05 — not invented here |
 | Teacher compensation configuration | **DEFERRED (owner)** | Architecture already preserved (D2/A09, `TH Instructor Contract` + skill terms); configuration surface is a later slice on the same principles |
-| Refunds / cancellations / credits | **DEFERRED** | Native credit-note authority + correction framework exist; policy model will be built and the Owner asked (slice 4) |
-| Branch availability / overrides | **CONFIGURATION (later slice)** | Global definition + explicit override pattern (§16); deferred until the global layer is consumed in production-like use |
-| Reporting definitions (§29) | **CONFIGURATION (later slice)** | The owner cockpit already states definitions inline; a central register is a later slice |
+| Refunds / cancellations / credits | **CONFIGURATION** | Extended correction framework (shipped); OD-CP-2 Option B (issued Fees, full-amount only, native cancellation/reversal) |
+| Branch availability / overrides | **CONFIGURATION** | OD-CP-3 Option A (shipped): global-only configuration; no branch override layer |
+| Reporting definitions (§29) | **CONFIGURATION** | Central canonical definition register (`toefl_house.reporting`, shipped) |
 
 **Architecture decision (engineering, per §36): a level is modeled AS a native
 `Program` record.** Rationale: native `Program Enrollment`, `Fee Structure`
@@ -227,8 +227,18 @@ Only the discount-rule module (slice 3). Programs, levels, durations,
 fees and everything else shipped here continue independently.
 ```
 
-Recorded answers (Owner): _awaiting answer — will be recorded here verbatim
-and implemented with tests when it arrives._
+Recorded answers (Owner):
+**OD-CP-1 is decided: Policy A — Single Discount Per Charge**
+A charge line may receive zero or one discount only. Discounts must never stack.
+If multiple discount rules are eligible, the system must resolve them to one
+applicable discount according to an explicit configured precedence rule and
+record which rule was applied. Do not hard-code discount percentages or business
+rules. Keep discount configuration centralized and make all modules consume the
+same policy.
+
+Implemented in slice 3 (`TH Discount Rule`, `rules.resolve_charge_discount`,
+Course Owner commands, Academic Setup desk section, and finance consumption
+in `issue_tuition_fees`).
 
 ```text
 OD-CP-2
@@ -261,6 +271,16 @@ Blocking:
 Only the Fees-refund module (slice 4). Everything shipped continues.
 ```
 
+Recorded answers (Owner):
+**OD-CP-2 is decided: Option B — Fees too, full-amount only**
+Extend the existing fail-closed correction framework to issued tuition Fees:
+full-amount refunds only, governed by the same owner-entered terms (approver
+role + correction window) as placement-invoice credit notes today.
+
+Implemented in slice 4 (`request_fees_correction`, `approve_fees_correction`,
+`deny_fees_correction`, native Fees cancellation reversal, dual-key approver
+check).
+
 ```text
 OD-CP-3
 
@@ -290,8 +310,13 @@ Blocking:
 Only the branch-override slice (slice 5). Nothing else waits on it.
 ```
 
-Recorded answers (Owner): _awaiting answers — will be recorded here
-verbatim and implemented with tests when they arrive._
+Recorded answers (Owner):
+**OD-CP-3 is decided: Option A — No overrides; global only**
+All branches consume the single global configuration. No branch-specific
+override layer is created.
+
+Implemented in slice 5 (pinned single global authority across all desks,
+verified by `tests/configuration/test_contract.py`).
 
 Folded into existing owner-deferred decisions (not re-asked): assessment
 weights/pass marks/retakes = D1 (B04/B05); payroll policy = D2 (A09).
@@ -308,22 +333,30 @@ suite if a future change reintroduces hard-coded policy.
 
 ## 8. Verification
 
-- `tests/configuration/test_contract.py` (26 tests) — pure rules (validation
+- `tests/configuration/test_contract.py` (43 tests) — pure rules (validation
   matrices, effective-date resolution incl. the §17 boundary semantics,
-  monotone versions, progression integrity, refusal messages), doctype JSON
+  monotone versions, progression integrity, refusal messages, discount
+  percentage and precedence validation, OD-CP-1 Policy A single discount
+  resolution without stacking, canonical reporting register), doctype JSON
   contracts (set-once identity, uniqueness, **no delete for any role**,
   Course-Owner-only writes, native Version audit), command contracts
   (whitelisted, request-key-first, gated, never synthetic-gated, rules
   reused), registry/Page/hooks/projection ties, hard-coded-policy audit.
-- `tests/configuration/test_lifecycle.py` (11 tests) — the §33/§45 lifecycle
+- `tests/configuration/test_lifecycle.py` (14 tests) — the §33/§45 lifecycle
   against the real commands on an in-memory backend: build a program with
   ordered levels, link progression, change the duration policy, prove the new
   version governs only new dates, prove the old version is closed untouched,
   prove deactivation is refused with real counts, prove the gate refuses
-  every other role.
+  every other role; plus discount rule lifecycle and the complete §45
+  acceptance rehearsal (Program + 5 levels + durations + fee types + fee plan
+  + 10% scholarship discount + enrollment + billing + later tuition change
+  leaving history intact + fees correction refund).
+- `tests/finance/test_corrections.py` (10 tests) — fees correction commands,
+  full-amount rule, window validation, approver dual-key check, and native
+  cancellation reversal.
 - Desk contracts extended: the Academic Setup desk is tied into the registry,
   Page JSON, hooks, projection allow-lists, client surfaces and the
-  signature-mirroring dialog map; its endpoint executes in the runtime smoke.
+  signature-mirroring dialog map (25 guided actions across 6 desks).
 
 ## 9. Roadmap (each slice gated on the previous, decisions requested in parallel)
 
@@ -342,11 +375,14 @@ suite if a future change reintroduces hard-coded policy.
    offering a button that can only fail, and an ambiguous plan pauses
    billing in explicit language. Pinned and mutation-checked by
    `tests/configuration`.
-3. Discount rules — **blocked on OD-CP-1**; smallest model (§14) on the chosen
-   policy, consumed at fee preparation, native percent discipline preserved.
-4. Refund/cancellation policy model — will carry its own OWNER DECISION
-   block; native credit-note authority stays the only execution path.
-5. Branch availability + explicit overrides (§16) and the reporting
-   definition register (§29) once the global layer has production-like use.
+3. **Shipped** — discount rules under OD-CP-1 Policy A (`TH Discount Rule`):
+   central catalog, explicit precedence, single discount per charge line,
+   never stacks, consumed by fee issuance (`issue_tuition_fees`).
+4. **Shipped** — tuition Fees refund under OD-CP-2 Option B: extended
+   correction framework to issued Fees, full-amount only, native cancellation
+   and GL receivable reversal.
+5. **Shipped** — branch configuration under OD-CP-3 Option A (global authority
+   only, no branch override layer) and the central reporting definition
+   register (§29, `toefl_house.reporting`).
 6. Progression and assessment policy activation — the moment the Owner
    answers D1, the configured structure is already the carrier.

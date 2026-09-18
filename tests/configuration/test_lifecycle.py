@@ -38,10 +38,11 @@ class _Doc:
         self._backend = backend
         self.doctype = doctype
         self._payload = dict(payload)
+        self.flags = types.SimpleNamespace(ignore_permissions=False, ignore_links=False)
         for key, value in payload.items():
             if isinstance(value, list):
                 self._payload[key] = [_Row(row) for row in value]
-        self.name = None
+        self.name = self._payload.get("name")
 
     def __getattr__(self, key):
         try:
@@ -50,7 +51,7 @@ class _Doc:
             raise AttributeError(key) from exc
 
     def __setattr__(self, key, value):
-        if key in ("_backend", "doctype", "_payload", "name"):
+        if key in ("_backend", "doctype", "_payload", "name", "flags"):
             self.__dict__[key] = value
             return
         self._payload[key] = value
@@ -75,13 +76,35 @@ class _Doc:
                or self._payload.get("academic_year_name")
                or self._payload.get("category_name"))
         if not key:
-            key = "EDU-FST-" + str(len(store) + 1).zfill(5)
+            prefix = "EDU-FEE-" if self.doctype == "Fees" else (
+                "CORR-" if self.doctype == "TH Correction Request" else (
+                    "POL-" if self.doctype == "TH Correction Policy" else "EDU-FST-"))
+            key = prefix + str(len(store) + 1).zfill(5)
         self.name = key
         self._payload["name"] = key
+        if self.doctype == "Fees":
+            total = 0.0
+            for comp in self._payload.get("components") or []:
+                amt = float(comp.get("amount") or 0)
+                disc = float(comp.get("discount") or 0)
+                line_total = amt - (amt * disc / 100.0)
+                comp["total"] = line_total
+                total += line_total
+            self._payload.setdefault("grand_total", total)
+            self._payload.setdefault("outstanding_amount", total)
+            self._payload.setdefault("currency", "USD")
         store[key] = self
         return self
 
     def save(self, ignore_permissions=False):
+        return self
+
+    def submit(self):
+        self._payload["docstatus"] = 1
+        return self
+
+    def cancel(self):
+        self._payload["docstatus"] = 2
         return self
 
 
@@ -89,6 +112,14 @@ class _FakeFrappe:
     def __init__(self, roles, enrollments=()):
         self.session = types.SimpleNamespace(user="owner@example.com")
         self.store = {}
+        self.store.setdefault("User", {})["owner@example.com"] = {
+            "name": "owner@example.com", "enabled": 1}
+        self.conf = {
+            "toefl_house_synthetic_only": 1,
+            "allow_tests": 1,
+            "encryption_key": "test-secret-key-32-bytes-long!"
+        }
+        self.local = types.SimpleNamespace(site="placement-test.localhost")
         self._roles = set(roles)
         for index, row in enumerate(enrollments):
             self.store.setdefault("Program Enrollment", {})[f"ENR-{index}"] = dict(row)
@@ -97,12 +128,14 @@ class _FakeFrappe:
         utils = types.ModuleType("frappe.utils")
         utils.today = lambda: "2026-09-17"
         utils.now_datetime = lambda: datetime(2026, 9, 17, 12, 0, 0)
+        utils.get_datetime = lambda v=None: datetime.now() if v is None else (
+            v if isinstance(v, datetime) else datetime.fromisoformat(str(v)))
         self.utils = utils
 
     def get_roles(self, user):
         return self._roles if user == self.session.user else set()
 
-    def get_value(self, doctype, filters, fieldname):
+    def get_value(self, doctype, filters, fieldname=None, as_dict=False, for_update=False):
         store = self.store.get(doctype, {})
         if isinstance(filters, str):
             record = store.get(filters)
@@ -111,9 +144,16 @@ class _FakeFrappe:
                            if all(doc.get(k) == v for k, v in dict(filters).items())), None)
         if record is None:
             return None
+        payload = record._payload if hasattr(record, "_payload") else record
+        if as_dict:
+            if isinstance(fieldname, (list, tuple)):
+                return _Row({f: payload.get(f) for f in fieldname})
+            return _Row(payload)
         if isinstance(fieldname, str):
-            return record.get(fieldname)
-        return [record.get(field) for field in fieldname]
+            return payload.get(fieldname)
+        if isinstance(fieldname, (list, tuple)):
+            return [payload.get(field) for field in fieldname]
+        return record.name if hasattr(record, "name") else payload.get("name")
 
     def exists(self, doctype, filters):
         return self.get_value(doctype, filters, "name") is not None
@@ -129,6 +169,23 @@ class _FakeFrappe:
             payload = doc._payload if hasattr(doc, "_payload") else doc
             if all(payload.get(k) == v for k, v in dict(filters or {}).items()):
                 matched.append(dict(payload))
+        if not matched and filters and "parent" in filters:
+            parent_dt = filters.get("parenttype")
+            parent_name = filters.get("parent")
+            candidates = self.store.get(parent_dt, {}).values() if parent_dt else [
+                d for docs in self.store.values() for d in docs.values()
+            ]
+            for parent_doc in candidates:
+                p_payload = parent_doc._payload if hasattr(parent_doc, "_payload") else parent_doc
+                if p_payload.get("name") == parent_name:
+                    for child_list in p_payload.values():
+                        if isinstance(child_list, list):
+                            for row in child_list:
+                                if isinstance(row, dict):
+                                    row_copy = dict(row)
+                                    row_copy["parent"] = parent_name
+                                    row_copy["parenttype"] = parent_dt
+                                    matched.append(_Row(row_copy))
         return matched
 
     def get_doc(self, doctype, name=None, for_update=False):
@@ -139,6 +196,14 @@ class _FakeFrappe:
             return _Doc(self, doctype, {"doctype": doctype})
         return self.store.get(doctype, {})[name]
 
+    def sql(self, query, values=(), as_dict=False):
+        if "SELECT @@SESSION.innodb_lock_wait_timeout" in str(query):
+            return [[50]]
+        return []
+
+    def get_cached_value(self, doctype, name, fieldname):
+        return self.get_value(doctype, name, fieldname)
+
 
 def _load_module(roles, enrollments=()):
     fake = _FakeFrappe(roles, enrollments)
@@ -147,12 +212,19 @@ def _load_module(roles, enrollments=()):
                             "toefl_house.academic", "toefl_house.academic.rules")}
     stub = types.ModuleType("frappe")
     for attr in ("session", "PermissionError", "ValidationError", "utils",
-                 "get_roles", "get_value", "exists", "count", "get_all", "get_doc"):
+                 "get_roles", "get_value", "exists", "count", "get_all", "get_doc",
+                 "get_cached_value", "conf", "local"):
         setattr(stub, attr, getattr(fake, attr))
     stub.whitelist = lambda **kwargs: (lambda func: func)
+    stub.flags = types.SimpleNamespace()
+    stub.QueryDeadlockError = type("QueryDeadlockError", (Exception,), {})
+    stub.QueryTimeoutError = type("QueryTimeoutError", (Exception,), {})
+    stub.DoesNotExistError = type("DoesNotExistError", (Exception,), {})
     stub.db = types.SimpleNamespace(
         get_value=fake.get_value, exists=fake.exists,
-        count=fake.count, get_all=fake.get_all)
+        count=fake.count, get_all=fake.get_all, sql=fake.sql,
+        db_type="mariadb", transaction_writes=0, _disable_transaction_control=0,
+        commit=lambda: None, rollback=lambda: None)
     sys.modules["frappe"] = stub
     sys.modules["frappe.utils"] = stub.utils
     package = types.ModuleType("toefl_house")
@@ -361,6 +433,172 @@ class FeeConfigurationLifecycleTests(unittest.TestCase):
                                                      "Tuition Fee", 5000)
                 with self.assertRaises(fake.PermissionError):
                     academic.create_fee_type("R" * 24, "Sneaky Fee")
+
+
+class DiscountConfigurationLifecycleTests(unittest.TestCase):
+    def test_owner_manages_discount_rules(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            fake.store.setdefault("Item Group", {})["Fee Component"] = {"name": "Fee Component"}
+            academic.create_fee_type("R" * 24, "Tuition Fee", "")
+            rule = academic.create_discount_rule(
+                "R" * 24, "SCHOLARSHIP-10", "10% Merit Scholarship", 10.0,
+                precedence=10, fee_category="Tuition Fee")
+            self.assertEqual(rule["code"], "SCHOLARSHIP-10")
+            self.assertEqual(rule["discount_percentage"], 10.0)
+            self.assertEqual(rule["precedence"], 10)
+            self.assertEqual(rule["status"], "Active")
+
+            # Duplicate rejected
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.create_discount_rule(
+                    "R" * 24, "SCHOLARSHIP-10", "Duplicate", 10.0)
+            self.assertIn("already exists", str(ctx.exception))
+
+            # Deactivate (retire)
+            retired = academic.set_discount_rule_status("R" * 24, "SCHOLARSHIP-10", 0)
+            self.assertEqual(retired["status"], "Retired")
+
+            # Reactivate
+            active = academic.set_discount_rule_status("R" * 24, "SCHOLARSHIP-10", 1)
+            self.assertEqual(active["status"], "Active")
+
+    def test_discount_commands_refuse_unauthorized_roles(self):
+        for roles in (set(), {"Reception"}, {"Finance Officer"}, {"Academic Manager"}):
+            for academic, fake in _load_module(roles):
+                with self.assertRaises(fake.PermissionError):
+                    academic.create_discount_rule(
+                        "R" * 24, "RULE-1", "Rule 1", 10.0)
+                with self.assertRaises(fake.PermissionError):
+                    academic.set_discount_rule_status("R" * 24, "RULE-1", 0)
+
+
+class AcceptanceRehearsalTests(unittest.TestCase):
+    """Mission §45 Final Acceptance Rehearsal.
+
+    Owner defines GE + 5 levels + 2-month durations + fee types + 10% scholarship
+    + one progression rule; Reception->Admission->Enrollment->Finance all consume
+    config automatically; later tuition change -> new enrollment uses new config,
+    historical enrollment unchanged.
+    """
+
+    def test_mission_acceptance_rehearsal_end_to_end(self):
+        for academic, fake in _load_module({"Course Owner", "Finance Officer", "Finance Manager"}):
+            # 1. Setup prerequisite company & item group
+            fake.store.setdefault("Item Group", {})["Fee Component"] = {"name": "Fee Component"}
+            fake.store.setdefault("Company", {})["TOEFL House"] = {
+                "name": "TOEFL House", "default_receivable_account": "Debtors - TH",
+                "default_currency": "USD"}
+            fake.store.setdefault("Role", {})["Finance Manager"] = {"name": "Finance Manager"}
+
+            # 2. Owner defines GE program family
+            prog = academic.create_program("R" * 24, "GEN-ENG", "General English Track",
+                                           "Institutional track")
+            self.assertEqual(prog["code"], "GEN-ENG")
+
+            # 3. Owner defines 5 levels with 2-month durations
+            levels = [
+                ("LVL-1", "Starter", 1),
+                ("LVL-2", "Elementary", 2),
+                ("LVL-3", "Pre-Intermediate", 3),
+                ("LVL-4", "Intermediate", 4),
+                ("LVL-5", "Upper-Intermediate", 5),
+            ]
+            for code, title, seq in levels:
+                lvl = academic.create_level("R" * 24, "GEN-ENG", code, title, seq,
+                                            2, "Month", "2026-01-01")
+                self.assertEqual(lvl["duration"], "2 months")
+
+            # 4. Owner defines progression rule: LVL-1 progresses to LVL-2
+            academic.set_next_level("R" * 24, "LVL-1", "LVL-2")
+            self.assertEqual(fake.store["TH Program Level"]["LVL-1"].next_level, "LVL-2")
+
+            # 5. Owner defines academic year and fee type
+            academic.create_academic_year("R" * 24, "2026-27", "2026-07-01", "2027-06-30")
+            academic.create_fee_type("R" * 24, "Tuition Fee", "Core tuition charge")
+
+            # 6. Owner defines fee plan for LVL-1 (5000 Tuition Fee)
+            fee_plan = academic.set_level_fee_component("R" * 24, "LVL-1", "2026-27",
+                                                        "Tuition Fee", 5000)
+            self.assertEqual(fee_plan["total"], 5000.0)
+
+            # 7. Owner defines 10% scholarship discount rule (Policy A)
+            disc = academic.create_discount_rule("R" * 24, "SCHOLARSHIP-10",
+                                                "10% Scholarship", 10.0,
+                                                precedence=10, fee_category="Tuition Fee")
+            self.assertEqual(disc["discount_percentage"], 10.0)
+
+            # 8. Load Finance and Corrections modules
+            import importlib.util
+            fin_spec = importlib.util.spec_from_file_location(
+                "toefl_house.finance", APP / "finance/__init__.py")
+            finance = importlib.util.module_from_spec(fin_spec)
+            fin_spec.loader.exec_module(finance)
+
+            corr_spec = importlib.util.spec_from_file_location(
+                "toefl_house.finance.corrections", APP / "finance/corrections.py")
+            corrections = importlib.util.module_from_spec(corr_spec)
+            corr_spec.loader.exec_module(corrections)
+
+            # Native Program for LVL-1:
+            lvl1_doc = fake.store["TH Program Level"]["LVL-1"]
+            native_prog = lvl1_doc.native_program
+
+            # Simulate Student A enrollment
+            fake.store.setdefault("Student", {})["STU-001"] = {
+                "name": "STU-001", "student_name": "Student Alpha"}
+            fake.store.setdefault("Program Enrollment", {})["ENR-001"] = {
+                "name": "ENR-001", "student": "STU-001", "program": native_prog,
+                "academic_year": "2026-27", "docstatus": 1, "enrollment_date": "2026-08-01"}
+
+            # Finance issues tuition fees for Student A
+            # (Consumes configured fee plan + discount rule automatically)
+            fees_res_1 = finance.issue_tuition_fees("R" * 24, "ENR-001", fee_plan["fee_structure"],
+                                                    "2026-08-02", "2026-08-30")
+            fees_1 = fake.store["Fees"][fees_res_1["fees"]]
+            self.assertEqual(float(fees_1.grand_total), 4500.0)  # 5000 - 10% scholarship = 4500
+            self.assertEqual(len(fees_res_1.get("discounts_applied", [])), 1)
+            self.assertEqual(fees_res_1["discounts_applied"][0]["rule_code"], "SCHOLARSHIP-10")
+
+            # 9. LATER TUITION CHANGE (§45)
+            # Owner changes Tuition Fee from 5000 to 6000
+            updated_plan = academic.set_level_fee_component("R" * 24, "LVL-1", "2026-27",
+                                                            "Tuition Fee", 6000)
+            self.assertEqual(updated_plan["total"], 6000.0)
+
+            # HISTORICAL INTEGRITY CHECK:
+            # Student A's issued Fees document is UNTOUCHED
+            fees_1_after = fake.store["Fees"][fees_res_1["fees"]]
+            self.assertEqual(float(fees_1_after.grand_total), 4500.0)
+            self.assertEqual(int(fees_1_after.docstatus), 1)
+
+            # New Student B enrolls under the updated policy
+            fake.store.setdefault("Student", {})["STU-002"] = {
+                "name": "STU-002", "student_name": "Student Beta"}
+            fake.store.setdefault("Program Enrollment", {})["ENR-002"] = {
+                "name": "ENR-002", "student": "STU-002", "program": native_prog,
+                "academic_year": "2026-27", "docstatus": 1, "enrollment_date": "2026-09-01"}
+
+            # Student B billed under new configuration
+            fees_res_2 = finance.issue_tuition_fees("K" * 24, "ENR-002", updated_plan["fee_structure"],
+                                                    "2026-09-02", "2026-09-30")
+            fees_2 = fake.store["Fees"][fees_res_2["fees"]]
+            self.assertEqual(float(fees_2.grand_total), 5400.0)  # 6000 - 10% scholarship = 5400
+
+            # 10. REFUND VIA CORRECTION FRAMEWORK (OD-CP-2 Option B)
+            corrections.configure_correction_policy("P" * 24, "Finance Manager", 30)
+            corr_req = corrections.request_fees_correction(
+                "C" * 24, fees_res_2["fees"], "Student withdrew within window", 5400.0)
+            self.assertEqual(corr_req["status"], "Requested")
+
+            # Approver approves fees correction
+            approved = corrections.approve_fees_correction("A" * 24, corr_req["name"])
+            self.assertEqual(approved["status"], "Posted")
+            self.assertEqual(approved["refunded_total"], 5400.0)
+
+            # Native Fees doc is cancelled (docstatus 2)
+            self.assertEqual(int(fees_2.docstatus), 2)
+            # Student A remains submitted and unchanged
+            self.assertEqual(int(fees_1.docstatus), 1)
 
 
 def rules_governing(versions, on_date):
