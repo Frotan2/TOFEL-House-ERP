@@ -1,7 +1,7 @@
 name: Placement synthetic content qualification
 on:
   push:
-    branches: [arena/01a0b084-tofel-house-erp]
+    branches: [arena/01a0b3a7-tofel-house-erp]
     paths:
       - .github/workflows/placement-content.yml
       - tools/session_branch.py
@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   content:
-    if: github.ref == 'refs/heads/arena/01a0b084-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0b3a7-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

@@ -25,10 +25,11 @@
       "reqd": 1
     },
     {
+      "description": "The skill area this instructor teaches for the class. Only Active TH Skill masters can be assigned.",
       "fieldname": "skill",
       "label": "Skill",
-      "fieldtype": "Select",
-      "options": "Speaking & Listening\nWriting & Grammar\nReading & Vocabulary",
+      "fieldtype": "Link",
+      "options": "TH Skill",
       "reqd": 1
     },
     {

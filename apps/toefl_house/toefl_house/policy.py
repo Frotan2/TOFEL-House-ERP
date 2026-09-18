@@ -517,22 +517,57 @@ def can_read(kind, roles, actor, owner, status=None):
 
 
 # --- D2 teaching compensation (owner requirement 2026-09-16) -------------
-# The three contracted teaching skill areas and the contractual models are
-# owner-given vocabulary. Rates, quantities, limits and terms are always
-# owner-entered contract data; nothing here supplies a default value.
-TEACHING_SKILLS = ("Speaking & Listening", "Writing & Grammar", "Reading & Vocabulary")
+# Skill is a configurable TH Skill master (Course Owner configuration);
+# compensation models, adjustment types and contract statuses are the
+# enumerated vocabulary the owner selected. Rates, quantities, limits and
+# terms are always owner-entered contract data; nothing here supplies a
+# default value.
 COMPENSATION_MODELS = ("Fixed Salary", "Skill-Based", "Hybrid")
 ADJUSTMENT_TYPES = ("Bonus", "Deduction")
 CONTRACT_STATUSES = ("Active", "Superseded")
+DELIVERY_MODES = ("On-site", "Online", "Hybrid")
+CLASS_STATUSES = ("Planned", "Active", "Completed", "Cancelled")
+CLASS_TRANSITIONS = {
+    ("Planned", "Active"),
+    ("Planned", "Cancelled"),
+    ("Active", "Completed"),
+    ("Active", "Cancelled"),
+}
 OPEN_END = "9999-12-31"
 MAX_AMOUNT = 10 ** 9
 MAX_QUANTITY = 10 ** 6
 
 
 def validate_skill(value):
-    if value not in TEACHING_SKILLS:
-        raise ValueError("Skill must be one of the three contracted teaching skill areas")
+    """Validate a skill reference as a bounded name.
+
+    Existence against the TH Skill master and the Active/Retired lifecycle
+    are enforced at the command layer (where frappe.db is available); this
+    pure function only rejects empty / implausible values so offline tests
+    do not need a database.
+    """
+    if not isinstance(value, str) or not value or len(value) > 140:
+        raise ValueError("A skill reference is required")
     return value
+
+
+def validate_delivery_mode(value):
+    if value not in DELIVERY_MODES:
+        raise ValueError("Delivery mode must be one of: " + ", ".join(DELIVERY_MODES))
+    return value
+
+
+def validate_class_status(value):
+    if value not in CLASS_STATUSES:
+        raise ValueError("Class status must be one of: " + ", ".join(CLASS_STATUSES))
+    return value
+
+
+def is_valid_class_transition(before, after):
+    """Guarded class lifecycle transitions. Terminal states (Completed, Cancelled)
+    do not regress.
+    """
+    return before == after or (before, after) in CLASS_TRANSITIONS
 
 
 def validate_compensation_model(value):

@@ -2,6 +2,42 @@
 import frappe
 
 
+# Canonical default skills seeded at install. Codes are stable identity; titles
+# may be renamed by the Course Owner through configuration. The canonical three
+# match the originally hard-coded teaching skill vocabulary so existing
+# references (if any) keep their identity under the new configurable master.
+DEFAULT_SKILLS = (
+    ("SL", "Speaking & Listening"),
+    ("WG", "Writing & Grammar"),
+    ("RV", "Reading & Vocabulary"),
+)
+
+
+def _seed_skills():
+    """Seed the three canonical TH Skill masters if they do not exist yet.
+
+    Safe to run on every migrate: existing skill records (by unique code) are
+    left untouched; this never overwrites owner configuration.
+    """
+    for code, title in DEFAULT_SKILLS:
+        if frappe.db.exists("TH Skill", code):
+            continue
+        try:
+            doc = frappe.get_doc({
+                "doctype": "TH Skill",
+                "code": code,
+                "title": title,
+                "status": "Active",
+                "set_by": "Administrator",
+                "set_on": frappe.utils.now_datetime(),
+            })
+            doc.flags.ignore_permissions = True
+            doc.insert(ignore_permissions=True)
+        except Exception:
+            # Another migrate or parallel process may have created it concurrently.
+            frappe.db.rollback()
+
+
 def after_migrate():
     frappe.db.add_unique("TH Placement Item Revision", ["family", "revision"], "th_item_family_revision")
     frappe.db.add_unique("TH Placement Key Revision", ["item_revision", "key_version"], "th_key_item_version")
@@ -36,9 +72,16 @@ def after_migrate():
     frappe.db.add_index("TH Teaching Assignment", ["student_group", "skill"], "th_assignment_group_skill")
     frappe.db.add_index("TH Teaching Assignment", ["contract"], "th_assignment_contract")
     frappe.db.add_index("TH Teaching Assignment", ["instructor", "effective_start"], "th_assignment_instructor_start")
+    # TH Skill lookups (config master).
+    frappe.db.add_index("TH Skill", ["status"], "th_skill_status")
+    # Student Group class lifecycle lookups (operational class fields).
+    frappe.db.add_index("Student Group", ["th_class_status"], "th_sg_class_status")
+    frappe.db.add_index("Student Group", ["th_branch"], "th_sg_branch")
+    frappe.db.add_index("Student Group", ["th_class_start_date"], "th_sg_start_date")
     # D3 correction framework lookups.
     frappe.db.add_index("TH Correction Policy", ["status"], "th_correction_policy_status")
     frappe.db.add_index("TH Correction Request", ["sales_invoice"], "th_correction_request_invoice")
+    _seed_skills()
 
 
 def after_install():

@@ -5,24 +5,13 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
-Active engineering branch: `arena/01a0b084-tofel-house-erp`. Historical hosted
+Active engineering branch: `arena/01a0b3a7-tofel-house-erp`. Historical hosted
 runs retain their original branch provenance; see
 [branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
 
-**Engineering review (2026-09-17):**
-[ENGINEERING-REVIEW-2026-09-17.md](docs/engineering/ENGINEERING-REVIEW-2026-09-17.md).
-The working tree was **red** — two qualification tests failed because the pinned
-branch boundary had drifted from the checkout. The boundary was rotated, the
-rotation procedure was made honestly followable (a rotated branch now records an
-explicit, fail-closed *absence* of hosted execution instead of being forced to
-re-label an older branch's run), and a latent `NameError` in the
-evidence-recovery path, an unfiltered archive extraction, and the absence of any
-static-analysis or whole-suite gate were all fixed. Owned suite: **665 tests
-pass**, ruff clean, both Node suites pass, D8 validator BLOCKED / REJECT.
-
-**The active branch has NO hosted execution of its own yet — recorded as an
-explicit, fail-closed absence.** The session boundary was rotated to
-`arena/01a0b084-tofel-house-erp` on 2026-09-17, so
+**Engineering review (2026-09-18):**
+Continuing ERP semantic reconciliation work on this session branch.
+The session boundary was rotated to `arena/01a0b3a7-tofel-house-erp` on 2026-09-18, so
 `active_branch_hosted_execution` is `NOT_EXECUTED_ON_THIS_BRANCH` and carries no
 run, check or report identifier; every hosted run cited in this repository is
 historical provenance from an earlier session branch. The most recent observed

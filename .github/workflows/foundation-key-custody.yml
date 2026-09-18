@@ -24,7 +24,7 @@ name: Foundation external key custody
 # boundary that GitHub Actions artifacts cannot provide.
 on:
   push:
-    branches: [arena/01a0b084-tofel-house-erp]
+    branches: [arena/01a0b3a7-tofel-house-erp]
     paths:
       - .github/workflows/foundation-key-custody.yml
       - tools/foundation/bench_bootstrap.py
@@ -51,7 +51,7 @@ concurrency:
 
 jobs:
   custodian:
-    if: github.ref == 'refs/heads/arena/01a0b084-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0b3a7-tofel-house-erp'
     name: Key custody - separate custodian system
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -105,7 +105,7 @@ jobs:
           retention-days: 14
 
   operator:
-    if: github.ref == 'refs/heads/arena/01a0b084-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0b3a7-tofel-house-erp'
     name: Key custody - operating system
     needs: custodian
     runs-on: ubuntu-24.04
@@ -170,7 +170,7 @@ jobs:
           retention-days: 14
 
   recovery:
-    if: github.ref == 'refs/heads/arena/01a0b084-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0b3a7-tofel-house-erp'
     name: Key custody - recovery system
     needs: operator
     runs-on: ubuntu-24.04

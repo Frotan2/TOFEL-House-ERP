@@ -35,8 +35,13 @@ frappe.provide("toefl_house.command_pages");
 
 	const CONFIG_TYPES = ["blueprint", "policy", "course_map"];
 	const ADMISSION_OUTCOMES = ["Approved", "Conditional", "Deferred", "Rejected"];
-	const TEACHING_SKILLS = ["Speaking & Listening", "Writing & Grammar", "Reading & Vocabulary"];
-	const COMPENSATION_MODELS = ["Fixed Salary", "Skill-Based", "Hybrid"];
+	const DELIVERY_MODES = ["On-site", "Online", "Hybrid"];
+	const CLASS_TRANSITIONS = ["Active", "Completed", "Cancelled"];
+	/* Teaching skills are configured server-side in TH Skill (Active only).
+	 * The client fetches them at page open; if the fetch fails the field
+	 * falls back to a free-text Data input so the server (which authoritatively
+	 * validates the code) remains in control of vocabulary. */
+	let TEACHING_SKILLS = [];
 	const ADMIN_MANAGED_ROLES = [
 		"General Manager", "Academic Manager", "Finance Manager", "Reception",
 		"Placement Author", "Placement Publisher", "Placement Auditor",
@@ -218,9 +223,10 @@ frappe.provide("toefl_house.command_pages");
 			title: "TOEFL House Teaching Scheduling",
 			description: "Create native class, session and skill-assignment facts through guarded commands. The page performs no native list or link lookup.",
 			commands: [
-				{ label: "Create student group", method: "toefl_house.teaching.create_student_group", dispatches: ["create_student_group"], fields: [data("group_name", "Synthetic group name", { reqd: 1 }), data("program", "Program", { reqd: 1 }), data("academic_year", "Academic year", { reqd: 1 }), data("academic_term", "Academic term"), integer("max_strength", "Maximum strength", { reqd: 1 })] },
+				{ label: "Create student group", method: "toefl_house.teaching.create_student_group", dispatches: ["create_student_group"], fields: [data("group_name", "Synthetic group name", { reqd: 1 }), data("program", "Program", { reqd: 1 }), data("academic_year", "Academic year", { reqd: 1 }), data("academic_term", "Academic term"), integer("max_strength", "Maximum strength", { reqd: 1 }), date("class_start_date", "Class start date"), date("class_end_date", "Class end date (blank = use level duration policy)"), select("delivery_mode", "Delivery mode", DELIVERY_MODES, { default: "On-site" }), data("branch", "Branch")] },
+				{ label: "Transition class", method: "toefl_house.teaching.transition_class", dispatches: ["transition_class"], fields: [data("student_group", "Student group", { reqd: 1 }), select("to_status", "New status", CLASS_TRANSITIONS, { reqd: 1 })] },
 				{ label: "Schedule session", method: "toefl_house.teaching.schedule_session", dispatches: ["schedule_session"], fields: [data("student_group", "Student group", { reqd: 1 }), date("schedule_date", "Schedule date", { reqd: 1 }), time("from_time", "From time", { reqd: 1 }), time("to_time", "To time", { reqd: 1 }), data("instructor", "Instructor", { reqd: 1 }), data("room", "Room", { reqd: 1 }), data("course", "Course", { reqd: 1 })] },
-				{ label: "Assign teaching skill", method: "toefl_house.teaching.compensation.assign_teaching_skill", dispatches: ["assign_teaching_skill"], fields: [data("student_group", "Student group", { reqd: 1 }), select("skill", "Skill", TEACHING_SKILLS, { reqd: 1 }), data("instructor", "Instructor", { reqd: 1 }), data("contract", "Instructor contract", { reqd: 1 }), date("effective_start", "Effective start", { reqd: 1 }), date("effective_end", "Effective end"), data("course_schedule", "Course schedule")] },
+				{ label: "Assign teaching skill", method: "toefl_house.teaching.compensation.assign_teaching_skill", dispatches: ["assign_teaching_skill"], fields: [data("student_group", "Student group", { reqd: 1 }), select("skill", "Skill (code)", TEACHING_SKILLS, { reqd: 1, placeholder: "Loading skills…" }), data("instructor", "Instructor", { reqd: 1 }), data("contract", "Instructor contract", { reqd: 1 }), date("effective_start", "Effective start", { reqd: 1 }), date("effective_end", "Effective end"), data("course_schedule", "Course schedule")] },
 				{ label: "End teaching assignment", method: "toefl_house.teaching.compensation.end_teaching_assignment", dispatches: ["end_teaching_assignment"], fields: [data("assignment", "Teaching assignment", { reqd: 1 }), date("effective_end", "Effective end", { reqd: 1 })] },
 			],
 		},
@@ -426,10 +432,21 @@ frappe.provide("toefl_house.command_pages");
 		frappe.msgprint({ title: text(label + " result"), message: resultMarkup(label, result), wide: true });
 	}
 
+	function resolveFields(fields) {
+		// Defer options lookup to open-time so that asynchronously loaded
+		// vocabularies (e.g. TH Skill codes) reflect current configuration.
+		return fields.map((field) => {
+			if (field.fieldname === "skill" && field.fieldtype === "Select") {
+				return { ...field, options: TEACHING_SKILLS.join("\n") || (field.placeholder || "") };
+			}
+			return field;
+		});
+	}
+
 	function runCommand(command) {
 		const dialog = new frappe.ui.Dialog({
 			title: text(command.label),
-			fields: [requestKeyField(), ...command.fields],
+			fields: [requestKeyField(), ...resolveFields(command.fields)],
 			primary_action_label: text("Run command"),
 			primary_action(values) {
 				const args = { request_key: values.request_key };
@@ -517,11 +534,40 @@ frappe.provide("toefl_house.command_pages");
 		return card;
 	}
 
+	function loadActiveSkills() {
+		// Populate the skill select with codes fetched from the server.
+		// A failure leaves the field as a Data entry (the server authoritatively
+		// validates), so the page stays usable offline and never invents skills.
+		frappe.call({
+			method: "toefl_house.teaching.active_skills",
+			callback(response) {
+				const list = (response.message || []).map((r) => r.code);
+				if (list.length) {
+					TEACHING_SKILLS = list;
+					// Patch any already-rendered selects so the user sees options
+					// without needing to reload. Dialogs read options at open time,
+					// so they will already use the fresh list.
+					$("select[data-fieldname='skill']").each((_, el) => {
+						const current = el.value;
+						el.innerHTML = list.map((c) =>
+							`<option value="${escapeText(c)}"${c === current ? " selected" : ""}>${escapeText(c)}</option>`
+						).join("");
+					});
+				}
+			},
+		});
+	}
+
 	function renderActionPage(wrapper, surface) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: text(surface.title), single_column: true });
 		ensureStyleSheet();
 		if (page.main && page.main.addClass) page.main.addClass("th-page");
 		renderHeader(page, surface);
+
+		// Load server-configured vocabularies before rendering action cards so
+		// that the first opened dialog can populate selects correctly. Skills
+		// are the only config-driven select on the command pages today.
+		if (surface.role === "Teaching Scheduler") loadActiveSkills();
 
 		const block = section(page.body, text("Available actions"));
 		const grid = $("<div class='th-grid'></div>").appendTo(block);

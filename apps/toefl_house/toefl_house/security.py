@@ -44,6 +44,7 @@ KIND_ROLES = {
     "convert_applicant": "Admission Approver",
     "enroll_in_program": "Enrollment Officer",
     "create_student_group": "Teaching Scheduler",
+    "transition_class": "Teaching Scheduler",
     "schedule_session": "Teaching Scheduler",
     "record_attendance": "Attendance Recorder",
     "issue_tuition_fees": "Finance Officer",
@@ -127,6 +128,7 @@ def enrollment_command_active():
 
 TEACHING_COMMANDS = {
     "create_student_group": "Student Group",
+    "transition_class": "Student Group",
     "schedule_session": "Course Schedule",
     "record_attendance": "Student Attendance",
 }
@@ -137,6 +139,17 @@ def teaching_command_active(doctype):
     context = _CONTEXT.get()
     return bool(context and context[1] == frappe.session.user
                 and TEACHING_COMMANDS.get(context[0]) == doctype)
+
+
+def active_command_kind():
+    """Return the kind name of the currently active command, or None.
+
+    Public, read-only inspection; callers use this to vary invariants within
+    a shared guard (e.g. transition_class is the only Student Group command
+    that may mutate th_class_status after insert).
+    """
+    context = _CONTEXT.get()
+    return context[0] if context and context[1] == frappe.session.user else None
 
 
 FINANCE_COMMANDS = {

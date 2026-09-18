@@ -41,7 +41,7 @@ start a deferred academic domain. Production remains **REJECT**.
 [PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md) is the authoritative revised placement model: managed bank, constrained randomized blueprints, six skills, digital/physical/hybrid delivery and objective/manual marking. It supersedes earlier narrow placement-slice restrictions, not native ownership or the production REJECT. M01–M05 consolidate remaining business policy approvals. Implementation is not authorized. Earlier architecture/source-review metadata records historical snapshots, not a new validation of this revision.
 
 
-Date: 2026-09-16 · Active branch: `arena/01a0b084-tofel-house-erp`. **Review record, not production authorization.** Selected Frappe + ERPNext + Education + HRMS/payroll foundation unchanged. Production acceptance remains **REJECT**.
+Date: 2026-09-16 · Active branch: `arena/01a0b3a7-tofel-house-erp`. **Review record, not production authorization.** Selected Frappe + ERPNext + Education + HRMS/payroll foundation unchanged. Production acceptance remains **REJECT**.
 
 ## Mandatory placement meaning
 

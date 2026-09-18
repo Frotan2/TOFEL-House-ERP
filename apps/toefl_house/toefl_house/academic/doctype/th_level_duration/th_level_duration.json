@@ -38,7 +38,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "The date from which this duration governs new activity. Historical records keep the version that was effective when they were created.",
+   "description": "The date from which this duration policy governs new class planning (default end-date suggestion). Historical class instances, enrollments and issued fees keep their own operational dates and the duration version that governed when they were created; changing this policy never rewrites them.",
    "fieldname": "effective_from",
    "fieldtype": "Date",
    "in_list_view": 1,

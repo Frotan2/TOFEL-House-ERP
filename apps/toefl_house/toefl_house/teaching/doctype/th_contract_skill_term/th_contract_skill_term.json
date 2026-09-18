@@ -16,10 +16,11 @@
   ],
   "fields": [
     {
+      "description": "The skill area this contract term covers. Only Active TH Skill masters may be added to new contracts.",
       "fieldname": "skill",
       "label": "Skill",
-      "fieldtype": "Select",
-      "options": "Speaking & Listening\nWriting & Grammar\nReading & Vocabulary",
+      "fieldtype": "Link",
+      "options": "TH Skill",
       "reqd": 1,
       "in_list_view": 1
     },

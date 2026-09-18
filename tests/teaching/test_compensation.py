@@ -12,11 +12,12 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps/toefl_house"))
-from toefl_house.policy import (ADJUSTMENT_TYPES, COMPENSATION_MODELS, TEACHING_SKILLS,
-                                compute_skill_payable, validate_compensation_model,
-                                validate_effective_window, validate_optional_amount,
-                                validate_payable_quantity, validate_positive_amount,
-                                validate_skill, windows_overlap)
+from toefl_house.policy import (ADJUSTMENT_TYPES, CLASS_STATUSES, COMPENSATION_MODELS,
+                                DELIVERY_MODES, compute_skill_payable,
+                                validate_class_status, validate_compensation_model,
+                                validate_delivery_mode, validate_effective_window,
+                                validate_optional_amount, validate_payable_quantity,
+                                validate_positive_amount, validate_skill, windows_overlap)
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "apps/toefl_house/toefl_house"
@@ -28,6 +29,7 @@ DOCTYPES = {
     "TH Contract Skill Term": APP / "teaching/doctype/th_contract_skill_term/th_contract_skill_term.json",
     "TH Contract Adjustment": APP / "teaching/doctype/th_contract_adjustment/th_contract_adjustment.json",
     "TH Teaching Assignment": APP / "teaching/doctype/th_teaching_assignment/th_teaching_assignment.json",
+    "TH Skill": APP / "teaching/doctype/th_skill/th_skill.json",
 }
 COMMANDS = {
     "create_teaching_contract": "Finance Officer",
@@ -39,12 +41,18 @@ COMMANDS = {
 
 
 class SkillVocabularyTests(unittest.TestCase):
-    def test_owner_skill_areas_only(self):
-        self.assertEqual(TEACHING_SKILLS, ("Speaking & Listening", "Writing & Grammar",
-                                           "Reading & Vocabulary"))
-        for skill in TEACHING_SKILLS:
-            self.assertEqual(validate_skill(skill), skill)
-        for bad in ("speaking & listening", "Listening", "", None, 7):
+    """Skill is a configurable TH Skill master (not a hard-coded list).
+
+    The pure validate_skill only bounds the reference as a plausible name;
+    Active/Retired lifecycle is enforced at the command layer against the
+    database. The canonical three skills are seeded at install (codes SL, WG,
+    RV with the legacy titles) so no hard-coded list lives in policy.py.
+    """
+
+    def test_validate_skill_bounds_reference(self):
+        for good in ("SL", "WG", "RV", "SPEAKING-LISTENING"):
+            self.assertEqual(validate_skill(good), good)
+        for bad in ("", None, 7, "x" * 141):
             with self.assertRaises(ValueError):
                 validate_skill(bad)
 
@@ -55,6 +63,17 @@ class SkillVocabularyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_compensation_model("Per Class")
         self.assertEqual(ADJUSTMENT_TYPES, ("Bonus", "Deduction"))
+
+    def test_delivery_mode_and_class_status_enums(self):
+        """Delivery mode is an operational class property, not a separate Program."""
+        self.assertEqual(DELIVERY_MODES, ("On-site", "Online", "Hybrid"))
+        for mode in DELIVERY_MODES:
+            self.assertEqual(validate_delivery_mode(mode), mode)
+        with self.assertRaises(ValueError):
+            validate_delivery_mode("In-Person")
+        self.assertEqual(CLASS_STATUSES, ("Planned", "Active", "Completed", "Cancelled"))
+        for status in CLASS_STATUSES:
+            self.assertEqual(validate_class_status(status), status)
 
 
 class AmountTests(unittest.TestCase):
@@ -201,11 +220,20 @@ class DocTypeShapeTests(unittest.TestCase):
             self.assertEqual(bool(data.get("istable")), child, name)
             if child:
                 self.assertEqual(data["permissions"], [])
+            elif name == "TH Skill":
+                # Configuration master: Course Owner may create/update; operational
+                # roles only read. Delete is forbidden for everyone (asserted separately).
+                self.assertEqual(data["autoname"], "field:code")
+                roles_with_write = {row["role"] for row in data["permissions"] if row.get("write")}
+                self.assertEqual(roles_with_write, {"Course Owner"})
+                for row in data["permissions"]:
+                    self.assertFalse(row.get("delete"), "no role may delete a skill")
             else:
+                # Operational TH records are command-only — no direct write via Desk.
                 self.assertEqual(data["autoname"], "hash")
                 for row in data["permissions"]:
                     self.assertNotIn("write", {k for k, v in row.items() if v == 1 and k != "role"},
-                                     "no role may hold direct write")
+                                     f"no role may hold direct write on {name}")
             fields = {f["fieldname"] for f in data["fields"]}
             if name == "TH Instructor Contract":
                 self.assertLessEqual(
@@ -224,11 +252,33 @@ class DocTypeShapeTests(unittest.TestCase):
                 self.assertLessEqual(
                     {"adjustment_type", "amount", "effective_date", "approver", "reason"}, fields)
 
-    def test_skill_selects_use_owner_vocabulary(self):
+    def test_skill_fields_are_links_to_th_skill_master(self):
+        """Skill is a configurable master, not a hard-coded Select list."""
         for name in ("TH Contract Skill Term", "TH Teaching Assignment"):
             data = json.loads(DOCTYPES[name].read_text())
             skill = next(f for f in data["fields"] if f["fieldname"] == "skill")
-            self.assertEqual(skill["options"].split("\n"), list(TEACHING_SKILLS))
+            self.assertEqual(skill["fieldtype"], "Link", f"{name} skill must be a Link")
+            self.assertEqual(skill["options"], "TH Skill", f"{name} skill must link to TH Skill")
+            self.assertTrue(skill.get("reqd"))
+
+    def test_th_skill_master_shape(self):
+        """TH Skill is a configuration master with stable code identity and Active/Retired lifecycle."""
+        data = json.loads(DOCTYPES["TH Skill"].read_text())
+        self.assertEqual(data["name"], "TH Skill")
+        self.assertEqual(data["module"], "Teaching")
+        self.assertFalse(data.get("istable"))
+        fields = {f["fieldname"]: f for f in data["fields"]}
+        self.assertEqual(fields["code"]["fieldtype"], "Data")
+        self.assertTrue(fields["code"].get("unique"))
+        self.assertTrue(fields["code"].get("set_only_once"))
+        self.assertEqual(fields["status"]["fieldtype"], "Select")
+        self.assertIn("Active", fields["status"]["options"])
+        self.assertIn("Retired", fields["status"]["options"])
+        # No role may delete configuration (track_changes on, no delete perm).
+        self.assertTrue(data.get("track_changes"))
+        for row in data["permissions"]:
+            self.assertNotIn("delete", {k for k, v in row.items() if v == 1 and k != "role"},
+                             "no role may delete a skill")
 
     def test_controller_invariants_wired(self):
         controllers = (APP / "controllers.py").read_text()

@@ -1488,6 +1488,37 @@ def main():
             frappe.db.set_value('Company','SYN Teaching House','default_holiday_list','SYN-HOLIDAYS-2026')
             frappe.db.set_single_value('Global Defaults','default_company','SYN Teaching House')
             return {'rooms':rooms,'instructors':instructors,'company':'SYN Teaching House'}
+        def traced(fn):
+            # Diagnostics: name the exact statement of a failure in one hosted
+            # cycle instead of guessing (job logs are unreachable; only the
+            # exception message reaches the report).
+            def wrapped():
+                try:return fn()
+                except Exception as exc:
+                    import traceback as _tb
+                    frames=[f for f in _tb.extract_tb(exc.__traceback__) if f.filename.split('/')[-1] not in ('database.py','cursors.py','connections.py','base.py')]
+                    frames=" <- ".join(f.filename.split('/')[-1]+':'+str(f.lineno)+':'+f.name for f in frames[-6:])
+                    raise AssertionError(f'{type(exc).__name__}: {exc} @ {frames}') from exc
+            return wrapped
+        def class_fields_present():
+            # Item 1: the Student Group class-fact Custom Fields must exist on
+            # the migrated site with the pinned shape (fields, types, options,
+            # read-only presentation).
+            meta=frappe.get_meta('Student Group')
+            fields={df.fieldname:df for df in meta.fields}
+            want=('th_class_start_date','th_class_end_date','th_class_status','th_delivery_mode','th_branch')
+            missing=[f for f in want if f not in fields]
+            assert not missing,('custom fields missing on migrated site',missing)
+            types={f:fields[f].fieldtype for f in want}
+            assert types=={'th_class_start_date':'Date','th_class_end_date':'Date','th_class_status':'Select','th_delivery_mode':'Select','th_branch':'Link'},types
+            assert 'Online' in (fields['th_delivery_mode'].options or '') and 'Hybrid' in (fields['th_delivery_mode'].options or '')
+            for opt in ('Planned','Active','Completed','Cancelled'):
+                assert opt in (fields['th_class_status'].options or ''),opt
+            assert fields['th_branch'].options=='Branch'
+            ro={f:int(fields[f].read_only or 0) for f in want}
+            assert all(ro.values()),ro
+            return {'student_group_custom_fields':list(want),'fieldtypes':types,'read_only':ro}
+        check('teaching-class-fields-present',class_fields_present)
         tea_cat=check('teaching-native-catalog',teaching_catalog)
         def second_intake():
             rel=release_for('candidate9','teaching_pipe_a')
@@ -1512,26 +1543,73 @@ def main():
         check('teaching-group-non-synthetic-name-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_badname_000000001','REAL-CLASS-1',cat['program'],cat['academic_year'],'',2))))
         check('teaching-group-unbounded-capacity-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_badsized_0000001',GRP_A,cat['program'],cat['academic_year'],'',0))))
         check('teaching-group-unknown-year-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_badyear_0000001',GRP_A,cat['program'],'SYN-AY-NOPE','',2))))
-        check('teaching-group-empty-roster-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_empty_000000001',GRP_A,cat['program'],'SYN-AY-2027','',2))))
-        check('teaching-group-over-capacity-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_overcap_0000001',GRP_A,cat['program'],cat['academic_year'],'',1))))
-        groupA=check('teaching-group-happy-path',lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_a_key_00001',GRP_A,cat['program'],cat['academic_year'],'',2)))
+        check('teaching-group-empty-roster-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_empty_000000001',GRP_A,cat['program'],'SYN-AY-2027','',2,'2026-09-01','2026-12-31'))))
+        check('teaching-group-over-capacity-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_overcap_0000001',GRP_A,cat['program'],cat['academic_year'],'',1,'2026-09-01','2026-12-31'))))
+        # TH Level Duration is a planning default only: with no governing
+        # duration for the program's level, creation fails closed rather than
+        # inventing an end date.
+        check('teaching-group-no-duration-policy-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_nodur_0000000001',GRP_A,cat['program'],cat['academic_year'],'',2,'2026-09-01'))),'No governing duration policy')
+        groupA=check('teaching-group-happy-path',lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_a_key_00001',GRP_A,cat['program'],cat['academic_year'],'',2,'2026-09-01','2026-12-31')))
         assert groupA['name']==GRP_A and groupA['students']==2
         assert groupA['roster']==sorted([converted['native_student'],second['student']])
         def group_replay():
             count=frappe.db.count(api.AUDIT)
-            value=as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_a_key_00001',GRP_A,cat['program'],cat['academic_year'],'',2))
+            value=as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_a_key_00001',GRP_A,cat['program'],cat['academic_year'],'',2,'2026-09-01','2026-12-31'))
             assert value==groupA and frappe.db.count(api.AUDIT)==count
             assert frappe.db.count('Student Group',{'student_group_name':GRP_A})==1
             return {'same_result':True,'one_group':True}
         check('teaching-group-idempotent-replay',group_replay)
-        check('teaching-group-duplicate-name-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_dup_0000001',GRP_A,cat['program'],cat['academic_year'],'',2))))
+        check('teaching-group-duplicate-name-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_dup_0000001',GRP_A,cat['program'],cat['academic_year'],'',2,'2026-09-01','2026-12-31'))))
         def group_direct_denied():
             frappe.set_user('Administrator')
             return denied(lambda:frappe.get_doc(dict(doctype='Student Group',student_group_name='SYN-GRP-DIRECT-1',
                 group_based_on='Batch',program=cat['program'],academic_year=cat['academic_year'],max_strength=2)).insert(ignore_permissions=True))
         check('teaching-group-direct-write-denied',group_direct_denied)
-        groupB=check('teaching-second-group',lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_b_key_00001',GRP_B,cat['program'],cat['academic_year'],'',2)))
-        assert groupB['students']==2
+        groupB=check('teaching-second-group',lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_b_key_00001',GRP_B,cat['program'],cat['academic_year'],'',2,'2026-09-01','2026-12-31')))
+        assert groupB['students']==2 and groupA['class_status']=='Planned' and groupB['class_status']=='Planned'
+        # Class state machine: groups create in Planned. Sessions may only be
+        # scheduled for Active classes, and only transition_class may advance
+        # the status (guard_enforce_class_fact_invariants blocks direct writes).
+        check('teaching-transition-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:tea.transition_class('tea_trans_out_0001',GRP_A,'Active'))))
+        check('teaching-transition-recorder-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.transition_class('tea_trans_rec_0001',GRP_A,'Active'))))
+        check('teaching-transition-invalid-target-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_bad_0001',GRP_A,'Completed'))))
+        check('teaching-session-before-activate-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_planned_deny_01',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))),'can only be scheduled for Active classes (current status: Planned)')
+        actA=check('teaching-transition-groupA-active',lambda:as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_a_key_001',GRP_A,'Active')))
+        assert actA['after_status']=='Active' and actA['before_status']=='Planned'
+        actB=check('teaching-transition-groupB-active',lambda:as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_b_key_001',GRP_B,'Active')))
+        assert actB['after_status']=='Active' and actB['before_status']=='Planned'
+        # Class-fact fields (dates/delivery/branch/status) are immutable after
+        # insert except th_class_status via transition_class, and that even for
+        # Administrator/ignore_permissions. REST/Python/client.set_value denials
+        # are exercised in the A13 containment section below; these probes pin
+        # the controller guard on in-process save paths.
+        def class_fact_save_denied():
+            # The Desk/form save path and the generic RPC write path both run
+            # the document controller; outside a teaching command the guard
+            # denies even for Administrator with ignore_permissions. (Direct
+            # DB access bypasses doc_events natively - documented A13 boundary,
+            # Production hardening disables the DB console.)
+            frappe.set_user('Administrator')
+            probed={}
+            for field,value in (('th_delivery_mode','Online'),('th_class_start_date','2026-09-01'),
+                                ('th_class_end_date','2027-06-30'),('th_class_status','Cancelled')):
+                doc=frappe.get_doc('Student Group',GRP_A);doc.set(field,value)
+                try:
+                    doc.save(ignore_permissions=True)
+                    raise AssertionError((field,'protected class fact edit unexpectedly saved'))
+                except (frappe.ValidationError,frappe.PermissionError) as exc:
+                    assert 'requires an authorized teaching command' in str(exc),(field,str(exc)[:200])
+                assert frappe.db.get_value('Student Group',GRP_A,field)!=(value if field!='th_class_status' else 'Cancelled'),(field,'denied edit persisted')
+                probed[field]='guard denied (form/RPC save path)'
+            setv=frappe.get_attr('frappe.client.set_value')
+            try:
+                setv(doctype='Student Group',name=GRP_A,fieldname='th_delivery_mode',value='Hybrid')
+                raise AssertionError('frappe.client.set_value unexpectedly succeeded')
+            except (frappe.ValidationError,frappe.PermissionError) as exc:
+                assert 'requires an authorized teaching command' in str(exc),str(exc)[:200]
+            assert frappe.db.get_value('Student Group',GRP_A,'th_delivery_mode')=='On-site','denied RPC set_value persisted'
+            return {'class_fact_saves_denied':probed,'rpc_set_value_denied':'th_delivery_mode'}
+        check('teaching-class-fact-save-denied',traced(class_fact_save_denied))
         check('teaching-session-recorder-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.schedule_session('tea_rec_sched_0000001',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))))
         check('teaching-session-inverted-window-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_badwindow_0000001',GRP_A,'2026-09-21','10:30:00','09:00:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))))
         check('teaching-session-outside-year-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_baddate_000000001',GRP_A,'2027-01-05','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))))
@@ -1557,6 +1635,35 @@ def main():
                 schedule_date='2026-09-24',from_time='09:00:00',to_time='10:00:00')).insert(ignore_permissions=True))
         check('teaching-session-direct-write-denied',session_direct_denied)
         schedB=check('teaching-second-session',lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_b_key_00001',GRP_B,'2026-09-22','13:00:00','14:30:00',INS_TWO,ROOM_B,'SYN-COURSE-CORE')))
+        # Completed and Cancelled are terminal; sessions must not schedule on
+        # them either. Activate -> Complete and Planned -> Cancel transitions
+        # are exercised on fresh synthetic groups so the production groups stay
+        # Active for the attendance/audit chain.
+        GRP_C='SYN-GRP-COMPL-1';GRP_D='SYN-GRP-CANCEL-1'
+        as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_c_key_001',GRP_C,cat['program'],cat['academic_year'],'',2,'2026-09-01','2026-12-31'))
+        as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_c_key_001',GRP_C,'Active'))
+        completed=as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_c_to_complete_1',GRP_C,'Completed'))
+        assert completed['after_status']=='Completed'
+        check('teaching-session-completed-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_compl_deny_01',GRP_C,'2026-09-23','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))),'can only be scheduled for Active classes (current status: Completed)')
+        check('teaching-transition-completed-terminal-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_compl_back_01',GRP_C,'Active'))))
+        as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_d_key_001',GRP_D,cat['program'],cat['academic_year'],'',2,'2026-09-01','2026-12-31'))
+        cancelled=as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_d_key_001',GRP_D,'Cancelled'))
+        assert cancelled['after_status']=='Cancelled'
+        check('teaching-session-cancelled-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_canc_deny_01',GRP_D,'2026-09-23','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))),'can only be scheduled for Active classes (current status: Cancelled)')
+        check('teaching-transition-cancelled-terminal-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_canc_back_01',GRP_D,'Active'))))
+        # TH Skill canonical masters SL/WG/RV are seeded Active by install.py.
+        # Code stability, no-rename/no-delete and the one-way retirement gate
+        # are enforced by the controller and proven here and in
+        # teaching-retired-skill-runtime-policy (after the compensation flow).
+        def skill_seed_probes():
+            frappe.set_user('Administrator')
+            assert frappe.db.exists('DocType','TH Skill'),('TH Skill doctype missing on migrated site')
+            for code,title in (('SL','Speaking & Listening'),('WG','Writing & Grammar'),('RV','Reading & Vocabulary')):
+                assert frappe.db.exists('TH Skill',code),(code,'canonical seed missing')
+                row=frappe.db.get_value('TH Skill',code,['title','status'],as_dict=True)
+                assert row.title==title and row.status=='Active',(code,row)
+            return {'seeded_codes':['SL','WG','RV'],'seeded_titles':{'SL':'Speaking & Listening','WG':'Writing & Grammar','RV':'Reading & Vocabulary'}}
+        check('teaching-skill-seeds-present',skill_seed_probes)
         def outsider_student():
             frappe.set_user('Administrator')
             return frappe.get_doc(dict(doctype='Student',first_name='SYNTHETIC Outsider',
@@ -2169,12 +2276,19 @@ def main():
         # --- Teaching operations over HTTP: routes, CSRF, CRUD containment, races ---
         def tpost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.teaching.'+method,json=payload,timeout=40)
         GRP_HTTP='SYN-GRP-HTTP-1'
-        http_grp_payload=dict(request_key='http_tea_group_0000001',group_name=GRP_HTTP,program=cat['program'],academic_year=cat['academic_year'],max_strength=3)
+        http_grp_payload=dict(request_key='http_tea_group_0000001',group_name=GRP_HTTP,program=cat['program'],academic_year=cat['academic_year'],max_strength=3,class_start_date='2026-09-01',class_end_date='2026-12-31')
         def http_group():
             r=tpost('teaching_scheduler','create_student_group',http_grp_payload);assert r.status_code==200,f'group HTTP {r.status_code} {r.text[:200]}'
             return r.json()['message']
         httpgroup=check('http-teaching-group-positive',http_group)
-        assert httpgroup['students']==3
+        assert httpgroup['students']==3 and httpgroup['class_status']=='Planned'
+        def http_activate():
+            r=tpost('teaching_scheduler','transition_class',dict(request_key='http_tea_trans_0001',student_group=GRP_HTTP,to_status='Active'))
+            assert r.status_code==200,f'transition HTTP {r.status_code} {r.text[:200]}'
+            value=r.json()['message']
+            assert value['after_status']=='Active',value
+            return value
+        check('http-teaching-transition-active',http_activate)
         check('http-teaching-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.teaching.create_student_group',headers={'Host':'placement-test.localhost'},json=http_grp_payload,timeout=30)))
         check('http-teaching-unrelated-role-denied',lambda:http_denied(tpost('outsider','create_student_group',dict(http_grp_payload,request_key='http_tea_out_000000001'))))
         check('http-teaching-wrong-role-denied',lambda:http_denied(tpost('attendance_recorder','create_student_group',dict(http_grp_payload,request_key='http_tea_rec_000000001'))))
@@ -2189,6 +2303,12 @@ def main():
         check('http-teaching-csrf-negative-with-positive-control',http_tea_csrf)
         grp_url=base+'/api/resource/'+quote('Student Group',safe='')+'/'+httpgroup['name']
         check('http-teaching-direct-crud-mutation-denied',lambda:http_denied(sessions['teaching_scheduler'].put(grp_url,json={'max_strength':99},timeout=30)))
+        # Item 8: a REST write against a protected class fact is refused (the
+        # teaching-scheduler role holds no native Student Group CRUD, and the
+        # controller guard denies the save path for any role, so the write is
+        # rejected regardless of which layer stops it first).
+        check('http-teaching-protected-fact-put-denied',lambda:http_denied(sessions['teaching_scheduler'].put(grp_url,json={'th_delivery_mode':'Online'},timeout=30)))
+        assert frappe.db.get_value('Student Group',GRP_HTTP,'th_delivery_mode')=='On-site','denied REST class-fact write persisted'
         def http_grp_idem():
             r0=tpost('teaching_scheduler','create_student_group',http_grp_payload)
             assert r0.status_code==200,f'group replay HTTP {r0.status_code} {r0.text[:200]}'
@@ -2395,18 +2515,6 @@ def main():
                     'placement_item':'SYN-PLACEMENT-FEE','fee_structure':fs_name,
                     'receivable':comp.default_receivable_account,'payer':payers['one'],
                     'payer_waiver':payers['two'],'before':fin_before}
-        def traced(fn):
-            # Diagnostics: name the exact statement of a failure in one hosted
-            # cycle instead of guessing (job logs are unreachable; only the
-            # exception message reaches the report).
-            def wrapped():
-                try:return fn()
-                except Exception as exc:
-                    import traceback as _tb
-                    frames=[f for f in _tb.extract_tb(exc.__traceback__) if f.filename.split('/')[-1] not in ('database.py','cursors.py','connections.py','base.py')]
-                    frames=" <- ".join(f.filename.split('/')[-1]+':'+str(f.lineno)+':'+f.name for f in frames[-6:])
-                    raise AssertionError(f'{type(exc).__name__}: {exc} @ {frames}') from exc
-            return wrapped
         fin=check('finance-native-catalog',traced(finance_catalog))
         def case_of(label):
             # Cases are autonamed; the request key is only the receipt identity.
@@ -3074,7 +3182,7 @@ def main():
         # fixture data; no policy value is invented.
         from toefl_house.teaching import compensation as tcomp
         CON='TH Instructor Contract';ASSIGN='TH Teaching Assignment';ADS='Additional Salary'
-        SK1,SK2,SK3='Speaking & Listening','Writing & Grammar','Reading & Vocabulary'
+        SK1,SK2,SK3='SL','WG','RV'
         def comp_fixtures():
             frappe.set_user('Administrator')
             comp='SYN Teaching House'
@@ -3092,7 +3200,7 @@ def main():
             cur=frappe.db.get_value('Company',comp,'default_currency') or 'USD'
             if not frappe.db.exists('Gender','Other'):
                 frappe.get_doc(dict(doctype='Gender',gender='Other')).insert()
-            for label in ('One','Two'):
+            for label in ('One','Two','Temp'):
                 ename=frappe.db.get_value('Employee',{'employee_name':'SYN Employee '+label},'name')
                 if not ename:
                     # pinned erpnext 4048fb70: Employee autoname naming_series,
@@ -3114,6 +3222,21 @@ def main():
                         salary_structure='SYN Teaching Structure',from_date='2026-01-01',
                         company=comp,currency=cur,base=0))
                     ssa.insert();ssa.submit()
+            # Instructor->Employee linkage (item 10): native Education
+            # Instructor carries an employee Link; bind each contract-holding
+            # instructor to their employee so the payroll-integrity cross-check
+            # in create_teaching_contract resolves. 'SYN Instructor Left' shares
+            # employee One (its fixed contract is issued against One); the
+            # Temp pair exercises the inactive-employee refusal.
+            for label,iname in (('One',ins['One']),('Two',ins['Two']),('Left',ins['Left'])):
+                frappe.db.set_value('Instructor',iname,'employee',emps[label])
+            tname=frappe.db.get_value('Instructor',{'instructor_name':'SYN Instructor Temp'},'name')
+            if not tname:
+                tname=frappe.get_doc(dict(doctype='Instructor',instructor_name='SYN Instructor Temp',
+                    naming_series='EDU-INS-.YYYY.-',status='Active',employee=emps['Temp'])).insert().name
+            else:
+                frappe.db.set_value('Instructor',tname,'employee',emps['Temp'])
+            ins['Temp']=tname
             frappe.db.commit()
             return dict(company=comp,earning='SYN Teaching Pay',deduction='SYN Contract Deduction',
                         emps=emps,ins=ins)
@@ -3138,6 +3261,25 @@ def main():
             fixed=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
                 'tc_contract_left_00001',cfx['ins']['Left'],cfx['emps']['One'],'Fixed Salary',
                 'SYN native salary structure','Monthly','2026-01-01'))
+            # Instructor->Employee integrity (item 10, runtime): the employee
+            # must be the one linked on the native Instructor record, otherwise
+            # payroll would pay the wrong person.
+            assert unavailable(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_bad_employee_0000001',cfx['ins']['One'],cfx['emps']['Two'],'Skill-Based',
+                    'SYN basis','Monthly','2026-01-01')),"does not match the instructor's HRMS employee record")
+            # An inactive employee cannot hold a contract: flip the Temp
+            # employee to Left (direct DB write mirrors the HRMS exit flow at
+            # the data layer) and require refusal, then restore.
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Employee',cfx['emps']['Temp'],'status','Left')
+            try:
+                assert unavailable(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                    'tc_inactive_emp_000001',cfx['ins']['Temp'],cfx['emps']['Temp'],'Skill-Based',
+                    'SYN basis','Monthly','2026-01-01')),'Only active employees can hold teaching contracts')
+            finally:
+                frappe.db.set_value('Employee',cfx['emps']['Temp'],'status','Active')
+                frappe.db.commit()
+                frappe.set_user('Administrator')
             # only the finance side may create contracts
             assert denied(lambda:as_user('teaching_scheduler',lambda:tcomp.create_teaching_contract(
                 'tc_denied_sched_00001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
@@ -3171,6 +3313,7 @@ def main():
             frappe.db.commit()
             return {'contracts':{'one':r1['name'],'two':r2['name'],'fixed':fixed['name']},
                     'scheduler_contract_denied':True,
+                    'employee_mismatch_denied':True,'inactive_employee_denied':True,
                     'outsider_contract_denied':True,'tamper_denied':True,
                     'scheduler_contract_read_denied':True}
         cauth=check('teaching-compensation-contract-authority',contract_authority)
@@ -3306,6 +3449,50 @@ def main():
                     'receipt_idempotent':True,'salary_slips_untouched':True,
                     'audit_chain_ref_fields':True}
         check('teaching-compensation-calculation',compensation_calculation)
+        def retired_skill_runtime():
+            # Item 9 (runtime): retiring a configured skill preserves every
+            # historical reference and keeps the record operable, while new
+            # contracts/assignments referencing it are refused and the
+            # retirement is one-way (no reactivation).
+            frappe.set_user('Administrator')
+            sk=frappe.get_doc('TH Skill','RV')
+            sk.status='Retired'
+            sk.flags.ignore_permissions=True
+            sk.save(ignore_permissions=True)
+            assert frappe.db.get_value('TH Skill','RV','status')=='Retired'
+            # Historical facts remain readable and operable
+            hist=frappe.db.get_value(ASSIGN,afacts['assignments']['a3'],['skill','student_group','effective_end'],as_dict=True)
+            assert hist.skill=='RV' and hist.student_group=='SYN-GRP-MAIN-2',(afacts['assignments']['a3'],hist)
+            term=frappe.db.get_all('TH Contract Skill Term',filters={'parent':cauth['contracts']['two'],'parenttype':CON,'skill':'RV'},fields=['name','rate'])
+            assert term and float(term[0].rate)==15,(cauth['contracts']['two'],term)
+            ended3=as_user('teaching_scheduler',lambda:tcomp.end_teaching_assignment(
+                'tc_end_three_hist_01',afacts['assignments']['a3'],'2026-09-30'))
+            assert ended3['effective_end']=='2026-09-30'
+            # Retirement is one-way
+            assert denied(lambda:(lambda x:(x.__setattr__('status','Active'),x.save(ignore_permissions=True)))(
+                frappe.get_doc('TH Skill','RV'))),('retired skill was reactivated')
+            frappe.set_user('Administrator')
+            # New contract work is refused
+            assert unavailable(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_retire_contract_0001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
+                'SYN retired skill probe','Monthly','2027-06-01','2027-06-30','',
+                '',[dict(skill='RV',unit_of_payment='SYN Session',rate=5,payable_quantity=5)],[])),
+                'is retired; only Active skills')
+            # New assignment work is refused
+            assert unavailable(lambda:as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                'tc_retire_assign_0001','SYN-GRP-COMPL-1','RV',cfx['ins']['Two'],
+                cauth['contracts']['two'],'2026-09-01')),'is retired; only Active skills')
+            # Unknown skill codes are refused too (the master is the vocabulary)
+            assert unavailable(lambda:as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                'tc_unknown_skill_00001',cfx['ins']['One'],cfx['emps']['One'],'Skill-Based',
+                'SYN unknown skill probe','Monthly','2027-07-01','2027-07-31','',
+                '',[dict(skill='SYN-NOPE',unit_of_payment='SYN Session',rate=5,payable_quantity=5)],[])),
+                'Unknown skill')
+            frappe.db.commit()
+            return {'historical_assignment_valid':True,'historical_contract_term_valid':True,
+                    'retirement_one_way':True,'new_contract_denied':True,
+                    'new_assignment_denied':True,'unknown_skill_denied':True}
+        check('teaching-retired-skill-runtime-policy',traced(retired_skill_runtime))
         # --- D3 correction framework (owner: "framework approved; exact
         # terms later"). Fail-closed until a policy exists; approval terms
         # are fixture configuration, not invented policy. The money

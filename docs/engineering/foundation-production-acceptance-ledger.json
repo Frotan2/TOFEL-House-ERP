@@ -120,8 +120,8 @@
   "risk_acceptance_granted": false,
   "architecture_release_boundary": "Option 2 selected as maintenance direction; baseline is qualification-only and all current release gates remain unchanged.",
   "active_branch_qualification": {
-    "date": "2026-09-17",
-    "branch": "arena/01a0b084-tofel-house-erp",
+    "date": "2026-09-18",
+    "branch": "arena/01a0b3a7-tofel-house-erp",
     "classification": "hosted_synthetic_qualification_only",
     "hosted_execution_state": "NOT_EXECUTED_ON_THIS_BRANCH",
     "rotated_from": "arena/01a0aef4-tofel-house-erp",
@@ -132,9 +132,9 @@
     "phase2_gate_passed": false,
     "security_gate_passed": false,
     "product_implementation_authorized": false,
-    "qualification_scope": "No hosted workflow has run on this branch yet. The absence is explicit and fail-closed: tools/foundation/d8_validate.py rejects any run, check, commit or report identifier attached to this block, so no earlier branch's execution can be re-labelled as this branch's. Re-execute the five named hosted workflows on this branch to replace this block with observed results.",
-    "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT. Until the hosted workflows are re-executed here, every hosted run cited in this repository is historical provenance from an earlier session branch. Production stays REJECT and D8 stays BLOCKED regardless.",
-    "supersedes": "arena/01a0aef4-tofel-house-erp"
+    "qualification_scope": "No hosted workflow has run on this branch yet. The absence is explicit and fail-closed: tools/foundation/d8_validate.py rejects any run, check, commit or report identifier attached to this block, so no earlier branch's execution can be re-labelled as this branch's. Re-execute the named hosted workflows on this branch to replace this block with observed results.",
+    "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT. Until hosted workflows are re-executed here, every hosted run cited in this repository is historical provenance from an earlier session branch. Production stays REJECT and D8 stays BLOCKED regardless.",
+    "supersedes": "arena/01a0b084-tofel-house-erp"
   },
   "prior_active_branch_provenance": {
     "date": "2026-09-17",
@@ -796,10 +796,10 @@
     }
   },
   "last_rotation": {
-    "date": "2026-09-17",
-    "active_branch": "arena/01a0b084-tofel-house-erp",
-    "rotated_from": "arena/01a0aef4-tofel-house-erp",
-    "effect": "Branch-boundary rotation only. No gate changed state, no hosted run was re-executed or re-labelled, and the active branch carries no hosted evidence: hosted_execution_state is NOT_EXECUTED_ON_THIS_BRANCH with no run, check or report identity, enforced fail-closed by the D8 validator and its tests."
+    "date": "2026-09-18",
+    "active_branch": "arena/01a0b3a7-tofel-house-erp",
+    "rotated_from": "arena/01a0b084-tofel-house-erp",
+    "effect": "Branch-boundary rotation for ERP semantic reconciliation work. No gate changed state, no hosted run was re-executed or re-labelled, and the active branch carries no hosted evidence: hosted_execution_state is NOT_EXECUTED_ON_THIS_BRANCH with no run, check or report identity, enforced fail-closed by the D8 validator and its tests."
   },
   "older_active_branch_provenance": {
     "date": "2026-09-16",

@@ -10,7 +10,7 @@
 > it conflicts. No implementation authorization or production approval is granted.
 
 
-Date: 2026-09-16 · Active branch: `arena/01a0b084-tofel-house-erp`. Contract status: **authoritative architecture specification; not production authorization**. Decision authority: [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md) plus the canonical [owner-decision record](../engineering/canonical-owner-decision-record.json). CONDITIONAL/BLOCKED decisions and unsupplied business policy are not implemented defaults. Selected foundation, pins, upstream source and production REJECT are unchanged.
+Date: 2026-09-16 · Active branch: `arena/01a0b3a7-tofel-house-erp`. Contract status: **authoritative architecture specification; not production authorization**. Decision authority: [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md) plus the canonical [owner-decision record](../engineering/canonical-owner-decision-record.json). CONDITIONAL/BLOCKED decisions and unsupplied business policy are not implemented defaults. Selected foundation, pins, upstream source and production REJECT are unchanged.
 
 ## Owner-decision alignment and deployment phases
 

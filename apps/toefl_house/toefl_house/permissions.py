@@ -44,13 +44,13 @@ LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
 STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score", "decision")
 
 
-CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Finance Officer")
+CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Finance Officer", "Finance Auditor", "Teaching Scheduler", "Teaching Auditor")
 
 # Governance configuration (the Academic Control Plane): deliberately NOT in
 # the synthetic-guarded DOCTYPES world. These records are governance state,
 # readable by management roles, mutable only through the guarded
 # toefl_house.academic commands (docs/product/CONFIGURATION-PLANE.md).
-GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount Rule"}
+GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount Rule", "TH Skill"}
 
 
 def configuration_has_permission(doc, ptype=None, user=None, **kwargs):

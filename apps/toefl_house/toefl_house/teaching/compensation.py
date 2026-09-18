@@ -60,10 +60,28 @@ def _policy(fn, *args):
         raise frappe.ValidationError(str(exc)) from exc
 
 
+def _assert_active_skill(skill_code):
+    """Runtime check (inside command context) that the TH Skill exists and is Active.
+
+    Pure validate_skill (policy.validate_skill) only bounds the name; the
+    existence/lifecycle check requires the database and lives here. Retired
+    skills remain valid for historical reference on existing contracts/assignments
+    but cannot be added to new ones.
+    """
+    if not frappe.db.exists("TH Skill", skill_code):
+        raise frappe.ValidationError(f"Unknown skill: {skill_code}")
+    status = frappe.db.get_value("TH Skill", skill_code, "status")
+    if status != "Active":
+        raise frappe.ValidationError(
+            f"Skill {skill_code} is retired; only Active skills can be used in new contracts or assignments")
+    return skill_code
+
+
 def _parse_terms(rows):
     terms, seen = [], set()
     for row in rows:
         skill = _policy(validate_skill, row.get("skill"))
+        _assert_active_skill(skill)
         if skill in seen:
             raise frappe.ValidationError("Duplicate skill term in contract")
         seen.add(skill)
@@ -143,6 +161,15 @@ def create_teaching_contract(request_key, instructor, employee, compensation_mod
             raise frappe.ValidationError("Unknown instructor")
         if not frappe.db.exists(EMPLOYEE, employee_name):
             raise frappe.ValidationError("Unknown employee")
+        # Native Education Instructor carries an employee link; we require
+        # it to match for payroll integrity (Additional Salary is created
+        # against the employee, so a mismatch would pay the wrong person).
+        instructor_employee = frappe.db.get_value(INSTRUCTOR, instructor_name, "employee")
+        if instructor_employee != employee_name:
+            raise frappe.ValidationError(
+                "Employee does not match the instructor's HRMS employee record")
+        if frappe.db.get_value(EMPLOYEE, employee_name, "status") != "Active":
+            raise frappe.ValidationError("Only active employees can hold teaching contracts")
         if model == "Fixed Salary" and terms:
             raise frappe.ValidationError("Fixed-salary contracts carry no skill terms; native salary structure applies")
         if model in ("Skill-Based", "Hybrid") and not terms:
@@ -244,6 +271,7 @@ def assign_teaching_skill(request_key, student_group, skill, instructor, contrac
     def work(actor):
         group_name = _bounded(student_group, "Student Group")
         skill_name = _policy(validate_skill, skill)
+        _assert_active_skill(skill_name)
         instructor_name = _bounded(instructor, "Instructor")
         contract_name = _bounded(contract, "Contract")
         start, end = _policy(validate_effective_window, effective_start, effective_end or "")

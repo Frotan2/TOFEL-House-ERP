@@ -15,6 +15,7 @@ from toefl_house.policy import (can_read, validate_attendance_statuses, validate
 
 ROOT = Path(__file__).resolve().parents[2]
 TEACHING = ROOT / "apps/toefl_house/toefl_house/teaching/__init__.py"
+SECURITY = ROOT / "apps/toefl_house/toefl_house/security.py"
 HOOKS = ROOT / "apps/toefl_house/toefl_house/hooks.py"
 
 
@@ -123,6 +124,23 @@ class GuardWiringTests(unittest.TestCase):
                   if isinstance(node, ast.FunctionDef) and node.name.startswith("guard_")}
         self.assertEqual(guards, {"guard_student_group", "guard_course_schedule",
                                   "guard_student_attendance"})
+
+    def test_transition_class_command_is_registered(self):
+        """transition_class is a Teaching Scheduler command guarded against the
+        same native Student Group containment as create_student_group."""
+        sec_tree = ast.parse(SECURITY.read_text(encoding="utf-8"))
+        # Locate KIND_ROLES and TEACHING_COMMANDS dicts.
+        kind_roles = None
+        teaching_commands = None
+        for node in ast.walk(sec_tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if getattr(target, "id", None) == "KIND_ROLES":
+                        kind_roles = ast.literal_eval(node.value)
+                    if getattr(target, "id", None) == "TEACHING_COMMANDS":
+                        teaching_commands = ast.literal_eval(node.value)
+        self.assertEqual(kind_roles["transition_class"], "Teaching Scheduler")
+        self.assertEqual(teaching_commands["transition_class"], "Student Group")
 
     def test_work_does_not_assign_enclosing_parameters(self):
         tree = ast.parse(TEACHING.read_text(encoding="utf-8"))

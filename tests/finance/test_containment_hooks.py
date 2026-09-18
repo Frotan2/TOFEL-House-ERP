@@ -53,7 +53,7 @@ class ContainmentHookWiringTests(unittest.TestCase):
     def test_no_unguarded_doctype_events(self):
         events = doc_events()
         extra = set(events) - set(GUARDS)
-        allowed_extras = {"TH Academic Program", "TH Program Level", "TH Discount Rule"}
+        allowed_extras = {"TH Academic Program", "TH Program Level", "TH Discount Rule", "TH Skill"}
         self.assertEqual(extra, allowed_extras,
                          "doc_events changed; update this guard deliberately — the "
                          "only sanctioned extras are the governance configuration "

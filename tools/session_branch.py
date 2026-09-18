@@ -7,7 +7,7 @@ intentionally changed, and update the workflow branch filters and tests in the
 same change.
 """
 
-ACTIVE_BRANCH = "arena/01a0b084-tofel-house-erp"
+ACTIVE_BRANCH = "arena/01a0b3a7-tofel-house-erp"
 ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 
 # Hosted-execution identity for the ACTIVE branch.
@@ -27,9 +27,14 @@ ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 ACTIVE_RUNTIME_STATE = "NOT_EXECUTED_ON_THIS_BRANCH"
 ACTIVE_RUNTIME_RUN = ""
 
-# Historical provenance pins: the last Foundation runtime executed on each
-# previous Arena session branch. These are evidence identity, never current
-# execution authority. Newest first.
+# Historical provenance pins: the last two Arena session branches that produced
+# a recorded Foundation runtime REJECT. These are evidence identity, never
+# current execution authority. Newest first.
+#
+# arena/01a0b084-tofel-house-erp never executed hosted workflows (its
+# active_branch_qualification was NOT_EXECUTED_ON_THIS_BRANCH with empty run),
+# so it falls into the general HISTORICAL_BRANCHES list without a pinned run,
+# and the two evidence-bearing provenance pins stay pinned to their executed runs.
 PRIOR_ACTIVE_BRANCH = "arena/01a0aef4-tofel-house-erp"
 PRIOR_ACTIVE_RUNTIME_RUN = "35218007937"
 
@@ -43,6 +48,7 @@ EARLIER_ACTIVE_RUNTIME_RUN = "35122242581"
 # The executable enforcement of that rule is tests/foundation/test_branch_boundary.py;
 # the classification policy is docs/engineering/BRANCH-RECONCILIATION.md.
 HISTORICAL_BRANCHES = (
+    "arena/01a0b084-tofel-house-erp",
     PRIOR_ACTIVE_BRANCH,
     EARLIER_ACTIVE_BRANCH,
     "arena/01a0a9f7-tofel-house-erp",
