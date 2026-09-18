@@ -3984,6 +3984,13 @@ def main():
             assert denied(lambda:as_user('outsider',lambda:corr.request_fees_correction(
                 'desk-fees-outsider-001',fee2,'SYN outsider attempt',gt2))), \
                 'an outsider opened a fees correction'
+            # InnoDB: ROLLBACK TO SAVEPOINT does NOT release row locks. The
+            # partial-amount probe above locked this fee (the command locks
+            # before judging the amount) and denied() only rolled back to its
+            # savepoint — a full transaction rollback here is what frees the
+            # row for the worker's transaction, instead of waiting into a
+            # lock-wait timeout.
+            frappe.db.rollback()
             r=sess['finance_officer'].post(base+'/api/method/toefl_house.finance.'
                 'corrections.request_fees_correction',json=dict(
                 request_key='desk-fees-http-req-0001',fees=fee2,
@@ -4019,6 +4026,9 @@ def main():
                 request_key='desk-fees-http-appr-01',request=creq['name']),timeout=40)
             assert rb.status_code==200 and rb.json()['message']==approved, \
                 'same key must replay the same receipt, not a second reversal'
+            frappe.db.commit()  # end this transaction so the next reads take a
+            # fresh snapshot: the approval was committed by the HTTP worker,
+            # and a REPEATABLE-READ snapshot older than it would not see it.
             frappe.set_user('Administrator')
             assert int(frappe.db.get_value('Fees',fee2,'docstatus'))==2, \
                 'approval must reverse via native cancellation'
