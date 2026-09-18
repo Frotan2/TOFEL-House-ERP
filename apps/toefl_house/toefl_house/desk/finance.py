@@ -29,6 +29,10 @@ PAYMENT = "Payment Entry"
 CORRECTION = "TH Correction Request"
 POLICY = "TH Correction Policy"
 ENROLLMENT = "Program Enrollment"
+FEE_STRUCTURE = "Fee Structure"
+FEE_ROW = "Fee Component"
+PLAN_FIELDS = ["name", "program", "academic_year", "company", "docstatus"]
+PLAN_ROW_FIELDS = ["name", "parent", "parenttype", "fees_category", "amount", "idx"]
 
 
 def _money_state(row):
@@ -216,21 +220,67 @@ def work():
         "currency": row.get("currency") or "",
     } for row in payments]
 
-    billing_items = [{
-        "id": row["name"],
-        "person": row.get("student_name") or row.get("student") or "",
-        "detail": " · ".join(part for part in (row.get("program"), row.get("academic_year")) if part),
-        "status": "Unbilled",
-        "stage": "Awaiting billing",
-        "stage_definition": "Submitted enrollment with no Fees record referencing it.",
-        "next": "Issue the tuition fees from a configured Fee Structure.",
-        "next_role": "Finance Officer",
-        "waiting_since": row.get("enrollment_date"),
-        "action": guided_action("Finance Officer", "toefl_house.finance.issue_tuition_fees",
-                                "Issue tuition fees",
-                                {"program_enrollment": row["name"], "fee_structure": "",
-                                 "posting_date": day, "due_date": ""}),
-    } for row in awaiting_billing[:LIMIT_QUEUES]]
+    # §18: resolve the Owner's configured fee plan (Academic Control Plane)
+    # into the billing prefill. One source of truth: the plan is the native
+    # Fee Structure for (program, academic year); the Officer never types a
+    # structure name, and a missing/incomplete plan names its owner.
+    plans = project_rows("finance", FEE_STRUCTURE, PLAN_FIELDS,
+                         order_by="name asc", limit=LIMIT_QUEUES)
+    plan_rows = project_rows("finance", FEE_ROW, PLAN_ROW_FIELDS,
+                             filters={"parenttype": FEE_STRUCTURE},
+                             order_by="idx asc", limit=LIMIT_QUEUES * 4)
+    rows_by_plan = {}
+    for plan_row in plan_rows:
+        rows_by_plan.setdefault(plan_row.get("parent"), []).append(plan_row)
+    plans_by_key = {}
+    for plan in plans:
+        plans_by_key.setdefault(
+            (plan.get("program"), plan.get("academic_year")), []).append(plan)
+
+    def billing_guidance(row):
+        """Resolve the plan for one unbilled enrollment into next/action."""
+        candidates = plans_by_key.get(
+            (row.get("program"), row.get("academic_year") or ""), [])
+        editable = [plan for plan in candidates if int(plan.get("docstatus") or 0) == 0]
+        if len(editable) == 1:
+            components = rows_by_plan.get(editable[0]["name"], [])
+            if components:
+                return ("Issue the tuition fees from the configured plan for this "
+                        "level and academic year.", "Finance Officer",
+                        guided_action(
+                            "Finance Officer", "toefl_house.finance.issue_tuition_fees",
+                            "Issue tuition fees",
+                            {"program_enrollment": row["name"],
+                             "fee_structure": editable[0]["name"],
+                             "posting_date": day, "due_date": ""}))
+            return ("The fee plan for this level and year has no components yet; "
+                    "the Course Owner completes it in Academic Setup before this "
+                    "enrollment can be billed.", "Course Owner", None)
+        if not editable:
+            return ("No fee plan is configured for this level and academic year "
+                    "yet; the Course Owner defines fee plans in Academic Setup.",
+                    "Course Owner", None)
+        return ("More than one editable fee plan exists for this level and year; "
+                "billing stays paused until Finance keeps exactly one.",
+                "Finance Officer", None)
+
+    billing_items = []
+    for row in awaiting_billing[:LIMIT_QUEUES]:
+        next_text, next_role, action = billing_guidance(row)
+        item = {
+            "id": row["name"],
+            "person": row.get("student_name") or row.get("student") or "",
+            "detail": " · ".join(part for part in (row.get("program"), row.get("academic_year")) if part),
+            "status": "Unbilled",
+            "stage": "Awaiting billing",
+            "stage_definition": "Submitted enrollment with no Fees record referencing it.",
+            "next": next_text,
+            "next_role": next_role,
+            "waiting_since": row.get("enrollment_date"),
+        }
+        if action:
+            item["action"] = action
+        billing_items.append(item)
 
     return {
         "desk": SLUG,

@@ -344,6 +344,22 @@ class ControlPlaneTieTests(unittest.TestCase):
                      ('("setup", "Program Enrollment")',)):
             self.assertIn(pair[0], init_source, f"missing projection allow-list {pair[0]}")
 
+    def test_finance_desk_consumes_the_configured_fee_plans(self):
+        """§18: billing guidance resolves the Owner's plan — one source of truth."""
+        source = (APP / "desk/finance.py").read_text(encoding="utf-8")
+        self.assertIn("Academic Setup", source,
+                      "a missing plan must name its owner and where to fix it")
+        self.assertIn("billing_guidance", source)
+        self.assertIn('"fee_structure": editable[0]["name"]', source,
+                      "the configured plan must be the prefill, never a blank field")
+        for literal in ("No fee plan is configured", "has no components yet",
+                        "More than one editable fee plan"):
+            self.assertIn(literal, source)
+        init_source = (APP / "desk/__init__.py").read_text(encoding="utf-8")
+        for pair in (('("finance", "Fee Structure")',),
+                     ('("finance", "Fee Component")',)):
+            self.assertIn(pair[0], init_source, f"missing allow-list {pair[0]}")
+
     def test_setup_desk_consumes_the_pure_rules(self):
         source = (APP / "desk/setup.py").read_text(encoding="utf-8")
         self.assertIn("from toefl_house.academic import rules", source)

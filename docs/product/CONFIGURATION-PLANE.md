@@ -257,6 +257,13 @@ suite if a future change reintroduces hard-coded policy.
    readiness fact "active levels without a fee plan for the current academic
    year" — the honest preview of what would block future billing (posted
    documents are, by native semantics, never affected).
+   **Consumed where the work happens (§18/§43):** the Finance Manager desk's
+   awaiting-billing queue resolves each enrollment's configured plan into the
+   issuance prefill — the Officer never types a structure name; a missing or
+   incomplete plan names the Course Owner and Academic Setup instead of
+   offering a button that can only fail, and an ambiguous plan pauses
+   billing in explicit language. Pinned and mutation-checked by
+   `tests/configuration`.
 3. Discount rules — **blocked on OD-CP-1**; smallest model (§14) on the chosen
    policy, consumed at fee preparation, native percent discipline preserved.
 4. Refund/cancellation policy model — will carry its own OWNER DECISION

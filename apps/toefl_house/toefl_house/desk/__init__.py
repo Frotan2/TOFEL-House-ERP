@@ -153,6 +153,14 @@ PROJECTION_FIELDS = {
         "name", "student", "student_name", "program", "academic_year",
         "enrollment_date", "docstatus",
     ],
+    # §18 consumption: the finance desk resolves the Owner's configured fee
+    # plan (control plane) into the issuance prefill — one source of truth.
+    ("finance", "Fee Structure"): [
+        "name", "program", "academic_year", "company", "docstatus",
+    ],
+    ("finance", "Fee Component"): [
+        "name", "parent", "parenttype", "fees_category", "amount", "idx",
+    ],
     # Owner cockpit counts enabled Students; the projection carries the key
     # only — no student detail leaves the store through the cockpit.
     ("management", "Student"): [
