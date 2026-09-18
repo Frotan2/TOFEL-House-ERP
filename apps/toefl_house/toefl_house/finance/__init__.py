@@ -86,10 +86,15 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
 
         # Resolve centralized discount policy (OD-CP-1 Policy A: single discount per charge)
         from toefl_house.academic import rules
+        # "status" must be part of the fetched fields: resolve_charge_discount
+        # re-checks each row's status and a row without the key is not
+        # eligible (found by the first hosted odcp-discount run: the field
+        # list omitted it and every rule was silently skipped).
         discount_rules = frappe.db.get_all("TH Discount Rule",
                                            filters={"status": "Active"},
                                            fields=["code", "title", "discount_percentage",
-                                                   "precedence", "fee_category", "program"])
+                                                   "precedence", "fee_category", "program",
+                                                   "status"])
         applied_discounts = []
         fee_components = []
         for c in components:

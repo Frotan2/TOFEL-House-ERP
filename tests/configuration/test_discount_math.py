@@ -56,6 +56,21 @@ class ApplyChargeDiscountTests(unittest.TestCase):
                 rules.apply_charge_discount(100, stacked)
 
 
+class ResolverRowShapeTests(unittest.TestCase):
+    def test_rows_without_status_are_not_eligible(self):
+        """The resolver's second guard needs the row's own status: a fetched
+        row missing the key is treated as non-Active. This contract is why
+        issue_tuition_fees must fetch "status" in its field list (the first
+        hosted odcp run found rows fetched without it — every rule was
+        silently skipped and no discount ever reached the receivable)."""
+        rule = {"code": "X-1", "title": "Ten", "discount_percentage": 10.0,
+                "precedence": 5}  # no "status" key
+        self.assertIsNone(rules.resolve_charge_discount([rule], fee_category=None))
+        self.assertEqual(
+            rules.resolve_charge_discount([dict(rule, status="Active")])["rule_code"],
+            "X-1")
+
+
 class FinanceCommandShapeTests(unittest.TestCase):
     def test_issue_tuition_bills_the_net_amount(self):
         src = FINANCE.read_text(encoding="utf-8")
@@ -66,6 +81,15 @@ class FinanceCommandShapeTests(unittest.TestCase):
         self.assertIn('"gross_amount": gross', src)
         self.assertIn('"net_amount": net', src)
         self.assertIn('result["discount_amount"]', src)
+
+    def test_rule_fetch_carries_the_status_field(self):
+        """Regression lock (hosted run ecb227b found the defect offline-passing):
+        the get_all for TH Discount Rule must select "status" alongside the
+        resolver-consumed fields, or no rule can ever be eligible."""
+        src = FINANCE.read_text(encoding="utf-8")
+        fetch = src[src.index('frappe.db.get_all("TH Discount Rule"'):]
+        fields = fetch[fetch.index("fields=["):fetch.index("]")]
+        self.assertIn('"status"', fields)
 
     def test_no_native_fee_discount_field_claim(self):
         """The helper docstring must keep recording WHY amount carries the
