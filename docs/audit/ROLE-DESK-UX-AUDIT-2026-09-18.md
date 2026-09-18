@@ -334,3 +334,35 @@ only for role-holders with fresh idempotency keys and refusal-free buttons;
 escaping and forbidden-primitive client tests exist; the six-desk registry,
 titles and role pins match `security.py`'s command roles. Phase 2 must keep
 every line of this list true.
+
+## 10. Phase 2 execution evidence (2026-09-18)
+
+Ordered per §8. Offline suites were green at every commit; hosted
+qualification per §5/§6 is recorded with exact run IDs.
+
+| Step | Findings | Commits | Offline anchor | Hosted evidence |
+| --- | --- | --- | --- | --- |
+| 1 | D1a (setup.work whitelist), D1b (`toefl_house.desk.available` at all call sites) + harness hardening (whitelist-marking stub, client-string→endpoint exposure tie-out, pinned-schema fail-closed `get_all`/`count`) | `5453bce` | `DeskReadEndpointExposureTests`; `test_role_desks.cjs` whitelist mirror; **mutation-checked**: removing the decorator fails the suite | owned-suite `35356041526` ✅ (ruff 0.16.8 + 847 tests + all 4 Node suites) |
+| 2 | D2/D3/D4 cohort fidelity (real Student Group schema; `th_class_status` canonical; Reception derives from open classes; no duplicate `active` authority) | `5453bce` | `pinned_schema.json` (17 doctypes incl. User Permission) consumed by `DeskSchemaFidelityTests` + world tests; **mutation-checked**: restoring the phantom `active` query fails | same owned-suite ✅ |
+| 3 | D6 (correction rows name the real fees-or-invoice target) + U9 (issuance rule = desk guidance: non-cancelled plan with components, draft or submitted; `Submitted (locked)` honesty) | `924a2ac` | `FinanceBillingGuidanceWorldTests` (7 cases incl. submitted-plan prefill, null-year match, cancelled refusal), `ManagementCorrectionsWorldTests`, configuration contract re-pinned | — |
+| 4 | U1 affordances: Activate class (Planned), Schedule session (Active), Create class (unclassed intake), prefilled into the existing teaching commands; role-gated | `0b49e48` | `AcademicClassActionsWorldTests` (5 cases) + `GuidedEndpointRegistryTests` teaching signatures + Node signature diff via the `toefl_house.teaching` module map | — |
+| 5 | U5 plain-language sweep; request key → read-only pre-filled "Request reference" (idempotency/audit intact) | `2019656` | `DeskPlainLanguageTests` (AST, dict **and** `section()` kwargs) + Node live-dialog `read_only` pin | hosted payload scan (see below) |
+| 6 | P1 honored by filtering, never by crashing (declared answer pinned executable; nothing invented for P2/P3) | `4ea3ab0` | `DeskBranchScopeTests` with ledger-backed `get_meta` stub | — |
+| 7 | Hosted desk qualification (audience loads, negatives, lifecycle truth, U1 prefills, D6/OD-RD-1 chain over real HTTP) | `53aae30`, fix `0c54bc2` | `tests.placement.test_native_check_arity` ✅ | placement-content `35356041546` **failed by design once**: the new `role-desk-hosted-qualification` check caught two stale finance `section(empty_body=…)` strings naming `Payment Entry`/`Program Enrollment` that the dict-only offline scan had missed (`report_sha256 593baf16…`). Fixed (`0c54bc2`) and the guard widened to `section()` kwargs, so the escape path is closed, not just the instance. GL-reversal assertion verified against pinned education `93bc70757533` `fees.py on_cancel` → `make_reverse_gl_entries`. |
+
+### State of the re-run
+`0c54bc2` (guard widened + strings fixed + confirmation the hosted GL claim
+tests real controller behavior) awaits one more hosted cycle: owned-suite and
+placement-content must both go green on that SHA before any desk-readiness
+word is written. **As of this entry the GitHub connector in the working
+session returned invalid credentials**, so the push and the qualification
+re-run are blocked on reconnecting GitHub — not on the code. No readiness is
+claimed until that cycle is green.
+
+### What the hosted failure proves
+The §5 checks were not decoration: the first real-pipeline pass executed the
+whitelist path, loaded all six desks for their audiences and reached the
+fees-correction chain — and a scan stricter than anything previously wired
+caught the residue. That is the harness-strengthening objective (make this
+defect class visible) demonstrated on a live bench, catching what offline
+dict-scan coverage had let through.
