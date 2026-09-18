@@ -84,11 +84,23 @@ class AppAssemblyTests(unittest.TestCase):
     def test_permission_hooks_and_query_conditions_cover_exactly_the_command_doctypes(self):
         has_permission = set(self.hooks["has_permission"])
         query_conditions = set(self.hooks["permission_query_conditions"])
-        guarded = set(self.security["DOCTYPES"])
+        guarded = set(self.security["DOCTYPES"]) | self.governance_doctypes()
         self.assertEqual(has_permission, query_conditions,
                          "has_permission and permission_query_conditions disagree")
         self.assertEqual(has_permission, guarded,
-                         "hooks permission hooks and security.DOCTYPES disagree")
+                         "hooks must cover exactly the synthetic-guarded doctypes "
+                         "plus the declared governance configuration")
+
+    def governance_doctypes(self):
+        import ast as _ast
+        match = re.search(r"^GOVERNANCE_DOCTYPES = (\{.*?\})", self.permissions_source,
+                          re.S | re.M)
+        self.assertTrue(match, "permissions.py must declare GOVERNANCE_DOCTYPES")
+        governance = _ast.literal_eval(match.group(1))
+        self.assertTrue(governance.isdisjoint(self.security["DOCTYPES"]),
+                        "governance configuration must stay disjoint from the "
+                        "synthetic-guarded doctypes")
+        return governance
 
     def test_child_tables_are_deliberately_unguarded(self):
         children = {name for name, definition in self.doctypes.items()
@@ -98,7 +110,16 @@ class AppAssemblyTests(unittest.TestCase):
                          "exactly the child tables may be absent from the permission hooks")
 
     def test_every_query_condition_target_exists(self):
+        governance = self.governance_doctypes()
         for doctype, target in self.hooks["permission_query_conditions"].items():
+            if doctype in governance:
+                self.assertEqual(target, "toefl_house.permissions.configuration_query",
+                                 f"{doctype} must use the non-synthetic governance query")
+                self.assertIn("def configuration_query(", self.permissions_source,
+                              "the governance query seam has no definition")
+                self.assertIn("def configuration_has_permission(", self.permissions_source,
+                              "the governance row seam has no definition")
+                continue
             self.assertEqual(target, f"toefl_house.permissions.query_{self.kind_of(doctype)}",
                              f"{doctype} points at an unexpected query function")
             suffix = target.rsplit("query_", 1)[1]
@@ -163,8 +184,14 @@ class AppAssemblyTests(unittest.TestCase):
         guarded_native = {dt for dt, handlers in events.items()
                           if any(handler.startswith("toefl_house.") for handler in handlers.values())}
         self.assertTrue(guarded_native, "no native DocType carries an owned guard")
+        governance = self.governance_doctypes()
         for doctype, handlers in events.items():
             if doctype not in guarded_native:
+                continue
+            if doctype in governance:
+                # Governance configuration is non-cancelable and non-submittable;
+                # its hooks are unconditional integrity checks (validate family).
+                self.assertIn("validate", handlers, f"{doctype} is missing the validate seam")
                 continue
             for seam in seams:
                 self.assertIn(seam, handlers, f"{doctype} is missing the {seam} seam")

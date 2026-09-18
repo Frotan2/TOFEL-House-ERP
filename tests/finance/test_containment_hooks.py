@@ -52,8 +52,20 @@ class ContainmentHookWiringTests(unittest.TestCase):
 
     def test_no_unguarded_doctype_events(self):
         events = doc_events()
-        self.assertEqual(set(events), set(GUARDS),
-                         "doc_events changed; update this guard deliberately")
+        extra = set(events) - set(GUARDS)
+        allowed_extras = {"TH Academic Program", "TH Program Level"}
+        self.assertEqual(extra, allowed_extras,
+                         "doc_events changed; update this guard deliberately — the "
+                         "only sanctioned extras are the governance configuration "
+                         "integrity hooks (docs/product/CONFIGURATION-PLANE.md)")
+        app_root = ROOT / "apps/toefl_house/toefl_house"
+        for doctype in allowed_extras:
+            for seam, target in events[doctype].items():
+                module_path = target.rsplit(".", 1)[0].split("toefl_house.", 1)[1].replace(".", "/") + ".py"
+                self.assertTrue((app_root / module_path).exists(), (doctype, seam, target))
+                self.assertIn(target.rsplit(".", 1)[1],
+                              (app_root / module_path).read_text(encoding="utf-8"),
+                              (doctype, seam, "function must exist"))
 
     def test_guard_functions_exist_in_their_modules(self):
         for guard in sorted(set(GUARDS.values())):

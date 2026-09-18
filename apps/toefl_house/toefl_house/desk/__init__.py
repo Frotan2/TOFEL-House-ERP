@@ -55,6 +55,12 @@ DESKS = {
         "roles": ["Course Owner"],
         "module": "Operations",
     },
+    "th-academic-setup": {
+        "title": "TOEFL House Academic Setup",
+        "description": "The Owner's configuration control plane: programs, ordered levels, effective-dated durations and progression, consumed natively by the whole product.",
+        "roles": ["Course Owner"],
+        "module": "Operations",
+    },
 }
 
 # Fields each desk may project. This allow-list is the read boundary for the
@@ -181,6 +187,23 @@ PROJECTION_FIELDS = {
     ],
     ("management", "User"): [
         "name",
+    ],
+    # Academic Setup (Course Owner): configuration masters, their effective-
+    # dated duration versions, and the enrollment usage counts that guard
+    # deactivation. No student detail beyond the enrollment link.
+    ("setup", "TH Academic Program"): [
+        "name", "code", "title", "status", "modified",
+    ],
+    ("setup", "TH Program Level"): [
+        "name", "family", "code", "title", "sequence", "status",
+        "native_program", "next_level", "modified",
+    ],
+    ("setup", "TH Level Duration"): [
+        "name", "parent", "parenttype", "duration_value", "duration_unit",
+        "effective_from", "superseded_on", "reason", "set_by",
+    ],
+    ("setup", "Program Enrollment"): [
+        "name", "program", "docstatus",
     ],
 }
 

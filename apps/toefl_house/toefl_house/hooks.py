@@ -30,7 +30,7 @@ page_js = {name: "public/js/th_command_pages.js" for name in _COMMAND_PAGES}
 # design system stylesheet with the command pages but not the command client.
 _DESK_PAGES = (
     "th-reception-desk", "th-academic-desk", "th-finance-desk",
-    "th-operations-desk", "th-owner-cockpit",
+    "th-operations-desk", "th-owner-cockpit", "th-academic-setup",
 )
 page_js.update({name: "public/js/th_role_desks.js" for name in _DESK_PAGES})
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception"]]]},
@@ -45,8 +45,11 @@ has_permission = {
                  "TH Placement Course Map Revision", "TH Placement Decision",
                  "TH Admission Decision", "TH Instructor Contract",
                  "TH Teaching Assignment", "TH Correction Policy",
-                 "TH Correction Request")
+                 "TH Correction Request",
+                 "TH Academic Program", "TH Program Level")
 }
+has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Program Level"] = "toefl_house.permissions.configuration_has_permission"
 permission_query_conditions = {
     name: "toefl_house.permissions.query_" + suffix
     for name, suffix in (
@@ -65,6 +68,9 @@ permission_query_conditions = {
         ("TH Correction Policy", "correction_policy"),
         ("TH Correction Request", "correction_request"))
 }
+# Governance configuration is queried through the non-synthetic checker.
+permission_query_conditions["TH Academic Program"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Program Level"] = "toefl_house.permissions.configuration_query"
 override_whitelisted_methods = {
     "education.education.api.enroll_student": "toefl_house.admission.deny_enroll_student",
 }
@@ -77,6 +83,16 @@ override_whitelisted_methods = {
 # frappe (delete_doc check_permission_and_not_submitted); drafts cannot
 # exist outside commands because insert is denied on validate.
 doc_events = {
+    # Governance configuration: unconditional integrity hooks (the rules bind
+    # on every write path, native form included). Distinct from the command
+    # containment guards below; sanctioned by tests/finance/test_containment_hooks.
+    "TH Academic Program": {
+        "validate": "toefl_house.academic.doctype.th_academic_program.th_academic_program.validate",
+    },
+    "TH Program Level": {
+        "validate": "toefl_house.academic.doctype.th_program_level.th_program_level.validate",
+        "before_save": "toefl_house.academic.doctype.th_program_level.th_program_level.before_save",
+    },
     "Program Enrollment": {
         "validate": "toefl_house.enrollment.guard_program_enrollment",
         "before_cancel": "toefl_house.enrollment.guard_program_enrollment",

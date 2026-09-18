@@ -60,6 +60,12 @@ const EXPECTED = {
 		endpoint: "toefl_house.desk.owner.cockpit",
 		python: "toefl_house.desk.owner",
 	},
+	"th-academic-setup": {
+		title: "TOEFL House Academic Setup",
+		roles: ["Course Owner"],
+		endpoint: "toefl_house.desk.setup.work",
+		python: "toefl_house.desk.setup",
+	},
 };
 
 /* ------------------------------------------------------------------ loading */
@@ -123,6 +129,7 @@ const endpointFiles = {
 	"toefl_house.api": ["api.py"],
 	"toefl_house.finance": ["finance/__init__.py"],
 	"toefl_house.finance.corrections": ["finance/corrections.py"],
+	"toefl_house.academic": ["academic/__init__.py"],
 };
 function signatureOf(method) {
 	const parts = method.split(".");
@@ -170,6 +177,15 @@ assert(source.includes("frappe.call({"), "desk client must talk to the server ov
 const allowedCalls = new Set([...Object.values(EXPECTED).map((shape) => shape.endpoint),
 	client.toefl_house.role_desks.registry,
 	...Object.keys(actionFields)]);
+for (const method of Object.keys(actionFields)) {
+	// The projection endpoint must resolve to a real owned module file.
+	const parts = method.split(".");
+	if (parts[1] === "desk") {
+		const file = (endpointFiles[`toefl_house.desk.${parts[3]}`] || [])[0];
+		assert(file || ["reception", "academic", "finance", "operations", "owner", "setup"]
+			.includes(parts[3]), `unknown desk module ${method}`);
+	}
+}
 for (const [, method] of source.matchAll(/method:\s*"([\w.]+)"/g)) {
 	assert(allowedCalls.has(method), `desk client calls an unreviewed endpoint: ${method}`);
 }

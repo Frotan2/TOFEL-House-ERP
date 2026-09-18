@@ -44,6 +44,38 @@ LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
 STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score", "decision")
 
 
+CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager")
+
+# Governance configuration (the Academic Control Plane): deliberately NOT in
+# the synthetic-guarded DOCTYPES world. These records are governance state,
+# readable by management roles, mutable only through the guarded
+# toefl_house.academic commands (docs/product/CONFIGURATION-PLANE.md).
+GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level"}
+
+
+def configuration_has_permission(doc, ptype=None, user=None, **kwargs):
+    """Governance reads for the Academic Control Plane.
+
+    Deliberately NOT synthetic-gated: configuration is governance state, the
+    same boundary as toefl_house.administration. Writes never flow through
+    native forms-of-convenience: only the guarded toefl_house.academic
+    commands (Course Owner gate) and the doctype permissions (no delete for
+    anyone) open change paths.
+    """
+    user = user or frappe.session.user
+    if user in (None, "Guest", "Administrator"):
+        return False
+    return ptype in (None, "read", "select") and bool(
+        set(frappe.get_roles(user)) & set(CONFIGURATION_READERS))
+
+
+def configuration_query(user=None):
+    user = user or frappe.session.user
+    if user in (None, "Guest", "Administrator"):
+        return "1=0"
+    return "1=1" if set(frappe.get_roles(user)) & set(CONFIGURATION_READERS) else "1=0"
+
+
 def has_permission(doc, ptype=None, user=None, **kwargs):
     try:
         require_synthetic()

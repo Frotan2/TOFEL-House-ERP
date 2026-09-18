@@ -45,6 +45,11 @@ frappe.provide("toefl_house.role_desks");
 			title: "TOEFL House Owner Cockpit",
 			description: "Business state with every definition stated, plus the fail-closed release posture.",
 		},
+		"th-academic-setup": {
+			endpoint: "toefl_house.desk.setup.work",
+			title: "TOEFL House Academic Setup",
+			description: "Programs, ordered levels, effective-dated durations and progression — the configuration the whole institution runs on.",
+		},
 	});
 
 	const DESK_REGISTRY = "toefl_house.desk.registry.available";
@@ -289,6 +294,40 @@ frappe.provide("toefl_house.role_desks");
 		],
 		"toefl_house.finance.corrections.approve_invoice_correction": [
 			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
+		],
+		"toefl_house.academic.create_program": [
+			{ fieldname: "code", label: "Program code (stable, e.g. GEN-ENG)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
+		],
+		"toefl_house.academic.create_level": [
+			{ fieldname: "family", label: "Program code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "code", label: "Level code (stable, e.g. PREP-1)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "sequence", label: "Position (1 = first)", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "duration_value", label: "Duration", fieldtype: "Float", reqd: 1 },
+			{ fieldname: "duration_unit", label: "Unit", fieldtype: "Select", options: "Month\nWeek\nDay", reqd: 1 },
+			{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "next_level", label: "Next level code (optional)", fieldtype: "Data" },
+		],
+		"toefl_house.academic.set_level_duration": [
+			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "duration_value", label: "New duration", fieldtype: "Float", reqd: 1 },
+			{ fieldname: "duration_unit", label: "Unit", fieldtype: "Select", options: "Month\nWeek\nDay", reqd: 1 },
+			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text" },
+		],
+		"toefl_house.academic.set_next_level": [
+			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "next_level", label: "Next level code (same program, empty to clear)", fieldtype: "Data" },
+		],
+		"toefl_house.academic.set_program_status": [
+			{ fieldname: "program", label: "Program code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Select", options: "1\n0", reqd: 1, description: "0 retires the program (only once no active level depends on it)." },
+		],
+		"toefl_house.academic.set_level_status": [
+			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Select", options: "1\n0", reqd: 1, description: "0 retires the level; refused while submitted enrollments still run on it." },
 		],
 	});
 

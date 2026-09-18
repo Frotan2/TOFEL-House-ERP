@@ -267,7 +267,7 @@ class DeskAudienceTieTests(unittest.TestCase):
     def test_desk_registry_is_complete(self):
         self.assertEqual(set(self.desks), {
             "th-reception-desk", "th-academic-desk", "th-finance-desk",
-            "th-operations-desk", "th-owner-cockpit"})
+            "th-operations-desk", "th-owner-cockpit", "th-academic-setup"})
         roles = {row["name"] for row in json.loads(
             (APP / "fixtures/role.json").read_text(encoding="utf-8"))}
         for slug, spec in self.desks.items():
@@ -560,6 +560,7 @@ class DeskWorkSmokeTests(unittest.TestCase):
         ("finance", "work", {"Finance Manager"}),
         ("operations", "work", {"General Manager"}),
         ("owner", "cockpit", {"Course Owner"}),
+        ("setup", "work", {"Course Owner"}),
     )
 
     def test_every_desk_endpoint_runs_and_returns_sections(self):

@@ -76,6 +76,7 @@ Rules that are binding for every desk:
 | `th-finance-desk` | Finance Manager | Operations | `toefl_house.desk.finance.work` |
 | `th-operations-desk` | General Manager | Operations | `toefl_house.desk.operations.work` |
 | `th-owner-cockpit` | Course Owner | Operations | `toefl_house.desk.owner.cockpit` |
+| `th-academic-setup` | Course Owner | Operations | `toefl_house.desk.setup.work` |
 
 `toefl_house.desk.registry.available` tells any desk (and the command-centre
 landing page) which desks the *server* believes this viewer holds — the client
@@ -130,6 +131,16 @@ Sections:
 - **Staffing** — count of enabled users per shipped operational role (native
   `Has Role`), so an assignment gap is visible before it becomes a queue.
 - **Links** — one row per role desk the viewer may open.
+
+### Academic Setup desk (the configuration control plane)
+
+The Owner's configuration surface (docs/product/CONFIGURATION-PLANE.md):
+configuration health facts — including surfaced integrity faults such as a
+level missing its native anchor — the program families, their ordered levels
+with the *governing effective-dated duration* resolved from version history,
+and guided actions into the guarded configuration commands
+(`toefl_house.academic.*`). Deactivation is offered only where the server
+allows it; refusals arrive in business language with real counts.
 
 ### Owner cockpit
 
