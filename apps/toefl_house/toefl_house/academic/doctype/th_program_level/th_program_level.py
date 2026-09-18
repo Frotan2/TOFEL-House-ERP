@@ -8,8 +8,17 @@ rewrite version history, or detach the native anchor.
 """
 import frappe
 from frappe import _
+from frappe.model.document import Document
 
 from toefl_house.academic import rules
+
+
+class THProgramLevel(Document):
+    def validate(self):
+        validate(self)
+
+    def before_save(self):
+        before_save(self)
 
 
 def validate(doc, method=None):

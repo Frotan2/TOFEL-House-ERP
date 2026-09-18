@@ -44,7 +44,7 @@ LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
 STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score", "decision")
 
 
-CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager")
+CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Finance Officer")
 
 # Governance configuration (the Academic Control Plane): deliberately NOT in
 # the synthetic-guarded DOCTYPES world. These records are governance state,
@@ -63,16 +63,20 @@ def configuration_has_permission(doc, ptype=None, user=None, **kwargs):
     anyone) open change paths.
     """
     user = user or frappe.session.user
-    if user in (None, "Guest", "Administrator"):
+    if user in (None, "Guest"):
         return False
+    if user == "Administrator":
+        return True
     return ptype in (None, "read", "select") and bool(
         set(frappe.get_roles(user)) & set(CONFIGURATION_READERS))
 
 
 def configuration_query(user=None):
     user = user or frappe.session.user
-    if user in (None, "Guest", "Administrator"):
+    if user in (None, "Guest"):
         return "1=0"
+    if user == "Administrator":
+        return "1=1"
     return "1=1" if set(frappe.get_roles(user)) & set(CONFIGURATION_READERS) else "1=0"
 
 

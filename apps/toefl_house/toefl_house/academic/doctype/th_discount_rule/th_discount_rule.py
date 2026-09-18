@@ -1,8 +1,14 @@
 """Controller for TH Discount Rule: identity and validation on every write path."""
 import frappe
 from frappe import _
+from frappe.model.document import Document
 
 from toefl_house.academic import rules
+
+
+class THDiscountRule(Document):
+    def validate(self):
+        validate(self)
 
 
 def validate(doc, method=None):

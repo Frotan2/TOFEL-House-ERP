@@ -96,6 +96,9 @@ doc_events = {
         "validate": "toefl_house.academic.doctype.th_program_level.th_program_level.validate",
         "before_save": "toefl_house.academic.doctype.th_program_level.th_program_level.before_save",
     },
+    "TH Discount Rule": {
+        "validate": "toefl_house.academic.doctype.th_discount_rule.th_discount_rule.validate",
+    },
     "Program Enrollment": {
         "validate": "toefl_house.enrollment.guard_program_enrollment",
         "before_cancel": "toefl_house.enrollment.guard_program_enrollment",
