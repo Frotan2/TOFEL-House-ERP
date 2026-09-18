@@ -1,6 +1,6 @@
 # TOEFL House ERP — Owner Decision Packet (R4)
 
-Date: 2026-09-16 · Active branch: `arena/01a0aef4-tofel-house-erp`
+Date: 2026-09-16 · Active branch: `arena/01a0b084-tofel-house-erp`
 **Production remains REJECT.** Nothing here invents a business rule. This
 file is the human-readable projection and navigation document for the canonical
 [`canonical-owner-decision-record.json`](canonical-owner-decision-record.json);

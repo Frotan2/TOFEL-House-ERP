@@ -7,7 +7,7 @@ intentionally changed, and update the workflow branch filters and tests in the
 same change.
 """
 
-ACTIVE_BRANCH = "arena/01a0aef4-tofel-house-erp"
+ACTIVE_BRANCH = "arena/01a0b084-tofel-house-erp"
 ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 
 # Hosted-execution identity for the ACTIVE branch.
@@ -24,24 +24,17 @@ ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 # active branch must be a REJECT. tools/foundation/d8_validate.py asserts both the
 # status and this exact run id, so the pin cannot be silently swapped for a
 # different or passing run.
-#
-# All five hosted workflows named by the documented rotation procedure were
-# genuinely re-executed on this branch at commit
-# e8da889b22589a5d64f7843ecaf5d11d9260424c, and the ledger's
-# active_branch_qualification block was replaced with those observed results in
-# the same change. The Foundation runtime REJECTED on SEC-DEPS-01 exactly as
-# predicted; re-executing did not and could not turn it green.
-ACTIVE_RUNTIME_STATE = "EXECUTED"
-ACTIVE_RUNTIME_RUN = "35218007937"
+ACTIVE_RUNTIME_STATE = "NOT_EXECUTED_ON_THIS_BRANCH"
+ACTIVE_RUNTIME_RUN = ""
 
 # Historical provenance pins: the last Foundation runtime executed on each
 # previous Arena session branch. These are evidence identity, never current
 # execution authority. Newest first.
-PRIOR_ACTIVE_BRANCH = "arena/01a0aafe-tofel-house-erp"
-PRIOR_ACTIVE_RUNTIME_RUN = "35122242581"
+PRIOR_ACTIVE_BRANCH = "arena/01a0aef4-tofel-house-erp"
+PRIOR_ACTIVE_RUNTIME_RUN = "35218007937"
 
-EARLIER_ACTIVE_BRANCH = "arena/01a0a9f7-tofel-house-erp"
-EARLIER_ACTIVE_RUNTIME_RUN = "35090904508"
+EARLIER_ACTIVE_BRANCH = "arena/01a0aafe-tofel-house-erp"
+EARLIER_ACTIVE_RUNTIME_RUN = "35122242581"
 
 # Every Arena session branch this repository has ever recorded hosted evidence
 # against. A branch reference anywhere in an active surface (workflow filter,
@@ -52,6 +45,7 @@ EARLIER_ACTIVE_RUNTIME_RUN = "35090904508"
 HISTORICAL_BRANCHES = (
     PRIOR_ACTIVE_BRANCH,
     EARLIER_ACTIVE_BRANCH,
+    "arena/01a0a9f7-tofel-house-erp",
     "arena/01a0a942-tofel-house-erp",
     "arena/01a0a496-tofel-house-erp",
     "arena/01a0a13b-tofel-house-erp",

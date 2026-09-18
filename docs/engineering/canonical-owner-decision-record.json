@@ -3,7 +3,7 @@
   "record_id": "TOFEL-HOUSE-OWNER-DECISIONS",
   "record_date": "2026-09-16",
   "authority": "Owner decisions supplied in the current engineering conversation; this record is the canonical repository representation.",
-  "active_branch": "arena/01a0aef4-tofel-house-erp",
+  "active_branch": "arena/01a0b084-tofel-house-erp",
   "production_state": "REJECT",
   "business_authorities": {
     "system_owner": "Course Owner",

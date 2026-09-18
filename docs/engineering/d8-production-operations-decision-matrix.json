@@ -2,7 +2,7 @@
   "schema_version": 1,
   "matrix_id": "D8-PRODUCTION-OPERATIONS",
   "date": "2026-09-16",
-  "active_branch": "arena/01a0aef4-tofel-house-erp",
+  "active_branch": "arena/01a0b084-tofel-house-erp",
   "production_state": "REJECT",
   "overall_gate_state": "BLOCKED",
   "security_dependency_state": "UPSTREAM-BLOCKED / REJECT",
@@ -236,7 +236,7 @@
     "production_state": "REJECT",
     "production_enabled": false,
     "synthetic_only_guard_must_remain_enforced": true,
-    "active_branch": "arena/01a0aef4-tofel-house-erp",
+    "active_branch": "arena/01a0b084-tofel-house-erp",
     "historical_evidence_may_not_be_relabelled_as_active": true,
     "no_owner_waiver_for_sec_deps": true,
     "owner_decision_record": "canonical-owner-decision-record.json"
@@ -277,7 +277,7 @@
       "area": "Resolved dependency and frontend advisory gates",
       "state": "REJECT",
       "scope": "SEC-DEPS-01 is UPSTREAM-BLOCKED / REJECT; no waiver, override, fabricated lock, unsupported upgrade, or fork-like patch.",
-      "evidence": "Foundation runtime 35122242581 on the active branch at d7df9ca (Checks 104889030990 / 104889035777): 116 restricted checks, 114 pass, hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail. Resolved-stack audit inventoried 161 Bench Python and 572 supplied Node package names with 14 PyPI/OSV findings across pdfkit, pypdf, setuptools and weasyprint; npm bulk advisory audit queried 255 package names with 21 returning 57 findings (27 high, 26 moderate, 4 low). Frontend candidate review 35122242647 also failed and the candidate is NOT adopted. Prior-branch provenance retained: run 35090904508, Checks 104787576338 / 104787579362. evidence/production-like-execution/execution-ledger.json ACTIVE-BRANCH RECONCILIATION (2026-09-17 closure pass at da8b36a): Foundation runtime run 35225331022 on arena/01a0aef4-tofel-house-erp at da8b36a347917e81ecf262694cc0d12ffc0fc4b5 (check 105222593207) repeated the identical profile - 121 restricted checks, 119 pass, only hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail, with phase2_gate_passed and security_gate_passed both false. Frontend candidate run 35222291762 at 1b9f29f: 22 checks, 20 pass, baseline-audit and candidate-audit exit 1, 1 advisory introduced and 35 removed, production_pins_changed false. Re-execution on the active branch changed no outcome. State remains REJECT.",
+      "evidence": "Foundation runtime 35122242581 on the active branch at d7df9ca (Checks 104889030990 / 104889035777): 116 restricted checks, 114 pass, hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail. Resolved-stack audit inventoried 161 Bench Python and 572 supplied Node package names with 14 PyPI/OSV findings across pdfkit, pypdf, setuptools and weasyprint; npm bulk advisory audit queried 255 package names with 21 returning 57 findings (27 high, 26 moderate, 4 low). Frontend candidate review 35122242647 also failed and the candidate is NOT adopted. Prior-branch provenance retained: run 35090904508, Checks 104787576338 / 104787579362. evidence/production-like-execution/execution-ledger.json ACTIVE-BRANCH RECONCILIATION (2026-09-17 closure pass at da8b36a): Foundation runtime run 35225331022 on arena/01a0b084-tofel-house-erp at da8b36a347917e81ecf262694cc0d12ffc0fc4b5 (check 105222593207) repeated the identical profile - 121 restricted checks, 119 pass, only hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail, with phase2_gate_passed and security_gate_passed both false. Frontend candidate run 35222291762 at 1b9f29f: 22 checks, 20 pass, baseline-audit and candidate-audit exit 1, 1 advisory introduced and 35 removed, production_pins_changed false. Re-execution on the active branch changed no outcome. State remains REJECT.",
       "production_closure": true
     },
     {

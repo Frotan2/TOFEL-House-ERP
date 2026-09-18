@@ -1,7 +1,7 @@
 # Production-readiness closure pass — 2026-09-17
 
 **Commit under review:** `da8b36a347917e81ecf262694cc0d12ffc0fc4b5`
-**Branch:** `arena/01a0aef4-tofel-house-erp`
+**Branch:** `arena/01a0b084-tofel-house-erp`
 **Outcome:** **NO-GO for production.** Production remains **REJECT**, D8 remains
 **BLOCKED**, SEC-DEPS-01 remains **UPSTREAM-BLOCKED / REJECT**.
 

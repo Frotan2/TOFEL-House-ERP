@@ -1,6 +1,6 @@
 # Engineering review — 2026-09-17
 
-Date: 2026-09-17 UTC · Active branch: `arena/01a0aef4-tofel-house-erp`
+Date: 2026-09-17 UTC · Active branch: `arena/01a0b084-tofel-house-erp`
 Reviewer scope: the whole repository as checked out, not a single domain.
 **Production remains REJECT. D8 remains BLOCKED. No qualified domain was
 reopened. No business rule, price, grading policy, tax, refund term or

@@ -5,7 +5,7 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
-Active engineering branch: `arena/01a0aef4-tofel-house-erp`. Historical hosted
+Active engineering branch: `arena/01a0b084-tofel-house-erp`. Historical hosted
 runs retain their original branch provenance; see
 [branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
 
@@ -20,17 +20,21 @@ evidence-recovery path, an unfiltered archive extraction, and the absence of any
 static-analysis or whole-suite gate were all fixed. Owned suite: **665 tests
 pass**, ruff clean, both Node suites pass, D8 validator BLOCKED / REJECT.
 
-**The active branch now carries its own hosted evidence, and it is a REJECT.**
-All five named hosted workflows were re-executed on
-`arena/01a0aef4-tofel-house-erp` at commit `e8da889`, so
-`active_branch_hosted_execution` is now `EXECUTED` and the ledger's
-`active_branch_qualification` block holds those observed run, check and report
-identifiers. **Foundation runtime rejected on SEC-DEPS-01 exactly as predicted**
-(run `35218007937`: 119/121 checks pass, `hosted-full-stack-dependency-audit` and
-`hosted-frontend-advisory-audit` fail). Re-executing moved the evidence onto this
-branch; it changed no outcome. Production remains **REJECT** and D8 remains
-**BLOCKED**. Runs cited further below that belong to earlier session branches are
-historical provenance and are labelled as such.
+**The active branch has NO hosted execution of its own yet — recorded as an
+explicit, fail-closed absence.** The session boundary was rotated to
+`arena/01a0b084-tofel-house-erp` on 2026-09-17, so
+`active_branch_hosted_execution` is `NOT_EXECUTED_ON_THIS_BRANCH` and carries no
+run, check or report identifier; every hosted run cited in this repository is
+historical provenance from an earlier session branch. The most recent observed
+Foundation runtime remains the REJECT on the prior branch
+`arena/01a0aef4-tofel-house-erp` (run `35218007937`, commit `e8da889`: 119/121
+checks pass, `hosted-full-stack-dependency-audit` and
+`hosted-frontend-advisory-audit` fail). **Foundation runtime rejects on
+SEC-DEPS-01 exactly as predicted. Production remains REJECT and D8 remains
+BLOCKED.** Re-executing the named hosted workflows on this branch will replace
+the absence with observed results; until then no execution is claimed. Runs
+cited further below that belong to earlier session branches are historical
+provenance and are labelled as such.
 
 **Production-like execution pass (2026-09-16, commit `d7df9ca`):** the readiness
 harness was re-executed on a genuine Docker-capable runner (ubuntu-24.04, Docker

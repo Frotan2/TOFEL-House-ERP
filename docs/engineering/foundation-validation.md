@@ -166,12 +166,12 @@ substitute for hosted integration results. Security and Phase 2 gates remain fal
 
 ### Qualification method and reproduction
 
-Use `.github/workflows/foundation-runtime.yml` on `arena/01a0aef4-tofel-house-erp`:
+Use `.github/workflows/foundation-runtime.yml` on `arena/01a0b084-tofel-house-erp`:
 
 ```sh
-gh workflow run foundation-runtime.yml --ref arena/01a0aef4-tofel-house-erp -f profile=hardened
+gh workflow run foundation-runtime.yml --ref arena/01a0b084-tofel-house-erp -f profile=hardened
 # Historical unsafe-baseline reproduction: use -f profile=forensic instead.
-gh run list --workflow foundation-runtime.yml --branch arena/01a0aef4-tofel-house-erp
+gh run list --workflow foundation-runtime.yml --branch arena/01a0b084-tofel-house-erp
 # Substitute the returned run ID:
 gh run watch RUN_ID --exit-status
 ```

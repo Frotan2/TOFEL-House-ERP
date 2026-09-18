@@ -1,14 +1,40 @@
 # Branch and evidence reconciliation
 
-Date: 2026-09-16 UTC · Rotation record: 2026-09-17 UTC
+Date: 2026-09-16 UTC · Rotation record: 2026-09-17 UTC (two rotations)
 
 ## Active engineering branch
 
 The Arena session branch for current engineering work and hosted qualification is
-`arena/01a0aef4-tofel-house-erp`. The executable branch boundary is defined once
+`arena/01a0b084-tofel-house-erp`. The executable branch boundary is defined once
 in `tools/session_branch.py`; workflow filters, hosted guards, and their tests
 must remain aligned with it. `tests/foundation/test_branch_boundary.py` now
 enforces that mechanically instead of leaving it to review.
+
+### Rotation of 2026-09-17 (second): `arena/01a0aef4-tofel-house-erp` → historical provenance
+
+When the Arena session branch changed again, the boundary was rotated to
+`arena/01a0b084-tofel-house-erp` using the recorded procedure: the canonical
+value in `tools/session_branch.py`, the workflow branch filters, the hosted
+guards, the current-status document headers, the D8 matrix/contract/owner
+records and the qualification tests were updated in the same change. The
+immediately previous branch `arena/01a0aef4-tofel-house-erp` moved from
+**active** to **historical provenance**, keeping its own executed evidence
+(Foundation runtime run `35218007937`, REJECT on SEC-DEPS-01, at commit
+`e8da889`) under `prior_active_branch_provenance`. The previous prior branch
+`arena/01a0aafe-tofel-house-erp` moved to `earlier_active_branch_provenance`,
+and `arena/01a0a9f7-tofel-house-erp` is preserved verbatim under
+`older_active_branch_provenance`.
+
+Because no hosted workflow has run on `arena/01a0b084-tofel-house-erp` yet,
+`hosted_execution_state` is again recorded as the explicit, fail-closed
+`NOT_EXECUTED_ON_THIS_BRANCH` state carrying **no** run, check, commit or
+report identifier. `tools/foundation/d8_validate.py` enforces that absence: any
+execution identity attached to the active block fails the contract, so no
+earlier branch's run can be re-labelled as this branch's execution. The
+`ActiveBranchEvidenceTests` guards keep driving both directions of the state
+machine (absence populated with identity, and execution claimed while the
+boundary records an absence), so the state cannot drift in either direction.
+Production remains **REJECT** and D8 remains **BLOCKED**.
 
 The boundary was rotated from `arena/01a0aafe-tofel-house-erp` on 2026-09-17 when
 the Arena session branch changed, using the procedure recorded in

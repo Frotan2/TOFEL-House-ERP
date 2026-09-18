@@ -25,7 +25,7 @@ name: Foundation operational boundaries
 # requirement is genuinely proven, and the dependency gate SEC-DEPS-01 is untouched.
 on:
   push:
-    branches: [arena/01a0aef4-tofel-house-erp]
+    branches: [arena/01a0b084-tofel-house-erp]
     paths:
       - .github/workflows/foundation-operational-boundaries.yml
       - tools/foundation/bench_bootstrap.py
@@ -50,7 +50,7 @@ concurrency:
 
 jobs:
   tls-edge:
-    if: github.ref == 'refs/heads/arena/01a0aef4-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0b084-tofel-house-erp'
     name: Operational boundaries - TLS edge
     runs-on: ubuntu-24.04
     timeout-minutes: 60
