@@ -12,10 +12,16 @@ runs retain their original branch provenance; see
 **Engineering review (2026-09-18):**
 Continuing ERP semantic reconciliation work on this session branch.
 The session boundary was rotated to `arena/01a0b5c4-tofel-house-erp` on
-2026-09-18, so `active_branch_hosted_execution` is
-`NOT_EXECUTED_ON_THIS_BRANCH` and carries no run, check or report identifier;
-every hosted run cited in this repository is historical provenance from an
-earlier session branch. That rotation also **corrected a stale claim**: the
+2026-09-18, and ten hosted workflows were then genuinely executed on this branch
+at commit `e96de8a` by push trigger, so `active_branch_hosted_execution` is
+`EXECUTED` with `ACTIVE_RUNTIME_RUN` pinned to `35384078097`. Eight gates
+succeeded (owned suite `35384078106`, D8 contract `35384077993`, runner
+`35384077956`, placement `35384078001`, operational boundaries `35384078024`,
+datastore durability `35384078002`, external key custody `35384077977`,
+independent-system recovery `35384078072`) and two rejected: **Foundation
+runtime `35384078097` — failure** at `Install and validate the pinned
+foundation`, and frontend candidate review `35384077998` — failure at
+`Compare frozen baseline and isolated candidate`. That rotation also **corrected a stale claim**: the
 previous active branch `arena/01a0b3a7-tofel-house-erp` was recorded as having
 no hosted execution, but `Foundation runtime validation` genuinely ran there and
 rejected — run `35361065542` at commit `82275fd`, conclusion `failure`, failing

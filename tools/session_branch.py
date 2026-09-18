@@ -24,8 +24,8 @@ ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 # active branch must be a REJECT. tools/foundation/d8_validate.py asserts both the
 # status and this exact run id, so the pin cannot be silently swapped for a
 # different or passing run.
-ACTIVE_RUNTIME_STATE = "NOT_EXECUTED_ON_THIS_BRANCH"
-ACTIVE_RUNTIME_RUN = ""
+ACTIVE_RUNTIME_STATE = "EXECUTED"
+ACTIVE_RUNTIME_RUN = "35384078097"
 
 # Historical provenance pins: the last two Arena session branches that produced
 # a recorded Foundation runtime REJECT. These are evidence identity, never

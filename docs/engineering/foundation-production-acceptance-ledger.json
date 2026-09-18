@@ -123,7 +123,8 @@
     "date": "2026-09-18",
     "branch": "arena/01a0b5c4-tofel-house-erp",
     "classification": "hosted_synthetic_qualification_only",
-    "hosted_execution_state": "NOT_EXECUTED_ON_THIS_BRANCH",
+    "hosted_execution_state": "EXECUTED",
+    "qualification_commit": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
     "rotated_from": "arena/01a0b3a7-tofel-house-erp",
     "prior_active_branch": "arena/01a0b3a7-tofel-house-erp",
     "earlier_active_branch": "arena/01a0aef4-tofel-house-erp",
@@ -132,9 +133,71 @@
     "phase2_gate_passed": false,
     "security_gate_passed": false,
     "product_implementation_authorized": false,
-    "qualification_scope": "No hosted workflow has run on this branch yet. The absence is explicit and fail-closed: tools/foundation/d8_validate.py rejects any run, check, commit or report identifier attached to this block, so no earlier branch's execution can be re-labelled as this branch's. Re-execute the named hosted workflows on this branch to replace this block with observed results.",
-    "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT. Until hosted workflows are re-executed here, every hosted run cited in this repository is historical provenance from an earlier session branch. Production stays REJECT and D8 stays BLOCKED regardless.",
-    "supersedes": "arena/01a0b3a7-tofel-house-erp"
+    "foundation_runtime": {
+      "run": "35384078097",
+      "head_branch": "arena/01a0b5c4-tofel-house-erp",
+      "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+      "status": "fail_reject",
+      "conclusion": "failure",
+      "created_at": "2026-09-18T19:06:37Z",
+      "job": "105726747501",
+      "failing_step": "Install and validate the pinned foundation",
+      "observed": "Foundation runtime validation genuinely executed on this branch at commit e96de8ab21326bea1e7ee2bcafb1992a99c0a82b and rejected. Verified from the GitHub Actions API: run 35384078097, job 105726747501, conclusion failure, failing at the step 'Install and validate the pinned foundation' with exit code 1. This is the SEC-DEPS-01 condition reproduced on the active branch by push-triggered execution rather than re-labelling an earlier branch's run.",
+      "phase2_gate_passed": false,
+      "security_gate_passed": false,
+      "product_implementation_authorized": false,
+      "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; nothing was suppressed, overridden, waived, forked or downgraded. Check-run ids and report SHA-256 digests are deliberately not asserted: the artifact and log blobs are unreachable from the recording sandbox (the results host returns EOF), so no digest is recorded that was not independently read. Advisory findings are not exploitability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. Hosted qualification evidence only; it does not authorize production."
+    },
+    "foundation_runner": {
+      "run": "35384077956",
+      "head_branch": "arena/01a0b5c4-tofel-house-erp",
+      "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+      "status": "pass_scoped",
+      "conclusion": "success",
+      "observed": "Foundation runner qualification completed successfully on this branch at the same commit.",
+      "limits": "Runner/download/service qualification only. It does not prove restart persistence, crash durability, RDB/AOF persistence or restart recovery."
+    },
+    "placement": {
+      "run": "35384078001",
+      "head_branch": "arena/01a0b5c4-tofel-house-erp",
+      "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+      "status": "pass_scoped",
+      "conclusion": "success",
+      "observed": "Placement synthetic content qualification completed successfully on this branch at the same commit.",
+      "limits": "Synthetic content-governance scope on one disposable runner; not multi-branch isolation in a deployed topology, not an independent-host restore, not a destructive-event recovery, not offsite backup, not key custody/rotation, not RPO/RTO, SLA or availability proof. The synthetic-only guard was enabled. Production remains REJECT."
+    },
+    "frontend_candidate": {
+      "run": "35384077998",
+      "head_branch": "arena/01a0b5c4-tofel-house-erp",
+      "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+      "status": "fail_reject_not_adopted",
+      "conclusion": "failure",
+      "job": "105726747229",
+      "failing_step": "Compare frozen baseline and isolated candidate",
+      "observed": "The frontend candidate review executed and failed at the baseline-versus-candidate comparison step, continuing this gate's unbroken rejection history on the npm advisory audit.",
+      "limits": "Candidate is NOT ADOPTED and is not a remediation or production approval. production_pins_changed remains false."
+    },
+    "d8_contract": {
+      "run": "35384077993",
+      "head_branch": "arena/01a0b5c4-tofel-house-erp",
+      "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+      "status": "pass_structural",
+      "conclusion": "success",
+      "job": "105726747011",
+      "observed": "d8_validate.py and tests.d8.test_contract ran on this branch at this commit and passed. The validator exits 0 while reporting d8_gate_state BLOCKED, production_state REJECT, production_enabled false, synthetic-only guard REQUIRED and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT.",
+      "limits": "Structural contract validation only. A passing D8 contract check is not a D8 PASS and not production authorization."
+    },
+    "other_gates_on_this_branch": {
+      "operational_boundaries": "35384078024 success",
+      "datastore_durability": "35384078002 success",
+      "external_key_custody": "35384077977 success",
+      "independent_system_recovery": "35384078072 success",
+      "owned_suite": "35384078106 success"
+    },
+    "qualification_scope": "Ten hosted workflows were genuinely executed on this branch at commit e96de8ab21326bea1e7ee2bcafb1992a99c0a82b by push trigger: owned-suite, foundation-runtime, foundation-runner, foundation-frontend-review, foundation-operational-boundaries, foundation-durability, foundation-key-custody, foundation-independent-recovery, placement-content and d8-operations-contract. Eight succeeded; Foundation runtime validation and the frontend candidate review both rejected. Prior-session evidence is retained unchanged under the provenance blocks and was not counted as an execution on this branch.",
+    "limits": "Nothing here authorizes production. D8 remains BLOCKED, production remains REJECT, and SEC-DEPS-01 remains UPSTREAM-BLOCKED with no waiver. The Foundation runtime REJECTED on this branch exactly as it did on the two previous session branches; re-execution changed the branch that owns the evidence, not the outcome. The frontend candidate is not adopted.",
+    "supersedes": "arena/01a0b3a7-tofel-house-erp",
+    "former_classification": "hosted_synthetic_qualification_only"
   },
   "prior_active_branch_provenance": {
     "date": "2026-09-18",

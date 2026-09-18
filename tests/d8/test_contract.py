@@ -155,28 +155,38 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
 
     # --- the real ledger state: an explicit, guarded absence -----------------
 
-    def test_the_active_branch_records_an_explicit_absence_of_hosted_execution(self):
-        self.assertEqual(self.active["hosted_execution_state"], d8.ACTIVE_RUNTIME_NOT_EXECUTED)
-        self.assertEqual(d8.ACTIVE_RUNTIME_STATE, d8.ACTIVE_RUNTIME_NOT_EXECUTED)
-        # No execution identity anywhere in the block, at any depth.
-        def walk(node):
-            for key, value in node.items():
-                if isinstance(value, dict):
-                    walk(value)
-                elif key in d8.EXECUTION_IDENTITY_FIELDS:
-                    self.assertIn(value, (None, ""), f"{key} carries execution identity")
-        walk(self.active)
-        for key in d8.EXECUTION_EVIDENCE_KEYS:
-            self.assertNotIn(key, self.active, f"{key} is populated while NOT_EXECUTED")
-        # The absence may never relax the production posture.
+    def test_the_active_branch_records_its_own_real_hosted_execution(self):
+        """The named workflows genuinely ran on this branch, so it records EXECUTED.
+
+        This replaced the explicit-absence assertion once the push-triggered
+        qualification of 2026-09-18 executed for real at commit e96de8a. The
+        absence guards are not weakened by the flip: they remain driven by
+        test_a_not_executed_block_may_not_carry_run_identity,
+        test_a_not_executed_block_may_not_populate_evidence_subblocks and
+        test_a_not_executed_block_may_not_relax_the_production_posture, which
+        force the NOT_EXECUTED state consistently on both sides.
+        """
+        self.assertEqual(self.active["hosted_execution_state"], "EXECUTED")
+        self.assertEqual(d8.ACTIVE_RUNTIME_STATE, "EXECUTED")
+        # The recorded execution must be this branch's own, at its own commit.
+        runtime = self.active["foundation_runtime"]
+        self.assertEqual(runtime["run"], d8.ACTIVE_RUNTIME_RUN)
+        self.assertEqual(runtime["head_branch"], d8.ACTIVE_BRANCH)
+        self.assertEqual(runtime["head_sha"], self.active["qualification_commit"])
+        # And it must be the REJECT that actually happened, never a pass.
+        self.assertEqual(runtime["status"], "fail_reject")
+        for flag in ("phase2_gate_passed", "security_gate_passed",
+                     "product_implementation_authorized"):
+            self.assertIs(runtime[flag], False)
+        # A real execution may never relax the production posture either.
         self.assertEqual(self.active["production_state"], "REJECT")
         self.assertFalse(self.active["production_authorized"])
         self.assertEqual(self.active["rotated_from"], d8.PRIOR_ACTIVE_BRANCH)
 
     def test_report_discloses_the_absence_without_relaxing_any_gate(self):
         report = d8.run(d8.TEMPLATE_PATH)
-        self.assertEqual(report["active_branch_hosted_execution"], d8.ACTIVE_RUNTIME_NOT_EXECUTED)
-        self.assertIn("has NO hosted execution", report["warning"])
+        self.assertEqual(report["active_branch_hosted_execution"], "EXECUTED")
+        self.assertNotIn("has NO hosted execution", report["warning"])
         self.assertEqual(report["production_state"], "REJECT")
         self.assertEqual(report["d8_gate_state"], "BLOCKED")
         self.assertEqual(report["sec_deps"], "UPSTREAM-BLOCKED / REJECT")
@@ -248,12 +258,14 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
     def test_claiming_no_execution_the_boundary_does_record_is_rejected(self):
         """The mirror image: an absence the boundary does not record is equally a drift.
 
-        The boundary currently records the absence, so force the boundary to
-        claim an execution instead: with the session boundary pinning EXECUTED
+        The boundary now records a real execution, so force the *ledger* to
+        claim an absence instead: with the session boundary pinning EXECUTED
         while the ledger records NOT_EXECUTED, the ledger is lying about the
         branch state and the contract must fail rather than trust the ledger.
         """
         ledger = copy.deepcopy(self.ledger)
+        ledger["active_branch_qualification"]["hosted_execution_state"] = (
+            d8.ACTIVE_RUNTIME_NOT_EXECUTED)
         original_path, original_state = d8.LEDGER_PATH, d8.ACTIVE_RUNTIME_STATE
         d8.ACTIVE_RUNTIME_STATE = "EXECUTED"
         with tempfile.NamedTemporaryFile("w", suffix=".json") as handle:
@@ -315,10 +327,12 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
                 self.assertNotIn(value, serialized,
                                  f"{label}-branch {field} leaked into the active block")
 
-    def test_the_active_branch_pins_no_run_while_the_absence_stands(self):
-        """No execution is claimed, so the boundary pins no run at all — and no
-        previous branch's run could therefore be mistaken for this branch's."""
-        self.assertEqual(d8.ACTIVE_RUNTIME_RUN, "")
+    def test_the_active_branch_pins_its_own_run_and_no_earlier_branchs(self):
+        """The boundary pins the run that actually executed on this branch, and it
+        is distinct from every earlier branch's pinned run, so no previous
+        branch's execution can be mistaken for this branch's."""
+        self.assertEqual(d8.ACTIVE_RUNTIME_RUN, "35384078097")
+        self.assertEqual(self.active["foundation_runtime"]["run"], d8.ACTIVE_RUNTIME_RUN)
         self.assertNotIn(d8.ACTIVE_RUNTIME_RUN,
                          (d8.PRIOR_ACTIVE_RUNTIME_RUN, d8.EARLIER_ACTIVE_RUNTIME_RUN),
                          "the active branch pins a run that belongs to an earlier branch")

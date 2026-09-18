@@ -45,11 +45,37 @@ recorded for it: the check-runs endpoint returns 404 for that run and the
 artifact/log blobs are unreachable from the recording sandbox, so nothing is
 asserted that was not independently read.
 
-Because no hosted workflow has run on `arena/01a0b5c4-tofel-house-erp` yet,
-`hosted_execution_state` is the explicit, fail-closed
-`NOT_EXECUTED_ON_THIS_BRANCH` carrying **no** run, check, commit or report
-identifier. `tools/foundation/d8_validate.py` enforces that absence. Production
-remains **REJECT** and D8 remains **BLOCKED**; no gate changed state.
+That absence was then closed **by execution, not by re-labelling**. Ten hosted
+workflows were genuinely executed on `arena/01a0b5c4-tofel-house-erp` at commit
+`e96de8ab21326bea1e7ee2bcafb1992a99c0a82b`, triggered by the push of the
+rotation commit itself:
+
+| Workflow | Run | Conclusion |
+| --- | --- | --- |
+| Foundation runtime validation | `35384078097` | **failure** |
+| Foundation frontend candidate review | `35384077998` | **failure** |
+| Owned suite | `35384078106` | success |
+| D8 operations contract validation | `35384077993` | success |
+| Foundation runner qualification | `35384077956` | success |
+| Placement synthetic content qualification | `35384078001` | success |
+| Foundation operational boundaries | `35384078024` | success |
+| Foundation datastore durability | `35384078002` | success |
+| Foundation external key custody | `35384077977` | success |
+| Foundation independent-system recovery | `35384078072` | success |
+
+`hosted_execution_state` is therefore `EXECUTED` and
+`session_branch.ACTIVE_RUNTIME_RUN` is pinned to `35384078097`, whose status is
+`fail_reject`: it failed at the step `Install and validate the pinned
+foundation`. `tools/foundation/d8_validate.py` asserts **both** that status and
+that exact run id, so the pin cannot be silently swapped for a different or
+passing run while SEC-DEPS-01 is open. Check-run ids and report SHA-256 digests
+are deliberately not recorded for these runs: the artifact and log blobs are
+unreachable from the recording sandbox, so no digest is asserted that was not
+independently read.
+
+**The Foundation runtime rejected exactly as predicted.** Production remains
+**REJECT** and D8 remains **BLOCKED**; re-execution moved the evidence onto this
+branch and changed no outcome. The frontend candidate remains NOT ADOPTED.
 
 ### Rotation of 2026-09-17 (second): `arena/01a0aef4-tofel-house-erp` → historical provenance
 
