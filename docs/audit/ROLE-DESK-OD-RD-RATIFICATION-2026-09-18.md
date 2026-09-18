@@ -3,17 +3,25 @@
 Date: 2026-09-18 · Active branch at evidence time: `arena/01a0b3a7-tofel-house-erp`
 Session branch: `arena/01a0b568-tofel-house-erp`
 Base commit for this ratification: `d5f9e426e8bd75f2ad43c1a47b4dddb548ea6d44`
-Final product SHA with full Phase-2 green: `31e6add1724bf96a3e2b9eb460ea080738a0117f`
+Final product SHA with full Phase-2 green (pre-U fixes): `31e6add1724bf96a3e2b9eb460ea080738a0117f`
+Final merge SHA with U3/U6/U7/U8 + ratification: `b210b3d30652bfa05b9e60845bbaada9d80d7e17` (merge of `93baa83` into active)
 
 **Production remains REJECT** — SEC-DEPS-01 upstream-blocked, synthetic-only activation required.
 This ratification does not authorize production; it closes the product-readiness of the six role desks.
 
 ## Hosted evidence that informs these decisions
 
-Both runs were on `arena/01a0b3a7-tofel-house-erp` at `31e6add`:
+### Pre-U-fix final green (on `31e6add`):
 
 - **Owned suite** `35365044995` — success, ruff 0.16.8, 847+ Python tests, all four Node suites (realtime_guard, command_pages, design_system, role_desks), D8 gate BLOCKED / production REJECT as required.
 - **Placement synthetic content qualification** `35365045006` — success, 570 native checks, check-run `105668996321`, report SHA-256 `45a698dcd6ea5e2341eddbf335e68c5b57ea99c52d8bb10d9289a04265b49cdf`.
+
+### Post-U-fix final green (on merge `b210b3d` = `93baa83` + active):
+
+- **Owned suite** `35371920888` — success, same 847+ tests, ruff 0.16.8, Node suites, D8 BLOCKED/REJECT.
+- **Placement synthetic content qualification** `35371920878` — success, 570 checks, check-run `105691353452`, report SHA-256 `7dcc2b505a5338e7b9801bd4b1edfb012fc020b6d924bfab924fad68b1268964`, runner result `105691355851`.
+
+Both post-fix runs confirm U3/U6/U7/U8 did not break desk qualification; fees-correction chain re-qualified with new request `pk8lkdn0vl`.
 
 The placement report includes the `role-desk-hosted-qualification` observation:
 
@@ -105,13 +113,16 @@ Offline guards at final SHA:
 
 ## Final desk readiness claim
 
-With both hosted gates green on `31e6add` and owner ratification of OD-RD-1..4 above:
+With both hosted gates green on `31e6add` (pre-U) and re-green on `b210b3d` (post-U) and owner ratification of OD-RD-1..4 above:
 
 - Six role desks are **qualified on the real HTTP pipeline** (audience loads, negatives, lifecycle truth, U1 prefills, D6/OD-RD-1 chain over real HTTP).
 - Offline guards and hosted evidence can no longer diverge: desk projection field allow-lists are pinned against `pinned_schema.json` (17 doctypes incl. User Permission) and consumed by `DeskSchemaFidelityTests`; `get_all`/`count` stub fails closed on unlisted fields; whitelist-marking stub ensures `frappe.whitelist` is not a no-op in tests; client-string→endpoint exposure tie-out ensures every `toefl_house.desk.<module>.work` named in JS resolves to a whitelisted endpoint.
 - Production remains **REJECT** — SEC-DEPS-01 and synthetic-only activation unchanged. No D8 gate flipped by this ratification.
 - Remaining owner decisions: D1, D4, D5, D6a/b, D11 remain as per `OWNER-DECISIONS.md`. OD-RD-1..4 are now CLOSED per this ratification.
 
-Evidence packet for OD-RD-1 is the hosted placement report `45a698dcd6ea5e2341eddbf335e68c5b57ea99c52d8bb10d9289a04265b49cdf` (check-run `105668996321`) plus owned-suite `35365044995`, plus local desk suite 53 tests.
+Evidence packet for OD-RD-1 is:
+- Pre-U: hosted placement report `45a698dcd6ea5e2341eddbf335e68c5b57ea99c52d8bb10d9289a04265b49cdf` (check-run `105668996321`) + owned-suite `35365044995`
+- Post-U: hosted placement report `7dcc2b505a5338e7b9801bd4b1edfb012fc020b6d924bfab924fad68b1268964` (check-run `105691353452`) + owned-suite `35371920888` (both on merge `b210b3d`)
+- Local desk suite 53 tests green at `93baa83` and at `b210b3d`.
 
-Stamped: 2026-09-18
+Stamped: 2026-09-18 — final green `b210b3d` with U3/U6/U7/U8 closure.
