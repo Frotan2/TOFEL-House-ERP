@@ -447,3 +447,83 @@ infrastructure):
 - SEC-DEPS-01 upstream security blocker remains unchanged and out of scope
   for this slice; production authorization stays BLOCKED per the standing
   D8 decision matrix.
+
+## 12. Hosted runtime qualification — Class + TH Skill (2026-09-18)
+
+Mechanism: the repository's existing hosted qualification harness
+(`.github/workflows/placement-content.yml` → `tools/placement/run_native.py`)
+builds a pinned bench on GitHub's synthetic runner (frappe 988e54f3c4c2,
+education 93bc70757533, erpnext 4048fb70…, hrms a4768b44…, MariaDB, Redis,
+gunicorn HTTP), creates `placement-test.localhost` and
+`placement-second.localhost`, installs `foundation_security` + `toefl_house`,
+runs `bench migrate` twice per site, then executes
+`tools/placement/native_checks.py` (552+ native DB/controller/HTTP checks)
+and a true bench backup/restore rehearsal. Evidence is published as check
+runs ("Placement native checks" / "Placement runner result", gzip+base64 with
+SHA-256 digest). Unit tests and static analysis are NOT counted as runtime
+evidence anywhere below.
+
+Run ledger (branch `arena/01a0b3a7-tofel-house-erp`):
+
+| Run | Result | Meaning |
+| --- | --- | --- |
+| 35332459813 | fail (fresh-site install) | **Product defect found:** `install.py` added the `th_sg_class_status` / `th_sg_branch` / `th_sg_start_date` indexes during `after_install` before the Custom Field fixtures created the columns → MariaDB 1072. Fixed at root cause (`frappe.db.has_column` guard; the next migrate applies the index) with a regression test in `tests/teaching/test_class_lifecycle.py`. |
+| 35333228021 | fail (harness) | Qualification-harness arity defect (message needle mis-parenthesized into `check()`); fixed, and all `check()/denied()/unavailable()` calls were audited by an AST arity scan. |
+| 35334186130 | fail (harness, deep) | **552/552 native checks passed** — every Class + TH Skill runtime proof listed below went green on the real site. The failure was afterwards, in this slice's new fixture code (instructor↔employee linker key), before the retired-skill/instructor-integrity checks could run. Fixed (Left instructor binds to its fixed-contract employee). |
+| 35335044988 | conclusion to be transcribed | Re-run carrying the same 552 green proofs plus the newly-enabled item 9/10 probes (retired-skill runtime policy, Instructor↔Employee integrity, mismatch/inactive-employee refusals). Evidence retrieval was interrupted by an expired sandbox GitHub token; the exact report must be re-read from run 35335044988's "Placement native checks" check run after the GitHub connection is refreshed, and this section updated before any green claim is made for items 9–10. |
+
+Runtime behaviors **proven on the real Frappe site** (run 35334186130; check
+names as published in the report):
+
+1. **Custom Fields applied by migrate** — `teaching-class-fields-present`:
+   `th_class_start_date`/`th_class_end_date` (Date, read-only),
+   `th_class_status`/`th_delivery_mode` (Select with the pinned options),
+   `th_branch` (Link→Branch) all exist on the migrated `Student Group` meta.
+2. **TH Skill master + seeded vocabulary** — `teaching-skill-seeds-present`:
+   doctype exists on the migrated site; SL/WG/RV are present as Active with
+   the canonical titles.
+3. **`create_student_group` on the real site** — `teaching-group-happy-path`
+   (+`teaching-group-idempotent-replay`, name/capacity/roster/program/year
+   refusals, `teaching-second-group`): roster derived only from submitted
+   Program Enrollments; class facts recorded; Planned status.
+   `teaching-group-no-duration-policy-denied` proves the duration-policy
+   default fails closed when no TH Level Duration governs the level.
+4. **`transition_class` on the real Student Group** —
+   `teaching-transition-groupA-active` / `-groupB-active`; role refusals
+   `teaching-transition-outsider-denied` / `-recorder-denied`; illegal jump
+   refused `teaching-transition-invalid-target-denied`.
+5. **`schedule_session` only for Active classes** —
+   `teaching-session-happy-path`, `teaching-second-session`,
+   `http-teaching-session-positive` (REST), idempotent replay, and group/
+   instructor/room/calendar refusals.
+6. **Planned / Completed / Cancelled refusals** —
+   `teaching-session-before-activate-denied` (Planned),
+   `teaching-session-completed-denied`, `teaching-session-cancelled-denied`
+   — each asserted against the exact guard message
+   "Sessions can only be scheduled for Active classes (current status: X)";
+   terminal states cannot regress (`teaching-transition-completed-terminal-
+   denied`, `teaching-transition-cancelled-terminal-denied`).
+7. **Direct Desk/form editing refused** — `teaching-class-fact-save-denied`:
+   Administrator `doc.save(ignore_permissions=True)` on each protected fact
+   (delivery mode, both dates, status) is refused by the guard with the
+   message, and the persisted values are re-read and confirmed unchanged.
+8. **REST/Python RPC writes refused** — same check proves
+   `frappe.client.set_value` refusal plus value persistence, and
+   `http-teaching-protected-fact-put-denied` refuses `PUT /api/resource/
+   Student Group/<name>` on a protected fact at the web seam (pre-existing
+   A13 containment checks cover cancel/edit/delete/amend-copy seams).
+
+Runtime behavior **pending the 35335044988 read-out** (probes written,
+green expected, not yet claimed): `teaching-compensation-contract-authority`
+(extended with the mismatched-employee and inactive-employee refusals —
+item 10) and `teaching-retired-skill-runtime-policy` (item 9: RV retired →
+historical assignment/contract term stay readable and `end_teaching_assignment`
+stays operable; reactivation refused; new contract/assignment with the retired
+skill refused with the exact message; unknown skill code refused).
+
+Standing blockers (unchanged by this qualification): **SEC-DEPS-01
+UPSTREAM-BLOCKED**, D8 gate **BLOCKED**, production decision **REJECT** — the
+hosted synthetic runtime is not a production deployment, and a green
+qualification does not lift any of them. No class-amendment policy, no
+cancellation/completion side effects, no Offering/Program Version layers were
+invented (§11.2 remains the open-owner-decision list).
