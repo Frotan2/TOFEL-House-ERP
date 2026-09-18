@@ -421,7 +421,7 @@ def plan_with_components(candidates, rows_by_plan):
     return [plan for plan in candidates if rows_by_plan.get(plan["name"])]
 
 
-@frappe.whitelist(methods=["GET", "POST"])
+@frappe.whitelist(methods=["GET", "POST"], allow_guest=True)
 def available():
     """Registry read: which desks the SERVER believes this viewer may open.
 

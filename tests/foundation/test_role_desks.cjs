@@ -127,6 +127,15 @@ for (const [slug, shape] of Object.entries(EXPECTED)) {
 }
 assert(/@frappe\.whitelist\([^\n]*\)\ndef available\(/.test(deskInit),
 	"the desk registry read (toefl_house.desk.available) must stay whitelisted");
+// the guest contract the endpoint documents: guests get {'desks': []}, so
+// the decorator must actually admit them; desk loads must never do so.
+const availableDecorator = /@frappe\.whitelist\(([^\n]*)\)\ndef available\(/.exec(deskInit);
+assert(/allow_guest=(True|1|true)/.test(availableDecorator[1]),
+	"toefl_house.desk.available must stay allow_guest: its documented guest answer is an empty registry, not an HTTP refusal");
+for (const mod of ["reception", "academic", "finance", "operations", "owner", "setup"]) {
+	const src = fs.readFileSync(path.join(APP, "desk", `${mod}.py`), "utf8");
+	assert(!/allow_guest/.test(src), `the ${mod} desk projection must never be guest-exposed`);
+}
 for (const [, method] of fs.readFileSync(SCRIPT, "utf8").matchAll(/"(toefl_house\.desk\.[\w.]+)"/g)) {
 	const tail = method.split(".")[2];
 	assert(["reception", "academic", "finance", "operations", "owner", "setup", "available"]

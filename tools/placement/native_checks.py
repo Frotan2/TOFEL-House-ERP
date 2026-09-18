@@ -3910,7 +3910,8 @@ def main():
             # guest: registry answers empty; desk loads are denied
             g=requests.get(base+'/api/method/toefl_house.desk.available',
                 headers={'Host':'placement-test.localhost'},timeout=30)
-            assert g.status_code==200 and g.json()['message']['desks']==[]
+            assert g.status_code==200 and g.json()['message']['desks']==[], \
+                ('guest registry answer',g.status_code,g.text[:200])
             http_denied(requests.get(base+'/api/method/toefl_house.desk.reception.work',
                 headers={'Host':'placement-test.localhost'},timeout=30))
             http_denied(sessions['outsider'].get(

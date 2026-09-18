@@ -138,6 +138,7 @@ def _frappe_stub(roles=()):
         def decorator(func):
             func.__frappe_whitelisted__ = True
             func.__frappe_whitelist_methods__ = tuple(kwargs.get("methods") or ())
+            func.__frappe_whitelist_allow_guest__ = bool(kwargs.get("allow_guest"))
             return func
         return decorator
 
@@ -464,6 +465,18 @@ class DeskReadEndpointExposureTests(unittest.TestCase):
                 self.assertTrue({"GET", "POST"} <= set(
                     getattr(target, "__frappe_whitelist_methods__", ())),
                     f"{dotted} must accept GET and POST like every desk read")
+                # Guest contract, pinned at the decorator (the hosted bench
+                # is where an unmet guest promise now fails loudly first):
+                # the registry answers guests an explicit empty list; every
+                # desk projection stays guest-closed and audience-gated.
+                guest_ok = bool(getattr(target, "__frappe_whitelist_allow_guest__", False))
+                if dotted == "toefl_house.desk.available":
+                    self.assertTrue(guest_ok,
+                                    f"{dotted} must stay allow_guest: its guest "
+                                    "branch answers {'desks': []}, not an error")
+                else:
+                    self.assertFalse(guest_ok,
+                                     f"{dotted} must never be guest-exposed")
 
 
 class DeskSchemaFidelityTests(unittest.TestCase):
