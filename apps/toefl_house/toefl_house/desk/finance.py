@@ -36,8 +36,6 @@ def _money_state(row):
     if row.get("docstatus") == 2:
         return "Cancelled"
     outstanding = float(row.get("outstanding_amount") or 0)
-    grand = float(row.get("grand_total") or 0)
-    paid = grand - outstanding
     if outstanding <= 0:
         return "Settled"
     if row.get("status") in ("Overdue",) or (

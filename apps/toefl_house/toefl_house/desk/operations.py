@@ -5,13 +5,12 @@ cockpit: no release posture, no governance claims — operational queues and
 exception facts only. Sections are specified in docs/product/ROLE-DESKS.md.
 """
 import frappe
-from frappe.utils import now_datetime, today
+from frappe.utils import now_datetime
 
 from toefl_house.desk import (
     BOUNCE_WINDOW,
     DESKS,
     LIMIT_QUEUES,
-    project_count,
     project_rows,
     require_desk_audience,
     section,
@@ -91,7 +90,6 @@ def _age_label(value):
 def work():
     """GM desk payload: funnel, exceptions, staffing, links."""
     require_desk_audience(SLUG)
-    day = today()
 
     admissions_open = project_rows("management", ADMISSION,
                                    ["name", "student_applicant", "program", "status",

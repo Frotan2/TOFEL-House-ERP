@@ -73,7 +73,6 @@ def work():
     """Academic desk payload: academic queues, classes, sessions, workload."""
     require_desk_audience(SLUG)
     day = today()
-    now = now_datetime()
 
     # --- admissions awaiting an academic decision --------------------------
     admissions = project_rows("academic", ADMISSION, ADMISSION_FIELDS,
@@ -88,11 +87,6 @@ def work():
                                order_by="modified asc", limit=LIMIT_QUEUES)
 
     # --- placement pipeline -------------------------------------------------
-    attempts = project_rows("academic", ATTEMPT,
-                            ["name", "case_name", "ordinal", "status", "version", "mode",
-                             "deadline_at"],
-                            filters={"status": ("in", list(lifecycle.PLACEMENT_ATTEMPT_ORDER))},
-                            order_by="modified asc", limit=LIMIT_QUEUES)
     finalized_waiting = project_rows(
         "academic", ATTEMPT,
         ["name", "case_name", "ordinal", "status", "version", "mode", "deadline_at"],
