@@ -3228,8 +3228,8 @@ def main():
             # in create_teaching_contract resolves. 'SYN Instructor Left' shares
             # employee One (its fixed contract is issued against One); the
             # Temp pair exercises the inactive-employee refusal.
-            for label,iname in (('One',ins['One']),('Two',ins['Two']),('Left',ins['Left'])):
-                frappe.db.set_value('Instructor',iname,'employee',emps[label])
+            for ilabel,elabel in (('One','One'),('Two','Two'),('Left','One')):
+                frappe.db.set_value('Instructor',ins[ilabel],'employee',emps[elabel])
             tname=frappe.db.get_value('Instructor',{'instructor_name':'SYN Instructor Temp'},'name')
             if not tname:
                 tname=frappe.get_doc(dict(doctype='Instructor',instructor_name='SYN Instructor Temp',
