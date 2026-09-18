@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 import frappe
 from toefl_house.api import _execute
 from toefl_house.academic.rules import resolve_duration
-from toefl_house.policy import (CLASS_STATUSES, DELIVERY_MODES, digest, is_valid_class_transition,
+from toefl_house.policy import (DELIVERY_MODES, digest, is_valid_class_transition,
                                 validate_attendance_statuses, validate_capacity,
                                 validate_class_status, validate_delivery_mode,
                                 validate_group_name, validate_schedule_date,

@@ -11,7 +11,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps/toefl_house"))
-from toefl_house.policy import CLASS_STATUSES, CLASS_TRANSITIONS, DELIVERY_MODES, \
+from toefl_house.policy import CLASS_STATUSES, DELIVERY_MODES, \
     is_valid_class_transition, validate_class_status, validate_delivery_mode
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -150,6 +150,19 @@ class InstallSeedingTests(unittest.TestCase):
         self.assertNotIn("th_class", existing)
         self.assertNotIn("th_cohort", existing)
         self.assertNotIn("th_course_offering", existing)
+
+    def test_student_group_indexes_guarded_on_custom_field_columns(self):
+        """Regression (hosted run 35332459813): the Student Group class-fact
+        columns come from Custom Field fixtures, which do not exist during
+        install-app. Unconditional add_index then dies with MySQL 1072 and
+        fails the fresh-site install; the index must be added only once the
+        column exists (the next migrate applies it)."""
+        src = INSTALL.read_text()
+        self.assertIn('frappe.db.has_column("Student Group", column)', src)
+        for bare in ('frappe.db.add_index("Student Group", ["th_class_status"]',
+                     'frappe.db.add_index("Student Group", ["th_branch"]',
+                     'frappe.db.add_index("Student Group", ["th_class_start_date"]'):
+            self.assertNotIn(bare, src)
 
 
 class ClassFactInvariantTests(unittest.TestCase):

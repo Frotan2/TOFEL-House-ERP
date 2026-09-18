@@ -74,10 +74,16 @@ def after_migrate():
     frappe.db.add_index("TH Teaching Assignment", ["instructor", "effective_start"], "th_assignment_instructor_start")
     # TH Skill lookups (config master).
     frappe.db.add_index("TH Skill", ["status"], "th_skill_status")
-    # Student Group class lifecycle lookups (operational class fields).
-    frappe.db.add_index("Student Group", ["th_class_status"], "th_sg_class_status")
-    frappe.db.add_index("Student Group", ["th_branch"], "th_sg_branch")
-    frappe.db.add_index("Student Group", ["th_class_start_date"], "th_sg_start_date")
+    # Student Group class lifecycle lookups (operational class fields). These
+    # columns come from Custom Field fixtures; during install-app the
+    # fixtures have not been applied yet, so adding the index there fails
+    # with MySQL 1072 (hosted run 35332459813). Guard on column existence:
+    # the next migrate adds the index once the Custom Fields are present.
+    for column, index in (("th_class_status", "th_sg_class_status"),
+                          ("th_branch", "th_sg_branch"),
+                          ("th_class_start_date", "th_sg_start_date")):
+        if frappe.db.has_column("Student Group", column):
+            frappe.db.add_index("Student Group", [column], index)
     # D3 correction framework lookups.
     frappe.db.add_index("TH Correction Policy", ["status"], "th_correction_policy_status")
     frappe.db.add_index("TH Correction Request", ["sales_invoice"], "th_correction_request_invoice")
