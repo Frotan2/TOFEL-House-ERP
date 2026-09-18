@@ -1548,7 +1548,7 @@ def main():
         # TH Level Duration is a planning default only: with no governing
         # duration for the program's level, creation fails closed rather than
         # inventing an end date.
-        check('teaching-group-no-duration-policy-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_nodur_0000000001',GRP_A,cat['program'],cat['academic_year'],'',2,'2026-09-01'))),'No governing duration policy')
+        check('teaching-group-no-duration-policy-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_nodur_0000000001',GRP_A,cat['program'],cat['academic_year'],'',2,'2026-09-01')),'No governing duration policy'))
         groupA=check('teaching-group-happy-path',lambda:as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_a_key_00001',GRP_A,cat['program'],cat['academic_year'],'',2,'2026-09-01','2026-12-31')))
         assert groupA['name']==GRP_A and groupA['students']==2
         assert groupA['roster']==sorted([converted['native_student'],second['student']])
@@ -1573,7 +1573,7 @@ def main():
         check('teaching-transition-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:tea.transition_class('tea_trans_out_0001',GRP_A,'Active'))))
         check('teaching-transition-recorder-denied',lambda:denied(lambda:as_user('attendance_recorder',lambda:tea.transition_class('tea_trans_rec_0001',GRP_A,'Active'))))
         check('teaching-transition-invalid-target-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_bad_0001',GRP_A,'Completed'))))
-        check('teaching-session-before-activate-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_planned_deny_01',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))),'can only be scheduled for Active classes (current status: Planned)')
+        check('teaching-session-before-activate-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_planned_deny_01',GRP_A,'2026-09-21','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE')),'can only be scheduled for Active classes (current status: Planned)'))
         actA=check('teaching-transition-groupA-active',lambda:as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_a_key_001',GRP_A,'Active')))
         assert actA['after_status']=='Active' and actA['before_status']=='Planned'
         actB=check('teaching-transition-groupB-active',lambda:as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_b_key_001',GRP_B,'Active')))
@@ -1644,12 +1644,12 @@ def main():
         as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_c_key_001',GRP_C,'Active'))
         completed=as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_c_to_complete_1',GRP_C,'Completed'))
         assert completed['after_status']=='Completed'
-        check('teaching-session-completed-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_compl_deny_01',GRP_C,'2026-09-23','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))),'can only be scheduled for Active classes (current status: Completed)')
+        check('teaching-session-completed-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_compl_deny_01',GRP_C,'2026-09-23','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE')),'can only be scheduled for Active classes (current status: Completed)'))
         check('teaching-transition-completed-terminal-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_compl_back_01',GRP_C,'Active'))))
         as_user('teaching_scheduler',lambda:tea.create_student_group('tea_group_d_key_001',GRP_D,cat['program'],cat['academic_year'],'',2,'2026-09-01','2026-12-31'))
         cancelled=as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_d_key_001',GRP_D,'Cancelled'))
         assert cancelled['after_status']=='Cancelled'
-        check('teaching-session-cancelled-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_canc_deny_01',GRP_D,'2026-09-23','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))),'can only be scheduled for Active classes (current status: Cancelled)')
+        check('teaching-session-cancelled-denied',lambda:unavailable(lambda:as_user('teaching_scheduler',lambda:tea.schedule_session('tea_sched_canc_deny_01',GRP_D,'2026-09-23','09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE')),'can only be scheduled for Active classes (current status: Cancelled)'))
         check('teaching-transition-cancelled-terminal-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:tea.transition_class('tea_trans_canc_back_01',GRP_D,'Active'))))
         # TH Skill canonical masters SL/WG/RV are seeded Active by install.py.
         # Code stability, no-rename/no-delete and the one-way retirement gate
