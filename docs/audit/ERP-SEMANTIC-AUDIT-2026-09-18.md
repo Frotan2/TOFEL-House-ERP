@@ -551,4 +551,8 @@ UPSTREAM-BLOCKED**, D8 gate **BLOCKED**, production decision **REJECT** — the
 hosted synthetic runtime is not a production deployment, and a green
 qualification does not lift any of them. No class-amendment policy, no
 cancellation/completion side effects, no Offering/Program Version layers were
-invented (§11.2 remains the open-owner-decision list).
+invented (§11.2 remains the open-owner-decision list). The next mission —
+hosted qualification of the Admission → Enrollment → Fees handoff and the
+OD-CP-1/2/3 runtime semantics — is planned in
+`docs/audit/FEE-HANDOFF-AUDIT-2026-09-18.md` (plan published 2026-09-18,
+no product code changed for it yet).
