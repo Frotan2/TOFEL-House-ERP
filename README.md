@@ -5,25 +5,35 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
-Active engineering branch: `arena/01a0b3a7-tofel-house-erp`. Historical hosted
+Active engineering branch: `arena/01a0b5c4-tofel-house-erp`. Historical hosted
 runs retain their original branch provenance; see
 [branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
 
 **Engineering review (2026-09-18):**
 Continuing ERP semantic reconciliation work on this session branch.
-The session boundary was rotated to `arena/01a0b3a7-tofel-house-erp` on 2026-09-18, so
-`active_branch_hosted_execution` is `NOT_EXECUTED_ON_THIS_BRANCH` and carries no
-run, check or report identifier; every hosted run cited in this repository is
-historical provenance from an earlier session branch. The most recent observed
-Foundation runtime remains the REJECT on the prior branch
-`arena/01a0aef4-tofel-house-erp` (run `35218007937`, commit `e8da889`: 119/121
-checks pass, `hosted-full-stack-dependency-audit` and
-`hosted-frontend-advisory-audit` fail). **Foundation runtime rejects on
-SEC-DEPS-01 exactly as predicted. Production remains REJECT and D8 remains
-BLOCKED.** Re-executing the named hosted workflows on this branch will replace
-the absence with observed results; until then no execution is claimed. Runs
-cited further below that belong to earlier session branches are historical
-provenance and are labelled as such.
+The session boundary was rotated to `arena/01a0b5c4-tofel-house-erp` on
+2026-09-18, so `active_branch_hosted_execution` is
+`NOT_EXECUTED_ON_THIS_BRANCH` and carries no run, check or report identifier;
+every hosted run cited in this repository is historical provenance from an
+earlier session branch. That rotation also **corrected a stale claim**: the
+previous active branch `arena/01a0b3a7-tofel-house-erp` was recorded as having
+no hosted execution, but `Foundation runtime validation` genuinely ran there and
+rejected — run `35361065542` at commit `82275fd`, conclusion `failure`, failing
+at the step `Install and validate the pinned foundation`, with a second run
+`35356041559` at `53aae30` failing identically. See
+[branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
+**Foundation runtime rejects on SEC-DEPS-01 exactly as predicted. Production
+remains REJECT and D8 remains BLOCKED.** Re-executing the named hosted workflows
+on this branch will replace the absence with observed results; until then no
+execution is claimed. Runs cited further below that belong to earlier session
+branches are historical provenance and are labelled as such.
+
+The two commits previously reported as local-only on an earlier session
+(`b6d78e5` and `8638c77`) are recorded as **LOST / NON-EXISTENT**. They are
+absent from every reachable object in this repository's full history, and the
+GitHub commits API returns HTTP 422 "No commit found for SHA" for both. They are
+not cited as history anywhere in this repository and must not be reconstructed
+or assumed.
 
 **Production-like execution pass (2026-09-16, commit `d7df9ca`):** the readiness
 harness was re-executed on a genuine Docker-capable runner (ubuntu-24.04, Docker

@@ -270,8 +270,15 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
     # --- provenance separation -------------------------------------------
 
     def test_each_previous_session_branch_keeps_its_own_pinned_run(self):
-        self.assertEqual(d8.PRIOR_ACTIVE_RUNTIME_RUN, "35218007937")
-        self.assertEqual(d8.EARLIER_ACTIVE_RUNTIME_RUN, "35122242581")
+        # Advanced by the 2026-09-18 rotation to arena/01a0b5c4-tofel-house-erp,
+        # per the procedure in tools/session_branch.py ("update the workflow
+        # branch filters and tests in the same change"). The pins move forward
+        # to the newly retired branches' own real runs; the guard itself is
+        # unchanged and still rejects any swap or re-labelling.
+        #   prior   arena/01a0b3a7-tofel-house-erp -> run 35361065542 (fail_reject)
+        #   earlier arena/01a0aef4-tofel-house-erp -> run 35218007937 (fail_reject)
+        self.assertEqual(d8.PRIOR_ACTIVE_RUNTIME_RUN, "35361065542")
+        self.assertEqual(d8.EARLIER_ACTIVE_RUNTIME_RUN, "35218007937")
         prior = self.ledger["prior_active_branch_provenance"]
         earlier = self.ledger["earlier_active_branch_provenance"]
         self.assertEqual(prior["branch"], d8.PRIOR_ACTIVE_BRANCH)

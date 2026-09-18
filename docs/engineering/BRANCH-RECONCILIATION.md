@@ -5,10 +5,51 @@ Date: 2026-09-16 UTC · Rotation record: 2026-09-17 UTC (two rotations)
 ## Active engineering branch
 
 The Arena session branch for current engineering work and hosted qualification is
-`arena/01a0b3a7-tofel-house-erp`. The executable branch boundary is defined once
+`arena/01a0b5c4-tofel-house-erp`. The executable branch boundary is defined once
 in `tools/session_branch.py`; workflow filters, hosted guards, and their tests
 must remain aligned with it. `tests/foundation/test_branch_boundary.py` now
 enforces that mechanically instead of leaving it to review.
+
+### Rotation of 2026-09-18 (third): `arena/01a0b3a7-tofel-house-erp` → historical provenance
+
+The Arena session branch changed again, so the boundary was rotated to
+`arena/01a0b5c4-tofel-house-erp` using the recorded procedure: the canonical
+value in `tools/session_branch.py`, all eleven workflow branch filters and their
+`github.ref` guards, the ten current-status document headers, the D8
+matrix/contract/owner records, the acceptance ledger and the qualification tests
+were updated in the same change. `arena/01a0b3a7-tofel-house-erp` moved from
+**active** to **historical provenance**; `arena/01a0aef4-tofel-house-erp` moved
+to `earlier_active_branch_provenance`; `arena/01a0aafe-tofel-house-erp` moved to
+`older_active_branch_provenance`; and `arena/01a0a9f7-tofel-house-erp` moved to
+`oldest_active_branch_provenance`. Every run, check, commit and SHA-256 identity
+in those blocks is unchanged — a rotation moves the boundary, never the evidence.
+
+**A stale claim was corrected by this rotation.** The block that previously
+occupied `active_branch_qualification` recorded
+`hosted_execution_state: NOT_EXECUTED_ON_THIS_BRANCH` for
+`arena/01a0b3a7-tofel-house-erp`. That was not true. The GitHub Actions API
+shows `Foundation runtime validation` genuinely executed on that branch and
+rejected:
+
+| Run | Head SHA | Conclusion | Created |
+| --- | --- | --- | --- |
+| `35361065542` | `82275fd4fd917dbe175f7bd67a0b5380ab169017` | `failure` | 2026-09-18T15:13:11Z |
+| `35356041559` | `53aae309dfd668c66ac30dc6072237f525a5dce0` | `failure` | 2026-09-18T14:24:34Z |
+
+Run `35361065542` is now pinned as `PRIOR_ACTIVE_RUNTIME_RUN` with status
+`fail_reject`. Its job steps show checkout, setup-node, owned qualification
+policies, pinned Yarn CLI and Python/service setup all succeeding, then
+`Install and validate the pinned foundation` failing with exit code 1 — the
+SEC-DEPS-01 position. Check-run ids and report digests are deliberately **not**
+recorded for it: the check-runs endpoint returns 404 for that run and the
+artifact/log blobs are unreachable from the recording sandbox, so nothing is
+asserted that was not independently read.
+
+Because no hosted workflow has run on `arena/01a0b5c4-tofel-house-erp` yet,
+`hosted_execution_state` is the explicit, fail-closed
+`NOT_EXECUTED_ON_THIS_BRANCH` carrying **no** run, check, commit or report
+identifier. `tools/foundation/d8_validate.py` enforces that absence. Production
+remains **REJECT** and D8 remains **BLOCKED**; no gate changed state.
 
 ### Rotation of 2026-09-17 (second): `arena/01a0aef4-tofel-house-erp` → historical provenance
 

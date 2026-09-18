@@ -2,7 +2,7 @@
   "schema_version": 1,
   "matrix_id": "D8-PRODUCTION-OPERATIONS",
   "date": "2026-09-16",
-  "active_branch": "arena/01a0b3a7-tofel-house-erp",
+  "active_branch": "arena/01a0b5c4-tofel-house-erp",
   "production_state": "REJECT",
   "overall_gate_state": "BLOCKED",
   "security_dependency_state": "UPSTREAM-BLOCKED / REJECT",
@@ -325,7 +325,7 @@
       "area": "Operational role/responsibility ownership",
       "state": "PASS",
       "scope": "Business authority map selected: Course Owner final authority; General Manager routine operations; Academic/Finance/Reception role scopes. Code-derived charter is delivered; role implementation and production evidence remain bounded.",
-      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md \u00a73; OPERATIONAL-OWNERSHIP-CHARTER.md; canonical-owner-decision-record.json; tests/foundation/test_governance_surface.py",
+      "evidence": "FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md §3; OPERATIONAL-OWNERSHIP-CHARTER.md; canonical-owner-decision-record.json; tests/foundation/test_governance_surface.py",
       "production_closure": true
     },
     {

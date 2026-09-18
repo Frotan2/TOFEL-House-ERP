@@ -15,7 +15,7 @@ permissions:
   checks: write
 jobs:
   recover:
-    if: github.ref == 'refs/heads/arena/01a0b3a7-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0b5c4-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

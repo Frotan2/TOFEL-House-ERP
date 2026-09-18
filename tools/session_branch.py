@@ -7,7 +7,7 @@ intentionally changed, and update the workflow branch filters and tests in the
 same change.
 """
 
-ACTIVE_BRANCH = "arena/01a0b3a7-tofel-house-erp"
+ACTIVE_BRANCH = "arena/01a0b5c4-tofel-house-erp"
 ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 
 # Hosted-execution identity for the ACTIVE branch.
@@ -35,11 +35,11 @@ ACTIVE_RUNTIME_RUN = ""
 # active_branch_qualification was NOT_EXECUTED_ON_THIS_BRANCH with empty run),
 # so it falls into the general HISTORICAL_BRANCHES list without a pinned run,
 # and the two evidence-bearing provenance pins stay pinned to their executed runs.
-PRIOR_ACTIVE_BRANCH = "arena/01a0aef4-tofel-house-erp"
-PRIOR_ACTIVE_RUNTIME_RUN = "35218007937"
+PRIOR_ACTIVE_BRANCH = "arena/01a0b3a7-tofel-house-erp"
+PRIOR_ACTIVE_RUNTIME_RUN = "35361065542"
 
-EARLIER_ACTIVE_BRANCH = "arena/01a0aafe-tofel-house-erp"
-EARLIER_ACTIVE_RUNTIME_RUN = "35122242581"
+EARLIER_ACTIVE_BRANCH = "arena/01a0aef4-tofel-house-erp"
+EARLIER_ACTIVE_RUNTIME_RUN = "35218007937"
 
 # Every Arena session branch this repository has ever recorded hosted evidence
 # against. A branch reference anywhere in an active surface (workflow filter,
@@ -48,6 +48,8 @@ EARLIER_ACTIVE_RUNTIME_RUN = "35122242581"
 # The executable enforcement of that rule is tests/foundation/test_branch_boundary.py;
 # the classification policy is docs/engineering/BRANCH-RECONCILIATION.md.
 HISTORICAL_BRANCHES = (
+    "arena/01a0b568-tofel-house-erp",
+    "arena/01a0aafe-tofel-house-erp",
     "arena/01a0b084-tofel-house-erp",
     PRIOR_ACTIVE_BRANCH,
     EARLIER_ACTIVE_BRANCH,

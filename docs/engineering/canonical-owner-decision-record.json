@@ -3,7 +3,7 @@
   "record_id": "TOFEL-HOUSE-OWNER-DECISIONS",
   "record_date": "2026-09-16",
   "authority": "Owner decisions supplied in the current engineering conversation; this record is the canonical repository representation.",
-  "active_branch": "arena/01a0b3a7-tofel-house-erp",
+  "active_branch": "arena/01a0b5c4-tofel-house-erp",
   "production_state": "REJECT",
   "business_authorities": {
     "system_owner": "Course Owner",
@@ -26,7 +26,7 @@
     "branch_operational_isolation": "REQUIRED",
     "branch_authority": "Use native ERPNext Company/Branch and native permission/accounting authorities where applicable; do not create a parallel tenant or accounting ledger.",
     "aggregate_visibility": "Course Owner and appropriately authorized senior management may view organization-level aggregates according to role; aggregate visibility does not bypass branch-level operational isolation.",
-    "student_guardian_portal": "FUTURE SCOPE \u2014 not current scope.",
+    "student_guardian_portal": "FUTURE SCOPE — not current scope.",
     "online_payment_gateway": "NOT REQUIRED AT LAUNCH. Payments app remains pinned but no gateway is selected."
   },
   "deployment_and_state": {
