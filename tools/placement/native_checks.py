@@ -3871,16 +3871,22 @@ def main():
         # plain language, expose the real fee-correction target, and hand
         # OD-RD-1's fees-correction chain through the queue end to end.
         # This is qualification evidence; it is not OD-RD-1 ratification.
-        def desk_get(label,method):
-            r=sessions[label].get(base+'/api/method/toefl_house.desk.'+method,timeout=30)
-            assert r.status_code==200,(method,label,r.status_code,r.text[:300])
-            return r.json()['message']
-        def desk_sections(payload):
-            return {sect['id'] for sect in payload['sections']}
-        BANNED_PLUMBING=('Student Group','Program Enrollment','Sales Invoice',
-                         'Payment Entry','Has Role','docstatus')
         def desk_qualification():
             frappe.set_user('Administrator')
+            # Hermetic fresh logins: the revocation/restore probes above deny
+            # stale sessions by design, so the desk pass must not inherit a
+            # poisoned session — this is what a staff browser would do today.
+            sess={label:login(label) for label in ('receptionist','academic_manager',
+                  'finance_manager','general_manager','course_owner','academic_scheduler',
+                  'finance_officer','outsider','teaching_scheduler')}
+            def desk_get(label,method):
+                r=sess[label].get(base+'/api/method/toefl_house.desk.'+method,timeout=30)
+                assert r.status_code==200,(method,label,r.status_code,r.text[:300])
+                return r.json()['message']
+            def desk_sections(payload):
+                return {sect['id'] for sect in payload['sections']}
+            BANNED_PLUMBING=('Student Group','Program Enrollment','Sales Invoice',
+                             'Payment Entry','Has Role','docstatus')
             observed={}
             # D1 over HTTP: audience loads, negatives, guest registry.
             rec=desk_get('receptionist','reception.work')
@@ -3914,14 +3920,14 @@ def main():
                 ('guest registry answer',g.status_code,g.text[:200])
             http_denied(requests.get(base+'/api/method/toefl_house.desk.reception.work',
                 headers={'Host':'placement-test.localhost'},timeout=30))
-            http_denied(sessions['outsider'].get(
+            http_denied(sess['outsider'].get(
                 base+'/api/method/toefl_house.desk.reception.work',timeout=30))
-            http_denied(sessions['finance_manager'].get(
+            http_denied(sess['finance_manager'].get(
                 base+'/api/method/toefl_house.desk.academic.work',timeout=30))
-            http_denied(sessions['teaching_scheduler'].get(
+            http_denied(sess['teaching_scheduler'].get(
                 base+'/api/method/toefl_house.desk.academic.work',timeout=30))
             # a read endpoint answers its own desk and nothing else, on POST too
-            rp=sessions['receptionist'].post(base+'/api/method/toefl_house.desk.reception.work',
+            rp=sess['receptionist'].post(base+'/api/method/toefl_house.desk.reception.work',
                 json={'desk':'th-academic-desk','slug':'th-academic-desk'},timeout=30)
             assert rp.status_code==200 and rp.json()['message']['desk']=='th-reception-desk', \
                 'a desk endpoint must not be retargetable by request payload'
@@ -3943,7 +3949,7 @@ def main():
             # read from the governed class fact, not from any flag of ours.
             sname=frappe.db.get_value('Student',second['student'],'student_name')
             assert sname,('the synthetic student has no name to look up',second)
-            lut=sessions['receptionist'].get(base+'/api/method/toefl_house.desk.reception.lookup',
+            lut=sess['receptionist'].get(base+'/api/method/toefl_house.desk.reception.lookup',
                 params={'query':sname},timeout=30)
             assert lut.status_code==200,('reception lookup',lut.status_code,lut.text[:200])
             lmsg=lut.json()['message']
@@ -3978,13 +3984,13 @@ def main():
             assert denied(lambda:as_user('outsider',lambda:corr.request_fees_correction(
                 'desk-fees-outsider-001',fee2,'SYN outsider attempt',gt2))), \
                 'an outsider opened a fees correction'
-            r=sessions['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+            r=sess['finance_officer'].post(base+'/api/method/toefl_house.finance.'
                 'corrections.request_fees_correction',json=dict(
                 request_key='desk-fees-http-req-0001',fees=fee2,
                 reason='SYN hosted desk probe',requested_amount=gt2),timeout=40)
             assert r.status_code==200,('fees correction request over HTTP',r.status_code,r.text[:300])
             creq=r.json()['message']
-            rd=sessions['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+            rd=sess['finance_officer'].post(base+'/api/method/toefl_house.finance.'
                 'corrections.request_fees_correction',json=dict(
                 request_key='desk-fees-http-req-0002',fees=fee2,
                 reason='SYN duplicate attempt',requested_amount=gt2),timeout=40)
@@ -4002,13 +4008,13 @@ def main():
                 'desk-fees-probe-0001',creq['name'])))
             assert probe_denial=={'denied':'PermissionError'}, \
                 'command access without the approver role must not approve'
-            ra=sessions['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+            ra=sess['finance_officer'].post(base+'/api/method/toefl_house.finance.'
                 'corrections.approve_fees_correction',json=dict(
                 request_key='desk-fees-http-appr-01',request=creq['name']),timeout=40)
             assert ra.status_code==200,('approve over HTTP',ra.status_code,ra.text[:300])
             approved=ra.json()['message']
             assert approved['status']=='Posted' and approved['refunded_total']==gt2,approved
-            rb=sessions['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+            rb=sess['finance_officer'].post(base+'/api/method/toefl_house.finance.'
                 'corrections.approve_fees_correction',json=dict(
                 request_key='desk-fees-http-appr-01',request=creq['name']),timeout=40)
             assert rb.status_code==200 and rb.json()['message']==approved, \
