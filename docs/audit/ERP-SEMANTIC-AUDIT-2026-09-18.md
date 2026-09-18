@@ -557,4 +557,10 @@ OD-CP-1/2/3 runtime semantics — was planned, executed and closed the same
 day in `docs/audit/FEE-HANDOFF-AUDIT-2026-09-18.md` (§8 ledger: hosted run
 35344291259, 569/569 checks green; two product defects found and fixed at
 root cause — net-amount billing of discounts and the omitted `status` field
-in the rule fetch).
+in the rule fetch). The following mission — Role Desk / UX qualification —
+published its Phase-1 audit plan (findings only, no product changes) in
+`docs/audit/ROLE-DESK-UX-AUDIT-2026-09-18.md`; it records four desks broken
+at real-bench load (a missing `@frappe.whitelist`, three projections on a
+non-existent `Student Group.active` column), lifecycle-status mislabeling,
+the unqualified fees-correction wiring, and the deferred owner decisions
+(OD-RD-1..4). Implementation waits for the owner's review of that plan.
