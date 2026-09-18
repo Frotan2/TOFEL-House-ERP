@@ -386,3 +386,30 @@ suite if a future change reintroduces hard-coded policy.
    register (§29, `toefl_house.reporting`).
 6. Progression and assessment policy activation — the moment the Owner
    answers D1, the configured structure is already the carrier.
+
+## 10. Runtime Qualification Evidence & Controller Registration
+
+During hosted qualification run `35316268556`, the test step `finance-tuition-happy-path`
+failed with `DoesNotExistError: DocType TH Discount Rule not found`. Root-cause investigation
+against Frappe v16.33.1 source (`frappe/model/sync.py::remove_orphan_doctypes`) revealed:
+
+1. When `bench migrate` completes its model sync, `remove_orphan_doctypes` invokes
+   `frappe.model.base_document.get_controller(doctype)`.
+2. Standard Frappe doctypes require a `Document` subclass in their controller module named
+   after the doctype (e.g. `class THDiscountRule(Document): ...`).
+3. If no such class exists, `get_controller` raises `ImportError`. `remove_orphan_doctypes`
+   treats the doctype as deleted code and calls `frappe.delete_doc("DocType", name, force=True)`,
+   silently purging the `tabDocType` record.
+4. Registered proper `Document` controller classes for all four academic doctypes:
+   - `THAcademicProgram` in `academic/doctype/th_academic_program/th_academic_program.py`
+   - `THProgramLevel` in `academic/doctype/th_program_level/th_program_level.py`
+   - `THLevelDuration` in `academic/doctype/th_level_duration/th_level_duration.py`
+   - `THDiscountRule` in `academic/doctype/th_discount_rule/th_discount_rule.py`
+5. Updated `permissions.py` (`CONFIGURATION_READERS`) to include `Finance Manager` and `Finance Officer`
+   so fee issuance and finance desks can read active discount rules.
+
+**Evidence:** Commit `c2b779b` executed full hosted qualification in run `35317973709`
+(`Placement synthetic content qualification`), passing all 75 checks, container migrations,
+and 600+ synthetic scenarios in 11m29s with 0 errors. Owned suite run `35317973780` passed
+in 20s.
+
