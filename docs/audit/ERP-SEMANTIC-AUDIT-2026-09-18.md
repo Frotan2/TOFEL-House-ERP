@@ -457,7 +457,8 @@ education 93bc70757533, erpnext 4048fb70…, hrms a4768b44…, MariaDB, Redis,
 gunicorn HTTP), creates `placement-test.localhost` and
 `placement-second.localhost`, installs `foundation_security` + `toefl_house`,
 runs `bench migrate` twice per site, then executes
-`tools/placement/native_checks.py` (552+ native DB/controller/HTTP checks)
+`tools/placement/native_checks.py` (559 native DB/controller/HTTP checks at
+close of this slice)
 and a true bench backup/restore rehearsal. Evidence is published as check
 runs ("Placement native checks" / "Placement runner result", gzip+base64 with
 SHA-256 digest). Unit tests and static analysis are NOT counted as runtime
@@ -468,12 +469,14 @@ Run ledger (branch `arena/01a0b3a7-tofel-house-erp`):
 | Run | Result | Meaning |
 | --- | --- | --- |
 | 35332459813 | fail (fresh-site install) | **Product defect found:** `install.py` added the `th_sg_class_status` / `th_sg_branch` / `th_sg_start_date` indexes during `after_install` before the Custom Field fixtures created the columns → MariaDB 1072. Fixed at root cause (`frappe.db.has_column` guard; the next migrate applies the index) with a regression test in `tests/teaching/test_class_lifecycle.py`. |
-| 35333228021 | fail (harness) | Qualification-harness arity defect (message needle mis-parenthesized into `check()`); fixed, and all `check()/denied()/unavailable()` calls were audited by an AST arity scan. |
+| 35333228021 | fail (harness) | Qualification-harness arity defect (message needle mis-parenthesized into `check()`); fixed. Now permanently guarded by `tests/placement/test_native_check_arity.py`. |
 | 35334186130 | fail (harness, deep) | **552/552 native checks passed** — every Class + TH Skill runtime proof listed below went green on the real site. The failure was afterwards, in this slice's new fixture code (instructor↔employee linker key), before the retired-skill/instructor-integrity checks could run. Fixed (Left instructor binds to its fixed-contract employee). |
-| 35335044988 | conclusion to be transcribed | Re-run carrying the same 552 green proofs plus the newly-enabled item 9/10 probes (retired-skill runtime policy, Instructor↔Employee integrity, mismatch/inactive-employee refusals). Evidence retrieval was interrupted by an expired sandbox GitHub token; the exact report must be re-read from run 35335044988's "Placement native checks" check run after the GitHub connection is refreshed, and this section updated before any green claim is made for items 9–10. |
+| 35335044988 | fail (harness, 555/556 green) | Re-run carrying the 552 green proofs plus the item 9/10 probes. Read-out transcribed from the "Placement native checks" check run (report SHA-256 `8e0070050a54b70a8dc9cd2b3d268e0ddd48d183b0dab45efb6c8e404c24acd2`): **555/556 checks passed**; `teaching-compensation-contract-authority` passed with `employee_mismatch_denied` and `inactive_employee_denied` both true (item 10 proven). The single failure was again harness, not application: the retired-skill probe passed 12 positional arguments to `create_teaching_contract()` (signature accepts 7–11) — a stray `''` left from an older signature. The crash aborted the sequence, so the three downstream `finance-correction-*` checks never ran. |
+| 35337366200 | **success** | Final qualification on commit `bdbacc0`: **559/559 native checks passed** on both fresh pinned sites (report SHA-256 `df108f6a9428dcbdd74491f158e3acac6daa828ace29fa993e3cad00ce276694`, `status: pass`, `production: REJECT`). Items 1–10 are all proven here; the harness fix also restored the three `finance-correction-*` checks, which passed. Paired owned suite run 35337366214: success (819 tests, ruff 0.16.8 clean, node guards, D8 BLOCKED assertions). |
 
-Runtime behaviors **proven on the real Frappe site** (run 35334186130; check
-names as published in the report):
+Runtime behavior **proven on the real Frappe site** (runs 35334186130 and
+35337366200 — every item below green in the final 559/559 run; check names
+as published in the report):
 
 1. **Custom Fields applied by migrate** — `teaching-class-fields-present`:
    `th_class_start_date`/`th_class_end_date` (Date, read-only),
@@ -513,13 +516,35 @@ names as published in the report):
    Student Group/<name>` on a protected fact at the web seam (pre-existing
    A13 containment checks cover cancel/edit/delete/amend-copy seams).
 
-Runtime behavior **pending the 35335044988 read-out** (probes written,
-green expected, not yet claimed): `teaching-compensation-contract-authority`
-(extended with the mismatched-employee and inactive-employee refusals —
-item 10) and `teaching-retired-skill-runtime-policy` (item 9: RV retired →
-historical assignment/contract term stay readable and `end_teaching_assignment`
-stays operable; reactivation refused; new contract/assignment with the retired
-skill refused with the exact message; unknown skill code refused).
+9. **Retired TH Skill runtime policy** (item 9, run 35337366200) —
+   `teaching-retired-skill-runtime-policy`: after RV is retired on the live
+   site, the historical assignment remains readable and operable
+   (`historical_assignment_valid`: the assignment doc still references
+   skill RV and its class; `end_teaching_assignment` succeeds against it),
+   the historical contract skill term stays intact
+   (`historical_contract_term_valid`, rate preserved), reactivation is
+   refused (`retirement_one_way`), a **new contract** whose skill terms
+   cite RV is refused with the exact guard message "is retired; only
+   Active skills" (`new_contract_denied`), a **new assignment** for RV is
+   refused likewise (`new_assignment_denied`), and a code absent from the
+   master is refused with "Unknown skill" (`unknown_skill_denied`) — the
+   TH Skill master is the vocabulary.
+10. **Instructor → Employee integrity** (item 10, runs 35335044988 and
+    35337366200) — `teaching-compensation-contract-authority`: creating a
+    contract whose employee does not match the native Instructor's linked
+    `employee` is refused with "does not match the instructor's HRMS
+    employee record" (`employee_mismatch_denied`), and a contract against a
+    now-Inactive employee is refused with "Only active employees can hold
+    teaching contracts" (`inactive_employee_denied`, exercised by flipping
+    the Temp employee to Left at the data layer and restoring). Same check
+    proves scheduler/outsider write-and-read refusals and contract tamper
+    refusal.
+
+Harness note: both harness-only failures (35333228021, 35335044988) were
+the same bug class — miscounted positional arguments in the probe code —
+and `tests/placement/test_native_check_arity.py` now AST-checks every
+helper and app-API call site in `native_checks.py` against real callee
+signatures before any push is trusted for a hosted run.
 
 Standing blockers (unchanged by this qualification): **SEC-DEPS-01
 UPSTREAM-BLOCKED**, D8 gate **BLOCKED**, production decision **REJECT** — the
