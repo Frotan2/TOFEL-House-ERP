@@ -230,6 +230,69 @@ fees and everything else shipped here continue independently.
 Recorded answers (Owner): _awaiting answer — will be recorded here verbatim
 and implemented with tests when it arrives._
 
+```text
+OD-CP-2
+
+Decision:
+What may be refunded, under what terms?
+
+Recommended:
+B — Extend the existing fail-closed correction framework to issued tuition
+Fees: full-amount refunds only, through the native reverse Payment Entry,
+governed by the same owner-entered terms (approver role + correction window)
+as placement-invoice credit notes today.
+
+Why:
+The machinery already exists and is qualified (D3: TH Correction Policy +
+Request, native credit notes, no parallel ledger). Fees refunds have one
+native money artifact too (a reverse Payment Entry against the same
+receivable) — no new ledger, no new policy engine. Partial refunds are the
+only part that needs genuinely new owner terms (amount rules); deferring
+them keeps this decision answerable today without inventing policy.
+
+Options:
+A — Placement invoices only (status quo): Fees refunds refused with an
+    explicit message.
+B — Placement invoices + issued Fees, full-amount only (recommended)
+C — Placement invoices + issued Fees, partial refunds allowed (owner must
+    also supply amount/eligibility terms before build)
+
+Blocking:
+Only the Fees-refund module (slice 4). Everything shipped continues.
+```
+
+```text
+OD-CP-3
+
+Decision:
+Which configuration may individual branches override, if any?
+
+Recommended:
+A — None for now. The global configuration is the only configuration;
+branch differentiation happens only through native dimensions that already
+exist (each fee plan already carries a Company; items already carry
+per-company defaults).
+
+Why:
+Overrides multiply every later answer ("which price was active in which
+branch when?") and the effective-dating question becomes two-dimensional.
+No current, demonstrated need has been recorded. Adding an override layer
+later is additive; removing one is not.
+
+Options:
+A — No overrides; global only (recommended)
+B — Durations may be overridden per branch
+C — Fee plans may be overridden per branch (beyond the native company
+    dimension already on each plan)
+D — Both durations and fee plans overridable per branch
+
+Blocking:
+Only the branch-override slice (slice 5). Nothing else waits on it.
+```
+
+Recorded answers (Owner): _awaiting answers — will be recorded here
+verbatim and implemented with tests when they arrive._
+
 Folded into existing owner-deferred decisions (not re-asked): assessment
 weights/pass marks/retakes = D1 (B04/B05); payroll policy = D2 (A09).
 
