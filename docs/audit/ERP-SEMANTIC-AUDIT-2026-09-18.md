@@ -553,6 +553,8 @@ qualification does not lift any of them. No class-amendment policy, no
 cancellation/completion side effects, no Offering/Program Version layers were
 invented (§11.2 remains the open-owner-decision list). The next mission —
 hosted qualification of the Admission → Enrollment → Fees handoff and the
-OD-CP-1/2/3 runtime semantics — is planned in
-`docs/audit/FEE-HANDOFF-AUDIT-2026-09-18.md` (plan published 2026-09-18,
-no product code changed for it yet).
+OD-CP-1/2/3 runtime semantics — was planned, executed and closed the same
+day in `docs/audit/FEE-HANDOFF-AUDIT-2026-09-18.md` (§8 ledger: hosted run
+35344291259, 569/569 checks green; two product defects found and fixed at
+root cause — net-amount billing of discounts and the omitted `status` field
+in the rule fetch).

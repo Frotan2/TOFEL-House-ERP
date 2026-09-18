@@ -1,6 +1,9 @@
 # Admission → Enrollment → Fees Handoff Audit — Kickoff Plan (2026-09-18)
 
-Status: **PLAN — published before any code change** (standing rule).
+Status: **CLOSED 2026-09-18 — all five gaps hosted-verified on run
+35344291259 (569/569 checks); two product defects found and fixed at root
+cause. See §8 ledger.** The plan below is kept as issued (published before
+any code change, per the standing rule).
 Scope discipline inherited from the Class + TH Skill slice (ERP-SEMANTIC-AUDIT-2026-09-18.md §12):
 unit tests and static analysis are never runtime evidence; every verified line below cites a
 hosted run; anything not hosted-proven is listed as a gap, not a claim.
@@ -121,3 +124,104 @@ full re-qualification; owned suite ≥ current count, lint clean; audit doc push
 2. Add probes to `tools/placement/native_checks.py` in dependency order G1 → G3 → G2 → G5 → G4
    (config plane first so the money probes can seed rules through the published commands).
 3. Push → hosted run → transcribe → fix defects at root cause → rerun until green → ledger.
+
+## 8. Execution ledger (closed 2026-09-18)
+
+**Product defects found by this audit — both fixed at the smallest root
+cause with regression coverage; neither was visible to the 815/819-test
+unit layer:**
+
+1. **Discounts never reached the tuition receivable.** The pinned native
+   Education `Fees.calculate_total()` (education 93bc70757533) computes
+   `grand_total` as the plain sum of component `amount` fields and does
+   not apply the child `discount` field; `issue_tuition_fees` recorded the
+   resolved single discount only on the child row. Found while validating
+   probe arithmetic against the pinned controller (before any hosted run),
+   because the offline acceptance rehearsal's fake `Fees` had applied the
+   discount field the native controller ignores — the fake itself was the
+   second defect (fidelity). Fix: new pure helper
+   `rules.apply_charge_discount(gross, pct)` (one application per line by
+   construction), command bills `amount = net`, keeps the percentage on the
+   child row as the descriptive record, and reports `gross_total` /
+   `discount_amount` / per-line `gross_amount`/`net_amount` on the receipt.
+   The rehearsal fake now mirrors native exactly.
+2. **Rule fetch omitted `status`, so resolution silently found nothing.**
+   `resolve_charge_discount` re-validates each fetched row's own `status`;
+   the `frappe.db.get_all` field list didn't include it, so at runtime
+   every Active rule was treated as non-Active and dropped. Found by
+   hosted run 35342862926 (`KeyError: 'discounts_applied'` in
+   `odcp-discount-single-winner-tuition`; the other 562 checks passed).
+   Fix: fetch `status` alongside the resolver-consumed fields. Pinned by a
+   pure resolver row-shape contract test plus a static field-list lock
+   (`tests/configuration/test_discount_math.py`).
+
+**Hosted run ledger (branch `arena/01a0b3a7-tofel-house-erp`):**
+
+| Run | Result | Meaning |
+| --- | --- | --- |
+| 35342862926 (`ecb227b`) | fail 562/563 | Defect #2 exposed on the real site; fixtures, seeding and all command-plane guards already green. |
+| 35344291259 (`e870293`) | **success 569/569** | Final qualification. Report SHA-256 `df87b9893abddc14fc06368c7a50389f81452066eb77933509418d38a44e0a3d`, `status: pass`, `production: REJECT`. Owned suite 35344291287: 829 tests, ruff 0.16.8, node guards, D8 BLOCKED assertions — all green. |
+
+**Gap-by-gap evidence (check names as published in the 569-check report):**
+
+- **G1 (OD-CP-1 = A, one discount per charge line):**
+  `odcp-fee-catalog-fixture`, `odcp-discount-rules-seeded`,
+  `odcp-discount-rule-command-guard` (non-owner writes denied, 100% cap
+  boundary accepted-then-retired, precedence format, duplicate code,
+  unknown category, unknown rule — all refused),
+  `odcp-discount-single-winner-tuition`: exactly one winner per line
+  (`one_discount_per_line`, `no_stacking`), higher precedence beats higher
+  percentage (TUI 10% p9 wins over broad BIG 20% p5), retired 99-precedence
+  rule ignored, non-matching program scope ignored, deterministic tie-break
+  to `SYN-DISC-TIE-B`, and — the receivable proof — `grand_total` 26000.0
+  on a 30000.0 structure (gross − 4000.0 discount), persisted child rows
+  and the GL Entry debit verified equal to the reduced receivable
+  (`gl_equals_receivable`), `replay_identical`.
+  `odcp-discount-scope-live-and-immutable`: a newly-created 50% family rule
+  takes effect for new issuances only (`scoped_rule_applies`,
+  `both_lines_reduced`) and the earlier discounted fee stays frozen
+  (`historical_fees_unchanged`). `odcp-discount-retirement-control`: retired
+  rules vanish from new issuances (`billed_gross_after_retirements`, 25000.0
+  gross) while every earlier fee remains untouched (asserted inline);
+  non-owner reactivation denied (`non_owner_status_write_denied`).
+- **G2 (OD-CP-2 = B, full-amount only, native accounting):** the earlier
+  hosted `finance-correction-*` trio already proves fail-closed without
+  policy, the dual-key approval, window, partial refusal and native
+  credit-note posting; this audit adds `odcp-refund-surface-absent`:
+  submitted Fees (tuition receivables) are not a correction target at all
+  (`fees_not_correctable`), unknown invoices denied (`missing_invoice_denied`),
+  the fee fact untouched (`fee_fact_untouched`) — combined with the
+  existing A13 containment (`containment-rpc-routes-denied`, cancel-route
+  refusals on Fees) there is no second refund authority.
+- **G3 (OD-CP-3 = A, global config only):** `odcp-global-config-no-branch`
+  — runtime meta proves no branch dimension on `Fee Structure`,
+  `Fee Component`, `Fees`, `TH Discount Rule`, `TH Correction Policy`; the
+  branch attribute exists only on the operational class layer
+  (`operational_branch_present_only_on_classes`).
+- **G4 (seam continuity):** `integration-journey-through-fees` — the
+  `TH Placement Operation` receipt for the discounted issuance is Complete
+  with the finance actor, exactly one `TH Placement Audit Event` targets
+  the fee, a same-key replay adds no event, and the enrollment behind the
+  fee is the journey student's (`pe_matches_journey_student`) — admission →
+  enrollment → fees is one receipted chain.
+- **G5 (legacy leakage):** `odcp-legacy-vocabulary-absent` — all 27 `TH %`
+  doctypes on the migrated site scanned; no Refund/Override/Partial/Branch/
+  Fee Schedule/Payment-Term vocabulary exists.
+
+**Open owner questions surfaced (deliberately NOT invented):**
+
+- *Discount program scope semantics*: resolution compares the rule's
+  `TH Academic Program` code to the enrollment's native Program name
+  literally. A rule scoped to a family therefore applies exactly when the
+  native program name equals the family code (the behavior pinned above).
+  Whether a family-scoped rule should apply to **all levels'** native
+  programs of that family is an owner semantics decision — not implemented.
+- *Tuition-side refunds/corrections beyond the invoice framework*: fees
+  corrections await owner terms, mirroring the invoice-side v1 posture;
+  the system stays fail-closed (`odcp-refund-surface-absent` documents the
+  containment, not a policy).
+
+Standing blockers unchanged: **SEC-DEPS-01 UPSTREAM-BLOCKED**, D8
+**BLOCKED**, production decision **REJECT** (restated by the hosted report
+itself). This audit verified existing implemented behavior end-to-end; it
+introduces no new business policy and claims no production readiness.
