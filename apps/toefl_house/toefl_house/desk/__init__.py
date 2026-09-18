@@ -211,7 +211,7 @@ PROJECTION_FIELDS = {
         "effective_from", "superseded_on", "reason", "set_by",
     ],
     ("setup", "Program Enrollment"): [
-        "name", "program", "docstatus",
+        "name", "program", "enrollment_date", "docstatus",
     ],
     # Fee configuration (control plane slice 2): native fee masters and the
     # editable plans per level. No GL detail beyond the resolved receivable.

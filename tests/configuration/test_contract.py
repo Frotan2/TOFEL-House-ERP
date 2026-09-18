@@ -157,6 +157,33 @@ class FeeRuleTests(unittest.TestCase):
             rules.validate_year_bounds("2027-06-30", "2026-07-01")
 
 
+class DurationHistoryTests(unittest.TestCase):
+    """§17: 'which configuration was active when this student was enrolled?'"""
+
+    VERSIONS = (
+        _version(2, "Month", "2026-01-01"),
+        _version(3, "Month", "2026-07-01"),
+    )
+
+    def test_history_splits_enrollments_by_governing_version(self):
+        counts = rules.duration_history_counts(
+            self.VERSIONS,
+            ["2026-02-15", "2026-03-01", "2026-06-20", "2026-07-05", "2026-08-01"])
+        self.assertEqual(counts["2 months (from 2026-01-01)"], 3)
+        self.assertEqual(counts["3 months (from 2026-07-01)"], 2)
+
+    def test_unresolvable_dates_are_surfaced_not_guessed(self):
+        counts = rules.duration_history_counts(self.VERSIONS, ["2025-12-31"])
+        self.assertEqual(counts["before the first configured version"], 1)
+        self.assertEqual(rules.duration_history_counts(self.VERSIONS, []), {})
+
+    def test_setup_desk_surfaces_history(self):
+        source = (APP / "desk/setup.py").read_text(encoding="utf-8")
+        self.assertIn("rules.duration_history_counts", source,
+                      "the desk must resolve history through the pure rules")
+        self.assertIn("History: ", source)
+
+
 class ProgressionRuleTests(unittest.TestCase):
     LEVELS = {
         "A1": ("GEN", None),

@@ -219,6 +219,24 @@ def validate_year_bounds(start_date, end_date):
     return start, end
 
 
+def duration_history_counts(rows, enrollment_dates):
+    """Answer 'which configuration was active when?' (mission §17).
+
+    For each enrollment date, resolve the duration version that governed it
+    and count. The result is how the Owner sees history split across policy
+    versions without any record being rewritten. Unresolvable dates (before
+    the first version) are counted under "" — surfaced, never guessed.
+    """
+    counts = {}
+    for value in enrollment_dates or []:
+        governing = resolve_duration(rows, str(value))
+        label = duration_label(governing) if governing else ""
+        key = f"{label} (from {governing.get('effective_from')})" if governing \
+            else "before the first configured version"
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def latest_version(rows):
     """The most recently effective version row, or None."""
     existing = normalize_versions(rows)

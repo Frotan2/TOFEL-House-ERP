@@ -74,6 +74,10 @@ def work():
     versions_by_level = {}
     for row in versions:
         versions_by_level.setdefault(row.get("parent"), []).append(row)
+    enrollments_by_program = {}
+    for row in active_enrollments:
+        if row.get("program"):
+            enrollments_by_program.setdefault(row["program"], []).append(row)
     usage = {}
     for row in active_enrollments:
         if row.get("program"):
@@ -194,6 +198,17 @@ def work():
             next_bits.append(f"Progression: {target.get('title') or level['next_level']}.")
         else:
             next_bits.append("No next level configured.")
+        # §17 made visible: which duration version governed each live
+        # enrollment. History stays whole; only the answer is computed.
+        history = ""
+        if level.get("native_program"):
+            dates = [enrollment.get("enrollment_date") for enrollment
+                     in enrollments_by_program.get(level["native_program"], [])
+                     if enrollment.get("enrollment_date")]
+            counts = rules.duration_history_counts(versions_for, dates)
+            if counts:
+                history = " History: " + ", ".join(
+                    f"{count} enrolled under {label}" for label, count in counts.items()) + "."
         item = {
             "id": level["code"],
             "person": level["title"],
@@ -206,7 +221,7 @@ def work():
             "stage": f"Level {level.get('sequence')}",
             "stage_definition": "Ordered level of its program family; the duration is "
                                 "the governing effective-dated version, not a hard-coded value.",
-            "next": " ".join(next_bits),
+            "next": " ".join(next_bits) + history,
             "next_role": "Course Owner",
             "waiting_since": level.get("modified"),
         }
