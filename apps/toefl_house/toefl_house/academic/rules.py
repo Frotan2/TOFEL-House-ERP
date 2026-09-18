@@ -319,6 +319,22 @@ def validate_precedence(value):
     return value
 
 
+def apply_charge_discount(gross, discount_percentage):
+    """Net billable amount after the single winning discount (OD-CP-1 A).
+
+    The pinned native Education Fees controller computes grand_total as the
+    plain sum of component amounts and never applies the child ``discount``
+    field; the resolved discount therefore has to be baked into the billed
+    amount itself. One application per line — stacking is unrepresentable by
+    construction, because a single percentage is supplied here at most once.
+    """
+    g = float(gross)
+    if g < 0:
+        raise ValueError("Fee amount must not be negative")
+    percent = validate_discount_percentage(discount_percentage)
+    return round(g - (g * percent / 100.0), 2)
+
+
 def resolve_charge_discount(rules_list, fee_category=None, program=None):
     """Resolve eligible discount rules under OD-CP-1 Policy A (Single Discount Per Charge).
 

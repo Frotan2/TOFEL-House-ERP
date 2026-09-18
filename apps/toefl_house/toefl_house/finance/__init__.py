@@ -97,12 +97,22 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             winner = rules.resolve_charge_discount(
                 discount_rules, fee_category=c.fees_category, program=pe.program)
             if winner:
+                gross = float(c.amount)
+                # Native Fees sums component amounts into grand_total and
+                # ignores the child discount field (verified against pinned
+                # education 93bc70757533): bill the net amount so the
+                # receivable honors OD-CP-1, and keep the percentage on the
+                # row as the descriptive record of the applied rule.
+                net = rules.apply_charge_discount(gross, winner["discount_percentage"])
+                comp_row["amount"] = net
                 comp_row["discount"] = winner["discount_percentage"]
                 applied_discounts.append({
                     "fee_category": c.fees_category,
                     "rule_code": winner["rule_code"],
                     "rule_title": winner["rule_title"],
                     "discount_percentage": winner["discount_percentage"],
+                    "gross_amount": gross,
+                    "net_amount": net,
                 })
             fee_components.append(comp_row)
 
@@ -138,6 +148,9 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
         }
         if applied_discounts:
             result["discounts_applied"] = applied_discounts
+            result["gross_total"] = round(sum(float(c.amount) for c in components), 2)
+            result["discount_amount"] = round(result["gross_total"]
+                                              - float(row.grand_total), 2)
         return result, dict(target=fees.name,
                             after_hash=digest([fees.name, pe_name, fs_name, posting, due,
                                                {c.fees_category: float(c.amount)

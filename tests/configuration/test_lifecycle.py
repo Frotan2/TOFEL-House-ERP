@@ -83,13 +83,15 @@ class _Doc:
         self.name = key
         self._payload["name"] = key
         if self.doctype == "Fees":
+            # Mirror the pinned native Education Fees.calculate_total()
+            # (education 93bc70757533): grand_total is the PLAIN sum of
+            # component amounts. The native controller never applies the
+            # child discount field — which is exactly why the finance
+            # command bills net amounts (see tests/configuration/
+            # test_discount_math.py and the hosted odcp-discount-* checks).
             total = 0.0
             for comp in self._payload.get("components") or []:
-                amt = float(comp.get("amount") or 0)
-                disc = float(comp.get("discount") or 0)
-                line_total = amt - (amt * disc / 100.0)
-                comp["total"] = line_total
-                total += line_total
+                total += float(comp.get("amount") or 0)
             self._payload.setdefault("grand_total", total)
             self._payload.setdefault("outstanding_amount", total)
             self._payload.setdefault("currency", "USD")

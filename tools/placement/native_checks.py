@@ -49,7 +49,8 @@ def main():
            'teaching_auditor':'synthetic-teaching-auditor@example.test',
            'finance_officer':'synthetic-finance-officer@example.test',
            'finance_auditor':'synthetic-finance-auditor@example.test',
-           'containment_probe':'synthetic-containment-probe@example.test'}
+           'containment_probe':'synthetic-containment-probe@example.test',
+           'course_owner':'synthetic-course-owner@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
@@ -127,7 +128,10 @@ def main():
                          # A13 web-seam containment probe: native Accounts
                          # User only; never revoked, so the REST probes below
                          # exercise the guard layer, not a permission denial.
-                         'containment_probe':['Accounts User']}
+                         'containment_probe':['Accounts User'],
+                         # Configuration-plane actor for OD-CP discount rules:
+                         # the only role the Course Owner gate accepts.
+                         'course_owner':['Course Owner']}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -3603,6 +3607,252 @@ def main():
                     'gl_posted':True,'one_shot_decision':True,'denial_posts_nothing':True,
                     'facts_immutable':True}
         check('finance-correction-posting',correction_posting)
+        # ---- OD-CP money semantics at the fees seam (fee-handoff audit,
+        # 2026-09-18): G1 discount resolution must reach the receivable
+        # (single winner per line, never stacked); G3 money configuration is
+        # branch-free at runtime; G2 the refund surface is the native invoice
+        # correction only — submitted Fees are not correctable through it;
+        # G5 legacy vocabulary is absent; G4 the fee receipt chains onto the
+        # operation/audit ledger. Fixed alongside this block: issue_tuition_
+        # fees now bills the NET amount, because native Fees.calculate_total()
+        # (pinned education 93bc70757533) sums component amounts and ignores
+        # the child discount field — the earlier code recorded the discount
+        # but the receivable stayed at gross.
+        from toefl_house import academic as acm
+        def odcp_fixtures():
+            # Second Fee Structure (two lines) so per-line resolution is
+            # observable in one issuance; a family-coded TH Academic Program
+            # anchors the program-scoped rule experiments (literal scope
+            # matching; family-wide expansion stays an open owner question).
+            frappe.set_user('Administrator')
+            if not frappe.db.exists('Item','SYN-Books'):
+                frappe.get_doc(dict(doctype='Item',item_code='SYN-Books',
+                    item_name='SYN-Books',item_group='Fee Component',
+                    stock_uom='Nos',uom='Nos',is_stock_item=0,is_sales_item=1,
+                    is_service_item=1)).insert()
+            if not frappe.db.exists('Fee Category','SYN-Books'):
+                frappe.get_doc(dict(doctype='Fee Category',category_name='SYN-Books')).insert()
+            if not frappe.db.exists('TH Academic Program','SYN-PROGRAM-GENERAL'):
+                as_user('course_owner',lambda:acm.create_program(
+                    'odcp-family-general-00001','SYN-PROGRAM-GENERAL','SYN General (ODCP fixture)'))
+            if not frappe.db.exists('TH Academic Program','SYN-PROG-EVENING'):
+                as_user('course_owner',lambda:acm.create_program(
+                    'odcp-family-evening-0001','SYN-PROG-EVENING','SYN Evening (non-matching)'))
+            frappe.set_user('Administrator')
+            comp=frappe.get_doc('Company','TOEFL House')
+            fs2=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
+                program=cat['program'],academic_year=cat['academic_year'],
+                receivable_account=comp.default_receivable_account,
+                income_account=comp.default_income_account,
+                cost_center=comp.cost_center,company='TOEFL House'))
+            fs2.append('components',{'fees_category':'SYN-Tuition','amount':25000})
+            fs2.append('components',{'fees_category':'SYN-Books','amount':5000})
+            fs2.insert()
+            frappe.db.commit()
+            return {'fs2':fs2.name,'tuition':25000,'books':5000}
+        def odcp_seed_rules():
+            # Six Active rules + one immediate retirement:
+            # BIG broad 20% p5; TUI tuition 10% p9 (wins tuition);
+            # TIE-A/TIE-B books 30% p7 (deterministic code tie-break -> TIE-B);
+            # RET 50% p99 retired before any issuance (must be ignored);
+            # EVE 9% p60 scoped to a family that never matches (must be ignored).
+            frappe.set_user('Administrator')
+            as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-rule-big-00000001','SYN-DISC-BIG','SYN broad twenty',20,5,'',''))
+            as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-rule-tui-00000001','SYN-DISC-TUI','SYN tuition ten',10,9,'SYN-Tuition',''))
+            as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-rule-tie-a-00001','SYN-DISC-TIE-A','SYN books tie A',30,7,'SYN-Books',''))
+            as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-rule-tie-b-00001','SYN-DISC-TIE-B','SYN books tie B',30,7,'SYN-Books',''))
+            as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-rule-ret-0000001','SYN-DISC-RET','SYN retired fifty',50,99,'',''))
+            as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-rule-eve-0000001','SYN-DISC-EVE','SYN evening nine',9,60,'','SYN-PROG-EVENING'))
+            as_user('course_owner',lambda:acm.set_discount_rule_status(
+                'odcp-rule-retire-ret-01','SYN-DISC-RET',0))
+            frappe.db.commit()
+            return {'active':['SYN-DISC-BIG','SYN-DISC-TUI','SYN-DISC-TIE-A','SYN-DISC-TIE-B',
+                              'SYN-DISC-EVE'],'retired_at_seed':['SYN-DISC-RET']}
+        def odcp_command_guard():
+            frappe.set_user('Administrator')
+            assert denied(lambda:as_user('finance_officer',lambda:acm.create_discount_rule(
+                'odcp-guard-officer-0001','SYN-DISC-NOPE','SYN wrong actor',10))),('finance officer created a rule')
+            assert denied(lambda:as_user('outsider',lambda:acm.create_discount_rule(
+                'odcp-guard-outsider-001','SYN-DISC-NOPE','SYN wrong actor',10))),('outsider created a rule')
+            assert unavailable(lambda:as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-guard-pct-150-00001','SYN-DISC-HIGH','SYN over cap',150)),'cannot exceed 100%')
+            assert unavailable(lambda:as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-guard-pct-zero-0001','SYN-DISC-ZERO','SYN zero',0)),'greater than zero')
+            assert unavailable(lambda:as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-guard-prec-bad-0001','SYN-DISC-PR','SYN bad precedence',10,'x','','')),'whole number')
+            assert unavailable(lambda:as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-guard-cat-unknown-01','SYN-DISC-CAT','SYN unknown category',1,5,
+                'SYN-NOPE-CATEGORY','')),'does not exist yet')
+            assert unavailable(lambda:as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-guard-dup-code-0001','SYN-DISC-BIG','SYN duplicate code',1)),'already exists')
+            assert unavailable(lambda:as_user('course_owner',lambda:acm.set_discount_rule_status(
+                'odcp-guard-unknown-rule-1','SYN-DISC-NONE',1)),'Unknown discount rule')
+            # the 100% boundary is the owner's cap, inclusive; retire it again
+            # immediately so it never participates in an issuance
+            as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-guard-pct-max-00001','SYN-DISC-P100','SYN full waiver boundary',100))
+            as_user('course_owner',lambda:acm.set_discount_rule_status(
+                'odcp-retire-p100-000001','SYN-DISC-P100',0))
+            return {'non_owner_write_denied':True,'percentage_bounds_denied':True,
+                    'precedence_denied':True,'duplicate_code_denied':True,
+                    'unknown_category_denied':True,'unknown_rule_status_denied':True,
+                    'boundary_100_accepted_then_retired':True}
+        def discount_single_winner():
+            frappe.set_user('Administrator')
+            fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+                'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
+                '2026-09-05','2026-10-05'))
+            applied={d['fee_category']:d for d in fees['discounts_applied']}
+            assert set(applied)=={'SYN-Tuition','SYN-Books'},applied
+            # one winner per line by precedence; tie broken by documented order;
+            # retired RET (p99) and non-matching EVE (p60) never won anywhere
+            assert applied['SYN-Tuition']['rule_code']=='SYN-DISC-TUI',applied['SYN-Tuition']
+            assert applied['SYN-Books']['rule_code']=='SYN-DISC-TIE-B',applied['SYN-Books']
+            assert fees['gross_total']==30000.0 and fees['discount_amount']==4000.0,fees
+            assert fees['grand_total']==26000.0 and float(fees['outstanding_amount'])==26000.0,fees
+            rows={r.fees_category:(float(r.amount),float(r.discount or 0)) for r in
+                frappe.db.get_all('Fee Component',filters={'parent':fees['fees']},
+                    fields=['fees_category','amount','discount'],order_by='idx')}
+            assert rows=={'SYN-Tuition':(22500.0,10.0),'SYN-Books':(3500.0,30.0)},rows
+            persisted=frappe.db.get_value('Fees',fees['fees'],
+                ['docstatus','grand_total','outstanding_amount'],as_dict=True)
+            assert int(persisted.docstatus)==1 and float(persisted.grand_total)==26000.0,persisted
+            gl=frappe.db.get_value('GL Entry',
+                {'against_voucher':fees['fees'],'debit':['>',0]},'debit_in_account_currency')
+            assert float(gl)==26000.0,(gl,)
+            count=frappe.db.count(api.AUDIT);fees_count=frappe.db.count('Fees')
+            again=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+                'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
+                '2026-09-05','2026-10-05'))
+            assert again==fees and frappe.db.count(api.AUDIT)==count and frappe.db.count('Fees')==fees_count
+            return {'fees':fees['fees'],'grand_total':26000.0,
+                    'one_discount_per_line':True,'no_stacking':True,
+                    'retired_rule_ignored':True,'nonmatching_scope_ignored':True,
+                    'deterministic_tie':'SYN-DISC-TIE-B','gl_equals_receivable':True,
+                    'replay_identical':True}
+        def discount_scope_live():
+            frappe.set_user('Administrator')
+            # a newly winning scope rule takes effect for NEW issuances with
+            # higher precedence on both lines; earlier money facts stay frozen
+            as_user('course_owner',lambda:acm.create_discount_rule(
+                'odcp-rule-gen-00000001','SYN-DISC-GEN','SYN general fifty',50,50,
+                '','SYN-PROGRAM-GENERAL'))
+            fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+                'odcp-fee-scoped-live-01',enrolled['program_enrollment'],fsx['fs2'],
+                '2026-09-06','2026-10-06'))
+            assert fees['grand_total']==15000.0,fees
+            applied={d['fee_category']:d['rule_code'] for d in fees['discounts_applied']}
+            assert applied=={'SYN-Tuition':'SYN-DISC-GEN','SYN-Books':'SYN-DISC-GEN'},applied
+            assert fees['gross_total']==30000.0 and fees['discount_amount']==15000.0,fees
+            row=frappe.db.get_value('Fees',fdisc['fees'],
+                ['grand_total','outstanding_amount'],as_dict=True)
+            assert float(row.grand_total)==26000.0 and float(row.outstanding_amount)==26000.0,row
+            return {'scoped_rule_applies':True,'both_lines_reduced':True,
+                    'historical_fees_unchanged':True}
+        def discount_retirement_control():
+            frappe.set_user('Administrator')
+            for k,code in (('odcp-retire-tui-000001','SYN-DISC-TUI'),
+                           ('odcp-retire-big-000001','SYN-DISC-BIG'),
+                           ('odcp-retire-tiea-00001','SYN-DISC-TIE-A'),
+                           ('odcp-retire-tieb-00001','SYN-DISC-TIE-B'),
+                           ('odcp-retire-gen-000001','SYN-DISC-GEN')):
+                as_user('course_owner',lambda k=k,code=code:acm.set_discount_rule_status(k,code,0))
+            # only EVE (non-matching) and the retired set remain: new issuances
+            # must bill gross on a fresh structure
+            frappe.set_user('Administrator')
+            comp=frappe.get_doc('Company','TOEFL House')
+            fs3=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
+                program=cat['program'],academic_year=cat['academic_year'],
+                receivable_account=comp.default_receivable_account,
+                income_account=comp.default_income_account,
+                cost_center=comp.cost_center,company='TOEFL House'))
+            fs3.append('components',{'fees_category':'SYN-Tuition','amount':25000})
+            fs3.insert()
+            fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+                'odcp-fee-post-retire-01',second['program_enrollment'],fs3.name,
+                '2026-09-07','2026-10-07'))
+            assert 'discounts_applied' not in fees,fees
+            assert fees['grand_total']==25000.0,fees
+            assert denied(lambda:as_user('finance_officer',lambda:acm.set_discount_rule_status(
+                'odcp-unretire-officer-01','SYN-DISC-TUI',1))),('non-owner reactivated a rule')
+            return {'retired_rules_excluded_from_new_issuance':True,
+                    'billed_gross_after_retirements':True,
+                    'non_owner_status_write_denied':True}
+        def refund_surface_absent():
+            frappe.set_user('Administrator')
+            # OD-CP-2: the only correction surface is the native placement
+            # Sales Invoice; submitted Fees (tuition receivables) are not a
+            # correction target at all — no second refund authority exists.
+            assert unavailable(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'odcp-refund-fees-name-01',fdisc['fees'],'SYN refund attempt via Fees',1.0)),
+                'Unknown sales invoice')
+            assert unavailable(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'odcp-refund-ghost-invoice',
+                'ACC-SINV-2026-99999','SYN refund attempt missing invoice',1.0)),
+                'Unknown sales invoice')
+            still=frappe.db.get_value('Fees',fdisc['fees'],['docstatus','outstanding_amount'],as_dict=True)
+            assert int(still.docstatus)==1 and float(still.outstanding_amount)==26000.0,still
+            return {'fees_not_correctable':True,'missing_invoice_denied':True,
+                    'fee_fact_untouched':True}
+        def branch_free_money_config():
+            frappe.set_user('Administrator')
+            checked={}
+            for dt in ('Fee Structure','Fee Component','Fees','TH Discount Rule','TH Correction Policy'):
+                meta=frappe.get_meta(dt)
+                for f in ('branch','th_branch','branch_override','branch_specific'):
+                    assert not meta.has_field(f),(dt,f)
+                checked[dt]='no branch dimension'
+            # branch is an operational attribute only: the class layer keeps it
+            assert frappe.get_meta('Student Group').has_field('th_branch')
+            return {'config_doctypes':checked,'operational_branch_present_only_on_classes':True}
+        def legacy_vocabulary_absent():
+            frappe.set_user('Administrator')
+            names=frappe.db.get_all('DocType',filters={'name':['like','TH %']},pluck='name')
+            banned=('Refund','Override','Partial','Branch','Fee Schedule','Payment Term')
+            hits=[n for n in names if any(b in n for b in banned)]
+            assert not hits,hits
+            for dt in ('TH Fee Override','TH Partial Refund','TH Branch Fee','TH Refund'):
+                assert not frappe.db.exists('DocType',dt),dt
+            return {'th_doctypes_scanned':len(names),'legacy_names_absent':True}
+        def fee_receipt_chain():
+            frappe.set_user('Administrator')
+            opname=digest(['issue_tuition_fees','odcp-fee-discounted-0001'])
+            op=frappe.db.get_value('TH Placement Operation',opname,
+                ['kind','actor','status','result_json'],as_dict=True)
+            assert op and op['kind']=='issue_tuition_fees' and op['status']=='Complete',op
+            assert op['actor']==users['finance_officer'],op['actor']
+            auds=frappe.db.get_all('TH Placement Audit Event',filters={'operation':opname},
+                fields=['action','target'])
+            assert len(auds)==1 and auds[0].action=='issue_tuition_fees',auds
+            assert auds[0].target==fdisc['fees'],auds
+            assert fdisc['fees'] in (op['result_json'] or ''),op['result_json']
+            n_before=frappe.db.count('TH Placement Audit Event',{'operation':opname})
+            as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+                'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
+                '2026-09-05','2026-10-05'))
+            assert frappe.db.count('TH Placement Audit Event',{'operation':opname})==n_before
+            # the discounted fee belongs to the admission->enrollment journey:
+            pe_student=frappe.db.get_value('Program Enrollment',second['program_enrollment'],'student')
+            assert pe_student==second['student'],(pe_student,second['student'])
+            return {'operation_receipt_complete':True,'single_audit_event':True,
+                    'audit_target_is_the_fee':True,'replay_adds_no_event':True,
+                    'pe_matches_journey_student':True}
+        fsx=check('odcp-fee-catalog-fixture',traced(odcp_fixtures))
+        check('odcp-discount-rules-seeded',traced(odcp_seed_rules))
+        check('odcp-discount-rule-command-guard',traced(odcp_command_guard))
+        fdisc=check('odcp-discount-single-winner-tuition',traced(discount_single_winner))
+        check('odcp-discount-scope-live-and-immutable',traced(discount_scope_live))
+        check('odcp-discount-retirement-control',traced(discount_retirement_control))
+        check('odcp-refund-surface-absent',traced(refund_surface_absent))
+        check('odcp-global-config-no-branch',traced(branch_free_money_config))
+        check('odcp-legacy-vocabulary-absent',traced(legacy_vocabulary_absent))
+        check('integration-journey-through-fees',traced(fee_receipt_chain))
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}
