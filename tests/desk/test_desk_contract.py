@@ -70,6 +70,45 @@ def assert_columns_real(caller, doctype, columns):
                              "(schema fiction — D2 class)")
 
 
+def desk_world_get_all(label, world):
+    """Schema-strict, filter-aware get_all over a fixture world."""
+
+    def world_get_all(doctype, filters=None, fields=None, order_by=None,
+                      limit_start=None, limit_page_length=None, **kwargs):
+        assert_columns_real(label, doctype,
+                            list(fields or []) + list((filters or {}).keys()))
+        rows = world.get(doctype, [])
+        kept = []
+        for row in rows:
+            ok = True
+            for key, value in (filters or {}).items():
+                cell = row.get(key)
+                if isinstance(value, (tuple, list)) and len(value) == 2 \
+                        and isinstance(value[0], str):
+                    op, bound = value
+                    if op == "in" and cell not in bound:
+                        ok = False
+                    elif op == "!=" and cell == bound:
+                        ok = False
+                    elif op == ">" and not (cell is not None and cell > bound):
+                        ok = False
+                    elif op == ">=" and not (cell is not None and cell >= bound):
+                        ok = False
+                    elif op == "is" and bound == "not set" and cell not in (None, ""):
+                        ok = False
+                    elif op == "is" and bound == "set" and cell in (None, ""):
+                        ok = False
+                elif cell != value:
+                    ok = False
+            if ok:
+                kept.append(dict(row))
+        if limit_page_length is not None:
+            kept = kept[int(limit_start or 0):int(limit_start or 0) + int(limit_page_length)]
+        return kept
+
+    return world_get_all
+
+
 def _frappe_stub(roles=()):
     stub = types.ModuleType("frappe")
 
@@ -726,6 +765,18 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                    ["request_key", "program_enrollment", "fee_structure", "posting_date", "due_date"]),
         "toefl_house.finance.corrections.approve_invoice_correction": ("finance/corrections.py",
                                                                        ["request_key", "request"]),
+        "toefl_house.teaching.create_student_group": ("teaching/__init__.py",
+                                                       ["request_key", "group_name", "program",
+                                                        "academic_year", "academic_term",
+                                                        "max_strength", "class_start_date",
+                                                        "class_end_date", "delivery_mode",
+                                                        "branch"]),
+        "toefl_house.teaching.transition_class": ("teaching/__init__.py",
+                                                   ["request_key", "student_group", "to_status"]),
+        "toefl_house.teaching.schedule_session": ("teaching/__init__.py",
+                                                  ["request_key", "student_group", "schedule_date",
+                                                   "from_time", "to_time", "instructor", "room",
+                                                   "course"]),
     }
 
     def test_every_guided_endpoint_is_whitelisted_with_the_expected_signature(self):
@@ -1000,31 +1051,7 @@ class FinanceBillingGuidanceWorldTests(unittest.TestCase):
             ],
         }
 
-        def world_get_all(doctype, filters=None, fields=None, order_by=None,
-                          limit_start=None, limit_page_length=None, **kwargs):
-            assert_columns_real("billing world", doctype,
-                                list(fields or []) + list((filters or {}).keys()))
-            rows = world.get(doctype, [])
-            filters = filters or {}
-            kept = []
-            for row in rows:
-                ok = True
-                for key, value in filters.items():
-                    cell = row.get(key)
-                    if isinstance(value, (tuple, list)) and len(value) == 2 \
-                            and isinstance(value[0], str) and value[0] in ("in", "!=", ">"):
-                        op, bound = value
-                        if op == "in" and cell not in bound:
-                            ok = False
-                        elif op == "!=" and cell == bound:
-                            ok = False
-                        elif op == ">" and not (cell is not None and cell > bound):
-                            ok = False
-                    elif cell != value:
-                        ok = False
-                if ok:
-                    kept.append(dict(row))
-            return kept
+        world_get_all = desk_world_get_all("billing world", world)
 
         module = _import_desk("finance", roles={"Finance Manager", "Finance Officer"})
         module.frappe.get_all = world_get_all
@@ -1103,26 +1130,7 @@ class ManagementCorrectionsWorldTests(unittest.TestCase):
             ],
         }
 
-        def world_get_all(doctype, filters=None, fields=None, order_by=None,
-                          limit_start=None, limit_page_length=None, **kwargs):
-            assert_columns_real("management world", doctype,
-                                list(fields or []) + list((filters or {}).keys()))
-            rows = world.get(doctype, [])
-            filters = filters or {}
-            kept = []
-            for row in rows:
-                ok = True
-                for key, value in filters.items():
-                    if isinstance(value, (tuple, list)) and len(value) == 2 \
-                            and isinstance(value[0], str):
-                        op, bound = value
-                        if op == "in" and row.get(key) not in bound:
-                            ok = False
-                    elif row.get(key) != value:
-                        ok = False
-                if ok:
-                    kept.append(dict(row))
-            return kept
+        world_get_all = desk_world_get_all("management world", world)
 
         module = _import_desk("operations", roles={"General Manager"})
         module.frappe.get_all = world_get_all
@@ -1140,6 +1148,93 @@ class ManagementCorrectionsWorldTests(unittest.TestCase):
         self.assertEqual(items["COR-2"]["person"], "ACC-SINV-9")
         self.assertIn("Invoice correction", items["COR-2"]["detail"])
         self.assertNotIn("COR-3", items, "only pending requests are exceptions")
+
+
+class AcademicClassActionsWorldTests(unittest.TestCase):
+    """U1: the classes section drives the real teaching commands.
+
+    Planned classes get activation, Active classes get session scheduling,
+    an unclassed intake gets one guided class creation per level and year —
+    and every affordance disappears for viewers without the acting role.
+    The desk embeds prefills for EXISTING commands only; no new policy.
+    """
+
+    @staticmethod
+    def _world():
+        return {
+            "Student Group": [
+                {"name": "GROUP-A", "student_group_name": "GEN-1 2026 A",
+                 "program": "GEN-1", "academic_year": "2026", "max_strength": 12,
+                 "course": "GEN-C", "disabled": 0, "th_class_status": "Planned"},
+                {"name": "GROUP-B", "student_group_name": "GEN-2 2026 A",
+                 "program": "GEN-2", "academic_year": "2026", "max_strength": 10,
+                 "course": "GEN-C2", "disabled": 0, "th_class_status": "Active"},
+                {"name": "GROUP-C", "student_group_name": "GEN-3 2026 A",
+                 "program": "GEN-3", "academic_year": "2026", "max_strength": 10,
+                 "course": "GEN-C3", "disabled": 0, "th_class_status": "Completed"},
+            ],
+            "Program Enrollment": [
+                {"name": "ENR-1", "student": "STU-1", "student_name": "Ana",
+                 "program": "GEN-4", "academic_year": "2026",
+                 "enrollment_date": "2026-09-01", "docstatus": 1},
+                {"name": "ENR-2", "student": "STU-2", "student_name": "Ben",
+                 "program": "GEN-4", "academic_year": "2026",
+                 "enrollment_date": "2026-09-03", "docstatus": 1},
+                {"name": "ENR-3", "student": "STU-3", "student_name": "Cia",
+                 "program": "GEN-2", "academic_year": "2026",
+                 "enrollment_date": "2026-09-02", "docstatus": 1},
+            ],
+        }
+
+    def _payload(self, roles):
+        module = _import_desk("academic", roles=roles)
+        world_get_all = desk_world_get_all("class-actions world", self._world())
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        return module.work()
+
+    def _classes(self, payload):
+        section = next(sect for sect in payload["sections"] if sect["id"] == "classes")
+        return {item["id"]: item for item in section["items"]}
+
+    def test_planned_class_offers_activation_only(self):
+        items = self._classes(self._payload({"Academic Manager", "Teaching Scheduler"}))
+        action = items["GROUP-A"]["action"]
+        self.assertEqual(action["endpoint"], "toefl_house.teaching.transition_class")
+        self.assertEqual(action["args"], {"student_group": "GROUP-A",
+                                         "to_status": "Active"})
+        self.assertEqual(action["label"], "Activate class")
+
+    def test_active_class_offers_scheduling(self):
+        items = self._classes(self._payload({"Academic Manager", "Teaching Scheduler"}))
+        action = items["GROUP-B"]["action"]
+        self.assertEqual(action["endpoint"], "toefl_house.teaching.schedule_session")
+        self.assertEqual(action["args"], {"student_group": "GROUP-B"})
+
+    def test_closed_class_offers_nothing(self):
+        items = self._classes(self._payload({"Academic Manager", "Teaching Scheduler"}))
+        self.assertIsNone(items["GROUP-C"]["action"])
+
+    def test_unclassed_intake_gets_one_create_row(self):
+        items = self._classes(self._payload({"Academic Manager", "Teaching Scheduler"}))
+        create = items["new-class:GEN-4:2026"]
+        self.assertEqual(create["action"]["endpoint"],
+                         "toefl_house.teaching.create_student_group")
+        self.assertEqual(create["action"]["args"],
+                         {"program": "GEN-4", "academic_year": "2026"})
+        self.assertIn("2 enrolled without a class", create["detail"],
+                      "one row per (program, year), counted from unclassed enrollments")
+        self.assertEqual(create["waiting_since"], "2026-09-01",
+                         "the row waits from the OLDEST unclassed enrollment")
+        self.assertNotIn("new-class:GEN-2:2026", items,
+                         "a classed intake must not be offered creation")
+
+    def test_actions_are_role_gated(self):
+        items = self._classes(self._payload({"Academic Manager"}))
+        self.assertIsNone(items["GROUP-A"]["action"])
+        self.assertIsNone(items["GROUP-B"]["action"])
+        self.assertNotIn("new-class:GEN-4:2026", items,
+                         "the creation row is an affordance, not narration")
 
 
 if __name__ == "__main__":

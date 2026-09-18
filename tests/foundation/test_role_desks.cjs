@@ -153,6 +153,7 @@ const endpointFiles = {
 	"toefl_house.finance": ["finance/__init__.py"],
 	"toefl_house.finance.corrections": ["finance/corrections.py"],
 	"toefl_house.academic": ["academic/__init__.py"],
+	"toefl_house.teaching": ["teaching/__init__.py"],
 };
 function signatureOf(method) {
 	const parts = method.split(".");

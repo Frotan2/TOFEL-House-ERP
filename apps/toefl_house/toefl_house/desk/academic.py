@@ -195,15 +195,28 @@ def work():
     } for row in sessions]
 
     cohort_items = []
+    # U1: each lifecycle state offers the ONE command that advances it —
+    # activation opens scheduling, scheduling runs from Active only. These
+    # are the same guarded teaching commands the teaching pages call; the
+    # desk only prefills them for role holders (no new policy here).
     for row in groups:
         state = cohort_state(row)
+        action = None
         if state == "Planned":
             next_text = "Activate the class before its first session can be scheduled."
             stage_definition = ("The class exists and its roster is set; activation is "
                                 "the step that opens scheduling.")
+            action = guided_action("Teaching Scheduler",
+                                   "toefl_house.teaching.transition_class",
+                                   "Activate class",
+                                   {"student_group": row["name"], "to_status": "Active"})
         elif state == "Active":
             next_text = "Check the roster before the next session."
             stage_definition = "The class is running: sessions and attendance are open."
+            action = guided_action("Teaching Scheduler",
+                                   "toefl_house.teaching.schedule_session",
+                                   "Schedule session",
+                                   {"student_group": row["name"]})
         else:
             next_text = "No action; this class is closed."
             stage_definition = "The class lifecycle has ended (completed or cancelled)."
@@ -219,8 +232,43 @@ def work():
             "next": next_text,
             "next_role": "Teaching Scheduler",
             "waiting_since": None,
-            "action": None,
+            "action": action,
         })
+
+    # Submitted enrollments with no class get one guided creation row per
+    # level and year — only for viewers who can actually run it.
+    if unclassed:
+        seen = set()
+        creation_items = []
+        for row in unclassed:
+            pair = (row.get("program"), row.get("academic_year"))
+            if not pair[0] or pair in seen:
+                continue
+            seen.add(pair)
+            intake = [r for r in unclassed if (r.get("program"), r.get("academic_year")) == pair]
+            action = guided_action("Teaching Scheduler",
+                                   "toefl_house.teaching.create_student_group",
+                                   "Create class",
+                                   {"program": pair[0],
+                                    "academic_year": pair[1] or ""})
+            if not action:
+                break
+            creation_items.append({
+                "id": f"new-class:{pair[0]}:{pair[1] or '-'}",
+                "person": "New class for this intake",
+                "detail": f"{pair[0]} · {pair[1] or 'no year'} · {len(intake)} "
+                          f"enrolled without a class",
+                "status": "Needs a class",
+                "stage": "Class creation",
+                "stage_definition": ("Submitted enrollments exist for this level and "
+                                     "year, but no class is planned or running yet."),
+                "next": "Name the class and set its capacity; the roster is drawn "
+                        "from these submitted enrollments by the command itself.",
+                "next_role": "Teaching Scheduler",
+                "waiting_since": min((r.get("enrollment_date") or "") for r in intake) or None,
+                "action": action,
+            })
+        cohort_items = creation_items + cohort_items
 
     assignment_items = [{
         "id": row["name"],

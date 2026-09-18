@@ -378,6 +378,32 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "code", label: "Rule code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Select", options: "1\n0", reqd: 1, description: "0 retires the rule for new charges." },
 		],
+		/* U1: the class-lifecycle commands, mirrored from the teaching module
+		 * exactly as its command pages run them — same guards, same rules. */
+		"toefl_house.teaching.create_student_group": [
+			{ fieldname: "group_name", label: "Class name", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "program", label: "Program (level)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "academic_term", label: "Academic term (optional)", fieldtype: "Data" },
+			{ fieldname: "max_strength", label: "Capacity", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "class_start_date", label: "First day", fieldtype: "Date" },
+			{ fieldname: "class_end_date", label: "Last day (blank = from the level's duration)", fieldtype: "Date" },
+			{ fieldname: "delivery_mode", label: "Delivery mode", fieldtype: "Select", options: "On-site\nOnline\nHybrid", default: "On-site" },
+			{ fieldname: "branch", label: "Branch (optional)", fieldtype: "Data" },
+		],
+		"toefl_house.teaching.transition_class": [
+			{ fieldname: "student_group", label: "Class", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "to_status", label: "New status", fieldtype: "Select", options: "Active\nCompleted\nCancelled", reqd: 1 },
+		],
+		"toefl_house.teaching.schedule_session": [
+			{ fieldname: "student_group", label: "Class", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "schedule_date", label: "Date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "from_time", label: "Start time", fieldtype: "Time", reqd: 1 },
+			{ fieldname: "to_time", label: "End time", fieldtype: "Time", reqd: 1 },
+			{ fieldname: "instructor", label: "Instructor", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "room", label: "Room", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "course", label: "Course", fieldtype: "Data", reqd: 1 },
+		],
 	});
 
 	/* Client-side courtesy guards for rules the server enforces anyway
