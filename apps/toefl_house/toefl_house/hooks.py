@@ -25,6 +25,14 @@ _COMMAND_PAGES = (
     "th-enrollment", "th-teaching-scheduling", "th-attendance-recording",
 )
 page_js = {name: "public/js/th_command_pages.js" for name in _COMMAND_PAGES}
+# Role desks (docs/product/ROLE-DESKS.md) use the desk client. They are
+# separate native Pages, independently role-gated server-side; they share the
+# design system stylesheet with the command pages but not the command client.
+_DESK_PAGES = (
+    "th-reception-desk", "th-academic-desk", "th-finance-desk",
+    "th-operations-desk", "th-owner-cockpit",
+)
+page_js.update({name: "public/js/th_role_desks.js" for name in _DESK_PAGES})
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception"]]]},
             {"dt": "Custom Field", "filters": [["dt", "=", "Sales Invoice"], ["fieldname", "=", "th_placement_case"]]}]
 has_permission = {

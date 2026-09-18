@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Operations",
+  "name": "th-owner-cockpit",
+  "page_name": "th-owner-cockpit",
+  "roles": [
+    {
+      "role": "Course Owner"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Owner Cockpit"
+}

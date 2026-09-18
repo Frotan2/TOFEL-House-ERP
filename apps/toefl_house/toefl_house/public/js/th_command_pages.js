@@ -699,6 +699,40 @@ frappe.provide("toefl_house.command_pages");
 				candidate.admin ? candidate.roles.join(" / ") : candidate.role,
 			);
 		});
+
+		/*
+		 * Role desks (docs/product/ROLE-DESKS.md). The registry read is
+		 * server-authoritative: the client never decides from session data
+		 * which desks an account holds. The landing page's own audience is
+		 * unchanged and stays pinned to the hosted qualification.
+		 */
+		const deskBlock = section(page.body, text("Your desks"));
+		const deskLoading = $("<div class='th-loading'></div>").appendTo(deskBlock);
+		$("<span class='th-spinner' aria-hidden='true'></span>").appendTo(deskLoading);
+		$("<span></span>").text(text("Checking which desks your roles can open…")).appendTo(deskLoading);
+		frappe.call({
+			method: "toefl_house.desk.registry.available",
+			callback(response) {
+				deskLoading.remove();
+				const desks = (response.message || {}).desks || [];
+				if (!desks.length) return;
+				const group = $("<div class='th-route-group'></div>").appendTo(deskBlock);
+				desks.forEach((desk) => {
+					$("<button type='button' class='btn btn-primary btn-sm'></button>")
+						.text(text(desk.title))
+						.on("click", () => frappe.set_route(desk.slug))
+						.appendTo(group);
+				});
+			},
+			error() {
+				deskLoading.remove();
+				/* The command areas above remain fully usable; the desks are
+				 * an additional surface, so their failure is a quiet note. */
+				$("<p class='th-card-hint'></p>")
+					.text(text("Desk availability could not be checked. The command areas above are unaffected."))
+					.appendTo(deskBlock);
+			},
+		});
 	}
 
 	toefl_house.command_pages.surfaces = PAGE_SURFACES;

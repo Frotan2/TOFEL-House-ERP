@@ -443,6 +443,203 @@
 	margin: 0;
 }
 
+/* --------------------------------------------------------- role desk layer */
+/* Components for the five role desks (docs/product/ROLE-DESKS.md). Same
+ * tokens, same five status tones, same restraint: emphasis marks the next
+ * action, never decoration. */
+
+.th-desk-strip {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--th-space-2);
+	margin-top: var(--th-space-3);
+}
+
+.th-desk-strip-label {
+	font-size: var(--th-fs-meta);
+	font-weight: var(--th-fw-semibold);
+	color: var(--th-ink-muted);
+}
+
+.th-desk-link {
+	margin: 0;
+}
+
+.th-section-body {
+	margin-top: var(--th-space-3);
+}
+
+.th-search-bar {
+	display: flex;
+	gap: var(--th-space-2);
+	align-items: center;
+	max-inline-size: 34rem;
+}
+
+.th-search-input {
+	flex: 1 1 auto;
+	margin: 0;
+}
+
+.th-search-results {
+	margin-top: var(--th-space-4);
+	display: grid;
+	gap: var(--th-space-4);
+}
+
+.th-search-heading {
+	font-size: var(--th-fs-title);
+	font-weight: var(--th-fw-semibold);
+	margin: var(--th-space-2) 0 0;
+}
+
+/* Fact tiles: value first, label, then the definition that makes the number
+ * meaningful. A number without its definition is not evidence. */
+.th-fact-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+	gap: var(--th-space-3);
+}
+
+.th-fact {
+	background: var(--th-surface);
+	border: 1px solid var(--th-line);
+	border-radius: var(--th-radius-md);
+	box-shadow: var(--th-shadow-1);
+	padding: var(--th-space-3) var(--th-space-4);
+}
+
+.th-fact-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--th-space-2);
+}
+
+.th-fact-value {
+	font-size: var(--th-fs-display);
+	font-weight: var(--th-fw-semibold);
+	line-height: var(--th-lh-tight);
+	color: var(--th-ink);
+	overflow-wrap: anywhere;
+}
+
+.th-fact-label {
+	margin: var(--th-space-1) 0 0;
+	font-weight: var(--th-fw-medium);
+	color: var(--th-ink);
+}
+
+.th-fact-definition {
+	margin: var(--th-space-1) 0 0;
+	font-size: var(--th-fs-meta);
+	color: var(--th-ink-muted);
+}
+
+/* Queue tables: identity -> status -> next action -> age -> act. The column
+ * order is the reading order of a decision, which is why it is fixed. */
+.th-queue {
+	inline-size: 100%;
+	border-collapse: collapse;
+	background: var(--th-surface);
+	border: 1px solid var(--th-line);
+	border-radius: var(--th-radius-md);
+	box-shadow: var(--th-shadow-1);
+}
+
+.th-queue thead th {
+	font-size: var(--th-fs-eyebrow);
+	font-weight: var(--th-fw-semibold);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--th-ink-faint);
+	text-align: start;
+	padding: var(--th-space-2) var(--th-space-3);
+	border-bottom: 1px solid var(--th-line);
+}
+
+.th-queue td {
+	padding: var(--th-space-3);
+	border-bottom: 1px solid var(--th-line);
+	vertical-align: top;
+}
+
+.th-queue tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.th-queue tbody tr:hover {
+	background: var(--th-surface-sunken);
+}
+
+.th-queue-person {
+	margin: 0;
+	font-weight: var(--th-fw-semibold);
+	color: var(--th-ink);
+	overflow-wrap: anywhere;
+}
+
+.th-queue-id {
+	margin: var(--th-space-1) 0 0;
+	font-size: var(--th-fs-meta);
+	color: var(--th-ink-faint);
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	overflow-wrap: anywhere;
+}
+
+.th-queue-detail {
+	margin: var(--th-space-1) 0 0;
+	font-size: var(--th-fs-meta);
+	color: var(--th-ink-muted);
+	overflow-wrap: anywhere;
+}
+
+.th-queue-state .th-status {
+	margin: 0;
+}
+
+.th-queue-stage {
+	margin: var(--th-space-1) 0 0;
+	font-size: var(--th-fs-meta);
+	color: var(--th-ink-muted);
+}
+
+.th-queue-next {
+	max-inline-size: 22rem;
+}
+
+.th-queue-next-action {
+	margin: 0;
+	color: var(--th-ink);
+	overflow-wrap: anywhere;
+}
+
+.th-queue-when {
+	white-space: nowrap;
+	font-size: var(--th-fs-meta);
+	color: var(--th-ink-muted);
+}
+
+.th-queue-age {
+	margin: 0;
+	font-weight: var(--th-fw-medium);
+	color: var(--th-ink);
+}
+
+.th-queue-date {
+	margin: var(--th-space-1) 0 0;
+}
+
+.th-queue-action-cell {
+	text-align: end;
+}
+
+.th-queue-action-cell .th-queue-action {
+	margin: 0;
+	white-space: nowrap;
+}
+
 /* ------------------------------------------------------------ accessibility */
 
 /* A visible focus ring on every interactive element, including the ones
@@ -493,6 +690,52 @@
 	.th-card-footer .th-action {
 		margin-inline-start: 0;
 		inline-size: 100%;
+	}
+
+	/* Queue tables reflow into stacked cards: every cell keeps its content and
+	 * its meaning, nothing is truncated away. */
+	.th-queue,
+	.th-queue tbody,
+	.th-queue tr,
+	.th-queue td {
+		display: block;
+		inline-size: 100%;
+	}
+
+	.th-queue thead {
+		display: none;
+	}
+
+	.th-queue {
+		border: 0;
+		background: transparent;
+		box-shadow: none;
+	}
+
+	.th-queue-row {
+		border: 1px solid var(--th-line);
+		border-radius: var(--th-radius-md);
+		background: var(--th-surface);
+		box-shadow: var(--th-shadow-1);
+		margin-block-end: var(--th-space-3);
+	}
+
+	.th-queue td {
+		border-bottom: 1px solid var(--th-line);
+		padding: var(--th-space-2) var(--th-space-3);
+	}
+
+	.th-queue-row td:last-child {
+		border-bottom: 0;
+		text-align: start;
+	}
+
+	.th-queue-action-cell .th-queue-action {
+		inline-size: 100%;
+	}
+
+	.th-search-bar {
+		flex-wrap: wrap;
 	}
 }
 

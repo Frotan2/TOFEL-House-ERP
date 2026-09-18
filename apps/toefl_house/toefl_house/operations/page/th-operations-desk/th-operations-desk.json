@@ -1,0 +1,14 @@
+{
+  "content": null,
+  "doctype": "Page",
+  "module": "Operations",
+  "name": "th-operations-desk",
+  "page_name": "th-operations-desk",
+  "roles": [
+    {
+      "role": "General Manager"
+    }
+  ],
+  "standard": "Yes",
+  "title": "TOEFL House Operations Desk"
+}
