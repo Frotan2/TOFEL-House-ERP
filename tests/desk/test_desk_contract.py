@@ -162,6 +162,19 @@ def _frappe_stub(roles=()):
         get_list=_db_get_all,
     )
     stub.get_all = _db_get_all
+
+    class _StubMeta:
+        """has_field answers only from the pinned ledger — like a real meta
+        answers only from the deployed schema, never from wishful fields."""
+
+        def __init__(self, doctype):
+            self.doctype = doctype
+
+        def has_field(self, fieldname):
+            real = pinned_schema.real_fields(self.doctype)
+            return real is not None and fieldname in real
+
+    stub.get_meta = lambda doctype, *args, **kwargs: _StubMeta(doctype)
     import datetime as _datetime
     _NOW = _datetime.datetime(2026, 9, 17, 9, 0, 0)
 
@@ -1289,6 +1302,49 @@ class AcademicClassActionsWorldTests(unittest.TestCase):
         self.assertIsNone(items["GROUP-B"]["action"])
         self.assertNotIn("new-class:GEN-4:2026", items,
                          "the creation row is an affordance, not narration")
+
+
+class DeskBranchScopeTests(unittest.TestCase):
+    """P1 as DECLARED, not invented: User Permission scope must be honoured
+    by filtering doctypes that carry the field and never by crashing a desk.
+
+    No new branch policy is asserted here — only that the declared behavior
+    (scope applies where the schema supports it) executes on every affected
+    projection call."""
+
+    def test_scope_filters_apply_only_where_the_schema_supports_them(self):
+        seen = []
+
+        def scoped_get_all(doctype, filters=None, fields=None, pluck=None, **kwargs):
+            assert_columns_real("scope world", doctype,
+                                list(fields or []) + list((filters or {}).keys()))
+            seen.append((doctype, dict(filters or {})))
+            if doctype == "User Permission" and pluck == "for_value":
+                return ["TH-CO"] if (filters or {}).get("allow") == "Company" else ["HQ"]
+            if pluck is not None:
+                return []
+            return desk_world_get_all("scope world", {})(
+                doctype, filters=filters, fields=fields, **kwargs)
+
+        module = _import_desk("finance", roles={"Finance Manager"})
+        module.frappe.get_all = scoped_get_all
+        module.frappe.db.get_all = scoped_get_all
+        payload = module.work()  # the P1 crash class: non-empty scope blew up
+        self.assertEqual(payload["desk"], "th-finance-desk")
+
+        scoped = 0
+        for doctype, filters in seen:
+            if doctype == "User Permission":
+                continue
+            real = pinned_schema.real_fields(doctype)
+            for fieldname in ("company", "branch"):
+                if fieldname in filters:
+                    scoped += 1
+                    self.assertTrue(real is not None and fieldname in real,
+                                    f"{doctype} was scoped by {fieldname} it does not carry")
+        self.assertGreater(scoped, 0,
+                           "a viewer with Company/Branch permissions must see the "
+                           "scope applied on doctypes that carry the field")
 
 
 if __name__ == "__main__":
