@@ -215,6 +215,10 @@ frappe.provide("toefl_house.role_desks");
 			const action = $("<td class='th-queue-action-cell'></td>").appendTo(row);
 			const button = actionButton(item.action);
 			if (button) button.appendTo(action);
+			(item.actions || []).forEach((extra) => {
+				const secondary = actionButton(extra);
+				if (secondary) secondary.appendTo(action);
+			});
 		});
 		return table;
 	}

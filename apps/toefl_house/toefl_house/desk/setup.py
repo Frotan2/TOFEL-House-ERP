@@ -27,6 +27,7 @@ SLUG = "th-academic-setup"
 
 PROGRAM = "TH Academic Program"
 LEVEL = "TH Program Level"
+NATIVE_PROGRAM = "Program"
 DURATION = "TH Level Duration"
 ENROLLMENT = "Program Enrollment"
 YEAR = "Academic Year"
@@ -70,6 +71,9 @@ def work():
     fee_rows = project_rows("setup", FEE_ROW, FEE_ROW_FIELDS,
                             filters={"parenttype": FEE_STRUCTURE},
                             order_by="idx asc", limit=LIMIT_QUEUES * 4)
+    native_programs = project_rows("setup", NATIVE_PROGRAM,
+                                   ["name", "program_name"],
+                                   order_by="program_name asc", limit=LIMIT_QUEUES)
 
     versions_by_level = {}
     for row in versions:
@@ -86,6 +90,7 @@ def work():
     levels_by_native = {row["native_program"]: row
                         for row in levels if row.get("native_program")}
     family_titles = {row["name"]: row["title"] for row in programs}
+    programs_by_name = {row["name"]: row for row in programs}
 
     # --- fee readiness ------------------------------------------------------
     rows_by_plan = {}
@@ -96,6 +101,8 @@ def work():
         plans_by_program.setdefault((plan.get("program"), plan.get("academic_year")),
                                     []).append(plan)
     current_year = _current_year(years, today)
+    anchored_native = {row["native_program"] for row in levels
+                       if row.get("native_program")}
     levels_without_plan = []
     for level in levels:
         if level["status"] != "Active" or not level.get("native_program"):
@@ -134,6 +141,14 @@ def work():
                 "Course Owner", "toefl_house.academic.set_level_fee_component",
                 "Set fee component",
                 {"level": level["code"], "academic_year": plan.get("academic_year") or ""})
+            if rows:
+                fee_plan_items[-1]["actions"] = [row for row in [
+                    guided_action(
+                        "Course Owner", "toefl_house.academic.remove_level_fee_component",
+                        "Remove component",
+                        {"level": level["code"],
+                         "academic_year": plan.get("academic_year") or ""})
+                ] if row]
 
     fee_type_items = [{
         "id": row["name"],
@@ -165,10 +180,26 @@ def work():
             "next_role": "Course Owner" if not family_levels else None,
             "waiting_since": program.get("modified"),
         }
+        row_actions = []
+        active_family_levels = sum(
+            1 for row in family_levels if row["status"] == "Active")
         if program["status"] == "Active":
             item["action"] = guided_action(
                 "Course Owner", "toefl_house.academic.create_level",
                 "Define level", {"family": program["code"]})
+            if active_family_levels == 0:
+                # The server rule allows retiring only with no active levels;
+                # the button appears exactly when it can succeed.
+                row_actions.append(guided_action(
+                    "Course Owner", "toefl_house.academic.set_program_status",
+                    "Retire program", {"program": program["code"], "active": "0"}))
+        else:
+            row_actions.append(guided_action(
+                "Course Owner", "toefl_house.academic.set_program_status",
+                "Reactivate program", {"program": program["code"], "active": "1"}))
+        extras = [row for row in row_actions if row]
+        if extras:
+            item["actions"] = extras
         program_rows_view.append(item)
 
     level_rows_view = []
@@ -225,6 +256,7 @@ def work():
             "next_role": "Course Owner",
             "waiting_since": level.get("modified"),
         }
+        row_actions = []
         if level["status"] == "Active":
             prefill = {"level": level["code"], "effective_from": ""}
             if governing:
@@ -233,6 +265,24 @@ def work():
             item["action"] = guided_action(
                 "Course Owner", "toefl_house.academic.set_level_duration",
                 "Set duration", prefill)
+            row_actions.append(guided_action(
+                "Course Owner", "toefl_house.academic.set_next_level",
+                "Set progression", {"level": level["code"], "next_level": ""}))
+            if not usage.get(level.get("native_program")):
+                # Refusal-free by construction: retire appears only when no
+                # submitted enrollment runs on the level.
+                row_actions.append(guided_action(
+                    "Course Owner", "toefl_house.academic.set_level_status",
+                    "Retire level", {"level": level["code"], "active": "0"}))
+        else:
+            family_status = (programs_by_name.get(level.get("family")) or {}).get("status")
+            if family_status == "Active":
+                row_actions.append(guided_action(
+                    "Course Owner", "toefl_house.academic.set_level_status",
+                    "Reactivate level", {"level": level["code"], "active": "1"}))
+        extras = [row for row in row_actions if row]
+        if extras:
+            item["actions"] = extras
         level_rows_view.append(item)
 
     health = [
@@ -269,6 +319,13 @@ def work():
                        f"{current_year or 'any defined academic year'}; enrollment "
                        "of such a level cannot be billed yet.",
          "value": len(levels_without_plan), "owner": "Course Owner"},
+        {"label": "Native programs outside the control plane",
+         "definition": "Native Education Program records no configured level "
+                       "anchors. Enrollment against them bypasses the Owner's "
+                       "structure; adopt them as levels or retire them deliberately.",
+         "value": sum(1 for row in native_programs
+                      if row["name"] not in anchored_native),
+         "owner": "Course Owner"},
     ]
 
     setup_actions = [{

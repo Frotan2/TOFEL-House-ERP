@@ -213,6 +213,11 @@ PROJECTION_FIELDS = {
     ("setup", "Program Enrollment"): [
         "name", "program", "enrollment_date", "docstatus",
     ],
+    # Integrity audit: native Program identity/display only, to surface
+    # records defined outside the control plane.
+    ("setup", "Program"): [
+        "name", "program_name",
+    ],
     # Fee configuration (control plane slice 2): native fee masters and the
     # editable plans per level. No GL detail beyond the resolved receivable.
     ("setup", "Academic Year"): [

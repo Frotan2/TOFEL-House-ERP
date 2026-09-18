@@ -415,6 +415,14 @@ const hostileItem = {
 		label: "Send for review",
 		args: { name: "ADM-0001", expected_version: 2 },
 	},
+	actions: [
+		{
+			role: "Admission Reviewer",
+			endpoint: "toefl_house.academic.set_next_level",
+			label: `Set progression for ${HOSTILE}`,
+			args: { level: "ADM-0001", next_level: "" },
+		},
+	],
 };
 
 {
@@ -436,16 +444,11 @@ const hostileItem = {
 	assert(rendered.includes("No released result is waiting"), "empty state renders for the empty section");
 	assert(rendered.includes("Your desks:"), "the desk strip renders the registry answer");
 
-	// Queue action: the guided dialog mirrors the server signature.
+	// Queue actions: the primary plus the contextual secondary the server
+	// authorized; both are real mapped commands.
 	const actionButtons = findAll(scenario.body, "th-queue-action");
-	if (!actionButtons.length) {
-		console.error("TREE:");
-		(function dump(node, depth) {
-			console.error("  ".repeat(depth) + node.tag + "[" + node.classes.join(",") + "] " + JSON.stringify(node.texts));
-			for (const child of node.children) dump(child, depth + 1);
-		})(scenario.body, 0);
-	}
-	assert.strictEqual(actionButtons.length, 1, "exactly the server-authorized action renders");
+	assert.strictEqual(actionButtons.length, 2,
+		"exactly the server-authorized actions render (primary + secondary)");
 	const before = scenario.calls.filter((call) => call.method === "toefl_house.admission.review_admission").length;
 	actionButtons[0].click();
 	assert.strictEqual(scenario.dialogs.length, 1, "the guided action opens one dialog");
@@ -470,6 +473,18 @@ const hostileItem = {
 	assert(resultMessage.includes("&lt;img"), "a hostile result must be escaped");
 	// A successful guided action refreshes the desk.
 	assert(scenario.workCalls >= 2, "a successful guided action refreshes the desk");
+
+	// The contextual secondary action opens its own mapped dialog with the
+	// server's prefill (proving multi-action rows don't dead-end the Owner).
+	actionButtons[1].click();
+	assert.strictEqual(scenario.dialogs.length, 2, "the secondary action opens one dialog");
+	const secondary = scenario.dialogs[1];
+	assert.deepStrictEqual(
+		Array.from(secondary.opts.fields, (field) => field.fieldname),
+		["request_key", "level", "next_level"],
+		"the secondary dialog mirrors its reviewed signature");
+	assert.strictEqual(secondary.values.level, "ADM-0001",
+		"the secondary prefill reaches the dialog");
 }
 
 {

@@ -640,6 +640,11 @@
 	white-space: nowrap;
 }
 
+/* Contextual secondary actions sit beside the primary one. */
+.th-queue-action-cell .th-queue-action + .th-queue-action {
+	margin-inline-start: var(--th-space-2);
+}
+
 /* ------------------------------------------------------------ accessibility */
 
 /* A visible focus ring on every interactive element, including the ones

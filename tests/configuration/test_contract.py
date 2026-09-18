@@ -387,6 +387,31 @@ class ControlPlaneTieTests(unittest.TestCase):
                      ('("finance", "Fee Component")',)):
             self.assertIn(pair[0], init_source, f"missing allow-list {pair[0]}")
 
+    def test_setup_desk_offers_only_actions_that_can_succeed(self):
+        """Contextual multi-actions: buttons appear exactly when the server
+        rule lets them succeed — no doomed buttons, no dead ends."""
+        source = (APP / "desk/setup.py").read_text(encoding="utf-8")
+        # Retire program only when no active level depends on it:
+        self.assertIn("active_family_levels == 0", source)
+        self.assertIn('"Retire program"', source)
+        # Retire level only when no submitted enrollment runs on it:
+        self.assertIn('if not usage.get(level.get("native_program")):', source)
+        self.assertIn('"Retire level"', source)
+        # Reactivation, progression and component removal are contextual too:
+        for literal in ('"Reactivate program"', '"Reactivate level"',
+                        '"Set progression"', '"Remove component"'):
+            self.assertIn(literal, source)
+        # The client renders the secondary actions.
+        client = (APP / "public/js/th_role_desks.js").read_text(encoding="utf-8")
+        self.assertIn("(item.actions || []).forEach", client)
+
+    def test_setup_desk_audits_native_programs_outside_the_plane(self):
+        source = (APP / "desk/setup.py").read_text(encoding="utf-8")
+        self.assertIn("outside the control plane", source)
+        self.assertIn("anchored_native", source)
+        init_source = (APP / "desk/__init__.py").read_text(encoding="utf-8")
+        self.assertIn('("setup", "Program")', init_source)
+
     def test_setup_desk_consumes_the_pure_rules(self):
         source = (APP / "desk/setup.py").read_text(encoding="utf-8")
         self.assertIn("from toefl_house.academic import rules", source)

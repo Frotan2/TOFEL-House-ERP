@@ -119,10 +119,15 @@ keyed per Program, not per Course.
   ambiguity (two editable structures for one program+year) is refused, not
   guessed.
 - **Academic Setup desk** (`th-academic-setup`, audience Course Owner) —
-  configuration health facts (integrity faults surface, never hide), the
-  program and level queues with the *governing* duration of each level, and
-  guided actions into the guarded commands. Part of the desk registry, the
-  landing-page strip, and every desk contract.
+  configuration health facts (integrity faults surface, never hide — including
+  native `Program` records defined *outside* the control plane), the program
+  and level queues with the *governing* duration of each level, per-enrollment
+  configuration history ("which version governed this enrollment"), and
+  contextual multi-actions into the guarded commands: a button appears only
+  when the server rule lets it succeed (retire a program only with no active
+  levels; retire a level only with no live enrollments), so no row dead-ends
+  and no button can only fail. Part of the desk registry, the landing-page
+  strip, and every desk contract.
 
 ### Integrity rules (§23, §32, §39 — all enforced)
 
