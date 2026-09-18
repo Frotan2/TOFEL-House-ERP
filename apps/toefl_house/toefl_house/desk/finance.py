@@ -314,7 +314,7 @@ def work():
             section("corrections", "Correction queue", "queue",
                     items=_correction_items(corrections),
                     empty_title="No correction requests",
-                    empty_body="No invoice correction has been requested. Requests appear here the moment they are created."),
+                    empty_body="No correction request (invoice or tuition fee) is open. Requests appear here the moment they are created."),
         ],
     }
 

@@ -50,7 +50,12 @@ def main():
            'finance_officer':'synthetic-finance-officer@example.test',
            'finance_auditor':'synthetic-finance-auditor@example.test',
            'containment_probe':'synthetic-containment-probe@example.test',
-           'course_owner':'synthetic-course-owner@example.test'}
+           'course_owner':'synthetic-course-owner@example.test',
+           'receptionist':'synthetic-receptionist@example.test',
+           'academic_manager':'synthetic-academic-manager@example.test',
+           'finance_manager':'synthetic-finance-manager@example.test',
+           'general_manager':'synthetic-general-manager@example.test',
+           'academic_scheduler':'synthetic-academic-scheduler@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
@@ -131,7 +136,13 @@ def main():
                          'containment_probe':['Accounts User'],
                          # Configuration-plane actor for OD-CP discount rules:
                          # the only role the Course Owner gate accepts.
-                         'course_owner':['Course Owner']}
+                         'course_owner':['Course Owner'],
+                        # Role-desk audiences for the Phase-2 desk qualification.
+                        'receptionist':['Reception'],
+                        'academic_manager':['Academic Manager'],
+                        'finance_manager':['Finance Manager'],
+                        'general_manager':['General Manager'],
+                        'academic_scheduler':['Academic Manager','Teaching Scheduler']}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -1844,7 +1855,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor','teaching_scheduler','attendance_recorder','finance_officer','containment_probe')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor','teaching_scheduler','attendance_recorder','finance_officer','containment_probe','receptionist','academic_manager','finance_manager','general_manager','course_owner','academic_scheduler')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def apost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.admission.'+method,json=payload,timeout=40)
         def epost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.enrollment.'+method,json=payload,timeout=40)
@@ -3853,7 +3864,185 @@ def main():
         check('odcp-global-config-no-branch',traced(branch_free_money_config))
         check('odcp-legacy-vocabulary-absent',traced(legacy_vocabulary_absent))
         check('integration-journey-through-fees',traced(fee_receipt_chain))
+        # ---- Role-desk hosted qualification (Phase 2: D1-D6, U1, U9). ----
+        # Every desk must LOAD over the real HTTP pipeline as its audience,
+        # refuse non-audiences and guests, carry the governed class lifecycle
+        # (th_class_status — never a phantom Student Group.active), stay in
+        # plain language, expose the real fee-correction target, and hand
+        # OD-RD-1's fees-correction chain through the queue end to end.
+        # This is qualification evidence; it is not OD-RD-1 ratification.
+        def desk_get(label,method):
+            r=sessions[label].get(base+'/api/method/toefl_house.desk.'+method,timeout=30)
+            assert r.status_code==200,(method,label,r.status_code,r.text[:300])
+            return r.json()['message']
+        def desk_sections(payload):
+            return {sect['id'] for sect in payload['sections']}
+        BANNED_PLUMBING=('Student Group','Program Enrollment','Sales Invoice',
+                         'Payment Entry','Has Role','docstatus')
+        def desk_qualification():
+            frappe.set_user('Administrator')
+            observed={}
+            # D1 over HTTP: audience loads, negatives, guest registry.
+            rec=desk_get('receptionist','reception.work')
+            assert rec['desk']=='th-reception-desk' and {'funnel','people','handover'}<=desk_sections(rec)
+            aca=desk_get('academic_manager','academic.work')
+            assert aca['desk']=='th-academic-desk' and {'classes','sessions','admissions'}<=desk_sections(aca)
+            fin=desk_get('finance_manager','finance.work')
+            assert fin['desk']=='th-finance-desk' and {'billing','corrections','outstanding'}<=desk_sections(fin)
+            ops=desk_get('general_manager','operations.work')
+            assert ops['desk']=='th-operations-desk' and {'funnel','exceptions','staffing','desks'}<=desk_sections(ops)
+            own=desk_get('course_owner','owner.cockpit')
+            assert own['desk']=='th-owner-cockpit' and 'posture' in desk_sections(own)
+            setu=desk_get('course_owner','setup.work')
+            assert setu['desk']=='th-academic-setup' and {'health','fees'}<=desk_sections(setu)
+            # the release posture stays honestly fail-closed on a real bench
+            assert 'REJECT' in json.dumps(own)
+            # plain-language promise (U5): no raw doctype plumbing in payloads
+            for name,payload in (('reception',rec),('academic',aca),('finance',fin),
+                                 ('operations',ops),('owner',own),('setup',setu)):
+                text=json.dumps(payload)
+                for word in BANNED_PLUMBING:
+                    assert word not in text,(name,word)
+            # registry: server-decided, per audience
+            assert {d['slug'] for d in desk_get('receptionist','available')['desks']}=={'th-reception-desk'}
+            assert {d['slug'] for d in desk_get('course_owner','available')['desks']}=={'th-owner-cockpit','th-academic-setup'}
+            assert desk_get('outsider','available')['desks']==[]
+            # guest: registry answers empty; desk loads are denied
+            g=requests.get(base+'/api/method/toefl_house.desk.available',
+                headers={'Host':'placement-test.localhost'},timeout=30)
+            assert g.status_code==200 and g.json()['message']['desks']==[]
+            http_denied(requests.get(base+'/api/method/toefl_house.desk.reception.work',
+                headers={'Host':'placement-test.localhost'},timeout=30))
+            http_denied(sessions['outsider'].get(
+                base+'/api/method/toefl_house.desk.reception.work',timeout=30))
+            http_denied(sessions['finance_manager'].get(
+                base+'/api/method/toefl_house.desk.academic.work',timeout=30))
+            http_denied(sessions['teaching_scheduler'].get(
+                base+'/api/method/toefl_house.desk.academic.work',timeout=30))
+            # a read endpoint answers its own desk and nothing else, on POST too
+            rp=sessions['receptionist'].post(base+'/api/method/toefl_house.desk.reception.work',
+                json={'desk':'th-academic-desk','slug':'th-academic-desk'},timeout=30)
+            assert rp.status_code==200 and rp.json()['message']['desk']=='th-reception-desk', \
+                'a desk endpoint must not be retargetable by request payload'
+            observed['audiences']=('all six desk loads HTTP 200; guest/outsider/'
+                                   'cross-audience denied; POST to a read endpoint '
+                                   'refused by its GET/POST marks')
+            # D2/D3/D4: the payload reflects the governed lifecycle only
+            classes={item['id']:item for item in next(
+                sect for sect in aca['sections'] if sect['id']=='classes')['items']}
+            assert classes[GRP_A]['stage']=='Class \u2014 Active',classes[GRP_A]['stage']
+            assert classes[GRP_B]['stage']=='Class \u2014 Active'
+            assert classes[GRP_A]['action'] is None, 'role gate: Academic Manager gets narration, not the button'
+            running=next(f for f in next(sect for sect in aca['sections']
+                if sect['id']=='funnel')['facts'] if f['label']=='Classes running')
+            assert running['value']>=2
+            people={item['id']:item for item in next(
+                sect for sect in rec['sections'] if sect['id']=='people')['items']}
+            enrolled_stages=[i['stage'] for i in people.values() if i.get('stage')=='Enrolled']
+            assert enrolled_stages, 'the classified intakes must read as Enrolled (cohort derived from the real class state)'
+            assert not [i for i in people.values() if i.get('stage')=='Enrolled, no class'], \
+                'GRP_A is Active for this program and year: nobody here may read as unclassed'
+            # U1: affordances for the acting role, same payloads, gated
+            aca_sch=desk_get('academic_scheduler','academic.work')
+            cls_sch={item['id']:item for item in next(
+                sect for sect in aca_sch['sections'] if sect['id']=='classes')['items']}
+            act=cls_sch[GRP_A]['action']
+            assert act and act['endpoint']=='toefl_house.teaching.schedule_session' \
+                and act['args']=={'student_group':GRP_A},act
+            assert not [i for i in cls_sch if str(i).startswith('new-class:')], \
+                'every intake in this fixture is classed; no creation row is offered'
+            observed['guided_actions']='schedule prefills reach the acting role over HTTP; non-holders see none'
+            # D6 + OD-RD-1: the fees-correction seam, end to end over HTTP
+            fee2=frappe.db.get_value('Fees',{'docstatus':1,'outstanding_amount':['>',0],
+                'name':['!=',fdisc['fees']]},'name',order_by='creation asc')
+            assert fee2,('a submitted outstanding fee must exist for the correction probe')
+            f2=frappe.db.get_value('Fees',fee2,['grand_total','outstanding_amount'],as_dict=True)
+            gt2=round(float(f2.grand_total),2)
+            assert denied(lambda:as_user('finance_officer',lambda:corr.request_fees_correction(
+                'desk-fees-partial-0001',fee2,'SYN partial attempt',round(gt2-1,2)))), \
+                'partial corrections stay refused until owner terms exist'
+            assert denied(lambda:as_user('outsider',lambda:corr.request_fees_correction(
+                'desk-fees-outsider-001',fee2,'SYN outsider attempt',gt2))), \
+                'an outsider opened a fees correction'
+            r=sessions['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+                'corrections.request_fees_correction',json=dict(
+                request_key='desk-fees-http-req-0001',fees=fee2,
+                reason='SYN hosted desk probe',requested_amount=gt2),timeout=40)
+            assert r.status_code==200,('fees correction request over HTTP',r.status_code,r.text[:300])
+            creq=r.json()['message']
+            rd=sessions['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+                'corrections.request_fees_correction',json=dict(
+                request_key='desk-fees-http-req-0002',fees=fee2,
+                reason='SYN duplicate attempt',requested_amount=gt2),timeout=40)
+            http_denied(rd)
+            fin_mid=desk_get('finance_manager','finance.work')
+            csect=next(sect for sect in fin_mid['sections'] if sect['id']=='corrections')
+            crow=next(i for i in csect['items'] if i['id']==creq['name'])
+            assert crow['person']==fee2, ('D6: the desk row must name the fee it targets',crow)
+            assert crow['stage_definition']=='Fees correction request.',crow
+            assert crow.get('action') is None, 'approver buttons belong to the policy role only'
+            pending=next(f for f in next(sect for sect in fin_mid['sections']
+                if sect['id']=='facts')['facts'] if f['label']=='Corrections pending')
+            assert pending['value']==1
+            probe_denial=denied(lambda:as_user('correction_probe',lambda:corr.approve_fees_correction(
+                'desk-fees-probe-0001',creq['name'])))
+            assert probe_denial=={'denied':'PermissionError'}, \
+                'command access without the approver role must not approve'
+            ra=sessions['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+                'corrections.approve_fees_correction',json=dict(
+                request_key='desk-fees-http-appr-01',request=creq['name']),timeout=40)
+            assert ra.status_code==200,('approve over HTTP',ra.status_code,ra.text[:300])
+            approved=ra.json()['message']
+            assert approved['status']=='Posted' and approved['refunded_total']==gt2,approved
+            rb=sessions['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+                'corrections.approve_fees_correction',json=dict(
+                request_key='desk-fees-http-appr-01',request=creq['name']),timeout=40)
+            assert rb.status_code==200 and rb.json()['message']==approved, \
+                'same key must replay the same receipt, not a second reversal'
+            frappe.set_user('Administrator')
+            assert int(frappe.db.get_value('Fees',fee2,'docstatus'))==2, \
+                'approval must reverse via native cancellation'
+            assert frappe.db.count('GL Entry',{'against_voucher':fee2,'is_cancelled':0})==0, \
+                'an open receivable line may survive the cancellation'
+            req_row=frappe.db.get_value(CREQ,creq['name'],['status','approved_by'],as_dict=True)
+            assert req_row.status=='Posted' and req_row.approved_by==users['finance_officer'],req_row
+            fin_post=desk_get('finance_manager','finance.work')
+            csect=next(sect for sect in fin_post['sections'] if sect['id']=='corrections')
+            crow2=next(i for i in csect['items'] if i['id']==creq['name'])
+            assert crow2['status']=='Posted' and crow2.get('action') is None, \
+                ('a posted correction must read as decided, buttonless',crow2)
+            pending=next(f for f in next(sect for sect in fin_post['sections']
+                if sect['id']=='facts')['facts'] if f['label']=='Corrections pending')
+            assert pending['value']==0
+            ops_post=desk_get('general_manager','operations.work')
+            exc=next(sect for sect in ops_post['sections'] if sect['id']=='exceptions')
+            assert creq['name'] not in {i['id'] for i in exc['items']}
+            # denial path leaves the fee untouched, and a denial reopens the door
+            req3=as_user('finance_officer',lambda:corr.request_fees_correction(
+                'desk-fees-deny-req-001',fdisc['fees'],'SYN denial path probe',26000.0))
+            d3=as_user('finance_officer',lambda:corr.deny_fees_correction(
+                'desk-fees-deny-run-01',req3['name']))
+            assert d3['status']=='Denied'
+            still=frappe.db.get_value('Fees',fdisc['fees'],['docstatus','outstanding_amount'],as_dict=True)
+            assert int(still.docstatus)==1 and float(still.outstanding_amount)==26000.0,still
+            req4=as_user('finance_officer',lambda:corr.request_fees_correction(
+                'desk-fees-redo-req-001',fdisc['fees'],'SYN re-request after denial',26000.0))
+            as_user('finance_officer',lambda:corr.deny_fees_correction(
+                'desk-fees-redo-deny-01',req4['name']))
+            observed['fees_correction']={
+                'target_fee':fee2,'amount':gt2,'request':creq['name'],
+                'http_request_and_approve':True,'replay_identical_receipt':True,
+                'partial_denied':True,'outsider_denied':True,'duplicate_open_denied':True,
+                'dual_key_denied':probe_denial,'posted_and_reversed':True,
+                'gl_open_rows_after':0,'desk_shows_named_fee_target':True,
+                'desk_clears_after_posting':True,'denial_keeps_fee':True,
+                'redeny_allowed_after_denial':True,
+                'note':'OD-RD-1 evidence only: ratification waits for the owner'}
+            frappe.db.commit()
+            return observed
+        check('role-desk-hosted-qualification',traced(desk_qualification))
         report['status']='pass'
+
     except Exception as exc:
         report['status']='fail';report['failure']={'type':type(exc).__name__,'message':str(exc)[:600]}
         print('Native qualification failed:',type(exc).__name__,str(exc)[:600],flush=True)
