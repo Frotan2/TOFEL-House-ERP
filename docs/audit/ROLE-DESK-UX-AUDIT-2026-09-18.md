@@ -373,14 +373,24 @@ fees-correction chain end to end (target `EDU-FEE-2026-00001`, request
 `ghph21s107`, replay-identical receipt, `gl_open_rows_after: 0`, desk row
 named then cleared, denial keeps the fee, re-request after denial allowed).
 
+Post-U-fix final gates on `b210b3d` (merge of `93baa83` U3/U6/U7/U8 closure + ratification into active):
+owned-suite `35371920888` **success** and placement-content `35371920878` **success**
+(570 checks, report SHA-256 `7dcc2b505a5338e7b9801bd4b1edfb012fc020b6d924bfab924fad68b1268964`,
+check-run `105691353452`, request `pk8lkdn0vl`). U3 reception guidance now names
+Publisher/Releaser, U6 owner cockpit selects `accepted`/`native_student`, U7 deployment
+posture carries as-of date per canonical record, U8 workspace navigation declared
+in `ROLE-DESKS.md`. No regression.
+
 **Foundation runtime validation** (`foundation-runtime.yml`) fails on every
 recent SHA including pre-Phase-2 ones (`b83d118`, `10939bb`): it is the
 documented SEC-DEPS-01 upstream-dependency hard stop, deliberately left
 untouched by this mission and unchanged by it — production stays REJECT.
 
 Desk-readiness for the six role desks is therefore **qualified on the real
-HTTP pipeline**; OD-RD-1 ratification is now an owner decision informed by
-green evidence — the evidence does not self-ratify.
+HTTP pipeline**; OD-RD-1..4 ratification is now recorded in
+`ROLE-DESK-OD-RD-RATIFICATION-2026-09-18.md` with owner answers:
+OD-RD-1 ratify, OD-RD-2 verify now, OD-RD-3 keep human-readable gate, OD-RD-4 keep read-only reference.
+The evidence does not self-ratify — ratification is owner decision informed by green evidence.
 
 ### What the hosted failure proves
 The §5 checks were not decoration: the first real-pipeline pass executed the
@@ -388,4 +398,5 @@ whitelist path, loaded all six desks for their audiences and reached the
 fees-correction chain — and a scan stricter than anything previously wired
 caught the residue. That is the harness-strengthening objective (make this
 defect class visible) demonstrated on a live bench, catching what offline
-dict-scan coverage had let through.
+dict-scan coverage had let through. The post-U-fix re-green proves the same
+harness still holds after the final UX polish.
