@@ -171,6 +171,24 @@ Reception (find person) → record_applicant → create_admission
   → record_attendance → issue_tuition_fees / issue_placement_fee
 ```
 
+## Workspace navigation (declared answer for U8)
+
+- `TH Finance` workspace is gated on `Finance Officer` — the role that does
+  daily finance work reaches its DocType links (Fees, Sales Invoice, Payment
+  Entry, Fee Structure, etc.) through that workspace.
+- `TH Receipts` workspace is gated on the five Auditor roles (Placement,
+  Admission, Enrollment, Teaching, Finance Auditor) — it surfaces the
+  operation/audit DocTypes for audit review.
+- All other operational Officer roles (Placement Author, Publisher, Releaser,
+  Invigilator, Admission Officer/Reviewer/Approver, Enrollment Officer,
+  Teaching Scheduler, Attendance Recorder, etc.) intentionally land on **no
+  workspace**. They reach their work through the six role desks (which embed
+  guided actions into the existing guarded command Pages) and through the
+  command Pages themselves. This is deliberate, not accidental: adding a native
+  Workspace for each Officer role would widen native read scopes beyond the
+  guarded commands and violate the A13 containment boundary. The declared
+  navigation is: desks first, command Pages second, no per-role Workspace.
+
 ## What is deliberately NOT here
 
 - No teacher-facing desk: a teacher's identity link (native `Instructor` ↔

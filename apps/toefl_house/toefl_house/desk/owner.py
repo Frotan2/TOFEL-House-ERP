@@ -33,6 +33,10 @@ GROUP = "Student Group"
 # The release posture facts are static, reviewed constants — the same records
 # the canonical ledger and the administration control centre state. They are
 # not computed from the database and no gate state can be derived here.
+# Deployment value is the owner's selected current deployment (local/server
+# through Tailscale) per canonical-owner-decision-record.json as of 2026-09-16.
+# The line carries the as-of date so a future ledger change cannot silently
+# stale the cockpit.
 RELEASE_POSTURE = [
     {"label": "Production",
      "definition": "Production acceptance state from the acceptance ledger.",
@@ -44,8 +48,8 @@ RELEASE_POSTURE = [
      "definition": "All owned business commands stay confined to explicitly isolated synthetic sites until the owner authorizes activation.",
      "value": "REQUIRED", "owner": None},
     {"label": "Deployment",
-     "definition": "Current deployment decision recorded by the owner.",
-     "value": "LOCAL_SERVER_TAILSCALE", "owner": None},
+     "definition": "Current deployment decision recorded by the owner in canonical-owner-decision-record.json (as of 2026-09-16).",
+     "value": "LOCAL_SERVER_TAILSCALE (as of 2026-09-16 per canonical-owner-decision-record.json)", "owner": None},
 ]
 
 
@@ -56,7 +60,7 @@ def cockpit():
 
     admissions_open = project_rows("management", ADMISSION,
                                    ["name", "student_applicant", "program", "status",
-                                    "version", "modified"],
+                                    "version", "accepted", "native_student", "modified"],
                                    filters={"status": ("in", list(lifecycle.ADMISSION_OPEN_STATUSES))},
                                    order_by="modified asc", limit=BOUNCE_WINDOW)
     attempts_running = project_count("management", ATTEMPT, {

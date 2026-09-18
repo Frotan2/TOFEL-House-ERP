@@ -109,7 +109,12 @@ def _person_item(applicant, decisions_by_applicant, subject_to_decision):
     stage = {
         "label": "Applicant recorded",
         "definition": "The applicant is on file, but no admission decision has been opened yet.",
-        "next": "Open the admission decision for this applicant.",
+        "next": (
+            "Open the admission decision once a placement result is released for this "
+            "applicant's email. A placement result appears after the Placement Publisher "
+            "finalizes the attempt and the Placement Releaser releases it — ask those "
+            "roles to publish the result if it is not yet visible."
+        ),
         "role": "Admission Officer",
         "command": "create_admission",
     }
