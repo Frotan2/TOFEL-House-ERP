@@ -788,24 +788,33 @@ class DeskPlainLanguageTests(unittest.TestCase):
             yield from DeskPlainLanguageTests._strings(node.orelse)
 
     def test_display_fields_carry_no_doctype_plumbing(self):
-        _ast = ast
         for module in ("reception", "academic", "lifecycle", "finance", "operations",
                        "owner", "setup"):
-            tree = _ast.parse((DESK / f"{module}.py").read_text(encoding="utf-8"))
+            tree = ast.parse((DESK / f"{module}.py").read_text(encoding="utf-8"))
             banned = self.COMMON_BANNED if module in ("finance", "owner", "setup") \
                 else self.STAFF_BANNED
-            for node in _ast.walk(tree):
-                if isinstance(node, _ast.Dict):
-                    for key, value in zip(node.keys, node.values):
-                        if not (isinstance(key, _ast.Constant)
-                                and key.value in self.DISPLAY_KEYS):
-                            continue
-                        for text in self._strings(value):
-                            for word in banned:
-                                self.assertNotIn(
-                                    word, text,
-                                    f"{module}.py embeds raw '{word}' in a "
-                                    "staff-visible desk string")
+            display = dict.fromkeys(self.DISPLAY_KEYS)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Dict):
+                    pairs = [(k, v) for k, v in zip(node.keys, node.values)
+                             if isinstance(k, ast.Constant) and k.value in display]
+                elif (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Name) and node.func.id == "section"):
+                    # section(title=…, empty_title=…, empty_body=…) is how a
+                    # section's visible prose reaches the payload too — the
+                    # hosted bench once caught a string that this call path
+                    # hid from a dict-only scan.
+                    pairs = [(kw, kw.value) for kw in node.keywords
+                             if kw.arg in ("title", "empty_title", "empty_body")]
+                else:
+                    continue
+                for key, value in pairs:
+                    for text in self._strings(value):
+                        for word in banned:
+                            self.assertNotIn(
+                                word, text,
+                                f"{module}.py embeds raw '{word}' in a "
+                                "staff-visible desk string")
 
 
 class GuidedEndpointRegistryTests(unittest.TestCase):

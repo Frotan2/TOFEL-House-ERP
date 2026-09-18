@@ -299,7 +299,7 @@ def work():
         "sections": [
             section("today", "Today", "queue", items=payment_items,
                     empty_title="No payments recorded today",
-                    empty_body="No submitted Payment Entry of type Receive is posted for today. Check the date or record the payment natively."),
+                    empty_body="No payment has been received for today. Payments appear here the moment they are posted."),
             section("facts", "Money facts", "facts", facts=money_facts,
                     empty_title="No money facts yet",
                     empty_body="Facts appear once the native billing and payment records exist."),
@@ -310,7 +310,7 @@ def work():
                     empty_body="No submitted invoice or fee carries an outstanding amount for your scope."),
             section("billing", "Awaiting billing", "queue", items=billing_items,
                     empty_title="Everything submitted is billed",
-                    empty_body="Every submitted Program Enrollment has a Fees record, or no enrollment has been submitted yet."),
+                    empty_body="Every confirmed enrollment has an issued bill, or no enrollment has been confirmed yet."),
             section("corrections", "Correction queue", "queue",
                     items=_correction_items(corrections),
                     empty_title="No correction requests",
