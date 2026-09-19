@@ -228,12 +228,15 @@
     }
   ],
   "licensing": {
-    "state": "NOT SELECTED",
+    "state": "MIT (owner decision D11, 2026-09-19)",
     "recorded": "2026-09-17",
     "declared_in_app_metadata": "MIT (apps/toefl_house/toefl_house/hooks.py, apps/foundation_security/foundation_security/hooks.py)",
-    "repository_license_file": "absent",
-    "readme_statement": "No product license has been selected yet.",
-    "engineering_action": "None taken. Selecting or removing a license grant is an owner decision (D11)."
+    "repository_license_file": "present (LICENSE, MIT)",
+    "readme_statement": "Product license: MIT — owner decision D11, decided 2026-09-19.",
+    "engineering_action": "None taken. Selecting or removing a license grant is an owner decision (D11).",
+    "resolved": "2026-09-19",
+    "consistency_guard": "tests/foundation/test_licence_consistency.py",
+    "historical_note": "Recorded 2026-09-17 as NOT SELECTED with a three-way contradiction between app metadata, README and the absent LICENSE file. Superseded by owner decision D11 on 2026-09-19; the historical state is preserved here rather than erased."
   },
   "resolved_business_decisions": {
     "D12": {

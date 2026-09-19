@@ -147,12 +147,18 @@ declaration is wrong and must be corrected; (d) **keep it unlicensed**.
 **Why owner-only:** a license is a legal grant, it is effectively irreversible
 once published, and it constrains how the upstream apps may be combined and
 distributed. Engineering has no authority to select one, and none was selected.
-**Current state — three-way inconsistency, documented not resolved:**
-`apps/toefl_house/toefl_house/hooks.py` and
-`apps/foundation_security/foundation_security/hooks.py` both declare
-`app_license = "MIT"`; the README states *"No product license has been selected
-yet"*; there is **no** LICENSE file in the repository; and the GitHub repository
-reports its license as `null`. **Unblocks:** distribution of the owned
+**Resolved 2026-09-19 — MIT selected.** `LICENSE` now carries the MIT text,
+both `hooks.py` declarations were already `app_license = "MIT"`, and the README
+states the same thing, so all three surfaces agree.
+`tests/foundation/test_licence_consistency.py` (6 tests) enforces the agreement
+and scans the active surfaces for the stale wording, so this cannot silently
+return. Upstream Frappe/ERPNext/Education/HRMS terms continue to govern those
+apps; MIT does not relicense them.
+
+*Historical (superseded): the 2026-09-17 review recorded a three-way
+inconsistency — both `hooks.py` files declared `app_license = "MIT"` while the
+README said no product license had been selected and no LICENSE file existed,
+with GitHub reporting `null`. That state is preserved here as provenance only.* **Unblocks:** distribution of the owned
 application outside this repository. Whichever option is selected, the
 `hooks.py` declaration, the README statement, a repository LICENSE file and the
 upstream-compatibility note must be made consistent **in the same change**.
@@ -267,4 +273,4 @@ technical gates are independently satisfied.
 | D8 | **Owner requirements selected and recorded in the canonical owner-decision record** | Authority roles, role-based access/auditability/offboarding, branch isolation, current local/Tailscale deployment, local state, encrypted versioned backup/recovery, preservation priority, configurable policy, compensation models, controlled administration, and health/attention visibility are now business inputs. Future provider/hostname/DNS/public edge, off-site destination, numeric capacity/availability, and numeric RPO/RTO remain unselected. Engineering implementation and independent evidence remain D8-BLOCKED; production stays REJECT. |
 | D9 | **(d) No separate register** | Gate CLOSED at status quo; attendance facts via guarded APIs only |
 | D10 | **(ii) Role-based report/page surfaces** | **T3 EXECUTED & QUALIFIED** — 13 native command Pages (role-filtered command centre + 12 one-role action Pages), no new native Education/ERPNext authority; run 35073376790 @ 3587700, **542/542**. The separate Course Owner/General Manager control-centre Page is a locally contract-tested governance surface and not a replacement for the qualified command evidence. |
-| D11 | **NOT SELECTED — owner decision required** | Found by the 2026-09-17 engineering review. `hooks.py` declares MIT in both apps, the README says no license is selected, no LICENSE file exists and GitHub reports `null`. Engineering selected nothing; see D11 above for the four options and the consistency requirement. |
+| D11 | **(a) MIT** — DECIDED 2026-09-19 | Found by the 2026-09-17 engineering review as a three-way contradiction: `hooks.py` declared MIT in both apps, the README said no license was selected, no LICENSE file existed and GitHub reported `null`. The Course Owner selected MIT on 2026-09-19; all three surfaces were made consistent in one change and `tests/foundation/test_licence_consistency.py` now enforces the agreement. Upstream Frappe/ERPNext/Education/HRMS terms still govern those apps. |
