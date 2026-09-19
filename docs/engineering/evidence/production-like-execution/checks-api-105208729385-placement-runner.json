@@ -1,0 +1,570 @@
+{
+ "retrieval_provenance": {
+  "retrieved_at_utc": "2026-09-19T16:05:00+00:00",
+  "retrieved_by": "\u00a75 evidence re-observability sweep (read-only GitHub Checks API)",
+  "check_id": 105208729385,
+  "run_id": "35222291725",
+  "head_sha": "1b9f29fd6e5521fb758e8696d8a55fa7937a558a",
+  "summary_digest_sha256": "eef019163c74a11569a73a3d33629a703f34f3fc5355b2fe03aee9ee6a77ac5c",
+  "transport": "plain",
+  "digest_verified": true
+ },
+ "report": {
+  "scope": "Synthetic content-governance backend increment; NOT full Placement qualification",
+  "commit": "1b9f29fd6e5521fb758e8696d8a55fa7937a558a",
+  "run_id": "35222291725",
+  "run_attempt": "1",
+  "status": "pass",
+  "checks": [
+   {
+    "name": "python-version",
+    "exit_code": 0,
+    "seconds": 0.003
+   },
+   {
+    "name": "node-version",
+    "exit_code": 0,
+    "seconds": 0.004
+   },
+   {
+    "name": "yarn-version",
+    "exit_code": 0,
+    "seconds": 0.201
+   },
+   {
+    "name": "tools-env",
+    "exit_code": 0,
+    "seconds": 3.272
+   },
+   {
+    "name": "tools-install",
+    "exit_code": 0,
+    "seconds": 4.127
+   },
+   {
+    "name": "init-frappe",
+    "exit_code": 0,
+    "seconds": 0.004
+   },
+   {
+    "name": "origin-frappe",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "fetch-frappe",
+    "exit_code": 0,
+    "seconds": 5.704
+   },
+   {
+    "name": "checkout-frappe",
+    "exit_code": 0,
+    "seconds": 0.362
+   },
+   {
+    "name": "sha-frappe",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "init-erpnext",
+    "exit_code": 0,
+    "seconds": 0.004
+   },
+   {
+    "name": "origin-erpnext",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "fetch-erpnext",
+    "exit_code": 0,
+    "seconds": 7.074
+   },
+   {
+    "name": "checkout-erpnext",
+    "exit_code": 0,
+    "seconds": 0.497
+   },
+   {
+    "name": "sha-erpnext",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "init-education",
+    "exit_code": 0,
+    "seconds": 0.004
+   },
+   {
+    "name": "origin-education",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "fetch-education",
+    "exit_code": 0,
+    "seconds": 0.775
+   },
+   {
+    "name": "checkout-education",
+    "exit_code": 0,
+    "seconds": 0.07
+   },
+   {
+    "name": "sha-education",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "init-payments",
+    "exit_code": 0,
+    "seconds": 0.004
+   },
+   {
+    "name": "origin-payments",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "fetch-payments",
+    "exit_code": 0,
+    "seconds": 0.374
+   },
+   {
+    "name": "checkout-payments",
+    "exit_code": 0,
+    "seconds": 0.009
+   },
+   {
+    "name": "sha-payments",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "init-hrms",
+    "exit_code": 0,
+    "seconds": 0.004
+   },
+   {
+    "name": "origin-hrms",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "fetch-hrms",
+    "exit_code": 0,
+    "seconds": 1.393
+   },
+   {
+    "name": "checkout-hrms",
+    "exit_code": 0,
+    "seconds": 0.151
+   },
+   {
+    "name": "sha-hrms",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "start-mariadb",
+    "exit_code": 0,
+    "seconds": 5.583
+   },
+   {
+    "name": "start-redis-queue",
+    "exit_code": 0,
+    "seconds": 0.155
+   },
+   {
+    "name": "start-redis-cache",
+    "exit_code": 0,
+    "seconds": 0.16
+   },
+   {
+    "name": "bench-init",
+    "exit_code": 0,
+    "seconds": 32.611
+   },
+   {
+    "name": "config-redis_cache",
+    "exit_code": 0,
+    "seconds": 1.378
+   },
+   {
+    "name": "config-redis_queue",
+    "exit_code": 0,
+    "seconds": 0.429
+   },
+   {
+    "name": "config-redis_socketio",
+    "exit_code": 0,
+    "seconds": 0.428
+   },
+   {
+    "name": "get-erpnext",
+    "exit_code": 0,
+    "seconds": 20.208
+   },
+   {
+    "name": "get-education",
+    "exit_code": 0,
+    "seconds": 10.351
+   },
+   {
+    "name": "get-payments",
+    "exit_code": 0,
+    "seconds": 1.49
+   },
+   {
+    "name": "get-hrms",
+    "exit_code": 0,
+    "seconds": 33.44
+   },
+   {
+    "name": "export-init-foundation_security",
+    "exit_code": 0,
+    "seconds": 0.004
+   },
+   {
+    "name": "export-add-foundation_security",
+    "exit_code": 0,
+    "seconds": 0.004
+   },
+   {
+    "name": "export-commit-foundation_security",
+    "exit_code": 0,
+    "seconds": 0.006
+   },
+   {
+    "name": "get-foundation_security",
+    "exit_code": 0,
+    "seconds": 1.103
+   },
+   {
+    "name": "export-init-toefl_house",
+    "exit_code": 0,
+    "seconds": 0.004
+   },
+   {
+    "name": "export-add-toefl_house",
+    "exit_code": 0,
+    "seconds": 0.023
+   },
+   {
+    "name": "export-commit-toefl_house",
+    "exit_code": 0,
+    "seconds": 0.019
+   },
+   {
+    "name": "get-toefl_house",
+    "exit_code": 0,
+    "seconds": 0.983
+   },
+   {
+    "name": "pip-check",
+    "exit_code": 0,
+    "seconds": 0.019
+   },
+   {
+    "name": "new-placement-test.localhost",
+    "exit_code": 0,
+    "seconds": 21.352
+   },
+   {
+    "name": "install-placement-test.localhost-erpnext",
+    "exit_code": 0,
+    "seconds": 41.575
+   },
+   {
+    "name": "install-placement-test.localhost-education",
+    "exit_code": 0,
+    "seconds": 9.133
+   },
+   {
+    "name": "install-placement-test.localhost-payments",
+    "exit_code": 0,
+    "seconds": 3.72
+   },
+   {
+    "name": "install-placement-test.localhost-hrms",
+    "exit_code": 0,
+    "seconds": 26.843
+   },
+   {
+    "name": "install-placement-test.localhost-foundation_security",
+    "exit_code": 0,
+    "seconds": 2.547
+   },
+   {
+    "name": "install-placement-test.localhost-toefl_house",
+    "exit_code": 0,
+    "seconds": 5.477
+   },
+   {
+    "name": "enable-placement-test.localhost-allow_tests",
+    "exit_code": 0,
+    "seconds": 0.458
+   },
+   {
+    "name": "enable-placement-test.localhost-toefl_house_synthetic_only",
+    "exit_code": 0,
+    "seconds": 0.45
+   },
+   {
+    "name": "enable-placement-test.localhost-disable_website_cache",
+    "exit_code": 0,
+    "seconds": 0.493
+   },
+   {
+    "name": "migrate-placement-test.localhost",
+    "exit_code": 0,
+    "seconds": 16.413
+   },
+   {
+    "name": "migrate-replay-placement-test.localhost",
+    "exit_code": 0,
+    "seconds": 15.816
+   },
+   {
+    "name": "new-placement-second.localhost",
+    "exit_code": 0,
+    "seconds": 16.991
+   },
+   {
+    "name": "install-placement-second.localhost-erpnext",
+    "exit_code": 0,
+    "seconds": 41.447
+   },
+   {
+    "name": "install-placement-second.localhost-education",
+    "exit_code": 0,
+    "seconds": 9.627
+   },
+   {
+    "name": "install-placement-second.localhost-payments",
+    "exit_code": 0,
+    "seconds": 3.792
+   },
+   {
+    "name": "install-placement-second.localhost-hrms",
+    "exit_code": 0,
+    "seconds": 26.703
+   },
+   {
+    "name": "install-placement-second.localhost-foundation_security",
+    "exit_code": 0,
+    "seconds": 2.428
+   },
+   {
+    "name": "install-placement-second.localhost-toefl_house",
+    "exit_code": 0,
+    "seconds": 5.287
+   },
+   {
+    "name": "enable-placement-second.localhost-allow_tests",
+    "exit_code": 0,
+    "seconds": 0.454
+   },
+   {
+    "name": "enable-placement-second.localhost-toefl_house_synthetic_only",
+    "exit_code": 0,
+    "seconds": 0.464
+   },
+   {
+    "name": "enable-placement-second.localhost-disable_website_cache",
+    "exit_code": 0,
+    "seconds": 0.471
+   },
+   {
+    "name": "migrate-placement-second.localhost",
+    "exit_code": 0,
+    "seconds": 16.537
+   },
+   {
+    "name": "migrate-replay-placement-second.localhost",
+    "exit_code": 0,
+    "seconds": 15.968
+   },
+   {
+    "name": "native-acceptance",
+    "exit_code": 0,
+    "seconds": 35.172
+   },
+   {
+    "name": "capture-product-restore-snapshot",
+    "exit_code": 0,
+    "seconds": 1.013
+   },
+   {
+    "name": "backup-placement-test-with-files",
+    "exit_code": 0,
+    "seconds": 6.767
+   },
+   {
+    "name": "new-placement-restore-site",
+    "exit_code": 0,
+    "seconds": 17.674
+   },
+   {
+    "name": "install-placement-restore.localhost-erpnext",
+    "exit_code": 0,
+    "seconds": 41.972
+   },
+   {
+    "name": "install-placement-restore.localhost-education",
+    "exit_code": 0,
+    "seconds": 9.875
+   },
+   {
+    "name": "install-placement-restore.localhost-payments",
+    "exit_code": 0,
+    "seconds": 3.938
+   },
+   {
+    "name": "install-placement-restore.localhost-hrms",
+    "exit_code": 0,
+    "seconds": 28.152
+   },
+   {
+    "name": "install-placement-restore.localhost-foundation_security",
+    "exit_code": 0,
+    "seconds": 2.638
+   },
+   {
+    "name": "install-placement-restore.localhost-toefl_house",
+    "exit_code": 0,
+    "seconds": 5.785
+   },
+   {
+    "name": "enable-placement-restore.localhost-allow_tests",
+    "exit_code": 0,
+    "seconds": 0.519
+   },
+   {
+    "name": "enable-placement-restore.localhost-toefl_house_synthetic_only",
+    "exit_code": 0,
+    "seconds": 0.526
+   },
+   {
+    "name": "enable-placement-restore.localhost-disable_website_cache",
+    "exit_code": 0,
+    "seconds": 0.542
+   },
+   {
+    "name": "restore-placement-test-with-files",
+    "exit_code": 0,
+    "seconds": 7.337
+   },
+   {
+    "name": "migrate-placement-restore-site",
+    "exit_code": 0,
+    "seconds": 17.458
+   },
+   {
+    "name": "verify-product-restore-snapshot",
+    "exit_code": 0,
+    "seconds": 1.159
+   },
+   {
+    "name": "list-apps",
+    "exit_code": 0,
+    "seconds": 1.094
+   },
+   {
+    "name": "final-sha-frappe",
+    "exit_code": 0,
+    "seconds": 0.003
+   },
+   {
+    "name": "unchanged-frappe",
+    "exit_code": 0,
+    "seconds": 0.278
+   },
+   {
+    "name": "final-sha-erpnext",
+    "exit_code": 0,
+    "seconds": 0.003
+   },
+   {
+    "name": "unchanged-erpnext",
+    "exit_code": 0,
+    "seconds": 0.371
+   },
+   {
+    "name": "final-sha-education",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "unchanged-education",
+    "exit_code": 0,
+    "seconds": 0.052
+   },
+   {
+    "name": "final-sha-payments",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "unchanged-payments",
+    "exit_code": 0,
+    "seconds": 0.004
+   },
+   {
+    "name": "final-sha-hrms",
+    "exit_code": 0,
+    "seconds": 0.002
+   },
+   {
+    "name": "unchanged-hrms",
+    "exit_code": 0,
+    "seconds": 0.103
+   }
+  ],
+  "production": "REJECT",
+  "runtime_complete": true,
+  "product_backup": {
+   "database": {
+    "bytes": 1268035,
+    "sha256": "f5341db94b8a6516248d1867c27b195787abb696a359229f949af78f6874d0f5"
+   },
+   "private_files": {
+    "bytes": 10240,
+    "sha256": "24f79a9790440af84ed823cc7445d0e01d19fe76806dce6215c123dae0d5d000"
+   },
+   "public_files": {
+    "bytes": 10240,
+    "sha256": "9ae7be301b0e165c402f7ffec02843951c87dc78ef3702e099ad36fb69adbf5d"
+   }
+  },
+  "product_restore_context": {
+   "separate_database": true,
+   "source_db_credentials_copied": false,
+   "site_encryption_key_restored": true,
+   "site": "placement-restore.localhost"
+  },
+  "product_restore": {
+   "scope": "Disposable synthetic TOEFL House record and private-file restore only; not production DR",
+   "status": "pass",
+   "doctypes_verified": {
+    "TH Placement Item Revision": 39,
+    "TH Placement Attempt": 18,
+    "TH Placement Decision": 7,
+    "TH Admission Decision": 6,
+    "Program Enrollment": 3,
+    "Student Group": 3,
+    "Course Schedule": 4,
+    "Student Attendance": 8,
+    "TH Instructor Contract": 5,
+    "TH Teaching Assignment": 3,
+    "TH Correction Policy": 1,
+    "TH Correction Request": 2,
+    "Fees": 2,
+    "Sales Invoice": 4
+   },
+   "private_file_sha256_verified": true
+  },
+  "installed_apps": "{\n \"placement-test.localhost\": [\n  \"frappe\",\n  \"erpnext\",\n  \"education\",\n  \"payments\",\n  \"hrms\",\n  \"foundation_security\",\n  \"toefl_house\"\n ]\n}"
+ }
+}

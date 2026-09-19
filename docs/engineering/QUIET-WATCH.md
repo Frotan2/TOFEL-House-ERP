@@ -17,6 +17,7 @@ edit turns CI red instead of rewriting history.
 | `evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json` | Dated historical verdict (REJECT). History must not be rewritten. |
 | `evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-19.json` | Dated live re-verification (REJECT). History must not be rewritten. |
 | `evidence/sec-deps-01/readable-register-2026-09-19.json` | Readable finding register (also `--check`-guarded against its generator). |
+| `evidence/evidence-reobservability-2026-09-19.md` | Dated §5 re-observability verdict. History must not be rewritten. |
 
 ## Truly-current state vs docs (verification basis, 2026-09-19)
 

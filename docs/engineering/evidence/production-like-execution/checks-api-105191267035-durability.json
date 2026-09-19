@@ -1,0 +1,780 @@
+{
+ "retrieval_provenance": {
+  "retrieved_at_utc": "2026-09-19T16:05:00+00:00",
+  "retrieved_by": "\u00a75 evidence re-observability sweep (read-only GitHub Checks API)",
+  "check_id": 105191267035,
+  "run_id": "35218008053",
+  "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+  "summary_digest_sha256": "428372beffb3e61305f4ef610570b7129bc3a65b0314aa3cc336eadc875d226b",
+  "transport": "plain",
+  "digest_verified": true
+ },
+ "report": {
+  "scope": "Real container MariaDB/Redis restart, crash-recovery and named-volume persistence; synthetic data only, not application workflow proof",
+  "run_id": "35218008053",
+  "run_attempt": "1",
+  "commit": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+  "ref": "refs/heads/arena/01a0aef4-tofel-house-erp",
+  "runner_image": "ubuntu24",
+  "runner_image_version": "20260907.300.1",
+  "status": "pass",
+  "checks": [
+   {
+    "name": "docker-version",
+    "command": [
+     "docker",
+     "version",
+     "--format",
+     "{{.Client.Version}} {{.Server.Version}}"
+    ],
+    "exit_code": 0,
+    "seconds": 0.084,
+    "status": "pass"
+   },
+   {
+    "name": "create-mariadb-volume",
+    "command": [
+     "docker",
+     "volume",
+     "create",
+     "foundation-durability-mariadb-data"
+    ],
+    "exit_code": 0,
+    "seconds": 0.013,
+    "status": "pass"
+   },
+   {
+    "name": "create-redis-volume",
+    "command": [
+     "docker",
+     "volume",
+     "create",
+     "foundation-durability-redis-data"
+    ],
+    "exit_code": 0,
+    "seconds": 0.018,
+    "status": "pass"
+   },
+   {
+    "name": "start-mariadb",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-durability-mariadb",
+     "--volume",
+     "foundation-durability-mariadb-data:/var/lib/mysql",
+     "--mount",
+     "type=bind,source=/home/runner/work/_temp/foundation-durability/db-password,target=/run/secrets/db-password,readonly",
+     "--env",
+     "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password",
+     "--env",
+     "MARIADB_ROOT_HOST=%",
+     "--health-cmd",
+     "healthcheck.sh --connect --innodb_initialized",
+     "--health-interval",
+     "2s",
+     "--health-retries",
+     "90",
+     "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+     "--character-set-server=utf8mb4",
+     "--collation-server=utf8mb4_unicode_ci",
+     "--innodb-flush-log-at-trx-commit=1",
+     "--sync-binlog=1",
+     "--log-bin=mariadb-bin",
+     "--innodb-buffer-pool-size=64M"
+    ],
+    "exit_code": 0,
+    "seconds": 6.464,
+    "status": "pass"
+   },
+   {
+    "name": "start-redis",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-durability-redis",
+     "--volume",
+     "foundation-durability-redis-data:/data",
+     "--health-cmd",
+     "redis-cli ping | grep -q PONG",
+     "--health-interval",
+     "2s",
+     "--health-retries",
+     "90",
+     "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+     "--appendonly",
+     "yes",
+     "--appendfsync",
+     "always",
+     "--save",
+     "900",
+     "1",
+     "--maxmemory",
+     "128mb"
+    ],
+    "exit_code": 0,
+    "seconds": 3.55,
+    "status": "pass"
+   },
+   {
+    "name": "restart-mariadb",
+    "command": [
+     "docker",
+     "restart",
+     "--time",
+     "30",
+     "foundation-durability-mariadb"
+    ],
+    "exit_code": 0,
+    "seconds": 0.552,
+    "status": "pass"
+   },
+   {
+    "name": "restart-redis",
+    "command": [
+     "docker",
+     "restart",
+     "--time",
+     "30",
+     "foundation-durability-redis"
+    ],
+    "exit_code": 0,
+    "seconds": 0.428,
+    "status": "pass"
+   },
+   {
+    "name": "kill-mariadb-sigkill",
+    "command": [
+     "docker",
+     "kill",
+     "--signal=KILL",
+     "foundation-durability-mariadb"
+    ],
+    "exit_code": 0,
+    "seconds": 0.102,
+    "status": "pass"
+   },
+   {
+    "name": "kill-redis-sigkill",
+    "command": [
+     "docker",
+     "kill",
+     "--signal=KILL",
+     "foundation-durability-redis"
+    ],
+    "exit_code": 0,
+    "seconds": 0.07,
+    "status": "pass"
+   },
+   {
+    "name": "start-mariadb-after-crash",
+    "command": [
+     "docker",
+     "start",
+     "foundation-durability-mariadb"
+    ],
+    "exit_code": 0,
+    "seconds": 0.104,
+    "status": "pass"
+   },
+   {
+    "name": "start-redis-after-crash",
+    "command": [
+     "docker",
+     "start",
+     "foundation-durability-redis"
+    ],
+    "exit_code": 0,
+    "seconds": 0.133,
+    "status": "pass"
+   },
+   {
+    "name": "mariadb-crash-recovery-log",
+    "command": [
+     "docker",
+     "logs",
+     "--tail",
+     "600",
+     "foundation-durability-mariadb"
+    ],
+    "exit_code": 0,
+    "seconds": 0.012,
+    "status": "pass"
+   },
+   {
+    "name": "destroy-mariadb-container",
+    "command": [
+     "docker",
+     "rm",
+     "--force",
+     "foundation-durability-mariadb"
+    ],
+    "exit_code": 0,
+    "seconds": 0.356,
+    "status": "pass"
+   },
+   {
+    "name": "destroy-redis-container",
+    "command": [
+     "docker",
+     "rm",
+     "--force",
+     "foundation-durability-redis"
+    ],
+    "exit_code": 0,
+    "seconds": 0.078,
+    "status": "pass"
+   },
+   {
+    "name": "recreate-mariadb-from-volume",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-durability-mariadb",
+     "--volume",
+     "foundation-durability-mariadb-data:/var/lib/mysql",
+     "--mount",
+     "type=bind,source=/home/runner/work/_temp/foundation-durability/db-password,target=/run/secrets/db-password,readonly",
+     "--env",
+     "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password",
+     "--env",
+     "MARIADB_ROOT_HOST=%",
+     "--health-cmd",
+     "healthcheck.sh --connect --innodb_initialized",
+     "--health-interval",
+     "2s",
+     "--health-retries",
+     "90",
+     "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+     "--character-set-server=utf8mb4",
+     "--collation-server=utf8mb4_unicode_ci",
+     "--innodb-flush-log-at-trx-commit=1",
+     "--sync-binlog=1",
+     "--log-bin=mariadb-bin",
+     "--innodb-buffer-pool-size=64M"
+    ],
+    "exit_code": 0,
+    "seconds": 0.135,
+    "status": "pass"
+   },
+   {
+    "name": "recreate-redis-from-volume",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-durability-redis",
+     "--volume",
+     "foundation-durability-redis-data:/data",
+     "--health-cmd",
+     "redis-cli ping | grep -q PONG",
+     "--health-interval",
+     "2s",
+     "--health-retries",
+     "90",
+     "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+     "--appendonly",
+     "yes",
+     "--appendfsync",
+     "always",
+     "--save",
+     "900",
+     "1",
+     "--maxmemory",
+     "128mb"
+    ],
+    "exit_code": 0,
+    "seconds": 0.223,
+    "status": "pass"
+   },
+   {
+    "name": "remove-mariadb-container-for-control",
+    "command": [
+     "docker",
+     "rm",
+     "--force",
+     "foundation-durability-mariadb"
+    ],
+    "exit_code": 0,
+    "seconds": 0.231,
+    "status": "pass"
+   },
+   {
+    "name": "remove-mariadb-volume",
+    "command": [
+     "docker",
+     "volume",
+     "rm",
+     "foundation-durability-mariadb-data"
+    ],
+    "exit_code": 0,
+    "seconds": 0.017,
+    "status": "pass"
+   },
+   {
+    "name": "create-empty-mariadb-volume",
+    "command": [
+     "docker",
+     "volume",
+     "create",
+     "foundation-durability-mariadb-data"
+    ],
+    "exit_code": 0,
+    "seconds": 0.011,
+    "status": "pass"
+   },
+   {
+    "name": "start-mariadb-on-empty-volume",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-durability-mariadb",
+     "--volume",
+     "foundation-durability-mariadb-data:/var/lib/mysql",
+     "--mount",
+     "type=bind,source=/home/runner/work/_temp/foundation-durability/db-password,target=/run/secrets/db-password,readonly",
+     "--env",
+     "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password",
+     "--env",
+     "MARIADB_ROOT_HOST=%",
+     "--health-cmd",
+     "healthcheck.sh --connect --innodb_initialized",
+     "--health-interval",
+     "2s",
+     "--health-retries",
+     "90",
+     "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+     "--character-set-server=utf8mb4",
+     "--collation-server=utf8mb4_unicode_ci",
+     "--innodb-flush-log-at-trx-commit=1",
+     "--sync-binlog=1",
+     "--log-bin=mariadb-bin",
+     "--innodb-buffer-pool-size=64M"
+    ],
+    "exit_code": 0,
+    "seconds": 0.468,
+    "status": "pass"
+   }
+  ],
+  "mocks_or_simulations_used": false,
+  "pinned_images": {
+   "mariadb": {
+    "index_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+    "selected_version": "11.8.9"
+   },
+   "redis": {
+    "index_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+    "selected_version": "8.6.6"
+   }
+  },
+  "docker_version": "28.0.4 28.0.4",
+  "named_volumes": {
+   "mariadb": "foundation-durability-mariadb-data",
+   "redis": "foundation-durability-redis-data"
+  },
+  "mariadb_startup": {
+   "healthy": true,
+   "polls": 4,
+   "container_id": "f259ee90b8ae",
+   "status": "running",
+   "health": "healthy",
+   "started_at": "2026-09-17T11:52:51.460229538Z",
+   "restart_count": "0"
+  },
+  "redis_startup": {
+   "healthy": true,
+   "polls": 1,
+   "container_id": "7cd815119ee9",
+   "status": "running",
+   "health": "healthy",
+   "started_at": "2026-09-17T11:52:54.96490128Z",
+   "restart_count": "0"
+  },
+  "resolved_platform_digests": {
+   "mariadb": [
+    "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62"
+   ],
+   "redis": [
+    "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+   ]
+  },
+  "pre_state": {
+   "mariadb": {
+    "committed_row_count": 25,
+    "payload_crc32_sum": 51945241053,
+    "innodb_flush_log_at_trx_commit": "1",
+    "sync_binlog": "1",
+    "log_bin": "1",
+    "innodb_force_recovery": "0",
+    "version": "11.8.9-MariaDB-ubu2404-log",
+    "binlog_files": [
+     "mariadb-bin.000001\t353",
+     "mariadb-bin.000002\t5300"
+    ],
+    "uncommitted_visible": "0"
+   },
+   "redis": {
+    "dbsize": 2,
+    "committed_value_sha256": "c9fce334cacb41026c170ef1c198a0753e76b732b3266f6c05cad3eede741227",
+    "queue_length": 25,
+    "queue_head_sha256": "01b1e00ebff5369fc4f92ba702bbc97dab1ee8784a3cda127f0f5bc7bd78038c",
+    "aof_enabled": "1",
+    "aof_last_write_status": "ok",
+    "aof_current_size": "322",
+    "rdb_last_bgsave_status": "ok",
+    "loading": "0",
+    "redis_version": "8.6.6",
+    "redis_mode": "standalone"
+   },
+   "containers": {
+    "mariadb": {
+     "container_id": "f259ee90b8ae",
+     "status": "running",
+     "health": "healthy",
+     "started_at": "2026-09-17T11:52:51.460229538Z",
+     "restart_count": "0"
+    },
+    "redis": {
+     "container_id": "7cd815119ee9",
+     "status": "running",
+     "health": "healthy",
+     "started_at": "2026-09-17T11:52:54.96490128Z",
+     "restart_count": "0"
+    }
+   }
+  },
+  "restart_recovery": {
+   "mariadb": {
+    "healthy": true,
+    "polls": 2,
+    "container_id": "f259ee90b8ae",
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-09-17T11:53:10.250932343Z",
+    "restart_count": "0"
+   },
+   "redis": {
+    "healthy": true,
+    "polls": 1,
+    "container_id": "7cd815119ee9",
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-09-17T11:53:10.577795419Z",
+    "restart_count": "0"
+   }
+  },
+  "scenario_1_graceful_restart": {
+   "post_state": {
+    "mariadb": {
+     "committed_row_count": 25,
+     "payload_crc32_sum": 51945241053,
+     "innodb_flush_log_at_trx_commit": "1",
+     "sync_binlog": "1",
+     "log_bin": "1",
+     "innodb_force_recovery": "0",
+     "version": "11.8.9-MariaDB-ubu2404-log",
+     "binlog_files": [
+      "mariadb-bin.000001\t353",
+      "mariadb-bin.000002\t5323",
+      "mariadb-bin.000003\t344"
+     ],
+     "uncommitted_visible": "0"
+    },
+    "redis": {
+     "dbsize": 2,
+     "committed_value_sha256": "c9fce334cacb41026c170ef1c198a0753e76b732b3266f6c05cad3eede741227",
+     "queue_length": 25,
+     "queue_head_sha256": "01b1e00ebff5369fc4f92ba702bbc97dab1ee8784a3cda127f0f5bc7bd78038c",
+     "aof_enabled": "1",
+     "aof_last_write_status": "ok",
+     "aof_current_size": "322",
+     "rdb_last_bgsave_status": "ok",
+     "loading": "0",
+     "redis_version": "8.6.6",
+     "redis_mode": "standalone"
+    },
+    "containers": {
+     "mariadb": {
+      "container_id": "f259ee90b8ae",
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-09-17T11:53:10.250932343Z",
+      "restart_count": "0"
+     },
+     "redis": {
+      "container_id": "7cd815119ee9",
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-09-17T11:53:10.577795419Z",
+      "restart_count": "0"
+     }
+    }
+   },
+   "survived": true,
+   "uncommitted_row_absent_after_recovery": true,
+   "binlog_rotations_observed": 3
+  },
+  "crash_states": {
+   "mariadb": {
+    "container_id": "f259ee90b8ae",
+    "status": "exited",
+    "health": "unhealthy",
+    "started_at": "2026-09-17T11:53:10.250932343Z",
+    "restart_count": "0"
+   },
+   "redis": {
+    "container_id": "7cd815119ee9",
+    "status": "exited",
+    "health": "unhealthy",
+    "started_at": "2026-09-17T11:53:10.577795419Z",
+    "restart_count": "0"
+   }
+  },
+  "crash_recovery": {
+   "mariadb": {
+    "healthy": true,
+    "polls": 2,
+    "container_id": "f259ee90b8ae",
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-09-17T11:53:17.344313196Z",
+    "restart_count": "0"
+   },
+   "redis": {
+    "healthy": true,
+    "polls": 1,
+    "container_id": "7cd815119ee9",
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-09-17T11:53:17.467285104Z",
+    "restart_count": "0"
+   }
+  },
+  "scenario_2_sigkill_crash_recovery": {
+   "post_state": {
+    "mariadb": {
+     "committed_row_count": 25,
+     "payload_crc32_sum": 51945241053,
+     "innodb_flush_log_at_trx_commit": "1",
+     "sync_binlog": "1",
+     "log_bin": "1",
+     "innodb_force_recovery": "0",
+     "version": "11.8.9-MariaDB-ubu2404-log",
+     "binlog_files": [
+      "mariadb-bin.000001\t353",
+      "mariadb-bin.000002\t5323",
+      "mariadb-bin.000003\t344",
+      "mariadb-bin.000004\t344"
+     ],
+     "uncommitted_visible": "0"
+    },
+    "redis": {
+     "dbsize": 2,
+     "committed_value_sha256": "c9fce334cacb41026c170ef1c198a0753e76b732b3266f6c05cad3eede741227",
+     "queue_length": 25,
+     "queue_head_sha256": "01b1e00ebff5369fc4f92ba702bbc97dab1ee8784a3cda127f0f5bc7bd78038c",
+     "aof_enabled": "1",
+     "aof_last_write_status": "ok",
+     "aof_current_size": "322",
+     "rdb_last_bgsave_status": "ok",
+     "loading": "0",
+     "redis_version": "8.6.6",
+     "redis_mode": "standalone"
+    },
+    "containers": {
+     "mariadb": {
+      "container_id": "f259ee90b8ae",
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-09-17T11:53:17.344313196Z",
+      "restart_count": "0"
+     },
+     "redis": {
+      "container_id": "7cd815119ee9",
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-09-17T11:53:17.467285104Z",
+      "restart_count": "0"
+     }
+    }
+   },
+   "survived": true,
+   "uncommitted_row_absent_after_crash": true,
+   "binlog_rotations_observed": 4,
+   "innodb_force_recovery_setting": "0",
+   "innodb_recovery_messages": [],
+   "server_startup_messages": [
+    "2026-09-17 11:52:51+00:00 [Note] [Entrypoint]: Entrypoint script for MariaDB Server 1:11.8.9+maria~ubu2404 started.",
+    "2026-09-17 11:52:51+00:00 [Note] [Entrypoint]: Switching to dedicated user 'mysql'",
+    "2026-09-17 11:52:51+00:00 [Note] [Entrypoint]: Entrypoint script for MariaDB Server 1:11.8.9+maria~ubu2404 started.",
+    "2026-09-17 11:52:51+00:00 [Note] [Entrypoint]: Initializing database files",
+    "2026-09-17 11:52:53+00:00 [Note] [Entrypoint]: Database files initialized",
+    "2026-09-17 11:52:53+00:00 [Note] [Entrypoint]: Starting temporary server",
+    "2026-09-17 11:52:53+00:00 [Note] [Entrypoint]: Waiting for server startup",
+    "2026-09-17 11:52:56+00:00 [Note] [Entrypoint]: Temporary server started.",
+    "2026-09-17 11:52:56+00:00 [Note] [Entrypoint]: Securing system users (equivalent to running mysql_secure_installation)",
+    "2026-09-17 11:52:56+00:00 [Note] [Entrypoint]: Stopping temporary server",
+    "2026-09-17 11:52:56+00:00 [Note] [Entrypoint]: Temporary server stopped",
+    "2026-09-17 11:52:56+00:00 [Note] [Entrypoint]: MariaDB init process done. Ready for start up.",
+    "2026-09-17 11:53:10+00:00 [Note] [Entrypoint]: Entrypoint script for MariaDB Server 1:11.8.9+maria~ubu2404 started.",
+    "2026-09-17 11:53:10+00:00 [Note] [Entrypoint]: Switching to dedicated user 'mysql'",
+    "2026-09-17 11:53:10+00:00 [Note] [Entrypoint]: Entrypoint script for MariaDB Server 1:11.8.9+maria~ubu2404 started.",
+    "2026-09-17 11:53:10+00:00 [Note] [Entrypoint]: MariaDB upgrade not required",
+    "2026-09-17 11:53:17+00:00 [Note] [Entrypoint]: Entrypoint script for MariaDB Server 1:11.8.9+maria~ubu2404 started.",
+    "2026-09-17 11:53:17+00:00 [Note] [Entrypoint]: Switching to dedicated user 'mysql'",
+    "2026-09-17 11:53:17+00:00 [Note] [Entrypoint]: Entrypoint script for MariaDB Server 1:11.8.9+maria~ubu2404 started.",
+    "2026-09-17 11:53:17+00:00 [Note] [Entrypoint]: MariaDB upgrade not required"
+   ],
+   "innodb_status_log_section": [
+    "Log sequence number 52305",
+    "Log flushed up to   52305",
+    "Pages flushed up to 51911",
+    "Last checkpoint at  51911"
+   ],
+   "log_lines_captured": 23,
+   "note": "innodb_recovery_messages may legitimately be empty at default server verbosity; innodb_status_log_section is the authoritative corroboration and startup messages are recorded separately so they are never mistaken for recovery evidence."
+  },
+  "scenario_3_container_destruction": {
+   "destroyed_state": {
+    "mariadb": {
+     "container_id": "f259ee90b8ae",
+     "status": "running",
+     "health": "healthy",
+     "started_at": "2026-09-17T11:53:17.344313196Z",
+     "restart_count": "0"
+    },
+    "redis": {
+     "container_id": "7cd815119ee9",
+     "status": "running",
+     "health": "healthy",
+     "started_at": "2026-09-17T11:53:17.467285104Z",
+     "restart_count": "0"
+    }
+   },
+   "post_state": {
+    "mariadb": {
+     "committed_row_count": 25,
+     "payload_crc32_sum": 51945241053,
+     "innodb_flush_log_at_trx_commit": "1",
+     "sync_binlog": "1",
+     "log_bin": "1",
+     "innodb_force_recovery": "0",
+     "version": "11.8.9-MariaDB-ubu2404-log",
+     "binlog_files": [
+      "mariadb-bin.000001\t353",
+      "mariadb-bin.000002\t5323",
+      "mariadb-bin.000003\t344",
+      "mariadb-bin.000004\t344",
+      "mariadb-bin.000005\t344"
+     ],
+     "uncommitted_visible": "0"
+    },
+    "redis": {
+     "dbsize": 2,
+     "committed_value_sha256": "c9fce334cacb41026c170ef1c198a0753e76b732b3266f6c05cad3eede741227",
+     "queue_length": 25,
+     "queue_head_sha256": "01b1e00ebff5369fc4f92ba702bbc97dab1ee8784a3cda127f0f5bc7bd78038c",
+     "aof_enabled": "1",
+     "aof_last_write_status": "ok",
+     "aof_current_size": "322",
+     "rdb_last_bgsave_status": "ok",
+     "loading": "0",
+     "redis_version": "8.6.6",
+     "redis_mode": "standalone"
+    },
+    "containers": {
+     "mariadb": {
+      "container_id": "11ce0156a150",
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-09-17T11:53:20.971892681Z",
+      "restart_count": "0"
+     },
+     "redis": {
+      "container_id": "a2ae51a6ced1",
+      "status": "running",
+      "health": "healthy",
+      "started_at": "2026-09-17T11:53:21.11879333Z",
+      "restart_count": "0"
+     }
+    }
+   },
+   "survived": true,
+   "mariadb_container_id_before_destruction": "f259ee90b8ae",
+   "mariadb_container_id_after_recreation": "11ce0156a150",
+   "redis_container_id_before_destruction": "7cd815119ee9",
+   "redis_container_id_after_recreation": "a2ae51a6ced1",
+   "binlog_rotations_observed": 5,
+   "new_containers_created": true,
+   "mariadb_log_tail_after_recreation": "2026-09-17 11:53:21+00:00 [Note] [Entrypoint]: Entrypoint script for MariaDB Server 1:11.8.9+maria~ubu2404 started.\n2026-09-17 11:53:21+00:00 [Note] [Entrypoint]: Switching to dedicated user 'mysql'\n2026-09-17 11:53:21+00:00 [Note] [Entrypoint]: Entrypoint script for MariaDB Server 1:11.8.9+maria~ubu2404 started.\n2026-09-17 11:53:21+00:00 [Note] [Entrypoint]: MariaDB upgrade not required"
+  },
+  "volumes_after_destruction": {
+   "mariadb": {
+    "CreatedAt": "2026-09-17T11:52:45Z",
+    "Driver": "local",
+    "Labels": null,
+    "Mountpoint": "/var/lib/docker/volumes/foundation-durability-mariadb-data/_data",
+    "Name": "foundation-durability-mariadb-data",
+    "Options": null,
+    "Scope": "local"
+   },
+   "redis": {
+    "CreatedAt": "2026-09-17T11:52:45Z",
+    "Driver": "local",
+    "Labels": null,
+    "Mountpoint": "/var/lib/docker/volumes/foundation-durability-redis-data/_data",
+    "Name": "foundation-durability-redis-data",
+    "Options": null,
+    "Scope": "local"
+   }
+  },
+  "recreation_health": {
+   "mariadb": {
+    "healthy": true,
+    "polls": 2,
+    "container_id": "11ce0156a150",
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-09-17T11:53:20.971892681Z",
+    "restart_count": "0"
+   },
+   "redis": {
+    "healthy": true,
+    "polls": 1,
+    "container_id": "a2ae51a6ced1",
+    "status": "running",
+    "health": "healthy",
+    "started_at": "2026-09-17T11:53:21.11879333Z",
+    "restart_count": "0"
+   }
+  },
+  "negative_control_volume_loss": {
+   "table_present_after_volume_loss": "0",
+   "expected": "0",
+   "confirms_data_lived_in_the_volume": true
+  },
+  "binlog_rotation_progression": {
+   "pre_state": 2,
+   "graceful restart": 3,
+   "crash recovery": 4,
+   "volume persistence after container destruction": 5
+  },
+  "durability_executed": true,
+  "not_proven_by_this_probe": [
+   "Host or region loss, storage-array failure and off-site replication",
+   "High availability, failover and multi-node quorum behaviour",
+   "Application-level workflow correctness after recovery",
+   "Backup archive integrity, which is covered by the restore probes",
+   "Any owner-selected durability reference or retention objective"
+  ]
+ }
+}

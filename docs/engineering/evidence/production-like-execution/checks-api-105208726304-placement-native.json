@@ -1,0 +1,6648 @@
+{
+ "retrieval_provenance": {
+  "retrieved_at_utc": "2026-09-19T16:05:00+00:00",
+  "retrieved_by": "\u00a75 evidence re-observability sweep (read-only GitHub Checks API)",
+  "check_id": 105208726304,
+  "run_id": "35222291725",
+  "head_sha": "1b9f29fd6e5521fb758e8696d8a55fa7937a558a",
+  "summary_digest_sha256": "011145ab6de4910ccdacb4d5dc5ccbd408b3c750203bd27e0f13858b0a1b8ffc",
+  "transport": "gzip+base64",
+  "digest_verified": true
+ },
+ "report": {
+  "scope": "Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20",
+  "status": "pass",
+  "checks": [
+   {
+    "name": "native-fixtures-placement-test.localhost",
+    "status": "pass",
+    "observation": {
+     "site": "placement-test.localhost",
+     "users": 33,
+     "apps": [
+      "frappe",
+      "erpnext",
+      "education",
+      "payments",
+      "hrms",
+      "foundation_security",
+      "toefl_house"
+     ]
+    },
+    "seconds": 3.147
+   },
+   {
+    "name": "native-fixtures-placement-second.localhost",
+    "status": "pass",
+    "observation": {
+     "site": "placement-second.localhost",
+     "users": 33,
+     "apps": [
+      "frappe",
+      "erpnext",
+      "education",
+      "payments",
+      "hrms",
+      "foundation_security",
+      "toefl_house"
+     ]
+    },
+    "seconds": 2.647
+   },
+   {
+    "name": "administrator-not-an-implicit-business-actor",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "disabled-site-fails-closed",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "create-native-draft",
+    "status": "pass",
+    "observation": {
+     "name": "j2t2md142k",
+     "version": 1,
+     "status": "Draft",
+     "content_hash": "5d61f6fd551d556f46feb7629add3fcfe87bbd95011d27312dd57bc414fe2f2a"
+    },
+    "seconds": 0.107
+   },
+   {
+    "name": "idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "no_duplicate_audit": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "database-family-revision-unique",
+    "status": "pass",
+    "observation": {
+     "denied": "UniqueValidationError"
+    },
+    "seconds": 0.01
+   },
+   {
+    "name": "changed-payload-conflict",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "changed-actor-conflict",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "family-author-namespace-enforced",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.014
+   },
+   {
+    "name": "self-publication-denied-despite-role-union",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "revise-draft-append-key-history",
+    "status": "pass",
+    "observation": {
+     "name": "j2t2md142k",
+     "version": 2,
+     "status": "Draft",
+     "content_hash": "5d61f6fd551d556f46feb7629add3fcfe87bbd95011d27312dd57bc414fe2f2a"
+    },
+    "seconds": 0.021
+   },
+   {
+    "name": "old-key-not-overwritten",
+    "status": "pass",
+    "observation": {
+     "old_key_preserved": true
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "key-history-direct-update-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "stale-draft-edit-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "other-author-edit-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "independent-native-publication",
+    "status": "pass",
+    "observation": {
+     "name": "j2t2md142k",
+     "version": 3,
+     "status": "Published",
+     "content_hash": "5d61f6fd551d556f46feb7629add3fcfe87bbd95011d27312dd57bc414fe2f2a"
+    },
+    "seconds": 0.025
+   },
+   {
+    "name": "published-edit-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "ignore-permissions-does-not-bypass-controller",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "direct-db-set-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "direct-db-update-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "delete-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "native-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "published_prompt_readable": true,
+     "key_restricted": true,
+     "audit_events": 3
+    },
+    "seconds": 0.015
+   },
+   {
+    "name": "atomic-item-key-receipt-audit-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "audit append"
+    },
+    "seconds": 0.019
+   },
+   {
+    "name": "config-conflicting-quotas-create-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "config-invalid-mode-create-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "config-out-of-bounds-policy-create-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "config-unknown-type-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.0
+   },
+   {
+    "name": "config-non-synthetic-code-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.0
+   },
+   {
+    "name": "config-create-blueprint-draft",
+    "status": "pass",
+    "observation": {
+     "name": "j2v8s23v1k",
+     "config": "blueprint",
+     "version": 1,
+     "status": "Draft",
+     "content_hash": "40c0aa5e76ae4ceb8494e119ebf2601c04069863ee20cbb266964de82dc752e7"
+    },
+    "seconds": 0.033
+   },
+   {
+    "name": "config-duplicate-code-revision-unique",
+    "status": "pass",
+    "observation": {
+     "denied": "UniqueValidationError"
+    },
+    "seconds": 0.018
+   },
+   {
+    "name": "config-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "no_duplicate_audit": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "config-changed-payload-conflict",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "config-changed-actor-conflict",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "config-create-policy-draft",
+    "status": "pass",
+    "observation": {
+     "name": "j30adhptql",
+     "config": "policy",
+     "version": 1,
+     "status": "Draft",
+     "content_hash": "36c33aa85940caad918344baa49f1d32203a23e768692b4fc32f514e8c0d9fcd"
+    },
+    "seconds": 0.039
+   },
+   {
+    "name": "config-revise-draft",
+    "status": "pass",
+    "observation": {
+     "name": "j2v8s23v1k",
+     "config": "blueprint",
+     "version": 2,
+     "status": "Draft",
+     "content_hash": "d0cc8cff576e3451ea19068e67085f681a9ac6fce353e7543e0632215d5dece9"
+    },
+    "seconds": 0.019
+   },
+   {
+    "name": "config-other-author-revise-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "config-stale-version-revise-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "config-self-review-denied-despite-role-union",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "config-independent-review",
+    "status": "pass",
+    "observation": {
+     "name": "j2v8s23v1k",
+     "config": "blueprint",
+     "version": 3,
+     "status": "Reviewed",
+     "content_hash": "d0cc8cff576e3451ea19068e67085f681a9ac6fce353e7543e0632215d5dece9"
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "config-review-freezes-content",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "config-reviewer-self-publish-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "config-author-publish-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "config-independent-publication",
+    "status": "pass",
+    "observation": {
+     "name": "j2v8s23v1k",
+     "config": "blueprint",
+     "version": 4,
+     "status": "Published",
+     "content_hash": "d0cc8cff576e3451ea19068e67085f681a9ac6fce353e7543e0632215d5dece9"
+    },
+    "seconds": 0.025
+   },
+   {
+    "name": "config-published-revise-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "config-retire-by-author-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "config-independent-retirement",
+    "status": "pass",
+    "observation": {
+     "name": "j2v8s23v1k",
+     "config": "blueprint",
+     "version": 5,
+     "status": "Retired",
+     "content_hash": "d0cc8cff576e3451ea19068e67085f681a9ac6fce353e7543e0632215d5dece9"
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "config-retired-is-terminal",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "config-policy-review",
+    "status": "pass",
+    "observation": {
+     "name": "j30adhptql",
+     "config": "policy",
+     "version": 2,
+     "status": "Reviewed",
+     "content_hash": "36c33aa85940caad918344baa49f1d32203a23e768692b4fc32f514e8c0d9fcd"
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "config-policy-independent-publication",
+    "status": "pass",
+    "observation": {
+     "name": "j30adhptql",
+     "config": "policy",
+     "version": 3,
+     "status": "Published",
+     "content_hash": "36c33aa85940caad918344baa49f1d32203a23e768692b4fc32f514e8c0d9fcd"
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "config-ignore-permissions-does-not-bypass-controller",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "config-direct-db-set-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "config-direct-db-update-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "config-delete-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "config-audit-ledger-shape",
+    "status": "pass",
+    "observation": {
+     "config_audit_rows": 5,
+     "actions": [
+      "create_blueprint",
+      "publish_blueprint",
+      "retire_blueprint",
+      "review_blueprint",
+      "revise_blueprint"
+     ],
+     "no_item_key_references": true
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "config-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "own_and_published_visible": true,
+     "retired_hidden_from_auditor": true,
+     "list_parity": true
+    },
+    "seconds": 0.014
+   },
+   {
+    "name": "config-atomic-doc-receipt-audit-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "audit append"
+    },
+    "seconds": 0.011
+   },
+   {
+    "name": "second-site-no-first-site-record",
+    "status": "pass",
+    "observation": {
+     "absent": true
+    },
+    "seconds": 0.01
+   },
+   {
+    "name": "second-site-no-first-site-config-record",
+    "status": "pass",
+    "observation": {
+     "config_absent_on_second_site": true
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "native-whole-command-transient-recovery",
+    "status": "pass",
+    "observation": {
+     "attempts": 2,
+     "rollback_and_wait_restore": true,
+     "exhaustion": false
+    },
+    "seconds": 0.123
+   },
+   {
+    "name": "native-retry-exhaustion-bounded",
+    "status": "pass",
+    "observation": {
+     "attempts": 4,
+     "rollback_and_wait_restore": true,
+     "exhaustion": true
+    },
+    "seconds": 0.153
+   },
+   {
+    "name": "alloc-bank-fixture-published",
+    "status": "pass",
+    "observation": {
+     "bank_families": 36,
+     "published_total": 37
+    },
+    "seconds": 1.417
+   },
+   {
+    "name": "alloc-config-fixtures-published",
+    "status": "pass",
+    "observation": {
+     "draft_bp": "j3jpf9c2pj",
+     "draft_pol": "j3jmnfq1tj",
+     "over_bp": "j3k230df9a",
+     "spk_bp": "j3kgebf1ul",
+     "main_bp": "j3lqtq6vbg",
+     "small_bp": "j3l7vtjugc",
+     "main_version": 3,
+     "main_pol": "j3lvnvqc6e",
+     "main_pol_version": 3
+    },
+    "seconds": 0.273
+   },
+   {
+    "name": "alloc-create-case",
+    "status": "pass",
+    "observation": {
+     "name": "j3mhevfs1g",
+     "subject": "synthetic-candidate@example.test",
+     "purpose": "synthetic-placement",
+     "status": "Open"
+    },
+    "seconds": 0.034
+   },
+   {
+    "name": "alloc-case-duplicate-subject-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "alloc-case-missing-subject-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "alloc-case-privileged-subject-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "alloc-case-author-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "alloc-case-outsider-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "alloc-fail-missing-case",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "alloc-fail-draft-blueprint",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError",
+     "reason": "Only published blueprint revisions can be allocated"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "alloc-fail-stale-blueprint-version",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError",
+     "reason": "Stale configuration revision"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "alloc-fail-draft-policy",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError",
+     "reason": "Only published policy revisions can be allocated"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "alloc-fail-infeasible-quota",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError",
+     "reason": "Allocation unavailable: insufficient eligible families for skill Listening: need 12, have 9"
+    },
+    "seconds": 0.038
+   },
+   {
+    "name": "alloc-fail-missing-skill-section",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError",
+     "reason": "Allocation unavailable: insufficient eligible families for skill Speaking: need 2, have 0"
+    },
+    "seconds": 0.014
+   },
+   {
+    "name": "alloc-happy-path",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3o0rma7he",
+     "ordinal": 1,
+     "status": "Allocated",
+     "mode": "Digital",
+     "case": "j3mhevfs1g",
+     "subject": "synthetic-candidate@example.test",
+     "blueprint": "j3lqtq6vbg",
+     "blueprint_version": 3,
+     "policy": "j3lvnvqc6e",
+     "policy_version": 3,
+     "manifest": "j3oqeu7lj5",
+     "form_hash": "c41e1f0cd6902e399dc5661259f17a78dd9711637b5cca9f7065667ed38f56b2",
+     "item_count": 9
+    },
+    "seconds": 0.098
+   },
+   {
+    "name": "alloc-manifest-integrity-and-determinism",
+    "status": "pass",
+    "observation": {
+     "one_manifest_per_attempt": true,
+     "hash_bound": true,
+     "quotas_exact": true,
+     "strata_balanced": true,
+     "rerun_identical": true
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "alloc-audit-and-exposure-ledger",
+    "status": "pass",
+    "observation": {
+     "allocation_audit": 1,
+     "exposure_rows": 9,
+     "receipt_complete": true
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "alloc-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "no_new_attempt": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "alloc-changed-payload-conflict",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "alloc-changed-actor-conflict",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "alloc-second-attempt-ordinal",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pkn0d1pe",
+     "ordinal": 2,
+     "status": "Allocated",
+     "mode": "Digital",
+     "case": "j3mhevfs1g",
+     "subject": "synthetic-candidate@example.test",
+     "blueprint": "j3lqtq6vbg",
+     "blueprint_version": 3,
+     "policy": "j3lvnvqc6e",
+     "policy_version": 3,
+     "manifest": "j3p9i8gn2u",
+     "form_hash": "b753be398bcc6fd8f8e6064c6f1d8c10f05bc0ef6131d72591d10102187552c9",
+     "item_count": 9
+    },
+    "seconds": 0.053
+   },
+   {
+    "name": "alloc-exposure-reuse-controlled",
+    "status": "pass",
+    "observation": {
+     "no_family_reuse_for_subject": true,
+     "second_rerun_identical": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "alloc-create-case-second-subject",
+    "status": "pass",
+    "observation": {
+     "name": "j3pcha1rhl",
+     "subject": "synthetic-candidate2@example.test",
+     "purpose": "synthetic-placement",
+     "status": "Open"
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "alloc-other-subject-independent-pool",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pllf382e",
+     "ordinal": 1,
+     "status": "Allocated",
+     "mode": "Digital",
+     "case": "j3pcha1rhl",
+     "subject": "synthetic-candidate2@example.test",
+     "blueprint": "j3lqtq6vbg",
+     "blueprint_version": 3,
+     "policy": "j3lvnvqc6e",
+     "policy_version": 3,
+     "manifest": "j3ptjht4s0",
+     "form_hash": "3905b9b924a270dddd4ff8f6c3a3668d627a4f7ebadbfd6fa96a334629533eca",
+     "item_count": 9
+    },
+    "seconds": 0.055
+   },
+   {
+    "name": "alloc-third-attempt",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3qfm9l90l",
+     "ordinal": 3,
+     "status": "Allocated",
+     "mode": "Digital",
+     "case": "j3mhevfs1g",
+     "subject": "synthetic-candidate@example.test",
+     "blueprint": "j3lqtq6vbg",
+     "blueprint_version": 3,
+     "policy": "j3lvnvqc6e",
+     "policy_version": 3,
+     "manifest": "j3qqfi7pr6",
+     "form_hash": "5c5535c2b332771c76ce5f5c146c1c261fbadd0fd26da98342773545c4cdcfe8",
+     "item_count": 9
+    },
+    "seconds": 0.053
+   },
+   {
+    "name": "alloc-fourth-attempt-unavailable-fail-closed",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError",
+     "reason": "Allocation unavailable: insufficient eligible families for skill Reading: need 3, have 0",
+     "no_partial_state": true
+    },
+    "seconds": 0.013
+   },
+   {
+    "name": "alloc-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "staff_only_records": true,
+     "guard_internal": true,
+     "dual_role_author_reads_as_publisher": true
+    },
+    "seconds": 0.041
+   },
+   {
+    "name": "alloc-ignore-permissions-does-not-bypass-controller",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "alloc-direct-db-set-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "alloc-direct-db-update-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "alloc-delete-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "alloc-forged-manifest-hash-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "alloc-atomic-attempt-manifest-exposure-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "exposure reservation"
+    },
+    "seconds": 0.026
+   },
+   {
+    "name": "alloc-create-case-transient-subject",
+    "status": "pass",
+    "observation": {
+     "name": "j3r9r6e41r",
+     "subject": "synthetic-candidate4@example.test",
+     "purpose": "synthetic-placement",
+     "status": "Open"
+    },
+    "seconds": 0.018
+   },
+   {
+    "name": "alloc-whole-command-transient-recovery",
+    "status": "pass",
+    "observation": {
+     "attempts": 2,
+     "whole_command_reentered": true,
+     "exhaustion": false
+    },
+    "seconds": 0.082
+   },
+   {
+    "name": "alloc-retry-exhaustion-bounded",
+    "status": "pass",
+    "observation": {
+     "attempts": 4,
+     "whole_command_reentered": true,
+     "exhaustion": true
+    },
+    "seconds": 0.154
+   },
+   {
+    "name": "second-site-no-first-site-allocation-record",
+    "status": "pass",
+    "observation": {
+     "allocation_absent_on_second_site": true
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "deliver-verify-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "deliver-verify-author-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "deliver-verify-outsider-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "deliver-allocator-operator-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.092
+   },
+   {
+    "name": "deliver-before-verify-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.018
+   },
+   {
+    "name": "deliver-physical-mode-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError",
+     "mode": "Physical",
+     "status": "Allocated"
+    },
+    "seconds": 0.097
+   },
+   {
+    "name": "deliver-verify-happy",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pllf382e",
+     "status": "Verified",
+     "version": 2,
+     "verified_by": "synthetic-invigilator@example.test",
+     "verified_at": "2026-09-17 18:16:56"
+    },
+    "seconds": 0.019
+   },
+   {
+    "name": "deliver-verify-idempotent",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "no_duplicate_audit": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "deliver-verify-stale-version-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "deliver-second-verify-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "deliver-happy-path",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pllf382e",
+     "status": "In Progress",
+     "version": 3,
+     "started_at": "2026-09-17 18:16:56",
+     "deadline_at": "2026-09-17 19:01:56",
+     "item_count": 9,
+     "projection": {
+      "attempt": "j3pllf382e",
+      "case": "j3pcha1rhl",
+      "subject": "synthetic-candidate2@example.test",
+      "sections": [
+       {
+        "id": "listening_a",
+        "skill": "Listening",
+        "minutes": 10,
+        "item_count": 2
+       },
+       {
+        "id": "reading_a",
+        "skill": "Reading",
+        "minutes": 15,
+        "item_count": 3
+       },
+       {
+        "id": "vocab_a",
+        "skill": "Vocabulary",
+        "minutes": 10,
+        "item_count": 2
+       },
+       {
+        "id": "grammar_a",
+        "skill": "Grammar",
+        "minutes": 10,
+        "item_count": 2
+       }
+      ],
+      "items": [
+       {
+        "order": 1,
+        "occurrence_id": "O001",
+        "section": "listening_a",
+        "skill": "Listening",
+        "difficulty": "Stretch",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Listening Stretch 0 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Listening Stretch 0 option 2"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Listening Stretch 0 option 4"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Listening Stretch 0 option 1"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Listening Stretch 0 option 3"
+         }
+        ]
+       },
+       {
+        "order": 2,
+        "occurrence_id": "O002",
+        "section": "listening_a",
+        "skill": "Listening",
+        "difficulty": "Core",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Listening Core 1 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Listening Core 1 option 2"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Listening Core 1 option 3"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Listening Core 1 option 1"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Listening Core 1 option 4"
+         }
+        ]
+       },
+       {
+        "order": 3,
+        "occurrence_id": "O003",
+        "section": "reading_a",
+        "skill": "Reading",
+        "difficulty": "Entry",
+        "question_type": "True False",
+        "prompt": "SYNTHETIC: bank Reading Entry 2 fixture question.",
+        "options": [
+         {
+          "id": "true",
+          "text": "True"
+         },
+         {
+          "id": "false",
+          "text": "False"
+         }
+        ]
+       },
+       {
+        "order": 4,
+        "occurrence_id": "O004",
+        "section": "reading_a",
+        "skill": "Reading",
+        "difficulty": "Core",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Reading Core 0 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Reading Core 0 option 2"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Reading Core 0 option 3"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Reading Core 0 option 4"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Reading Core 0 option 1"
+         }
+        ]
+       },
+       {
+        "order": 5,
+        "occurrence_id": "O005",
+        "section": "reading_a",
+        "skill": "Reading",
+        "difficulty": "Stretch",
+        "question_type": "True False",
+        "prompt": "SYNTHETIC: bank Reading Stretch 2 fixture question.",
+        "options": [
+         {
+          "id": "true",
+          "text": "True"
+         },
+         {
+          "id": "false",
+          "text": "False"
+         }
+        ]
+       },
+       {
+        "order": 6,
+        "occurrence_id": "O006",
+        "section": "vocab_a",
+        "skill": "Vocabulary",
+        "difficulty": "Stretch",
+        "question_type": "True False",
+        "prompt": "SYNTHETIC: bank Vocabulary Stretch 2 fixture question.",
+        "options": [
+         {
+          "id": "true",
+          "text": "True"
+         },
+         {
+          "id": "false",
+          "text": "False"
+         }
+        ]
+       },
+       {
+        "order": 7,
+        "occurrence_id": "O007",
+        "section": "vocab_a",
+        "skill": "Vocabulary",
+        "difficulty": "Core",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Vocabulary Core 0 fixture question.",
+        "options": [
+         {
+          "id": "o3",
+          "text": "SYN Vocabulary Core 0 option 3"
+         },
+         {
+          "id": "o2",
+          "text": "SYN Vocabulary Core 0 option 2"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Vocabulary Core 0 option 1"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Vocabulary Core 0 option 4"
+         }
+        ]
+       },
+       {
+        "order": 8,
+        "occurrence_id": "O008",
+        "section": "grammar_a",
+        "skill": "Grammar",
+        "difficulty": "Entry",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Grammar Entry 0 fixture question.",
+        "options": [
+         {
+          "id": "o4",
+          "text": "SYN Grammar Entry 0 option 4"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Grammar Entry 0 option 3"
+         },
+         {
+          "id": "o2",
+          "text": "SYN Grammar Entry 0 option 2"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Grammar Entry 0 option 1"
+         }
+        ]
+       },
+       {
+        "order": 9,
+        "occurrence_id": "O009",
+        "section": "grammar_a",
+        "skill": "Grammar",
+        "difficulty": "Stretch",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Grammar Stretch 1 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Grammar Stretch 1 option 2"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Grammar Stretch 1 option 4"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Grammar Stretch 1 option 3"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Grammar Stretch 1 option 1"
+         }
+        ]
+       }
+      ],
+      "mode": "Digital"
+     }
+    },
+    "seconds": 0.045
+   },
+   {
+    "name": "deliver-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "no_duplicate_delivery": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "deliver-exposure-converted",
+    "status": "pass",
+    "observation": {
+     "reserved": 9,
+     "delivered": 9,
+     "reserved_retained": true
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "deliver-projection-strips-secrets",
+    "status": "pass",
+    "observation": {
+     "items": 9,
+     "no_seed_or_key": true
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "deliver-clock-started",
+    "status": "pass",
+    "observation": {
+     "started_at": "2026-09-17 18:16:56",
+     "deadline_at": "2026-09-17 19:01:56"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "deliver-save-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "deliver-save-unknown-occurrence-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "deliver-save-unknown-option-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "deliver-save-missing-requires-empty-option",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "deliver-save-response",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pllf382e",
+     "occurrence": 1,
+     "revision": 1,
+     "option_id": "o2",
+     "missing": 0,
+     "status": "In Progress"
+    },
+    "seconds": 0.035
+   },
+   {
+    "name": "deliver-save-idempotent",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "one_revision": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "deliver-save-stale-revision-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "deliver-save-revise",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pllf382e",
+     "occurrence": 1,
+     "revision": 2,
+     "option_id": "o4",
+     "missing": 0,
+     "status": "In Progress"
+    },
+    "seconds": 0.018
+   },
+   {
+    "name": "deliver-deadline-timeout-seal",
+    "status": "pass",
+    "observation": {
+     "seal_reason": "Timeout",
+     "missing_count": 8,
+     "late_save_rejected": true
+    },
+    "seconds": 0.046
+   },
+   {
+    "name": "deliver-save-after-seal-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "deliver-seal-after-seal-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "deliver-verify-second-form",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pkn0d1pe",
+     "status": "Verified",
+     "version": 2,
+     "verified_by": "synthetic-invigilator@example.test",
+     "verified_at": "2026-09-17 18:16:56"
+    },
+    "seconds": 0.019
+   },
+   {
+    "name": "deliver-second-form",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pkn0d1pe",
+     "status": "In Progress",
+     "version": 3,
+     "started_at": "2026-09-17 18:16:56",
+     "deadline_at": "2026-09-17 19:01:56",
+     "item_count": 9,
+     "projection": {
+      "attempt": "j3pkn0d1pe",
+      "case": "j3mhevfs1g",
+      "subject": "synthetic-candidate@example.test",
+      "sections": [
+       {
+        "id": "listening_a",
+        "skill": "Listening",
+        "minutes": 10,
+        "item_count": 2
+       },
+       {
+        "id": "reading_a",
+        "skill": "Reading",
+        "minutes": 15,
+        "item_count": 3
+       },
+       {
+        "id": "vocab_a",
+        "skill": "Vocabulary",
+        "minutes": 10,
+        "item_count": 2
+       },
+       {
+        "id": "grammar_a",
+        "skill": "Grammar",
+        "minutes": 10,
+        "item_count": 2
+       }
+      ],
+      "items": [
+       {
+        "order": 1,
+        "occurrence_id": "O001",
+        "section": "listening_a",
+        "skill": "Listening",
+        "difficulty": "Stretch",
+        "question_type": "True False",
+        "prompt": "SYNTHETIC: bank Listening Stretch 2 fixture question.",
+        "options": [
+         {
+          "id": "true",
+          "text": "True"
+         },
+         {
+          "id": "false",
+          "text": "False"
+         }
+        ]
+       },
+       {
+        "order": 2,
+        "occurrence_id": "O002",
+        "section": "listening_a",
+        "skill": "Listening",
+        "difficulty": "Entry",
+        "question_type": "True False",
+        "prompt": "SYNTHETIC: bank Listening Entry 2 fixture question.",
+        "options": [
+         {
+          "id": "true",
+          "text": "True"
+         },
+         {
+          "id": "false",
+          "text": "False"
+         }
+        ]
+       },
+       {
+        "order": 3,
+        "occurrence_id": "O003",
+        "section": "reading_a",
+        "skill": "Reading",
+        "difficulty": "Entry",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Reading Entry 1 fixture question.",
+        "options": [
+         {
+          "id": "o3",
+          "text": "SYN Reading Entry 1 option 3"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Reading Entry 1 option 4"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Reading Entry 1 option 1"
+         },
+         {
+          "id": "o2",
+          "text": "SYN Reading Entry 1 option 2"
+         }
+        ]
+       },
+       {
+        "order": 4,
+        "occurrence_id": "O004",
+        "section": "reading_a",
+        "skill": "Reading",
+        "difficulty": "Core",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Reading Core 1 fixture question.",
+        "options": [
+         {
+          "id": "o1",
+          "text": "SYN Reading Core 1 option 1"
+         },
+         {
+          "id": "o2",
+          "text": "SYN Reading Core 1 option 2"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Reading Core 1 option 3"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Reading Core 1 option 4"
+         }
+        ]
+       },
+       {
+        "order": 5,
+        "occurrence_id": "O005",
+        "section": "reading_a",
+        "skill": "Reading",
+        "difficulty": "Stretch",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Reading Stretch 1 fixture question.",
+        "options": [
+         {
+          "id": "o3",
+          "text": "SYN Reading Stretch 1 option 3"
+         },
+         {
+          "id": "o2",
+          "text": "SYN Reading Stretch 1 option 2"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Reading Stretch 1 option 1"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Reading Stretch 1 option 4"
+         }
+        ]
+       },
+       {
+        "order": 6,
+        "occurrence_id": "O006",
+        "section": "vocab_a",
+        "skill": "Vocabulary",
+        "difficulty": "Entry",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Vocabulary Entry 0 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Vocabulary Entry 0 option 2"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Vocabulary Entry 0 option 4"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Vocabulary Entry 0 option 3"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Vocabulary Entry 0 option 1"
+         }
+        ]
+       },
+       {
+        "order": 7,
+        "occurrence_id": "O007",
+        "section": "vocab_a",
+        "skill": "Vocabulary",
+        "difficulty": "Stretch",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Vocabulary Stretch 0 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Vocabulary Stretch 0 option 2"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Vocabulary Stretch 0 option 3"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Vocabulary Stretch 0 option 1"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Vocabulary Stretch 0 option 4"
+         }
+        ]
+       },
+       {
+        "order": 8,
+        "occurrence_id": "O008",
+        "section": "grammar_a",
+        "skill": "Grammar",
+        "difficulty": "Core",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Grammar Core 0 fixture question.",
+        "options": [
+         {
+          "id": "o3",
+          "text": "SYN Grammar Core 0 option 3"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Grammar Core 0 option 4"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Grammar Core 0 option 1"
+         },
+         {
+          "id": "o2",
+          "text": "SYN Grammar Core 0 option 2"
+         }
+        ]
+       },
+       {
+        "order": 9,
+        "occurrence_id": "O009",
+        "section": "grammar_a",
+        "skill": "Grammar",
+        "difficulty": "Stretch",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Grammar Stretch 0 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Grammar Stretch 0 option 2"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Grammar Stretch 0 option 1"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Grammar Stretch 0 option 3"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Grammar Stretch 0 option 4"
+         }
+        ]
+       }
+      ],
+      "mode": "Digital"
+     }
+    },
+    "seconds": 0.047
+   },
+   {
+    "name": "deliver-save-second-form",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pkn0d1pe",
+     "occurrence": 1,
+     "revision": 1,
+     "option_id": "true",
+     "missing": 0,
+     "status": "In Progress"
+    },
+    "seconds": 0.018
+   },
+   {
+    "name": "deliver-submit-seal",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pkn0d1pe",
+     "status": "Sealed",
+     "version": 4,
+     "seal_reason": "Submitted",
+     "sealed_at": "2026-09-17 18:16:56",
+     "missing_count": 8
+    },
+    "seconds": 0.044
+   },
+   {
+    "name": "deliver-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "invigilator_no_manifest": true,
+     "author_denied": true,
+     "staff_response_readable": true
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "deliver-ignore-permissions-does-not-bypass-controller",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "deliver-direct-db-set-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "deliver-delete-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "deliver-verify-fourth",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3qfm9l90l",
+     "status": "Verified",
+     "version": 2,
+     "verified_by": "synthetic-invigilator@example.test",
+     "verified_at": "2026-09-17 18:16:56"
+    },
+    "seconds": 0.019
+   },
+   {
+    "name": "deliver-atomic-exposure-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "delivered exposure"
+    },
+    "seconds": 0.013
+   },
+   {
+    "name": "deliver-whole-command-transient-recovery",
+    "status": "pass",
+    "observation": {
+     "attempts": 2,
+     "whole_command_reentered": true,
+     "exhaustion": false
+    },
+    "seconds": 0.073
+   },
+   {
+    "name": "deliver-retry-exhaustion-bounded",
+    "status": "pass",
+    "observation": {
+     "attempts": 4,
+     "whole_command_reentered": true,
+     "exhaustion": true
+    },
+    "seconds": 0.169
+   },
+   {
+    "name": "second-site-no-first-site-delivery-record",
+    "status": "pass",
+    "observation": {
+     "delivery_absent_on_second_site": true
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "score-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "score-author-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "score-outsider-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "score-invigilator-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "score-before-seal-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.015
+   },
+   {
+    "name": "score-happy-path",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pkn0d1pe",
+     "status": "Marking",
+     "version": 5,
+     "score": "j471n0804u",
+     "revision": 1,
+     "scorer_version": "objective-v1",
+     "presented": 9,
+     "correct": 1,
+     "incorrect": 0,
+     "missing": 8,
+     "by_skill": {
+      "Listening": {
+       "presented": 2,
+       "correct": 1,
+       "incorrect": 0,
+       "missing": 1
+      },
+      "Reading": {
+       "presented": 3,
+       "correct": 0,
+       "incorrect": 0,
+       "missing": 3
+      },
+      "Vocabulary": {
+       "presented": 2,
+       "correct": 0,
+       "incorrect": 0,
+       "missing": 2
+      },
+      "Grammar": {
+       "presented": 2,
+       "correct": 0,
+       "incorrect": 0,
+       "missing": 2
+      }
+     },
+     "items": [
+      {
+       "order": 1,
+       "skill": "Listening",
+       "question_type": "True False",
+       "outcome": "correct"
+      },
+      {
+       "order": 2,
+       "skill": "Listening",
+       "question_type": "True False",
+       "outcome": "missing"
+      },
+      {
+       "order": 3,
+       "skill": "Reading",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 4,
+       "skill": "Reading",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 5,
+       "skill": "Reading",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 6,
+       "skill": "Vocabulary",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 7,
+       "skill": "Vocabulary",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 8,
+       "skill": "Grammar",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 9,
+       "skill": "Grammar",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      }
+     ]
+    },
+    "seconds": 0.045
+   },
+   {
+    "name": "score-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "one_score": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "score-stale-version-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "score-second-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "score-missing-is-not-zero",
+    "status": "pass",
+    "observation": {
+     "missing": 8,
+     "not_zero": true,
+     "no_cutoff": true
+    },
+    "seconds": 0.0
+   },
+   {
+    "name": "score-projection-strips-keys",
+    "status": "pass",
+    "observation": {
+     "items": 9,
+     "no_seed_or_key": true
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "score-determinism",
+    "status": "pass",
+    "observation": {
+     "rerun_identical": true,
+     "scorer": "objective-v1"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "score-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "assessor_no_manifest_or_key": true,
+     "invigilator_no_score": true
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "score-ignore-permissions-does-not-bypass-controller",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "score-direct-db-set-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "score-delete-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "score-atomic-score-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "score insert"
+    },
+    "seconds": 0.016
+   },
+   {
+    "name": "score-seal-fourth",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3qfm9l90l",
+     "status": "Sealed",
+     "version": 4,
+     "seal_reason": "Submitted",
+     "sealed_at": "2026-09-17 18:16:56",
+     "missing_count": 9
+    },
+    "seconds": 0.051
+   },
+   {
+    "name": "score-whole-command-transient-recovery",
+    "status": "pass",
+    "observation": {
+     "attempts": 2,
+     "whole_command_reentered": true,
+     "exhaustion": false
+    },
+    "seconds": 0.064
+   },
+   {
+    "name": "score-retry-exhaustion-bounded",
+    "status": "pass",
+    "observation": {
+     "attempts": 4,
+     "whole_command_reentered": true,
+     "exhaustion": true
+    },
+    "seconds": 0.276
+   },
+   {
+    "name": "review-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "review-author-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "review-outsider-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "review-invigilator-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "review-assessor-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "review-before-score-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "review-scorer-cannot-self-review",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.087
+   },
+   {
+    "name": "review-happy-path",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pkn0d1pe",
+     "status": "Review",
+     "version": 6,
+     "reviewed_by": "synthetic-reviewer@example.test",
+     "reviewed_at": "2026-09-17 18:16:57"
+    },
+    "seconds": 0.022
+   },
+   {
+    "name": "review-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "no_duplicate_audit": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "review-stale-version-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "review-second-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "review-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "reviewer_no_manifest_or_key": true
+    },
+    "seconds": 0.012
+   },
+   {
+    "name": "review-ignore-permissions-does-not-bypass-controller",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "review-direct-db-set-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "review-atomic-review-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "review audit"
+    },
+    "seconds": 0.016
+   },
+   {
+    "name": "review-whole-command-transient-recovery",
+    "status": "pass",
+    "observation": {
+     "attempts": 2,
+     "whole_command_reentered": true,
+     "exhaustion": false
+    },
+    "seconds": 0.045
+   },
+   {
+    "name": "review-retry-exhaustion-bounded",
+    "status": "pass",
+    "observation": {
+     "attempts": 4,
+     "whole_command_reentered": true,
+     "exhaustion": true
+    },
+    "seconds": 0.179
+   },
+   {
+    "name": "finalize-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "finalize-author-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "finalize-outsider-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "finalize-invigilator-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "finalize-assessor-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "finalize-reviewer-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "finalize-before-review-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.015
+   },
+   {
+    "name": "finalize-scorer-cannot-finalize",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.088
+   },
+   {
+    "name": "finalize-happy-path",
+    "status": "pass",
+    "observation": {
+     "attempt": "j3pkn0d1pe",
+     "status": "Finalized",
+     "version": 7,
+     "finalized_by": "synthetic-reviewer2@example.test",
+     "finalized_at": "2026-09-17 18:16:57"
+    },
+    "seconds": 0.023
+   },
+   {
+    "name": "finalize-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "no_duplicate_audit": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "finalize-stale-version-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "finalize-second-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "finalize-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "finalizer_no_manifest_or_key": true
+    },
+    "seconds": 0.013
+   },
+   {
+    "name": "finalize-ignore-permissions-does-not-bypass-controller",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "finalize-direct-db-set-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "finalize-atomic-finalize-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "finalize audit"
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "finalize-whole-command-transient-recovery",
+    "status": "pass",
+    "observation": {
+     "attempts": 2,
+     "whole_command_reentered": true,
+     "exhaustion": false
+    },
+    "seconds": 0.047
+   },
+   {
+    "name": "finalize-retry-exhaustion-bounded",
+    "status": "pass",
+    "observation": {
+     "attempts": 4,
+     "whole_command_reentered": true,
+     "exhaustion": true
+    },
+    "seconds": 0.167
+   },
+   {
+    "name": "second-site-no-first-site-score-record",
+    "status": "pass",
+    "observation": {
+     "score_absent_on_second_site": true
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "second-site-no-first-site-review-record",
+    "status": "pass",
+    "observation": {
+     "review_absent_on_second_site": true
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "second-site-no-first-site-finalize-record",
+    "status": "pass",
+    "observation": {
+     "finalize_absent_on_second_site": true
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "decision-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "decision-author-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "decision-outsider-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "decision-invigilator-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "decision-assessor-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.004
+   },
+   {
+    "name": "decision-reviewer-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "decision-finalizer-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "decision-before-finalize-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.016
+   },
+   {
+    "name": "decision-missing-course-map-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.018
+   },
+   {
+    "name": "decision-invalid-course-map-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "decision-course-map-published",
+    "status": "pass",
+    "observation": {
+     "name": "j4l4hls21k",
+     "config": "course_map",
+     "version": 3,
+     "status": "Published",
+     "content_hash": "713d503b7d83ffac44c7101cdd39dfb842ad2df5443441cd17dfd24183cd1df2"
+    },
+    "seconds": 0.062
+   },
+   {
+    "name": "decision-second-course-map-published",
+    "status": "pass",
+    "observation": {
+     "name": "j4mnfut3mr",
+     "config": "course_map",
+     "version": 3,
+     "status": "Published",
+     "content_hash": "713d503b7d83ffac44c7101cdd39dfb842ad2df5443441cd17dfd24183cd1df2"
+    },
+    "seconds": 0.048
+   },
+   {
+    "name": "decision-two-published-maps-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "decision-retire-second-course-map",
+    "status": "pass",
+    "observation": {
+     "name": "j4mnfut3mr",
+     "config": "course_map",
+     "version": 4,
+     "status": "Retired",
+     "content_hash": "713d503b7d83ffac44c7101cdd39dfb842ad2df5443441cd17dfd24183cd1df2"
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "decision-all-missing-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "decision-create-case",
+    "status": "pass",
+    "observation": {
+     "name": "j4nchc8ch1",
+     "subject": "synthetic-candidate5@example.test",
+     "purpose": "synthetic-placement",
+     "status": "Open"
+    },
+    "seconds": 0.017
+   },
+   {
+    "name": "decision-digital-pipeline",
+    "status": "pass",
+    "observation": {
+     "attempt": "j4nqt5ak9t",
+     "ordinal": 1,
+     "status": "Allocated",
+     "mode": "Digital",
+     "case": "j4nchc8ch1",
+     "subject": "synthetic-candidate5@example.test",
+     "blueprint": "j3l7vtjugc",
+     "blueprint_version": 3,
+     "policy": "j3lvnvqc6e",
+     "policy_version": 3,
+     "manifest": "j4nk5ou7m3",
+     "form_hash": "67b98ff953618ef1716163aa8269cb2a341832a9ca9317621894e861ce8215a4",
+     "item_count": 2
+    },
+    "seconds": 0.189
+   },
+   {
+    "name": "decision-happy-path",
+    "status": "pass",
+    "observation": {
+     "attempt": "j4nqt5ak9t",
+     "status": "Finalized",
+     "version": 7,
+     "decision": "j4plt45sqt",
+     "revision": 1,
+     "internal_level": "SYN-LEVEL-GENERAL",
+     "course_code": "SYN-COURSE-GENERAL",
+     "released_by": "synthetic-releaser@example.test",
+     "released_at": "2026-09-17 18:16:58",
+     "expires_at": "2026-12-16 18:16:58",
+     "validity_days": 90
+    },
+    "seconds": 0.029
+   },
+   {
+    "name": "decision-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "one_decision": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "decision-stale-version-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "decision-second-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "decision-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "releaser_no_manifest_or_key": true,
+     "staff_decision_readable": true
+    },
+    "seconds": 0.021
+   },
+   {
+    "name": "decision-ignore-permissions-does-not-bypass-controller",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "decision-direct-db-set-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "decision-delete-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "decision-post-finalize-attempt-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "decision-second-digital-pipeline",
+    "status": "pass",
+    "observation": {
+     "attempt": "j4qm28i0g1",
+     "ordinal": 2,
+     "status": "Allocated",
+     "mode": "Digital",
+     "case": "j4nchc8ch1",
+     "subject": "synthetic-candidate5@example.test",
+     "blueprint": "j3l7vtjugc",
+     "blueprint_version": 3,
+     "policy": "j3lvnvqc6e",
+     "policy_version": 3,
+     "manifest": "j4qda6vk2f",
+     "form_hash": "ff52416dd7c281040b296090369681dce8d59fe56a2e146cf1d82234b3f8b09e",
+     "item_count": 2
+    },
+    "seconds": 0.179
+   },
+   {
+    "name": "decision-atomic-decision-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "decision insert"
+    },
+    "seconds": 0.013
+   },
+   {
+    "name": "decision-whole-command-transient-recovery",
+    "status": "pass",
+    "observation": {
+     "attempts": 2,
+     "whole_command_reentered": true,
+     "exhaustion": false
+    },
+    "seconds": 0.05
+   },
+   {
+    "name": "decision-retry-exhaustion-bounded",
+    "status": "pass",
+    "observation": {
+     "attempts": 4,
+     "whole_command_reentered": true,
+     "exhaustion": true
+    },
+    "seconds": 0.343
+   },
+   {
+    "name": "second-site-no-first-site-decision-record",
+    "status": "pass",
+    "observation": {
+     "decision_absent_on_second_site": true
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "placement-closed-without-student-or-applicant",
+    "status": "pass",
+    "observation": {
+     "placement_no_student_or_applicant": true
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "admission-native-catalog",
+    "status": "pass",
+    "observation": {
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026"
+    },
+    "seconds": 0.058
+   },
+   {
+    "name": "admission-unknown-program-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.015
+   },
+   {
+    "name": "admission-missing-placement-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "admission-outsider-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-author-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-record-applicant",
+    "status": "pass",
+    "observation": {
+     "name": "EDU-APP-2026-00001",
+     "student_email_id": "synthetic-candidate5@example.test",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "application_status": "Applied",
+     "paid": 0,
+     "placement_decision": "j4plt45sqt"
+    },
+    "seconds": 0.062
+   },
+   {
+    "name": "admission-duplicate-applicant-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "admission-create-draft",
+    "status": "pass",
+    "observation": {
+     "name": "j51te153av",
+     "student_applicant": "EDU-APP-2026-00001",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j4plt45sqt",
+     "status": "Draft",
+     "version": 1,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": ""
+    },
+    "seconds": 0.039
+   },
+   {
+    "name": "admission-duplicate-active-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "admission-officer-self-review-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-approver-review-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-review",
+    "status": "pass",
+    "observation": {
+     "name": "j51te153av",
+     "student_applicant": "EDU-APP-2026-00001",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j4plt45sqt",
+     "status": "Review",
+     "version": 2,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": "",
+     "reviewed_by": "synthetic-admissions-reviewer@example.test",
+     "reviewed_at": "2026-09-17 18:16:59"
+    },
+    "seconds": 0.026
+   },
+   {
+    "name": "admission-officer-self-decide-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-reviewer-decide-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-approve",
+    "status": "pass",
+    "observation": {
+     "name": "j51te153av",
+     "student_applicant": "EDU-APP-2026-00001",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j4plt45sqt",
+     "status": "Approved",
+     "version": 3,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": "",
+     "decided_by": "synthetic-approver@example.test",
+     "decided_at": "2026-09-17 18:16:59",
+     "outcome_reason": "Eligible after internal placement."
+    },
+    "seconds": 0.026
+   },
+   {
+    "name": "admission-convert-before-accept-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "admission-approver-self-accept-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-accept-offer",
+    "status": "pass",
+    "observation": {
+     "name": "j51te153av",
+     "student_applicant": "EDU-APP-2026-00001",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j4plt45sqt",
+     "status": "Approved",
+     "version": 4,
+     "accepted": 1,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": "",
+     "accepted_by": "synthetic-officer@example.test",
+     "accepted_at": "2026-09-17 18:16:59"
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "admission-officer-convert-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-convert-student",
+    "status": "pass",
+    "observation": {
+     "name": "j51te153av",
+     "student_applicant": "EDU-APP-2026-00001",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j4plt45sqt",
+     "status": "Approved",
+     "version": 5,
+     "accepted": 1,
+     "native_student": "EDU-STU-2026-00001",
+     "existing_student": "",
+     "conditions": "",
+     "native_application_status": "Admitted",
+     "customer": "SYNTHETIC Applicant Applicant",
+     "program_enrollment": 0,
+     "converted_at": "2026-09-17 18:16:59"
+    },
+    "seconds": 0.178
+   },
+   {
+    "name": "admission-convert-idempotent",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "one_student": true
+    },
+    "seconds": 0.004
+   },
+   {
+    "name": "admission-stale-convert-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "admission-revoke-converted-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "admission-enroll-student-contained",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-program-enrollment-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.024
+   },
+   {
+    "name": "admission-ignore-permissions-does-not-bypass-controller",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "admission-direct-db-set-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-delete-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "admission-extra-released-withdraw",
+    "status": "pass",
+    "observation": {
+     "attempt": "j55sce8o4v",
+     "status": "Finalized",
+     "version": 7,
+     "decision": "j578odhom7",
+     "revision": 1,
+     "internal_level": "SYN-LEVEL-GENERAL",
+     "course_code": "SYN-COURSE-GENERAL",
+     "released_by": "synthetic-releaser@example.test",
+     "released_at": "2026-09-17 18:16:59",
+     "expires_at": "2026-12-16 18:16:59",
+     "validity_days": 90
+    },
+    "seconds": 0.214
+   },
+   {
+    "name": "admission-record-withdraw-applicant",
+    "status": "pass",
+    "observation": {
+     "name": "EDU-APP-2026-00002",
+     "student_email_id": "synthetic-candidate6@example.test",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "application_status": "Applied",
+     "paid": 0,
+     "placement_decision": "j578odhom7"
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "admission-create-withdraw-draft",
+    "status": "pass",
+    "observation": {
+     "name": "j574oijeni",
+     "student_applicant": "EDU-APP-2026-00002",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j578odhom7",
+     "status": "Draft",
+     "version": 1,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": ""
+    },
+    "seconds": 0.021
+   },
+   {
+    "name": "admission-withdraw",
+    "status": "pass",
+    "observation": {
+     "name": "j574oijeni",
+     "student_applicant": "EDU-APP-2026-00002",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j578odhom7",
+     "status": "Withdrawn",
+     "version": 2,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": "",
+     "outcome_reason": "Eligible after internal placement."
+    },
+    "seconds": 0.019
+   },
+   {
+    "name": "admission-withdraw-other-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-extra-released-reject",
+    "status": "pass",
+    "observation": {
+     "attempt": "j5822nvqhj",
+     "status": "Finalized",
+     "version": 7,
+     "decision": "j5ab2j5djg",
+     "revision": 1,
+     "internal_level": "SYN-LEVEL-GENERAL",
+     "course_code": "SYN-COURSE-GENERAL",
+     "released_by": "synthetic-releaser@example.test",
+     "released_at": "2026-09-17 18:17:00",
+     "expires_at": "2026-12-16 18:17:00",
+     "validity_days": 90
+    },
+    "seconds": 0.213
+   },
+   {
+    "name": "admission-record-reject-applicant",
+    "status": "pass",
+    "observation": {
+     "name": "EDU-APP-2026-00003",
+     "student_email_id": "synthetic-candidate7@example.test",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "application_status": "Applied",
+     "paid": 0,
+     "placement_decision": "j5ab2j5djg"
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "admission-create-reject-draft",
+    "status": "pass",
+    "observation": {
+     "name": "j5a34d1hvq",
+     "student_applicant": "EDU-APP-2026-00003",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j5ab2j5djg",
+     "status": "Draft",
+     "version": 1,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": ""
+    },
+    "seconds": 0.021
+   },
+   {
+    "name": "admission-reject",
+    "status": "pass",
+    "observation": {
+     "name": "j5a34d1hvq",
+     "student_applicant": "EDU-APP-2026-00003",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j5ab2j5djg",
+     "status": "Rejected",
+     "version": 3,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": "",
+     "decided_by": "synthetic-approver@example.test",
+     "decided_at": "2026-09-17 18:17:00",
+     "outcome_reason": "Eligible after internal placement."
+    },
+    "seconds": 0.019
+   },
+   {
+    "name": "admission-reject-does-not-convert",
+    "status": "pass",
+    "observation": {
+     "students": 0
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "admission-extra-released-conditional",
+    "status": "pass",
+    "observation": {
+     "attempt": "j5bt1bh1to",
+     "status": "Finalized",
+     "version": 7,
+     "decision": "j5c6jgh1av",
+     "revision": 1,
+     "internal_level": "SYN-LEVEL-GENERAL",
+     "course_code": "SYN-COURSE-GENERAL",
+     "released_by": "synthetic-releaser@example.test",
+     "released_at": "2026-09-17 18:17:00",
+     "expires_at": "2026-12-16 18:17:00",
+     "validity_days": 90
+    },
+    "seconds": 0.216
+   },
+   {
+    "name": "admission-record-conditional-applicant",
+    "status": "pass",
+    "observation": {
+     "name": "EDU-APP-2026-00004",
+     "student_email_id": "synthetic-candidate8@example.test",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "application_status": "Applied",
+     "paid": 0,
+     "placement_decision": "j5c6jgh1av"
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "admission-create-conditional-draft",
+    "status": "pass",
+    "observation": {
+     "name": "j5d4nn8ne1",
+     "student_applicant": "EDU-APP-2026-00004",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j5c6jgh1av",
+     "status": "Draft",
+     "version": 1,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": ""
+    },
+    "seconds": 0.022
+   },
+   {
+    "name": "admission-conditional",
+    "status": "pass",
+    "observation": {
+     "name": "j5d4nn8ne1",
+     "student_applicant": "EDU-APP-2026-00004",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j5c6jgh1av",
+     "status": "Conditional",
+     "version": 3,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": "Awaiting document verification only.",
+     "decided_by": "synthetic-approver@example.test",
+     "decided_at": "2026-09-17 18:17:00",
+     "outcome_reason": "Eligible after internal placement."
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "admission-conditional-convert-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.01
+   },
+   {
+    "name": "admission-expire-after-placement-validity",
+    "status": "pass",
+    "observation": {
+     "status": "Expired"
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "admission-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "admission_staff_only": true
+    },
+    "seconds": 0.012
+   },
+   {
+    "name": "admission-atomic-decision-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "admission audit"
+    },
+    "seconds": 0.018
+   },
+   {
+    "name": "second-site-no-first-site-admission-record",
+    "status": "pass",
+    "observation": {
+     "admission_absent_on_second_site": true
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "enrollment-native-catalog",
+    "status": "pass",
+    "observation": {
+     "course": "SYN-COURSE-CORE",
+     "program": "SYN-PROGRAM-GENERAL"
+    },
+    "seconds": 0.045
+   },
+   {
+    "name": "enrollment-outsider-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "enrollment-author-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "enrollment-admission-officer-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "enrollment-approver-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "enrollment-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "enrollment-withdrawn-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.016
+   },
+   {
+    "name": "enrollment-rejected-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "enrollment-expired-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "enrollment-atomic-enrollment-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "enrollment audit"
+    },
+    "seconds": 0.056
+   },
+   {
+    "name": "enrollment-happy-path",
+    "status": "pass",
+    "observation": {
+     "admission_decision": "j51te153av",
+     "student": "EDU-STU-2026-00001",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "program_enrollment": "EDU-ENR-2026-00001",
+     "docstatus": 1,
+     "course_enrollments": 1,
+     "sales_invoice": 0
+    },
+    "seconds": 0.04
+   },
+   {
+    "name": "enrollment-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "one_enrollment": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "enrollment-duplicate-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.011
+   },
+   {
+    "name": "enrollment-direct-pe-still-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.004
+   },
+   {
+    "name": "enrollment-enroll-student-still-contained",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "enrollment-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "enrollment_officer_no_pe_crud": true,
+     "auditor_receipts_only": true
+    },
+    "seconds": 0.013
+   },
+   {
+    "name": "second-site-no-first-site-enrollment-record",
+    "status": "pass",
+    "observation": {
+     "enrollment_absent_on_second_site": true
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "teaching-native-catalog",
+    "status": "pass",
+    "observation": {
+     "rooms": {
+      "SYN-ROOM-A": "HTL-ROOM-2026-00001",
+      "SYN-ROOM-B": "HTL-ROOM-2026-00002"
+     },
+     "instructors": {
+      "SYN Instructor One": "EDU-INS-2026-00001",
+      "SYN Instructor Two": "EDU-INS-2026-00002",
+      "SYN Instructor Left": "EDU-INS-2026-00003"
+     },
+     "company": "SYN Teaching House"
+    },
+    "seconds": 2.295
+   },
+   {
+    "name": "teaching-second-intake-enrolled",
+    "status": "pass",
+    "observation": {
+     "student": "EDU-STU-2026-00002",
+     "program_enrollment": "EDU-ENR-2026-00002",
+     "released": "j6cureem21"
+    },
+    "seconds": 0.888
+   },
+   {
+    "name": "teaching-outsider-group-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "teaching-recorder-group-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.004
+   },
+   {
+    "name": "teaching-enrollment-officer-group-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "teaching-group-non-synthetic-name-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.015
+   },
+   {
+    "name": "teaching-group-unbounded-capacity-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "teaching-group-unknown-year-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "teaching-group-empty-roster-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "teaching-group-over-capacity-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "teaching-group-happy-path",
+    "status": "pass",
+    "observation": {
+     "name": "SYN-GRP-MAIN-1",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "academic_term": "",
+     "max_strength": 2,
+     "students": 2,
+     "roster": [
+      "EDU-STU-2026-00001",
+      "EDU-STU-2026-00002"
+     ]
+    },
+    "seconds": 0.052
+   },
+   {
+    "name": "teaching-group-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "one_group": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "teaching-group-duplicate-name-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "teaching-group-direct-write-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "teaching-second-group",
+    "status": "pass",
+    "observation": {
+     "name": "SYN-GRP-MAIN-2",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "academic_term": "",
+     "max_strength": 2,
+     "students": 2,
+     "roster": [
+      "EDU-STU-2026-00001",
+      "EDU-STU-2026-00002"
+     ]
+    },
+    "seconds": 0.019
+   },
+   {
+    "name": "teaching-session-recorder-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "teaching-session-inverted-window-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "teaching-session-outside-year-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.058
+   },
+   {
+    "name": "teaching-session-left-instructor-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "teaching-session-unknown-course-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "teaching-session-course-outside-program-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "teaching-session-happy-path",
+    "status": "pass",
+    "observation": {
+     "name": "EDU-CSH-2026-00001",
+     "student_group": "SYN-GRP-MAIN-1",
+     "course": "SYN-COURSE-CORE",
+     "instructor": "EDU-INS-2026-00001",
+     "room": "HTL-ROOM-2026-00001",
+     "schedule_date": "2026-09-21",
+     "from_time": "09:00:00",
+     "to_time": "10:30:00",
+     "title": "SYN-COURSE-CORE by SYN Instructor One"
+    },
+    "seconds": 0.027
+   },
+   {
+    "name": "teaching-session-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "one_session": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "teaching-session-group-conflict-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "OverlapError"
+    },
+    "seconds": 0.013
+   },
+   {
+    "name": "teaching-session-instructor-conflict-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "OverlapError"
+    },
+    "seconds": 0.014
+   },
+   {
+    "name": "teaching-session-room-conflict-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "OverlapError"
+    },
+    "seconds": 0.014
+   },
+   {
+    "name": "teaching-session-direct-write-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "teaching-second-session",
+    "status": "pass",
+    "observation": {
+     "name": "EDU-CSH-2026-00002",
+     "student_group": "SYN-GRP-MAIN-2",
+     "course": "SYN-COURSE-CORE",
+     "instructor": "EDU-INS-2026-00002",
+     "room": "HTL-ROOM-2026-00002",
+     "schedule_date": "2026-09-22",
+     "from_time": "13:00:00",
+     "to_time": "14:30:00",
+     "title": "SYN-COURSE-CORE by SYN Instructor Two"
+    },
+    "seconds": 0.022
+   },
+   {
+    "name": "teaching-outsider-student-fixture",
+    "status": "pass",
+    "observation": "EDU-STU-2026-00003",
+    "seconds": 0.014
+   },
+   {
+    "name": "teaching-attendance-scheduler-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "teaching-attendance-invalid-status-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.012
+   },
+   {
+    "name": "teaching-attendance-empty-batch-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "teaching-attendance-off-roster-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "teaching-attendance-happy-path",
+    "status": "pass",
+    "observation": {
+     "course_schedule": "EDU-CSH-2026-00001",
+     "student_group": "SYN-GRP-MAIN-1",
+     "date": "2026-09-21",
+     "marked": 2,
+     "records": {
+      "EDU-STU-2026-00001": "EDU-ATT-2026-00001",
+      "EDU-STU-2026-00002": "EDU-ATT-2026-00002"
+     }
+    },
+    "seconds": 0.063
+   },
+   {
+    "name": "teaching-attendance-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "two_records": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "teaching-attendance-duplicate-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "teaching-attendance-direct-write-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "teaching-attendance-atomic-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "teaching audit"
+    },
+    "seconds": 0.021
+   },
+   {
+    "name": "teaching-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "teaching_no_native_crud": true,
+     "auditor_receipts_only": true
+    },
+    "seconds": 0.044
+   },
+   {
+    "name": "integration-e2e-student-journey",
+    "status": "pass",
+    "observation": {
+     "attendance": "EDU-ATT-2026-00002",
+     "course_schedule": "EDU-CSH-2026-00001",
+     "student_group": "SYN-GRP-MAIN-1",
+     "program_enrollment": "EDU-ENR-2026-00002",
+     "admission_decision": "j6dsb24qmg",
+     "placement_decision": "j6cureem21",
+     "placement_case": "j68lhjkb2l",
+     "student": "EDU-STU-2026-00002",
+     "chain_complete": true
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "integration-journey-receipt-continuity",
+    "status": "pass",
+    "observation": {
+     "journey_commands_receipted": 11,
+     "actor_separation_verified": true,
+     "kinds": [
+      "release_decision",
+      "record_applicant",
+      "create_admission",
+      "review_admission",
+      "decide_admission",
+      "accept_offer",
+      "convert_applicant",
+      "enroll_in_program",
+      "create_student_group",
+      "schedule_session",
+      "record_attendance"
+     ]
+    },
+    "seconds": 0.01
+   },
+   {
+    "name": "integration-cross-domain-referential-integrity",
+    "status": "pass",
+    "observation": {
+     "groups_verified": 2,
+     "schedules_verified": 2,
+     "attendance_verified": 2,
+     "audit_ledger_referential": 248
+    },
+    "seconds": 0.01
+   },
+   {
+    "name": "second-site-no-first-site-teaching-record",
+    "status": "pass",
+    "observation": {
+     "teaching_absent_on_second_site": true
+    },
+    "seconds": 0.002
+   },
+   {
+    "name": "http-positive-create",
+    "status": "pass",
+    "observation": {
+     "name": "j7cvn1gqgk",
+     "version": 1,
+     "status": "Draft",
+     "content_hash": "5d61f6fd551d556f46feb7629add3fcfe87bbd95011d27312dd57bc414fe2f2a"
+    },
+    "seconds": 0.053
+   },
+   {
+    "name": "http-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.028
+   },
+   {
+    "name": "http-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.012
+   },
+   {
+    "name": "http-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "http-other-author-draft-read-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "http-auditor-key-read-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "http-concurrent-create-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_item_and_audit": true
+    },
+    "seconds": 0.055
+   },
+   {
+    "name": "http-concurrent-publication-cas",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      417
+     ],
+     "one_publication": true
+    },
+    "seconds": 0.052
+   },
+   {
+    "name": "http-config-positive-create",
+    "status": "pass",
+    "observation": {
+     "name": "j7enqufg4p",
+     "config": "blueprint",
+     "version": 1,
+     "status": "Draft",
+     "content_hash": "40c0aa5e76ae4ceb8494e119ebf2601c04069863ee20cbb266964de82dc752e7"
+    },
+    "seconds": 0.031
+   },
+   {
+    "name": "http-config-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-config-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-config-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-config-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-config-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "http-config-other-author-read-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "http-config-concurrent-create-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_doc_and_audit": true
+    },
+    "seconds": 0.046
+   },
+   {
+    "name": "http-config-concurrent-publication-cas",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      417
+     ],
+     "one_publication": true
+    },
+    "seconds": 0.101
+   },
+   {
+    "name": "http-config-policy-draft-review-publish-flow",
+    "status": "pass",
+    "observation": "j7h8l72ho7",
+    "seconds": 0.071
+   },
+   {
+    "name": "http-alloc-case-create",
+    "status": "pass",
+    "observation": {
+     "name": "j7hlabi80p",
+     "subject": "synthetic-candidate3@example.test",
+     "purpose": "synthetic-placement",
+     "status": "Open"
+    },
+    "seconds": 0.025
+   },
+   {
+    "name": "http-alloc-positive-create",
+    "status": "pass",
+    "observation": {
+     "attempt": "j7i0o8h2ci",
+     "ordinal": 1,
+     "status": "Allocated",
+     "mode": "Digital",
+     "case": "j7hlabi80p",
+     "subject": "synthetic-candidate3@example.test",
+     "blueprint": "j3lqtq6vbg",
+     "blueprint_version": 3,
+     "policy": "j3lvnvqc6e",
+     "policy_version": 3,
+     "manifest": "j7id4ajvhv",
+     "form_hash": "b136c563dbfa1dc2dc747c25c2353133d26f1cd48ac54507f6431c71112d81aa",
+     "item_count": 9
+    },
+    "seconds": 0.068
+   },
+   {
+    "name": "http-alloc-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-alloc-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-alloc-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-alloc-case-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-alloc-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-alloc-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-alloc-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "http-alloc-other-role-read-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "http-alloc-concurrent-create-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_attempt_for_key": true
+    },
+    "seconds": 0.06
+   },
+   {
+    "name": "http-alloc-concurrent-distinct-keys",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "ordinals": [
+      3,
+      4
+     ],
+     "concurrent_forms_disjoint": true
+    },
+    "seconds": 0.104
+   },
+   {
+    "name": "http-deliver-verify",
+    "status": "pass",
+    "observation": {
+     "attempt": "j7i0o8h2ci",
+     "status": "Verified",
+     "version": 2,
+     "verified_by": "synthetic-invigilator@example.test",
+     "verified_at": "2026-09-17 18:17:07"
+    },
+    "seconds": 0.023
+   },
+   {
+    "name": "http-deliver-positive",
+    "status": "pass",
+    "observation": {
+     "attempt": "j7i0o8h2ci",
+     "status": "In Progress",
+     "version": 3,
+     "started_at": "2026-09-17 18:17:07",
+     "deadline_at": "2026-09-17 19:02:07",
+     "item_count": 9,
+     "projection": {
+      "attempt": "j7i0o8h2ci",
+      "case": "j7hlabi80p",
+      "subject": "synthetic-candidate3@example.test",
+      "sections": [
+       {
+        "id": "listening_a",
+        "skill": "Listening",
+        "minutes": 10,
+        "item_count": 2
+       },
+       {
+        "id": "reading_a",
+        "skill": "Reading",
+        "minutes": 15,
+        "item_count": 3
+       },
+       {
+        "id": "vocab_a",
+        "skill": "Vocabulary",
+        "minutes": 10,
+        "item_count": 2
+       },
+       {
+        "id": "grammar_a",
+        "skill": "Grammar",
+        "minutes": 10,
+        "item_count": 2
+       }
+      ],
+      "items": [
+       {
+        "order": 1,
+        "occurrence_id": "O001",
+        "section": "listening_a",
+        "skill": "Listening",
+        "difficulty": "Stretch",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Listening Stretch 1 fixture question.",
+        "options": [
+         {
+          "id": "o1",
+          "text": "SYN Listening Stretch 1 option 1"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Listening Stretch 1 option 3"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Listening Stretch 1 option 4"
+         },
+         {
+          "id": "o2",
+          "text": "SYN Listening Stretch 1 option 2"
+         }
+        ]
+       },
+       {
+        "order": 2,
+        "occurrence_id": "O002",
+        "section": "listening_a",
+        "skill": "Listening",
+        "difficulty": "Core",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Listening Core 0 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Listening Core 0 option 2"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Listening Core 0 option 3"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Listening Core 0 option 1"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Listening Core 0 option 4"
+         }
+        ]
+       },
+       {
+        "order": 3,
+        "occurrence_id": "O003",
+        "section": "reading_a",
+        "skill": "Reading",
+        "difficulty": "Core",
+        "question_type": "True False",
+        "prompt": "SYNTHETIC: bank Reading Core 2 fixture question.",
+        "options": [
+         {
+          "id": "true",
+          "text": "True"
+         },
+         {
+          "id": "false",
+          "text": "False"
+         }
+        ]
+       },
+       {
+        "order": 4,
+        "occurrence_id": "O004",
+        "section": "reading_a",
+        "skill": "Reading",
+        "difficulty": "Stretch",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Reading Stretch 1 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Reading Stretch 1 option 2"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Reading Stretch 1 option 1"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Reading Stretch 1 option 4"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Reading Stretch 1 option 3"
+         }
+        ]
+       },
+       {
+        "order": 5,
+        "occurrence_id": "O005",
+        "section": "reading_a",
+        "skill": "Reading",
+        "difficulty": "Entry",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Reading Entry 1 fixture question.",
+        "options": [
+         {
+          "id": "o4",
+          "text": "SYN Reading Entry 1 option 4"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Reading Entry 1 option 1"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Reading Entry 1 option 3"
+         },
+         {
+          "id": "o2",
+          "text": "SYN Reading Entry 1 option 2"
+         }
+        ]
+       },
+       {
+        "order": 6,
+        "occurrence_id": "O006",
+        "section": "vocab_a",
+        "skill": "Vocabulary",
+        "difficulty": "Entry",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Vocabulary Entry 1 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Vocabulary Entry 1 option 2"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Vocabulary Entry 1 option 3"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Vocabulary Entry 1 option 4"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Vocabulary Entry 1 option 1"
+         }
+        ]
+       },
+       {
+        "order": 7,
+        "occurrence_id": "O007",
+        "section": "vocab_a",
+        "skill": "Vocabulary",
+        "difficulty": "Stretch",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Vocabulary Stretch 1 fixture question.",
+        "options": [
+         {
+          "id": "o4",
+          "text": "SYN Vocabulary Stretch 1 option 4"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Vocabulary Stretch 1 option 3"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Vocabulary Stretch 1 option 1"
+         },
+         {
+          "id": "o2",
+          "text": "SYN Vocabulary Stretch 1 option 2"
+         }
+        ]
+       },
+       {
+        "order": 8,
+        "occurrence_id": "O008",
+        "section": "grammar_a",
+        "skill": "Grammar",
+        "difficulty": "Entry",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: select the fixture option.",
+        "options": [
+         {
+          "id": "b",
+          "text": "Fixture B"
+         },
+         {
+          "id": "a",
+          "text": "Fixture A"
+         }
+        ]
+       },
+       {
+        "order": 9,
+        "occurrence_id": "O009",
+        "section": "grammar_a",
+        "skill": "Grammar",
+        "difficulty": "Stretch",
+        "question_type": "Single Choice",
+        "prompt": "SYNTHETIC: bank Grammar Stretch 0 fixture question.",
+        "options": [
+         {
+          "id": "o2",
+          "text": "SYN Grammar Stretch 0 option 2"
+         },
+         {
+          "id": "o3",
+          "text": "SYN Grammar Stretch 0 option 3"
+         },
+         {
+          "id": "o4",
+          "text": "SYN Grammar Stretch 0 option 4"
+         },
+         {
+          "id": "o1",
+          "text": "SYN Grammar Stretch 0 option 1"
+         }
+        ]
+       }
+      ],
+      "mode": "Digital"
+     }
+    },
+    "seconds": 0.051
+   },
+   {
+    "name": "http-deliver-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-deliver-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-deliver-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-deliver-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-deliver-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-deliver-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-deliver-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "http-save-positive",
+    "status": "pass",
+    "observation": {
+     "attempt": "j7i0o8h2ci",
+     "occurrence": 1,
+     "revision": 1,
+     "option_id": "o1",
+     "missing": 0,
+     "status": "In Progress"
+    },
+    "seconds": 0.025
+   },
+   {
+    "name": "http-deliver-other-role-response-read-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "http-save-concurrent-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_revision": true
+    },
+    "seconds": 0.046
+   },
+   {
+    "name": "http-seal-submitted",
+    "status": "pass",
+    "observation": {
+     "attempt": "j7i0o8h2ci",
+     "status": "Sealed",
+     "version": 4,
+     "seal_reason": "Submitted",
+     "sealed_at": "2026-09-17 18:17:07",
+     "missing_count": 7
+    },
+    "seconds": 0.046
+   },
+   {
+    "name": "http-score-positive",
+    "status": "pass",
+    "observation": {
+     "attempt": "j7i0o8h2ci",
+     "status": "Marking",
+     "version": 5,
+     "score": "j7ntlp5ugg",
+     "revision": 1,
+     "scorer_version": "objective-v1",
+     "presented": 9,
+     "correct": 1,
+     "incorrect": 1,
+     "missing": 7,
+     "by_skill": {
+      "Listening": {
+       "presented": 2,
+       "correct": 1,
+       "incorrect": 1,
+       "missing": 0
+      },
+      "Reading": {
+       "presented": 3,
+       "correct": 0,
+       "incorrect": 0,
+       "missing": 3
+      },
+      "Vocabulary": {
+       "presented": 2,
+       "correct": 0,
+       "incorrect": 0,
+       "missing": 2
+      },
+      "Grammar": {
+       "presented": 2,
+       "correct": 0,
+       "incorrect": 0,
+       "missing": 2
+      }
+     },
+     "items": [
+      {
+       "order": 1,
+       "skill": "Listening",
+       "question_type": "Single Choice",
+       "outcome": "correct"
+      },
+      {
+       "order": 2,
+       "skill": "Listening",
+       "question_type": "Single Choice",
+       "outcome": "incorrect"
+      },
+      {
+       "order": 3,
+       "skill": "Reading",
+       "question_type": "True False",
+       "outcome": "missing"
+      },
+      {
+       "order": 4,
+       "skill": "Reading",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 5,
+       "skill": "Reading",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 6,
+       "skill": "Vocabulary",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 7,
+       "skill": "Vocabulary",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 8,
+       "skill": "Grammar",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      },
+      {
+       "order": 9,
+       "skill": "Grammar",
+       "question_type": "Single Choice",
+       "outcome": "missing"
+      }
+     ]
+    },
+    "seconds": 0.035
+   },
+   {
+    "name": "http-score-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-score-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-score-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-score-invigilator-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-score-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-score-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-score-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-score-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "http-score-other-role-read-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "http-score-concurrent-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_score": true
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "http-review-positive",
+    "status": "pass",
+    "observation": {
+     "attempt": "j7i0o8h2ci",
+     "status": "Review",
+     "version": 6,
+     "reviewed_by": "synthetic-reviewer@example.test",
+     "reviewed_at": "2026-09-17 18:17:08"
+    },
+    "seconds": 0.023
+   },
+   {
+    "name": "http-review-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-review-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-review-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-review-invigilator-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-review-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-review-assessor-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-review-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-review-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-review-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "http-review-other-role-read-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-review-concurrent-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_review": true
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "http-finalize-positive",
+    "status": "pass",
+    "observation": {
+     "attempt": "j7i0o8h2ci",
+     "status": "Finalized",
+     "version": 7,
+     "finalized_by": "synthetic-reviewer2@example.test",
+     "finalized_at": "2026-09-17 18:17:08"
+    },
+    "seconds": 0.022
+   },
+   {
+    "name": "http-finalize-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-finalize-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-finalize-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-finalize-invigilator-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-finalize-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-finalize-assessor-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-finalize-reviewer-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 417,
+     "exception": "ValidationError"
+    },
+    "seconds": 0.012
+   },
+   {
+    "name": "http-finalize-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-finalize-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-finalize-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "http-finalize-other-role-read-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "http-finalize-concurrent-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_finalize": true
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "http-decision-setup-finalized",
+    "status": "pass",
+    "observation": {
+     "attempt": "j7q3r3taun",
+     "ordinal": 4,
+     "status": "Allocated",
+     "mode": "Digital",
+     "case": "j4nchc8ch1",
+     "subject": "synthetic-candidate5@example.test",
+     "blueprint": "j3l7vtjugc",
+     "blueprint_version": 3,
+     "policy": "j3lvnvqc6e",
+     "policy_version": 3,
+     "manifest": "j7rnv2fn8d",
+     "form_hash": "f4866f7249e0af6e043fd5813122528f54406c6812fce57b1c6e94630330fbd8",
+     "item_count": 2
+    },
+    "seconds": 0.183
+   },
+   {
+    "name": "http-decision-positive",
+    "status": "pass",
+    "observation": {
+     "attempt": "j7q3r3taun",
+     "status": "Finalized",
+     "version": 7,
+     "decision": "j7shp6nhrv",
+     "revision": 1,
+     "internal_level": "SYN-LEVEL-GENERAL",
+     "course_code": "SYN-COURSE-GENERAL",
+     "released_by": "synthetic-releaser@example.test",
+     "released_at": "2026-09-17 18:17:08",
+     "expires_at": "2026-12-16 18:17:08",
+     "validity_days": 90
+    },
+    "seconds": 0.029
+   },
+   {
+    "name": "http-decision-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-decision-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-decision-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-decision-invigilator-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-decision-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-decision-assessor-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-decision-reviewer-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-decision-finalizer-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-decision-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-decision-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-decision-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "http-decision-other-role-read-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-decision-concurrent-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_decision": true
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "http-admission-create",
+    "status": "pass",
+    "observation": {
+     "name": "j7ugdjip3i",
+     "student_applicant": "EDU-APP-2026-00002",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j578odhom7",
+     "status": "Draft",
+     "version": 1,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": ""
+    },
+    "seconds": 0.031
+   },
+   {
+    "name": "http-admission-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-admission-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-admission-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-admission-publisher-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-admission-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-admission-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-admission-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "http-admission-other-role-read-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-admission-review",
+    "status": "pass",
+    "observation": {
+     "name": "j7ugdjip3i",
+     "student_applicant": "EDU-APP-2026-00002",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j578odhom7",
+     "status": "Review",
+     "version": 2,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": "",
+     "reviewed_by": "synthetic-admissions-reviewer@example.test",
+     "reviewed_at": "2026-09-17 18:17:08"
+    },
+    "seconds": 0.022
+   },
+   {
+    "name": "http-admission-approve",
+    "status": "pass",
+    "observation": {
+     "name": "j7ugdjip3i",
+     "student_applicant": "EDU-APP-2026-00002",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j578odhom7",
+     "status": "Approved",
+     "version": 3,
+     "accepted": 0,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": "",
+     "decided_by": "synthetic-approver@example.test",
+     "decided_at": "2026-09-17 18:17:08",
+     "outcome_reason": "Eligible after internal placement."
+    },
+    "seconds": 0.023
+   },
+   {
+    "name": "http-admission-accept",
+    "status": "pass",
+    "observation": {
+     "name": "j7ugdjip3i",
+     "student_applicant": "EDU-APP-2026-00002",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j578odhom7",
+     "status": "Approved",
+     "version": 4,
+     "accepted": 1,
+     "native_student": "",
+     "existing_student": "",
+     "conditions": "",
+     "accepted_by": "synthetic-officer@example.test",
+     "accepted_at": "2026-09-17 18:17:08"
+    },
+    "seconds": 0.023
+   },
+   {
+    "name": "http-admission-convert",
+    "status": "pass",
+    "observation": {
+     "name": "j7ugdjip3i",
+     "student_applicant": "EDU-APP-2026-00002",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "placement_decision": "j578odhom7",
+     "status": "Approved",
+     "version": 5,
+     "accepted": 1,
+     "native_student": "EDU-STU-2026-00004",
+     "existing_student": "",
+     "conditions": "",
+     "native_application_status": "Admitted",
+     "customer": "SYNTHETIC Withdraw Applicant",
+     "program_enrollment": 0,
+     "converted_at": "2026-09-17 18:17:08"
+    },
+    "seconds": 0.084
+   },
+   {
+    "name": "http-admission-enroll-student-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-admission-concurrent-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_student": true
+    },
+    "seconds": 0.016
+   },
+   {
+    "name": "http-enrollment-positive",
+    "status": "pass",
+    "observation": {
+     "admission_decision": "j7ugdjip3i",
+     "student": "EDU-STU-2026-00004",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "program_enrollment": "EDU-ENR-2026-00003",
+     "docstatus": 1,
+     "course_enrollments": 1,
+     "sales_invoice": 0
+    },
+    "seconds": 0.058
+   },
+   {
+    "name": "http-enrollment-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-enrollment-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-enrollment-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-enrollment-admission-officer-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-enrollment-approver-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-enrollment-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-enrollment-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-enrollment-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "http-enrollment-concurrent-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_enrollment": true
+    },
+    "seconds": 0.016
+   },
+   {
+    "name": "http-teaching-group-positive",
+    "status": "pass",
+    "observation": {
+     "name": "SYN-GRP-HTTP-1",
+     "program": "SYN-PROGRAM-GENERAL",
+     "academic_year": "SYN-AY-2026",
+     "academic_term": "",
+     "max_strength": 3,
+     "students": 3,
+     "roster": [
+      "EDU-STU-2026-00001",
+      "EDU-STU-2026-00002",
+      "EDU-STU-2026-00004"
+     ]
+    },
+    "seconds": 0.029
+   },
+   {
+    "name": "http-teaching-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-teaching-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-teaching-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-teaching-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-teaching-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-teaching-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.01
+   },
+   {
+    "name": "http-teaching-concurrent-group-idempotency",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      200
+     ],
+     "one_group": true
+    },
+    "seconds": 0.015
+   },
+   {
+    "name": "http-teaching-session-positive",
+    "status": "pass",
+    "observation": {
+     "name": "EDU-CSH-2026-00003",
+     "student_group": "SYN-GRP-HTTP-1",
+     "course": "SYN-COURSE-CORE",
+     "instructor": "EDU-INS-2026-00002",
+     "room": "HTL-ROOM-2026-00002",
+     "schedule_date": "2026-09-22",
+     "from_time": "11:00:00",
+     "to_time": "12:30:00",
+     "title": "SYN-COURSE-CORE by SYN Instructor Two"
+    },
+    "seconds": 0.033
+   },
+   {
+    "name": "http-teaching-session-unrelated-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-teaching-attendance-positive",
+    "status": "pass",
+    "observation": {
+     "course_schedule": "EDU-CSH-2026-00003",
+     "student_group": "SYN-GRP-HTTP-1",
+     "date": "2026-09-22",
+     "marked": 3,
+     "records": {
+      "EDU-STU-2026-00001": "EDU-ATT-2026-00003",
+      "EDU-STU-2026-00002": "EDU-ATT-2026-00004",
+      "EDU-STU-2026-00004": "EDU-ATT-2026-00005"
+     }
+    },
+    "seconds": 0.061
+   },
+   {
+    "name": "http-teaching-attendance-scheduler-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-teaching-attendance-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "http-teaching-concurrent-attendance-duplicate-cas",
+    "status": "pass",
+    "observation": {
+     "http_statuses": [
+      200,
+      417
+     ],
+     "no_double_marking": true,
+     "race_session": "EDU-CSH-2026-00004"
+    },
+    "seconds": 0.113
+   },
+   {
+    "name": "http-teaching-attendance-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "three_records": true
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "http-teaching-attendance-direct-crud-mutation-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.012
+   },
+   {
+    "name": "http-enrollment-revoked-officer-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.124
+   },
+   {
+    "name": "http-admission-revoked-officer-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.056
+   },
+   {
+    "name": "http-decision-revoked-releaser-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.057
+   },
+   {
+    "name": "http-finalize-revoked-reviewer-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.057
+   },
+   {
+    "name": "http-review-revoked-reviewer-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.055
+   },
+   {
+    "name": "http-score-revoked-assessor-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.057
+   },
+   {
+    "name": "http-deliver-revoked-invigilator-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.055
+   },
+   {
+    "name": "http-alloc-revoked-publisher-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.055
+   },
+   {
+    "name": "http-role-revocation-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.051
+   },
+   {
+    "name": "http-config-revoked-publisher-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.054
+   },
+   {
+    "name": "http-teaching-revoked-scheduler-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.054
+   },
+   {
+    "name": "http-teaching-revoked-recorder-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.056
+   },
+   {
+    "name": "no-academic-finance-payroll-writes",
+    "status": "pass",
+    "observation": {
+     "academic_finance_payroll_unchanged": true,
+     "native_program_enrollments": 3,
+     "native_course_enrollments": 3,
+     "native_students": 4,
+     "native_applicants": 5,
+     "native_student_groups": 3,
+     "native_course_schedules": 4,
+     "native_student_attendance": 8
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "finance-native-catalog",
+    "status": "pass",
+    "observation": {
+     "company": "TOEFL House",
+     "price_list": "TOEFL House Standard",
+     "placement_item": "SYN-PLACEMENT-FEE",
+     "fee_structure": "EDU-FST-2026-00001",
+     "receivable": "Debtors - TH",
+     "payer": "SYN Placement Payer One",
+     "payer_waiver": "SYN Placement Payer Two",
+     "before": {
+      "Student": 4,
+      "Student Applicant": 5,
+      "Program Enrollment": 3,
+      "Course Enrollment": 3,
+      "Assessment Result": 0,
+      "Sales Invoice": 0,
+      "GL Entry": 0,
+      "Salary Slip": 0,
+      "Student Group": 3,
+      "Course Schedule": 4,
+      "Student Attendance": 8,
+      "Employee": 0,
+      "Attendance": 0,
+      "Timesheet": 0,
+      "Additional Salary": 0,
+      "Fees": 0
+     }
+    },
+    "seconds": 3.139
+   },
+   {
+    "name": "finance-tuition-unknown-enrollment-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.051
+   },
+   {
+    "name": "finance-tuition-bad-window-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "finance-tuition-outside-year-structure-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "finance-tuition-outsider-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.004
+   },
+   {
+    "name": "finance-tuition-enrollment-officer-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.004
+   },
+   {
+    "name": "finance-tuition-scheduler-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.004
+   },
+   {
+    "name": "finance-tuition-happy-path",
+    "status": "pass",
+    "observation": {
+     "fees": "EDU-FEE-2026-00001",
+     "program_enrollment": "EDU-ENR-2026-00002",
+     "student": "EDU-STU-2026-00002",
+     "fee_structure": "EDU-FST-2026-00001",
+     "grand_total": 25000.0,
+     "outstanding_amount": 25000.0,
+     "currency": "AFN",
+     "posting_date": "2026-09-01",
+     "due_date": "2026-09-30"
+    },
+    "seconds": 0.254
+   },
+   {
+    "name": "finance-tuition-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "no_new_fees": true
+    },
+    "seconds": 0.004
+   },
+   {
+    "name": "finance-tuition-duplicate-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "finance-tuition-direct-write-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "finance-tuition-atomic-rollback",
+    "status": "pass",
+    "observation": {
+     "real_database_rollback": true,
+     "injected_boundary": "finance audit"
+    },
+    "seconds": 0.053
+   },
+   {
+    "name": "finance-placement-unknown-case-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.008
+   },
+   {
+    "name": "finance-placement-unknown-customer-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "finance-placement-outsider-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "PermissionError"
+    },
+    "seconds": 0.001
+   },
+   {
+    "name": "finance-placement-zero-rate-not-billable",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "finance-placement-happy-path",
+    "status": "pass",
+    "observation": {
+     "sales_invoice": "ACC-SINV-2026-00001",
+     "case": "j68lhjkb2l",
+     "customer": "SYN Placement Payer One",
+     "configured_rate": 4000.0,
+     "grand_total": 4000.0,
+     "net_total": 4000.0,
+     "discount_amount": 0.0,
+     "outstanding_amount": 4000.0,
+     "currency": "AFN",
+     "posting_date": "2026-09-01",
+     "due_date": "2026-09-30"
+    },
+    "seconds": 0.46
+   },
+   {
+    "name": "finance-placement-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "no_new_invoice": true
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "finance-placement-duplicate-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "finance-placement-direct-write-denied",
+    "status": "pass",
+    "observation": {
+     "denied": "ValidationError"
+    },
+    "seconds": 0.527
+   },
+   {
+    "name": "finance-placement-native-pricing-rule-waiver",
+    "status": "pass",
+    "observation": {
+     "pricing_rule": "PRLE-0001",
+     "waived_grand_total": 0.0,
+     "line_discount": 4000.0,
+     "sales_invoice": "ACC-SINV-2026-00002"
+    },
+    "seconds": 0.191
+   },
+   {
+    "name": "finance-role-and-list-parity",
+    "status": "pass",
+    "observation": {
+     "receipt_ledger_auditor_only": true,
+     "auditor_no_fees": true
+    },
+    "seconds": 0.027
+   },
+   {
+    "name": "http-finance-tuition-positive",
+    "status": "pass",
+    "observation": {
+     "fees": "EDU-FEE-2026-00002",
+     "program_enrollment": "EDU-ENR-2026-00001",
+     "student": "EDU-STU-2026-00001",
+     "fee_structure": "EDU-FST-2026-00001",
+     "grand_total": 25000.0,
+     "outstanding_amount": 25000.0,
+     "currency": "AFN",
+     "posting_date": "2026-09-02",
+     "due_date": "2026-10-02"
+    },
+    "seconds": 0.114
+   },
+   {
+    "name": "http-finance-guest-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.025
+   },
+   {
+    "name": "http-finance-csrf-negative-with-positive-control",
+    "status": "pass",
+    "observation": {
+     "http_status": 400,
+     "exception": "CSRFTokenError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-finance-wrong-role-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.006
+   },
+   {
+    "name": "http-finance-get-cannot-mutate",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.016
+   },
+   {
+    "name": "http-finance-tuition-idempotent-replay",
+    "status": "pass",
+    "observation": {
+     "same_result": true,
+     "no_new_fees": true
+    },
+    "seconds": 0.007
+   },
+   {
+    "name": "http-finance-placement-positive",
+    "status": "pass",
+    "observation": {
+     "sales_invoice": "ACC-SINV-2026-00003",
+     "case": "j58b94rla7",
+     "customer": "SYN Placement Payer One",
+     "configured_rate": 4000.0,
+     "grand_total": 4000.0,
+     "net_total": 4000.0,
+     "discount_amount": 0.0,
+     "outstanding_amount": 4000.0,
+     "currency": "AFN",
+     "posting_date": "2026-09-02",
+     "due_date": "2026-10-02"
+    },
+    "seconds": 0.242
+   },
+   {
+    "name": "http-finance-revoked-officer-old-session-denied",
+    "status": "pass",
+    "observation": {
+     "http_status": 403,
+     "exception": "PermissionError"
+    },
+    "seconds": 0.139
+   },
+   {
+    "name": "finance-write-containment",
+    "status": "pass",
+    "observation": {
+     "fees_billed": 2,
+     "placement_invoices": 3,
+     "gl_voucher_types": [
+      "Fees",
+      "Sales Invoice"
+     ],
+     "academic_and_payroll_untouched": true
+    },
+    "seconds": 0.005
+   },
+   {
+    "name": "containment-admin-cancel-denied",
+    "status": "pass",
+    "observation": {
+     "cancel_denied_docstatus_intact": {
+      "Fees": "command-only guard (before_cancel)",
+      "Sales Invoice": "command-only guard (before_cancel)",
+      "Program Enrollment": "command-only guard (before_cancel)",
+      "Course Enrollment": "native docstatus transition (draft, non-submittable)",
+      "Student Group": "native docstatus transition (draft, non-submittable)",
+      "Course Schedule": "native docstatus transition (draft, non-submittable)",
+      "Student Attendance": "command-only guard (before_cancel)"
+     }
+    },
+    "seconds": 0.094
+   },
+   {
+    "name": "containment-edit-seam-denied",
+    "status": "pass",
+    "observation": {
+     "edit_seam_denied": {
+      "Fees": "student_name",
+      "Sales Invoice": "company_tax_id",
+      "Course Enrollment": "program",
+      "Student Group": "student_group_name",
+      "Course Schedule": "title"
+     },
+     "no_text_probe_field": [
+      "Program Enrollment",
+      "Student Attendance"
+     ]
+    },
+    "seconds": 0.068
+   },
+   {
+    "name": "containment-rpc-routes-denied",
+    "status": "pass",
+    "observation": {
+     "rpc_insert_denied": true,
+     "rpc_set_value_denied": "student_name",
+     "rpc_delete_denied_natively": true
+    },
+    "seconds": 0.014
+   },
+   {
+    "name": "containment-rest-routes-denied",
+    "status": "pass",
+    "observation": {
+     "rest_insert": {
+      "http_status": 417,
+      "exception": "ValidationError"
+     },
+     "rest_update": {
+      "http_status": 417,
+      "exception": "ValidationError"
+     },
+     "desk_cancel_route_permission_layer": {
+      "http_status": 403,
+      "exception": "PermissionError"
+     },
+     "rest_delete": {
+      "http_status": 417,
+      "exception": "ValidationError"
+     },
+     "probe_user": "containment_probe (native Accounts User, never revoked)"
+    },
+    "seconds": 0.055
+   },
+   {
+    "name": "containment-amend-copy-denied",
+    "status": "pass",
+    "observation": {
+     "copy_insert_denied": [
+      "Fees",
+      "Sales Invoice"
+     ],
+     "amend_route": "unreachable while cancel is denied"
+    },
+    "seconds": 0.068
+   },
+   {
+    "name": "containment-no-side-effects-from-probes",
+    "status": "pass",
+    "observation": {
+     "no_writes_from_probes": true,
+     "targets_intact": [
+      "Fees",
+      "Sales Invoice",
+      "Program Enrollment",
+      "Course Enrollment",
+      "Student Group",
+      "Course Schedule",
+      "Student Attendance"
+     ]
+    },
+    "seconds": 0.004
+   },
+   {
+    "name": "release-probe-users-restored",
+    "status": "pass",
+    "observation": {
+     "restored": [
+      "admissions_reviewer",
+      "approver",
+      "assessor",
+      "attendance_recorder",
+      "enrollment_officer",
+      "finance_officer",
+      "invigilator",
+      "officer",
+      "publisher",
+      "releaser",
+      "reviewer",
+      "second_author",
+      "teaching_scheduler"
+     ]
+    },
+    "seconds": 0.474
+   },
+   {
+    "name": "release-workspaces-configured",
+    "status": "pass",
+    "observation": {
+     "workspaces_configured": [
+      "TH Finance",
+      "TH Receipts"
+     ]
+    },
+    "seconds": 0.083
+   },
+   {
+    "name": "release-workspace-role-visibility",
+    "status": "pass",
+    "observation": {
+     "role_scoped_visibility": {
+      "finance_auditor": [
+       "TH Receipts"
+      ],
+      "admissions_auditor": [
+       "TH Receipts"
+      ],
+      "finance_officer": [
+       "TH Finance"
+      ],
+      "invigilator": [],
+      "teaching_scheduler": []
+     }
+    },
+    "seconds": 0.381
+   },
+   {
+    "name": "release-workspace-no-privilege-escalation",
+    "status": "pass",
+    "observation": {
+     "no_read_granted_by_workspaces": true
+    },
+    "seconds": 0.003
+   },
+   {
+    "name": "release-command-pages-configured",
+    "status": "pass",
+    "observation": {
+     "pages_configured": {
+      "th-command-centre": [
+       "Admission Approver",
+       "Admission Officer",
+       "Admission Reviewer",
+       "Attendance Recorder",
+       "Enrollment Officer",
+       "Placement Assessor",
+       "Placement Author",
+       "Placement Invigilator",
+       "Placement Publisher",
+       "Placement Releaser",
+       "Placement Reviewer",
+       "Teaching Scheduler"
+      ],
+      "th-placement-author": [
+       "Placement Author"
+      ],
+      "th-placement-publisher": [
+       "Placement Publisher"
+      ],
+      "th-placement-invigilation": [
+       "Placement Invigilator"
+      ],
+      "th-placement-assessment": [
+       "Placement Assessor"
+      ],
+      "th-placement-review": [
+       "Placement Reviewer"
+      ],
+      "th-placement-release": [
+       "Placement Releaser"
+      ],
+      "th-admission-officer": [
+       "Admission Officer"
+      ],
+      "th-admission-review": [
+       "Admission Reviewer"
+      ],
+      "th-admission-approval": [
+       "Admission Approver"
+      ],
+      "th-enrollment": [
+       "Enrollment Officer"
+      ],
+      "th-teaching-scheduling": [
+       "Teaching Scheduler"
+      ],
+      "th-attendance-recording": [
+       "Attendance Recorder"
+      ]
+     },
+     "app_home": "/app/th-command-centre"
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "release-command-page-role-visibility",
+    "status": "pass",
+    "observation": {
+     "role_scoped_pages": {
+      "second_author": [
+       "th-command-centre",
+       "th-placement-author"
+      ],
+      "publisher": [
+       "th-command-centre",
+       "th-placement-publisher"
+      ],
+      "invigilator": [
+       "th-command-centre",
+       "th-placement-invigilation"
+      ],
+      "assessor": [
+       "th-command-centre",
+       "th-placement-assessment"
+      ],
+      "reviewer": [
+       "th-command-centre",
+       "th-placement-review"
+      ],
+      "releaser": [
+       "th-command-centre",
+       "th-placement-release"
+      ],
+      "officer": [
+       "th-admission-officer",
+       "th-command-centre"
+      ],
+      "admissions_reviewer": [
+       "th-admission-review",
+       "th-command-centre"
+      ],
+      "approver": [
+       "th-admission-approval",
+       "th-command-centre"
+      ],
+      "enrollment_officer": [
+       "th-command-centre",
+       "th-enrollment"
+      ],
+      "teaching_scheduler": [
+       "th-command-centre",
+       "th-teaching-scheduling"
+      ],
+      "attendance_recorder": [
+       "th-attendance-recording",
+       "th-command-centre"
+      ]
+     },
+     "non_members_denied": 7
+    },
+    "seconds": 0.281
+   },
+   {
+    "name": "release-command-pages-no-privilege-escalation",
+    "status": "pass",
+    "observation": {
+     "page_loaded": "th-placement-invigilation",
+     "native_read_permissions_unchanged": true,
+     "native_direct_lists_empty_or_denied": [
+      "Program Enrollment",
+      "Student Group",
+      "Course Schedule",
+      "Student Attendance",
+      "Fees",
+      "Sales Invoice"
+     ]
+    },
+    "seconds": 0.024
+   },
+   {
+    "name": "release-registers-configured",
+    "status": "pass",
+    "observation": {
+     "TH Tuition Billing Register": [
+      "fees",
+      "student",
+      "program_enrollment",
+      "academic_year",
+      "posting_date",
+      "due_date",
+      "grand_total",
+      "outstanding_amount",
+      "docstatus"
+     ],
+     "TH Placement Billing Register": [
+      "sales_invoice",
+      "customer",
+      "placement_case",
+      "posting_date",
+      "due_date",
+      "grand_total",
+      "outstanding_amount",
+      "docstatus"
+     ]
+    },
+    "seconds": 0.041
+   },
+   {
+    "name": "release-registers-role-access",
+    "status": "pass",
+    "observation": {
+     "TH Tuition Billing Register": {
+      "permitted": [
+       "finance_officer"
+      ],
+      "denied": [
+       "finance_auditor",
+       "invigilator",
+       "teaching_scheduler"
+      ]
+     },
+     "TH Placement Billing Register": {
+      "permitted": [
+       "finance_officer",
+       "finance_auditor"
+      ],
+      "denied": [
+       "invigilator",
+       "teaching_scheduler"
+      ]
+     }
+    },
+    "seconds": 0.028
+   },
+   {
+    "name": "release-registers-facts-only",
+    "status": "pass",
+    "observation": {
+     "TH Tuition Billing Register": [
+      "fees",
+      "student",
+      "program_enrollment",
+      "academic_year",
+      "posting_date",
+      "due_date",
+      "grand_total",
+      "outstanding_amount",
+      "docstatus"
+     ],
+     "TH Placement Billing Register": [
+      "sales_invoice",
+      "customer",
+      "placement_case",
+      "posting_date",
+      "due_date",
+      "grand_total",
+      "outstanding_amount",
+      "docstatus"
+     ]
+    },
+    "seconds": 0.009
+   },
+   {
+    "name": "release-attachment-paths-guarded",
+    "status": "pass",
+    "observation": {
+     "attachment_parent_gated": [
+      "invigilator",
+      "outsider"
+     ],
+     "auditor_read_verified": true
+    },
+    "seconds": 0.88
+   },
+   {
+    "name": "release-read-export-print-paths-denied",
+    "status": "pass",
+    "observation": {
+     "invigilator": {
+      "list_denied": [
+       "TH Placement Operation",
+       "TH Placement Audit Event"
+      ],
+      "print_denied": "TH Placement Operation"
+     },
+     "outsider": {
+      "list_denied": [
+       "TH Placement Operation",
+       "TH Placement Audit Event"
+      ],
+      "print_denied": "TH Placement Operation"
+     }
+    },
+    "seconds": 0.016
+   },
+   {
+    "name": "release-observability-probes",
+    "status": "pass",
+    "observation": {
+     "error_log_roundtrip": "jaung1p456",
+     "scheduler_jobs_active": true,
+     "ping": "pong"
+    },
+    "seconds": 0.13
+   },
+   {
+    "name": "teaching-compensation-contract-authority",
+    "status": "pass",
+    "observation": {
+     "contracts": {
+      "one": "jb93866iig",
+      "two": "jb9tenkqpn",
+      "fixed": "jba0omhiva"
+     },
+     "scheduler_contract_denied": true,
+     "outsider_contract_denied": true,
+     "tamper_denied": true,
+     "scheduler_contract_read_denied": true
+    },
+    "seconds": 0.226
+   },
+   {
+    "name": "teaching-assignment-facts",
+    "status": "pass",
+    "observation": {
+     "assignments": {
+      "a1": "jbbhgh20kq",
+      "a2": "jbbtofhv12",
+      "a3": "jbb53qvlii"
+     },
+     "one_instructor_two_skills": true,
+     "two_classes_covered": true,
+     "duplicate_skill_denied": true,
+     "fixed_assign_denied": true,
+     "officer_assign_denied": true,
+     "outsider_assignment_read_denied": true
+    },
+    "seconds": 0.163
+   },
+   {
+    "name": "teaching-compensation-calculation",
+    "status": "pass",
+    "observation": {
+     "payroll_inputs": 5,
+     "amounts": {
+      "a1": 500.0,
+      "a2": 400.0,
+      "a3": 300.0,
+      "bonus": 50.0,
+      "deduction": 25.0
+     },
+     "pre_revision_rate_used": true,
+     "supersession_reproducible": true,
+     "superseded_contract_assign_denied": true,
+     "future_contract_assign_denied": true,
+     "duplicate_pay_prevented": true,
+     "receipt_idempotent": true,
+     "salary_slips_untouched": true,
+     "audit_chain_ref_fields": true
+    },
+    "seconds": 0.215
+   },
+   {
+    "name": "finance-correction-fail-closed",
+    "status": "pass",
+    "observation": {
+     "no_policy_fail_closed": true
+    },
+    "seconds": 0.02
+   },
+   {
+    "name": "finance-correction-sod-and-window",
+    "status": "pass",
+    "observation": {
+     "policy": "jbhubphi2c",
+     "request": "jbhqv6pa9k",
+     "outsider_denied": true,
+     "scheduler_denied": true,
+     "partial_denied": true,
+     "expired_window_denied": true,
+     "dual_key_enforced": true
+    },
+    "seconds": 0.097
+   },
+   {
+    "name": "finance-correction-posting",
+    "status": "pass",
+    "observation": {
+     "credit_note": "ACC-SINV-2026-00005",
+     "credit_total": -4000.0,
+     "gl_posted": true,
+     "one_shot_decision": true,
+     "denial_posts_nothing": true,
+     "facts_immutable": true
+    },
+    "seconds": 0.76
+   }
+  ],
+  "commit": "1b9f29fd6e5521fb758e8696d8a55fa7937a558a",
+  "runtime_kind": "Frappe/MariaDB/Redis/HTTP",
+  "production": "REJECT",
+  "note": "Thin admission, native Program Enrollment and native teaching operations (Student Group / Course Schedule / Student Attendance); no TH Enrollment ledger, grading, fees or payroll"
+ }
+}

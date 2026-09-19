@@ -1,0 +1,1125 @@
+{
+ "retrieval_provenance": {
+  "retrieved_at_utc": "2026-09-19T16:05:00+00:00",
+  "retrieved_by": "\u00a75 evidence re-observability sweep (read-only GitHub Checks API)",
+  "check_id": 105191973507,
+  "run_id": "35218007814",
+  "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+  "summary_digest_sha256": "5348ac42d9535e600acc957261ef26aba563fc77a81193736609bf144e9aa5a8",
+  "transport": "plain",
+  "digest_verified": true
+ },
+ "report": {
+  "artifact_name": "tls-edge-result.json",
+  "scope": "Operational TLS edge in front of a live Frappe site: a private CA and issued leaf certificate, the pinned bench template's TLS policy, and client-side verification by two independent TLS implementations; synthetic data only",
+  "role": "tls-edge",
+  "site": "edge.foundation.internal",
+  "run_id": "35218007814",
+  "commit": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+  "ref": "refs/heads/arena/01a0aef4-tofel-house-erp",
+  "status": "pass",
+  "checks": [
+   {
+    "name": "docker-version",
+    "command": [
+     "docker",
+     "version",
+     "--format",
+     "{{.Client.Version}} {{.Server.Version}}"
+    ],
+    "exit_code": 0,
+    "seconds": 0.018,
+    "status": "pass"
+   },
+   {
+    "name": "start-mariadb",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-indep-mariadb",
+     "--mount",
+     "type=bind,source=/home/runner/work/_temp/foundation-tls-edge/db-password,target=/run/secrets/db-password,readonly",
+     "--env",
+     "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password",
+     "--env",
+     "MARIADB_ROOT_HOST=%",
+     "--publish",
+     "127.0.0.1:13306:3306",
+     "--health-cmd",
+     "healthcheck.sh --connect --innodb_initialized",
+     "--health-interval",
+     "2s",
+     "--health-retries",
+     "60",
+     "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+     "--character-set-server=utf8mb4",
+     "--collation-server=utf8mb4_unicode_ci"
+    ],
+    "exit_code": 0,
+    "seconds": 4.169,
+    "status": "pass"
+   },
+   {
+    "name": "start-foundation-indep-redis-queue",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-indep-redis-queue",
+     "--publish",
+     "127.0.0.1:11379:6379",
+     "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+    ],
+    "exit_code": 0,
+    "seconds": 0.161,
+    "status": "pass"
+   },
+   {
+    "name": "start-foundation-indep-redis-cache",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-indep-redis-cache",
+     "--publish",
+     "127.0.0.1:12379:6379",
+     "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+    ],
+    "exit_code": 0,
+    "seconds": 0.165,
+    "status": "pass"
+   },
+   {
+    "name": "clone-frappe",
+    "command": [
+     "git",
+     "init",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/frappe"
+    ],
+    "exit_code": 0,
+    "seconds": 0.004,
+    "status": "pass"
+   },
+   {
+    "name": "origin-frappe",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/frappe",
+     "remote",
+     "add",
+     "origin",
+     "https://github.com/frappe/frappe"
+    ],
+    "exit_code": 0,
+    "seconds": 0.002,
+    "status": "pass"
+   },
+   {
+    "name": "fetch-frappe",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/frappe",
+     "fetch",
+     "--depth",
+     "1",
+     "origin",
+     "988e54f3c4c291e2077a83809663f123731abe76"
+    ],
+    "exit_code": 0,
+    "seconds": 6.079,
+    "status": "pass"
+   },
+   {
+    "name": "checkout-frappe",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/frappe",
+     "checkout",
+     "--detach",
+     "FETCH_HEAD"
+    ],
+    "exit_code": 0,
+    "seconds": 0.35,
+    "status": "pass"
+   },
+   {
+    "name": "verify-frappe",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/frappe",
+     "rev-parse",
+     "HEAD"
+    ],
+    "exit_code": 0,
+    "seconds": 0.002,
+    "status": "pass"
+   },
+   {
+    "name": "clone-erpnext",
+    "command": [
+     "git",
+     "init",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/erpnext"
+    ],
+    "exit_code": 0,
+    "seconds": 0.003,
+    "status": "pass"
+   },
+   {
+    "name": "origin-erpnext",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/erpnext",
+     "remote",
+     "add",
+     "origin",
+     "https://github.com/frappe/erpnext"
+    ],
+    "exit_code": 0,
+    "seconds": 0.002,
+    "status": "pass"
+   },
+   {
+    "name": "fetch-erpnext",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/erpnext",
+     "fetch",
+     "--depth",
+     "1",
+     "origin",
+     "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd"
+    ],
+    "exit_code": 0,
+    "seconds": 7.847,
+    "status": "pass"
+   },
+   {
+    "name": "checkout-erpnext",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/erpnext",
+     "checkout",
+     "--detach",
+     "FETCH_HEAD"
+    ],
+    "exit_code": 0,
+    "seconds": 0.484,
+    "status": "pass"
+   },
+   {
+    "name": "verify-erpnext",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/erpnext",
+     "rev-parse",
+     "HEAD"
+    ],
+    "exit_code": 0,
+    "seconds": 0.002,
+    "status": "pass"
+   },
+   {
+    "name": "bench-tools-venv",
+    "command": [
+     "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+     "-m",
+     "venv",
+     "/home/runner/work/_temp/foundation-tls-edge/tools"
+    ],
+    "exit_code": 0,
+    "seconds": 3.207,
+    "status": "pass"
+   },
+   {
+    "name": "bench-tools-install",
+    "command": [
+     "/home/runner/work/_temp/foundation-tls-edge/tools/bin/python",
+     "-m",
+     "pip",
+     "install",
+     "frappe-bench==5.31.0",
+     "uv==0.11.6"
+    ],
+    "exit_code": 0,
+    "seconds": 3.488,
+    "status": "pass"
+   },
+   {
+    "name": "bench-init",
+    "command": [
+     "/home/runner/work/_temp/foundation-tls-edge/tools/bin/bench",
+     "init",
+     "/home/runner/work/_temp/foundation-tls-edge/bench",
+     "--frappe-path",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/frappe",
+     "--python",
+     "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+     "--no-backups",
+     "--skip-redis-config-generation",
+     "--no-procfile",
+     "--skip-assets",
+     "--verbose"
+    ],
+    "exit_code": 0,
+    "seconds": 28.847,
+    "status": "pass"
+   },
+   {
+    "name": "config-redis_cache",
+    "command": [
+     "/home/runner/work/_temp/foundation-tls-edge/tools/bin/bench",
+     "set-config",
+     "--global",
+     "redis_cache",
+     "redis://127.0.0.1:12379"
+    ],
+    "exit_code": 0,
+    "seconds": 1.331,
+    "status": "pass"
+   },
+   {
+    "name": "config-redis_queue",
+    "command": [
+     "/home/runner/work/_temp/foundation-tls-edge/tools/bin/bench",
+     "set-config",
+     "--global",
+     "redis_queue",
+     "redis://127.0.0.1:11379"
+    ],
+    "exit_code": 0,
+    "seconds": 0.448,
+    "status": "pass"
+   },
+   {
+    "name": "config-redis_socketio",
+    "command": [
+     "/home/runner/work/_temp/foundation-tls-edge/tools/bin/bench",
+     "set-config",
+     "--global",
+     "redis_socketio",
+     "redis://127.0.0.1:11379"
+    ],
+    "exit_code": 0,
+    "seconds": 0.447,
+    "status": "pass"
+   },
+   {
+    "name": "get-app-erpnext",
+    "command": [
+     "/home/runner/work/_temp/foundation-tls-edge/tools/bin/bench",
+     "get-app",
+     "--skip-assets",
+     "/home/runner/work/_temp/foundation-tls-edge/sources/erpnext"
+    ],
+    "exit_code": 0,
+    "seconds": 22.428,
+    "status": "pass"
+   },
+   {
+    "name": "new-site-on-tls-edge",
+    "command": [
+     "/home/runner/work/_temp/foundation-tls-edge/tools/bin/bench",
+     "new-site",
+     "edge.foundation.internal",
+     "--db-type",
+     "mariadb",
+     "--db-host",
+     "127.0.0.1",
+     "--db-port",
+     "13306",
+     "--db-root-password",
+     "[REDACTED]",
+     "--db-password",
+     "[REDACTED]",
+     "--admin-password",
+     "[REDACTED]",
+     "--mariadb-user-host-login-scope",
+     "%"
+    ],
+    "exit_code": 0,
+    "seconds": 22.404,
+    "status": "pass"
+   },
+   {
+    "name": "generate-private-ca-step-0",
+    "command": [
+     "openssl",
+     "genpkey",
+     "-algorithm",
+     "rsa",
+     "-pkeyopt",
+     "rsa_keygen_bits:2048",
+     "-out",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/ca.key"
+    ],
+    "exit_code": 0,
+    "seconds": 0.148,
+    "status": "pass"
+   },
+   {
+    "name": "generate-private-ca-step-1",
+    "command": [
+     "openssl",
+     "req",
+     "-x509",
+     "-new",
+     "-key",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/ca.key",
+     "-sha256",
+     "-days",
+     "2",
+     "-out",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/ca.pem",
+     "-subj",
+     "/CN=Foundation Operational Boundary Test CA",
+     "-addext",
+     "basicConstraints=critical,CA:TRUE",
+     "-addext",
+     "keyUsage=critical,keyCertSign,cRLSign"
+    ],
+    "exit_code": 0,
+    "seconds": 0.01,
+    "status": "pass"
+   },
+   {
+    "name": "issue-server-certificate-step-0",
+    "command": [
+     "openssl",
+     "genpkey",
+     "-algorithm",
+     "rsa",
+     "-pkeyopt",
+     "rsa_keygen_bits:2048",
+     "-out",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/server.key"
+    ],
+    "exit_code": 0,
+    "seconds": 0.22,
+    "status": "pass"
+   },
+   {
+    "name": "issue-server-certificate-step-1",
+    "command": [
+     "openssl",
+     "req",
+     "-new",
+     "-key",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/server.key",
+     "-out",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/server.csr",
+     "-subj",
+     "/CN=edge.foundation.internal"
+    ],
+    "exit_code": 0,
+    "seconds": 0.007,
+    "status": "pass"
+   },
+   {
+    "name": "issue-server-certificate-step-2",
+    "command": [
+     "openssl",
+     "x509",
+     "-req",
+     "-in",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/server.csr",
+     "-CA",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/ca.pem",
+     "-CAkey",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/ca.key",
+     "-CAcreateserial",
+     "-out",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/server.pem",
+     "-days",
+     "2",
+     "-sha256",
+     "-extfile",
+     "/dev/stdin"
+    ],
+    "exit_code": 0,
+    "seconds": 0.022,
+    "status": "pass"
+   },
+   {
+    "name": "issue-wrong-name-certificate-step-0",
+    "command": [
+     "openssl",
+     "genpkey",
+     "-algorithm",
+     "rsa",
+     "-pkeyopt",
+     "rsa_keygen_bits:2048",
+     "-out",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/wrong-name.key"
+    ],
+    "exit_code": 0,
+    "seconds": 0.064,
+    "status": "pass"
+   },
+   {
+    "name": "issue-wrong-name-certificate-step-1",
+    "command": [
+     "openssl",
+     "req",
+     "-new",
+     "-key",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/wrong-name.key",
+     "-out",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/wrong-name.csr",
+     "-subj",
+     "/CN=wrong-name.foundation.internal"
+    ],
+    "exit_code": 0,
+    "seconds": 0.006,
+    "status": "pass"
+   },
+   {
+    "name": "issue-wrong-name-certificate-step-2",
+    "command": [
+     "openssl",
+     "x509",
+     "-req",
+     "-in",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/wrong-name.csr",
+     "-CA",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/ca.pem",
+     "-CAkey",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/ca.key",
+     "-CAcreateserial",
+     "-out",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/wrong-name.pem",
+     "-days",
+     "2",
+     "-sha256",
+     "-extfile",
+     "/dev/stdin"
+    ],
+    "exit_code": 0,
+    "seconds": 0.022,
+    "status": "pass"
+   },
+   {
+    "name": "generate-unrelated-ca-key",
+    "command": [
+     "openssl",
+     "genpkey",
+     "-algorithm",
+     "rsa",
+     "-pkeyopt",
+     "rsa_keygen_bits:2048",
+     "-out",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/unrelated-ca.key"
+    ],
+    "exit_code": 0,
+    "seconds": 0.088,
+    "status": "pass"
+   },
+   {
+    "name": "generate-unrelated-ca-certificate",
+    "command": [
+     "openssl",
+     "req",
+     "-x509",
+     "-new",
+     "-key",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/unrelated-ca.key",
+     "-sha256",
+     "-days",
+     "2",
+     "-out",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/unrelated-ca.pem",
+     "-subj",
+     "/CN=Unrelated Foundation Test CA",
+     "-addext",
+     "basicConstraints=critical,CA:TRUE"
+    ],
+    "exit_code": 0,
+    "seconds": 0.007,
+    "status": "pass"
+   },
+   {
+    "name": "chain-verifies-against-the-private-ca",
+    "command": [
+     "openssl",
+     "verify",
+     "-CAfile",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/ca.pem",
+     "/home/runner/work/_temp/foundation-tls-edge/certs/server.pem"
+    ],
+    "exit_code": 0,
+    "seconds": 0.004,
+    "status": "pass"
+   },
+   {
+    "name": "add-edge-hostname-resolution",
+    "command": [
+     "sudo",
+     "sh",
+     "-c",
+     "grep -q ' edge.foundation.internal$' /etc/hosts || echo '127.0.0.1 edge.foundation.internal' >> /etc/hosts"
+    ],
+    "exit_code": 0,
+    "seconds": 0.008,
+    "status": "pass"
+   },
+   {
+    "name": "create-synthetic-file-pair",
+    "command": [
+     "/home/runner/work/_temp/foundation-tls-edge/bench/env/bin/python",
+     "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_tls_edge_state.py",
+     "create",
+     "edge.foundation.internal"
+    ],
+    "exit_code": 0,
+    "seconds": 1.117,
+    "status": "pass"
+   },
+   {
+    "name": "nginx-install",
+    "command": [
+     "sudo",
+     "apt-get",
+     "install",
+     "-y",
+     "--no-install-recommends",
+     "nginx"
+    ],
+    "exit_code": 0,
+    "seconds": 3.704,
+    "status": "pass"
+   },
+   {
+    "name": "nginx-config-check",
+    "command": [
+     "nginx",
+     "-t",
+     "-c",
+     "/home/runner/work/_temp/foundation-tls-edge/nginx-tls.conf"
+    ],
+    "exit_code": 0,
+    "seconds": 0.012,
+    "status": "pass"
+   },
+   {
+    "name": "verify-tls-edge-as-a-real-client",
+    "command": [
+     "/home/runner/work/_temp/foundation-tls-edge/bench/env/bin/python",
+     "/home/runner/work/TOFEL-House-ERP/TOFEL-House-ERP/tools/foundation/runtime_tls_edge_checks.py",
+     "edge.foundation.internal"
+    ],
+    "exit_code": 0,
+    "seconds": 0.612,
+    "status": "pass"
+   }
+  ],
+  "mocks_or_simulations_used": false,
+  "machine_identity": {
+   "hostname": "runnervmlun5p",
+   "runner_name": "GitHub Actions 1000002495",
+   "runner_os": "Linux",
+   "runner_image": "ubuntu24",
+   "runner_image_version": "20260907.300.1",
+   "machine": "x86_64",
+   "python": "3.12.3",
+   "run_id": "35218007814",
+   "job": "tls-edge",
+   "github_action": "__run_5",
+   "kernel_boot_id": "539b2ea3-fa72-4564-a5fe-a2808b074e0f",
+   "dmi_product_uuid": "0f395b97-0347-47ef-bafd-83b6541573ff",
+   "uptime_seconds": 69.2,
+   "cpu_count": 4,
+   "mem_total_kb": 16373452
+  },
+  "target_revisions": {
+   "frappe": "988e54f3c4c291e2077a83809663f123731abe76",
+   "erpnext": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd"
+  },
+  "verdicts": {
+   "tailscale_boundary": {
+    "status": "ENVIRONMENT-BLOCKED",
+    "tailscale_binary_present": false,
+    "owner_inputs_required": [
+     "a tailnet auth key or an OAuth client with permission to register a node",
+     "the ACL policy that defines which identities may reach this service",
+     "the decision of whether the service is tailnet-only or also publicly reachable"
+    ],
+    "listen_addresses_observed": [
+     "127.0.0.1:8080",
+     "127.0.0.1:8443",
+     "127.0.0.1:8000"
+    ],
+    "bound_to_every_interface": false,
+    "wildcard_addresses": [],
+    "what_is_proven": "the listener is bound to explicit addresses rather than to every interface, which is the binding shape a tailnet-only service needs",
+    "what_is_not_proven": "no tailnet was joined, no node was registered, no ACL was evaluated and no cross-node connection was made; a private listener on an ephemeral runner is not a tailnet boundary and is never reported as one",
+    "not_simulated": true
+   },
+   "tls_protocol_policy": {
+    "allowed_by_policy": [
+     "TLSv1.2",
+     "TLSv1.3"
+    ],
+    "refused_by_policy": [
+     "SSLv3",
+     "TLSv1",
+     "TLSv1.1"
+    ],
+    "per_protocol": {
+     "TLSv1.2": {
+      "outcome": "ACCEPTED",
+      "negotiated": true,
+      "expected": "ACCEPTED",
+      "refusal_reason": null,
+      "protocol_reported": "TLSv1.2",
+      "cipher": "ECDHE-RSA-AES256-GCM-SHA384",
+      "verify_return_code": 0,
+      "matches_policy": true
+     },
+     "TLSv1.3": {
+      "outcome": "ACCEPTED",
+      "negotiated": true,
+      "expected": "ACCEPTED",
+      "refusal_reason": null,
+      "protocol_reported": "TLSv1.3",
+      "cipher": "TLS_AES_256_GCM_SHA384",
+      "verify_return_code": 0,
+      "matches_policy": true
+     },
+     "SSLv3": {
+      "outcome": "REFUSED",
+      "negotiated": false,
+      "expected": "REFUSED",
+      "refusal_reason": null,
+      "protocol_reported": null,
+      "cipher": null,
+      "verify_return_code": null,
+      "matches_policy": true
+     },
+     "TLSv1": {
+      "outcome": "REFUSED",
+      "negotiated": false,
+      "expected": "REFUSED",
+      "reason": null,
+      "matches_policy": true,
+      "resolved_by": "raw ClientHello (policy-independent)",
+      "alert_description": "protocol_version",
+      "negotiated_version": null
+     },
+     "TLSv1.1": {
+      "outcome": "REFUSED",
+      "negotiated": false,
+      "expected": "REFUSED",
+      "reason": null,
+      "matches_policy": true,
+      "resolved_by": "raw ClientHello (policy-independent)",
+      "alert_description": "protocol_version",
+      "negotiated_version": null
+     }
+    },
+    "protocols_with_no_evidence": [],
+    "policy_violations": [],
+    "verdict": "POLICY ENFORCED",
+    "reason": "every allowed protocol negotiated and every refused protocol was rejected"
+   },
+   "certificate_verification": {
+    "verifies_with_the_private_ca": true,
+    "fails_without_a_trust_anchor": true,
+    "verify_return_code_with_ca": 0,
+    "verify_return_code_without_ca": 21,
+    "trust_anchor_note": "A private test CA generated inside the run. It proves the chain, the hostname binding and the verification behaviour are real; it is not a publicly trusted certificate and does not qualify a public edge.",
+    "fails_on_a_hostname_mismatch": true,
+    "wrong_name_verify_return_code": 62,
+    "hostname_binding_enforced": true,
+    "verification_enforced": true,
+    "verdict": "VERIFICATION ENFORCED",
+    "chain_verifies_independent_of_the_handshake": true
+   },
+   "tls_protocol_raw_client_hello": {
+    "TLSv1": {
+     "protocol": "TLSv1",
+     "instrument": "raw ClientHello (policy-independent)",
+     "offered": true,
+     "record_type": 21,
+     "record_version": "0x030x01",
+     "record_length": 2,
+     "bytes_read": 2,
+     "outcome": "ALERT",
+     "alert_level": "fatal",
+     "alert_description_code": 70,
+     "alert_description": "protocol_version",
+     "refusal_attributable_to_server": true
+    },
+    "TLSv1.1": {
+     "protocol": "TLSv1.1",
+     "instrument": "raw ClientHello (policy-independent)",
+     "offered": true,
+     "record_type": 21,
+     "record_version": "0x030x02",
+     "record_length": 2,
+     "bytes_read": 2,
+     "outcome": "ALERT",
+     "alert_level": "fatal",
+     "alert_description_code": 70,
+     "alert_description": "protocol_version",
+     "refusal_attributable_to_server": true
+    }
+   }
+  },
+  "listeners": {
+   "http": "127.0.0.1:8080",
+   "https": "127.0.0.1:8443",
+   "backend": "127.0.0.1:8000"
+  },
+  "ports_follow_the_pinned_template": {
+   "template_ports": [
+    80,
+    443
+   ],
+   "ports_used": [
+    "127.0.0.1:8080",
+    "127.0.0.1:8443"
+   ],
+   "deviation": "Binding 80 and 443 needs root; this probe listens on unprivileged ports and the plaintext redirect carries the TLS port explicitly. The port number is not part of the security claim."
+  },
+  "services": {
+   "mariadb": {
+    "image_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+    "selected_version": "11.8.9"
+   },
+   "redis": {
+    "image_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+    "selected_version": "8.6.6"
+   }
+  },
+  "docker_daemon_id": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+  "mariadb_health": {
+   "healthy": true,
+   "polls": 3
+  },
+  "installed_apps": [
+   "frappe 16.33.1 HEAD"
+  ],
+  "certificate_fingerprints": {
+   "server": "sha256 Fingerprint=54:7D:05:D6:C0:78:03:F7:19:B4:A8:FF:83:21:A0:57:69:1A:93:1B:5B:4A:88:A2:E7:9C:1F:E3:0C:BC:4A:F5",
+   "wrong_name": "sha256 Fingerprint=D9:4B:8A:97:30:2A:54:7F:9B:1F:CD:A3:50:24:DA:32:11:03:42:45:B1:9C:B1:C1:6B:7A:02:5F:C9:76:20:75"
+  },
+  "issued_certificate": {
+   "common_name": "edge.foundation.internal",
+   "subject_alt_names": [
+    "DNS:edge.foundation.internal"
+   ],
+   "is_ca": false,
+   "signature_algorithm": "sha256WithRSAEncryption",
+   "not_after": "Sep 19 11:55:11 2026 GMT",
+   "hostname_is_in_the_san": true
+  },
+  "hostname_resolution": {
+   "entry": "127.0.0.1 edge.foundation.internal",
+   "getent": "127.0.0.1       edge.foundation.internal",
+   "resolves_to_loopback": true
+  },
+  "synthetic_files": {
+   "tls-edge-private.txt": {
+    "file_url": "/private/files/tls-edge-private.txt",
+    "is_private": 1,
+    "bytes": 552,
+    "content_sha256": "06ff298b9b3007908f5887503a97bfa7d679f3207880ccf1f59eebaeb65092d5",
+    "on_disk_sha256": "06ff298b9b3007908f5887503a97bfa7d679f3207880ccf1f59eebaeb65092d5"
+   },
+   "tls-edge-public.txt": {
+    "file_url": "/files/tls-edge-public.txt",
+    "is_private": 0,
+    "bytes": 551,
+    "content_sha256": "73c69d113dfe09402f52bbdd88de91c1fb881d7db439711ae72b75dbbc508146",
+    "on_disk_sha256": "73c69d113dfe09402f52bbdd88de91c1fb881d7db439711ae72b75dbbc508146"
+   }
+  },
+  "listener_bindings": {
+   "8080": {
+    "listening": true,
+    "addresses": [
+     "127.0.0.1"
+    ],
+    "raw": [
+     "0100007F:1F90"
+    ],
+    "families": [
+     4
+    ],
+    "bound_to_every_interface": false
+   },
+   "8443": {
+    "listening": true,
+    "addresses": [
+     "127.0.0.1"
+    ],
+    "raw": [
+     "0100007F:20FB"
+    ],
+    "families": [
+     4
+    ],
+    "bound_to_every_interface": false
+   },
+   "8000": {
+    "listening": true,
+    "addresses": [
+     "127.0.0.1"
+    ],
+    "raw": [
+     "0100007F:1F40"
+    ],
+    "families": [
+     4
+    ],
+    "bound_to_every_interface": false
+   }
+  },
+  "client_checks": [
+   {
+    "name": "edge-hostname-resolves-to-the-listener",
+    "status": "pass",
+    "observation": {
+     "resolved_to": "127.0.0.1",
+     "note": "A real name resolution entry was added for this run, so clients perform genuine SNI and genuine hostname verification rather than connecting to an IP with a Host header."
+    }
+   },
+   {
+    "name": "site-answers-ping-over-tls",
+    "status": "pass",
+    "observation": {
+     "reachable_over_tls": true,
+     "attempts": 1,
+     "http_status": 200,
+     "ping_message": "pong",
+     "certificate_verified_against": "/home/runner/work/_temp/foundation-tls-edge/certs/ca.pem"
+    }
+   },
+   {
+    "name": "served-certificate-is-the-one-issued",
+    "status": "pass",
+    "observation": {
+     "served_certificate_sha256": "547d05d6c07803f719b4a8ff8321a057691a931b5b4a88a2e79c1fe30cbc4af5",
+     "issued_certificate_sha256": "547d05d6c07803f719b4a8ff8321a057691a931b5b4a88a2e79c1fe30cbc4af5",
+     "match": true,
+     "python_tls_negotiated": {
+      "protocol": "TLSv1.3",
+      "cipher": "TLS_AES_256_GCM_SHA384"
+     },
+     "note": "Digests the DER the listener actually presented, so a stale or substituted certificate cannot pass."
+    }
+   },
+   {
+    "name": "independent-tls-client-agrees-on-all-three-controls",
+    "status": "pass",
+    "observation": {
+     "verifies_with_the_private_ca": true,
+     "negotiated": {
+      "protocol": "TLSv1.3",
+      "cipher": "TLS_AES_256_GCM_SHA384"
+     },
+     "refuses_an_unrelated_ca": true,
+     "unrelated_ca_error": "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1082)",
+     "refuses_a_hostname_mismatch": true,
+     "hostname_mismatch_error": "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'wrong-name.foundation.internal'. (_ssl.c:1082)"
+    }
+   },
+   {
+    "name": "tls-protocol-policy-enforced-at-the-listener",
+    "status": "pass",
+    "observation": {
+     "policy": "POLICY ENFORCED",
+     "reason": "every allowed protocol negotiated and every refused protocol was rejected",
+     "outcomes": {
+      "TLSv1.2": "ACCEPTED",
+      "TLSv1.3": "ACCEPTED",
+      "SSLv3": "REFUSED",
+      "TLSv1": "REFUSED",
+      "TLSv1.1": "REFUSED"
+     },
+     "resolved_by_raw_client_hello": [
+      "TLSv1",
+      "TLSv1.1"
+     ],
+     "ciphers": {
+      "TLSv1.2": "ECDHE-RSA-AES256-GCM-SHA384",
+      "TLSv1.3": "TLS_AES_256_GCM_SHA384",
+      "SSLv3": null,
+      "TLSv1": null,
+      "TLSv1.1": null
+     }
+    }
+   },
+   {
+    "name": "certificate-verification-enforced",
+    "status": "pass",
+    "observation": {
+     "verdict": "VERIFICATION ENFORCED",
+     "verify_return_code_with_ca": 0,
+     "verify_return_code_with_unrelated_ca": 21,
+     "verify_return_code_on_hostname_mismatch": 62,
+     "chain_verifies_independent_of_the_handshake": true,
+     "trust_anchor_note": "A private test CA generated inside the run. It proves the chain, the hostname binding and the verification behaviour are real; it is not a publicly trusted certificate and does not qualify a public edge."
+    }
+   },
+   {
+    "name": "plaintext-listener-redirects-to-https",
+    "status": "pass",
+    "observation": {
+     "plaintext_status": 301,
+     "location": "https://edge.foundation.internal:8443/api/method/ping",
+     "redirects_to_tls": true,
+     "body_bytes": 178,
+     "note": "The plaintext listener answers with a redirect only. It holds no proxy_pass and no try_files, so there is no second route to the application that bypasses TLS."
+    }
+   },
+   {
+    "name": "hsts-and-security-headers-sent-over-tls",
+    "status": "pass",
+    "observation": {
+     "hsts": {
+      "present": true,
+      "raw": "max-age=63072000; includeSubDomains; preload",
+      "max_age": 63072000,
+      "include_subdomains": true,
+      "preload": true,
+      "well_formed": true
+     },
+     "hsts_matches_pinned_template": true,
+     "security_headers": {
+      "X-Frame-Options": "SAMEORIGIN",
+      "X-Content-Type-Options": "nosniff",
+      "X-XSS-Protection": "1; mode=block",
+      "Referrer-Policy": "same-origin, strict-origin-when-cross-origin"
+     },
+     "security_headers_missing": [],
+     "server_header": "nginx/1.24.0 (Ubuntu)"
+    }
+   },
+   {
+    "name": "authenticated-session-over-tls-with-secure-cookie",
+    "status": "pass",
+    "observation": {
+     "login_http_status": 200,
+     "logged_in_as": "Administrator",
+     "sid_cookie_secure_flag": true,
+     "sid_cookie_secure_attribute_parsed": true,
+     "sid_cookie_httponly": true,
+     "set_cookie_flags": [
+      "Expires=Thu, 24 Sep 2026 13:56:00 GMT",
+      "Max-Age=612000",
+      "Secure",
+      "HttpOnly",
+      "Path=/",
+      "SameSite=Lax"
+     ],
+     "scheme_propagation": "Gunicorn's default secure_scheme_headers maps X-FORWARDED-Proto=https and its default forwarded_allow_ips is 127.0.0.1,::1, so the proxy header the pinned template sends is what makes frappe.auth mark the cookie Secure."
+    }
+   },
+   {
+    "name": "private-file-denied-anonymously-over-tls",
+    "status": "pass",
+    "observation": {
+     "private_url": "/private/files/tls-edge-private.txt",
+     "anonymous_status": 403,
+     "denied_without_a_session": true,
+     "bytes_returned": 136
+    }
+   },
+   {
+    "name": "public-file-served-anonymously-over-tls",
+    "status": "pass",
+    "observation": {
+     "public_url": "/files/tls-edge-public.txt",
+     "anonymous_status": 200,
+     "served_sha256": "73c69d113dfe09402f52bbdd88de91c1fb881d7db439711ae72b75dbbc508146",
+     "matches_manifest": true,
+     "served_by": "nginx-static-public-directory"
+    }
+   },
+   {
+    "name": "private-file-served-to-authenticated-session-over-tls",
+    "status": "pass",
+    "observation": {
+     "private_url": "/private/files/tls-edge-private.txt",
+     "authenticated_status": 200,
+     "served_sha256": "06ff298b9b3007908f5887503a97bfa7d679f3207880ccf1f59eebaeb65092d5",
+     "matches_manifest": true,
+     "served_via": "X-Accel-Redirect to an nginx internal location",
+     "content_type": "text/plain"
+    }
+   },
+   {
+    "name": "plaintext-listener-never-serves-application-bytes",
+    "status": "pass",
+    "observation": {
+     "all_plaintext_requests_redirected": true,
+     "observations": {
+      "ping": {
+       "status": 301,
+       "location": "https://edge.foundation.internal:8443/api/method/ping",
+       "body_bytes": 178
+      },
+      "private_file": {
+       "status": 301,
+       "location": "https://edge.foundation.internal:8443/private/files/tls-edge-private.txt",
+       "body_bytes": 178
+      },
+      "public_file": {
+       "status": 301,
+       "location": "https://edge.foundation.internal:8443/files/tls-edge-public.txt",
+       "body_bytes": 178
+      }
+     },
+     "note": "No application response - not even the public file that nginx would otherwise serve statically - is available over plaintext."
+    }
+   }
+  ],
+  "required_refusals_observed": {
+   "protocols_rejected_by_the_listener": [
+    "SSLv3",
+    "TLSv1",
+    "TLSv1.1"
+   ],
+   "protocols_rejected_by_the_client_and_therefore_not_evidence": [],
+   "protocols_with_no_evidence_at_all": [],
+   "unrelated_ca_rejected": 21,
+   "hostname_mismatch_rejected": 62,
+   "complete": true,
+   "note": "Each refusal is observed, not assumed. A refusal caused by the client's own OpenSSL policy is listed separately, because it says nothing about the listener. complete=false means the client run stopped before every control was exercised."
+  },
+  "published_evidence_scan": {
+   "needles_scanned": 6,
+   "leaks": {},
+   "clean": true
+  },
+  "not_proven_by_this_probe": [
+   "A publicly trusted certificate: the CA is private and generated inside this run. It proves the chain, the hostname binding and that verification is enforced in both directions; it does not qualify a public edge and no browser would trust it",
+   "A tailnet: no auth key, no registered node, no ACL evaluation and no cross-node connection. Repository Actions secrets return HTTP 403 to this session's credential, so no owner-provisioned key material is reachable. Classified ENVIRONMENT-BLOCKED rather than simulated",
+   "Certificate issuance and renewal against a real ACME authority: the pinned bench template ships a letsencrypt.cfg, but issuing needs a publicly resolvable domain and control of its DNS",
+   "Revocation: no CRL distribution point, no OCSP responder and no OCSP stapling",
+   "Mutual TLS: no client certificate was requested or verified",
+   "Ports 80 and 443 as the pinned template uses them: binding them needs root, so unprivileged ports are used and the deviation is recorded above",
+   "The rate limiting the pinned template can enable (limit_conn per_host): not enabled here, so no throttling behaviour is claimed",
+   "A five-application ERPNext site: the site runs frappe alone. The TLS edge is proven for a Frappe site behind the pinned nginx template; erpnext is fetched into the bench by the shared builder but not installed on this site",
+   "TLS termination under load, session resumption statistics, or cipher preference behaviour across many concurrent clients",
+   "Any production workload: every certificate, credential, record and file here is synthetic and generated for this run"
+  ],
+  "process_logs": {
+   "web-backend": "[2026-09-17 11:55:13 +0000] [6070] [INFO] Starting gunicorn 23.0.0\n[2026-09-17 11:55:13 +0000] [6070] [INFO] Listening at: http://127.0.0.1:8000 (6070)\n[2026-09-17 11:55:13 +0000] [6070] [INFO] Using worker: sync\n[2026-09-17 11:55:13 +0000] [6095] [INFO] Booting worker with pid: 6095\n[2026-09-17 11:55:14 +0000] [6096] [INFO] Booting worker with pid: 6096\n[2026-09-17 11:56:00 +0000] [6070] [INFO] Handling signal: term\n[2026-09-17 11:56:00 +0000] [6096] [INFO] Worker exiting (pid: 6096)\n[2026-09-17 11:56:00 +0000] [6095] [INFO] Worker exiting (pid: 6095)\n[2026-09-17 11:56:00 +0000] [6070] [INFO] Shutting down: Master\n",
+   "tls-proxy": ""
+  }
+ }
+}

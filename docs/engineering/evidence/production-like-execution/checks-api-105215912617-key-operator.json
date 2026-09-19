@@ -1,0 +1,475 @@
+{
+ "retrieval_provenance": {
+  "retrieved_at_utc": "2026-09-19T16:05:00+00:00",
+  "retrieved_by": "\u00a75 evidence re-observability sweep (read-only GitHub Checks API)",
+  "check_id": 105215912617,
+  "run_id": "35225331195",
+  "head_sha": "da8b36a347917e81ecf262694cc0d12ffc0fc4b5",
+  "summary_digest_sha256": "d577b84fe6221fb37c72f3f476cc93dae629592de58f68786cd43283cbe05fec",
+  "transport": "plain-with-transport-escape-defect",
+  "digest_verified": false,
+  "parse_note": "Stored text fails strict JSON parse at two identical stderr bytes (uv box-drawing, same defect repaired by the 2026-09-17 closure pass). Archived report is parsed after replacing the invalid backslash-x escape with x; the summary digest does not verify against the stored bytes, so byte integrity is NOT claimed for this file. All cited content (18/19, bench-init exit 167, verbatim HTTP 503, 4 matched keys, negative controls) is re-observed from the repaired parse; the original transport text is retained verbatim below for independent inspection."
+ },
+ "report": {
+  "artifact_name": "operator-result.json",
+  "scope": "Operator system for external key custody: run a real site on keys retrieved from separate custody channels, produce an encrypted backup, then destroy the site and every local copy of the key material",
+  "role": "operator",
+  "site": "custody-operator.localhost",
+  "run_id": "35225331195",
+  "commit": "da8b36a347917e81ecf262694cc0d12ffc0fc4b5",
+  "ref": "refs/heads/arena/01a0aef4-tofel-house-erp",
+  "status": "fail",
+  "checks": [
+   {
+    "name": "docker-version",
+    "command": [
+     "docker",
+     "version",
+     "--format",
+     "{{.Client.Version}} {{.Server.Version}}"
+    ],
+    "exit_code": 0,
+    "seconds": 0.018,
+    "status": "pass"
+   },
+   {
+    "name": "start-mariadb",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-indep-mariadb",
+     "--mount",
+     "type=bind,source=/home/runner/work/_temp/foundation-key-custody-operator/db-password,target=/run/secrets/db-password,readonly",
+     "--env",
+     "MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password",
+     "--env",
+     "MARIADB_ROOT_HOST=%",
+     "--publish",
+     "127.0.0.1:13306:3306",
+     "--health-cmd",
+     "healthcheck.sh --connect --innodb_initialized",
+     "--health-interval",
+     "2s",
+     "--health-retries",
+     "60",
+     "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+     "--character-set-server=utf8mb4",
+     "--collation-server=utf8mb4_unicode_ci"
+    ],
+    "exit_code": 0,
+    "seconds": 4.829,
+    "status": "pass"
+   },
+   {
+    "name": "start-foundation-indep-redis-queue",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-indep-redis-queue",
+     "--publish",
+     "127.0.0.1:11379:6379",
+     "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+    ],
+    "exit_code": 0,
+    "seconds": 0.165,
+    "status": "pass"
+   },
+   {
+    "name": "start-foundation-indep-redis-cache",
+    "command": [
+     "docker",
+     "run",
+     "--detach",
+     "--name",
+     "foundation-indep-redis-cache",
+     "--publish",
+     "127.0.0.1:12379:6379",
+     "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36"
+    ],
+    "exit_code": 0,
+    "seconds": 0.164,
+    "status": "pass"
+   },
+   {
+    "name": "mariadb-client-install",
+    "command": [
+     "sudo",
+     "apt-get",
+     "install",
+     "-y",
+     "--no-install-recommends",
+     "mariadb-client",
+     "file"
+    ],
+    "exit_code": 0,
+    "seconds": 3.622,
+    "status": "pass"
+   },
+   {
+    "name": "mariadb-client-version",
+    "command": [
+     "mariadb",
+     "--version"
+    ],
+    "exit_code": 0,
+    "seconds": 0.025,
+    "status": "pass"
+   },
+   {
+    "name": "clone-frappe",
+    "command": [
+     "git",
+     "init",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe"
+    ],
+    "exit_code": 0,
+    "seconds": 0.003,
+    "status": "pass"
+   },
+   {
+    "name": "origin-frappe",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe",
+     "remote",
+     "add",
+     "origin",
+     "https://github.com/frappe/frappe"
+    ],
+    "exit_code": 0,
+    "seconds": 0.002,
+    "status": "pass"
+   },
+   {
+    "name": "fetch-frappe",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe",
+     "fetch",
+     "--depth",
+     "1",
+     "origin",
+     "988e54f3c4c291e2077a83809663f123731abe76"
+    ],
+    "exit_code": 0,
+    "seconds": 5.753,
+    "status": "pass"
+   },
+   {
+    "name": "checkout-frappe",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe",
+     "checkout",
+     "--detach",
+     "FETCH_HEAD"
+    ],
+    "exit_code": 0,
+    "seconds": 0.353,
+    "status": "pass"
+   },
+   {
+    "name": "verify-frappe",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe",
+     "rev-parse",
+     "HEAD"
+    ],
+    "exit_code": 0,
+    "seconds": 0.002,
+    "status": "pass"
+   },
+   {
+    "name": "clone-erpnext",
+    "command": [
+     "git",
+     "init",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext"
+    ],
+    "exit_code": 0,
+    "seconds": 0.003,
+    "status": "pass"
+   },
+   {
+    "name": "origin-erpnext",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext",
+     "remote",
+     "add",
+     "origin",
+     "https://github.com/frappe/erpnext"
+    ],
+    "exit_code": 0,
+    "seconds": 0.002,
+    "status": "pass"
+   },
+   {
+    "name": "fetch-erpnext",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext",
+     "fetch",
+     "--depth",
+     "1",
+     "origin",
+     "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd"
+    ],
+    "exit_code": 0,
+    "seconds": 7.285,
+    "status": "pass"
+   },
+   {
+    "name": "checkout-erpnext",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext",
+     "checkout",
+     "--detach",
+     "FETCH_HEAD"
+    ],
+    "exit_code": 0,
+    "seconds": 0.473,
+    "status": "pass"
+   },
+   {
+    "name": "verify-erpnext",
+    "command": [
+     "git",
+     "-C",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext",
+     "rev-parse",
+     "HEAD"
+    ],
+    "exit_code": 0,
+    "seconds": 0.002,
+    "status": "pass"
+   },
+   {
+    "name": "bench-tools-venv",
+    "command": [
+     "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+     "-m",
+     "venv",
+     "/home/runner/work/_temp/foundation-key-custody-operator/tools"
+    ],
+    "exit_code": 0,
+    "seconds": 2.741,
+    "status": "pass"
+   },
+   {
+    "name": "bench-tools-install",
+    "command": [
+     "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/python",
+     "-m",
+     "pip",
+     "install",
+     "frappe-bench==5.31.0",
+     "uv==0.11.6"
+    ],
+    "exit_code": 0,
+    "seconds": 3.06,
+    "status": "pass"
+   },
+   {
+    "name": "bench-init",
+    "command": [
+     "/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench",
+     "init",
+     "/home/runner/work/_temp/foundation-key-custody-operator/bench",
+     "--frappe-path",
+     "/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe",
+     "--python",
+     "/home/runner/work/_temp/foundation-runner-probe/python/bin/python3",
+     "--no-backups",
+     "--skip-redis-config-generation",
+     "--no-procfile",
+     "--skip-assets",
+     "--verbose"
+    ],
+    "exit_code": 167,
+    "seconds": 3.371,
+    "status": "fail",
+    "output_tail": "Setting Up Environment\n$ uv venv env --seed --python /home/runner/work/_temp/foundation-runner-probe/python/bin/python3\nGetting frappe\n$ git clone /home/runner/work/_temp/foundation-key-custody-operator/sources/frappe  --depth 1 --origin upstream\nInstalling frappe\n$ uv pip install  -e /home/runner/work/_temp/foundation-key-custody-operator/bench/apps/frappe  --python /home/runner/work/_temp/foundation-key-custody-operator/bench/env/bin/python\nUsing CPython 3.14.7 interpreter at: /home/runner/work/_temp/foundation-runner-probe/python/bin/python3\nCreating virtual environment with seed packages at: env\n + pip==26.2.1\nActivate with: env/bin/activate\nCloning into 'frappe'...\nwarning: --depth is ignored in local clones; use file:// instead.\nNote: switching to '988e54f3c4c291e2077a83809663f123731abe76'.\n\nYou are in 'detached HEAD' state. You can look around, make experimental\nchanges and commit them, and you can discard any commits you make in this\nstate without impacting any branches by switching back to a branch.\n\nIf you want to create a new branch to retain commits you create, you may\ndo so (now or later) by using -c with the switch command. Example:\n\n  git switch -c <new-branch-name>\n\nOr undo this operation with:\n\n  git switch -\n\nTurn off this advice by setting config variable advice.detachedHead to false\n\nUsing Python 3.14.7 environment at: env\n   Updating https://github.com/frappe/gunicorn (54b59ca884c79dcf04d4882658a32bbaf17e999f)\n   Updating https://github.com/frappe/pypika (2c50e6142b2d61d2d243e466fdd5dc03b3d918f2)\n    Updated https://github.com/frappe/pypika (2c50e6142b2d61d2d243e466fdd5dc03b3d918f2)\n  \u00d7 Failed to download and build `gunicorn @\n  \u2502 git+https://github.com/frappe/gunicorn@54b59ca884c79dcf04d4882658a32bbaf17e999f`\n  \u251c\u2500\u25b6 Git operation failed\n  \u251c\u2500\u25b6 failed to clone into: /home/runner/.cache/uv/git-v0/db/a821f38c8c8cde7f\n  \u251c\u2500\u25b6 failed to fetch commit `54b59ca884c79dcf04d4882658a32bbaf17e999f`\n  \u2570\u2500\u25b6 process didn't exit successfully: `/usr/bin/git fetch\n      --force --update-head-ok 'https://github.com/frappe/gunicorn'\n      '+54b59ca884c79dcf04d4882658a32bbaf17e999f:refs/commit/54b59ca884c79dcf04d4882658a32bbaf17e999f'`\n      (exit status: 128)\n      --- stderr\n      error: RPC failed; HTTP 503 curl 22 The requested URL returned error:\n      503\n      fatal: expected 'packfile'\n\nError occured during app install: uv pip install  -e /home/runner/work/_temp/foundation-key-custody-operator/bench/apps/frappe  --python /home/runner/work/_temp/foundation-key-custody-operator/bench/env/bin/python\n"
+   }
+  ],
+  "mocks_or_simulations_used": false,
+  "machine_identity": {
+   "hostname": "runnervmlun5p",
+   "runner_name": "GitHub Actions 1000002524",
+   "runner_os": "Linux",
+   "runner_image": "ubuntu24",
+   "runner_image_version": "20260907.300.1",
+   "machine": "x86_64",
+   "python": "3.12.3",
+   "run_id": "35225331195",
+   "job": "operator",
+   "github_action": "__run_4",
+   "kernel_boot_id": "663fddbd-75fd-44bf-85f3-d379b59d7e67",
+   "dmi_product_uuid": "12beac05-3ac4-4c97-b82a-3597e93b0856",
+   "uptime_seconds": 73.8,
+   "cpu_count": 4,
+   "mem_total_kb": 16373452,
+   "docker_daemon_id": "a4efb8b6-20f9-46f4-b827-91ac0547be3a"
+  },
+  "operator_revisions": {
+   "frappe": "988e54f3c4c291e2077a83809663f123731abe76",
+   "erpnext": "4048fb70e14d1843956fcdabb7c3cca75a1cbcdd"
+  },
+  "custody_manifest": {
+   "sha256": "32c7a8f009e3474e2ab88bae2a80a4f5c70db13e293a73c97639492a50ffbc72",
+   "entries": 4,
+   "split_method": "xor-one-time-pad-over-key-bytes",
+   "epochs": [
+    1,
+    2
+   ],
+   "rotation_lineage": {
+    "backup_encryption_key": {
+     "epoch1": "d686a1cbad0db8e24566ec21863c58e3597b9db35c4269a33af22d107916f070",
+     "epoch2": "dc4e56cec77bcc0a35a4364d12486d3e26dfb01e109299cd5c79a567cf118bba",
+     "keys_differ": true
+    },
+    "encryption_key": {
+     "epoch1": "c274dedab7439b1441c797a7a3b483c12f0211d2030c3a3db178caaa9e93f12c",
+     "epoch2": "12d9d7a91f5efcc80bd33d871d848749a65f43060db9f293bf43c76790eb3578",
+     "keys_differ": true
+    }
+   }
+  },
+  "custody_channels": {
+   "a": [
+    "epoch1-backup_encryption_key.json",
+    "epoch1-encryption_key.json",
+    "epoch2-backup_encryption_key.json",
+    "epoch2-encryption_key.json"
+   ],
+   "b": [
+    "epoch1-backup_encryption_key.json",
+    "epoch1-encryption_key.json",
+    "epoch2-backup_encryption_key.json",
+    "epoch2-encryption_key.json"
+   ]
+  },
+  "key_retrieval": {
+   "channels_required": [
+    "a",
+    "b"
+   ],
+   "retrieved": {
+    "epoch1-encryption_key": {
+     "fingerprint": "c274dedab7439b1441c797a7a3b483c12f0211d2030c3a3db178caaa9e93f12c",
+     "matches_custody_manifest": true,
+     "native_fernet_format": {
+      "valid": true,
+      "characters": 44,
+      "decoded_bytes": 32,
+      "matches": "the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept"
+     },
+     "channels_combined": [
+      "a",
+      "b"
+     ]
+    },
+    "epoch2-encryption_key": {
+     "fingerprint": "12d9d7a91f5efcc80bd33d871d848749a65f43060db9f293bf43c76790eb3578",
+     "matches_custody_manifest": true,
+     "native_fernet_format": {
+      "valid": true,
+      "characters": 44,
+      "decoded_bytes": 32,
+      "matches": "the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept"
+     },
+     "channels_combined": [
+      "a",
+      "b"
+     ]
+    },
+    "epoch1-backup_encryption_key": {
+     "fingerprint": "d686a1cbad0db8e24566ec21863c58e3597b9db35c4269a33af22d107916f070",
+     "matches_custody_manifest": true,
+     "native_fernet_format": {
+      "valid": true,
+      "characters": 44,
+      "decoded_bytes": 32,
+      "matches": "the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept"
+     },
+     "channels_combined": [
+      "a",
+      "b"
+     ]
+    },
+    "epoch2-backup_encryption_key": {
+     "fingerprint": "dc4e56cec77bcc0a35a4364d12486d3e26dfb01e109299cd5c79a567cf118bba",
+     "matches_custody_manifest": true,
+     "native_fernet_format": {
+      "valid": true,
+      "characters": 44,
+      "decoded_bytes": 32,
+      "matches": "the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept"
+     },
+     "channels_combined": [
+      "a",
+      "b"
+     ]
+    }
+   },
+   "verified_by": "SHA-256 fingerprint comparison against the custodian's manifest",
+   "plaintext_published": false
+  },
+  "custody_negative_controls_before_use": {
+   "channel_a_alone": {
+    "reconstructed": true,
+    "error": null,
+    "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+    "fingerprint_matches": false
+   },
+   "channel_b_alone": {
+    "reconstructed": true,
+    "error": null,
+    "fingerprint": "51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6",
+    "fingerprint_matches": false
+   },
+   "epoch1_a_with_epoch2_b": {
+    "reconstructed": true,
+    "error": null,
+    "fingerprint": "418663eb967989189d155fa4c7d377c11e32edd73ffe083554eeded2ac3526af",
+    "fingerprint_matches": false
+   }
+  },
+  "services": {
+   "mariadb": {
+    "image_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+    "selected_version": "11.8.9"
+   },
+   "redis": {
+    "image_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+    "selected_version": "8.6.6"
+   }
+  },
+  "docker_daemon_id": "a4efb8b6-20f9-46f4-b827-91ac0547be3a",
+  "mariadb_health": {
+   "healthy": true,
+   "polls": 4
+  },
+  "mariadb_client": {
+   "version": "mariadb  Ver 15.1 Distrib 10.11.14-MariaDB, for debian-linux-gnu (x86_64) using  EditLine wrapper",
+   "dump_binary": "/usr/bin/mariadb-dump",
+   "preferred_over_mysqldump_because": "MariaDB has no information_schema.COLUMN_STATISTICS, which the Oracle client queries unconditionally"
+  },
+  "failure": "bench-init: exit 167\nSetting Up Environment\n$ uv venv env --seed --python /home/runner/work/_temp/foundation-runner-probe/python/bin/python3\nGetting frappe\n$ git clone /home/runner/work/_temp/foundation-key-custody-operator/sources/frappe  --depth 1 --origin upstream\nInstalling frappe\n$ uv pip install  -e /home/runner/work/_temp/foundation-key-custody-operator/bench/apps/frappe  --python /home/runner/work/_temp/foundation-key-custody-operator/bench/env/bin/python\nUsing CPython 3.14.7 interpreter at: /home/runner/work/_temp/foundation-runner-probe/python/bin/python3\nCreating virtual environment with seed packages at: env\n + pip==26.2.1\nActivate with: env/bin/activate\nCloning into 'frappe'...\nwarning: --depth is ignored in local clones; use file:// instead.\nNote: switching to '988e54f3c4c291e2077a83809663f123731abe76'.\n\nYou are in 'detached HEAD' state. You can look around, make experimental\nchanges and commit them, and you can discard any commits you make in this\nstate without impacting any branches by switching back to a branch.\n\nIf you want to create a new branch to retain commits you create, you may\ndo so (now or later) by using -c with the switch command. Example:\n\n  git switch -c <new-branch-name>\n\nOr undo this operation with:\n\n  git switch -\n\nTurn off this advice by setting config variable advice.detachedHead to false\n\nUsing Python 3.14.7 environment at: env\n   Updating https://github.com/frappe/gunicorn (54b59ca884c79dcf04d4882658a32bbaf17e999f)\n   Updating https://github.com/frappe/pypika (2c50e6142b2d61d2d243e466fdd5dc03b3d918f2)\n    Updated https://github.com/frappe/pypika (2c50e6142b2d61d2d243e466fdd5dc03b3d918f2)\n  \u00d7 Failed to download and build `gunicorn @\n  \u2502 git+https://github.com/frappe/gunicorn@54b59ca884c79dcf04d4882658a32bbaf17e999f`\n  \u251c\u2500\u25b6 Git operation failed\n  \u251c\u2500\u25b6 failed to clone into: /home/runner/.cache/uv/git-v0/db/a821f38c8c8cde7f\n  \u251c\u2500\u25b6 failed to fetch commit `54b59ca884c79dcf04d4882658a32bbaf17e999f`\n  \u2570\u2500\u25b6 process didn't exit successfully: `/usr/bin/git fetch\n      --force --update-head-ok 'https://github.com/frappe/gunicorn'\n      '+54b59ca884c79dcf04d4882658a32bbaf17e999f:refs/commit/54b59ca884c79dcf04d4882658a32bbaf17e999f'`\n      (exit status: 128)\n      --- stderr\n      error: RPC failed; HTTP 503 curl 22 The requested URL returned error:\n      503\n      fatal: expected 'packfile'\n\nError occured during app install: uv pip install  -e /home/runner/work/_temp/foundation-key-custody-operator/bench/apps/frappe  --python /home/runner/work/_temp/foundation-key-custody-operator/bench/env/bin/python\n"
+ },
+ "original_transport_text": "{\"artifact_name\":\"operator-result.json\",\"scope\":\"Operator system for external key custody: run a real site on keys retrieved from separate custody channels, produce an encrypted backup, then destroy the site and every local copy of the key material\",\"role\":\"operator\",\"site\":\"custody-operator.localhost\",\"run_id\":\"35225331195\",\"commit\":\"da8b36a347917e81ecf262694cc0d12ffc0fc4b5\",\"ref\":\"refs/heads/arena/01a0aef4-tofel-house-erp\",\"status\":\"fail\",\"checks\":[{\"name\":\"docker-version\",\"command\":[\"docker\",\"version\",\"--format\",\"{{.Client.Version}} {{.Server.Version}}\"],\"exit_code\":0,\"seconds\":0.018,\"status\":\"pass\"},{\"name\":\"start-mariadb\",\"command\":[\"docker\",\"run\",\"--detach\",\"--name\",\"foundation-indep-mariadb\",\"--mount\",\"type=bind,source=/home/runner/work/_temp/foundation-key-custody-operator/db-password,target=/run/secrets/db-password,readonly\",\"--env\",\"MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db-password\",\"--env\",\"MARIADB_ROOT_HOST=%\",\"--publish\",\"127.0.0.1:13306:3306\",\"--health-cmd\",\"healthcheck.sh --connect --innodb_initialized\",\"--health-interval\",\"2s\",\"--health-retries\",\"60\",\"mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62\",\"--character-set-server=utf8mb4\",\"--collation-server=utf8mb4_unicode_ci\"],\"exit_code\":0,\"seconds\":4.829,\"status\":\"pass\"},{\"name\":\"start-foundation-indep-redis-queue\",\"command\":[\"docker\",\"run\",\"--detach\",\"--name\",\"foundation-indep-redis-queue\",\"--publish\",\"127.0.0.1:11379:6379\",\"redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36\"],\"exit_code\":0,\"seconds\":0.165,\"status\":\"pass\"},{\"name\":\"start-foundation-indep-redis-cache\",\"command\":[\"docker\",\"run\",\"--detach\",\"--name\",\"foundation-indep-redis-cache\",\"--publish\",\"127.0.0.1:12379:6379\",\"redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36\"],\"exit_code\":0,\"seconds\":0.164,\"status\":\"pass\"},{\"name\":\"mariadb-client-install\",\"command\":[\"sudo\",\"apt-get\",\"install\",\"-y\",\"--no-install-recommends\",\"mariadb-client\",\"file\"],\"exit_code\":0,\"seconds\":3.622,\"status\":\"pass\"},{\"name\":\"mariadb-client-version\",\"command\":[\"mariadb\",\"--version\"],\"exit_code\":0,\"seconds\":0.025,\"status\":\"pass\"},{\"name\":\"clone-frappe\",\"command\":[\"git\",\"init\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe\"],\"exit_code\":0,\"seconds\":0.003,\"status\":\"pass\"},{\"name\":\"origin-frappe\",\"command\":[\"git\",\"-C\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe\",\"remote\",\"add\",\"origin\",\"https://github.com/frappe/frappe\"],\"exit_code\":0,\"seconds\":0.002,\"status\":\"pass\"},{\"name\":\"fetch-frappe\",\"command\":[\"git\",\"-C\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe\",\"fetch\",\"--depth\",\"1\",\"origin\",\"988e54f3c4c291e2077a83809663f123731abe76\"],\"exit_code\":0,\"seconds\":5.753,\"status\":\"pass\"},{\"name\":\"checkout-frappe\",\"command\":[\"git\",\"-C\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe\",\"checkout\",\"--detach\",\"FETCH_HEAD\"],\"exit_code\":0,\"seconds\":0.353,\"status\":\"pass\"},{\"name\":\"verify-frappe\",\"command\":[\"git\",\"-C\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe\",\"rev-parse\",\"HEAD\"],\"exit_code\":0,\"seconds\":0.002,\"status\":\"pass\"},{\"name\":\"clone-erpnext\",\"command\":[\"git\",\"init\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext\"],\"exit_code\":0,\"seconds\":0.003,\"status\":\"pass\"},{\"name\":\"origin-erpnext\",\"command\":[\"git\",\"-C\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext\",\"remote\",\"add\",\"origin\",\"https://github.com/frappe/erpnext\"],\"exit_code\":0,\"seconds\":0.002,\"status\":\"pass\"},{\"name\":\"fetch-erpnext\",\"command\":[\"git\",\"-C\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext\",\"fetch\",\"--depth\",\"1\",\"origin\",\"4048fb70e14d1843956fcdabb7c3cca75a1cbcdd\"],\"exit_code\":0,\"seconds\":7.285,\"status\":\"pass\"},{\"name\":\"checkout-erpnext\",\"command\":[\"git\",\"-C\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext\",\"checkout\",\"--detach\",\"FETCH_HEAD\"],\"exit_code\":0,\"seconds\":0.473,\"status\":\"pass\"},{\"name\":\"verify-erpnext\",\"command\":[\"git\",\"-C\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/erpnext\",\"rev-parse\",\"HEAD\"],\"exit_code\":0,\"seconds\":0.002,\"status\":\"pass\"},{\"name\":\"bench-tools-venv\",\"command\":[\"/home/runner/work/_temp/foundation-runner-probe/python/bin/python3\",\"-m\",\"venv\",\"/home/runner/work/_temp/foundation-key-custody-operator/tools\"],\"exit_code\":0,\"seconds\":2.741,\"status\":\"pass\"},{\"name\":\"bench-tools-install\",\"command\":[\"/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/python\",\"-m\",\"pip\",\"install\",\"frappe-bench==5.31.0\",\"uv==0.11.6\"],\"exit_code\":0,\"seconds\":3.06,\"status\":\"pass\"},{\"name\":\"bench-init\",\"command\":[\"/home/runner/work/_temp/foundation-key-custody-operator/tools/bin/bench\",\"init\",\"/home/runner/work/_temp/foundation-key-custody-operator/bench\",\"--frappe-path\",\"/home/runner/work/_temp/foundation-key-custody-operator/sources/frappe\",\"--python\",\"/home/runner/work/_temp/foundation-runner-probe/python/bin/python3\",\"--no-backups\",\"--skip-redis-config-generation\",\"--no-procfile\",\"--skip-assets\",\"--verbose\"],\"exit_code\":167,\"seconds\":3.371,\"status\":\"fail\",\"output_tail\":\"Setting Up Environment\\n$ uv venv env --seed --python /home/runner/work/_temp/foundation-runner-probe/python/bin/python3\\nGetting frappe\\n$ git clone /home/runner/work/_temp/foundation-key-custody-operator/sources/frappe  --depth 1 --origin upstream\\nInstalling frappe\\n$ uv pip install  -e /home/runner/work/_temp/foundation-key-custody-operator/bench/apps/frappe  --python /home/runner/work/_temp/foundation-key-custody-operator/bench/env/bin/python\\nUsing CPython 3.14.7 interpreter at: /home/runner/work/_temp/foundation-runner-probe/python/bin/python3\\nCreating virtual environment with seed packages at: env\\n + pip==26.2.1\\nActivate with: env/bin/activate\\nCloning into 'frappe'...\\nwarning: --depth is ignored in local clones; use file:// instead.\\nNote: switching to '988e54f3c4c291e2077a83809663f123731abe76'.\\n\\nYou are in 'detached HEAD' state. You can look around, make experimental\\nchanges and commit them, and you can discard any commits you make in this\\nstate without impacting any branches by switching back to a branch.\\n\\nIf you want to create a new branch to retain commits you create, you may\\ndo so (now or later) by using -c with the switch command. Example:\\n\\n  git switch -c <new-branch-name>\\n\\nOr undo this operation with:\\n\\n  git switch -\\n\\nTurn off this advice by setting config variable advice.detachedHead to false\\n\\nUsing Python 3.14.7 environment at: env\\n   Updating https://github.com/frappe/gunicorn (54b59ca884c79dcf04d4882658a32bbaf17e999f)\\n   Updating https://github.com/frappe/pypika (2c50e6142b2d61d2d243e466fdd5dc03b3d918f2)\\n    Updated https://github.com/frappe/pypika (2c50e6142b2d61d2d243e466fdd5dc03b3d918f2)\\n  \\\u00d7 Failed to download and build `gunicorn @\\n  \\u2502 git+https://github.com/frappe/gunicorn@54b59ca884c79dcf04d4882658a32bbaf17e999f`\\n  \\u251c\\u2500\\u25b6 Git operation failed\\n  \\u251c\\u2500\\u25b6 failed to clone into: /home/runner/.cache/uv/git-v0/db/a821f38c8c8cde7f\\n  \\u251c\\u2500\\u25b6 failed to fetch commit `54b59ca884c79dcf04d4882658a32bbaf17e999f`\\n  \\u2570\\u2500\\u25b6 process didn't exit successfully: `/usr/bin/git fetch\\n      --force --update-head-ok 'https://github.com/frappe/gunicorn'\\n      '+54b59ca884c79dcf04d4882658a32bbaf17e999f:refs/commit/54b59ca884c79dcf04d4882658a32bbaf17e999f'`\\n      (exit status: 128)\\n      --- stderr\\n      error: RPC failed; HTTP 503 curl 22 The requested URL returned error:\\n      503\\n      fatal: expected 'packfile'\\n\\nError occured during app install: uv pip install  -e /home/runner/work/_temp/foundation-key-custody-operator/bench/apps/frappe  --python /home/runner/work/_temp/foundation-key-custody-operator/bench/env/bin/python\\n\"}],\"mocks_or_simulations_used\":false,\"machine_identity\":{\"hostname\":\"runnervmlun5p\",\"runner_name\":\"GitHub Actions 1000002524\",\"runner_os\":\"Linux\",\"runner_image\":\"ubuntu24\",\"runner_image_version\":\"20260907.300.1\",\"machine\":\"x86_64\",\"python\":\"3.12.3\",\"run_id\":\"35225331195\",\"job\":\"operator\",\"github_action\":\"__run_4\",\"kernel_boot_id\":\"663fddbd-75fd-44bf-85f3-d379b59d7e67\",\"dmi_product_uuid\":\"12beac05-3ac4-4c97-b82a-3597e93b0856\",\"uptime_seconds\":73.8,\"cpu_count\":4,\"mem_total_kb\":16373452,\"docker_daemon_id\":\"a4efb8b6-20f9-46f4-b827-91ac0547be3a\"},\"operator_revisions\":{\"frappe\":\"988e54f3c4c291e2077a83809663f123731abe76\",\"erpnext\":\"4048fb70e14d1843956fcdabb7c3cca75a1cbcdd\"},\"custody_manifest\":{\"sha256\":\"32c7a8f009e3474e2ab88bae2a80a4f5c70db13e293a73c97639492a50ffbc72\",\"entries\":4,\"split_method\":\"xor-one-time-pad-over-key-bytes\",\"epochs\":[1,2],\"rotation_lineage\":{\"backup_encryption_key\":{\"epoch1\":\"d686a1cbad0db8e24566ec21863c58e3597b9db35c4269a33af22d107916f070\",\"epoch2\":\"dc4e56cec77bcc0a35a4364d12486d3e26dfb01e109299cd5c79a567cf118bba\",\"keys_differ\":true},\"encryption_key\":{\"epoch1\":\"c274dedab7439b1441c797a7a3b483c12f0211d2030c3a3db178caaa9e93f12c\",\"epoch2\":\"12d9d7a91f5efcc80bd33d871d848749a65f43060db9f293bf43c76790eb3578\",\"keys_differ\":true}}},\"custody_channels\":{\"a\":[\"epoch1-backup_encryption_key.json\",\"epoch1-encryption_key.json\",\"epoch2-backup_encryption_key.json\",\"epoch2-encryption_key.json\"],\"b\":[\"epoch1-backup_encryption_key.json\",\"epoch1-encryption_key.json\",\"epoch2-backup_encryption_key.json\",\"epoch2-encryption_key.json\"]},\"key_retrieval\":{\"channels_required\":[\"a\",\"b\"],\"retrieved\":{\"epoch1-encryption_key\":{\"fingerprint\":\"c274dedab7439b1441c797a7a3b483c12f0211d2030c3a3db178caaa9e93f12c\",\"matches_custody_manifest\":true,\"native_fernet_format\":{\"valid\":true,\"characters\":44,\"decoded_bytes\":32,\"matches\":\"the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept\"},\"channels_combined\":[\"a\",\"b\"]},\"epoch2-encryption_key\":{\"fingerprint\":\"12d9d7a91f5efcc80bd33d871d848749a65f43060db9f293bf43c76790eb3578\",\"matches_custody_manifest\":true,\"native_fernet_format\":{\"valid\":true,\"characters\":44,\"decoded_bytes\":32,\"matches\":\"the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept\"},\"channels_combined\":[\"a\",\"b\"]},\"epoch1-backup_encryption_key\":{\"fingerprint\":\"d686a1cbad0db8e24566ec21863c58e3597b9db35c4269a33af22d107916f070\",\"matches_custody_manifest\":true,\"native_fernet_format\":{\"valid\":true,\"characters\":44,\"decoded_bytes\":32,\"matches\":\"the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept\"},\"channels_combined\":[\"a\",\"b\"]},\"epoch2-backup_encryption_key\":{\"fingerprint\":\"dc4e56cec77bcc0a35a4364d12486d3e26dfb01e109299cd5c79a567cf118bba\",\"matches_custody_manifest\":true,\"native_fernet_format\":{\"valid\":true,\"characters\":44,\"decoded_bytes\":32,\"matches\":\"the shape Fernet.generate_key() produces, which is what frappe.installer.update_site_config and gpg both accept\"},\"channels_combined\":[\"a\",\"b\"]}},\"verified_by\":\"SHA-256 fingerprint comparison against the custodian's manifest\",\"plaintext_published\":false},\"custody_negative_controls_before_use\":{\"channel_a_alone\":{\"reconstructed\":true,\"error\":null,\"fingerprint\":\"51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6\",\"fingerprint_matches\":false},\"channel_b_alone\":{\"reconstructed\":true,\"error\":null,\"fingerprint\":\"51643eac9777b63a7b268174d1fd4276daedec9bc9ea0bc6e5abf69047bc54f6\",\"fingerprint_matches\":false},\"epoch1_a_with_epoch2_b\":{\"reconstructed\":true,\"error\":null,\"fingerprint\":\"418663eb967989189d155fa4c7d377c11e32edd73ffe083554eeded2ac3526af\",\"fingerprint_matches\":false}},\"services\":{\"mariadb\":{\"image_digest\":\"mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62\",\"selected_version\":\"11.8.9\"},\"redis\":{\"image_digest\":\"redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36\",\"selected_version\":\"8.6.6\"}},\"docker_daemon_id\":\"a4efb8b6-20f9-46f4-b827-91ac0547be3a\",\"mariadb_health\":{\"healthy\":true,\"polls\":4},\"mariadb_client\":{\"version\":\"mariadb  Ver 15.1 Distrib 10.11.14-MariaDB, for debian-linux-gnu (x86_64) using  EditLine wrapper\",\"dump_binary\":\"/usr/bin/mariadb-dump\",\"preferred_over_mysqldump_because\":\"MariaDB has no information_schema.COLUMN_STATISTICS, which the Oracle client queries unconditionally\"},\"failure\":\"bench-init: exit 167\\nSetting Up Environment\\n$ uv venv env --seed --python /home/runner/work/_temp/foundation-runner-probe/python/bin/python3\\nGetting frappe\\n$ git clone /home/runner/work/_temp/foundation-key-custody-operator/sources/frappe  --depth 1 --origin upstream\\nInstalling frappe\\n$ uv pip install  -e /home/runner/work/_temp/foundation-key-custody-operator/bench/apps/frappe  --python /home/runner/work/_temp/foundation-key-custody-operator/bench/env/bin/python\\nUsing CPython 3.14.7 interpreter at: /home/runner/work/_temp/foundation-runner-probe/python/bin/python3\\nCreating virtual environment with seed packages at: env\\n + pip==26.2.1\\nActivate with: env/bin/activate\\nCloning into 'frappe'...\\nwarning: --depth is ignored in local clones; use file:// instead.\\nNote: switching to '988e54f3c4c291e2077a83809663f123731abe76'.\\n\\nYou are in 'detached HEAD' state. You can look around, make experimental\\nchanges and commit them, and you can discard any commits you make in this\\nstate without impacting any branches by switching back to a branch.\\n\\nIf you want to create a new branch to retain commits you create, you may\\ndo so (now or later) by using -c with the switch command. Example:\\n\\n  git switch -c <new-branch-name>\\n\\nOr undo this operation with:\\n\\n  git switch -\\n\\nTurn off this advice by setting config variable advice.detachedHead to false\\n\\nUsing Python 3.14.7 environment at: env\\n   Updating https://github.com/frappe/gunicorn (54b59ca884c79dcf04d4882658a32bbaf17e999f)\\n   Updating https://github.com/frappe/pypika (2c50e6142b2d61d2d243e466fdd5dc03b3d918f2)\\n    Updated https://github.com/frappe/pypika (2c50e6142b2d61d2d243e466fdd5dc03b3d918f2)\\n  \\\u00d7 Failed to download and build `gunicorn @\\n  \\u2502 git+https://github.com/frappe/gunicorn@54b59ca884c79dcf04d4882658a32bbaf17e999f`\\n  \\u251c\\u2500\\u25b6 Git operation failed\\n  \\u251c\\u2500\\u25b6 failed to clone into: /home/runner/.cache/uv/git-v0/db/a821f38c8c8cde7f\\n  \\u251c\\u2500\\u25b6 failed to fetch commit `54b59ca884c79dcf04d4882658a32bbaf17e999f`\\n  \\u2570\\u2500\\u25b6 process didn't exit successfully: `/usr/bin/git fetch\\n      --force --update-head-ok 'https://github.com/frappe/gunicorn'\\n      '+54b59ca884c79dcf04d4882658a32bbaf17e999f:refs/commit/54b59ca884c79dcf04d4882658a32bbaf17e999f'`\\n      (exit status: 128)\\n      --- stderr\\n      error: RPC failed; HTTP 503 curl 22 The requested URL returned error:\\n      503\\n      fatal: expected 'packfile'\\n\\nError occured during app install: uv pip install  -e /home/runner/work/_temp/foundation-key-custody-operator/bench/apps/frappe  --python /home/runner/work/_temp/foundation-key-custody-operator/bench/env/bin/python\\n\"}"
+}

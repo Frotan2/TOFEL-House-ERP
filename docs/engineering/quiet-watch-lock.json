@@ -5,6 +5,7 @@
     "docs/engineering/evidence/phase-2/source-verification.json": "66759fb5652cda5117b7a1dd580ada84d26ae0e7704d7a01652bd47ba93f358c",
     "docs/engineering/evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json": "12d8211bebb0cd8aef5846e92336eba2a4f240b15c30807cae638a6e7e891e63",
     "docs/engineering/evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-19.json": "41faf2eeea7bafdd92931e8b1cbe15d78bd1c95e5f33808753218a74e3ffe8d0",
-    "docs/engineering/evidence/sec-deps-01/readable-register-2026-09-19.json": "9ee4f9b651dbe2f2d65797d0679461c8df752e35a2ab61fffc697b21a23c7130"
+    "docs/engineering/evidence/sec-deps-01/readable-register-2026-09-19.json": "9ee4f9b651dbe2f2d65797d0679461c8df752e35a2ab61fffc697b21a23c7130",
+    "docs/engineering/evidence/evidence-reobservability-2026-09-19.md": "c3e5291028c31fe8cf7af3ecb17be6240c9a00467ecd29d45d842ace7ef8d8d2"
   }
 }

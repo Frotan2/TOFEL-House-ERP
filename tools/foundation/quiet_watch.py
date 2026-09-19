@@ -34,6 +34,7 @@ LOCKED = (
     "docs/engineering/evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json",
     "docs/engineering/evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-19.json",
     "docs/engineering/evidence/sec-deps-01/readable-register-2026-09-19.json",
+    "docs/engineering/evidence/evidence-reobservability-2026-09-19.md",
 )
 
 
