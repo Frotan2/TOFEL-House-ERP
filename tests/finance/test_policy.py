@@ -96,6 +96,27 @@ class FinanceContainmentWiringTests(unittest.TestCase):
         self.assertEqual(source.count("price_list_rate"), 1)
         self.assertNotIn("4000", source)
 
+    def test_issue_commands_lock_the_billable_row_before_the_duplicate_check(self):
+        """Two concurrent distinct keys must not both pass the exists() check."""
+        source = FINANCE.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+
+        def body(name):
+            fn = next(n for n in ast.walk(tree)
+                      if isinstance(n, ast.FunctionDef) and n.name == name)
+            return ast.get_source_segment(source, fn) or ""
+
+        tuition = body("issue_tuition_fees")
+        self.assertIn("for update", tuition)
+        self.assertLess(tuition.index("for update"),
+                        tuition.index("Tuition is already billed for this enrollment"),
+                        "the enrollment must be locked before the duplicate-billing check")
+        placement = body("issue_placement_fee")
+        self.assertIn("for update", placement)
+        self.assertLess(placement.index("for update"),
+                        placement.index("Placement fee is already billed for this case"),
+                        "the placement case must be locked before the duplicate-billing check")
+
 
 if __name__ == "__main__":
     unittest.main()

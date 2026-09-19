@@ -2666,13 +2666,25 @@ def main():
         check('finance-role-and-list-parity',fin_reads)
         def fpost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.finance.'+method,json=payload,timeout=40)
         http_fin_payload=dict(request_key='http_fin_tuition_00001',program_enrollment=enrolled['program_enrollment'],fee_structure=fin['fee_structure'],posting_date='2026-09-02',due_date='2026-10-02')
+        http_tuition_winner={'key':None}
         def http_tuition():
-            r=fpost('finance_officer','issue_tuition_fees',http_fin_payload)
-            assert r.status_code==200,f'tuition HTTP {r.status_code} {r.text[:200]}'
-            value=r.json()['message']
+            # First-writer-wins: two distinct keys against the same unbilled
+            # enrollment. Without the enrollment row lock both can pass the
+            # exists() check and post two Fees documents.
+            keys=('http_fin_race_a_00001','http_fin_race_b_00001')
+            def request(key):
+                s=requests.Session();s.headers.update(sessions['finance_officer'].headers);s.cookies.update(sessions['finance_officer'].cookies)
+                return key,s.post(base+'/api/method/toefl_house.finance.issue_tuition_fees',json=dict(http_fin_payload,request_key=key),timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,keys))
+            winners=[(k,r) for k,r in rs if r.status_code==200]
+            losers=[(k,r) for k,r in rs if r.status_code!=200]
+            assert len(winners)==1 and len(losers)==1,({'winners':[(k,r.status_code) for k,r in winners],'losers':[(k,r.status_code,r.json().get('exc_type')) for k,r in losers]})
+            http_tuition_winner['key']=winners[0][0]
+            value=winners[0][1].json()['message']
             assert value['grand_total']==25000.0 and value['currency']=='AFN',value
+            assert frappe.db.count('Fees',{'program_enrollment':enrolled['program_enrollment'],'docstatus':('!=',2)})==1
             return value
-        httpfees=check('http-finance-tuition-positive',http_tuition)
+        httpfees=check('http-finance-concurrent-tuition-first-writer',http_tuition)
         check('http-finance-guest-denied',lambda:http_denied(requests.post(base+'/api/method/toefl_house.finance.issue_tuition_fees',headers={'Host':'placement-test.localhost'},json=http_fin_payload,timeout=30)))
         def http_fin_csrf():
             s=sessions['finance_officer'];token=s.headers.pop('X-Frappe-CSRF-Token')
@@ -2682,18 +2694,28 @@ def main():
         check('http-finance-wrong-role-denied',lambda:http_denied(fpost('enrollment_officer','issue_tuition_fees',dict(http_fin_payload,request_key='http_fin_role_0000001'))))
         check('http-finance-get-cannot-mutate',lambda:http_denied(sessions['finance_officer'].get(base+'/api/method/toefl_house.finance.issue_tuition_fees',params={'request_key':'http_fin_get_0000001'},timeout=30)))
         def http_tuition_replay():
-            r=fpost('finance_officer','issue_tuition_fees',http_fin_payload)
+            r=fpost('finance_officer','issue_tuition_fees',dict(http_fin_payload,request_key=http_tuition_winner['key']))
             assert r.status_code==200 and r.json()['message']==httpfees
             assert frappe.db.count('Fees',{'program_enrollment':enrolled['program_enrollment'],'docstatus':('!=',2)})==1
-            return {'same_result':True,'no_new_fees':True}
+            return {'same_result':True,'no_new_fees':True,'replayed_key':http_tuition_winner['key']}
         check('http-finance-tuition-idempotent-replay',http_tuition_replay)
+        http_place_winner={'key':None}
         def http_placement():
-            r=fpost('finance_officer','issue_placement_fee',dict(request_key='http_fin_place_00001',case=case_of('candidate7'),customer=fin['payer'],posting_date='2026-09-02',due_date='2026-10-02'))
-            assert r.status_code==200,f'placement fee HTTP {r.status_code} {r.text[:200]}'
-            value=r.json()['message']
+            case=case_of('candidate7')
+            keys=('http_fin_prace_a_00001','http_fin_prace_b_00001')
+            def request(key):
+                s=requests.Session();s.headers.update(sessions['finance_officer'].headers);s.cookies.update(sessions['finance_officer'].cookies)
+                return key,s.post(base+'/api/method/toefl_house.finance.issue_placement_fee',json=dict(request_key=key,case=case,customer=fin['payer'],posting_date='2026-09-02',due_date='2026-10-02'),timeout=40)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,keys))
+            winners=[(k,r) for k,r in rs if r.status_code==200]
+            losers=[(k,r) for k,r in rs if r.status_code!=200]
+            assert len(winners)==1 and len(losers)==1,({'winners':[(k,r.status_code) for k,r in winners],'losers':[(k,r.status_code,r.json().get('exc_type')) for k,r in losers]})
+            http_place_winner['key']=winners[0][0]
+            value=winners[0][1].json()['message']
             assert value['grand_total']==4000.0 and value['currency']=='AFN',value
+            assert frappe.db.count('Sales Invoice',{'th_placement_case':case,'docstatus':('!=',2)})==1
             return value
-        httpinv=check('http-finance-placement-positive',http_placement)
+        httpinv=check('http-finance-concurrent-placement-first-writer',http_placement)
         def finance_officer_revoke():
             frappe.set_user('Administrator');u=frappe.get_doc('User',users['finance_officer']);u.roles=[];u.save();frappe.db.commit();frappe.clear_cache(user=u.name)
             return http_denied(fpost('finance_officer','issue_tuition_fees',dict(http_fin_payload,request_key='http_fin_revoked_00001')))

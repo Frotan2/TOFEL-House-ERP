@@ -61,6 +61,10 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             posting, due = validate_finance_dates(posting_date, due_date)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
+        if not frappe.db.exists(PROGRAM_ENROLLMENT, pe_name):
+            raise frappe.ValidationError("Unknown program enrollment")
+        frappe.db.sql("select name from `tabProgram Enrollment` where name=%s for update",
+                      (pe_name,))
         pe = frappe.db.get_value(PROGRAM_ENROLLMENT, pe_name,
                                  ["student", "program", "academic_year", "docstatus"],
                                  as_dict=True)
@@ -185,6 +189,10 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             posting, due = validate_finance_dates(posting_date, due_date)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
+        if not frappe.db.exists("TH Placement Case", case_name):
+            raise frappe.ValidationError("Unknown placement case")
+        frappe.db.sql("select name from `tabTH Placement Case` where name=%s for update",
+                      (case_name,))
         if not frappe.db.exists("TH Placement Case", case_name):
             raise frappe.ValidationError("Unknown placement case")
         if not frappe.db.exists(CUSTOMER, customer_name):
