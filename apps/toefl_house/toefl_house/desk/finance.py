@@ -204,7 +204,9 @@ def work():
                 "Amounts are read straight from the posted document.").format(
                     grand=row.get("grand_total") or 0, currency=row.get("currency") or "",
                     outstanding=row.get("outstanding_amount") or 0),
-            "next": "Record the payment against this document." if state in ("Outstanding", "Overdue", "Unpaid")
+            "next": ("Record the payment against this document in the finance workspace. "
+                     "This desk does not collect money itself.")
+            if state in ("Outstanding", "Overdue", "Unpaid")
             else "No action.",
             "next_role": "Finance Officer" if state in ("Outstanding", "Overdue", "Unpaid") else None,
             "waiting_since": row.get("due_date") or row.get("posting_date"),
