@@ -178,6 +178,10 @@ DEFAULT_ENCRYPT = ["openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-iter", "200000
                    "-salt", "-in", "{plain}", "-out", "{cipher}",
                    "-pass", "file:{passphrase_file}"]
 
+DEFAULT_DECRYPT = ["openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000",
+                   "-in", "{cipher}", "-out", "{plain}",
+                   "-pass", "file:{passphrase_file}"]
+
 
 @dataclass(frozen=True)
 class BackupRun:
@@ -263,8 +267,141 @@ def write_sidecar(run: BackupRun, retention: RetentionPolicy,
     return str(sidecar)
 
 
+@dataclass(frozen=True)
+class RestoreRun:
+    """One executed restore into staging. Never a live-site rehearsal record."""
+
+    artifact: str
+    decrypted_path: str
+    cipher_digest: str
+    plaintext_digest: str
+    verified: bool
+    restore_command_ran: bool
+    classification: str
+    rehearsal_on_real_server: bool
+
+
+def _is_within(path: str, root: str) -> bool:
+    """True when ``path`` is ``root`` or a file/directory inside it."""
+    target = pathlib.Path(path).resolve()
+    base = pathlib.Path(root).resolve()
+    if target == base:
+        return True
+    try:
+        target.relative_to(base)
+        return True
+    except ValueError:
+        return False
+
+
+def expected_digest_from_sidecar(artifact: str, manifest_path: str | None = None,
+                                 ) -> tuple[str, str | None, bool]:
+    """Cipher digest, plaintext digest if recorded, and whether the artifact is encrypted.
+
+    A missing sidecar is a refusal, not a skip: decrypting an unverified
+    artifact is how a corrupted backup becomes a corrupted database.
+    """
+    import json as _json
+    sidecar = pathlib.Path(manifest_path) if manifest_path else pathlib.Path(
+        str(artifact) + ".manifest.json")
+    if not sidecar.is_file():
+        raise BackupPolicyError(
+            "restore refused: sidecar manifest is missing; "
+            "will not decrypt an unverified artifact")
+    try:
+        payload = _json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise BackupPolicyError(
+            "restore refused: sidecar manifest is unreadable") from exc
+    artifacts = payload.get("artifacts") if isinstance(payload, dict) else None
+    if not isinstance(artifacts, list) or not artifacts or not isinstance(artifacts[0], dict):
+        raise BackupPolicyError("restore refused: sidecar lists no artifacts")
+    sha = artifacts[0].get("sha256")
+    if not isinstance(sha, str) or not sha:
+        raise BackupPolicyError("restore refused: sidecar has no cipher digest")
+    plain = artifacts[0].get("plaintext_sha256")
+    encrypted = bool(artifacts[0].get("encrypted"))
+    return sha, (plain if isinstance(plain, str) and plain else None), encrypted
+
+
+def run_restore(*, artifact: str, staging_root: str,
+                passphrase_file: str | None = None,
+                active_data_root: str | None = None,
+                restore_command: list[str] | None = None,
+                decrypt_command: list[str] | None = None,
+                manifest_path: str | None = None,
+                ) -> RestoreRun:
+    """Verify, then decrypt into staging. Never onto the live data root.
+
+    The backup-restore gate stays BLOCKED until a rehearsal is recorded on
+    the real server. This function is the mechanism for that rehearsal: it
+    will not decrypt a digest mismatch, will not write into the live data
+    directory, and always reports ``rehearsal_on_real_server=False``.
+    """
+    import subprocess
+
+    cipher = pathlib.Path(artifact)
+    if not cipher.is_file():
+        raise BackupPolicyError(f"restore refused: artifact missing: {artifact}")
+    expected, expected_plain, encrypted = expected_digest_from_sidecar(
+        str(cipher), manifest_path)
+    verdict = verify_artifact(cipher, expected)
+    if not verdict["verified"]:
+        raise BackupPolicyError(
+            "restore refused: artifact digest does not match the sidecar; "
+            "will not decrypt a corrupted or substituted backup")
+    if encrypted and not passphrase_file:
+        raise BackupPolicyError(
+            "restore refused: artifact is encrypted and no passphrase file was given")
+
+    if active_data_root and _is_within(staging_root, active_data_root):
+        raise BackupPolicyError(
+            "restore refused: staging directory is the live data root or inside it; "
+            "restore into a fresh location, never over the live one")
+
+    staging = pathlib.Path(staging_root)
+    staging.mkdir(parents=True, exist_ok=True)
+    decrypted = staging / (cipher.name + ".restored")
+    if decrypted.resolve() == cipher.resolve():
+        raise BackupPolicyError("restore refused: decrypted path would overwrite the cipher")
+
+    try:
+        if passphrase_file:
+            template = decrypt_command or DEFAULT_DECRYPT
+            argv = [part.format(plain=str(decrypted), cipher=str(cipher),
+                                passphrase_file=passphrase_file) for part in template]
+            subprocess.run(argv, check=True, capture_output=True)
+        else:
+            import shutil
+            shutil.copy2(cipher, decrypted)
+        plain_digest = digest_file(decrypted)
+        if expected_plain and plain_digest != expected_plain:
+            decrypted.unlink()
+            raise BackupPolicyError(
+                "restore refused: decrypted dump does not match the sidecar plaintext digest")
+    except BackupPolicyError:
+        raise
+    except Exception:
+        if decrypted.exists():
+            decrypted.unlink()
+        raise
+
+    ran = False
+    if restore_command:
+        with open(decrypted, "rb") as source:
+            subprocess.run(restore_command, stdin=source, check=True, capture_output=True)
+        ran = True
+    return RestoreRun(
+        artifact=str(cipher), decrypted_path=str(decrypted),
+        cipher_digest=expected, plaintext_digest=plain_digest,
+        verified=True, restore_command_ran=ran,
+        classification="INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY",
+        rehearsal_on_real_server=False,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Operator entry: run one backup, or print the restore rehearsal.
+    """Operator entry: run one backup, or verify-and-decrypt a restore into staging.
 
     Example (on the real server, with a second volume mounted):
 
@@ -275,15 +412,24 @@ def main(argv: list[str] | None = None) -> int:
             --passphrase-file /etc/toefl-house/backup-passphrase \\
             --dump-command mysqldump --single-transaction --routines --triggers SITE_DB
 
-    The restore rehearsal is printed by ``--print-restore-procedure``. It has
-    not been executed from this environment; the backup-restore gate stays
-    BLOCKED until that rehearsal is recorded on the real server.
+    Staging restore (still not a real-server rehearsal):
+
+        python3 -m tools.operations.interim_backup \\
+            --restore --artifact PATH.enc --staging-root /var/tmp/toefl-restore \\
+            --active-data-root /var/lib/mysql --passphrase-file /etc/toefl-house/backup-passphrase
+
+    The operator checklist is printed by ``--print-restore-procedure``. The
+    backup-restore gate stays BLOCKED until a rehearsal is recorded on the
+    real server.
     """
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--print-restore-procedure", action="store_true")
     parser.add_argument("--print-limitations", action="store_true")
+    parser.add_argument("--restore", action="store_true")
+    parser.add_argument("--artifact")
+    parser.add_argument("--staging-root")
     parser.add_argument("--active-data-root")
     parser.add_argument("--backup-root")
     parser.add_argument("--label")
@@ -298,6 +444,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.print_limitations:
         for line in LIMITATIONS:
             print(line)
+        return 0
+    if args.restore:
+        missing = [name for name in ("artifact", "staging_root", "active_data_root")
+                   if not getattr(args, name)]
+        if missing:
+            parser.error("a restore requires --artifact, --staging-root and "
+                         "--active-data-root")
+        run = run_restore(artifact=args.artifact, staging_root=args.staging_root,
+                          passphrase_file=args.passphrase_file,
+                          active_data_root=args.active_data_root)
+        print(run.decrypted_path)
+        print("verified")
+        print(run.classification)
+        print("NOT A REAL-SERVER REHEARSAL")
         return 0
     missing = [name for name in ("active_data_root", "backup_root", "label")
                if not getattr(args, name)]

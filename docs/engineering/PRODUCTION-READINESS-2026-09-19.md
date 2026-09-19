@@ -53,8 +53,14 @@ Proven in this repository, not assumed:
 - D11 MIT, D13 RPO 24h / RTO 8h (targets), D14 off-site class (hardware the
   Owner controls, not built).
 - Interim backup **mechanism**: different-volume refusal, openssl encrypt /
-  decrypt round-trip, digest, sidecar limitations, restore procedure printed
-  from code. **Not** a rehearsed restore on the real server.
+  digest sidecar, and `--restore` which verifies the digest then decrypts into
+  a staging directory that is not the live data root. **Not** a rehearsed
+  restore on the real server; the gate stays BLOCKED until that rehearsal
+  is recorded there.
+- Concurrent first-writer billing (tuition Fees and placement Sales Invoice)
+  hosted-proven on `3eaed7d` (placement **PASS** 35437058766). Invoice
+  correction approval re-validates the live invoice, matching the fees path,
+  hosted-proven on `7e1f346` (placement **PASS** 35435767069).
 - SEC-DEPS-01 evidence basis recorded as an inspection limitation — not an
   all-clear, not a demonstrated exploit.
 
@@ -98,11 +104,11 @@ If any of (1)–(3) remain, the honest answer to the acceptance question is
 | Item | State |
 |---|---|
 | Classification | INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY |
-| Mechanism | `python3 -m tools.operations.interim_backup` — dump command in, openssl AES-256-CBC PBKDF2, sha256 sidecar |
+| Mechanism | `python3 -m tools.operations.interim_backup` — dump command in, openssl AES-256-CBC PBKDF2, sha256 sidecar; `--restore` verifies then decrypts to staging |
 | Destination | A **different local volume** than the live data (`st_dev` must differ). Same-volume copies are refused. |
 | Retention | 14 daily / 8 weekly / 12 monthly, reported not auto-deleted |
-| Verification | sha256 of the cipher against the sidecar; decrypt round-trip proven in the owned suite with real openssl |
-| Restore test | **Not executed on the real server.** Procedure: `python3 -m tools.operations.interim_backup --print-restore-procedure` |
+| Verification | sha256 of the cipher against the sidecar before any decrypt; decrypted dump checked against the sidecar plaintext digest |
+| Restore test | **Not executed on the real server.** Staging restore: `python3 -m tools.operations.interim_backup --restore ...`. Procedure: `python3 -m tools.operations.interim_backup --print-restore-procedure` |
 | Same-machine limitation | A second drive in the same machine does **not** protect against theft, fire, flood, total hardware loss, site loss, or ransomware that reaches both mounted volumes. D14 off-site is NOT YET BUILT. |
 | RPO / RTO | Owner selected 24 hours / 8 hours as **targets**. They are not measured by this tool. |
 
@@ -151,14 +157,10 @@ forbidden error.
 
 1. Owner decision: lift or keep synthetic-only for the local Tailscale site.
 2. Restore rehearsal on the real server against a real MariaDB dump; record
-   date, digest, elapsed time, outcome. That is what moves backup-restore.
+   date, digest, elapsed time, outcome. Staging verify-and-decrypt exists;
+   that is not the rehearsal. The rehearsal is what moves backup-restore.
 3. Readable dependency-audit output from an environment with log access;
    triage; upgrade only with compatibility evidence; re-qualify hosted.
 4. Independent evidence of TLS and session cookies on the Tailscale URL.
-5. Finance-desk visibility of D12 payables awaiting native payroll (queue
-   of facts, not a second payroll engine).
-6. Hosted HTTP verification of desk journeys with real roles.
-7. Remaining hostile probes: fee no longer submitted / no longer exists;
-   discount-rule and invoice-correction paths.
-8. Do not start: guardian portal, payment gateway, public DNS, off-site
+5. Do not start: guardian portal, payment gateway, public DNS, off-site
    hardware fiction, capacity numbers, SPA frontend.

@@ -29,6 +29,7 @@ from tools.operations.interim_backup import (  # noqa: E402
     restore_procedure,
     retention_plan,
     run_backup,
+    run_restore,
     verify_artifact,
     write_sidecar,
 )
@@ -248,6 +249,124 @@ class ExecutedBackupRunTests(unittest.TestCase):
             self.assertIn("ransomware", joined)
 
 
+
+class RestoreMechanismTests(unittest.TestCase):
+    """Verify-then-decrypt into staging. Not a real-server rehearsal."""
+
+    def _passphrase(self, root):
+        path = os.path.join(root, "passphrase")
+        with open(path, "w") as handle:
+            handle.write("test-passphrase-not-a-secret\n")
+        os.chmod(path, 0o600)
+        return path
+
+    def _backed_up(self, root, payload=b"INSERT INTO t VALUES (1);\n"):
+        import shutil
+        if shutil.which("openssl") is None:
+            self.skipTest("openssl not available")
+        dest = os.path.join(root, "backups")
+        passphrase = self._passphrase(root)
+        run = run_backup(
+            backup_root=dest, label="db-restore-mech",
+            dump_command=["printf", payload.decode()],
+            passphrase_file=passphrase,
+            volume_evidence={"different_volume": True, "injected": True})
+        write_sidecar(run, RetentionPolicy(),
+                      restore_command="see restore_procedure()")
+        return run, passphrase, payload
+
+    def test_restore_decrypts_to_staging_after_verification(self):
+        with tempfile.TemporaryDirectory() as root:
+            live = os.path.join(root, "live")
+            staging = os.path.join(root, "staging")
+            os.makedirs(live)
+            run, passphrase, payload = self._backed_up(root)
+            restored = run_restore(
+                artifact=run.cipher_path, staging_root=staging,
+                passphrase_file=passphrase, active_data_root=live)
+            self.assertTrue(restored.verified)
+            self.assertFalse(restored.rehearsal_on_real_server)
+            self.assertEqual(restored.classification,
+                             "INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY")
+            with open(restored.decrypted_path, "rb") as handle:
+                self.assertEqual(handle.read(), payload)
+            self.assertTrue(os.path.isfile(run.cipher_path),
+                            "restore must not consume the cipher")
+
+    def test_a_corrupted_artifact_is_not_decrypted(self):
+        with tempfile.TemporaryDirectory() as root:
+            live = os.path.join(root, "live")
+            staging = os.path.join(root, "staging")
+            os.makedirs(live)
+            run, passphrase, _payload = self._backed_up(root)
+            with open(run.cipher_path, "wb") as handle:
+                handle.write(b"not the original cipher")
+            with self.assertRaises(BackupPolicyError) as raised:
+                run_restore(artifact=run.cipher_path, staging_root=staging,
+                            passphrase_file=passphrase, active_data_root=live)
+            self.assertIn("digest", str(raised.exception).lower())
+            leftovers = list(Path(staging).glob("*.restored")) if os.path.isdir(staging) else []
+            self.assertEqual(leftovers, [])
+
+    def test_missing_sidecar_is_not_decrypted(self):
+        with tempfile.TemporaryDirectory() as root:
+            live = os.path.join(root, "live")
+            staging = os.path.join(root, "staging")
+            os.makedirs(live)
+            run, passphrase, _payload = self._backed_up(root)
+            os.unlink(run.cipher_path + ".manifest.json")
+            with self.assertRaises(BackupPolicyError) as raised:
+                run_restore(artifact=run.cipher_path, staging_root=staging,
+                            passphrase_file=passphrase, active_data_root=live)
+            self.assertIn("sidecar", str(raised.exception).lower())
+
+    def test_staging_inside_the_live_root_is_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            live = os.path.join(root, "live")
+            os.makedirs(live)
+            run, passphrase, _payload = self._backed_up(root)
+            with self.assertRaises(BackupPolicyError) as raised:
+                run_restore(artifact=run.cipher_path,
+                            staging_root=os.path.join(live, "inside"),
+                            passphrase_file=passphrase, active_data_root=live)
+            self.assertIn("never over the live one", str(raised.exception))
+
+    def test_optional_restore_command_receives_the_dump(self):
+        with tempfile.TemporaryDirectory() as root:
+            live = os.path.join(root, "live")
+            staging = os.path.join(root, "staging")
+            fresh = os.path.join(root, "fresh.sql")
+            os.makedirs(live)
+            run, passphrase, payload = self._backed_up(root)
+            restored = run_restore(
+                artifact=run.cipher_path, staging_root=staging,
+                passphrase_file=passphrase, active_data_root=live,
+                restore_command=["tee", fresh])
+            self.assertTrue(restored.restore_command_ran)
+            with open(fresh, "rb") as handle:
+                self.assertEqual(handle.read(), payload)
+
+    def test_cli_restore_prints_the_not_rehearsal_marker(self):
+        from tools.operations.interim_backup import main
+        import io
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as root:
+            live = os.path.join(root, "live")
+            staging = os.path.join(root, "staging")
+            os.makedirs(live)
+            run, passphrase, _payload = self._backed_up(root)
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = main(["--restore", "--artifact", run.cipher_path,
+                             "--staging-root", staging, "--active-data-root", live,
+                             "--passphrase-file", passphrase])
+            self.assertEqual(code, 0)
+            text = buf.getvalue()
+            self.assertIn("verified", text)
+            self.assertIn("NOT A REAL-SERVER REHEARSAL", text)
+            self.assertIn("INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY", text)
+
+
 class OperatorCliTests(unittest.TestCase):
 
     def test_print_restore_procedure_exits_zero(self):
@@ -259,6 +378,11 @@ class OperatorCliTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             main(["--active-data-root", "/", "--backup-root", "/tmp",
                   "--label", "x"])
+
+    def test_a_restore_without_artifact_is_refused(self):
+        from tools.operations.interim_backup import main
+        with self.assertRaises(SystemExit):
+            main(["--restore", "--staging-root", "/tmp", "--active-data-root", "/"])
 
 
 if __name__ == "__main__":
