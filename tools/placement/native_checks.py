@@ -4497,7 +4497,11 @@ def main():
                 fields_fee=json.dumps(['`tabFees`.`name`'])
                 ex=sfin.post(base+'/api/method/frappe.desk.reportview.export_query',
                     json={'doctype':'Fees','fields':fields_fee,'file_format_type':'CSV'},timeout=60)
-                assert ex.status_code==200 and len(ex.content)>0 and b'name' in ex.content[:200], \
+                # The CSV header carries field LABELS ("ID" for `name`), not
+                # fieldnames — proven at runtime. The cell proves the
+                # export bit (200 here, denied below), not column exactness.
+                assert ex.status_code==200 and len(ex.content)>0 and b'"ID"' in ex.content[:60] \
+                    and ex.content.count(b'\r\n')>=2, \
                     ('finance export of the fee register failed',ex.status_code,ex.text[:200])
                 http_denied(so.post(base+'/api/method/frappe.desk.reportview.export_query',
                     json={'doctype':'Fees','fields':fields_fee,'file_format_type':'CSV'},timeout=60))
