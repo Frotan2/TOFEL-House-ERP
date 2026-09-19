@@ -250,6 +250,46 @@ and where a disaster can and cannot destroy it.
 
 ---
 
+## D15 — Production authorization scope — **DECIDED 2026-09-19**
+**Owner answer:** **LOCAL LAUNCH ONLY.** The local server + Tailscale deployment
+is the authorized launch scope. The public internet edge (provider, hostname,
+DNS, public edge) is **not** authorized and stays unselected.
+**Scope:** deployment-scope authorization for the currently selected local-server
++ Tailscale topology only.
+**Authorizes:** the local server + Tailscale deployment as the launch target
+(the Owner runs the launch runbook there); engineering to build the D16
+controlled production-activation path; closing launch evidence (restore
+rehearsal, TLS/session checks) against the local scope only.
+**Does NOT authorize:** flipping production to GO while SEC-DEPS-01 is REJECT
+(the Owner's simultaneous standing decision); any internet deployment; waiving
+the backup-restore rehearsal, TLS/session evidence, or durability/observability
+gates — scope authorization is not gate passage; treating hosted synthetic
+qualification as production evidence. Production stays **REJECT**.
+**Why owner-only:** only the Owner can accept the business risk of serving real
+students on the system and can bound where that risk may be taken.
+
+## D16 — Production activation mechanism — **DECIDED 2026-09-19**
+**Owner answer:** **YES — build the controlled activation.** Owned commands may
+operate on the named production site once the explicit activation flags are
+present; everywhere else the synthetic-only hard stop stays in force.
+**Scope:** `toefl_house.security` site-mode resolution and the guarded command
+entry points only. Activation is the explicit triple:
+`toefl_house_production_active=1` **and** `toefl_house_production_site` equal to
+the running site name. Mixed synthetic+production mode is refused; the two
+qualification hostnames can never be the production site.
+**Authorizes:** site-mode resolution (SYNTHETIC / PRODUCTION / REFUSED) with
+fail-closed refusal as the default; accepting PRODUCTION mode at the guarded
+command entry points alongside unchanged SYNTHETIC qualification behavior; the
+server activation steps in the launch runbook with verification commands.
+**Does NOT authorize:** removing or weakening `require_synthetic` on any
+qualification path; any activation that does not name the production site
+explicitly; production GO by itself — activation is a mechanism, and production
+stays **REJECT** until the gates close.
+**Why owner-only:** lifting the synthetic-only hard stop changes what data the
+system may touch. Only the Owner can permit real student data into command paths.
+
+---
+
 **How this packet is used:** business decisions are recorded once in the
 canonical JSON record and projected here. Engineering executes only the scope
 that those decisions unlocks, with narrow then broad validation; no domain
@@ -274,3 +314,5 @@ technical gates are independently satisfied.
 | D9 | **(d) No separate register** | Gate CLOSED at status quo; attendance facts via guarded APIs only |
 | D10 | **(ii) Role-based report/page surfaces** | **T3 EXECUTED & QUALIFIED** — 13 native command Pages (role-filtered command centre + 12 one-role action Pages), no new native Education/ERPNext authority; run 35073376790 @ 3587700, **542/542**. The separate Course Owner/General Manager control-centre Page is a locally contract-tested governance surface and not a replacement for the qualified command evidence. |
 | D11 | **(a) MIT** — DECIDED 2026-09-19 | Found by the 2026-09-17 engineering review as a three-way contradiction: `hooks.py` declared MIT in both apps, the README said no license was selected, no LICENSE file existed and GitHub reported `null`. The Course Owner selected MIT on 2026-09-19; all three surfaces were made consistent in one change and `tests/foundation/test_licence_consistency.py` now enforces the agreement. Upstream Frappe/ERPNext/Education/HRMS terms still govern those apps. |
+| D15 | **LOCAL LAUNCH ONLY** — DECIDED 2026-09-19 | Local server + Tailscale is the authorized launch scope; the internet edge stays unselected and unauthorized. Scope authorization is not gate passage: SEC-DEPS-01 stays REJECT per the simultaneous standing decision, so production stays REJECT. |
+| D16 | **Build the activation** — DECIDED 2026-09-19 | Controlled production-activation path authorized: explicit named-site triple, mixed mode refused, qualification hostnames never production. `require_synthetic` unchanged on qualification paths. Activation is a mechanism, not GO. |
