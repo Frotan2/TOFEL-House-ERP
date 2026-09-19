@@ -2702,18 +2702,27 @@ def main():
         http_place_winner={'key':None}
         def http_placement():
             case=case_of('candidate7')
+            # case_of is a SELECT: under REPEATABLE READ it opens a snapshot.
+            # Commit before the HTTP race so the count below sees the worker's
+            # invoice (run 35436385496 failed here with a bare AssertionError
+            # after tuition first-writer-wins had already passed).
+            frappe.db.commit()
             keys=('http_fin_prace_a_00001','http_fin_prace_b_00001')
             def request(key):
                 s=requests.Session();s.headers.update(sessions['finance_officer'].headers);s.cookies.update(sessions['finance_officer'].cookies)
                 return key,s.post(base+'/api/method/toefl_house.finance.issue_placement_fee',json=dict(request_key=key,case=case,customer=fin['payer'],posting_date='2026-09-02',due_date='2026-10-02'),timeout=40)
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,keys))
+            def _exc(r):
+                try:return r.json().get('exc_type')
+                except Exception:return r.text[:80]
             winners=[(k,r) for k,r in rs if r.status_code==200]
             losers=[(k,r) for k,r in rs if r.status_code!=200]
-            assert len(winners)==1 and len(losers)==1,({'winners':[(k,r.status_code) for k,r in winners],'losers':[(k,r.status_code,r.json().get('exc_type')) for k,r in losers]})
+            assert len(winners)==1 and len(losers)==1,({'winners':[(k,r.status_code) for k,r in winners],'losers':[(k,r.status_code,_exc(r)) for k,r in losers]})
             http_place_winner['key']=winners[0][0]
             value=winners[0][1].json()['message']
             assert value['grand_total']==4000.0 and value['currency']=='AFN',value
-            assert frappe.db.count('Sales Invoice',{'th_placement_case':case,'docstatus':('!=',2)})==1
+            billed=frappe.db.count('Sales Invoice',{'th_placement_case':case,'docstatus':('!=',2)})
+            assert billed==1,('expected one placement invoice after first-writer-wins',billed,case)
             return value
         httpinv=check('http-finance-concurrent-placement-first-writer',http_placement)
         def finance_officer_revoke():
