@@ -187,3 +187,73 @@ Production remains **REJECT**.
 
 **Do not start the next domain.** Teaching Operations (Scheduling & Attendance) is
 CLOSED / QUALIFIED. Stop. Production remains REJECT. Do not deploy.
+
+---
+
+## Addendum 2026-09-19 — D12 compensation posting basis (CLOSED / QUALIFIED on `9f45359`)
+
+Owner decision **D12** (2026-09-19) resolved the two compensation questions that
+engineering had deliberately failed closed rather than guess. Recorded in
+[OWNER-DECISIONS.md](../engineering/OWNER-DECISIONS.md) and the canonical
+owner-decision record:
+
+1. **One-off payable.** A teaching assignment's flat contract amount is paid
+   once, in the first payroll period that covers it.
+2. **Closed supersession window.** A revision ends the predecessor's window the
+   day before the successor starts.
+
+### Defect found and fixed
+
+`compute_skill_payable` returns a **flat** amount and `assign_teaching_skill`
+creates **open-ended** assignments, so every later payroll period re-selected the
+same assignment. The Additional Salary dedup key includes `payroll_date`, so it
+only ever caught same-period repeats: running September and then October paid one
+teaching fact twice. Contract adjustments carried the identical defect.
+
+The hosted check reported `duplicate_pay_prevented: True` throughout, because it
+only exercised a receipt replay and a fresh run over the *same* period. A green
+result was hiding a money bug. That flag is now split into
+`same_period_duplicate_pay_prevented` and
+`one_off_payable_basis_no_cross_period_repay`.
+
+### Invariant collision, resolved by narrowing
+
+`_validate_contract` made `effective_end` immutable, so closing the predecessor's
+window raised `PermissionError`. The rule was **narrowed, not removed**: on
+supersession a window may be set for the first time or move earlier, never later,
+and can never end before it starts. Every other field, all skill terms and all
+adjustments remain immutable, so historical compensation is still reproducible
+from a superseded contract. A static test prevents that narrowing from becoming a
+general window edit.
+
+### Harness fix this required
+
+Hosted job logs live on a results blob that returns `EOF` from the engineering
+sandbox, so a failing scenario was undiagnosable through the API and cost three
+blind iterations. `tools/placement/run_native.py` now emits the exception type,
+a bounded redacted message and the failing frames as `::error::` annotations,
+which are retrievable. That is what finally named the real cause on run
+`35421340401`: the probe asserted three in-scope assignments when the fixture had
+already ended one (`effective_end` `2026-09-15`), so two was correct. The probe
+was wrong, not the command.
+
+### Evidence
+
+| Gate | Run | Result |
+| --- | --- | --- |
+| Placement synthetic content qualification | `35422365153` | **success** |
+| — job `content` | `105842257814` | success |
+| — job `Placement native checks` | `105843550410` | success |
+| — job `Placement runner result` | `105843551630` | success |
+| Owned suite | `35422365161` | success |
+
+Executed on commit `9f45359ce3d3a82bf3923e98cff8ab96f95ea0a2`, created
+2026-09-19T04:50:27Z. Local: 850 owned tests OK, ruff 0.16.8 clean,
+`d8_validate.py` exit 0.
+
+**Gate effect: NONE.** D8 remains **BLOCKED**, production remains **REJECT**,
+`production_enabled` remains false, synthetic-only guard remains REQUIRED, and
+SEC-DEPS-01 remains **UPSTREAM-BLOCKED / REJECT** with no waiver. This is hosted
+qualification of one thin command on a disposable synthetic runner; it is not
+production authorization and does not reopen Placement, Admission, Enrollment,
+Teaching Operations or Finance.
