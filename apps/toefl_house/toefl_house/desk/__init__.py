@@ -39,7 +39,7 @@ DESKS = {
     },
     "th-finance-desk": {
         "title": "TOEFL House Finance Desk",
-        "description": "Today's collections, outstanding receivables, enrollments awaiting billing and the correction queue.",
+        "description": "Today's collections, outstanding receivables, enrollments awaiting billing, teaching assignments for native payroll, and the correction queue.",
         "roles": ["Finance Manager"],
         "module": "Operations",
     },
@@ -174,6 +174,13 @@ PROJECTION_FIELDS = {
     ],
     ("finance", "Fee Component"): [
         "name", "parent", "parenttype", "fees_category", "amount", "idx",
+    ],
+    # D12 visibility: assignment identity and window only. No rate, no
+    # payable amount, no Additional Salary — native payroll stays the
+    # money authority. A count of rows is a record count, not a payroll figure.
+    ("finance", "TH Teaching Assignment"): [
+        "name", "student_group", "skill", "instructor", "contract",
+        "course_schedule", "effective_start", "effective_end",
     ],
     # Owner cockpit counts enabled Students; the projection carries the key
     # only — no student detail leaves the store through the cockpit.

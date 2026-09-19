@@ -33,7 +33,10 @@ POLICY = "TH Correction Policy"
 ENROLLMENT = "Program Enrollment"
 FEE_STRUCTURE = "Fee Structure"
 FEE_ROW = "Fee Component"
+ASSIGNMENT = "TH Teaching Assignment"
 PLAN_FIELDS = ["name", "program", "academic_year", "company", "docstatus"]
+ASSIGNMENT_FIELDS = ["name", "student_group", "skill", "instructor", "contract",
+                     "course_schedule", "effective_start", "effective_end"]
 PLAN_ROW_FIELDS = ["name", "parent", "parenttype", "fees_category", "amount", "idx"]
 
 
@@ -165,6 +168,9 @@ def work():
                 billed.add(row["program_enrollment"])
     awaiting_billing = [row for row in enrollments if row["name"] not in billed]
 
+    assignments = project_rows("finance", ASSIGNMENT, ASSIGNMENT_FIELDS,
+                               order_by="effective_start asc", limit=LIMIT_QUEUES)
+
     money_facts = [
         {"label": "Collected today",
          "definition": "Money received today from posted payment records, summed per receiving currency.",
@@ -187,6 +193,9 @@ def work():
         {"label": "Enrollments awaiting billing",
          "definition": "Confirmed enrollments that no issued bill covers; cancelled bills do not count.",
          "value": len(awaiting_billing), "owner": "Finance Officer"},
+        {"label": "Teaching assignments on file",
+         "definition": "Instructor skill assignments. Pay is native payroll, one-off per assignment; this desk does not calculate pay.",
+         "value": len(assignments), "owner": "Finance Officer"},
     ]
 
     def money_item(row, kind):
@@ -295,6 +304,19 @@ def work():
             item["action"] = action
         billing_items.append(item)
 
+    assignment_items = [{
+        "id": row["name"],
+        "person": row.get("instructor") or "",
+        "detail": " · ".join(part for part in (row.get("student_group"), row.get("skill")) if part),
+        "status": row.get("effective_end") or "open",
+        "stage": "Teaching assignment",
+        "stage_definition": ("An instructor skill assignment. Pay is one-off in the first "
+                             "covering payroll period, through native payroll."),
+        "next": "Run native payroll for the covering period. This desk does not calculate pay.",
+        "next_role": "Finance Officer",
+        "waiting_since": row.get("effective_start"),
+    } for row in assignments]
+
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
@@ -317,6 +339,10 @@ def work():
                     items=_correction_items(corrections),
                     empty_title="No correction requests",
                     empty_body="No correction request (invoice or tuition fee) is open. Requests appear here the moment they are created."),
+            section("assignments", "Teaching assignments (native payroll)", "queue",
+                    items=assignment_items,
+                    empty_title="No teaching assignments",
+                    empty_body="No instructor skill assignment is on file. Assignments appear here from teaching scheduling; pay stays on native payroll."),
         ],
     }
 

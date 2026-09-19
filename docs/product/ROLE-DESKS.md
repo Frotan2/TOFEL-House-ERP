@@ -120,6 +120,10 @@ Sections:
   `Fees` row yet (definition: enrollment submitted, zero Fees referencing it).
 - **Correction queue** — `TH Correction Request` by status (pending /
   approved / denied), each with its invoice, requested amount and state.
+- **Teaching assignments** — `TH Teaching Assignment` identity and window
+  only (instructor, skill, class, dates). Pay is native payroll, one-off per
+  assignment (D12). The desk does not calculate pay and does not project
+  rates or Additional Salary rows.
 
 ### General Manager desk (operations, not a second Owner cockpit)
 

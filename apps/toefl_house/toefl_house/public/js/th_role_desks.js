@@ -33,7 +33,7 @@ frappe.provide("toefl_house.role_desks");
 		"th-finance-desk": {
 			endpoint: "toefl_house.desk.finance.work",
 			title: "TOEFL House Finance Desk",
-			description: "Today's collections, outstanding receivables, enrollments awaiting billing and the correction queue.",
+			description: "Today's collections, outstanding receivables, enrollments awaiting billing, teaching assignments for native payroll, and the correction queue.",
 		},
 		"th-operations-desk": {
 			endpoint: "toefl_house.desk.operations.work",

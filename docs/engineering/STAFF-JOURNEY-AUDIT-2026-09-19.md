@@ -69,11 +69,11 @@ They are **role boundaries**, already specified in ROLE-DESKS.md:
    refuse to run on a non-synthetic site. Staff cannot run ordinary
    operations against real student data until the Owner authorizes
    activation. This is a policy lock, not a missing screen.
-2. **Compensation is not visible on the Finance desk.** D12 is implemented
-   and hosted-qualified; the daily finance surface does not show "this
-   assignment is awaiting the next payroll." Staff must use native HRMS.
-   Adding a payable queue would be legitimate product work; inventing a
-   second payroll engine would not. Left as backlog, not built here.
+2. **Compensation visibility.** D12 is implemented and hosted-qualified.
+   Same-day follow-up: the Finance desk now lists teaching assignments as
+   identity-and-window facts and says it does not calculate pay. It still
+   does not show amounts, rates, or Additional Salary — native HRMS remains
+   the payroll authority. That is the product, not a remaining hole.
 3. **No hosted click-through of this journey on a live site was performed
    in this session.** Desk contract tests execute every `work()` endpoint
    under a frappe stub, including wrong-role refusal. That is not the same

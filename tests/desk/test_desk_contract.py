@@ -1369,5 +1369,41 @@ class DeskBranchScopeTests(unittest.TestCase):
                            "scope applied on doctypes that carry the field")
 
 
+class FinanceAssignmentFactsTests(unittest.TestCase):
+    """D12 visibility: assignments as facts, never as a second payroll."""
+
+    def _payload(self):
+        world = {
+            "TH Teaching Assignment": [
+                {"name": "ASN-1", "student_group": "GEN-1 2026 A", "skill": "SPEAKING",
+                 "instructor": "INS-1", "contract": "CON-1", "course_schedule": None,
+                 "effective_start": "2026-09-01", "effective_end": None},
+            ],
+        }
+        world_get_all = desk_world_get_all("assignment facts", world)
+        module = _import_desk("finance", roles={"Finance Manager"})
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        return module.work()
+
+    def test_assignments_are_listed_without_pay_figures(self):
+        payload = self._payload()
+        section = next(sect for sect in payload["sections"] if sect["id"] == "assignments")
+        self.assertEqual(len(section["items"]), 1)
+        item = section["items"][0]
+        self.assertEqual(item["person"], "INS-1")
+        self.assertNotIn("amount", item)
+        self.assertNotIn("currency", item)
+        self.assertIsNone(item.get("action"))
+        self.assertIn("does not calculate pay", item["next"])
+
+    def test_the_count_tile_is_a_record_count_not_a_payroll_number(self):
+        payload = self._payload()
+        facts = next(sect for sect in payload["sections"] if sect["id"] == "facts")["facts"]
+        tile = next(fact for fact in facts if fact["label"] == "Teaching assignments on file")
+        self.assertEqual(tile["value"], 1)
+        self.assertIn("does not calculate pay", tile["definition"])
+
+
 if __name__ == "__main__":
     unittest.main()
