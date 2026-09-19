@@ -153,6 +153,20 @@ def main():
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']=redact(str(exc));print(report['failure'],flush=True)
+        # Surface the failure as a check-run annotation.
+        #
+        # The job log is stored on a results blob that is not always
+        # retrievable (the host returns EOF), which left a failing scenario
+        # completely undiagnosable through the API: the run reported "failure"
+        # at a step name and nothing else. Annotations are retrievable, so the
+        # redacted traceback tail is emitted here as well. This adds
+        # diagnosability only - the exit code and report status are unchanged.
+        import traceback
+        detail=redact(traceback.format_exc())
+        report['traceback']=detail
+        for line in detail.strip().splitlines()[-14:]:
+            safe=line.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+            print('::error::'+safe,flush=True)
     finally:
         for proc,stream,log in processes:
             try:
