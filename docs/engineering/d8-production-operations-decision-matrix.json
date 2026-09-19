@@ -432,5 +432,31 @@
     "deferred_future_scope": [],
     "does_not_change": "No gate state was altered by the re-baseline. production_state stays REJECT, overall_gate_state stays BLOCKED, and dependency-security stays REJECT. Classifying a gate as operational hardening or future scope records that it does not block ordinary local daily use; it does not make it pass, does not waive it, and does not authorise the internet-hosted deployment.",
     "authority": "Owner directive of 2026-09-19, sections 1, 7 and 9."
+  },
+  "security_dependency_state_detail": {
+    "state": "UPSTREAM-BLOCKED / REJECT",
+    "state_unchanged_by_this_record": true,
+    "classification": "EVIDENCE AND INSPECTION LIMITATION - NOT A DEMONSTRATED EXPLOITABLE FINDING, AND NOT AN ALL-CLEAR",
+    "what_is_known": [
+      "The gate rejects. This is proven by real hosted execution against the exact SHA, not inferred.",
+      "It is enforced in code: d8_validate.py raises ContractError, so the posture cannot be edited away in a document.",
+      "The 273-commit history contains no dependency-upgrade commit, so nothing in this repository has addressed it.",
+      "The pinned foundation is Frappe/ERPNext/Education/HRMS at fixed revisions."
+    ],
+    "what_is_not_known": [
+      "Which specific pinned dependencies are implicated.",
+      "Which advisories the scanner matched, and their identifiers.",
+      "Their severity, and whether any is reachable or exploitable in this deployment.",
+      "Whether any compatible upstream fix exists."
+    ],
+    "why_it_is_not_known": "The scanner's advisory detail has never been retrievable from this environment. Job logs and artifact archives redirect to blob storage and terminate at EOF. Only workflow annotations are readable, and they carry no advisory identifiers. This is an inspection limitation of the reporting path, not evidence that a vulnerability exists.",
+    "what_this_record_does_not_do": "It does not downgrade the gate, does not infer a clean result from the absence of readable findings, does not invent advisory identifiers, and does not treat an unreadable report as proof of an unknown vulnerability. Both of those errors would be fabrications in opposite directions.",
+    "what_would_resolve_it": "The actual dependency-audit output captured from an environment with log access, then triage of the real advisories, then a compatibility-tested upgrade bundle where one exists, then hosted security qualification tied to the exact SHA.",
+    "owner_position": {
+      "decision": "SEC-DEPS-01 keep REJECT until the underlying findings can actually be read",
+      "date": "2026-09-19",
+      "effect": "Production stays REJECT. This is the Owner's decision, not an engineering default."
+    },
+    "authority": "Owner directive of 2026-09-19, section 8."
   }
 }

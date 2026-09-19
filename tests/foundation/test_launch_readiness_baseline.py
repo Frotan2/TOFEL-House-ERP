@@ -114,3 +114,43 @@ class LaunchReadinessBaselineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SecurityDependencyEvidenceTests(unittest.TestCase):
+    """Section 8: an unreadable advisory report is neither a finding nor a clean
+    result. Both directions are fabrications, so both are pinned here."""
+
+    def setUp(self):
+        self.matrix = json.loads(MATRIX.read_text(encoding="utf-8"))
+        self.detail = self.matrix["security_dependency_state_detail"]
+
+    def test_recording_the_detail_did_not_change_the_state(self):
+        self.assertEqual(self.matrix["security_dependency_state"],
+                         "UPSTREAM-BLOCKED / REJECT")
+        self.assertEqual(self.detail["state"], "UPSTREAM-BLOCKED / REJECT")
+        self.assertTrue(self.detail["state_unchanged_by_this_record"])
+
+    def test_the_limitation_is_classified_as_a_limitation(self):
+        self.assertIn("EVIDENCE AND INSPECTION LIMITATION",
+                      self.detail["classification"])
+        self.assertIn("NOT A DEMONSTRATED EXPLOITABLE FINDING",
+                      self.detail["classification"])
+        self.assertIn("NOT AN ALL-CLEAR", self.detail["classification"])
+
+    def test_known_and_unknown_are_separated_not_blurred(self):
+        self.assertTrue(self.detail["what_is_known"])
+        self.assertTrue(self.detail["what_is_not_known"])
+        joined_known = " ".join(self.detail["what_is_known"])
+        self.assertNotIn("no vulnerabilit", joined_known.lower(),
+                         "the known list must not smuggle in a clean result")
+
+    def test_no_advisory_identifiers_are_invented(self):
+        """A fabricated CVE would be the most dangerous possible content here."""
+        import re
+        blob = json.dumps(self.detail)
+        self.assertEqual(re.findall(r"CVE-\d{4}-\d+", blob), [])
+
+    def test_the_owner_position_is_recorded_as_the_owners(self):
+        self.assertEqual(self.detail["owner_position"]["date"], "2026-09-19")
+        self.assertIn("Owner's decision, not an engineering default",
+                      self.detail["owner_position"]["effect"])
