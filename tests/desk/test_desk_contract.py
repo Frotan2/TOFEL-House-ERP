@@ -30,7 +30,7 @@ APP = ROOT / "apps/toefl_house/toefl_house"
 DESK = APP / "desk"
 
 DESK_MODULES = ("__init__", "lifecycle", "reception", "academic", "finance",
-                "operations", "owner", "setup")
+                "operations", "owner", "setup", "teacher")
 
 SENSITIVE_FIELDS = {
     "answer", "content_hash", "result_json", "seed", "pool_digest",
@@ -195,10 +195,20 @@ def _frappe_stub(roles=()):
 
 def _import_desk(name, roles=()):
     """Import toefl_house.desk.<name> with frappe stubbed and the real desk
-    package executed, so `from toefl_house.desk import ...` resolves."""
+    package executed, so `from toefl_house.desk import ...` resolves.
+
+    Stale desk submodules are evicted first: without this, owner.py's
+    `from toefl_house.desk.operations import ...` binds to whatever stub an
+    earlier test cached (alphabetical class order made Owner tests silently
+    read Management tests' world). Every import here binds fresh or it
+    binds wrong.
+    """
     stub = _frappe_stub(roles)
     previous = {key: sys.modules.get(key)
                 for key in ("frappe", "frappe.utils", "toefl_house", "toefl_house.desk")}
+    stale = [key for key in sys.modules
+             if key.startswith("toefl_house.desk.") or key == "toefl_house.observability"]
+    stashed = {key: sys.modules.pop(key) for key in stale}
     sys.modules["frappe"] = stub
     sys.modules["frappe.utils"] = stub.utils
     package = types.ModuleType("toefl_house")
@@ -223,6 +233,7 @@ def _import_desk(name, roles=()):
                 sys.modules.pop(key, None)
             else:
                 sys.modules[key] = value
+        sys.modules.update(stashed)
 
 
 def desk_sources():
@@ -258,7 +269,7 @@ class DeskGateTests(unittest.TestCase):
 
     def test_every_whitelisted_desk_endpoint_gates_on_its_audience_first(self):
         for module in ("reception", "academic", "finance", "operations", "owner",
-                       "setup"):
+                       "setup", "teacher"):
             endpoints = self.whitelisted(self.trees[module])
             self.assertTrue(endpoints, f"{module} ships no whitelisted endpoint")
             for func in endpoints:
@@ -302,7 +313,7 @@ class DeskReadBoundaryTests(unittest.TestCase):
                            "frappe.db.get_all", "frappe.db.sql", "frappe.get_doc",
                            "frappe.db.insert", "frappe.db.delete", "frappe.db.count")
         for name in ("reception", "academic", "finance", "operations", "owner",
-                     "setup"):
+                     "setup", "teacher"):
             for node in ast.walk(self.trees[name]):
                 if isinstance(node, ast.Call):
                     rendered = ast.unparse(node.func)
@@ -323,7 +334,7 @@ class DeskReadBoundaryTests(unittest.TestCase):
 
     def test_every_projection_call_names_explicit_fields_and_a_limit(self):
         for name in ("reception", "academic", "finance", "operations", "owner",
-                     "setup"):
+                     "setup", "teacher"):
             for node in ast.walk(self.trees[name]):
                 if not (isinstance(node, ast.Call) and ast.unparse(node.func) in (
                         "project_rows", "project_count")):
@@ -378,7 +389,8 @@ class DeskAudienceTieTests(unittest.TestCase):
     def test_desk_registry_is_complete(self):
         self.assertEqual(set(self.desks), {
             "th-reception-desk", "th-academic-desk", "th-finance-desk",
-            "th-operations-desk", "th-owner-cockpit", "th-academic-setup"})
+            "th-operations-desk", "th-owner-cockpit", "th-academic-setup",
+            "th-teacher-desk"})
         roles = {row["name"] for row in json.loads(
             (APP / "fixtures/role.json").read_text(encoding="utf-8"))}
         for slug, spec in self.desks.items():
@@ -414,6 +426,7 @@ class DeskAudienceTieTests(unittest.TestCase):
             "th-operations-desk": "operations.work",
             "th-owner-cockpit": "owner.cockpit",
             "th-academic-setup": "setup.work",
+            "th-teacher-desk": "teacher.work",
         }
         for slug, dotted in module_of.items():
             self.assertIn(f'"toefl_house.desk.{dotted}"', self.client,
@@ -506,7 +519,7 @@ class DeskSchemaFidelityTests(unittest.TestCase):
 
     def test_every_desk_query_site_uses_real_columns(self):
         for name in ("reception", "academic", "finance", "operations", "owner",
-                     "setup"):
+                     "setup", "teacher"):
             tree = self.trees[name]
             strings, lists = {}, {}
             for node in tree.body:
@@ -803,7 +816,7 @@ class DeskPlainLanguageTests(unittest.TestCase):
 
     def test_display_fields_carry_no_doctype_plumbing(self):
         for module in ("reception", "academic", "lifecycle", "finance", "operations",
-                       "owner", "setup"):
+                       "owner", "setup", "teacher"):
             tree = ast.parse((DESK / f"{module}.py").read_text(encoding="utf-8"))
             banned = self.COMMON_BANNED if module in ("finance", "owner", "setup") \
                 else self.STAFF_BANNED
@@ -900,6 +913,7 @@ class DeskWorkSmokeTests(unittest.TestCase):
         ("operations", "work", {"General Manager"}),
         ("owner", "cockpit", {"Course Owner"}),
         ("setup", "work", {"Course Owner"}),
+        ("teacher", "work", {"Instructor"}),
     )
 
     def test_every_desk_endpoint_runs_and_returns_sections(self):
@@ -1058,6 +1072,28 @@ class SetupDeskWorldTests(unittest.TestCase):
                       if "not claimed by any configured level" in fact["label"])
         self.assertEqual(orphan["value"], 1,
                          "exactly one of the four native programs is unanchored")
+
+    def test_years_section_marks_current_and_names_missing_plans(self):
+        payload = self._run()
+        items = {item["id"]: item
+                 for item in self._section(payload, "years")["items"]}
+        self.assertEqual(items["2026-2027"]["status"], "Current")
+        self.assertIn("1 complete fee plan(s)", items["2026-2027"]["next"])
+        self.assertIn("GEN-A2", items["2026-2027"]["next"])
+        self.assertIn("GEN-A3", items["2026-2027"]["next"])
+
+    def test_governing_duration_names_its_actor_and_reason(self):
+        payload = self._run()
+        item = self._item(payload, "levels", "GEN-A1")
+        self.assertIn("owner@example.com", item["next"])
+        self.assertIn("initial", item["next"])
+
+    def test_grading_stays_an_explicit_owner_placeholder(self):
+        payload = self._run()
+        items = self._section(payload, "grading")["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["status"], "Not decided")
+        self.assertEqual(items[0]["next_role"], "Course Owner")
 
     def test_discounts_section_and_health_fact(self):
         payload = self._run()
@@ -1516,6 +1552,412 @@ class OwnerOperationsWorldTests(unittest.TestCase):
         self.assertIn("posture", ids)
         self.assertIn("funnel", ids)
         self.assertIn("exceptions", ids)
+
+
+class OperationsHealthWorldTests(unittest.TestCase):
+    """The GM desk surfaces worker/failed-job facts from native sources only.
+
+    The world carries a failed RQ job, an unseen error row, a stopped
+    schedule and two workers in verbatim states; the desk must count them,
+    name the failed job as a work item, and generate the matching alert
+    conditions — while the owner cockpit shows the same counts and the
+    empty world stays silent with explicit empty states.
+    """
+
+    WORLD = {
+        "Error Log": [
+            {"name": "ERR-1", "method": "nightly_sync", "seen": 0,
+             "creation": "2026-09-17 08:00:00"},
+            {"name": "ERR-2", "method": "old_sync", "seen": 1,
+             "creation": "2026-09-16 08:00:00"},
+        ],
+        "RQ Job": [
+            {"name": "JOB-1", "job_name": "send_digest", "queue": "default",
+             "status": "failed", "started_at": "2026-09-17 07:00:00",
+             "ended_at": "2026-09-17 07:01:00"},
+            {"name": "JOB-2", "job_name": "warm_cache", "queue": "short",
+             "status": "finished", "started_at": "2026-09-17 07:00:00",
+             "ended_at": "2026-09-17 07:00:30"},
+        ],
+        "RQ Worker": [
+            {"name": "W-1", "worker_name": "worker-1", "queue": "default",
+             "queue_type": "default", "status": "Active",
+             "failed_job_count": 1, "successful_job_count": 40,
+             "last_heartbeat": "2026-09-17 08:59:00"},
+            {"name": "W-2", "worker_name": "worker-2", "queue": "long",
+             "queue_type": "long", "status": "Idle",
+             "failed_job_count": 0, "successful_job_count": 3,
+             "last_heartbeat": "2026-09-17 08:59:00"},
+        ],
+        "Scheduled Job Type": [
+            {"name": "SJT-1", "method": "nightly_sync", "frequency": "Daily",
+             "stopped": 1, "last_execution": "2026-09-16 00:00:00"},
+        ],
+        "Scheduled Job Log": [
+            {"name": "SJL-1", "scheduled_job_type": "SJT-1",
+             "status": "Failed", "creation": "2026-09-17 00:00:01"},
+        ],
+    }
+
+    def _payload(self, module_name, entry, roles, world=None, ping="pong"):
+        module = _import_desk(module_name, roles=roles)
+        module.frappe.ping = lambda: ping
+        getter = desk_world_get_all(f"{module_name} health world", world or {})
+        module.frappe.get_all = getter
+        module.frappe.db.get_all = getter
+        return getattr(module, entry)()
+
+    @staticmethod
+    def _section(payload, sid):
+        return next(sect for sect in payload["sections"] if sect["id"] == sid)
+
+    def test_health_counts_come_from_the_native_rows(self):
+        payload = self._payload("operations", "work", {"General Manager"},
+                                self.WORLD)
+        facts = {fact["label"]: fact["value"]
+                 for fact in self._section(payload, "health-facts")["facts"]}
+        self.assertEqual(facts["Application answers"], "Yes")
+        self.assertEqual(facts["Unseen error rows"], 1)
+        self.assertEqual(facts["Failed background jobs"], 1)
+        self.assertEqual(facts["Workers observed"], 2)
+        self.assertEqual(facts["Stopped scheduled job types"], 1)
+        self.assertEqual(facts["Failed scheduled runs"], 1)
+
+    def test_failed_job_and_error_row_become_work_items(self):
+        payload = self._payload("operations", "work", {"General Manager"},
+                                self.WORLD)
+        items = {item["id"]: item
+                 for item in self._section(payload, "health")["items"]}
+        self.assertEqual(items["JOB-1"]["stage"], "Failed background job")
+        self.assertEqual(items["JOB-1"]["status"], "failed")
+        self.assertEqual(items["ERR-1"]["stage"], "Unseen error row")
+        self.assertEqual(items["SJT-1"]["stage"], "Stopped scheduled job")
+        # Finished jobs and seen errors are not work.
+        self.assertNotIn("JOB-2", items)
+        self.assertNotIn("ERR-2", items)
+
+    def test_conditions_are_generated_with_the_receiver_boundary_stated(self):
+        payload = self._payload("operations", "work", {"General Manager"},
+                                self.WORLD)
+        items = {item["id"]: item
+                 for item in self._section(payload, "health")["items"]}
+        self.assertIn("condition:failed_background_jobs", items)
+        self.assertIn("condition:unseen_error_logs", items)
+        definition = items["condition:failed_background_jobs"]["stage_definition"]
+        self.assertIn("never delivered", definition)
+
+    def test_worker_states_are_facts_not_conditions(self):
+        payload = self._payload("operations", "work", {"General Manager"},
+                                self.WORLD)
+        items = {item["id"]: item
+                 for item in self._section(payload, "health")["items"]}
+        conditions = [key for key in items if key.startswith("condition:")]
+        self.assertNotIn("condition:worker_states", conditions)
+        for key in conditions:
+            self.assertNotIn("Idle", items[key]["detail"])
+            self.assertNotIn("Active", items[key]["detail"])
+
+    def test_failed_ping_is_its_own_condition(self):
+        payload = self._payload("operations", "work", {"General Manager"},
+                                self.WORLD, ping="timeout")
+        items = {item["id"]: item
+                 for item in self._section(payload, "health")["items"]}
+        self.assertIn("condition:application_unreachable", items)
+
+    def test_owner_cockpit_shows_the_same_health_counts(self):
+        payload = self._payload("owner", "cockpit", {"Course Owner"}, self.WORLD)
+        facts = {fact["label"]: fact["value"]
+                 for fact in self._section(payload, "health")["facts"]}
+        self.assertEqual(facts["Failed background jobs"], 1)
+        self.assertEqual(facts["Unseen error rows"], 1)
+
+    def test_empty_world_is_silent_with_empty_states(self):
+        payload = self._payload("operations", "work", {"General Manager"}, {})
+        health = self._section(payload, "health")
+        self.assertEqual(health["items"], [])
+        self.assertTrue(health["empty"]["title"])
+
+
+class TeacherDeskWorldTests(unittest.TestCase):
+    """The teacher desk shows assigned classes only, via the native chain.
+
+    The stub login is desk-user@example.com: the world links it to
+    EMP-1 -> INS-1 with one assignment, while INS-2 (another teacher) owns
+    a second class that must never leak across. An unlinked login gets the
+    explicit empty state, and a non-Instructor role is refused at runtime.
+    """
+
+    DAY = "2026-09-17"
+
+    def _world(self):
+        return {
+            "Employee": [
+                {"name": "EMP-1", "employee_name": "Sara Teacher",
+                 "status": "Active", "user_id": "desk-user@example.com"},
+                {"name": "EMP-9", "employee_name": "Left Teacher",
+                 "status": "Left", "user_id": "left@example.com"},
+            ],
+            "Instructor": [
+                {"name": "INS-1", "instructor_name": "Sara Teacher",
+                 "employee": "EMP-1", "status": "Active"},
+                {"name": "INS-2", "instructor_name": "Omar Other",
+                 "employee": "EMP-2", "status": "Active"},
+            ],
+            "TH Teaching Assignment": [
+                {"name": "TA-1", "student_group": "CLASS-A",
+                 "skill": "SK-SL", "instructor": "INS-1",
+                 "contract": "CON-1", "course_schedule": None,
+                 "effective_start": "2026-09-01", "effective_end": None},
+                {"name": "TA-2", "student_group": "CLASS-B",
+                 "skill": "SK-WG", "instructor": "INS-2",
+                 "contract": "CON-2", "course_schedule": None,
+                 "effective_start": "2026-09-01", "effective_end": None},
+            ],
+            "TH Skill": [
+                {"name": "SK-SL", "code": "SL", "title": "Speaking Lab",
+                 "status": "Active"},
+            ],
+            "Student Group": [
+                {"name": "CLASS-A", "student_group_name": "Morning A1",
+                 "program": "GEN-A1", "academic_year": "2026-2027",
+                 "max_strength": 20, "course": "English A1",
+                 "disabled": 0, "th_class_status": "Active"},
+                {"name": "CLASS-B", "student_group_name": "Evening A2",
+                 "program": "GEN-A2", "academic_year": "2026-2027",
+                 "max_strength": 20, "course": "English A2",
+                 "disabled": 0, "th_class_status": "Active"},
+            ],
+            "Course Schedule": [
+                {"name": "SES-1", "student_group": "CLASS-A",
+                 "instructor": "INS-1", "course": "English A1",
+                 "room": "Room 1", "from_time": "09:00:00",
+                 "to_time": "10:30:00", "schedule_date": self.DAY},
+                {"name": "SES-2", "student_group": "CLASS-B",
+                 "instructor": "INS-2", "course": "English A2",
+                 "room": "Room 2", "from_time": "18:00:00",
+                 "to_time": "19:30:00", "schedule_date": self.DAY},
+            ],
+            "Student Group Student": [
+                {"name": "R-1", "parent": "CLASS-A", "student": "STU-1",
+                 "student_name": "Laila Student", "group_roll_number": 1,
+                 "active": 1},
+                {"name": "R-2", "parent": "CLASS-B", "student": "STU-2",
+                 "student_name": "Karim Other", "group_roll_number": 1,
+                 "active": 1},
+            ],
+            "Student Attendance": [
+                {"name": "ATT-1", "student": "STU-1",
+                 "student_group": "CLASS-A", "course_schedule": "SES-1",
+                 "date": self.DAY, "status": "Present", "docstatus": 1},
+            ],
+            "Assessment Result": [
+                {"name": "RES-1", "student": "STU-1",
+                 "student_name": "Laila Student", "student_group": "CLASS-A",
+                 "course": "English A1", "total_score": 82.0,
+                 "maximum_score": 100.0, "grade": "B", "docstatus": 1},
+            ],
+            "TH Instructor Contract": [
+                {"name": "CON-1", "instructor": "INS-1", "employee": "EMP-1",
+                 "compensation_model": "Per session",
+                 "assignment_basis": "Per class", "payment_frequency": "Monthly",
+                 "effective_start": "2026-09-01", "effective_end": None,
+                 "status": "Active"},
+            ],
+        }
+
+    def _payload(self, roles={"Instructor"}, world=None):
+        module = _import_desk("teacher", roles=roles)
+        getter = desk_world_get_all("teacher world",
+                                    self._world() if world is None else world)
+        module.frappe.get_all = getter
+        module.frappe.db.get_all = getter
+        return module.work()
+
+    @staticmethod
+    def _section(payload, sid):
+        return next(sect for sect in payload["sections"] if sect["id"] == sid)
+
+    def test_my_classes_lists_only_the_assigned_class(self):
+        payload = self._payload()
+        items = {item["id"]: item
+                 for item in self._section(payload, "classes")["items"]}
+        self.assertIn("TA-1", items)
+        self.assertNotIn("TA-2", items)
+        self.assertEqual(items["TA-1"]["person"], "Morning A1")
+        self.assertEqual(items["TA-1"]["status"], "Active")
+        self.assertIn("Speaking Lab", items["TA-1"]["detail"])
+        self.assertIn("1 on the roster", items["TA-1"]["members"])
+
+    def test_today_shows_only_my_sessions_with_attendance_state(self):
+        payload = self._payload()
+        items = {item["id"]: item
+                 for item in self._section(payload, "today")["items"]}
+        self.assertIn("SES-1", items)
+        self.assertNotIn("SES-2", items)
+        self.assertIn("1 marked, 0 absent", items["SES-1"]["next"])
+
+    def test_students_and_work_stay_within_my_classes(self):
+        payload = self._payload()
+        students = self._section(payload, "students")["items"]
+        self.assertEqual([item["person"] for item in students],
+                         ["Laila Student"])
+        work = {item["id"]: item
+                for item in self._section(payload, "work")["items"]}
+        self.assertIn("RES-1", work)
+        self.assertEqual(work["RES-1"]["score"], "82.0 of 100.0")
+        self.assertEqual(work["RES-1"]["status"], "Submitted")
+
+    def test_compensation_facts_carry_no_money(self):
+        payload = self._payload()
+        items = {item["id"]: item
+                 for item in self._section(payload, "compensation")["items"]}
+        self.assertIn("CON-1", items)
+        item = items["CON-1"]
+        self.assertIn("does not calculate pay", str(item))
+        for banned in ("amount", "currency", "rate", "salary", "payable"):
+            self.assertNotIn(banned, set(item))
+
+    def test_unlinked_login_gets_the_explicit_empty_state(self):
+        world = self._world()
+        world["Employee"] = []
+        payload = self._payload(world=world)
+        classes = self._section(payload, "classes")
+        self.assertEqual(classes["items"], [])
+        self.assertIn("not linked to an instructor record",
+                      classes["empty"]["body"])
+
+    def test_inactive_employee_does_not_resolve(self):
+        world = self._world()
+        world["Employee"] = [dict(row, status="Left")
+                             for row in world["Employee"]]
+        payload = self._payload(world=world)
+        self.assertEqual(self._section(payload, "classes")["items"], [])
+
+    def test_wrong_role_is_refused_at_runtime(self):
+        module = _import_desk("teacher", roles={"Reception"})
+        with self.assertRaises(Exception) as ctx:
+            module.work()
+        self.assertIn("Instructor", str(ctx.exception))
+
+
+class FinanceOutstandingWorldTests(unittest.TestCase):
+    """The finance desk's outstanding queue, from native facts only.
+
+    Settled documents stay out; owing documents carry their native state
+    (invoice status wins) with the matching next action; today's payments
+    list received money; corrections render every status with the
+    policy-blocked reason when no active policy exists.
+    """
+
+    DAY = "2026-09-17"
+
+    def _world(self, *, policy_active=True):
+        return {
+            "Sales Invoice": [
+                {"name": "INV-OWING", "customer": "C-1",
+                 "customer_name": "Karim", "th_placement_case": None,
+                 "posting_date": "2026-09-10", "due_date": "2026-09-12",
+                 "grand_total": 5000.0, "outstanding_amount": 2000.0,
+                 "currency": "USD", "company": "TOEFL House",
+                 "status": "Overdue", "is_return": 0, "docstatus": 1},
+                {"name": "INV-SETTLED", "customer": "C-2",
+                 "customer_name": "Laila", "th_placement_case": None,
+                 "posting_date": self.DAY, "due_date": "2026-09-24",
+                 "grand_total": 5000.0, "outstanding_amount": 0.0,
+                 "currency": "USD", "company": "TOEFL House",
+                 "status": "Paid", "is_return": 0, "docstatus": 1},
+            ],
+            "Fees": [
+                {"name": "FEE-OWING", "student": "STU-1",
+                 "student_name": "Laila", "program": "GEN-A1",
+                 "program_enrollment": "ENR-9", "academic_year": "2026-2027",
+                 "posting_date": "2026-09-10", "due_date": "2026-09-20",
+                 "grand_total": 8000.0, "outstanding_amount": 8000.0,
+                 "currency": "USD", "company": "TOEFL House", "docstatus": 1},
+            ],
+            "Payment Entry": [
+                {"name": "PAY-1", "payment_type": "Receive",
+                 "party_type": "Customer", "party": "C-1",
+                 "paid_amount": 3000.0, "received_amount": 3000.0,
+                 "paid_from_account_currency": "USD", "company": "TOEFL House",
+                 "posting_date": self.DAY, "docstatus": 1},
+            ],
+            "TH Correction Request": [
+                {"name": "COR-PEND", "sales_invoice": "INV-OWING",
+                 "fees": None, "reason": "duplicate line",
+                 "requested_amount": 500.0, "status": "Requested",
+                 "approved_by": None, "credit_note": None,
+                 "modified": "2026-09-16 09:00:00"},
+                {"name": "COR-DONE", "sales_invoice": None,
+                 "fees": "FEE-OWING", "reason": "wrong level",
+                 "requested_amount": 8000.0, "status": "Approved",
+                 "approved_by": "officer@example.com", "credit_note": None,
+                 "modified": "2026-09-15 09:00:00"},
+            ],
+            "TH Correction Policy": ([
+                {"name": "POL-1", "approver_role": "Finance Officer",
+                 "correction_window_days": 30, "status": "Active"},
+            ] if policy_active else []),
+            "Program Enrollment": [],
+            "TH Teaching Assignment": [],
+            "Fee Structure": [],
+            "Fee Component": [],
+        }
+
+    def _payload(self, **kwargs):
+        module = _import_desk("finance", roles={"Finance Manager"})
+        getter = desk_world_get_all("finance outstanding", self._world(**kwargs))
+        module.frappe.get_all = getter
+        module.frappe.db.get_all = getter
+        return module.work()
+
+    @staticmethod
+    def _section(payload, sid):
+        return next(sect for sect in payload["sections"] if sect["id"] == sid)
+
+    def test_owing_documents_appear_with_native_state_and_next_action(self):
+        payload = self._payload()
+        items = {item["id"]: item
+                 for item in self._section(payload, "outstanding")["items"]}
+        self.assertIn("INV-OWING", items)
+        self.assertEqual(items["INV-OWING"]["status"], "Overdue")
+        self.assertEqual(items["INV-OWING"]["next_role"], "Finance Officer")
+        self.assertIn("INV-OWING", items["INV-OWING"]["id"])
+        self.assertIn("FEE-OWING", items)
+        self.assertEqual(items["FEE-OWING"]["status"], "Outstanding")
+        self.assertNotIn("INV-SETTLED", items)
+
+    def test_money_facts_count_the_native_queues(self):
+        payload = self._payload()
+        facts = {fact["label"]: fact["value"]
+                 for fact in self._section(payload, "facts")["facts"]}
+        self.assertEqual(facts["Outstanding invoices"], 1)
+        self.assertEqual(facts["Outstanding tuition fees"], 1)
+        self.assertEqual(facts["Corrections pending"], 1)
+        self.assertIn("3000.00 USD", facts["Collected today"])
+
+    def test_today_lists_received_payments(self):
+        payload = self._payload()
+        items = {item["id"]: item
+                 for item in self._section(payload, "today")["items"]}
+        self.assertIn("PAY-1", items)
+        self.assertEqual(items["PAY-1"]["status"], "Received")
+
+    def test_corrections_render_status_with_policy_action(self):
+        payload = self._payload()
+        items = {item["id"]: item
+                 for item in self._section(payload, "corrections")["items"]}
+        self.assertEqual(items["COR-PEND"]["person"], "INV-OWING")
+        self.assertIn("action", items["COR-PEND"])
+        self.assertEqual(items["COR-DONE"]["person"], "FEE-OWING")
+        self.assertNotIn("action", items["COR-DONE"])
+
+    def test_missing_policy_states_the_blocked_reason(self):
+        payload = self._payload(policy_active=False)
+        items = {item["id"]: item
+                 for item in self._section(payload, "corrections")["items"]}
+        self.assertNotIn("action", items["COR-PEND"])
+        self.assertIn("No active correction policy", items["COR-PEND"]["next"])
 
 
 

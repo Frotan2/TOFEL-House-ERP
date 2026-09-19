@@ -174,7 +174,8 @@ def work():
     money_facts = [
         {"label": "Collected today",
          "definition": "Money received today from posted payment records, summed per receiving currency.",
-         "value": _summarize(payments, "paid_amount"),
+         "value": _summarize(payments, "paid_amount",
+                              currency_key="paid_from_account_currency"),
          "owner": None},
         {"label": "Invoiced today",
          "definition": "Amounts billed today across invoices and tuition fees, summed per currency.",
@@ -347,12 +348,13 @@ def work():
     }
 
 
-def _summarize(rows, field):
+def _summarize(rows, field, currency_key="currency"):
     """Per-currency totals of an existing row list. No new query, no rounding
-    policy beyond two decimals for display."""
+    policy beyond two decimals for display. Payment rows carry the paying
+    account's currency, not a flat `currency` column (pinned authority)."""
     totals = {}
     for row in rows:
-        currency = row.get("currency") or ""
+        currency = row.get(currency_key) or ""
         totals[currency] = totals.get(currency, 0) + float(row.get(field) or 0)
     if not totals:
         return "0"

@@ -31,9 +31,10 @@ page_js = {name: "public/js/th_command_pages.js" for name in _COMMAND_PAGES}
 _DESK_PAGES = (
     "th-reception-desk", "th-academic-desk", "th-finance-desk",
     "th-operations-desk", "th-owner-cockpit", "th-academic-setup",
+    "th-teacher-desk",
 )
 page_js.update({name: "public/js/th_role_desks.js" for name in _DESK_PAGES})
-fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception"]]]},
+fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception", "Instructor"]]]},
             {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Student Group"]]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"

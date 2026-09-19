@@ -1,9 +1,9 @@
 # Role Desks — the daily-work product layer
 
-Date: 2026-09-17 · Active branch: `arena/01a0b084-tofel-house-erp`
+Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp`
 
 This document specifies the role product layer built on top of the qualified
-command slices. It is the contract between the five operational roles and the
+command slices. It is the contract between the seven desk audiences and the
 server projections that serve them. Every section states its data source, its
 definition, its empty state and its failure state. Nothing here creates a
 parallel master, ledger, accounting model, permission model or workflow engine.
@@ -13,10 +13,10 @@ parallel master, ledger, accounting model, permission model or workflow engine.
 The qualified slices are *command-complete but product-incomplete*: every
 mutation exists behind a guarded, idempotent, role-checked endpoint, but a
 person could not answer "what is my next action?" without knowing record names,
-statuses and which colleague owns the next step. The five management roles —
+statuses and which colleague owns the next step. The management roles —
 Reception, Academic Manager, Finance Manager, General Manager and the Course
-Owner — had no surface at all. The desks close that gap without widening any
-authority.
+Owner — plus the Instructor role had no surface at all. The desks close that
+gap without widening any authority.
 
 ## Architecture
 
@@ -77,6 +77,7 @@ Rules that are binding for every desk:
 | `th-operations-desk` | General Manager | Operations | `toefl_house.desk.operations.work` |
 | `th-owner-cockpit` | Course Owner | Operations | `toefl_house.desk.owner.cockpit` |
 | `th-academic-setup` | Course Owner | Operations | `toefl_house.desk.setup.work` |
+| `th-teacher-desk` | Instructor | Operations | `toefl_house.desk.teacher.work` |
 
 `toefl_house.desk.available` tells any desk (and the command-centre
 landing page) which desks the *server* believes this viewer holds — the client
@@ -138,6 +139,13 @@ Sections:
   commands, projected from the existing audit receipts (actor, action, target,
   when). Hashes, keys and result payloads stay off the desk. Session saves and
   draft authoring stay on the auditor workspace. This is not a second log.
+- **System health** — native health facts (application ping, unseen error
+  rows, failed background jobs, observed workers with verbatim states,
+  stopped schedules, failed scheduled runs) plus failed-job/error/stopped
+  work items and generated alert conditions. Conditions are generated,
+  never delivered: no receiver exists in this product (see
+  `toefl_house/observability.py`, RECEIVER BOUNDARY). Tracebacks and error
+  text stay on the native forms.
 - **Links** — one row per role desk the viewer may open.
 
 ### Academic Setup desk (the configuration control plane)
@@ -145,10 +153,36 @@ Sections:
 The Owner's configuration surface (docs/product/CONFIGURATION-PLANE.md):
 configuration health facts — including surfaced integrity faults such as a
 level missing its native anchor — the program families, their ordered levels
-with the *governing effective-dated duration* resolved from version history,
-and guided actions into the guarded configuration commands
-(`toefl_house.academic.*`). Deactivation is offered only where the server
-allows it; refusals arrive in business language with real counts.
+with the *governing effective-dated duration* resolved from version history
+(each stating the actor and reason that set it), the academic years with
+per-year fee-plan coverage, and guided actions into the guarded configuration
+commands (`toefl_house.academic.*`). Deactivation is offered only where the
+server allows it; refusals arrive in business language with real counts.
+Grading stays an explicit placeholder: owner decision D1 has not been made,
+so no grading rules exist anywhere in the product.
+
+### Teacher desk — "What do I teach today?"
+
+Audience: the Instructor role. Identity resolves through the native chain
+only (session `User` → `Employee.user_id` → `Instructor.employee` →
+`TH Teaching Assignment`); a role holder who resolves to no instructor gets
+an explicit empty state naming the missing link, never another teacher's
+classes. Sections follow the daily path:
+
+- **My classes** — assigned classes with lifecycle state, skill, roster
+  size and assignment window. Closed classes stay listed as past work.
+- **Today** — today's sessions for my classes with time, course, room and
+  attendance state; unrecorded sessions prefill `record_attendance` for
+  viewers who hold Attendance Recorder.
+- **Sessions and attendance** — recent sessions with submitted-attendance
+  counts (marked/absent); only submitted rows count.
+- **Students** — my class rosters (name, roll, roster state).
+- **Academic work** — recorded assessment results for my classes, shown
+  exactly as recorded (score, maximum, grade, draft/submitted state). No
+  thresholds are stated: grading policy is owner decision D1.
+- **Compensation facts** — teaching-contract identity and window only
+  (model, basis, frequency, dates, status). Pay runs through native
+  payroll; the desk calculates nothing and shows no rates or amounts.
 
 ### Owner cockpit
 
@@ -157,6 +191,8 @@ Everything the GM desk shows, plus:
 - **Governance attention** — the fail-closed release facts (production REJECT,
   SEC-DEPS-01 upstream-blocked) from the same static, reviewed constants the
   administration control centre uses. Not new policy — the same recorded state.
+- **System health counts** — the same native health counts the GM desk
+  shows (failed-job detail lives on the GM desk).
 - **Recent recorded actions** — the same existing audit receipts the GM desk
   shows. Not a second trail.
 - **Definitions** — every tile ships its definition inline, because a number
@@ -192,7 +228,7 @@ Reception (find person) → record_applicant → create_admission
 - All other operational Officer roles (Placement Author, Publisher, Releaser,
   Invigilator, Admission Officer/Reviewer/Approver, Enrollment Officer,
   Teaching Scheduler, Attendance Recorder, etc.) intentionally land on **no
-  workspace**. They reach their work through the six role desks (which embed
+  workspace**. They reach their work through the seven role desks (which embed
   guided actions into the existing guarded command Pages) and through the
   command Pages themselves. This is deliberate, not accidental: adding a native
   Workspace for each Officer role would widen native read scopes beyond the
@@ -201,12 +237,15 @@ Reception (find person) → record_applicant → create_admission
 
 ## What is deliberately NOT here
 
-- No teacher-facing desk: a teacher's identity link (native `Instructor` ↔
-  `User`) is an owner decision that has not been made; a desk keyed on an
-  invented link would be fake authority. Teaching Scheduler and Attendance
-  Recorder keep their qualified command pages; the Academic desk carries the
-  assignment/workload facts.
-- No new status enums, severity models, risk scores, or payroll numbers.
+- No invented teacher identity: the teacher desk exists only because the
+  link is native (`Employee.user_id` at erpnext 4048fb70,
+  `Instructor.employee` at education 93bc707, mismatch refused by
+  `create_teaching_contract`). The earlier "owner decision" blocker is
+  superseded by that verification; unlinked logins get an empty state, not
+  a guess. Teaching Scheduler and Attendance Recorder keep their qualified
+  command pages; the Academic desk carries the assignment/workload facts.
+- No alert delivery: conditions name facts; no receiver, severity model,
+  risk score or payroll number is invented anywhere in the desk layer.
 - No widening of any pinned Page audience: `PAGE_SPEC` command pages are
   untouched, `app_home` is untouched, and the desks are separate Pages whose
   audiences are pinned by the desk contract tests.

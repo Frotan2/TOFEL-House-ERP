@@ -66,6 +66,12 @@ const EXPECTED = {
 		endpoint: "toefl_house.desk.setup.work",
 		python: "toefl_house.desk.setup",
 	},
+	"th-teacher-desk": {
+		title: "TOEFL House Teacher Desk",
+		roles: ["Instructor"],
+		endpoint: "toefl_house.desk.teacher.work",
+		python: "toefl_house.desk.teacher",
+	},
 };
 
 /* ------------------------------------------------------------------ loading */
@@ -132,13 +138,13 @@ assert(/@frappe\.whitelist\([^\n]*\)\ndef available\(/.test(deskInit),
 const availableDecorator = /@frappe\.whitelist\(([^\n]*)\)\ndef available\(/.exec(deskInit);
 assert(/allow_guest=(True|1|true)/.test(availableDecorator[1]),
 	"toefl_house.desk.available must stay allow_guest: its documented guest answer is an empty registry, not an HTTP refusal");
-for (const mod of ["reception", "academic", "finance", "operations", "owner", "setup"]) {
+for (const mod of ["reception", "academic", "finance", "operations", "owner", "setup", "teacher"]) {
 	const src = fs.readFileSync(path.join(APP, "desk", `${mod}.py`), "utf8");
 	assert(!/allow_guest/.test(src), `the ${mod} desk projection must never be guest-exposed`);
 }
 for (const [, method] of fs.readFileSync(SCRIPT, "utf8").matchAll(/"(toefl_house\.desk\.[\w.]+)"/g)) {
 	const tail = method.split(".")[2];
-	assert(["reception", "academic", "finance", "operations", "owner", "setup", "available"]
+	assert(["reception", "academic", "finance", "operations", "owner", "setup", "teacher", "available"]
 		.includes(tail), `desk client names an unresolvable module path: ${method}`);
 }
 

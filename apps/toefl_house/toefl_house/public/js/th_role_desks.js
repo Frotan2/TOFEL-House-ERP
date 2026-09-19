@@ -1,7 +1,7 @@
 /*
  * Role desk client (docs/product/ROLE-DESKS.md).
  *
- * Five daily-work surfaces over one whitelisted read endpoint each. The desks
+ * Seven daily-work surfaces over one whitelisted read endpoint each. The desks
  * contain no document query, no CRUD and no authority decision of their own:
  * every fact, queue item and guided action arrives from the server projection,
  * which has already applied the desk audience, field allow-lists and bounds.
@@ -49,6 +49,11 @@ frappe.provide("toefl_house.role_desks");
 			endpoint: "toefl_house.desk.setup.work",
 			title: "TOEFL House Academic Setup",
 			description: "Programs, ordered levels, effective-dated durations and progression — the configuration the whole institution runs on.",
+		},
+		"th-teacher-desk": {
+			endpoint: "toefl_house.desk.teacher.work",
+			title: "TOEFL House Teacher Desk",
+			description: "My classes, today's sessions, attendance, students, academic work and compensation facts — assigned classes only, resolved through the native identity chain.",
 		},
 	});
 

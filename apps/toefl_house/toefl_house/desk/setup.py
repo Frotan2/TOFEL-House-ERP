@@ -49,7 +49,8 @@ FEE_PLAN_FIELDS = ["name", "program", "academic_year", "company",
                    "receivable_account", "docstatus", "total_amount"]
 FEE_ROW_FIELDS = ["name", "parent", "parenttype", "fees_category", "amount", "idx"]
 DISCOUNT_RULE_FIELDS = ["name", "code", "title", "discount_percentage", "precedence",
-                        "status", "fee_category", "program", "description", "modified"]
+                        "status", "fee_category", "program", "description", "modified",
+                        "modified_by"]
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -241,6 +242,12 @@ def work():
         next_bits = []
         if label:
             next_bits.append(f"Duration {label} from {governing.get('effective_from')}.")
+            actor = governing.get("set_by") or ""
+            reason = governing.get("reason") or ""
+            if actor or reason:
+                next_bits.append("Set " + " ".join(part for part in (
+                    f"by {actor}." if actor else "",
+                    f"Reason: {reason}." if reason else "") if part))
         else:
             next_bits.append("No duration version is effective yet.")
         if level.get("next_level"):
@@ -403,6 +410,47 @@ def work():
          "owner": "Course Owner"},
     ]
 
+    year_items = []
+    for year in years:
+        start = str(year.get("year_start_date") or "")
+        end = str(year.get("year_end_date") or "")
+        if current_year and year["name"] == current_year:
+            marker = "Current"
+        elif end and end < str(today):
+            marker = "Past"
+        elif start and start > str(today):
+            marker = "Upcoming"
+        else:
+            marker = "Defined"
+        covered = []
+        missing = []
+        for level in levels:
+            if level["status"] != "Active" or not level.get("native_program"):
+                continue
+            if plan_with_components(
+                    issuable_plans(plans_by_program, level["native_program"],
+                                   year["name"]),
+                    rows_by_plan):
+                covered.append(level["code"])
+            else:
+                missing.append(level["code"])
+        year_items.append({
+            "id": year["name"],
+            "person": year["name"],
+            "detail": f"{start or '?'} to {end or '?'}",
+            "status": marker,
+            "stage": "Academic year",
+            "stage_definition": ("An academic year enrollments, classes and fee "
+                               "plans key on. Coverage counts complete fee plans "
+                               "for this year across active levels."),
+            "next": (f"{len(covered)} complete fee plan(s). "
+                     + (f"Missing a plan: {', '.join(missing)}." if missing
+                        else "Every active level has a plan."))
+            if covered or missing else "No active levels to cover yet.",
+            "next_role": "Course Owner" if missing else None,
+            "waiting_since": None,
+        })
+
     discount_rule_items = []
     for rule in discount_rules:
         active = rule.get("status") == "Active"
@@ -412,10 +460,12 @@ def work():
         if rule.get("program"):
             scope_bits.append(f"Program: {rule['program']}")
         scope_label = " · ".join(scope_bits) if scope_bits else "Institution-wide"
+        changed_by = rule.get("modified_by") or ""
         item = {
             "id": rule["code"],
             "person": rule.get("title") or rule["code"],
-            "detail": f"{rule.get('discount_percentage')}% discount · Precedence: {rule.get('precedence')} · Scope: {scope_label}",
+            "detail": f"{rule.get('discount_percentage')}% discount · Precedence: {rule.get('precedence')} · Scope: {scope_label}"
+                      + (f" · Last changed by {changed_by}" if changed_by else ""),
             "status": rule.get("status", "Active"),
             "stage": "Policy A (Single Discount)",
             "stage_definition": "Central discount rule catalog. Zero or one discount per charge; higher precedence resolves competing rules; never stacks.",
@@ -525,6 +575,28 @@ def work():
                     empty_title="No discount rules yet",
                     empty_body="Define scholarship or discount rules under Policy A; "
                                "charges receive at most one discount according to configured precedence."),
+            section("years", "Academic years", "queue", items=year_items,
+                    empty_title="No academic years yet",
+                    empty_body="Define the first academic year from Setup actions; "
+                               "fee plans, enrollments and classes key on it."),
+            section("grading", "Grading (owner decision D1)", "queue",
+                    items=[{
+                        "id": "grading-policy",
+                        "person": "Grading policy",
+                        "detail": "No grading rules are configured.",
+                        "status": "Not decided",
+                        "stage": "Grading",
+                        "stage_definition": ("Grade scales, cutoffs and result "
+                                           "computation are owner decision D1, which "
+                                           "has not been made. Nothing in the product "
+                                           "computes or interprets grades."),
+                        "next": ("The Course Owner decides the grading policy; until "
+                               "then desks show recorded scores only."),
+                        "next_role": "Course Owner",
+                        "waiting_since": None,
+                    }],
+                    empty_title="Grading is undecided",
+                    empty_body="Owner decision D1 has not been made."),
         ],
     }
 

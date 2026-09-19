@@ -22,7 +22,8 @@ Discipline (binding for every module in this package):
 """
 import frappe
 
-DESK_MODULES = ("reception", "academic", "finance", "operations", "owner", "setup")
+DESK_MODULES = ("reception", "academic", "finance", "operations", "owner", "setup",
+                "teacher")
 
 DESKS = {
     "th-reception-desk": {
@@ -59,6 +60,12 @@ DESKS = {
         "title": "TOEFL House Academic Setup",
         "description": "The Owner's configuration surface: programs, ordered levels, effective-dated durations and progression, feeding every other desk and command.",
         "roles": ["Course Owner"],
+        "module": "Operations",
+    },
+    "th-teacher-desk": {
+        "title": "TOEFL House Teacher Desk",
+        "description": "My classes, today's sessions, attendance, students, academic work and compensation facts — assigned classes only, resolved through the native identity chain.",
+        "roles": ["Instructor"],
         "module": "Operations",
     },
 }
@@ -222,6 +229,27 @@ PROJECTION_FIELDS = {
     ("management", "TH Placement Audit Event"): [
         "name", "actor", "action", "target", "item_revision", "creation",
     ],
+    # Operational visibility (native Frappe authorities, pinned 988e54f3c4c2).
+    # Row identity + native state only: the Error Log text, job tracebacks
+    # (exc_info) and worker internals stay on the native forms. RQ
+    # Worker.status is free text with no native vocabulary, so it is echoed
+    # verbatim and never interpreted into an alert condition.
+    ("management", "Error Log"): [
+        "name", "method", "seen", "creation",
+    ],
+    ("management", "RQ Job"): [
+        "name", "job_name", "queue", "status", "started_at", "ended_at",
+    ],
+    ("management", "RQ Worker"): [
+        "name", "worker_name", "queue", "queue_type", "status",
+        "failed_job_count", "successful_job_count", "last_heartbeat",
+    ],
+    ("management", "Scheduled Job Type"): [
+        "name", "method", "frequency", "stopped", "last_execution",
+    ],
+    ("management", "Scheduled Job Log"): [
+        "name", "scheduled_job_type", "status", "creation",
+    ],
     # Academic Setup (Course Owner): configuration masters, their effective-
     # dated duration versions, and the enrollment usage counts that guard
     # deactivation. No student detail beyond the enrollment link.
@@ -239,6 +267,7 @@ PROJECTION_FIELDS = {
     ("setup", "TH Discount Rule"): [
         "name", "code", "title", "discount_percentage", "precedence",
         "status", "fee_category", "program", "description", "modified",
+        "modified_by",
     ],
     ("setup", "Program Enrollment"): [
         "name", "program", "enrollment_date", "docstatus",
@@ -262,6 +291,50 @@ PROJECTION_FIELDS = {
     ],
     ("setup", "Fee Component"): [
         "name", "parent", "parenttype", "fees_category", "amount", "idx",
+    ],
+    # Teacher desk (Instructor): the teacher's own classes only, resolved
+    # through session User -> Employee.user_id -> Instructor.employee ->
+    # TH Teaching Assignment. Identity + window + recorded facts only: no
+    # rates, no payable amounts, no payroll rows (ROLE-DESKS). Assessment
+    # rows are recorded facts (score/max/grade as recorded); grading policy
+    # itself stays the owner decision D1 and is not projected.
+    ("teacher", "Employee"): [
+        "name", "employee_name", "status", "user_id",
+    ],
+    ("teacher", "Instructor"): [
+        "name", "instructor_name", "employee", "status",
+    ],
+    ("teacher", "TH Teaching Assignment"): [
+        "name", "student_group", "skill", "instructor", "contract",
+        "course_schedule", "effective_start", "effective_end",
+    ],
+    ("teacher", "TH Skill"): [
+        "name", "code", "title", "status",
+    ],
+    ("teacher", "Student Group"): [
+        "name", "student_group_name", "program", "academic_year",
+        "max_strength", "course", "disabled", "th_class_status",
+    ],
+    ("teacher", "Course Schedule"): [
+        "name", "student_group", "instructor", "course", "room",
+        "from_time", "to_time", "schedule_date",
+    ],
+    ("teacher", "Student Group Student"): [
+        "name", "parent", "student", "student_name", "group_roll_number",
+        "active",
+    ],
+    ("teacher", "Student Attendance"): [
+        "name", "student", "student_group", "course_schedule", "date",
+        "status", "docstatus",
+    ],
+    ("teacher", "Assessment Result"): [
+        "name", "student", "student_name", "student_group", "course",
+        "total_score", "maximum_score", "grade", "docstatus",
+    ],
+    ("teacher", "TH Instructor Contract"): [
+        "name", "instructor", "employee", "compensation_model",
+        "assignment_basis", "payment_frequency", "effective_start",
+        "effective_end", "status",
     ],
 }
 

@@ -55,7 +55,10 @@ def main():
            'academic_manager':'synthetic-academic-manager@example.test',
            'finance_manager':'synthetic-finance-manager@example.test',
            'general_manager':'synthetic-general-manager@example.test',
-           'academic_scheduler':'synthetic-academic-scheduler@example.test'}
+           'academic_scheduler':'synthetic-academic-scheduler@example.test',
+           'teacher_one':'synthetic-teacher-one@example.test',
+           'teacher_two':'synthetic-teacher-two@example.test',
+           'teacher_unlinked':'synthetic-teacher-unlinked@example.test'}
     item=None
     def check(name,fn):
         start=time.monotonic()
@@ -142,7 +145,13 @@ def main():
                         'academic_manager':['Academic Manager'],
                         'finance_manager':['Finance Manager'],
                         'general_manager':['General Manager'],
-                        'academic_scheduler':['Academic Manager','Teaching Scheduler']}
+                        'academic_scheduler':['Academic Manager','Teaching Scheduler'],
+                        # S6 teacher-daily-use: Instructor-role logins. The
+                        # role ships as a fixture (role.json); the employee
+                        # link is bound inside the desk checks below.
+                        'teacher_one':['Instructor'],
+                        'teacher_two':['Instructor'],
+                        'teacher_unlinked':['Instructor']}
                 for label,roles in mapping.items():
                     frappe.get_doc(dict(doctype='User',email=users[label],first_name='Synthetic '+label,
                         enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
@@ -1855,7 +1864,7 @@ def main():
             native_session=frappe.cache.hget('session',sid);token=native_session['data']['csrf_token'];assert token
             s.headers['X-Frappe-CSRF-Token']=token
             return s
-        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor','teaching_scheduler','attendance_recorder','finance_officer','containment_probe','receptionist','academic_manager','finance_manager','general_manager','course_owner','academic_scheduler')}
+        sessions={label:login(label) for label in ('author','other','publisher','publisher2','second_author','auditor','outsider','invigilator','assessor','reviewer','reviewer2','releaser','officer','admissions_reviewer','approver','admissions_auditor','enrollment_officer','enrollment_auditor','teaching_scheduler','attendance_recorder','finance_officer','containment_probe','receptionist','academic_manager','finance_manager','general_manager','course_owner','academic_scheduler','teacher_one','teacher_two','teacher_unlinked')}
         def post(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.api.'+method,json=payload,timeout=40)
         def apost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.admission.'+method,json=payload,timeout=40)
         def epost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.enrollment.'+method,json=payload,timeout=40)
@@ -4005,7 +4014,16 @@ def main():
             # poisoned session — this is what a staff browser would do today.
             sess={label:login(label) for label in ('receptionist','academic_manager',
                   'finance_manager','general_manager','course_owner','academic_scheduler',
-                  'finance_officer','outsider','teaching_scheduler')}
+                  'finance_officer','outsider','teaching_scheduler',
+                  'teacher_one','teacher_two','teacher_unlinked')}
+            # S6 teacher-daily-use: bind the Instructor-role logins through
+            # the native identity chain (Employee.user_id at erpnext
+            # 4048fb70; Instructor.employee at education 93bc707). One and
+            # Two resolve to the compensation fixtures' instructors; the
+            # third login stays deliberately unlinked for the empty state.
+            frappe.db.set_value('Employee',cfx['emps']['One'],'user_id',users['teacher_one'])
+            frappe.db.set_value('Employee',cfx['emps']['Two'],'user_id',users['teacher_two'])
+            frappe.db.commit()
             def desk_get(label,method):
                 r=sess[label].get(base+'/api/method/toefl_house.desk.'+method,timeout=30)
                 assert r.status_code==200,(method,label,r.status_code,r.text[:300])
@@ -4030,15 +4048,44 @@ def main():
             assert setu['desk']=='th-academic-setup' and {'health','fees'}<=desk_sections(setu)
             # the release posture stays honestly fail-closed on a real bench
             assert 'REJECT' in json.dumps(own)
+            # S6 obs-engineering-layer: native health facts ride the GM desk
+            # and the owner cockpit as counts-and-identities, never traces.
+            assert {'health','health-facts'}<=desk_sections(ops)
+            ohf={f['label']:f for f in next(s for s in ops['sections'] if s['id']=='health-facts')['facts']}
+            assert {'Application answers','Unseen error rows','Failed background jobs',
+                    'Workers observed','Stopped scheduled job types','Failed scheduled runs'}<=set(ohf),sorted(ohf)
+            assert ohf['Application answers']['value']=='Yes'
+            assert 'traceback' not in json.dumps(next(s for s in ops['sections'] if s['id']=='health')['items']).lower()
+            assert 'health' in desk_sections(own)
+            owf={f['label'] for f in next(s for s in own['sections'] if s['id']=='health')['facts']}
+            assert {'Failed background jobs','Stopped scheduled job types','Failed scheduled runs'}<=owf,sorted(owf)
+            # S6 academic-setup-finalization: years coverage and the grading
+            # placeholder are owner-visible facts, not hidden state.
+            assert {'years','grading','discounts'}<=desk_sections(setu)
+            yg={item['id']:item for item in next(s for s in setu['sections'] if s['id']=='grading')['items']}
+            assert yg['grading-policy']['status']=='Not decided',yg
+            yy={item['id']:item for item in next(s for s in setu['sections'] if s['id']=='years')['items']}
+            assert 'SYN-AY-2027' in yy,('the synthetic academic year must be owner-visible',sorted(yy))
+            # S6 teacher-daily-use: the seventh desk loads for its audience
+            # and shows assigned classes only, over the same HTTP path.
+            tea=desk_get('teacher_one','teacher.work')
+            assert tea['desk']=='th-teacher-desk' and {'classes','today','sessions','students','work','compensation'}<=desk_sections(tea)
+            tcls={item['person']:item for item in next(s for s in tea['sections'] if s['id']=='classes')['items']}
+            assert GRP_A in tcls and GRP_B not in tcls,('teacher desk must show assigned classes only',sorted(tcls))
+            assert tcls[GRP_A]['status']=='Active',tcls[GRP_A]
+            unl=desk_get('teacher_unlinked','teacher.work')
+            assert unl['desk']=='th-teacher-desk' and desk_sections(unl)=={'classes','today'}
+            assert 'No instructor link on this login' in json.dumps(unl)
             # plain-language promise (U5): no raw doctype plumbing in payloads
             for name,payload in (('reception',rec),('academic',aca),('finance',fin),
-                                 ('operations',ops),('owner',own),('setup',setu)):
+                                 ('operations',ops),('owner',own),('setup',setu),('teacher',tea)):
                 text=json.dumps(payload)
                 for word in BANNED_PLUMBING:
                     assert word not in text,(name,word)
             # registry: server-decided, per audience
             assert {d['slug'] for d in desk_get('receptionist','available')['desks']}=={'th-reception-desk'}
             assert {d['slug'] for d in desk_get('course_owner','available')['desks']}=={'th-owner-cockpit','th-academic-setup'}
+            assert {d['slug'] for d in desk_get('teacher_one','available')['desks']}=={'th-teacher-desk'}
             assert desk_get('outsider','available')['desks']==[]
             # guest: registry answers empty; desk loads are denied
             g=requests.get(base+'/api/method/toefl_house.desk.available',
@@ -4053,12 +4100,18 @@ def main():
                 base+'/api/method/toefl_house.desk.academic.work',timeout=30))
             http_denied(sess['teaching_scheduler'].get(
                 base+'/api/method/toefl_house.desk.academic.work',timeout=30))
+            http_denied(sess['outsider'].get(
+                base+'/api/method/toefl_house.desk.teacher.work',timeout=30))
+            http_denied(sess['receptionist'].get(
+                base+'/api/method/toefl_house.desk.teacher.work',timeout=30))
+            http_denied(sess['general_manager'].get(
+                base+'/api/method/toefl_house.desk.setup.work',timeout=30))
             # a read endpoint answers its own desk and nothing else, on POST too
             rp=sess['receptionist'].post(base+'/api/method/toefl_house.desk.reception.work',
                 json={'desk':'th-academic-desk','slug':'th-academic-desk'},timeout=30)
             assert rp.status_code==200 and rp.json()['message']['desk']=='th-reception-desk', \
                 'a desk endpoint must not be retargetable by request payload'
-            observed['audiences']=('all six desk loads HTTP 200; guest/outsider/'
+            observed['audiences']=('all seven desk loads HTTP 200; guest/outsider/'
                                    'cross-audience denied; POST to a read endpoint '
                                    'refused by its GET/POST marks')
             # D2/D3/D4: the payload reflects the governed lifecycle only
@@ -4279,6 +4332,193 @@ def main():
             frappe.db.commit()
             return observed
         check('role-desk-hosted-qualification',traced(desk_qualification))
+        # --- S6 obs-engineering-layer: the health surface, in process ---
+        # The GM desk and owner cockpit project native scheduler facts. This
+        # pins the audience gate (including the Administrator refusal), the
+        # count-and-identity-only shape, and the receiver boundary: alert
+        # conditions are generated facts with no delivery target anywhere.
+        def desk_observability():
+            ops_work=frappe.get_attr('toefl_house.desk.operations.work')
+            own_work=frappe.get_attr('toefl_house.desk.owner.cockpit')
+            frappe.set_user('Administrator')
+            assert denied(lambda:ops_work()),'Administrator opened the operations desk'
+            assert denied(lambda:as_user('academic_manager',ops_work)),'Academic Manager opened the operations desk'
+            assert denied(lambda:as_user('general_manager',own_work)),'General Manager opened the owner cockpit'
+            assert denied(lambda:as_user('outsider',ops_work)),'outsider opened the operations desk'
+            ops=as_user('general_manager',ops_work);frappe.set_user('Administrator')
+            items=next(s for s in ops['sections'] if s['id']=='health')['items']
+            facts={f['label']:f['value'] for f in next(s for s in ops['sections'] if s['id']=='health-facts')['facts']}
+            assert facts['Application answers']=='Yes',facts
+            assert all(isinstance(facts[label],int) for label in (
+                'Unseen error rows','Failed background jobs','Workers observed',
+                'Stopped scheduled job types','Failed scheduled runs')),facts
+            for item in items:
+                assert set(item)=={'id','person','detail','status','stage','stage_definition',
+                                   'next','next_role','waiting_since'},(item['id'],sorted(item))
+                assert 'traceback' not in json.dumps(item).lower(),(item['id'],'traceback leaked onto the desk')
+            conds=[i for i in items if i['id'].startswith('condition:')]
+            assert all('no receiver' in i['stage_definition'] for i in conds),(len(conds),'condition without the receiver boundary')
+            own=as_user('course_owner',own_work);frappe.set_user('Administrator')
+            ofacts={f['label']:f['value'] for f in next(s for s in own['sections'] if s['id']=='health')['facts']}
+            assert ofacts=={k:facts[k] for k in ofacts},('owner counts must equal the GM counts',ofacts,facts)
+            return {'gm_health_items':len(items),'conditions':len(conds),
+                    'receiver_keys_present':False,'traceback_present':False,
+                    'administrator_refused':True,'owner_counts_match_gm':True}
+        check('role-desk-observability-hosted',traced(desk_observability))
+        # --- S6 teacher-daily-use: assigned-only projection, in process ---
+        # Identity resolves through the native chain only; the desk shows the
+        # linked instructor's assignments and rosters, names the missing link
+        # otherwise, and carries no money — contract rows are identity facts.
+        def desk_teacher():
+            work=frappe.get_attr('toefl_house.desk.teacher.work')
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Employee',cfx['emps']['One'],'user_id',users['teacher_one'])
+            frappe.db.set_value('Employee',cfx['emps']['Two'],'user_id',users['teacher_two'])
+            frappe.db.commit()
+            assert denied(lambda:as_user('outsider',work)),'outsider opened the teacher desk'
+            assert denied(lambda:as_user('receptionist',work)),'receptionist opened the teacher desk'
+            assert denied(lambda:as_user('teaching_scheduler',work)),'scheduler opened the teacher desk'
+            one=as_user('teacher_one',work);frappe.set_user('Administrator')
+            two=as_user('teacher_two',work);frappe.set_user('Administrator')
+            persons=lambda p:{i['person'] for i in next(s for s in p['sections'] if s['id']=='classes')['items']}
+            assert persons(one)=={GRP_A},sorted(persons(one))
+            assert persons(two)=={GRP_B},sorted(persons(two))
+            students=lambda p:{i['id'] for i in next(s for s in p['sections'] if s['id']=='students')['items']}
+            assert students(one)==set(groupA['roster']),sorted(students(one))
+            assert students(two)==set(groupB['roster']),sorted(students(two))
+            assert outsider_stu not in students(one) and outsider_stu not in students(two), \
+                'an off-roster learner leaked onto a teacher desk'
+            pay=next(s for s in one['sections'] if s['id']=='compensation')['items']
+            assert pay,('the linked instructor holds a contract; the desk must say so')
+            for item in pay:
+                assert set(item)=={'id','person','detail','status','stage','stage_definition',
+                                   'next','next_role','waiting_since'},(item['id'],sorted(item))
+            assert 'does not calculate' in json.dumps(pay),'compensation must state its no-calculation boundary'
+            unl=as_user('teacher_unlinked',work);frappe.set_user('Administrator')
+            assert {s['id'] for s in unl['sections']}=={'classes','today'}
+            assert 'not linked to an instructor record' in json.dumps(unl)
+            return {'teacher_one_classes':sorted(persons(one)),'teacher_two_classes':sorted(persons(two)),
+                    'rosters_assigned_only':True,'off_roster_excluded':outsider_stu,
+                    'compensation_rows':len(pay),'unlinked_empty_state':True}
+        check('role-desk-teacher-hosted',traced(desk_teacher))
+        # --- S6/S9 broad-isolation matrix: two branches, two students, all
+        # surfaces. Each cell names its enforcement layer, proven at runtime:
+        # desk RPCs gate on audience; native list/REST gate on role read plus
+        # user permissions; export gates on the native export bit (pinned
+        # frappe 988e54f reportview._export_query: same DatabaseQuery layer
+        # as list, then can_export); print gates on print permission; reports
+        # gate on the report role table. Two honest boundaries fall out and
+        # are asserted, not hidden: the desk path (get_all) does not honor
+        # branch user-permissions — desk scope is assignment/audience — and
+        # the Student master has no branch dimension, so per-student
+        # isolation is desk-level (assigned rosters) while the native list
+        # stays role-wide for Instructor.
+        def desk_isolation_matrix():
+            frappe.set_user('Administrator')
+            for br in ('SYN-ISOL-A','SYN-ISOL-B'):
+                if not frappe.db.exists('Branch',br):
+                    frappe.get_doc(dict(doctype='Branch',branch=br)).insert()
+            IA,IB='SYN-GRP-ISOL-A','SYN-GRP-ISOL-B'
+            roster_n=frappe.db.count('Program Enrollment',{'program':cat['program'],
+                'academic_year':cat['academic_year'],'docstatus':1})
+            assert roster_n>=2,('two enrolled learners are needed for the matrix',roster_n)
+            if not frappe.db.exists('Student Group',IA):
+                as_user('teaching_scheduler',lambda:tea.create_student_group(
+                    'isol_group_a_0000001',IA,cat['program'],cat['academic_year'],'',
+                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-A'))
+            if not frappe.db.exists('Student Group',IB):
+                as_user('teaching_scheduler',lambda:tea.create_student_group(
+                    'isol_group_b_0000001',IB,cat['program'],cat['academic_year'],'',
+                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-B'))
+            frappe.set_user('Administrator')
+            assert frappe.db.get_value('Student Group',IA,'th_branch')=='SYN-ISOL-A'
+            assert frappe.db.get_value('Student Group',IB,'th_branch')=='SYN-ISOL-B'
+            up=frappe.get_doc(dict(doctype='User Permission',user=users['teacher_two'],
+                allow='Branch',for_value='SYN-ISOL-A')).insert()
+            frappe.db.commit()
+            try:
+                # LIST: role read + branch user-permission scope the native list.
+                listed={r['name'] for r in as_user('teacher_two',lambda:frappe.get_list(
+                    'Student Group',fields=['name'],limit_page_length=100))}
+                frappe.set_user('Administrator')
+                assert listed=={IA},('branch user-permission did not scope the native class list',sorted(listed))
+                # DESK PATH: the elevated projection ignores user permissions;
+                # scope comes from the assignment join instead (corollary below).
+                unscoped={r['name'] for r in as_user('teacher_two',lambda:frappe.get_all(
+                    'Student Group',fields=['name'],limit_page_length=100))}
+                frappe.set_user('Administrator')
+                assert {GRP_A,GRP_B,IA,IB}<=unscoped,('the desk-path read lost rows',sorted(unscoped))
+                twork=frappe.get_attr('toefl_house.desk.teacher.work')
+                two=as_user('teacher_two',twork);frappe.set_user('Administrator')
+                tclasses={i['person'] for i in next(s for s in two['sections'] if s['id']=='classes')['items']}
+                assert GRP_B in tclasses,('a branch user-permission must not move the assignment-scoped desk',sorted(tclasses))
+                # STUDENT MASTER: no branch dimension — the native list stays
+                # role-wide while the desk stays roster-scoped.
+                stlisted={r['name'] for r in as_user('teacher_two',lambda:frappe.get_list(
+                    'Student',fields=['name'],limit_page_length=200))}
+                frappe.set_user('Administrator')
+                assert {stu1,stu2,outsider_stu}<=stlisted,('native student list narrowed unexpectedly',sorted(stlisted))
+                tstudents={i['id'] for i in next(s for s in two['sections'] if s['id']=='students')['items']}
+                assert outsider_stu not in tstudents,'an off-roster learner leaked onto the teacher desk'
+                # REST: own-branch reads, cross-branch refused, outsider and
+                # guest refused outright.
+                s2=login('teacher_two');so=login('outsider')
+                r=s2.get(base+'/api/resource/Student Group/'+IA,timeout=30)
+                assert r.status_code==200 and r.json()['data']['name']==IA,('own-branch class unread over REST',r.status_code,r.text[:200])
+                http_denied(s2.get(base+'/api/resource/Student Group/'+IB,timeout=30))
+                http_denied(so.get(base+'/api/resource/Student Group/'+IA,timeout=30))
+                http_denied(requests.get(base+'/api/resource/Student Group/'+IA,
+                    headers={'Host':'placement-test.localhost'},timeout=30))
+                # EXPORT: the export bit gates beyond read. Finance holds it
+                # on Fees; Instructor reads classes but may not export them.
+                fields_fee=json.dumps(['`tabFees`.`name`'])
+                ex=sessions['finance_officer'].post(base+'/api/method/frappe.desk.reportview.export_query',
+                    json={'doctype':'Fees','fields':fields_fee,'file_format_type':'CSV'},timeout=60)
+                assert ex.status_code==200 and len(ex.content)>0 and b'name' in ex.content[:200], \
+                    ('finance export of the fee register failed',ex.status_code,ex.text[:200])
+                http_denied(sessions['outsider'].post(base+'/api/method/frappe.desk.reportview.export_query',
+                    json={'doctype':'Fees','fields':fields_fee,'file_format_type':'CSV'},timeout=60))
+                http_denied(s2.post(base+'/api/method/frappe.desk.reportview.export_query',
+                    json={'doctype':'Student Group','fields':json.dumps(['`tabStudent Group`.`name`']),
+                          'file_format_type':'CSV'},timeout=60))
+                # PRINT: no print authority, no printable.
+                assert denied(lambda:as_user('outsider',lambda:frappe.get_attr(
+                    'frappe.utils.print_format.download_pdf')('Student Group',IA))), \
+                    'outsider printed a class roster'
+                frappe.set_user('Administrator')
+                # REPORT: the register role table gates execution.
+                run_report=frappe.get_attr('frappe.desk.query_report.run')
+                as_user('finance_officer',lambda:run_report('TH Tuition Billing Register'))
+                frappe.set_user('Administrator')
+                assert denied(lambda:as_user('invigilator',lambda:run_report('TH Tuition Billing Register'))), \
+                    'a non-audience role executed the tuition register'
+                frappe.set_user('Administrator')
+                # DESK RPC: every desk answers its audience and refuses the rest.
+                msess={label:login(label) for label in ('receptionist','academic_manager','finance_manager',
+                    'general_manager','course_owner','teacher_one','teacher_unlinked','outsider')}
+                AUD={'reception.work':{'receptionist'},'academic.work':{'academic_manager'},
+                     'finance.work':{'finance_manager'},'operations.work':{'general_manager'},
+                     'owner.cockpit':{'course_owner'},'setup.work':{'course_owner'},
+                     'teacher.work':{'teacher_one','teacher_unlinked'}}
+                cells=0
+                for method,aud in AUD.items():
+                    for label,s in msess.items():
+                        r=s.get(base+'/api/method/toefl_house.desk.'+method,timeout=30)
+                        if label in aud:
+                            assert r.status_code==200,(method,label,r.status_code,r.text[:200]);cells+=1
+                        else:http_denied(r)
+                return {'branch_groups':[IA,IB],'native_list_scoped_to_branch':sorted(listed),
+                        'desk_path_ignores_branch_user_permission':sorted(tclasses),
+                        'student_master_role_wide':sorted(stlisted),
+                        'off_roster_excluded_from_desk':outsider_stu,
+                        'rest_allow_deny':True,'export_allow_read_and_deny':True,
+                        'print_denied':True,'report_allow_deny':True,
+                        'desk_rpc_allow_cells':cells,'desk_rpc_matrix':'7 desks x 8 logins'}
+            finally:
+                frappe.set_user('Administrator')
+                frappe.delete_doc('User Permission',up.name,ignore_permissions=True)
+                frappe.db.commit()
+        check('desk-broad-isolation-matrix',traced(desk_isolation_matrix))
         report['status']='pass'
 
     except Exception as exc:

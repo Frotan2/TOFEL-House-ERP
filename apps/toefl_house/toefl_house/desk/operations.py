@@ -19,6 +19,7 @@ from toefl_house.desk import (
     viewer_roles,
 )
 from toefl_house.desk import lifecycle
+from toefl_house import observability as obs
 
 SLUG = "th-operations-desk"
 
@@ -84,6 +85,7 @@ STAFF_ROLES = (
     "Reception", "Admission Officer", "Admission Reviewer", "Admission Approver",
     "Enrollment Officer", "Teaching Scheduler", "Attendance Recorder",
     "Finance Officer", "Academic Manager", "Finance Manager", "General Manager",
+    "Instructor",
 )
 
 
@@ -303,11 +305,134 @@ def _funnel_and_exceptions():
     return funnel_facts, exception_items
 
 
+ERROR_LOG = "Error Log"
+RQ_JOB = "RQ Job"
+RQ_WORKER = "RQ Worker"
+SCHEDULED_JOB_TYPE = "Scheduled Job Type"
+SCHEDULED_JOB_LOG = "Scheduled Job Log"
+
+
+def _system_health():
+    """Native health/worker/failed-job facts + alert conditions.
+
+    Shared by the GM desk and the Owner cockpit (same helper, same numbers).
+    Reads native Frappe authorities only, through the management projection
+    allow-lists; conditions come from toefl_house.observability and are
+    generated, never delivered (no receiver exists — see that module).
+    """
+    try:
+        ping_ok = frappe.ping() == "pong"
+    except Exception:
+        ping_ok = False
+    error_logs = project_rows("management", ERROR_LOG,
+                              ["name", "method", "seen", "creation"],
+                              filters={"seen": 0},
+                              order_by="creation desc", limit=LIMIT_QUEUES)
+    failed_jobs = project_rows("management", RQ_JOB,
+                               ["name", "job_name", "queue", "status",
+                                "started_at", "ended_at"],
+                               filters={"status": "failed"},
+                               order_by="ended_at desc", limit=LIMIT_QUEUES)
+    workers = project_rows("management", RQ_WORKER,
+                           ["name", "worker_name", "queue", "queue_type", "status",
+                            "failed_job_count", "successful_job_count",
+                            "last_heartbeat"],
+                           order_by="worker_name asc", limit=LIMIT_QUEUES)
+    stopped_types = project_rows("management", SCHEDULED_JOB_TYPE,
+                                 ["name", "method", "frequency", "stopped",
+                                  "last_execution"],
+                                 filters={"stopped": 1},
+                                 order_by="name asc", limit=LIMIT_QUEUES)
+    failed_scheduled = project_rows("management", SCHEDULED_JOB_LOG,
+                                    ["name", "scheduled_job_type", "status",
+                                     "creation"],
+                                    filters={"status": "Failed"},
+                                    order_by="creation desc", limit=LIMIT_QUEUES)
+    summary = obs.summarize_snapshot({
+        "error_logs": error_logs, "failed_jobs": failed_jobs,
+        "workers": workers, "stopped_job_types": stopped_types,
+        "failed_scheduled_logs": failed_scheduled,
+    })
+    conditions = obs.evaluate_alert_conditions(summary, ping_ok=ping_ok)
+    facts = [
+        {"label": "Application answers",
+         "definition": "The application's own health ping answered.",
+         "value": "Yes" if ping_ok else "No", "owner": None},
+        {"label": "Unseen error rows",
+         "definition": "Native Error Log rows not yet marked seen. The error text stays on the native form.",
+         "value": summary["unseen_error_logs"], "owner": "General Manager"},
+        {"label": "Failed background jobs",
+         "definition": "Native background jobs in failed status. Tracebacks stay on the native job form.",
+         "value": summary["failed_jobs"], "owner": "General Manager"},
+        {"label": "Workers observed",
+         "definition": "Native background workers known to the scheduler, with their verbatim reported state.",
+         "value": summary["workers_observed"], "owner": None},
+        {"label": "Stopped scheduled job types",
+         "definition": "Scheduled job types carrying the native stopped flag.",
+         "value": summary["stopped_scheduled_job_types"], "owner": "General Manager"},
+        {"label": "Failed scheduled runs",
+         "definition": "Scheduled runs that ended in native Failed status.",
+         "value": summary["failed_scheduled_logs"], "owner": "General Manager"},
+    ]
+    items = []
+    for row in failed_jobs:
+        items.append({
+            "id": row["name"],
+            "person": row.get("job_name") or row["name"],
+            "detail": f"queue {row.get('queue') or '—'}",
+            "status": "failed",
+            "stage": "Failed background job",
+            "stage_definition": "A native background job ended in failed status. The traceback stays on the native job form; this desk does not project it.",
+            "next": "Open the native background-job list, read the traceback, and re-queue or escalate.",
+            "next_role": "General Manager",
+            "waiting_since": row.get("ended_at") or row.get("started_at"),
+        })
+    for row in error_logs:
+        items.append({
+            "id": row["name"],
+            "person": row.get("method") or row["name"],
+            "detail": "unseen error row",
+            "status": "unseen",
+            "stage": "Unseen error row",
+            "stage_definition": "A native error row nobody has marked seen. The error text stays on the native form.",
+            "next": "Open the native error list and mark the row seen once it is understood.",
+            "next_role": "General Manager",
+            "waiting_since": row.get("creation"),
+        })
+    for row in stopped_types:
+        items.append({
+            "id": row["name"],
+            "person": row.get("method") or row["name"],
+            "detail": f"every {row.get('frequency') or '—'}",
+            "status": "stopped",
+            "stage": "Stopped scheduled job",
+            "stage_definition": "A scheduled job type carries the native stopped flag, so the scheduler skips it.",
+            "next": "Restart the job type from the native scheduler, or leave it stopped deliberately.",
+            "next_role": "General Manager",
+            "waiting_since": row.get("last_execution"),
+        })
+    for condition in conditions:
+        items.append({
+            "id": f"condition:{condition['condition']}",
+            "person": condition["condition"].replace("_", " "),
+            "detail": condition["detail"],
+            "status": "observed",
+            "stage": "Alert condition",
+            "stage_definition": ("A generated condition over the native facts above. Conditions are "
+                               "generated, never delivered: no alert receiver exists in this product."),
+            "next": "Work the underlying native rows; there is no receiver to notify.",
+            "next_role": "General Manager",
+            "waiting_since": None,
+        })
+    return facts, items
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def work():
     """GM desk payload: funnel, exceptions, staffing, links."""
     require_desk_audience(SLUG)
     funnel_facts, exception_items = _funnel_and_exceptions()
+    health_facts, health_items = _system_health()
 
     staff_counts = _staff_counts()
     desks_for_viewer = []
@@ -336,6 +461,12 @@ def work():
             section("staffing", "Role coverage", "queue", items=_role_items(staff_counts),
                     empty_title="No operational roles",
                     empty_body="No shipped operational role is assigned to an enabled user."),
+            section("health", "System health (native facts)", "queue", items=health_items,
+                    empty_title="No health exceptions",
+                    empty_body="The application answers, and no failed job, unseen error row or stopped schedule is recorded. Full counts sit beside the funnel facts."),
+            section("health-facts", "System health counts", "facts", facts=health_facts,
+                    empty_title="No health facts yet",
+                    empty_body="Health counts appear once the native scheduler tables exist."),
             section("desks", "Your desks", "links", items=desks_for_viewer,
                     empty_title="No other desks for your account",
                     empty_body="This account holds only the General Manager desk."),
