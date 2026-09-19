@@ -4355,7 +4355,7 @@ def main():
             for item in items:
                 assert set(item)=={'id','person','detail','status','stage','stage_definition',
                                    'next','next_role','waiting_since'},(item['id'],sorted(item))
-                assert 'traceback' not in json.dumps(item).lower(),(item['id'],'traceback leaked onto the desk')
+                assert 'traceback' not in json.dumps(item,default=str).lower(),(item['id'],'traceback leaked onto the desk')
             conds=[i for i in items if i['id'].startswith('condition:')]
             assert all('no receiver' in i['stage_definition'] for i in conds),(len(conds),'condition without the receiver boundary')
             own=as_user('course_owner',own_work);frappe.set_user('Administrator')
@@ -4393,7 +4393,7 @@ def main():
             for item in pay:
                 assert set(item)=={'id','person','detail','status','stage','stage_definition',
                                    'next','next_role','waiting_since'},(item['id'],sorted(item))
-            assert 'does not calculate' in json.dumps(pay),'compensation must state its no-calculation boundary'
+            assert 'does not calculate' in json.dumps(pay,default=str),'compensation must state its no-calculation boundary'
             unl=as_user('teacher_unlinked',work);frappe.set_user('Administrator')
             assert {s['id'] for s in unl['sections']}=={'classes','today'}
             assert 'not linked to an instructor record' in json.dumps(unl)
