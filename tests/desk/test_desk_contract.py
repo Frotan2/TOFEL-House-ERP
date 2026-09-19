@@ -1841,6 +1841,22 @@ class TeacherDeskWorldTests(unittest.TestCase):
             module.work()
         self.assertIn("Instructor", str(ctx.exception))
 
+    def test_branch_rule_narrows_what_is_seen_never_who_is_seen(self):
+        # Identity resolution is scope-exempt: a Branch user-permission
+        # for SYN-ISOL-A must not unlink a teacher whose employee row
+        # sits in HQ. Data reads stay scoped by default (P1).
+        world = self._world()
+        world["Employee"] = [dict(row, branch="HQ") for row in world["Employee"]]
+        world["User Permission"] = [
+            {"name": "UP-1", "user": "desk-user@example.com",
+             "allow": "Branch", "for_value": "SYN-ISOL-A"},
+        ]
+        payload = self._payload(world=world)
+        items = {item["id"]: item
+                 for item in self._section(payload, "classes")["items"]}
+        self.assertIn("TA-1", items)
+        self.assertNotIn("TA-2", items)
+
 
 class FinanceOutstandingWorldTests(unittest.TestCase):
     """The finance desk's outstanding queue, from native facts only.

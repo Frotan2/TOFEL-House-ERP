@@ -56,17 +56,21 @@ def _resolve_instructor(user):
     enforces); the instructor row is matched by its native employee link
     and surfaced with its verbatim status — no status vocabulary invented.
     """
+    # Identity, not data: these rows are keyed to the viewer's own login
+    # (user_id, then the employee link), so Company/Branch user-permission
+    # scope must not apply — a branch rule may narrow what a teacher sees,
+    # never who the teacher is. Data reads below stay scoped by default.
     employees = project_rows("teacher", EMPLOYEE,
                              ["name", "employee_name", "status", "user_id"],
                              filters={"user_id": user, "status": "Active"},
-                             order_by="name asc", limit=1)
+                             order_by="name asc", limit=1, scope=False)
     if not employees:
         return None, None
     employee = employees[0]
     instructors = project_rows("teacher", INSTRUCTOR,
                                ["name", "instructor_name", "employee", "status"],
                                filters={"employee": employee["name"]},
-                               order_by="name asc", limit=1)
+                               order_by="name asc", limit=1, scope=False)
     if not instructors:
         return employee, None
     return employee, instructors[0]

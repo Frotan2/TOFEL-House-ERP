@@ -419,15 +419,20 @@ def _assert_projection(desk, doctype, fields):
     return allow
 
 
-def project_rows(desk, doctype, fields, filters=None, order_by=None, limit=LIMIT_QUEUES):
+def project_rows(desk, doctype, fields, filters=None, order_by=None, limit=LIMIT_QUEUES,
+                 scope=True):
     """Elevated, allow-listed, bounded read for a desk projection.
 
     This is the only sanctioned way for a desk to read records its audience
     does not hold natively. It enforces the field allow-list and the limit
     before touching the database, so a caller cannot widen the projection.
+    Native Company/Branch user-permission scope applies by default; pass
+    scope=False only for self-filtered identity resolution (rows keyed to
+    the viewer's own login, which no permission can unsee without unlinking
+    the viewer). The field allow-list is never negotiable either way.
     """
     _assert_projection(desk, doctype, fields)
-    filters = _apply_scope(desk, doctype, dict(filters or {}))
+    filters = _apply_scope(desk, doctype, dict(filters or {})) if scope else dict(filters or {})
     return frappe.get_all(
         doctype,
         filters=filters,
