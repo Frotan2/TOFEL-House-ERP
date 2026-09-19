@@ -84,15 +84,99 @@ CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revis
                    "TH Placement Course Map Revision")
 
 
+SYNTHETIC_SITES = {"placement-test.localhost", "placement-second.localhost"}
+
+# D16 production activation (owner decision 2026-09-19): the two site_config
+# keys that, together with the running site name, form the explicit activation
+# triple. Server file access is the trust boundary — the owner controls the
+# server — so these flags are read from site_config, never from a request.
+PRODUCTION_ACTIVE_CONF_KEY = "toefl_house_production_active"
+PRODUCTION_SITE_CONF_KEY = "toefl_house_production_site"
+
+# Site modes resolved by site_mode(). SYNTHETIC is the unchanged qualification
+# behavior; PRODUCTION is the D16-activated real site; REFUSED is the default
+# for everything else, including any mixed synthetic+production configuration.
+SYNTHETIC = "SYNTHETIC"
+PRODUCTION = "PRODUCTION"
+REFUSED = "REFUSED"
+
+
 def require_synthetic():
     if (frappe.conf.get("toefl_house_synthetic_only") != 1
             or frappe.conf.get("allow_tests") != 1
-            or frappe.local.site not in {"placement-test.localhost", "placement-second.localhost"}):
+            or frappe.local.site not in SYNTHETIC_SITES):
         raise frappe.PermissionError("Placement is disabled outside explicitly isolated synthetic test sites")
 
 
+def site_mode():
+    """Resolve how owned commands may run on this site (D16).
+
+    SYNTHETIC: the unchanged qualification triple (synthetic-only flag,
+    allow-tests flag, qualification hostname). PRODUCTION: the explicit
+    activation triple (production-active flag plus a configured site name
+    equal to the running site). REFUSED: everything else — including a site
+    that carries BOTH triples (mixed mode is never allowed) and any attempt
+    to name a qualification hostname as the production site.
+    """
+    site = frappe.local.site
+    conf = frappe.conf
+    synthetic_flags = (conf.get("toefl_house_synthetic_only") == 1
+                       and conf.get("allow_tests") == 1)
+    production_claim = (conf.get(PRODUCTION_ACTIVE_CONF_KEY) == 1
+                        and isinstance(conf.get(PRODUCTION_SITE_CONF_KEY), str)
+                        and conf.get(PRODUCTION_SITE_CONF_KEY) == site)
+    # Mixed configuration is never allowed: a site carrying both the
+    # synthetic flags and a production claim on itself is refused on either
+    # hostname family (this is the copied-site_config fail-closed).
+    if synthetic_flags and production_claim:
+        return REFUSED
+    if synthetic_flags and site in SYNTHETIC_SITES:
+        return SYNTHETIC
+    if production_claim and site not in SYNTHETIC_SITES:
+        return PRODUCTION
+    return REFUSED
+
+
+def is_production():
+    """True only on the explicitly activated production site."""
+    return site_mode() == PRODUCTION
+
+
+def require_operational():
+    """Accept the synthetic qualification sites or the activated production site.
+
+    This is the D16 command gate: owned business commands run on SYNTHETIC
+    (unchanged qualification behavior) or PRODUCTION (explicit owner-authorized
+    activation) and are refused everywhere else. require_synthetic() stays
+    available for paths that must remain qualification-only.
+    """
+    if site_mode() == REFUSED:
+        raise frappe.PermissionError(
+            "TOEFL House commands are disabled on this site: it is neither an "
+            "explicitly synthetic test site nor the activated production site")
+
+
+def record_synthetic_flag():
+    """Stamp owned records with the site mode (D16 fixture separation).
+
+    Synthetic qualification records carry synthetic=1 exactly as before; real
+    production records carry synthetic=0 so test fixtures can never leak into
+    live data and live data is never mistaken for fixtures. The controllers
+    enforce the stamp per mode. Refused sites cannot reach this helper past
+    the command gate, but it refuses anyway rather than stamping blindly.
+    """
+    mode = site_mode()
+    if mode == SYNTHETIC:
+        return 1
+    if mode == PRODUCTION:
+        return 0
+    raise frappe.PermissionError(
+        "TOEFL House commands are disabled on this site: it is neither an "
+        "explicitly synthetic test site nor the activated production site")
+
+
 def authorize(role):
-    require_synthetic()
+    require_operational()
     user = frappe.session.user
     if user in (None, "Guest", "Administrator") or role not in frappe.get_roles(user):
         raise frappe.PermissionError("An explicitly assigned non-administrator actor is required")
@@ -113,7 +197,7 @@ def command(kind, actor):
 
 
 def require_command(doctype):
-    require_synthetic()
+    require_operational()
     context = _CONTEXT.get()
     if doctype not in DOCTYPES or context is None or context[1] != frappe.session.user:
         raise frappe.PermissionError("Protected records require an authorized domain command")

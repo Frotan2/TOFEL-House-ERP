@@ -13,6 +13,19 @@ DIFFICULTIES = ("Entry", "Core", "Stretch")
 SYNTHETIC_CODE = re.compile(r"SYN-[A-Z0-9_-]{1,48}")
 SECTION_ID = re.compile(r"[a-z][a-z0-9_]{0,15}")
 
+# D16 fixture-separation mirror: on the production site, test markers are
+# forbidden everywhere they are required on synthetic sites. Bounds are kept;
+# no production code format is invented — real values are owner configuration.
+PRODUCTION_CODE_LIMIT = 64
+
+
+def _production_code(value, label):
+    if not isinstance(value, str) or not 1 <= len(value) <= PRODUCTION_CODE_LIMIT:
+        raise ValueError(f"{label} must be 1 to 64 characters")
+    if value.startswith("SYN-") or value.startswith("SYNTHETIC"):
+        raise ValueError(f"{label} must not carry the synthetic test marker on the production site")
+    return value
+
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
@@ -28,7 +41,7 @@ def request_digest(value, secret):
     return hmac.new(secret.encode(), canonical(value).encode(), hashlib.sha256).hexdigest()
 
 
-def validate_content(value):
+def validate_content(value, *, production=False):
     if not isinstance(value, dict) or set(value) != FIELDS:
         raise ValueError("Content must contain exactly the supported fields")
     if value["skill"] not in SKILLS or value["difficulty"] not in DIFFICULTIES:
@@ -38,7 +51,14 @@ def validate_content(value):
     if value["skill"] in ("Speaking", "Writing"):
         raise ValueError("Productive-skill rubric tasks are not implemented in this increment")
     # Test-content marker is an explicit guardrail, not a PII detection claim.
-    if not isinstance(value["prompt"], str) or not value["prompt"].startswith("SYNTHETIC: ") or not 12 <= len(value["prompt"]) <= 4000:
+    # D16 mirror: required on synthetic sites, forbidden on the production site.
+    prompt = value["prompt"]
+    if production:
+        if not isinstance(prompt, str) or not 12 <= len(prompt) <= 4000:
+            raise ValueError("Only bounded plain-text prompts are accepted")
+        if prompt.startswith("SYNTHETIC: "):
+            raise ValueError("Test-fixture prompts are not accepted on the production site")
+    elif not isinstance(prompt, str) or not prompt.startswith("SYNTHETIC: ") or not 12 <= len(prompt) <= 4000:
         raise ValueError("Only bounded, explicitly synthetic plain-text prompts are accepted")
     options = value["options"]
     if not isinstance(options, list) or not 2 <= len(options) <= 6:
@@ -59,15 +79,19 @@ def validate_content(value):
     return value
 
 
-def validate_family(family, revision):
-    if not isinstance(family, str) or not re.fullmatch(r"SYN-[A-Z0-9_-]{1,48}", family):
+def validate_family(family, revision, *, production=False):
+    if production:
+        _production_code(family, "Family id")
+    elif not isinstance(family, str) or not re.fullmatch(r"SYN-[A-Z0-9_-]{1,48}", family):
         raise ValueError("Synthetic family id required")
     if type(revision) is not int or not 1 <= revision <= 100000:
         raise ValueError("Revision must be a positive integer")
 
 
-def validate_config_code(code, revision):
-    if not isinstance(code, str) or not SYNTHETIC_CODE.fullmatch(code):
+def validate_config_code(code, revision, *, production=False):
+    if production:
+        _production_code(code, "Config code")
+    elif not isinstance(code, str) or not SYNTHETIC_CODE.fullmatch(code):
         raise ValueError("Synthetic config code required")
     if type(revision) is not int or not 1 <= revision <= 100000:
         raise ValueError("Revision must be a positive integer")
@@ -148,12 +172,14 @@ def validate_policy(value):
 COURSE_MAP_MATCHES = ("any_correct",)
 
 
-def validate_course_map(value):
+def validate_course_map(value, *, production=False):
     """Bounded structural validation of a synthetic course/level map.
 
     Fixture entries are not approved Academic Owner operational policy
     (P1/P4 remain owner deliverables). No percent, cutoff, CEFR or
-    official TOEFL fields are accepted.
+    official TOEFL fields are accepted. D16 mirror: on the production site
+    the same structure holds with real owner-configured codes and test
+    markers forbidden.
     """
     if not isinstance(value, dict) or set(value) != {"algorithm", "entries"}:
         raise ValueError("Course map must contain exactly algorithm, entries")
@@ -166,10 +192,14 @@ def validate_course_map(value):
     for entry in entries:
         if not isinstance(entry, dict) or set(entry) != {"internal_level", "course_code", "match"}:
             raise ValueError("Entry must contain exactly internal_level, course_code, match")
-        if not isinstance(entry["internal_level"], str) or not SYNTHETIC_CODE.fullmatch(entry["internal_level"]):
-            raise ValueError("Synthetic internal_level required")
-        if not isinstance(entry["course_code"], str) or not SYNTHETIC_CODE.fullmatch(entry["course_code"]):
-            raise ValueError("Synthetic course_code required")
+        if production:
+            _production_code(entry["internal_level"], "internal_level")
+            _production_code(entry["course_code"], "course_code")
+        else:
+            if not isinstance(entry["internal_level"], str) or not SYNTHETIC_CODE.fullmatch(entry["internal_level"]):
+                raise ValueError("Synthetic internal_level required")
+            if not isinstance(entry["course_code"], str) or not SYNTHETIC_CODE.fullmatch(entry["course_code"]):
+                raise ValueError("Synthetic course_code required")
         if entry["match"] not in COURSE_MAP_MATCHES:
             raise ValueError("Unsupported course map match")
         key = (entry["internal_level"], entry["course_code"], entry["match"])
@@ -179,7 +209,7 @@ def validate_course_map(value):
     return value
 
 
-def recommend_course(score, course_map):
+def recommend_course(score, course_map, *, production=False):
     """Map sealed objective evidence to a synthetic internal course.
 
     Missing evidence is never treated as zero. No composite, percent,
@@ -196,15 +226,18 @@ def recommend_course(score, course_map):
         raise ValueError("Score completeness required")
     if presented < 1 or presented != correct + incorrect + missing:
         raise ValueError("Score completeness mismatch")
-    course_map = validate_course_map(course_map)
+    course_map = validate_course_map(course_map, production=production)
     for entry in course_map["entries"]:
         if entry["match"] == "any_correct" and correct >= 1:
+            rationale = ("Configured course mapping from observed correct evidence; "
+                         "not an approved academic grading policy.") if production else (
+                         "Synthetic non-operational fixture mapping from observed "
+                         "correct evidence; not an approved academic policy.")
             return {
                 "algorithm": "course-map-v1",
                 "internal_level": entry["internal_level"],
                 "course_code": entry["course_code"],
-                "rationale": ("Synthetic non-operational fixture mapping from observed "
-                              "correct evidence; not an approved academic policy."),
+                "rationale": rationale,
             }
     raise ValueError("No eligible course mapping for this evidence")
 
@@ -334,8 +367,10 @@ ATTENDANCE_STATUSES = ("Present", "Absent", "Leave")
 TIME_PATTERN = re.compile(r"([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?")
 
 
-def validate_group_name(value):
+def validate_group_name(value, *, production=False):
     """Class roster names are explicit synthetic fixtures, not real classes."""
+    if production:
+        return _production_code(value, "Student group name")
     if not isinstance(value, str) or not SYNTHETIC_CODE.fullmatch(value):
         raise ValueError("Synthetic student group name required")
     return value

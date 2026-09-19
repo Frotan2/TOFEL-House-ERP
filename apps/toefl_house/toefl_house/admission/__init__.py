@@ -4,6 +4,7 @@ import frappe
 from frappe.utils import get_datetime
 from toefl_house.api import ATTEMPT, DECISION, _execute, _now
 from toefl_house.policy import ADMISSION_OUTCOMES, digest, validate_admission_text
+from toefl_house.security import is_production, record_synthetic_flag
 
 DECISION_DT = "TH Admission Decision"
 APPLICANT = "Student Applicant"
@@ -142,8 +143,8 @@ def _active_duplicate(applicant_name):
 @frappe.whitelist(methods=["POST"])
 def deny_enroll_student(source_name=None):
     """A13 containment: native enroll_student is not an Admission API."""
-    from toefl_house.security import require_synthetic
-    require_synthetic()
+    from toefl_house.security import require_operational
+    require_operational()
     raise frappe.PermissionError(
         "Native enroll_student is contained; enrollment is not part of Admission")
 
@@ -155,7 +156,12 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
         _unexpired(row)
         subject = _placement_subject(row)
         first = _name(first_name, "First name")
-        if not first.startswith("SYNTHETIC"):
+        # D16 mirror: synthetic sites accept only marked fixture names;
+        # production accepts real bounded names and refuses test markers.
+        if is_production():
+            if first.startswith("SYN-") or first.startswith("SYNTHETIC"):
+                raise frappe.ValidationError("Test-fixture applicant names are not accepted on the production site")
+        elif not first.startswith("SYNTHETIC"):
             raise frappe.ValidationError("Only explicitly synthetic applicant names are accepted")
         program_name = _name(program, "Program")
         year_name = _name(academic_year, "Academic Year")
@@ -237,7 +243,7 @@ def create_admission(request_key, student_applicant, placement_decision, existin
             program=applicant.program, academic_year=applicant.academic_year,
             academic_term=applicant.get("academic_term") or None,
             placement_decision=row.name, existing_student=returning,
-            status="Draft", version=1, drafted_by=actor, accepted=0, synthetic=1,
+            status="Draft", version=1, drafted_by=actor, accepted=0, synthetic=record_synthetic_flag(),
         ))
         doc.insert(ignore_permissions=True)
         result = _result(doc)

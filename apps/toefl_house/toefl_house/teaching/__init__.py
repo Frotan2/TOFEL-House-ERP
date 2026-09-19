@@ -28,7 +28,7 @@ from toefl_house.policy import (DELIVERY_MODES, digest, is_valid_class_transitio
                                 validate_class_status, validate_delivery_mode,
                                 validate_group_name, validate_schedule_date,
                                 validate_session_window)
-from toefl_house.security import active_command_kind, require_synthetic, teaching_command_active
+from toefl_house.security import active_command_kind, is_production, require_operational, teaching_command_active
 
 GROUP = "Student Group"
 SCHEDULE = "Course Schedule"
@@ -77,7 +77,7 @@ def guard_student_group(doc, method=None):
        require an explicit owner policy and are refused until then — this
        module will not silently invent an amendment pathway.
     """
-    require_synthetic()
+    require_operational()
     if teaching_command_active(GROUP):
         _enforce_class_fact_invariants(doc)
         return
@@ -145,14 +145,14 @@ def _validate_class_facts_on_insert(doc):
 
 
 def guard_course_schedule(doc, method=None):
-    require_synthetic()
+    require_operational()
     if teaching_command_active(SCHEDULE):
         return
     raise frappe.ValidationError("Course Schedule requires an authorized teaching command")
 
 
 def guard_student_attendance(doc, method=None):
-    require_synthetic()
+    require_operational()
     if teaching_command_active(ATTENDANCE):
         return
     raise frappe.ValidationError("Student Attendance requires an authorized teaching command")
@@ -242,7 +242,7 @@ def create_student_group(request_key, group_name, program, academic_year, academ
     """
     def work(actor):
         try:
-            name = validate_group_name(group_name)
+            name = validate_group_name(group_name, production=is_production())
             capacity = validate_capacity(max_strength)
             start = validate_schedule_date(class_start_date) if class_start_date else frappe.utils.today()
             mode = validate_delivery_mode(delivery_mode)

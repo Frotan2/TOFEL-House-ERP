@@ -6,7 +6,7 @@ from frappe.model.document import Document
 from toefl_house.policy import (ADMISSION_OUTCOMES, ATTEMPT_TRANSITIONS, FROZEN_STATUSES,
                                 digest, is_admission_transition, is_config_transition)
 from toefl_house.scoring import SCORER_VERSION
-from toefl_house.security import require_command, CONFIG_DOCTYPES
+from toefl_house.security import require_command, site_mode, CONFIG_DOCTYPES, PRODUCTION, SYNTHETIC
 
 
 class ProtectedRecord(Document):
@@ -15,8 +15,21 @@ class ProtectedRecord(Document):
 
     def validate(self):
         require_command(self.doctype)
-        if self.get("synthetic") != 1:
-            raise frappe.ValidationError("Only synthetic records are supported")
+        # D16 fixture separation, enforced per site mode: synthetic
+        # qualification records carry synthetic=1 exactly as before, while
+        # real production records must NOT carry the fixture stamp — test
+        # fixtures can never leak into live data and live data is never
+        # mistaken for fixtures. Refused sites never reach this line past
+        # require_command; anything else fails closed.
+        mode = site_mode()
+        if mode == SYNTHETIC:
+            if self.get("synthetic") != 1:
+                raise frappe.ValidationError("Only synthetic records are supported")
+        elif mode == PRODUCTION:
+            if self.get("synthetic") == 1:
+                raise frappe.ValidationError("Synthetic fixture records are not accepted on the production site")
+        else:
+            raise frappe.PermissionError("TOEFL House records require an operational site")
         before = self.get_doc_before_save()
         if before and self.doctype in ("TH Placement Audit Event",):
             raise frappe.PermissionError("Audit events are append-only")

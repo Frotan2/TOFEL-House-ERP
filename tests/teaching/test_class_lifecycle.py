@@ -171,10 +171,11 @@ class ClassFactInvariantTests(unittest.TestCase):
     path with ignore_permissions=True."""
 
     def test_guard_requires_command_context(self):
-        """guard_student_group must call require_synthetic() and fail when
-        no synthetic environment flag is active."""
+        """guard_student_group must call require_operational() and fail when
+        the site is not an operational site (D16: synthetic qualification
+        sites and the activated production site; refused elsewhere)."""
         src = TEACHING_INIT.read_text()
-        self.assertIn("require_synthetic()", src)
+        self.assertIn("require_operational()", src)
         self.assertIn("teaching_command_active(GROUP)", src)
         self.assertIn("_enforce_class_fact_invariants", src)
         self.assertIn("Class fact", src)

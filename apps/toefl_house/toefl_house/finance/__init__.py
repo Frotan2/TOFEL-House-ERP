@@ -14,7 +14,7 @@ this slice.
 import frappe
 from toefl_house.api import _execute
 from toefl_house.policy import digest, validate_finance_dates
-from toefl_house.security import finance_command_active, require_synthetic
+from toefl_house.security import finance_command_active, is_production, require_operational
 from toefl_house.enrollment import deny_premature_invoice
 
 FEES = "Fees"
@@ -25,10 +25,30 @@ PROGRAM_ENROLLMENT = "Program Enrollment"
 COMPANY = "TOEFL House"
 PRICE_LIST = "TOEFL House Standard"
 PLACEMENT_FEE_ITEM = "SYN-PLACEMENT-FEE"
+PLACEMENT_FEE_ITEM_CONF_KEY = "toefl_house_placement_fee_item"
+
+
+def _placement_fee_item():
+    """Resolve the configured native Item code for the placement fee.
+
+    Synthetic sites bill through the SYN- fixture item. The production
+    site must configure a real native Item code via site_config; test
+    markers are refused and a missing value fails closed (no invented
+    default, no silent fallback).
+    """
+    if not is_production():
+        return PLACEMENT_FEE_ITEM
+    code = frappe.get_site_config().get(PLACEMENT_FEE_ITEM_CONF_KEY)
+    if not isinstance(code, str) or not code or len(code) > 140:
+        raise frappe.ValidationError("Placement fee item is not configured for the production site")
+    if code.startswith("SYN-") or code.startswith("SYNTHETIC"):
+        raise frappe.ValidationError(
+            "Test-fixture placement fee items are not accepted on the production site")
+    return code
 
 
 def guard_fees(doc, method=None):
-    require_synthetic()
+    require_operational()
     if finance_command_active(FEES):
         return
     raise frappe.ValidationError("Fees requires an authorized finance command")
@@ -39,7 +59,7 @@ def guard_sales_invoice(doc, method=None):
     # the finance containment guard is chained after it (one handler per
     # doctype/method per app).
     deny_premature_invoice(doc, method)
-    require_synthetic()
+    require_operational()
     if finance_command_active(INVOICE):
         return
     raise frappe.ValidationError("Sales Invoice requires an authorized finance command")
@@ -198,8 +218,9 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             raise frappe.ValidationError("Unknown placement case")
         if not frappe.db.exists(CUSTOMER, customer_name):
             raise frappe.ValidationError("Unknown customer")
+        item_code = _placement_fee_item()
         rate = frappe.db.get_value("Item Price",
-                                   {"item_code": PLACEMENT_FEE_ITEM,
+                                   {"item_code": item_code,
                                     "price_list": PRICE_LIST, "selling": 1},
                                    "price_list_rate")
         if not rate or float(rate) <= 0:
@@ -214,7 +235,7 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             posting_date=posting, due_date=due, set_posting_time=0,
             is_pos=0, th_placement_case=case_name,
             selling_price_list=PRICE_LIST,
-            items=[dict(item_code=PLACEMENT_FEE_ITEM, qty=1, rate=float(rate))]))
+            items=[dict(item_code=item_code, qty=1, rate=float(rate))]))
         invoice.flags.ignore_permissions = True
         invoice.insert(ignore_permissions=True)
         invoice.flags.ignore_permissions = True

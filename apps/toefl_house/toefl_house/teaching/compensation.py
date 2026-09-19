@@ -22,6 +22,7 @@ from toefl_house.policy import (digest, validate_compensation_model, validate_ef
                                 validate_optional_amount, validate_payable_quantity,
                                 validate_positive_amount, validate_schedule_date, validate_skill,
                                 windows_overlap)
+from toefl_house.security import record_synthetic_flag
 
 CONTRACT = "TH Instructor Contract"
 ASSIGNMENT = "TH Teaching Assignment"
@@ -131,7 +132,7 @@ def _contract_payload(actor, instructor, employee, model, basis, frequency,
                 compensation_model=model, assignment_basis=basis,
                 payment_frequency=frequency, effective_start=start, effective_end=end,
                 conditions=conditions, supersedes=supersedes, status="Active",
-                skill_terms=terms, adjustments=adjustments, synthetic=1)
+                skill_terms=terms, adjustments=adjustments, synthetic=record_synthetic_flag())
 
 
 @frappe.whitelist(methods=["POST"])
@@ -330,7 +331,7 @@ def assign_teaching_skill(request_key, student_group, skill, instructor, contrac
             doctype=ASSIGNMENT, student_group=group_name, skill=skill_name,
             instructor=instructor_name, contract=contract_name,
             course_schedule=schedule_name or None, effective_start=start,
-            effective_end=end, synthetic=1))
+            effective_end=end, synthetic=record_synthetic_flag()))
         assignment.flags.ignore_permissions = True
         assignment.flags.ignore_links = True
         assignment.insert(ignore_permissions=True)

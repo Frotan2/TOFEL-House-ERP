@@ -10,7 +10,7 @@ from toefl_house.admission import (
 )
 from toefl_house.api import _execute
 from toefl_house.policy import digest, enrollment_is_eligible
-from toefl_house.security import enrollment_command_active, require_synthetic
+from toefl_house.security import enrollment_command_active, require_operational
 
 PE = "Program Enrollment"
 CE = "Course Enrollment"
@@ -42,21 +42,21 @@ def _native_enrollment_write():
 
 
 def guard_program_enrollment(doc, method=None):
-    require_synthetic()
+    require_operational()
     if enrollment_command_active():
         return
     raise frappe.ValidationError("Program Enrollment requires an authorized enrollment command")
 
 
 def guard_course_enrollment(doc, method=None):
-    require_synthetic()
+    require_operational()
     if enrollment_command_active():
         return
     raise frappe.ValidationError("Course Enrollment requires an authorized enrollment command")
 
 
 def deny_premature_invoice(doc, method=None):
-    require_synthetic()
+    require_operational()
     customer = getattr(doc, "customer", None)
     if not customer:
         return

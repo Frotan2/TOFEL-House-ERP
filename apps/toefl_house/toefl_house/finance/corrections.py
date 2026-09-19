@@ -18,6 +18,7 @@ from datetime import date, timedelta
 import frappe
 from toefl_house.api import _execute
 from toefl_house.policy import digest, validate_correction_window_days
+from toefl_house.security import record_synthetic_flag
 
 POLICY = "TH Correction Policy"
 REQUEST = "TH Correction Request"
@@ -80,7 +81,7 @@ def configure_correction_policy(request_key, approver_role, correction_window_da
             old.save(ignore_permissions=True)
         policy = frappe.get_doc(dict(doctype=POLICY, approver_role=role,
                                      correction_window_days=days, status="Active",
-                                     synthetic=1))
+                                     synthetic=record_synthetic_flag()))
         policy.flags.ignore_permissions = True
         policy.insert(ignore_permissions=True)
         result = {"name": policy.name, "approver_role": role,
@@ -138,7 +139,7 @@ def request_invoice_correction(request_key, sales_invoice, reason, requested_amo
         request = frappe.get_doc(dict(
             doctype=REQUEST, sales_invoice=si_name, reason=reason,
             requested_amount=round(float(requested_amount), 2),
-            status="Requested", synthetic=1))
+            status="Requested", synthetic=record_synthetic_flag()))
         request.flags.ignore_permissions = True
         request.flags.ignore_links = True
         request.insert(ignore_permissions=True)
@@ -283,7 +284,7 @@ def request_fees_correction(request_key, fees, reason, requested_amount):
         request = frappe.get_doc(dict(
             doctype=REQUEST, fees=fee_name, reason=reason,
             requested_amount=round(float(requested_amount), 2),
-            status="Requested", synthetic=1))
+            status="Requested", synthetic=record_synthetic_flag()))
         request.flags.ignore_permissions = True
         request.flags.ignore_links = True
         request.insert(ignore_permissions=True)

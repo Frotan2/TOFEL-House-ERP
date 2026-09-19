@@ -284,10 +284,11 @@ def require_desk_audience(slug):
     desk read is therefore gated on the desk audience and on an enabled,
     non-guest, non-administrator user — the same viewer invariants
     toefl_house.security.authorize enforces for commands — but deliberately
-    NOT on the synthetic-site activation gate, exactly like the governance
-    surface in toefl_house.administration. The synthetic-only hard stop in
-    security.py remains untouched and continues to confine every business
-    command; a desk cannot mutate anything and adds no path around it.
+    NOT on the site activation gate, exactly like the governance
+    surface in toefl_house.administration. The operational hard stop in
+    security.py continues to confine every business command to the synthetic
+    qualification sites and the D16-activated production site; a desk cannot
+    mutate anything and adds no path around it.
     """
     user = frappe.session.user
     roles = set(frappe.get_roles(user))

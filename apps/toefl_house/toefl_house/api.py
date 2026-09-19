@@ -9,7 +9,7 @@ from toefl_house.policy import (attempt_deadline, canonical, deadline_reached, d
                                 validate_blueprint, validate_config_code, validate_content,
                                 validate_course_map, validate_family, validate_policy,
                                 validate_request_key)
-from toefl_house.security import KIND_ROLES, authorize, command
+from toefl_house.security import KIND_ROLES, authorize, command, is_production, record_synthetic_flag
 from toefl_house.transactions import run_with_retry
 
 ITEM = "TH Placement Item Revision"
@@ -49,7 +49,7 @@ def _content(value):
         except (ValueError, TypeError) as exc:
             raise frappe.ValidationError("Invalid JSON content") from exc
     try:
-        return validate_content(value)
+        return validate_content(value, production=is_production())
     except (ValueError, TypeError) as exc:
         raise frappe.ValidationError(str(exc)) from exc
 
@@ -80,13 +80,13 @@ def _execute_once(kind, request_key, payload, work):
         return existing()
     with command(kind, actor):
         op = frappe.get_doc(dict(doctype=OP, name=op_name, kind=kind, actor=actor,
-                                input_hash=input_hash, status="Applying", synthetic=1))
+                                input_hash=input_hash, status="Applying", synthetic=record_synthetic_flag()))
         try:
             op.insert(ignore_permissions=True)
         except frappe.DuplicateEntryError:
             return existing()
         result, event = work(actor)
-        frappe.get_doc(dict(doctype=AUDIT, actor=actor, operation=op.name, synthetic=1,
+        frappe.get_doc(dict(doctype=AUDIT, actor=actor, operation=op.name, synthetic=record_synthetic_flag(),
                             action=kind, **event)).insert(ignore_permissions=True)
         op.status = "Complete"
         op.result_json = canonical(result)
@@ -104,7 +104,7 @@ def _apply(item, content):
 
 def _new_key(item_name, version, answer):
     return frappe.get_doc(dict(doctype=KEY, item_revision=item_name, key_version=version, answer=answer,
-                               content_hash=digest([item_name, version, answer]), synthetic=1)).insert(ignore_permissions=True)
+                               content_hash=digest([item_name, version, answer]), synthetic=record_synthetic_flag())).insert(ignore_permissions=True)
 
 
 def _result(item):
@@ -124,15 +124,22 @@ def _locked_item(name, expected_version):
 def create_draft(request_key, family, revision, content):
     content = _content(content)
     try:
-        validate_family(family, revision)
+        validate_family(family, revision, production=is_production())
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
 
     def work(actor):
-        if not family.startswith("SYN-" + digest(actor)[:12].upper() + "-"):
+        # D16 mirror: synthetic families stay author-namespaced fixtures;
+        # production families are real codes and must not carry the test
+        # marker (database family/revision uniqueness still fails closed on
+        # collisions; revision ownership still binds author to draft).
+        if is_production():
+            if family.startswith("SYN-") or family.startswith("SYNTHETIC"):
+                raise frappe.PermissionError("Test-fixture families are not accepted on the production site")
+        elif not family.startswith("SYN-" + digest(actor)[:12].upper() + "-"):
             raise frappe.PermissionError("Synthetic family namespace must belong to the author")
         item = frappe.get_doc(dict(doctype=ITEM, family=family, revision=revision, version=1,
-                                  status="Draft", synthetic=1))
+                                  status="Draft", synthetic=record_synthetic_flag()))
         _apply(item, content)
         item.insert(ignore_permissions=True)
         key = _new_key(item.name, item.version, content["answer"])
@@ -202,6 +209,9 @@ def _definition(config, definition):
         except (ValueError, TypeError) as exc:
             raise frappe.ValidationError("Invalid JSON definition") from exc
     try:
+        # Only the course map carries codes; blueprint/policy are pure ranges.
+        if config == "course_map":
+            return validator(definition, production=is_production())
         return validator(definition)
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
@@ -230,13 +240,13 @@ def create_draft_config(request_key, config, code, revision, definition):
     doctype, _ = _config(config)
     definition = _definition(config, definition)
     try:
-        validate_config_code(code, revision)
+        validate_config_code(code, revision, production=is_production())
     except ValueError as exc:
         raise frappe.ValidationError(str(exc)) from exc
 
     def work(actor):
         doc = frappe.get_doc(dict(doctype=doctype, code=code, revision=revision, version=1,
-                                  status="Draft", synthetic=1,
+                                  status="Draft", synthetic=record_synthetic_flag(),
                                   definition_json=canonical(definition), content_hash=digest(definition)))
         doc.insert(ignore_permissions=True)
         return _config_result(doc), dict(target=doc.name, after_hash=doc.content_hash)
@@ -302,7 +312,10 @@ def publish_config(request_key, config, name, expected_version):
         if doc.review_actor == actor:
             raise frappe.PermissionError("Publication must be independent of the recorded reviewer")
         stored = json.loads(doc.definition_json)
-        validator(stored)
+        if config == "course_map":
+            validator(stored, production=is_production())
+        else:
+            validator(stored)
         if digest(stored) != doc.content_hash:
             raise frappe.ValidationError("Stored definition integrity mismatch")
         doc.status = "Published"
@@ -371,7 +384,15 @@ def _pinned_published(doctype, validator, name, expected_version, label):
 def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE):
     if not isinstance(subject, str) or not 3 <= len(subject) <= 140:
         raise frappe.ValidationError("Subject user reference required")
-    if purpose != SYNTHETIC_PURPOSE:
+    # D16 mirror: the synthetic increment accepts only its purpose marker;
+    # production requires a staff-entered bounded purpose and refuses the
+    # test marker (no purpose vocabulary is invented — staff enter it).
+    if is_production():
+        if not isinstance(purpose, str) or not 1 <= len(purpose) <= 140:
+            raise frappe.ValidationError("Case purpose required")
+        if purpose == SYNTHETIC_PURPOSE:
+            raise frappe.ValidationError("Test-fixture case purposes are not accepted on the production site")
+    elif purpose != SYNTHETIC_PURPOSE:
         raise frappe.ValidationError("Unsupported purpose in this synthetic increment")
 
     def work(actor):
@@ -380,7 +401,7 @@ def create_case(request_key, subject, purpose=SYNTHETIC_PURPOSE):
         if frappe.db.exists(CASE, {"subject": subject}):
             raise frappe.ValidationError("Subject already has a case in this increment")
         case = frappe.get_doc(dict(doctype=CASE, subject=subject, purpose=purpose,
-                                   status="Open", synthetic=1))
+                                   status="Open", synthetic=record_synthetic_flag()))
         case.insert(ignore_permissions=True)
         return {"name": case.name, "subject": subject, "purpose": purpose, "status": case.status}, \
                dict(target=case.name, after_hash=digest([subject, purpose]))
@@ -408,7 +429,7 @@ def allocate_attempt(request_key, case, blueprint, blueprint_version, policy, po
         guard_name = "AG-" + digest([BLUEPRINT, bp.name])[:32]
         if not frappe.db.exists(GUARD, guard_name):
             frappe.get_doc(dict(doctype=GUARD, name=guard_name, blueprint=bp.name,
-                                synthetic=1)).insert(ignore_permissions=True)
+                                synthetic=record_synthetic_flag())).insert(ignore_permissions=True)
         frappe.get_doc(GUARD, guard_name, for_update=True)
         # Reuse control: a family once exposed to this subject is never
         # allocated to that subject again (new item IDs do not reset family
@@ -455,7 +476,7 @@ def allocate_attempt(request_key, case, blueprint, blueprint_version, policy, po
                                       policy=pol.name, policy_version=pol.version,
                                       policy_hash=pol.content_hash, mode=bp_def["mode"],
                                       status="Allocated", version=1, allocated_by=actor,
-                                      synthetic=1))
+                                      synthetic=record_synthetic_flag()))
         attempt.insert(ignore_permissions=True)
         # Exactly one manifest per attempt; frozen question manifest. The
         # time profile is the published blueprint's section minutes (this
@@ -469,13 +490,13 @@ def allocate_attempt(request_key, case, blueprint, blueprint_version, policy, po
                                        algorithm_version=plan["algorithm"], seed=seed,
                                        pool_digest=plan["pool_digest"],
                                        form_json=canonical(form), form_hash=form_hash,
-                                       status="Committed", synthetic=1))
+                                       status="Committed", synthetic=record_synthetic_flag()))
         manifest.insert(ignore_permissions=True)
         # Reserve exposure before the commit; unique (attempt, family, event).
         for item in plan["items"]:
             frappe.get_doc(dict(doctype=EXPOSURE, attempt=attempt.name,
                                 family=item["family"], subject=subject,
-                                event="Reserved", synthetic=1)).insert(ignore_permissions=True)
+                                event="Reserved", synthetic=record_synthetic_flag())).insert(ignore_permissions=True)
         return {"attempt": attempt.name, "ordinal": ordinal, "status": attempt.status,
                 "mode": attempt.mode, "case": case_doc.name, "subject": subject,
                 "blueprint": bp.name, "blueprint_version": bp.version,
@@ -578,7 +599,7 @@ def _seal(attempt, reason):
         if current == 0:
             frappe.get_doc(dict(doctype=RESPONSE, attempt=attempt.name,
                                 occurrence=entry["order"], revision=1,
-                                option_id="", missing=1, synthetic=1)).insert(ignore_permissions=True)
+                                option_id="", missing=1, synthetic=record_synthetic_flag())).insert(ignore_permissions=True)
             missing_count += 1
     sealed_at = _now()
     _advance(attempt, "Sealed", sealed_at=sealed_at, seal_reason=reason)
@@ -637,7 +658,7 @@ def deliver_attempt(request_key, attempt, expected_version):
         for family in sorted({entry["family"] for entry in form["items"]}):
             frappe.get_doc(dict(doctype=EXPOSURE, attempt=doc.name, family=family,
                                 subject=doc.subject, event="Delivered",
-                                synthetic=1)).insert(ignore_permissions=True)
+                                synthetic=record_synthetic_flag())).insert(ignore_permissions=True)
         _advance(doc, "In Progress", started_at=started, deadline_at=deadline)
         result = {"attempt": doc.name, "status": doc.status, "version": doc.version,
                   "started_at": _iso(started), "deadline_at": _iso(deadline),
@@ -681,7 +702,7 @@ def save_response(request_key, attempt, expected_version, occurrence, expected_r
         revision = current + 1
         frappe.get_doc(dict(doctype=RESPONSE, attempt=doc.name, occurrence=occurrence,
                             revision=revision, option_id=stored_option, missing=missing,
-                            synthetic=1)).insert(ignore_permissions=True)
+                            synthetic=record_synthetic_flag())).insert(ignore_permissions=True)
         result = {"attempt": doc.name, "occurrence": occurrence, "revision": revision,
                   "option_id": stored_option, "missing": missing, "status": doc.status}
         return result, dict(target=doc.name,
@@ -773,7 +794,7 @@ def score_attempt(request_key, attempt, expected_version):
             response_digest=scoring.response_fingerprint(responses),
             key_digest=scoring.key_fingerprint(catalog),
             result_json=canonical(projection), result_hash=result_hash,
-            scored_by=actor, synthetic=1))
+            scored_by=actor, synthetic=record_synthetic_flag()))
         row.insert(ignore_permissions=True)
         _advance(doc, "Marking")
         result = {"attempt": doc.name, "status": doc.status, "version": doc.version,
@@ -850,7 +871,7 @@ def _exactly_one_published_course_map():
     if doc.status != "Published":
         raise frappe.ValidationError("Exactly one published course map is required")
     stored = json.loads(doc.definition_json)
-    validate_course_map(stored)
+    validate_course_map(stored, production=is_production())
     if digest(stored) != doc.content_hash:
         raise frappe.ValidationError("Stored definition integrity mismatch")
     return doc, stored
@@ -902,7 +923,7 @@ def release_decision(request_key, attempt, expected_version):
         pol_def = _pinned_attempt_policy(doc)
         map_doc, map_def = _exactly_one_published_course_map()
         try:
-            recommendation = recommend_course(score, map_def)
+            recommendation = recommend_course(score, map_def, production=is_production())
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         released_at = _now()
@@ -928,7 +949,7 @@ def release_decision(request_key, attempt, expected_version):
             score=score_row.name, course_map=map_doc.name, course_map_hash=map_doc.content_hash,
             internal_level=projection["internal_level"], course_code=projection["course_code"],
             result_json=canonical(projection), result_hash=result_hash,
-            released_by=actor, released_at=released_at, expires_at=expires_at, synthetic=1))
+            released_by=actor, released_at=released_at, expires_at=expires_at, synthetic=record_synthetic_flag()))
         row.insert(ignore_permissions=True)
         # Attempt remains Finalized; the case stays a FrozenRecord with no pointer.
         result = {"attempt": doc.name, "status": doc.status, "version": doc.version,

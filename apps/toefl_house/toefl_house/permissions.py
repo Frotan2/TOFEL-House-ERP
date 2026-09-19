@@ -1,7 +1,7 @@
 """Equivalent row and document restrictions; never grant write via role union."""
 import frappe
 from toefl_house.policy import can_read
-from toefl_house.security import require_synthetic
+from toefl_house.security import require_operational
 
 KINDS = {
     "TH Placement Item Revision": "item", "TH Placement Key Revision": "key",
@@ -81,8 +81,10 @@ def configuration_query(user=None):
 
 
 def has_permission(doc, ptype=None, user=None, **kwargs):
+    # D16: the same role rules govern reads on the synthetic qualification
+    # sites and on the activated production site; refused sites read nothing.
     try:
-        require_synthetic()
+        require_operational()
     except frappe.PermissionError:
         return False
     user = user or frappe.session.user
@@ -91,7 +93,7 @@ def has_permission(doc, ptype=None, user=None, **kwargs):
 
 def query(kind, user=None):
     try:
-        require_synthetic()
+        require_operational()
     except frappe.PermissionError:
         return "1=0"
     user = user or frappe.session.user
