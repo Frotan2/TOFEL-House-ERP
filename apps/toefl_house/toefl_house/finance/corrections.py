@@ -279,6 +279,32 @@ def approve_fees_correction(request_key, request):
         req = _pending_request(_name(request, "Correction request"))
         if not req.fees:
             raise frappe.ValidationError("Correction request is not for a Fees record")
+        # Re-validate the fee at approval time, under the same row lock the
+        # request used. Request and approval are separate commands that can be
+        # separated by any interval, so the invariants proven at request time
+        # cannot be assumed to still hold: the fee could have been amended, its
+        # total could have changed, or the correction window could have closed.
+        # Approving on stale state would cancel a fee whose amount no longer
+        # equals the recorded requested_amount while still reporting that amount
+        # as the refund - an inaccurate financial record. These are the same
+        # checks the request performed; nothing new is being decided here.
+        frappe.db.sql("select name from `tabFees` where name=%s for update", (req.fees,))
+        fee_row = frappe.db.get_value(FEES, req.fees,
+                                      ["docstatus", "grand_total", "posting_date"],
+                                      as_dict=True)
+        if not fee_row:
+            raise frappe.ValidationError("The fee behind this correction request no longer exists")
+        if int(fee_row.docstatus or 0) != 1:
+            raise frappe.ValidationError(
+                "The fee is no longer submitted; this correction request can no longer be approved")
+        if round(float(fee_row.grand_total), 2) != round(float(req.requested_amount), 2):
+            raise frappe.ValidationError(
+                "The fee total changed after this request was raised; v1 corrects the full fee "
+                "amount, so raise a new request for the current total")
+        limit = date.fromisoformat(str(fee_row.posting_date)) + timedelta(
+            days=int(policy.correction_window_days))
+        if date.today() > limit:
+            raise frappe.ValidationError("Correction window for this fee has closed")
         fee_doc = frappe.get_doc(FEES, req.fees)
         fee_doc.flags.ignore_permissions = True
         fee_doc.cancel()

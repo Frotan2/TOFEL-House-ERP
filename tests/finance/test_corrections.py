@@ -143,3 +143,36 @@ class DocTypeShapeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ApprovalRevalidationTests(unittest.TestCase):
+    """Approval must re-prove the request-time invariants, not assume them.
+
+    Requesting and approving a correction are separate commands that can be
+    separated by any interval. The request proves, under a row lock, that the fee
+    is submitted, that its total equals the requested amount (v1 is full-amount
+    only), and that the correction window is open. If approval trusted those
+    facts it would cancel a fee whose total had since changed while still
+    reporting the stale amount as the refund - an inaccurate financial record.
+    """
+
+    def test_approval_revalidates_the_fee_under_lock(self):
+        import ast
+        from pathlib import Path
+        source = (Path(__file__).resolve().parents[2]
+                  / "apps/toefl_house/toefl_house/finance/corrections.py").read_text()
+        tree = ast.parse(source)
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "approve_fees_correction")
+        body = ast.get_source_segment(source, fn) or ""
+        # The fee row is locked and re-read before the native cancellation.
+        self.assertIn("for update", body)
+        self.assertIn("grand_total", body)
+        self.assertIn("posting_date", body)
+        self.assertLess(body.index("for update"), body.index("fee_doc.cancel()"),
+                        "the fee must be locked and re-read before it is cancelled")
+        # Each request-time invariant is re-asserted at approval time.
+        self.assertIn("The fee is no longer submitted", body)
+        self.assertIn("The fee total changed after this request was raised", body)
+        self.assertIn("Correction window for this fee has closed", body)
+        self.assertIn("no longer exists", body)
