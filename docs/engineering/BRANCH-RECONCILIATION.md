@@ -32,14 +32,49 @@ slots; its full block remains verbatim in git history and its run identities
 stay recorded in the D8 operational-input packet, the Release Gap Map and the
 Release Candidate Dossier, so no evidence identity was lost.
 
-Because no hosted workflow has run on `arena/01a0ba0d-tofel-house-erp` yet,
-`hosted_execution_state` is again recorded as the explicit, fail-closed
+At rotation time no hosted workflow had run on `arena/01a0ba0d-tofel-house-erp`
+yet, so `hosted_execution_state` was recorded as the explicit, fail-closed
 `NOT_EXECUTED_ON_THIS_BRANCH` state carrying **no** run, check, commit or
-report identifier. `tools/foundation/d8_validate.py` enforces that absence: any
-execution identity attached to the active block fails the contract, so no
-earlier branch's run can be re-labelled as this branch's execution. The
-EXECUTED-path guards are still exercised by forcing that state consistently, so
-the push-triggered re-execution on this branch will record its own real run.
+report identifier. `tools/foundation/d8_validate.py` enforced that absence: any
+execution identity attached to the active block failed the contract, so no
+earlier branch's run could be re-labelled as this branch's execution.
+
+### Execution of 2026-09-19: absence closed by execution on `arena/01a0ba0d-tofel-house-erp`
+
+That absence has since been closed **by execution, not by re-labelling**. All
+ten hosted workflows genuinely executed on this branch by push trigger. Because
+every workflow except owned-suite is path-filtered, the evidence spans four
+commits — each workflow recorded its own head SHA:
+
+| Workflow | Run | Head | Conclusion |
+| --- | --- | --- | --- |
+| Foundation runtime validation | `35451785714` | `1ba0ecf` | **failure** |
+| Foundation frontend candidate review | `35449025381` | `b9be4d1` | **failure** |
+| Owned suite | `35452794488` | `523fe5e` | success |
+| D8 operations contract validation | `35450528401` | `83c82de` | success |
+| Foundation runner qualification | `35449025428` | `b9be4d1` | success |
+| Placement synthetic content qualification | `35451785695` | `1ba0ecf` | success |
+| Foundation operational boundaries | `35449025427` | `b9be4d1` | success |
+| Foundation datastore durability | `35449025405` | `b9be4d1` | success |
+| Foundation external key custody | `35449025377` | `b9be4d1` | success |
+| Foundation independent-system recovery | `35449025449` | `b9be4d1` | success |
+
+`hosted_execution_state` is therefore `EXECUTED` and
+`session_branch.ACTIVE_RUNTIME_RUN` is pinned to `35451785714`, whose status is
+`fail_reject`: job `105920099904` failed at the step `Install and validate the
+pinned foundation` with annotations `Restricted policy regressions failed:
+hosted-full-stack-dependency-audit: exit 1; hosted-frontend-advisory-audit:
+exit 1` — the SEC-DEPS-01 condition. An earlier runtime run on this branch
+(`35450528487` at `83c82de`) failed identically. `tools/foundation/d8_validate.py`
+asserts **both** that status and that exact run id, so the pin cannot be
+silently swapped for a different or passing run while SEC-DEPS-01 is open.
+Check-run ids and report SHA-256 digests are deliberately not recorded: the
+artifact and log blobs are unreachable from the recording sandbox, so no digest
+is asserted that was not independently read.
+
+**The Foundation runtime rejected exactly as predicted.** Production remains
+**REJECT** and D8 remains **BLOCKED**; execution moved the evidence onto this
+branch and changed no outcome. The frontend candidate remains NOT ADOPTED.
 
 ### Rotation of 2026-09-18 (third): `arena/01a0b3a7-tofel-house-erp` → historical provenance
 

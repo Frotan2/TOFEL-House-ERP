@@ -9,12 +9,29 @@ Active engineering branch: `arena/01a0ba0d-tofel-house-erp`. Historical hosted
 runs retain their original branch provenance; see
 [branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
 
+**Engineering execution (2026-09-19):**
+The rotation absence below was closed by genuine push-triggered execution on
+`arena/01a0ba0d-tofel-house-erp`, so `active_branch_hosted_execution` is now
+`EXECUTED` with `ACTIVE_RUNTIME_RUN` pinned to `35451785714`. All ten hosted
+workflows ran on this branch across four commits (path-filtered triggers; every
+workflow recorded its own head SHA): eight succeed at their newest run (owned
+suite `35452794488` at `523fe5e`, placement `35451785695` at `1ba0ecf`, D8
+contract `35450528401` at `83c82de`, runner `35449025428`, operational
+boundaries `35449025427`, datastore durability `35449025405`, external key
+custody `35449025377`, independent-system recovery `35449025449`,
+the last five at `b9be4d1`) and two reject: **Foundation runtime `35451785714`
+— failure** at `Install and validate the pinned foundation` (SEC-DEPS-01:
+`hosted-full-stack-dependency-audit` and `hosted-frontend-advisory-audit` exit
+1), and frontend candidate review `35449025381` — failure at `Compare frozen
+baseline and isolated candidate` (NOT ADOPTED). No run was re-labelled from any
+earlier branch. Production remains **REJECT** and D8 remains **BLOCKED**.
+
 **Engineering rotation (2026-09-19):**
 The session boundary was rotated to `arena/01a0ba0d-tofel-house-erp` on
-2026-09-19 (fourth rotation). No hosted workflow has run on this branch yet,
-so `active_branch_hosted_execution` is the explicit, fail-closed
-`NOT_EXECUTED_ON_THIS_BRANCH` carrying no run, check, commit or report
-identity. The previous active branch `arena/01a0b5c4-tofel-house-erp` moved to
+2026-09-19 (fourth rotation). At rotation time no hosted workflow had run on
+this branch yet, so `active_branch_hosted_execution` was the explicit,
+fail-closed `NOT_EXECUTED_ON_THIS_BRANCH` carrying no run, check, commit or
+report identity (closed by the execution recorded above). The previous active branch `arena/01a0b5c4-tofel-house-erp` moved to
 historical provenance with its genuine execution intact (Foundation runtime
 `35384078097` — failure on SEC-DEPS-01 at commit `e96de8a`). Re-executing the
 named hosted workflows on this branch by push trigger will replace the absence

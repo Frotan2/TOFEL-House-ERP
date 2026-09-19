@@ -80,14 +80,14 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
     historical `arena/01a0b5c4-tofel-house-erp` (run ``35384078097``, fail_reject) then
     made EXECUTED the real ledger state again, and the fourth rotation of
     2026-09-19 moved that historical branch — evidence unchanged — into
-    provenance, so the active branch `arena/01a0ba0d-tofel-house-erp` once
-    more records the explicit, fail-closed ``NOT_EXECUTED_ON_THIS_BRANCH``.
-    The NOT_EXECUTED path is the real ledger state: any run, check, commit or
-    report identity attached to it, any populated evidence subblock, or any
-    relaxed production posture must fail. The EXECUTED path keeps its own
-    guards, driven by forcing that state consistently, so when the named
-    workflows are genuinely re-executed on this branch the recorded run cannot
-    be swapped for a different or passing one.
+    provenance, so the active branch `arena/01a0ba0d-tofel-house-erp` briefly
+    recorded the explicit, fail-closed ``NOT_EXECUTED_ON_THIS_BRANCH``.
+    Push-triggered execution on 2026-09-19 then closed that absence with real
+    runs (newest Foundation runtime run ``35451785714``, fail_reject), so the
+    EXECUTED path is the real ledger state again: the recorded run cannot be
+    swapped for a different or passing one, and the gate flags cannot relax.
+    The NOT_EXECUTED path keeps its own guards, driven by forcing that state
+    consistently, so a future rotation back to an absence stays fail-closed.
     """
 
     FORCED_RUN = "36000000000"
@@ -159,36 +159,37 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
                 d8.LEDGER_PATH = original_path
                 d8.ACTIVE_RUNTIME_STATE, d8.ACTIVE_RUNTIME_RUN = original_state, original_run
 
-    # --- the real ledger state: an explicit, guarded absence -----------------
+    # --- the real ledger state: a genuine, guarded execution -----------------
 
-    def test_the_active_branch_records_an_explicit_absence_of_execution(self):
-        """No hosted workflow has run on this branch, so it records NOT_EXECUTED.
+    def test_the_active_branch_records_its_genuine_execution(self):
+        """The named workflows genuinely executed here, so the block is EXECUTED.
 
         The fourth rotation of 2026-09-19 moved the executed branch into
         provenance: historical `arena/01a0b5c4-tofel-house-erp` (run 35384078097, fail_reject),
-        evidence unchanged. Until the named workflows
-        are genuinely re-executed on this branch by push trigger, the active
-        block must carry no run, check, commit or report identity at all —
-        re-labelling the previous branch's run as an execution here is exactly
-        what the absence guards exist to prevent.
+        evidence unchanged. Push-triggered execution on this branch then closed
+        the absence with its own real runs — newest Foundation runtime run
+        35451785714 (fail_reject on SEC-DEPS-01) — recorded by value, never by
+        re-labelling the previous branch's run.
         """
-        self.assertEqual(self.active["hosted_execution_state"],
-                         d8.ACTIVE_RUNTIME_NOT_EXECUTED)
-        self.assertEqual(d8.ACTIVE_RUNTIME_STATE, d8.ACTIVE_RUNTIME_NOT_EXECUTED)
-        self.assertEqual(d8.ACTIVE_RUNTIME_RUN, "")
-        # The absence must be total: no evidence subblock may be populated.
-        for key in d8.EXECUTION_EVIDENCE_KEYS:
-            self.assertNotIn(key, self.active)
-        # And it may never relax the production posture either.
+        self.assertEqual(self.active["hosted_execution_state"], "EXECUTED")
+        self.assertEqual(d8.ACTIVE_RUNTIME_STATE, "EXECUTED")
+        self.assertEqual(d8.ACTIVE_RUNTIME_RUN, "35451785714")
+        runtime = self.active["foundation_runtime"]
+        self.assertEqual(runtime["run"], "35451785714")
+        self.assertEqual(runtime["head_branch"], d8.ACTIVE_BRANCH)
+        self.assertEqual(runtime["status"], "fail_reject")
+        for flag in ("phase2_gate_passed", "security_gate_passed",
+                     "product_implementation_authorized"):
+            self.assertFalse(runtime[flag])
+        # An execution still never relaxes the production posture.
         self.assertEqual(self.active["production_state"], "REJECT")
         self.assertFalse(self.active["production_authorized"])
         self.assertEqual(self.active["rotated_from"], d8.PRIOR_ACTIVE_BRANCH)
 
-    def test_report_discloses_the_absence_without_relaxing_any_gate(self):
+    def test_report_discloses_the_execution_without_relaxing_any_gate(self):
         report = d8.run(d8.TEMPLATE_PATH)
-        self.assertEqual(report["active_branch_hosted_execution"],
-                         d8.ACTIVE_RUNTIME_NOT_EXECUTED)
-        self.assertIn("has NO hosted execution", report["warning"])
+        self.assertEqual(report["active_branch_hosted_execution"], "EXECUTED")
+        self.assertNotIn("has NO hosted execution", report["warning"])
         self.assertEqual(report["production_state"], "REJECT")
         self.assertEqual(report["d8_gate_state"], "BLOCKED")
         self.assertEqual(report["sec_deps"], "UPSTREAM-BLOCKED / REJECT")
@@ -329,18 +330,15 @@ class ActiveBranchEvidenceTests(unittest.TestCase):
                 self.assertNotIn(value, serialized,
                                  f"{label}-branch {field} leaked into the active block")
 
-    def test_the_active_branch_pins_no_run_while_it_has_no_execution(self):
-        """With no hosted execution on this branch, the active run pin is empty.
+    def test_the_active_branch_pins_its_own_genuine_run(self):
+        """With genuine execution on this branch, the pin takes that run.
 
-        The moment the named workflows genuinely execute here, the pin takes
-        that run — and it must then be distinct from every earlier branch's
-        pinned run, so no previous branch's execution can be mistaken for
-        this branch's. Until then an empty pin is the honest state and any
-        run attached to the active block is re-labelling.
+        The pin must be distinct from every earlier branch's pinned run, so
+        no previous branch's execution can be mistaken for this branch's.
         """
-        self.assertEqual(d8.ACTIVE_RUNTIME_STATE, d8.ACTIVE_RUNTIME_NOT_EXECUTED)
-        self.assertEqual(d8.ACTIVE_RUNTIME_RUN, "")
-        self.assertNotIn("foundation_runtime", self.active)
+        self.assertEqual(d8.ACTIVE_RUNTIME_STATE, "EXECUTED")
+        self.assertEqual(d8.ACTIVE_RUNTIME_RUN, "35451785714")
+        self.assertEqual(self.active["foundation_runtime"]["run"], "35451785714")
         self.assertNotIn(d8.ACTIVE_RUNTIME_RUN,
                          (d8.PRIOR_ACTIVE_RUNTIME_RUN, d8.EARLIER_ACTIVE_RUNTIME_RUN),
                          "the active branch pins a run that belongs to an earlier branch")

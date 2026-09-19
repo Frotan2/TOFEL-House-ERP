@@ -13,19 +13,17 @@ ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 # Hosted-execution identity for the ACTIVE branch.
 #
 # A rotation moves the previous session branch and its runs into historical
-# provenance; it does not move the runs with it. Until the hosted workflows are
-# genuinely re-executed on the branch above, the active branch has NO hosted
-# runtime evidence, and that absence is recorded as an explicit, validated state
-# rather than by re-labelling an older branch's run. tools/foundation/d8_validate.py
-# fails closed on this state: it rejects any run/check/report identifier
-# attached to it, so the state cannot be used to smuggle a fabricated pass.
-#
-# While SEC-DEPS-01 is open, any Foundation runtime run that does exist on the
-# active branch must be a REJECT. tools/foundation/d8_validate.py asserts both the
-# status and this exact run id, so the pin cannot be silently swapped for a
-# different or passing run.
-ACTIVE_RUNTIME_STATE = "NOT_EXECUTED_ON_THIS_BRANCH"
-ACTIVE_RUNTIME_RUN = ""
+# provenance; it does not move the runs with it. At the 2026-09-19 rotation
+# the active branch had NO hosted runtime evidence, recorded as the explicit
+# NOT_EXECUTED_ON_THIS_BRANCH state. That absence was then closed by genuine
+# push-triggered execution on this branch (all ten hosted workflows ran;
+# Foundation runtime validation rejected on SEC-DEPS-01 exactly as predicted),
+# so the state below is now EXECUTED with the real run pinned.
+# tools/foundation/d8_validate.py fails closed on this state: it asserts both
+# the fail_reject status and this exact run id, so the pin cannot be silently
+# swapped for a different or passing run while SEC-DEPS-01 is open.
+ACTIVE_RUNTIME_STATE = "EXECUTED"
+ACTIVE_RUNTIME_RUN = "35451785714"
 
 # Historical provenance pins: the last two Arena session branches that produced
 # a recorded Foundation runtime REJECT. These are evidence identity, never
