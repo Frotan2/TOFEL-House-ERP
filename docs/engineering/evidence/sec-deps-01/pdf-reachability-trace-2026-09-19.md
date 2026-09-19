@@ -1,6 +1,6 @@
 # PDF-stack reachability trace (SEC-DEPS-01 risk precision, 2026-09-19)
 
-Branch: `arena/01a0ba0d-tofel-house-erp`. Traced against pinned Frappe
+Traced against pinned Frappe
 **v16.33.1** (`988e54f3c4c291e2077a83809663f123731abe76`), the framework
 version in `foundation-version-matrix.json`, via a local shallow clone
 plus the GitHub contents API. ERPNext refs checked at pinned **v16.34.2**;
