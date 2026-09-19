@@ -15,11 +15,13 @@ and fixed-version range events were transcribed verbatim. The npm records were
 already readable in the retained evidence (title, severity, CWE, vulnerable
 range) and are rolled up per package unchanged.
 
-This register is NOT a fresh audit of the current pins, NOT exploitability or
-reachability proof, NOT a full SBOM, and NOT a gate change. SEC-DEPS-01 stays
-UPSTREAM-BLOCKED / REJECT until the owner re-decides on the basis of readable
-findings. Reachability in the selected local-server + Tailscale deployment is
-explicitly NOT established for any finding recorded here.
+This register is NOT a fresh audit of the current pins, NOT exploitability
+proof, NOT a full SBOM, and NOT a gate change. SEC-DEPS-01 stays
+UPSTREAM-BLOCKED / REJECT. Per-finding reachability for the seven Python
+vulnerabilities was traced at the pinned framework on 2026-09-19 (see
+docs/engineering/evidence/sec-deps-01/pdf-reachability-trace-2026-09-19.md)
+and is recorded per entry; npm reachability is explicitly NOT established
+for any finding recorded here.
 """
 from __future__ import annotations
 
@@ -54,10 +56,16 @@ PYPI_VULNS = [
         "detail": ("In JazzCore python-pdfkit 1.0.0, the from_string method enables the "
                    "execution of JavaScript code within the context of the server application "
                    "and the exfiltration of local files."),
-        "deployment_note": ("Consumer class: server-side PDF/print rendering (upstream). The R3 "
-                            "print-path containment checks cover download_pdf denial, but whether "
-                            "untrusted input reaches pdfkit from_string in the selected deployment "
-                            "is NOT established by this register."),
+        "deployment_note": ("Consumer class: server-side PDF/print rendering (upstream). Traced "
+                            "2026-09-19 at pinned Frappe v16.33.1: the single runtime call site "
+                            "forces disable-javascript + disable-local-file-access with meta-tag "
+                            "option smuggling patched out, so both exploit halves are disabled "
+                            "at the invocation layer; HTML still reaches from_string by design, "
+                            "so NOT-REACHABLE cannot be claimed. R3 proves unauthorized print "
+                            "denied."),
+        "disposition": "OPEN",
+        "disposition_evidence": ("No patched version exists: PyPI latest is 1.0.0 and the advisory "
+                               "lists patched null (re-verified 2026-09-19)."),
     },
     {
         "vuln_key": "pypdf-outline-resource-exhaustion",
@@ -74,8 +82,12 @@ PYPI_VULNS = [
         "detail": ("A crafted PDF leads to long runtimes and large memory consumption when "
                    "accessing outlines with many entries or nested outlines with long "
                    "re-used nesting paths."),
-        "deployment_note": ("Crafted-PDF denial of service. Whether attacker-influenced PDFs reach "
-                            "pypdf outline handling in the selected deployment is NOT established."),
+        "deployment_note": ("Crafted-PDF denial of service. Traced 2026-09-19: REACHABLE via native "
+                            "PDF upload (File.check_content -> pdf_contains_js -> PdfReader, "
+                            "unbounded walk). Availability impact only."),
+        "disposition": "UPSTREAM-FIX AVAILABLE",
+        "disposition_evidence": ("Fixed in 6.16.1 (PyPI offers 6.19.0); unreachable because Frappe "
+                               "v16.34.0 and the version-16 branch head pin pypdf==6.15.0."),
     },
     {
         "vuln_key": "pypdf-xform-resource-exhaustion",
@@ -91,8 +103,12 @@ PYPI_VULNS = [
         "fix_status": "FIXED in 6.16.1 (installed 6.15.0 is affected)",
         "detail": ("A crafted PDF leads to long runtimes and large memory consumption when "
                    "extracting text of a page with many XForm objects, some re-used."),
-        "deployment_note": ("Crafted-PDF denial of service. Whether attacker-influenced PDFs reach "
-                            "pypdf XForm handling in the selected deployment is NOT established."),
+        "deployment_note": ("Crafted-PDF denial of service. Traced 2026-09-19: REACHABLE via native "
+                            "PDF upload (File.check_content -> pdf_contains_js -> PdfReader, "
+                            "unbounded walk). Availability impact only."),
+        "disposition": "UPSTREAM-FIX AVAILABLE",
+        "disposition_evidence": ("Fixed in 6.16.1 (PyPI offers 6.19.0); unreachable because Frappe "
+                               "v16.34.0 and the version-16 branch head pin pypdf==6.15.0."),
     },
     {
         "vuln_key": "pypdf-insert-child-infinite-loop",
@@ -108,8 +124,13 @@ PYPI_VULNS = [
         "fix_status": "FIXED in 6.16.0 (installed 6.15.0 is affected)",
         "detail": ("A crafted PDF leads to an infinite loop on a (usually writing) code path "
                    "where TreeObject.insert_child is involved."),
-        "deployment_note": ("Crafted-PDF denial of service. Whether attacker-influenced PDFs reach "
-                            "the affected code path in the selected deployment is NOT established."),
+        "deployment_note": ("Crafted-PDF denial of service. File.check_content feeds uploaded bytes "
+                            "to PdfReader; the insert_child path is a (usually writing) path whose "
+                            "trigger through the upload scanner is not demonstrated, but the "
+                            "affected package version is installed so the match stands."),
+        "disposition": "UPSTREAM-FIX AVAILABLE",
+        "disposition_evidence": ("Fixed in 6.16.0 (PyPI offers 6.19.0); unreachable because Frappe "
+                               "v16.34.0 and the version-16 branch head pin pypdf==6.15.0."),
     },
     {
         "vuln_key": "setuptools-manifest-normalization-bypass",
@@ -127,10 +148,13 @@ PYPI_VULNS = [
         "detail": ("FileList applies MANIFEST.in exclude/prune directives without Unicode "
                    "normalization, so on macOS APFS/HFS+ an NFD file name can bypass an NFC "
                    "exclusion rule and be packed into a published source distribution."),
-        "deployment_note": ("Build-time, macOS-only issue: it concerns publishing sdists from a Mac, "
-                            "not running the Linux server. Runtime reachability in the selected "
-                            "deployment is effectively nil, but the audit match still fails the gate "
-                            "while the pinned version is below 83.0.0."),
+        "deployment_note": ("Build-time, macOS-only trigger: publishing an sdist from a Mac. No sdist "
+                            "build exists in the Bench install/migrate/operate path, so there is no "
+                            "deployment action through which it executes — recorded as a trigger "
+                            "note, not a waiver: the audit match still fails the gate."),
+        "disposition": "UPSTREAM-FIX AVAILABLE",
+        "disposition_evidence": ("Fixed in 83.0.0 (PyPI offers 84.0.0); unreachable because official "
+                               "Bench v5.31.0 constrains setuptools>=71.0.0,<82.0.0."),
     },
     {
         "vuln_key": "weasyprint-css-injection-presentational-hints",
@@ -147,9 +171,13 @@ PYPI_VULNS = [
         "detail": ("Unescaped HTML attribute values are embedded into CSS when presentational "
                    "hints are enabled, allowing injection of arbitrary CSS declarations "
                    "including url() server-side requests."),
-        "deployment_note": ("Requires presentational_hints=True plus untrusted HTML. Whether the "
-                            "selected deployment renders untrusted HTML through weasyprint with "
-                            "presentational hints is NOT established."),
+        "deployment_note": ("Traced 2026-09-19: weasyprint renders only for Print Formats with "
+                            "print_format_builder_beta set, and this product ships zero Print "
+                            "Format fixtures — but the installed version is in the affected "
+                            "range with no patched release, so the match stands OPEN."),
+        "disposition": "OPEN",
+        "disposition_evidence": ("No patched version listed (affected range <= 68.1; advisory "
+                               "patched null, re-verified 2026-09-19)."),
     },
     {
         "vuln_key": "weasyprint-url-fetcher-bypass-ssrf",
@@ -167,9 +195,12 @@ PYPI_VULNS = [
                    "restrictive url_fetcher and build a fresh default fetcher: arbitrary local "
                    "file read via attacker-influenced xmp_metadata paths, SSRF/resource loading "
                    "via stylesheets, transitive through @import/url()."),
-        "deployment_note": ("Requires attacker-influenced xmp_metadata/stylesheets parameters. Whether "
-                            "the selected deployment forwards attacker input to those parameters is "
-                            "NOT established."),
+        "deployment_note": ("Same beta-builder gating as the CSS item: only reachable through a "
+                            "beta-builder Print Format rendering attacker-influenced content into "
+                            "fetched-URL positions; product ships no such formats."),
+        "disposition": "UPSTREAM-FIX AVAILABLE",
+        "disposition_evidence": ("Fixed in 70.0 (PyPI offers 70.0); unreachable because Frappe "
+                               "v16.34.0 pins WeasyPrint==68.0."),
     },
 ]
 
@@ -216,6 +247,12 @@ def build_register(retained: dict) -> dict:
             "package": slot["package"],
             "installed_versions": sorted(slot["installed_versions"]),
             "advisory_count": len(slot["advisories"]),
+            "disposition": "OPEN",
+            "disposition_evidence": ("Affected pinned transitive dependencies of the upstream "
+                                     "Frappe/ERPNext/Education trees (this product ships no npm "
+                                     "dependencies of its own). Fixed-version adoption belongs to "
+                                     "the upstream lockfile owners; no compatible official bundle "
+                                     "exists (remediation assessment 2026-09-19)."),
             "advisories": sorted(slot["advisories"], key=lambda item: item["id"]),
         }
         for slot in sorted(npm_by_package.values(), key=lambda item: item["package"])
@@ -235,10 +272,11 @@ def build_register(retained: dict) -> dict:
             "report_sha256": retained["source"]["decoded_report_sha256"],
             "observed_at_utc": retained["observed_at_utc"],
         },
-        "gate_effect": ("READABILITY ONLY. This register changes no gate: SEC-DEPS-01 stays "
-                        "UPSTREAM-BLOCKED / REJECT, D8 stays BLOCKED, production stays REJECT. "
-                        "Reachability in the selected deployment is NOT established for any "
-                        "finding recorded here; advisory matches are not exploitability proof."),
+        "gate_effect": ("READABILITY PLUS PER-FINDING DISPOSITION. This register changes no gate: "
+                        "SEC-DEPS-01 stays UPSTREAM-BLOCKED / REJECT, D8 stays BLOCKED, production "
+                        "stays REJECT. Python reachability is traced per entry; npm reachability "
+                        "is NOT established for any finding recorded here; advisory matches are "
+                        "not exploitability proof."),
         "counts": {
             "pypi_records": len(retained_pypi),
             "pypi_unique_vulnerabilities": len(PYPI_VULNS),
@@ -262,6 +300,8 @@ def build_register(retained: dict) -> dict:
                 "fix_status": vuln["fix_status"],
                 "detail": vuln["detail"],
                 "deployment_note": vuln["deployment_note"],
+                "disposition": vuln["disposition"],
+                "disposition_evidence": vuln["disposition_evidence"],
                 "osv_urls": [f"https://osv.dev/vulnerability/{record}" for record in vuln["records"]],
             }
             for vuln in PYPI_VULNS

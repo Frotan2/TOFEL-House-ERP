@@ -12,7 +12,7 @@
   "report_sha256": "f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc",
   "observed_at_utc": "2026-09-16"
  },
- "gate_effect": "READABILITY ONLY. This register changes no gate: SEC-DEPS-01 stays UPSTREAM-BLOCKED / REJECT, D8 stays BLOCKED, production stays REJECT. Reachability in the selected deployment is NOT established for any finding recorded here; advisory matches are not exploitability proof.",
+ "gate_effect": "READABILITY PLUS PER-FINDING DISPOSITION. This register changes no gate: SEC-DEPS-01 stays UPSTREAM-BLOCKED / REJECT, D8 stays BLOCKED, production stays REJECT. Python reachability is traced per entry; npm reachability is NOT established for any finding recorded here; advisory matches are not exploitability proof.",
  "counts": {
   "pypi_records": 14,
   "pypi_unique_vulnerabilities": 7,
@@ -46,7 +46,9 @@
    "fixed_version": null,
    "fix_status": "NO FIX LISTED (last_affected 1.0.0, which is the installed version)",
    "detail": "In JazzCore python-pdfkit 1.0.0, the from_string method enables the execution of JavaScript code within the context of the server application and the exfiltration of local files.",
-   "deployment_note": "Consumer class: server-side PDF/print rendering (upstream). The R3 print-path containment checks cover download_pdf denial, but whether untrusted input reaches pdfkit from_string in the selected deployment is NOT established by this register.",
+   "deployment_note": "Consumer class: server-side PDF/print rendering (upstream). Traced 2026-09-19 at pinned Frappe v16.33.1: the single runtime call site forces disable-javascript + disable-local-file-access with meta-tag option smuggling patched out, so both exploit halves are disabled at the invocation layer; HTML still reaches from_string by design, so NOT-REACHABLE cannot be claimed. R3 proves unauthorized print denied.",
+   "disposition": "OPEN",
+   "disposition_evidence": "No patched version exists: PyPI latest is 1.0.0 and the advisory lists patched null (re-verified 2026-09-19).",
    "osv_urls": [
     "https://osv.dev/vulnerability/GHSA-9g3x-6x24-vf9f",
     "https://osv.dev/vulnerability/PYSEC-2026-2860"
@@ -71,7 +73,9 @@
    "fixed_version": "6.16.1",
    "fix_status": "FIXED in 6.16.1 (installed 6.15.0 is affected)",
    "detail": "A crafted PDF leads to long runtimes and large memory consumption when accessing outlines with many entries or nested outlines with long re-used nesting paths.",
-   "deployment_note": "Crafted-PDF denial of service. Whether attacker-influenced PDFs reach pypdf outline handling in the selected deployment is NOT established.",
+   "deployment_note": "Crafted-PDF denial of service. Traced 2026-09-19: REACHABLE via native PDF upload (File.check_content -> pdf_contains_js -> PdfReader, unbounded walk). Availability impact only.",
+   "disposition": "UPSTREAM-FIX AVAILABLE",
+   "disposition_evidence": "Fixed in 6.16.1 (PyPI offers 6.19.0); unreachable because Frappe v16.34.0 and the version-16 branch head pin pypdf==6.15.0.",
    "osv_urls": [
     "https://osv.dev/vulnerability/GHSA-23w6-3w8w-8484",
     "https://osv.dev/vulnerability/PYSEC-2026-3910"
@@ -95,7 +99,9 @@
    "fixed_version": "6.16.1",
    "fix_status": "FIXED in 6.16.1 (installed 6.15.0 is affected)",
    "detail": "A crafted PDF leads to long runtimes and large memory consumption when extracting text of a page with many XForm objects, some re-used.",
-   "deployment_note": "Crafted-PDF denial of service. Whether attacker-influenced PDFs reach pypdf XForm handling in the selected deployment is NOT established.",
+   "deployment_note": "Crafted-PDF denial of service. Traced 2026-09-19: REACHABLE via native PDF upload (File.check_content -> pdf_contains_js -> PdfReader, unbounded walk). Availability impact only.",
+   "disposition": "UPSTREAM-FIX AVAILABLE",
+   "disposition_evidence": "Fixed in 6.16.1 (PyPI offers 6.19.0); unreachable because Frappe v16.34.0 and the version-16 branch head pin pypdf==6.15.0.",
    "osv_urls": [
     "https://osv.dev/vulnerability/GHSA-763m-79hh-57f2",
     "https://osv.dev/vulnerability/PYSEC-2026-3911"
@@ -119,7 +125,9 @@
    "fixed_version": "6.16.0",
    "fix_status": "FIXED in 6.16.0 (installed 6.15.0 is affected)",
    "detail": "A crafted PDF leads to an infinite loop on a (usually writing) code path where TreeObject.insert_child is involved.",
-   "deployment_note": "Crafted-PDF denial of service. Whether attacker-influenced PDFs reach the affected code path in the selected deployment is NOT established.",
+   "deployment_note": "Crafted-PDF denial of service. File.check_content feeds uploaded bytes to PdfReader; the insert_child path is a (usually writing) path whose trigger through the upload scanner is not demonstrated, but the affected package version is installed so the match stands.",
+   "disposition": "UPSTREAM-FIX AVAILABLE",
+   "disposition_evidence": "Fixed in 6.16.0 (PyPI offers 6.19.0); unreachable because Frappe v16.34.0 and the version-16 branch head pin pypdf==6.15.0.",
    "osv_urls": [
     "https://osv.dev/vulnerability/GHSA-jp53-mhqp-8xcg",
     "https://osv.dev/vulnerability/PYSEC-2026-3913"
@@ -144,7 +152,9 @@
    "fixed_version": "83.0.0",
    "fix_status": "FIXED in 83.0.0; Bench constrains setuptools below the fixed version (see remediation assessment 2026-09-16)",
    "detail": "FileList applies MANIFEST.in exclude/prune directives without Unicode normalization, so on macOS APFS/HFS+ an NFD file name can bypass an NFC exclusion rule and be packed into a published source distribution.",
-   "deployment_note": "Build-time, macOS-only issue: it concerns publishing sdists from a Mac, not running the Linux server. Runtime reachability in the selected deployment is effectively nil, but the audit match still fails the gate while the pinned version is below 83.0.0.",
+   "deployment_note": "Build-time, macOS-only trigger: publishing an sdist from a Mac. No sdist build exists in the Bench install/migrate/operate path, so there is no deployment action through which it executes \u2014 recorded as a trigger note, not a waiver: the audit match still fails the gate.",
+   "disposition": "UPSTREAM-FIX AVAILABLE",
+   "disposition_evidence": "Fixed in 83.0.0 (PyPI offers 84.0.0); unreachable because official Bench v5.31.0 constrains setuptools>=71.0.0,<82.0.0.",
    "osv_urls": [
     "https://osv.dev/vulnerability/GHSA-h35f-9h28-mq5c",
     "https://osv.dev/vulnerability/PYSEC-2026-3447"
@@ -168,7 +178,9 @@
    "fixed_version": null,
    "fix_status": "NO FIXED VERSION LISTED (last_affected 68.1; installed 68.0 is affected)",
    "detail": "Unescaped HTML attribute values are embedded into CSS when presentational hints are enabled, allowing injection of arbitrary CSS declarations including url() server-side requests.",
-   "deployment_note": "Requires presentational_hints=True plus untrusted HTML. Whether the selected deployment renders untrusted HTML through weasyprint with presentational hints is NOT established.",
+   "deployment_note": "Traced 2026-09-19: weasyprint renders only for Print Formats with print_format_builder_beta set, and this product ships zero Print Format fixtures \u2014 but the installed version is in the affected range with no patched release, so the match stands OPEN.",
+   "disposition": "OPEN",
+   "disposition_evidence": "No patched version listed (affected range <= 68.1; advisory patched null, re-verified 2026-09-19).",
    "osv_urls": [
     "https://osv.dev/vulnerability/GHSA-jhhc-3hcp-qhm5",
     "https://osv.dev/vulnerability/PYSEC-2026-3412"
@@ -192,7 +204,9 @@
    "fixed_version": "70.0",
    "fix_status": "FIXED in 70.0 (installed 68.0 is affected)",
    "detail": "Two write_pdf() channels (xmp_metadata, stylesheets) ignore the document's restrictive url_fetcher and build a fresh default fetcher: arbitrary local file read via attacker-influenced xmp_metadata paths, SSRF/resource loading via stylesheets, transitive through @import/url().",
-   "deployment_note": "Requires attacker-influenced xmp_metadata/stylesheets parameters. Whether the selected deployment forwards attacker input to those parameters is NOT established.",
+   "deployment_note": "Same beta-builder gating as the CSS item: only reachable through a beta-builder Print Format rendering attacker-influenced content into fetched-URL positions; product ships no such formats.",
+   "disposition": "UPSTREAM-FIX AVAILABLE",
+   "disposition_evidence": "Fixed in 70.0 (PyPI offers 70.0); unreachable because Frappe v16.34.0 pins WeasyPrint==68.0.",
    "osv_urls": [
     "https://osv.dev/vulnerability/GHSA-jf6q-chmf-3h3v",
     "https://osv.dev/vulnerability/PYSEC-2026-3940"
@@ -206,6 +220,8 @@
     "2.2.3"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1158508,
@@ -226,6 +242,8 @@
     "2.2.3"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1111311,
@@ -246,6 +264,8 @@
     "2.0.1"
    ],
    "advisory_count": 10,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1105443,
@@ -362,6 +382,8 @@
     "3.0.3"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1098094,
@@ -383,6 +405,8 @@
     "4.23.0"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1153171,
@@ -413,6 +437,8 @@
     "2.9.3"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1193675,
@@ -433,6 +459,8 @@
     "0.7.0"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1103907,
@@ -452,6 +480,8 @@
     "7.0.3"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1104664,
@@ -471,6 +501,8 @@
     "0.2.2"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1147955,
@@ -493,6 +525,8 @@
     "6.5.4"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1123943,
@@ -522,6 +556,8 @@
     "0.14.54"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1102341,
@@ -542,6 +578,8 @@
     "7.2.3"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1109842,
@@ -561,6 +599,8 @@
     "0.5.5"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1138808,
@@ -590,6 +630,8 @@
     "4.3.4"
    ],
    "advisory_count": 3,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1117067,
@@ -633,6 +675,8 @@
     "0.5.1"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1096543,
@@ -652,6 +696,8 @@
     "2.6.1"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1120062,
@@ -682,6 +728,8 @@
     "5.0.0"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1121797,
@@ -712,6 +760,8 @@
     "3.2.1"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1094088,
@@ -731,6 +781,8 @@
     "4.17.21"
    ],
    "advisory_count": 3,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1115806,
@@ -770,6 +822,8 @@
     "4.17.21"
    ],
    "advisory_count": 3,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1115805,
@@ -809,6 +863,8 @@
     "14.0.0"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1113190,
@@ -840,6 +896,8 @@
     "4.0.8"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1098681,
@@ -860,6 +918,8 @@
     "9.0.3"
    ],
    "advisory_count": 6,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1113459,
@@ -930,6 +990,8 @@
     "3.3.8"
    ],
    "advisory_count": 4,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1109563,
@@ -979,6 +1041,8 @@
     "2.3.1"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1115549,
@@ -1012,6 +1076,8 @@
     "8.4.35"
    ],
    "advisory_count": 6,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1093539,
@@ -1085,6 +1151,8 @@
     "2.0.3"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1098574,
@@ -1115,6 +1183,8 @@
     "2.77.3"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1099757,
@@ -1144,6 +1214,8 @@
     "1.8.1"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1120422,
@@ -1174,6 +1246,8 @@
     "2.1.0"
    ],
    "advisory_count": 3,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1117038,
@@ -1214,6 +1288,8 @@
     "4.2.4"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1115154,
@@ -1244,6 +1320,8 @@
     "2.8.0"
    ],
    "advisory_count": 4,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1114152,
@@ -1295,6 +1373,8 @@
     "0.2.4"
    ],
    "advisory_count": 1,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1120654,
@@ -1314,6 +1394,8 @@
     "2.9.17"
    ],
    "advisory_count": 15,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1096897,
@@ -1487,6 +1569,8 @@
     "8.11.0"
    ],
    "advisory_count": 3,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1118728,
@@ -1529,6 +1613,8 @@
     "2.3.4"
    ],
    "advisory_count": 2,
+   "disposition": "OPEN",
+   "disposition_evidence": "Affected pinned transitive dependencies of the upstream Frappe/ERPNext/Education trees (this product ships no npm dependencies of its own). Fixed-version adoption belongs to the upstream lockfile owners; no compatible official bundle exists (remediation assessment 2026-09-19).",
    "advisories": [
     {
      "id": 1115555,

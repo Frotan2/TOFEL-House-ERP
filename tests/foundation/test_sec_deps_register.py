@@ -88,6 +88,37 @@ class SecDepsRegisterTests(unittest.TestCase):
         self.assertIn("UPSTREAM-BLOCKED / REJECT", effect)
         self.assertIn("NOT established", effect)
 
+    def test_every_finding_carries_an_evidence_based_disposition(self):
+        allowed = {"FIXED", "UPSTREAM-FIX AVAILABLE", "REMEDIATION CANDIDATE",
+                   "NOT REACHABLE", "DEV/BUILD ONLY", "FALSE POSITIVE", "OPEN"}
+        expected = {
+            "pdfkit-path-traversal-from-string": "OPEN",
+            "pypdf-outline-resource-exhaustion": "UPSTREAM-FIX AVAILABLE",
+            "pypdf-xform-resource-exhaustion": "UPSTREAM-FIX AVAILABLE",
+            "pypdf-insert-child-infinite-loop": "UPSTREAM-FIX AVAILABLE",
+            "setuptools-manifest-normalization-bypass": "UPSTREAM-FIX AVAILABLE",
+            "weasyprint-css-injection-presentational-hints": "OPEN",
+            "weasyprint-url-fetcher-bypass-ssrf": "UPSTREAM-FIX AVAILABLE",
+        }
+        seen = set()
+        for vuln in self.register["pypi_vulnerabilities"]:
+            self.assertIn(vuln["disposition"], allowed, vuln["vuln_key"])
+            self.assertTrue(vuln["disposition_evidence"], vuln["vuln_key"])
+            self.assertEqual(vuln["disposition"], expected[vuln["vuln_key"]])
+            seen.add(vuln["vuln_key"])
+        self.assertEqual(seen, set(expected))
+        # No finding may claim a fix, a candidate, non-reachability or a
+        # false positive without the evidence this mission demands.
+        for vuln in self.register["pypi_vulnerabilities"]:
+            self.assertNotIn(vuln["disposition"],
+                             {"FIXED", "REMEDIATION CANDIDATE", "NOT REACHABLE",
+                              "DEV/BUILD ONLY", "FALSE POSITIVE"}, vuln["vuln_key"])
+
+    def test_every_npm_package_rollup_is_open_with_evidence(self):
+        for slot in self.register["npm_rollup_by_package"]:
+            self.assertEqual(slot["disposition"], "OPEN", slot["package"])
+            self.assertTrue(slot["disposition_evidence"], slot["package"])
+
 
 if __name__ == "__main__":
     unittest.main()

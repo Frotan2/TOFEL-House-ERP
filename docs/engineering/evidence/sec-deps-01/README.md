@@ -25,8 +25,10 @@ readability input for that decision. It changes no gate.
 Not a fresh audit of the current pins. Not exploitability or reachability
 proof. Not a full SBOM. Not OS/container coverage. Not remediation. Not a gate
 change: **SEC-DEPS-01 stays UPSTREAM-BLOCKED / REJECT, D8 stays BLOCKED,
-production stays REJECT.** Reachability in the selected local-server +
-Tailscale deployment is explicitly NOT established for any finding here.
+production stays REJECT.** Per-finding reachability for the 7 Python
+vulnerabilities is traced in
+[pdf-reachability-trace-2026-09-19.md](pdf-reachability-trace-2026-09-19.md);
+npm reachability is explicitly NOT established for any finding here.
 
 ## PyPI: 7 unique vulnerabilities, 4 packages (14 records)
 
@@ -89,17 +91,19 @@ Titles, CWEs and vulnerable ranges per advisory are in the JSON register
 
 ## Honest consequences for the local launch decision
 
-1. **pdfkit HIGH with no patch** is the sharpest PyPI finding: path traversal
-   in `from_string` with server-side JS execution and local file exfiltration,
-   and 1.0.0 (the installed version) is the last affected version. Reachability
-   through the deployment's PDF/print path is NOT established — but neither is
-   it excluded. Any risk acceptance must name this finding explicitly.
-2. **Two weasyprint MODERATEs** need attacker-influenced inputs (untrusted HTML
-   with presentational hints; `xmp_metadata`/`stylesheets` parameters). One has
-   no listed fix (68.1 last affected), one is fixed in 70.0.
-3. **pypdf MODERATEs** are crafted-PDF denial of service with patch releases
-   available (6.16.0/6.16.1) — a pin-change plus re-qualification decision, not
-   taken here.
+1. **pdfkit HIGH with no patch**: path traversal in `from_string` with
+   server-side JS execution and local file exfiltration; 1.0.0 is the last
+   affected version. Traced: both halves are disabled by forced
+   `disable-javascript`/`disable-local-file-access` at the single Frappe call
+   site, but HTML reaches `from_string` by design — disposition OPEN, not
+   NOT-REACHABLE. Any risk acceptance must name this finding explicitly.
+2. **Two weasyprint MODERATEs**, gated on beta-builder Print Formats (the
+   product ships none). SSRF fixed in 70.0 (Frappe pins 68.0); CSS injection
+   has no listed fix (68.1 last affected).
+3. **pypdf MODERATEs** are crafted-PDF denial of service, **reachable via
+   native PDF upload**, with patch releases available (6.16.0/6.16.1) that
+   Frappe does not pin — an upstream-release plus re-qualification decision,
+   not taken here.
 4. **setuptools MODERATE** is build-time macOS-only; negligible Linux-server
    runtime relevance, but it still fails the audit while pinned below 83.0.0.
 5. **npm: 2 critical + 49 high**, dominated by build/dev-transitive packages
