@@ -68,7 +68,7 @@ def main():
             return value
         except Exception as exc:
             frappe.db.rollback()
-            report['checks'].append({'name':name,'status':'fail','exception':type(exc).__name__,'message':str(exc)[:600]})
+            report['checks'].append({'name':name,'status':'fail','exception':type(exc).__name__,'message':str(exc)[:2000]})
             raise
         finally:output.write_text(json.dumps(report,indent=2,default=str)+'\n')
     def denied(fn):
@@ -4026,7 +4026,14 @@ def main():
             frappe.db.commit()
             def desk_get(label,method):
                 r=sess[label].get(base+'/api/method/toefl_house.desk.'+method,timeout=30)
-                assert r.status_code==200,(method,label,r.status_code,r.text[:300])
+                if r.status_code!=200:
+                    try:
+                        body=json.loads(r.text);exc=''.join(body.get('exc') or [])
+                        frames=[ln.strip() for ln in exc.splitlines() if ', line ' in ln]
+                        diag='FRAME :: '+' // '.join(frames[-7:])
+                    except Exception:
+                        diag=r.text[:300]
+                    assert False,(method,label,r.status_code,diag[:1500])
                 return r.json()['message']
             def desk_sections(payload):
                 return {sect['id'] for sect in payload['sections']}
