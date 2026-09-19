@@ -14,6 +14,7 @@ Separation of responsibilities (owner-mandated):
 No rate, amount, term or statutory rule is invented here: every value is
 owner-entered contract configuration.
 """
+import datetime
 import json
 import frappe
 from toefl_house.api import _execute
@@ -239,6 +240,26 @@ def revise_teaching_contract(request_key, contract, compensation_model, assignme
         successor.flags.ignore_links = True
         successor.insert(ignore_permissions=True)
         old.flags.ignore_permissions = True
+        # Owner decision D12 (2026-09-19): a revision closes the predecessor's
+        # window the day before the successor starts. Without this the
+        # superseded contract kept its open-ended effective_end, so the
+        # calculation found two contracts covering any later period and refused
+        # to run at all. Closing the window makes exactly one contract cover
+        # every period, applies the successor rate from its own start date, and
+        # reaches back into nothing: periods already compensated stay exactly as
+        # they were posted. Only the window is closed - no rate, term, quantity
+        # or adjustment on the predecessor is ever rewritten, so historical
+        # compensation remains reproducible from it.
+        successor_start = datetime.date.fromisoformat(str(start))
+        predecessor_start = datetime.date.fromisoformat(str(old.effective_start))
+        if successor_start <= predecessor_start:
+            raise frappe.ValidationError(
+                "A revised contract must start after the contract it replaces")
+        closing = (successor_start - datetime.timedelta(days=1)).isoformat()
+        window_was_closed = (not old.effective_end
+                             or str(old.effective_end) > closing)
+        if window_was_closed:
+            old.effective_end = closing
         old.status = "Superseded"
         old.save(ignore_permissions=True)
         result = {"name": successor.name, "supersedes": contract_name,
@@ -379,17 +400,14 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
     owns it); fixed-salary instructors are skipped (native Salary Structure
     path).
 
-    **Cross-period hold (fail closed).** The payable is a flat contract amount,
-    not a per-period or pro-rated figure, and `assign_teaching_skill` creates
-    open-ended assignments that overlap every later period. Re-posting such an
-    assignment in a second period would pay one teaching fact more than once.
-    Whether that flat amount is a one-off payable, a recurring per-period
-    amount, or a sum to be pro-rated across the periods it spans is the owner's
-    *payroll posting basis* decision, which is not recorded in the canonical
-    owner-decision record. Until it is, an assignment already compensated at a
-    different payroll date is **held, not paid**, and is reported under
-    `held_pending_posting_basis` so the payable stays visible and auditable.
-    Nothing is silently dropped and nothing is silently doubled.
+    **One-off payable (owner decision D12, 2026-09-19).** The payable is a flat
+    contract amount, not a per-period or pro-rated figure, and
+    `assign_teaching_skill` creates open-ended assignments that overlap every
+    later period. The owner selected the one-off basis: an assignment is
+    compensated once, in the first payroll period that covers it. A later
+    overlapping period therefore posts nothing for it and reports it under
+    `already_compensated_prior_period`, so the reason is visible in the audit
+    trail instead of being a silent skip or a second payment.
 
     Native preconditions (enforced by HRMS, not re-implemented here): the
     employee is Active and holds a submitted Salary Structure Assignment
@@ -417,7 +435,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
             "from `tabTH Teaching Assignment` where effective_start <= %s "
             "and (effective_end is null or effective_end >= %s)", (end, start), as_dict=True)
         posted, skipped_fixed, skipped_existing, adjustments_posted = {}, [], 0, 0
-        held_pending_posting_basis = {}
+        already_compensated = {}
         contracts = {}
         for instructor in sorted({row.instructor for row in rows}):
             matches = frappe.db.get_all(
@@ -446,20 +464,13 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 skipped_existing += 1
                 continue
             if already_paid:
-                # Fail closed on an unresolved payroll posting basis.
-                #
-                # compute_skill_payable returns a flat contract amount for the
-                # assignment; it is not pro-rated by period length. An
-                # open-ended assignment therefore overlaps every later period,
-                # and posting it again would pay the same teaching fact more
-                # than once. Whether a flat assignment amount is a one-off
-                # payable, a recurring per-period amount, or a sum to be
-                # pro-rated across the periods it spans is an owner decision
-                # (payroll posting basis) that has not been recorded, so no
-                # amount is posted here. The hold is reported explicitly
-                # rather than skipped silently, so the payable stays visible
-                # and auditable until the basis is decided.
-                held_pending_posting_basis[row.name] = already_paid
+                # Owner decision D12 (2026-09-19): the flat contract amount is a
+                # ONE-OFF payable. An assignment is compensated once, in the
+                # first payroll period that covers it; a later period that also
+                # overlaps the same open-ended assignment is not a second
+                # payable. Reported rather than skipped silently, so the audit
+                # trail shows why nothing was posted.
+                already_compensated[row.name] = already_paid
                 continue
             amount = _payable_for(contract, row)
             salary = frappe.get_doc(dict(
@@ -495,7 +506,9 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 skipped_existing += len(due)
                 continue
             if adjustment_paid:
-                held_pending_posting_basis[contract.name] = adjustment_paid
+                # Same one-off basis as the assignment path (D12): a bonus or
+                # deduction is posted once, not once per overlapping period.
+                already_compensated[contract.name] = adjustment_paid
                 continue
             for adjustment in due:
                 salary = frappe.get_doc(dict(
@@ -519,7 +532,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                   "posted": posted, "skipped_fixed_salary_contracts": sorted(skipped_fixed),
                   "skipped_existing": skipped_existing,
                   "adjustments_posted": adjustments_posted,
-                  "held_pending_posting_basis": held_pending_posting_basis}
+                  "already_compensated_prior_period": already_compensated}
         return result, dict(target=digest([start, end, company_name, component]),
                             after_hash=digest(result))
 

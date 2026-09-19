@@ -3459,21 +3459,28 @@ def main():
             # payroll posting basis (one-off vs recurring vs pro-rated) is an
             # unrecorded owner decision, so the command fails closed: it holds
             # and names the payable instead of doubling it or dropping it.
-            # The probe period is narrowed to 2026-09-01..2026-09-20 rather than
-            # a later month on purpose: revise_teaching_contract supersedes the
-            # predecessor without closing its open-ended effective_end, so a
-            # period after the revision matches two contracts and the command
-            # fails its own exactly-one-contract rule before any payable logic
-            # runs. That is a separate recorded finding, not this guard.
+            # Owner decision D12 (2026-09-19), both halves proven by this one
+            # post-revision period.
+            #
+            # (a) A revision closes the predecessor's window the day before the
+            # successor starts, so October resolves to exactly one contract per
+            # instructor instead of failing the exactly-one rule. rev1 starts
+            # 2026-10-01, so contract one must now end 2026-09-30.
+            assert str(frappe.db.get_value(CON,cauth['contracts']['one'],'effective_end'))=='2026-09-30',(
+                'superseded contract did not close at the successor start',
+                frappe.db.get_value(CON,cauth['contracts']['one'],'effective_end'))
+            # (b) The flat amount is a one-off payable: these assignments were
+            # already compensated at 2026-09-30, so a later period that still
+            # overlaps them posts nothing and names them instead.
             cross=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
-                'tc_calc_cross_0000001','2026-09-01','2026-09-20',cfx['company'],cfx['earning'],
+                'tc_calc_cross_0000001','2026-10-01','2026-10-31',cfx['company'],cfx['earning'],
                 cfx['deduction']))
             frappe.set_user('Administrator')
             assert not cross['posted'],('a second overlapping period re-paid a teaching fact',cross['posted'])
             assert set([a['a1'],a['a2'],a['a3']]).issubset(
-                set(cross['held_pending_posting_basis'])),(
-                'cross-period hold did not name every already-paid assignment',
-                cross['held_pending_posting_basis'])
+                set(cross['already_compensated_prior_period'])),(
+                'one-off basis did not name every already-compensated assignment',
+                cross['already_compensated_prior_period'])
             assert frappe.db.count(ADS)==ads_before+5,('cross-period run posted new payables')
             # no second engine: slips/statutory math stay untouched and native
             assert frappe.db.count('Salary Slip')==slips_before
@@ -3484,7 +3491,8 @@ def main():
                     'pre_revision_rate_used':True,'supersession_reproducible':True,
                     'superseded_contract_assign_denied':True,
                     'future_contract_assign_denied':True,'same_period_duplicate_pay_prevented':True,
-                    'cross_period_repay_held_pending_owner_posting_basis':True,
+                    'one_off_payable_basis_no_cross_period_repay':True,
+                    'superseded_contract_window_closed_at_successor_start':True,
                     'receipt_idempotent':True,'salary_slips_untouched':True,
                     'audit_chain_ref_fields':True}
         check('teaching-compensation-calculation',compensation_calculation)

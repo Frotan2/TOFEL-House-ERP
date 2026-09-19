@@ -161,6 +161,56 @@ upstream-compatibility note must be made consistent **in the same change**.
 
 ---
 
+## D12 — Teaching compensation posting basis and contract supersession windows
+**Date:** 2026-09-19 · **Status:** DECIDED by the Course Owner.
+
+**Question 1 — payroll posting basis.** A teaching assignment's payable is a
+single flat amount derived from its contract (`payable_quantity × rate`, clamped
+to the contract minimum/maximum). Assignments are created open-ended, so every
+later payroll period selects the same assignment again. What does that flat
+amount mean across recurring periods? **Decide (pick one):** (a) one-off
+payable; (b) recurring every period; (c) pro-rated across the periods it spans;
+(d) paid on completion only.
+
+**Owner answer 1:** **(a) One-off payable.** Each assignment is compensated
+exactly once, in the first payroll period that covers it.
+
+**Question 2 — effect of a contract revision on the old window.** Revising an
+instructor's contract marked the predecessor `Superseded` but left its
+`effective_end` open, so payroll matched two contracts for any period after the
+revision and refused to run at all. **Decide (pick one):** (a) close the
+predecessor's window at the successor's start; (b) leave it and require a
+narrower period; (c) prefer whichever contract is still Active.
+
+**Owner answer 2:** **(a) Close the old contract at the successor's start.**
+
+**Exact scope.** Both answers govern `toefl_house.teaching.compensation` only:
+`calculate_teaching_compensation` and `revise_teaching_contract`.
+
+**What this authorizes.** Payroll may post one Additional Salary per teaching
+assignment, in the first period that covers it, and never again for that
+assignment. A revision closes the predecessor's window the day before the
+successor starts, so exactly one contract covers any period and the successor
+rate applies from its own start date. Assignments and adjustments already
+compensated in an earlier period are reported under
+`already_compensated_prior_period` rather than skipped silently.
+
+**What this does NOT authorize.** It does not make the flat amount a per-period
+or pro-rated figure. It does not permit retroactive application of a successor
+rate to periods already paid. It does not rewrite any rate, term, quantity or
+adjustment on a superseded contract, so historical compensation remains
+reproducible from it. It does not create a second payroll engine, a parallel
+payable ledger, or any statutory/tax/slip calculation - native HRMS Salary Slip
+and Payroll Entry remain the payroll authority. It does not authorize
+production; production remains **REJECT**.
+
+**Why owner-only.** Both are compensation semantics with direct financial
+consequences: one determines how many times a teacher is paid for one teaching
+fact, the other determines which rate applies from which date. Engineering had
+failed both closed rather than guess, and both were escalated.
+
+---
+
 **How this packet is used:** business decisions are recorded once in the
 canonical JSON record and projected here. Engineering executes only the scope
 that those decisions unlocks, with narrow then broad validation; no domain

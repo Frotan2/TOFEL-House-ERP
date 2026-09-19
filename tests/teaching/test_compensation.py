@@ -209,35 +209,57 @@ class WiringTests(unittest.TestCase):
         self.assertLessEqual(created, {"ADDITIONAL_SALARY", "CONTRACT", "ASSIGNMENT"})
         self.assertIn("ADDITIONAL_SALARY", created)
 
-    def test_cross_period_repay_is_held_rather_than_posted(self):
-        """Regression: one teaching fact must never be paid twice.
+    def test_one_off_payable_basis_prevents_cross_period_repay(self):
+        """Owner decision D12 (2026-09-19): the flat amount is a ONE-OFF payable.
 
-        ``compute_skill_payable`` returns a *flat* contract amount and
+        ``compute_skill_payable`` returns a flat contract amount and
         ``assign_teaching_skill`` creates open-ended assignments, so every later
         payroll period selects the same assignment again. The Additional Salary
         dedup key includes ``payroll_date``, so same-period dedup cannot catch
-        it: a run over a different period posts the same flat amount a second
-        time. Whether that amount is a one-off payable, a recurring per-period
-        amount, or a sum to be pro-rated is the owner's *payroll posting basis*
-        decision, which is not recorded, so the command must fail closed and
-        hold the payable visibly instead of guessing.
+        it. The command must therefore look up every payroll date already posted
+        for the assignment and post nothing further, reporting the assignment
+        under ``already_compensated_prior_period`` rather than skipping it
+        silently or paying it twice.
         """
         source = COMPENSATION.read_text()
-        self.assertIn("held_pending_posting_basis", source)
-        self.assertIn("held_pending_posting_basis[row.name] = already_paid", source)
+        self.assertIn("already_compensated_prior_period", source)
+        self.assertIn("already_compensated[row.name] = already_paid", source)
         fn = next(n for n in ast.walk(ast.parse(source))
                   if isinstance(n, ast.FunctionDef)
                   and n.name == "calculate_teaching_compensation")
         body = ast.dump(fn)
-        # The pre-post lookup must read every payroll date for the assignment,
-        # not only the current period end, or the cross-period case is invisible.
         self.assertIn("already_paid", body)
-        self.assertIn("payroll_date", body)
-        # And the hold must be reported, never dropped silently.
-        self.assertIn('"held_pending_posting_basis": held_pending_posting_basis', source)
-        # The unresolved owner decision must stay documented at the command.
-        self.assertIn("payroll posting basis", fn.body[0].value.value.lower()
-                      if isinstance(fn.body[0], ast.Expr) else source.lower())
+        # Adjustments carry the identical flat-amount defect and must be covered
+        # by the same one-off rule, not left as a second double-posting path.
+        self.assertIn("adjustment_paid", body)
+        self.assertIn("already_compensated[contract.name] = adjustment_paid", source)
+        self.assertIn('"already_compensated_prior_period": already_compensated', source)
+        # The superseded hold vocabulary must be gone, so the decided policy
+        # cannot silently regress back into the undecided state.
+        self.assertNotIn("held_pending_posting_basis", source)
+        self.assertIn("D12", fn.body[0].value.value)
+
+    def test_revision_closes_the_predecessor_window_at_the_successor_start(self):
+        """Owner decision D12 (2026-09-19): a revision ends the old window.
+
+        Without this the superseded contract kept its open-ended effective_end,
+        so the calculation matched two contracts for any later period and
+        refused to run at all. Only the window is closed - no rate, term or
+        adjustment on the predecessor is rewritten, so historical compensation
+        stays reproducible, and the successor never reaches back before its own
+        start date.
+        """
+        source = COMPENSATION.read_text()
+        fn = next(n for n in ast.walk(ast.parse(source))
+                  if isinstance(n, ast.FunctionDef)
+                  and n.name == "revise_teaching_contract")
+        body = ast.dump(fn)
+        self.assertIn("effective_end", body)
+        self.assertIn("timedelta", body)
+        self.assertIn("Superseded", body)
+        # A successor may never start on or before the contract it replaces.
+        self.assertIn("A revised contract must start after the contract it replaces", source)
+        self.assertIn("D12", source)
 
 
 class DocTypeShapeTests(unittest.TestCase):
