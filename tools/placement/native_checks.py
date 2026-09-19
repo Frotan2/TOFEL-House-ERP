@@ -4101,6 +4101,34 @@ def main():
                 'desk-fees-redo-req-001',fdisc['fees'],'SYN re-request after denial',26000.0))
             as_user('finance_officer',lambda:corr.deny_fees_correction(
                 'desk-fees-redo-deny-01',req4['name']))
+            # HOSTILE PROBE for approval-time re-validation.
+            #
+            # Requesting and approving a correction are separate commands, so the
+            # fee can change in between. Mutate the total out-of-band - db.set_
+            # value bypasses the controller, which is exactly what an out-of-band
+            # change looks like - and prove approval REFUSES rather than
+            # cancelling the fee and reporting a stale refund. Without the
+            # re-validation this posted a reversal whose reported amount no
+            # longer matched the fee it reversed.
+            race=as_user('finance_officer',lambda:corr.request_fees_correction(
+                'desk-fees-race-req-01',fdisc['fees'],'SYN approval race probe',26000.0))
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Fees',fdisc['fees'],'grand_total',27500.0,update_modified=False)
+            frappe.db.commit()
+            assert denied(lambda:as_user('finance_officer',lambda:corr.approve_fees_correction(
+                'desk-fees-race-appr-01',race['name']))),(
+                'approval posted a refund against a fee whose total had changed')
+            frappe.db.set_value('Fees',fdisc['fees'],'grand_total',26000.0,update_modified=False)
+            frappe.db.commit()
+            after=frappe.db.get_value('Fees',fdisc['fees'],['docstatus','grand_total'],as_dict=True)
+            assert int(after.docstatus)==1 and float(after.grand_total)==26000.0,(
+                'a refused approval left the fee in a changed state',after)
+            assert frappe.db.get_value(CREQ,race['name'],'status')=='Requested',(
+                'a refused approval must leave the request pending, not posted')
+            assert frappe.db.count('GL Entry',{'against_voucher':fdisc['fees'],
+                'is_cancelled':0})>0,('a refused approval reversed the receivable')
+            as_user('finance_officer',lambda:corr.deny_fees_correction(
+                'desk-fees-race-deny-01',race['name']))
             observed['fees_correction']={
                 'target_fee':fee2,'amount':gt2,'request':creq['name'],
                 'http_request_and_approve':True,'replay_identical_receipt':True,
@@ -4108,6 +4136,7 @@ def main():
                 'dual_key_denied':probe_denial,'posted_and_reversed':True,
                 'gl_open_rows_after':0,'desk_shows_named_fee_target':True,
                 'desk_clears_after_posting':True,'denial_keeps_fee':True,
+                'approval_revalidates_fee_total_and_refuses_stale':True,
                 'redeny_allowed_after_denial':True,
                 'note':'OD-RD-1 evidence only: ratification waits for the owner'}
             frappe.db.commit()
