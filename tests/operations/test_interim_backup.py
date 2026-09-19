@@ -28,7 +28,9 @@ from tools.operations.interim_backup import (  # noqa: E402
     classify_generation,
     restore_procedure,
     retention_plan,
+    run_backup,
     verify_artifact,
+    write_sidecar,
 )
 
 
@@ -136,6 +138,127 @@ class HonestyTests(unittest.TestCase):
         self.assertLess(verify_at, restore_at,
                         "verification must precede the restore, not follow it")
         self.assertTrue(any("never over the live one" in s for s in steps))
+
+
+class ExecutedBackupRunTests(unittest.TestCase):
+    """Actually run the backup path, including real encryption.
+
+    A stubbed encryption call would prove nothing about whether the produced
+    artifact can be decrypted, so these use the real openssl binary when the
+    runner has one.
+    """
+
+    def _passphrase(self, root):
+        path = os.path.join(root, "passphrase")
+        with open(path, "w") as handle:
+            handle.write("test-passphrase-not-a-secret\n")
+        os.chmod(path, 0o600)
+        return path
+
+    def test_an_executed_backup_is_encrypted_digestible_and_leaves_no_plaintext(self):
+        import shutil
+        if shutil.which("openssl") is None:
+            self.skipTest("openssl not available")
+        with tempfile.TemporaryDirectory() as root:
+            dest = os.path.join(root, "backups")
+            passphrase = self._passphrase(root)
+            run = run_backup(
+                backup_root=dest, label="db-2026-09-19-daily",
+                dump_command=["printf", "INSERT INTO t VALUES (1);\n"],
+                passphrase_file=passphrase,
+                volume_evidence={"different_volume": True, "injected": True})
+            self.assertTrue(run.encrypted)
+            self.assertTrue(os.path.isfile(run.cipher_path))
+            self.assertFalse(os.path.isfile(os.path.join(dest, "db-2026-09-19-daily.plain")),
+                             "plaintext must not survive the run")
+            self.assertEqual(run.volume_evidence["injected"], True)
+            with open(run.cipher_path, "rb") as handle:
+                self.assertNotIn(b"INSERT INTO", handle.read(),
+                                 "artifact is not actually encrypted")
+
+    def test_the_encrypted_artifact_can_be_decrypted_back(self):
+        import shutil
+        import subprocess
+        if shutil.which("openssl") is None:
+            self.skipTest("openssl not available")
+        with tempfile.TemporaryDirectory() as root:
+            dest = os.path.join(root, "backups")
+            passphrase = self._passphrase(root)
+            payload = b"INSERT INTO `tabUser` VALUES ('Administrator');\n"
+            run = run_backup(
+                backup_root=dest, label="db-restore-check",
+                dump_command=["printf", payload.decode()],
+                passphrase_file=passphrase,
+                volume_evidence={"different_volume": True, "injected": True})
+            out = os.path.join(root, "restored.sql")
+            subprocess.run(["openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2",
+                            "-iter", "200000", "-in", run.cipher_path, "-out", out,
+                            "-pass", f"file:{passphrase}"], check=True,
+                           capture_output=True)
+            with open(out, "rb") as handle:
+                self.assertEqual(handle.read(), payload)
+
+    def test_a_failing_dump_aborts_without_leaving_a_partial_artifact(self):
+        with tempfile.TemporaryDirectory() as root:
+            dest = os.path.join(root, "backups")
+            os.makedirs(dest)
+            with self.assertRaises(Exception):
+                run_backup(
+                    backup_root=dest, label="db-bad",
+                    dump_command=["false"],
+                    volume_evidence={"different_volume": True, "injected": True})
+            leftovers = [p for p in os.listdir(dest)
+                         if p.endswith(".enc") or p.endswith(".plain")]
+            self.assertEqual(leftovers, [])
+
+    def test_same_volume_is_refused_before_anything_is_written(self):
+        with tempfile.TemporaryDirectory() as root:
+            live = os.path.join(root, "live")
+            dest = os.path.join(root, "backups")
+            os.makedirs(live)
+            with self.assertRaises(BackupPolicyError):
+                run_backup(
+                    backup_root=dest, label="db-samevol",
+                    dump_command=["printf", "should-not-run\n"],
+                    active_data_root=live)
+            self.assertFalse(os.path.isdir(dest),
+                             "destination must not be created after a volume refusal")
+
+    def test_the_sidecar_carries_limitations_and_the_digest(self):
+        import json
+        import shutil
+        if shutil.which("openssl") is None:
+            self.skipTest("openssl not available")
+        with tempfile.TemporaryDirectory() as root:
+            dest = os.path.join(root, "backups")
+            passphrase = self._passphrase(root)
+            run = run_backup(
+                backup_root=dest, label="db-sidecar",
+                dump_command=["printf", "payload\n"],
+                passphrase_file=passphrase,
+                volume_evidence={"different_volume": True, "injected": True})
+            sidecar = write_sidecar(run, RetentionPolicy(),
+                                    restore_command="see restore_procedure()")
+            payload = json.loads(Path(sidecar).read_text())
+            self.assertEqual(payload["classification"],
+                             "INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY")
+            self.assertEqual(payload["artifacts"][0]["sha256"], run.cipher_digest)
+            self.assertTrue(payload["volume_evidence"]["different_volume"])
+            joined = " ".join(payload["limitations"])
+            self.assertIn("ransomware", joined)
+
+
+class OperatorCliTests(unittest.TestCase):
+
+    def test_print_restore_procedure_exits_zero(self):
+        from tools.operations.interim_backup import main
+        self.assertEqual(main(["--print-restore-procedure"]), 0)
+
+    def test_a_run_without_dump_command_is_refused(self):
+        from tools.operations.interim_backup import main
+        with self.assertRaises(SystemExit):
+            main(["--active-data-root", "/", "--backup-root", "/tmp",
+                  "--label", "x"])
 
 
 if __name__ == "__main__":

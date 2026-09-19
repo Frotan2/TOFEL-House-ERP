@@ -61,8 +61,18 @@ class RetentionPolicy:
 
 
 def volume_id(path: str | os.PathLike[str]) -> int:
-    """Identity of the filesystem holding ``path``."""
-    return os.stat(path).st_dev
+    """Identity of the filesystem holding ``path``.
+
+    Walks up to the nearest existing ancestor so a destination that does not
+    yet exist can still be refused before anything is written there.
+    """
+    target = pathlib.Path(path)
+    while not target.exists():
+        parent = target.parent
+        if parent == target:
+            raise BackupPolicyError(f"cannot determine volume for {path}")
+        target = parent
+    return os.stat(target).st_dev
 
 
 def assert_different_volume(active_data_root: str, backup_root: str) -> dict[str, Any]:
@@ -162,3 +172,152 @@ def restore_procedure() -> list[str]:
         "Log in as a real role and confirm a known record is present and correct.",
         "Record the rehearsal: date, artifact digest, elapsed time, and outcome.",
     ]
+
+
+DEFAULT_ENCRYPT = ["openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-iter", "200000",
+                   "-salt", "-in", "{plain}", "-out", "{cipher}",
+                   "-pass", "file:{passphrase_file}"]
+
+
+@dataclass(frozen=True)
+class BackupRun:
+    """One executed backup. Carries its own digest and its own limitations."""
+    generation: str
+    plaintext_digest: str
+    cipher_digest: str
+    cipher_path: str
+    encrypted: bool
+    command: list[str]
+    volume_evidence: dict[str, Any]
+
+
+def run_backup(*, backup_root: str, label: str, dump_command: list[str],
+               encrypt_command: list[str] | None = None,
+               passphrase_file: str | None = None,
+               volume_evidence: dict[str, Any] | None = None,
+               active_data_root: str | None = None,
+               ) -> BackupRun:
+    """Execute one backup: dump, encrypt, digest.
+
+    ``volume_evidence`` is injectable so the policy can be tested without two
+    real mounts; when omitted it is computed from ``active_data_root`` versus
+    ``backup_root``, and a same-volume destination raises before anything is
+    written. Encryption is applied when a passphrase file is supplied. The
+    plaintext is removed once the cipher is verified, so an unencrypted copy
+    of the database is not left sitting on disk. A failed dump or encrypt
+    attempt removes its own leftovers rather than leaving a partial artifact.
+    """
+    import shutil
+    import subprocess
+
+    if volume_evidence is None:
+        if not active_data_root:
+            raise BackupPolicyError(
+                "active_data_root is required when volume_evidence is not injected")
+        volume_evidence = assert_different_volume(active_data_root, backup_root)
+    destination = pathlib.Path(backup_root)
+    destination.mkdir(parents=True, exist_ok=True)
+
+    plain = destination / f"{label}.plain"
+    cipher = destination / f"{label}.enc"
+    try:
+        with open(plain, "wb") as sink:
+            subprocess.run(dump_command, stdout=sink, stderr=subprocess.PIPE, check=True)
+        plain_digest = digest_file(plain)
+
+        if passphrase_file:
+            template = encrypt_command or DEFAULT_ENCRYPT
+            argv = [part.format(plain=str(plain), cipher=str(cipher),
+                                passphrase_file=passphrase_file) for part in template]
+            subprocess.run(argv, check=True, capture_output=True)
+            cipher_digest = digest_file(cipher)
+            plain.unlink()
+            return BackupRun(label, plain_digest, cipher_digest, str(cipher), True,
+                             argv, dict(volume_evidence))
+
+        kept = destination / f"{label}.plain.keep"
+        shutil.move(str(plain), str(kept))
+        return BackupRun(label, plain_digest, digest_file(kept), str(kept), False,
+                         list(dump_command), dict(volume_evidence))
+    except Exception:
+        for leftover in (plain, cipher):
+            if leftover.exists():
+                leftover.unlink()
+        raise
+
+
+def write_sidecar(run: BackupRun, retention: RetentionPolicy,
+                  restore_command: str,
+                  volume_evidence: dict[str, Any] | None = None) -> str:
+    """Write the manifest next to the artifact and return its path."""
+    import json as _json
+    evidence = volume_evidence if volume_evidence is not None else run.volume_evidence
+    manifest = backup_manifest(
+        artifacts=[{"generation": run.generation, "path": run.cipher_path,
+                    "sha256": run.cipher_digest, "encrypted": run.encrypted,
+                    "plaintext_sha256": run.plaintext_digest}],
+        retention=retention, volume_evidence=evidence,
+        restore_command=restore_command)
+    sidecar = pathlib.Path(run.cipher_path + ".manifest.json")
+    sidecar.write_text(_json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+    return str(sidecar)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Operator entry: run one backup, or print the restore rehearsal.
+
+    Example (on the real server, with a second volume mounted):
+
+        python3 -m tools.operations.interim_backup \\
+            --active-data-root /var/lib/mysql \\
+            --backup-root /mnt/toefl-house-backup \\
+            --label db-$(date +%Y-%m-%d)-daily \\
+            --passphrase-file /etc/toefl-house/backup-passphrase \\
+            --dump-command mysqldump --single-transaction --routines --triggers SITE_DB
+
+    The restore rehearsal is printed by ``--print-restore-procedure``. It has
+    not been executed from this environment; the backup-restore gate stays
+    BLOCKED until that rehearsal is recorded on the real server.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--print-restore-procedure", action="store_true")
+    parser.add_argument("--print-limitations", action="store_true")
+    parser.add_argument("--active-data-root")
+    parser.add_argument("--backup-root")
+    parser.add_argument("--label")
+    parser.add_argument("--passphrase-file")
+    parser.add_argument("--dump-command", nargs=argparse.REMAINDER)
+    args = parser.parse_args(argv)
+
+    if args.print_restore_procedure:
+        for i, step in enumerate(restore_procedure(), 1):
+            print(f"{i}. {step}")
+        return 0
+    if args.print_limitations:
+        for line in LIMITATIONS:
+            print(line)
+        return 0
+    missing = [name for name in ("active_data_root", "backup_root", "label")
+               if not getattr(args, name)]
+    if missing or not args.dump_command:
+        parser.error("a run requires --active-data-root, --backup-root, "
+                     "--label and --dump-command")
+    dump = list(args.dump_command)
+    if dump and dump[0] == "--":
+        dump = dump[1:]
+    run = run_backup(backup_root=args.backup_root, label=args.label,
+                     dump_command=dump, passphrase_file=args.passphrase_file,
+                     active_data_root=args.active_data_root)
+    sidecar = write_sidecar(run, RetentionPolicy(),
+                            restore_command="python3 -m tools.operations.interim_backup "
+                            "--print-restore-procedure")
+    print(run.cipher_path)
+    print(sidecar)
+    print("INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
