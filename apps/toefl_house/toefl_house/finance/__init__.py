@@ -86,7 +86,8 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             raise frappe.ValidationError("Fee structure has no configured components")
         if frappe.db.exists(FEES, {"program_enrollment": pe_name,
                                    "fee_structure": fs_name, "docstatus": ("!=", 2)}):
-            raise frappe.ValidationError("Tuition is already billed for this enrollment")
+            raise frappe.ValidationError(
+                "Tuition is already billed for this enrollment on this fee plan")
 
         # Resolve centralized discount policy (OD-CP-1 Policy A: single discount per charge)
         from toefl_house.academic import rules

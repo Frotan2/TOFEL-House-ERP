@@ -96,8 +96,9 @@ are unfinished enterprise work.
    the real server has not been executed, so the gate is not closed.
 5. **TLS / session on the Tailscale deployment** is launch-critical and not
    independently evidenced on the exact SHA from this environment.
-6. **Durability / observability (audit trail readable in ops)** not
-   independently evidenced for launch.
+6. **Durability and observability gates stay BLOCKED.** The backup *mechanism*
+   and ops-readable command receipts exist; measured recovery and deployed
+   monitoring do not. Desk facts are not a monitoring PASS.
 
 If any of (1)–(3) remain, the honest answer to the acceptance question is
 **no**.

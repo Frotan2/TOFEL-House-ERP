@@ -108,8 +108,10 @@ class FinanceContainmentWiringTests(unittest.TestCase):
 
         tuition = body("issue_tuition_fees")
         self.assertIn("for update", tuition)
+        self.assertIn('"fee_structure": fs_name', tuition,
+                      "duplicate tuition is per enrollment and fee plan, not enrollment alone")
         self.assertLess(tuition.index("for update"),
-                        tuition.index("Tuition is already billed for this enrollment"),
+                        tuition.index("Tuition is already billed for this enrollment on this fee plan"),
                         "the enrollment must be locked before the duplicate-billing check")
         placement = body("issue_placement_fee")
         self.assertIn("for update", placement)
