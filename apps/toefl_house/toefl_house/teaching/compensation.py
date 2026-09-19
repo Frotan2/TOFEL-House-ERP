@@ -482,10 +482,20 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
             if any(a.adjustment_type == "Deduction" for a in due) and not deduction:
                 raise frappe.ValidationError(
                     "Deduction adjustments require an explicit deduction salary component")
-            if frappe.db.exists(ADDITIONAL_SALARY,
-                                {"ref_doctype": CONTRACT, "ref_docname": contract.name,
-                                 "payroll_date": end, "disabled": 0}):
+            # Same fail-closed hold as the assignment path above: adjustment
+            # amounts are flat, and this dedup key includes payroll_date, so a
+            # second overlapping period would post the same bonus or deduction
+            # again. Hold and report instead of doubling it.
+            adjustment_paid = sorted({str(r.payroll_date) for r in frappe.db.get_all(
+                ADDITIONAL_SALARY,
+                filters=[["ref_doctype", "=", CONTRACT],
+                         ["ref_docname", "=", contract.name], ["disabled", "=", 0]],
+                fields=["payroll_date"])})
+            if end in adjustment_paid:
                 skipped_existing += len(due)
+                continue
+            if adjustment_paid:
+                held_pending_posting_basis[contract.name] = adjustment_paid
                 continue
             for adjustment in due:
                 salary = frappe.get_doc(dict(

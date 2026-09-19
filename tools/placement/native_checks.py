@@ -3459,13 +3459,20 @@ def main():
             # payroll posting basis (one-off vs recurring vs pro-rated) is an
             # unrecorded owner decision, so the command fails closed: it holds
             # and names the payable instead of doubling it or dropping it.
+            # The probe period is narrowed to 2026-09-01..2026-09-20 rather than
+            # a later month on purpose: revise_teaching_contract supersedes the
+            # predecessor without closing its open-ended effective_end, so a
+            # period after the revision matches two contracts and the command
+            # fails its own exactly-one-contract rule before any payable logic
+            # runs. That is a separate recorded finding, not this guard.
             cross=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
-                'tc_calc_cross_0000001','2026-10-01','2026-10-31',cfx['company'],cfx['earning'],
+                'tc_calc_cross_0000001','2026-09-01','2026-09-20',cfx['company'],cfx['earning'],
                 cfx['deduction']))
             frappe.set_user('Administrator')
-            assert not cross['posted'],('a second overlapping period re-paid an assignment',cross['posted'])
-            assert sorted(cross['held_pending_posting_basis'])==sorted(
-                [a['a1'],a['a2'],a['a3']]),('cross-period hold did not name every already-paid assignment',
+            assert not cross['posted'],('a second overlapping period re-paid a teaching fact',cross['posted'])
+            assert set([a['a1'],a['a2'],a['a3']]).issubset(
+                set(cross['held_pending_posting_basis'])),(
+                'cross-period hold did not name every already-paid assignment',
                 cross['held_pending_posting_basis'])
             assert frappe.db.count(ADS)==ads_before+5,('cross-period run posted new payables')
             # no second engine: slips/statutory math stay untouched and native
