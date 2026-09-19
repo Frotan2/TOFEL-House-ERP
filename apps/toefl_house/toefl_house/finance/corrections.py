@@ -7,11 +7,12 @@ supplies a default term, amount, tax or refund rule.
 
 Scope v1: full-amount corrections of TH placement Sales Invoices through
 the NATIVE credit-note mechanism (erpnext make_sales_return -> a Sales
-Invoice with is_return=1 and return_against set). Partial refunds and
-Fees-side corrections await the owner's exact terms and are refused with
-an explicit message rather than approximated. No parallel ledger: the
-request row carries facts and the decision trail; the native credit note
-is the only money artifact.
+Invoice with is_return=1 and return_against set), and full-amount tuition
+Fees corrections through native Fees cancellation. Partial refunds await
+the owner's exact terms and are refused with an explicit message rather
+than approximated. No parallel ledger: the request row carries facts and
+the decision trail; the native money artifact (credit note or fee
+cancellation) is the only posting.
 """
 from datetime import date, timedelta
 import frappe
@@ -161,11 +162,44 @@ def approve_invoice_correction(request_key, request):
     approver role. The money artifact is the native credit note produced
     by erpnext make_sales_return; the request row only records the
     decision trail (approver, credit-note link).
+
+    Request and approval are separate commands. The invoice is locked and
+    the request-time invariants are re-proven here, the same way
+    approve_fees_correction re-proves the fee: a stale approval would post
+    a credit note whose amount no longer matches the live invoice.
     """
     def work(actor):
         policy = _active_policy()
         _require_approver(policy, actor)
         req = _pending_request(_name(request, "Correction request"))
+        if not req.sales_invoice:
+            raise frappe.ValidationError("Correction request is not for an invoice")
+        frappe.db.sql("select name from `tabSales Invoice` where name=%s for update",
+                      (req.sales_invoice,))
+        si = frappe.db.get_value(INVOICE, req.sales_invoice,
+                                 ["docstatus", "is_return", "th_placement_case",
+                                  "grand_total", "posting_date"], as_dict=True)
+        if not si:
+            raise frappe.ValidationError(
+                "The invoice behind this correction request no longer exists")
+        if int(si.docstatus or 0) != 1 or int(si.is_return or 0) == 1:
+            raise frappe.ValidationError(
+                "The invoice is no longer submitted; this correction request "
+                "can no longer be approved")
+        if not si.th_placement_case:
+            raise frappe.ValidationError(
+                "Only TH placement invoices are correctable in this framework version")
+        if round(float(si.grand_total), 2) != round(float(req.requested_amount), 2):
+            raise frappe.ValidationError(
+                "The invoice total changed after this request was raised; v1 corrects "
+                "the full invoice amount, so raise a new request for the current total")
+        limit = date.fromisoformat(str(si.posting_date)) + timedelta(
+            days=int(policy.correction_window_days))
+        if date.today() > limit:
+            raise frappe.ValidationError("Correction window for this invoice has closed")
+        if frappe.db.exists(INVOICE, {"return_against": req.sales_invoice,
+                                      "docstatus": ("!=", 2)}):
+            raise frappe.ValidationError("Invoice already has a credit note")
         from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
         note = make_sales_return(req.sales_invoice)
         note.flags.ignore_permissions = True

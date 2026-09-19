@@ -3660,6 +3660,60 @@ def main():
                     'gl_posted':True,'one_shot_decision':True,'denial_posts_nothing':True,
                     'facts_immutable':True}
         check('finance-correction-posting',correction_posting)
+        def correction_invoice_approval_revalidation():
+            # Same TOCTOU the fees path already closed: request and approve are
+            # separate commands, so the invoice can change in between. Mutate
+            # out-of-band and prove approval REFUSES rather than posting a
+            # credit note against a stale amount or a draft invoice.
+            frappe.set_user('Administrator')
+            si=cfx2['si2']
+            gt=float(frappe.db.get_value('Sales Invoice',si,'grand_total'))
+            cn_before=frappe.db.count('Sales Invoice',{'is_return':1,'docstatus':('!=',2)})
+            req=as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_inv_race_req_00001',si,'SYN invoice approval race',gt))
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Sales Invoice',si,'grand_total',gt+1,update_modified=False)
+            frappe.db.commit()
+            assert denied(lambda:as_user('finance_officer',lambda:corr.approve_invoice_correction(
+                'fc_inv_race_appr_0001',req['name']))),(
+                'approval posted a credit note against an invoice whose total had changed')
+            frappe.db.set_value('Sales Invoice',si,'grand_total',gt,update_modified=False)
+            frappe.db.commit()
+            assert int(frappe.db.get_value('Sales Invoice',si,'docstatus'))==1
+            assert frappe.db.get_value(CREQ,req['name'],'status')=='Requested'
+            as_user('finance_officer',lambda:corr.deny_invoice_correction(
+                'fc_inv_race_deny_0001',req['name']))
+            orig_posting=frappe.db.get_value('Sales Invoice',si,'posting_date')
+            reqw=as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_inv_win_req_000001',si,'SYN invoice window race',gt))
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Sales Invoice',si,'posting_date','2000-01-01',update_modified=False)
+            frappe.db.commit()
+            assert denied(lambda:as_user('finance_officer',lambda:corr.approve_invoice_correction(
+                'fc_inv_win_appr_00001',reqw['name']))),(
+                'approval posted a credit note after the correction window had closed')
+            frappe.db.set_value('Sales Invoice',si,'posting_date',orig_posting,update_modified=False)
+            frappe.db.commit()
+            as_user('finance_officer',lambda:corr.deny_invoice_correction(
+                'fc_inv_win_deny_00001',reqw['name']))
+            reqs=as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_inv_unsub_req_00001',si,'SYN invoice unsubmitted race',gt))
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Sales Invoice',si,'docstatus',0,update_modified=False)
+            frappe.db.commit()
+            assert denied(lambda:as_user('finance_officer',lambda:corr.approve_invoice_correction(
+                'fc_inv_unsub_appr_0001',reqs['name']))),(
+                'approval posted a credit note against an invoice that is no longer submitted')
+            frappe.db.set_value('Sales Invoice',si,'docstatus',1,update_modified=False)
+            frappe.db.commit()
+            assert int(frappe.db.get_value('Sales Invoice',si,'docstatus'))==1
+            assert frappe.db.get_value(CREQ,reqs['name'],'status')=='Requested'
+            as_user('finance_officer',lambda:corr.deny_invoice_correction(
+                'fc_inv_unsub_deny_0001',reqs['name']))
+            assert frappe.db.count('Sales Invoice',{'is_return':1,'docstatus':('!=',2)})==cn_before
+            return {'invoice_total_race_refused':True,'invoice_window_race_refused':True,
+                    'invoice_unsubmitted_race_refused':True,'no_credit_note_from_refused_approvals':True}
+        check('finance-correction-invoice-approval-revalidation',correction_invoice_approval_revalidation)
         # ---- OD-CP money semantics at the fees seam (fee-handoff audit,
         # 2026-09-18): G1 discount resolution must reach the receivable
         # (single winner per line, never stacked); G3 money configuration is
@@ -4155,6 +4209,30 @@ def main():
                 'is_cancelled':0})>0,('a refused approval reversed the receivable')
             as_user('finance_officer',lambda:corr.deny_fees_correction(
                 'desk-fees-win-deny-01',win['name']))
+            # HOSTILE PROBE 3: the fee is no longer submitted between the two
+            # commands. A cancelled or draft fee must not be cancelled again
+            # by a stale approval. Restore the original docstatus so later
+            # assertions about this fixture stay true.
+            unsub=as_user('finance_officer',lambda:corr.request_fees_correction(
+                'desk-fees-unsub-req-01',fdisc['fees'],'SYN unsubmitted race',26000.0))
+            frappe.set_user('Administrator')
+            orig_ds=int(frappe.db.get_value('Fees',fdisc['fees'],'docstatus'))
+            frappe.db.set_value('Fees',fdisc['fees'],'docstatus',0,update_modified=False)
+            frappe.db.commit()
+            assert denied(lambda:as_user('finance_officer',lambda:corr.approve_fees_correction(
+                'desk-fees-unsub-appr-01',unsub['name']))),(
+                'approval posted a refund against a fee that is no longer submitted')
+            frappe.db.set_value('Fees',fdisc['fees'],'docstatus',orig_ds,update_modified=False)
+            frappe.db.commit()
+            afteru=frappe.db.get_value('Fees',fdisc['fees'],['docstatus','outstanding_amount'],as_dict=True)
+            assert int(afteru.docstatus)==1 and float(afteru.outstanding_amount)==26000.0,(
+                'a refused unsubmitted-fee approval left the fee in a changed state',afteru)
+            assert frappe.db.get_value(CREQ,unsub['name'],'status')=='Requested',(
+                'a refused unsubmitted-fee approval must leave the request pending, not posted')
+            assert frappe.db.count('GL Entry',{'against_voucher':fdisc['fees'],
+                'is_cancelled':0})>0,('a refused approval reversed the receivable')
+            as_user('finance_officer',lambda:corr.deny_fees_correction(
+                'desk-fees-unsub-deny-01',unsub['name']))
             observed['fees_correction']={
                 'target_fee':fee2,'amount':gt2,'request':creq['name'],
                 'http_request_and_approve':True,'replay_identical_receipt':True,
@@ -4164,6 +4242,7 @@ def main():
                 'desk_clears_after_posting':True,'denial_keeps_fee':True,
                 'approval_revalidates_fee_total_and_refuses_stale':True,
                 'approval_refuses_after_correction_window_closes':True,
+                'approval_refuses_when_fee_is_no_longer_submitted':True,
                 'redeny_allowed_after_denial':True,
                 'note':'OD-RD-1 evidence only: ratification waits for the owner'}
             frappe.db.commit()
