@@ -22,6 +22,7 @@ from toefl_house.desk import (
 from toefl_house.desk import lifecycle
 from toefl_house.desk.operations import (
     _staff_counts, _role_items, _age_label, _recorded_action_items,
+    _funnel_and_exceptions,
 )
 
 SLUG = "th-owner-cockpit"
@@ -111,6 +112,8 @@ def cockpit():
             "age": _age_label(oldest.get("modified")),
         })
 
+    funnel_facts, exception_items = _funnel_and_exceptions()
+
     held = viewer_roles()
     desks_for_viewer = []
     for slug, spec in DESKS.items():
@@ -126,6 +129,13 @@ def cockpit():
             section("business", "Business state", "facts", facts=business_facts,
                     empty_title="No business records yet",
                     empty_body="Counts appear as soon as the placement, admission and enrollment workflows create their first records."),
+            section("funnel", "Operation funnel", "facts", facts=funnel_facts,
+                    empty_title="No operational records yet",
+                    empty_body="Nothing is running in the placement, admission, enrollment or finance pipeline."),
+            section("exceptions", "Exceptions and oldest waiting work", "queue",
+                    items=exception_items,
+                    empty_title="No exceptions",
+                    empty_body="Nothing is overdue, stuck or waiting on an approver right now."),
             section("attention", "Attention", "queue", items=attention_items,
                     empty_title="Nothing needs owner attention",
                     empty_body="No open admission is waiting and no exception is recorded."),

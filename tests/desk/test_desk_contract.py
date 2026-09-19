@@ -1471,5 +1471,53 @@ class RecordedActionsWorldTests(unittest.TestCase):
 
 
 
+
+class OwnerOperationsWorldTests(unittest.TestCase):
+    """ROLE-DESKS: the Owner cockpit shows the GM queues, plus posture."""
+
+    def _payload(self):
+        world = {
+            "TH Correction Request": [
+                {"name": "COR-1", "sales_invoice": None, "fees": "FEE-77",
+                 "reason": "wrong amount", "requested_amount": 25000,
+                 "status": "Requested", "modified": "2026-09-15 09:00:00"},
+                {"name": "COR-2", "sales_invoice": "ACC-SINV-9", "fees": None,
+                 "reason": "duplicate charge", "requested_amount": 3000,
+                 "status": "Requested", "modified": "2026-09-16 09:00:00"},
+                {"name": "COR-3", "sales_invoice": "ACC-SINV-10", "fees": None,
+                 "reason": "already decided", "requested_amount": 10,
+                 "status": "Posted", "modified": "2026-09-10 09:00:00"},
+            ],
+        }
+        world_get_all = desk_world_get_all("owner operations", world)
+        module = _import_desk("owner", roles={"Course Owner"})
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        return module.cockpit()
+
+    def test_owner_sees_the_same_pending_corrections_as_gm(self):
+        payload = self._payload()
+        items = {item["id"]: item for item in
+                 next(sect for sect in payload["sections"] if sect["id"] == "exceptions")["items"]}
+        self.assertIn("COR-1", items)
+        self.assertEqual(items["COR-1"]["person"], "FEE-77")
+        self.assertIn("COR-2", items)
+        self.assertNotIn("COR-3", items)
+
+    def test_owner_funnel_counts_pending_corrections(self):
+        payload = self._payload()
+        facts = next(sect for sect in payload["sections"] if sect["id"] == "funnel")["facts"]
+        tile = next(fact for fact in facts if fact["label"] == "Corrections pending")
+        self.assertEqual(tile["value"], 2)
+
+    def test_owner_still_states_release_posture(self):
+        payload = self._payload()
+        ids = [sect["id"] for sect in payload["sections"]]
+        self.assertIn("posture", ids)
+        self.assertIn("funnel", ids)
+        self.assertIn("exceptions", ids)
+
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -167,11 +167,13 @@ def _recorded_action_items():
     return items
 
 
-@frappe.whitelist(methods=["GET", "POST"])
-def work():
-    """GM desk payload: funnel, exceptions, staffing, links."""
-    require_desk_audience(SLUG)
 
+def _funnel_and_exceptions():
+    """Shared operational facts for the GM desk and the Owner cockpit.
+
+    ROLE-DESKS: the Owner cockpit shows everything the GM desk shows, plus
+    posture. This helper is the GM queues; it does not grant GM commands.
+    """
     admissions_open = project_rows("management", ADMISSION,
                                    ["name", "student_applicant", "program", "status",
                                     "version", "modified"],
@@ -298,6 +300,14 @@ def work():
             "waiting_since": row.get("modified"),
             "age": _age_label(row.get("modified")),
         })
+    return funnel_facts, exception_items
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def work():
+    """GM desk payload: funnel, exceptions, staffing, links."""
+    require_desk_audience(SLUG)
+    funnel_facts, exception_items = _funnel_and_exceptions()
 
     staff_counts = _staff_counts()
     desks_for_viewer = []
