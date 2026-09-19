@@ -87,6 +87,22 @@ the server path. The wkhtmltopdf binary itself was not audited here.
   version is in the affected range), but there is no deployment action
   through which it executes.
 
+## Operational considerations (recommendations, not evidence)
+
+These narrow the pypdf upload-DoS window without touching upstream code.
+Each is a server/role decision for the Owner; none is implemented here:
+
+- Grant PDF upload/attach rights only to roles that need them, so an
+  arbitrary authenticated account cannot submit crafted PDFs.
+- Keep request/worker time and memory limits tight on the local server so
+  a crafted upload fails a single request instead of starving workers.
+- Do not create beta-builder (`print_format_builder_beta`) Print Formats,
+  and do not render untrusted content into fetched-URL positions of any
+  print format, to keep the WeasyPrint path closed.
+- Re-run this trace against any future framework pin before adopting it:
+  the pdfkit mitigation rests on framework code that upstream could
+  refactor.
+
 ## Reproduce
 
 ```bash
