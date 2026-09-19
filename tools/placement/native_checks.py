@@ -4407,12 +4407,14 @@ def main():
         # user permissions; export gates on the native export bit (pinned
         # frappe 988e54f reportview._export_query: same DatabaseQuery layer
         # as list, then can_export); print gates on print permission; reports
-        # gate on the report role table. Two honest boundaries fall out and
+        # gate on the report role table. Three honest boundaries fall out and
         # are asserted, not hidden: the desk path (get_all) does not honor
-        # branch user-permissions — desk scope is assignment/audience — and
-        # the Student master has no branch dimension, so per-student
-        # isolation is desk-level (assigned rosters) while the native list
-        # stays role-wide for Instructor.
+        # branch user-permissions — desk scope is assignment/audience; the
+        # Student master has no branch dimension, so per-student isolation
+        # is desk-level (assigned rosters) while the native list stays
+        # role-wide for Instructor; and native non-strict user-permissions
+        # keep branchless classes visible, so the exact-scoping cell runs
+        # between two populated branches.
         def desk_isolation_matrix():
             frappe.set_user('Administrator')
             for br in ('SYN-ISOL-A','SYN-ISOL-B'):
@@ -4437,6 +4439,23 @@ def main():
                 allow='Branch',for_value='SYN-ISOL-A')).insert()
             frappe.db.commit()
             try:
+                # Native non-strict boundary, proven not hidden (pinned
+                # frappe 988e54f permissions.has_user_permission: empty link
+                # values skip the user-permission check unless
+                # apply_strict_user_permissions). The five branchless
+                # fixture classes stay visible under the branch rule while
+                # the far-branch class is already excluded.
+                pre={r['name'] for r in as_user('teacher_two',lambda:frappe.get_list(
+                    'Student Group',fields=['name'],limit_page_length=100))}
+                frappe.set_user('Administrator')
+                assert {GRP_A,GRP_B,GRP_C,GRP_D,GRP_HTTP,IA}<=pre and IB not in pre, \
+                    ('native non-strict user-permission shape changed',sorted(pre))
+                # The branchless fixtures then take the far branch, so the
+                # scoping cell below proves exact isolation between two
+                # populated branches on the production-default mode.
+                for g in (GRP_A,GRP_B,GRP_C,GRP_D,GRP_HTTP):
+                    frappe.db.set_value('Student Group',g,'th_branch','SYN-ISOL-B')
+                frappe.db.commit()
                 # LIST: role read + branch user-permission scope the native list.
                 listed={r['name'] for r in as_user('teacher_two',lambda:frappe.get_list(
                     'Student Group',fields=['name'],limit_page_length=100))}
