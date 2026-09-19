@@ -3477,10 +3477,20 @@ def main():
                 cfx['deduction']))
             frappe.set_user('Administrator')
             assert not cross['posted'],('a second overlapping period re-paid a teaching fact',cross['posted'])
-            assert set([a['a1'],a['a2'],a['a3']]).issubset(
-                set(cross['already_compensated_prior_period'])),(
-                'one-off basis did not name every already-compensated assignment',
+            # Exactly a1 and a3 are in scope for October. a2 is not: its
+            # effective_end was recorded as 2026-09-15 by the ending probe
+            # above, so the period query correctly excludes it. Asserting all
+            # three here was wrong and failed on run 35421340401 - the command
+            # was right. Naming the in-scope pair exactly, and requiring the
+            # ended assignment to be absent, pins both halves of the rule.
+            held=set(cross['already_compensated_prior_period'])
+            assert set([a['a1'],a['a3']]).issubset(held),(
+                'one-off basis did not name every already-compensated in-scope assignment',
                 cross['already_compensated_prior_period'])
+            assert a['a2'] not in held,('an assignment that ended before the period was treated as payable',
+                cross['already_compensated_prior_period'])
+            assert cross['assignments']==2,('period selected an assignment that had already ended',
+                cross['assignments'])
             assert frappe.db.count(ADS)==ads_before+5,('cross-period run posted new payables')
             # no second engine: slips/statutory math stay untouched and native
             assert frappe.db.count('Salary Slip')==slips_before
