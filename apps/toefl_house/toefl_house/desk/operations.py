@@ -29,6 +29,56 @@ CORRECTION = "TH Correction Request"
 ENROLLMENT = "Program Enrollment"
 GROUP = "Student Group"
 SCHEDULE = "Course Schedule"
+AUDIT = "TH Placement Audit Event"
+AUDIT_FIELDS = ["name", "actor", "action", "target", "item_revision", "creation"]
+
+# Ops-visible subset of the existing command receipts. Session saves and
+# draft authoring stay on the auditor workspace; this is not a second log.
+ACTION_LABELS = {
+    "create_case": "Opened a placement case",
+    "allocate_attempt": "Allocated a placement session",
+    "verify_attempt": "Verified a placement session",
+    "deliver_attempt": "Started a placement session",
+    "seal_attempt": "Sealed a placement session",
+    "score_attempt": "Scored a placement session",
+    "review_attempt": "Reviewed a placement session",
+    "finalize_attempt": "Finalized a placement session",
+    "release_decision": "Released a placement result",
+    "publish": "Published a placement item",
+    "publish_blueprint": "Published a placement blueprint",
+    "publish_policy": "Published a placement policy",
+    "publish_course_map": "Published a course map",
+    "retire_blueprint": "Retired a placement blueprint",
+    "retire_policy": "Retired a placement policy",
+    "retire_course_map": "Retired a course map",
+    "record_applicant": "Recorded an applicant",
+    "create_admission": "Opened an admission",
+    "review_admission": "Sent an admission for review",
+    "decide_admission": "Recorded an admission outcome",
+    "accept_offer": "Accepted an admission offer",
+    "withdraw_admission": "Withdrew an admission",
+    "revoke_admission": "Revoked an admission",
+    "expire_admission": "Expired an admission",
+    "convert_applicant": "Created a student from an applicant",
+    "enroll_in_program": "Enrolled a student",
+    "create_student_group": "Created a class",
+    "transition_class": "Changed a class lifecycle",
+    "schedule_session": "Scheduled a session",
+    "record_attendance": "Recorded attendance",
+    "issue_tuition_fees": "Issued tuition",
+    "issue_placement_fee": "Issued a placement fee",
+    "create_teaching_contract": "Recorded a teaching contract",
+    "revise_teaching_contract": "Revised a teaching contract",
+    "assign_teaching_skill": "Assigned a teaching skill",
+    "end_teaching_assignment": "Ended a teaching assignment",
+    "configure_correction_policy": "Configured a correction policy",
+    "request_invoice_correction": "Requested an invoice correction",
+    "approve_invoice_correction": "Approved an invoice correction",
+    "deny_invoice_correction": "Denied an invoice correction",
+    "request_fees_correction": "Requested a tuition correction",
+    "approve_fees_correction": "Approved a tuition correction",
+    "deny_fees_correction": "Denied a tuition correction",
+}
 
 STAFF_ROLES = (
     "Reception", "Admission Officer", "Admission Reviewer", "Admission Approver",
@@ -86,6 +136,35 @@ def _age_label(value):
         return f"{days} days"
     except Exception:
         return ""
+
+
+def _recorded_action_items():
+    """Recent completed commands, as facts. No hashes, no second trail."""
+    rows = project_rows(
+        "management", AUDIT, AUDIT_FIELDS,
+        filters={"action": ("in", tuple(ACTION_LABELS))},
+        order_by="creation desc", limit=LIMIT_QUEUES)
+    items = []
+    for row in rows:
+        label = ACTION_LABELS.get(row.get("action"))
+        if not label:
+            continue
+        target = row.get("target") or row.get("item_revision") or ""
+        items.append({
+            "id": row["name"],
+            "person": row.get("actor") or "",
+            "detail": target,
+            "status": label,
+            "stage": "Recorded action",
+            "stage_definition": (
+                "A completed staff action wrote this record. The full trail "
+                "stays with auditor roles; this desk does not add a second log."),
+            "next": "No action.",
+            "next_role": None,
+            "waiting_since": row.get("creation"),
+            "age": _age_label(row.get("creation")),
+        })
+    return items
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -240,6 +319,10 @@ def work():
                     items=exception_items,
                     empty_title="No exceptions",
                     empty_body="Nothing is overdue, stuck or waiting on an approver right now."),
+            section("activity", "Recent recorded actions", "queue",
+                    items=_recorded_action_items(),
+                    empty_title="No recorded actions yet",
+                    empty_body="When staff complete an important action, the record appears here. The full trail stays with auditor roles."),
             section("staffing", "Role coverage", "queue", items=_role_items(staff_counts),
                     empty_title="No operational roles",
                     empty_body="No shipped operational role is assigned to an enabled user."),

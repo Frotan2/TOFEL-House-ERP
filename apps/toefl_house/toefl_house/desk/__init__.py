@@ -217,6 +217,11 @@ PROJECTION_FIELDS = {
     ("management", "User"): [
         "name",
     ],
+    # Existing command receipts, facts only. Hashes, keys and result_json
+    # stay off the desk; auditors still read the full trail on TH Receipts.
+    ("management", "TH Placement Audit Event"): [
+        "name", "actor", "action", "target", "item_revision", "creation",
+    ],
     # Academic Setup (Course Owner): configuration masters, their effective-
     # dated duration versions, and the enrollment usage counts that guard
     # deactivation. No student detail beyond the enrollment link.

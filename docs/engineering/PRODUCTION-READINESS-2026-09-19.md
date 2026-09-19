@@ -45,7 +45,9 @@ Proven in this repository, not assumed:
   authorities. No TH Teacher, TH Payroll, TH Payment, TH Class, TH Cohort.
 - Student lifecycle desks (Reception, Academic, Finance, GM, Owner, Setup)
   execute under the owned suite, refuse the wrong role, project real columns,
-  and guide into existing guarded commands.
+  and guide into existing guarded commands. GM and Owner desks now project
+  recent recorded actions from the existing audit receipts (no hashes, no
+  second log). That does not close the observability gate.
 - D12 teaching payables: one-off, first covering payroll period, contract
   supersession closes the predecessor; hosted-qualified on `9f45359`.
 - Financial TOCTOU on corrections: fee-total race and window-closure race

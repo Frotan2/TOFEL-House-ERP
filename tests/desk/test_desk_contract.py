@@ -36,6 +36,7 @@ SENSITIVE_FIELDS = {
     "answer", "content_hash", "result_json", "seed", "pool_digest",
     "key_version", "form_hash", "net_pay", "salary", "base",
     "encryption_key", "password", "secret",
+    "before_hash", "after_hash", "input_hash", "before_key", "after_key",
 }
 
 
@@ -1403,6 +1404,71 @@ class FinanceAssignmentFactsTests(unittest.TestCase):
         tile = next(fact for fact in facts if fact["label"] == "Teaching assignments on file")
         self.assertEqual(tile["value"], 1)
         self.assertIn("does not calculate pay", tile["definition"])
+
+
+
+class RecordedActionsWorldTests(unittest.TestCase):
+    """GM/Owner project existing audit receipts as facts, never hashes."""
+
+    def _world(self):
+        return {
+            "TH Placement Audit Event": [
+                {"name": "AE-1", "actor": "finance@example.com",
+                 "action": "issue_tuition_fees", "target": "FEE-77",
+                 "item_revision": None, "creation": "2026-09-19 10:00:00",
+                 "before_hash": "should-not-leave", "after_hash": "nope"},
+                {"name": "AE-2", "actor": "invigilator@example.com",
+                 "action": "save_response", "target": "ATT-1",
+                 "item_revision": None, "creation": "2026-09-19 10:01:00"},
+                {"name": "AE-3", "actor": "officer@example.com",
+                 "action": "enroll_in_program", "target": "ENR-9",
+                 "item_revision": None, "creation": "2026-09-19 09:00:00"},
+            ],
+        }
+
+    def _payload(self, module_name, entry, roles):
+        module = _import_desk(module_name, roles=roles)
+        world_get_all = desk_world_get_all("recorded actions", self._world())
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        return getattr(module, entry)()
+
+    def _activity(self, payload):
+        return next(sect for sect in payload["sections"] if sect["id"] == "activity")
+
+    def test_gm_shows_labeled_actions_and_hides_session_saves(self):
+        payload = self._payload("operations", "work", {"General Manager"})
+        items = {item["id"]: item for item in self._activity(payload)["items"]}
+        self.assertIn("AE-1", items)
+        self.assertEqual(items["AE-1"]["status"], "Issued tuition")
+        self.assertEqual(items["AE-1"]["person"], "finance@example.com")
+        self.assertEqual(items["AE-1"]["detail"], "FEE-77")
+        self.assertIsNone(items["AE-1"].get("action"))
+        self.assertNotIn("should-not-leave", str(items["AE-1"]))
+        self.assertNotIn("AE-2", items, "session saves stay on the auditor workspace")
+        self.assertIn("AE-3", items)
+        self.assertEqual(items["AE-3"]["status"], "Enrolled a student")
+
+    def test_owner_cockpit_shows_the_same_receipts(self):
+        payload = self._payload("owner", "cockpit", {"Course Owner"})
+        items = {item["id"]: item for item in self._activity(payload)["items"]}
+        self.assertIn("AE-1", items)
+        self.assertNotIn("AE-2", items)
+
+    def test_session_saves_are_not_in_the_ops_label_list(self):
+        module = _import_desk("operations", roles={"General Manager"})
+        self.assertNotIn("save_response", module.ACTION_LABELS)
+        self.assertNotIn("create_draft", module.ACTION_LABELS)
+        self.assertNotIn("revise_draft", module.ACTION_LABELS)
+        self.assertIn("issue_tuition_fees", module.ACTION_LABELS)
+
+    def test_projection_allow_list_excludes_hashes_and_keys(self):
+        allow = _literal_block(desk_sources()["__init__"], "PROJECTION_FIELDS = {")
+        fields = allow[("management", "TH Placement Audit Event")]
+        for banned in ("before_hash", "after_hash", "before_key", "after_key",
+                       "result_json", "input_hash"):
+            self.assertNotIn(banned, fields)
+
 
 
 if __name__ == "__main__":

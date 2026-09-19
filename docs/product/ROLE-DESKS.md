@@ -41,7 +41,7 @@ Rules that are binding for every desk:
    Group`, `Course Schedule`, `Student Attendance`, `Fees`, `Sales Invoice`,
    `Payment Entry`) and the owned slice records (`TH Placement Attempt`,
    `TH Placement Decision`, `TH Admission Decision`, `TH Teaching Assignment`,
-   `TH Correction Request`). No derived master is created.
+   `TH Correction Request`, `TH Placement Audit Event`). No derived master is created.
 2. **Smallest authority.** A desk role receives no document permissions. Where
    a desk shows a record the role cannot natively read, the read happens inside
    the desk projection, is gated by the desk audience, exposes only the fields
@@ -134,6 +134,10 @@ Sections:
   decisions. Facts with ages; no invented severity.
 - **Staffing** — count of enabled users per shipped operational role (native
   `Has Role`), so an assignment gap is visible before it becomes a queue.
+- **Recent recorded actions** — the last bounded set of completed guarded
+  commands, projected from the existing audit receipts (actor, action, target,
+  when). Hashes, keys and result payloads stay off the desk. Session saves and
+  draft authoring stay on the auditor workspace. This is not a second log.
 - **Links** — one row per role desk the viewer may open.
 
 ### Academic Setup desk (the configuration control plane)
@@ -153,6 +157,8 @@ Everything the GM desk shows, plus:
 - **Governance attention** — the fail-closed release facts (production REJECT,
   SEC-DEPS-01 upstream-blocked) from the same static, reviewed constants the
   administration control centre uses. Not new policy — the same recorded state.
+- **Recent recorded actions** — the same existing audit receipts the GM desk
+  shows. Not a second trail.
 - **Definitions** — every tile ships its definition inline, because a number
   without a definition is not evidence (mission §11).
 

@@ -20,7 +20,9 @@ from toefl_house.desk import (
     viewer_roles,
 )
 from toefl_house.desk import lifecycle
-from toefl_house.desk.operations import _staff_counts, _role_items, _age_label
+from toefl_house.desk.operations import (
+    _staff_counts, _role_items, _age_label, _recorded_action_items,
+)
 
 SLUG = "th-owner-cockpit"
 
@@ -127,6 +129,10 @@ def cockpit():
             section("attention", "Attention", "queue", items=attention_items,
                     empty_title="Nothing needs owner attention",
                     empty_body="No open admission is waiting and no exception is recorded."),
+            section("activity", "Recent recorded actions", "queue",
+                    items=_recorded_action_items(),
+                    empty_title="No recorded actions yet",
+                    empty_body="When staff complete an important action, the record appears here. The full trail stays with auditor roles."),
             section("posture", "Release posture (fail-closed facts)", "facts",
                     facts=RELEASE_POSTURE,
                     empty_title="Release posture is always stated",
