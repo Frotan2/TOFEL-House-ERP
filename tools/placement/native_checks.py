@@ -4471,12 +4471,16 @@ def main():
                     headers={'Host':'placement-test.localhost'},timeout=30))
                 # EXPORT: the export bit gates beyond read. Finance holds it
                 # on Fees; Instructor reads classes but may not export them.
+                # Fresh logins only: the module-level sessions predate the
+                # revocation/restore probes and are denied as stale by design
+                # (same rule as desk_qualification's hermetic sess above).
+                sfin=login('finance_officer')
                 fields_fee=json.dumps(['`tabFees`.`name`'])
-                ex=sessions['finance_officer'].post(base+'/api/method/frappe.desk.reportview.export_query',
+                ex=sfin.post(base+'/api/method/frappe.desk.reportview.export_query',
                     json={'doctype':'Fees','fields':fields_fee,'file_format_type':'CSV'},timeout=60)
                 assert ex.status_code==200 and len(ex.content)>0 and b'name' in ex.content[:200], \
                     ('finance export of the fee register failed',ex.status_code,ex.text[:200])
-                http_denied(sessions['outsider'].post(base+'/api/method/frappe.desk.reportview.export_query',
+                http_denied(so.post(base+'/api/method/frappe.desk.reportview.export_query',
                     json={'doctype':'Fees','fields':fields_fee,'file_format_type':'CSV'},timeout=60))
                 http_denied(s2.post(base+'/api/method/frappe.desk.reportview.export_query',
                     json={'doctype':'Student Group','fields':json.dumps(['`tabStudent Group`.`name`']),
