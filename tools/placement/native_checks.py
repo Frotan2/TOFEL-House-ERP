@@ -4029,8 +4029,7 @@ def main():
                 if r.status_code!=200:
                     try:
                         body=json.loads(r.text);exc=''.join(body.get('exc') or [])
-                        frames=[ln.strip() for ln in exc.splitlines() if ', line ' in ln]
-                        diag='FRAME :: '+' // '.join(frames[-7:])
+                        diag='TAIL :: '+exc[-1600:]
                     except Exception:
                         diag=r.text[:300]
                     assert False,(method,label,r.status_code,diag[:1500])
