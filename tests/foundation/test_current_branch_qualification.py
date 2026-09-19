@@ -55,6 +55,27 @@ class CurrentBranchQualificationTests(unittest.TestCase):
         self.assertIn("AUTHORIZED_REFS = (ACTIVE_REF,)", runner)
         self.assertIn("if os.environ.get(\"GITHUB_REF\") != ACTIVE_REF", publisher)
 
+    def test_runtime_install_emits_a_one_line_error_annotation_on_failure(self):
+        """Job logs EOF here. Annotations are the only hosted diagnostic.
+
+        A multi-line stderr dump never becomes an annotation. The helper must
+        emit ``::error::`` as a single line so the next Foundation runtime
+        failure is readable.
+        """
+        sys.path.insert(0, str(ROOT / "tools" / "foundation"))
+        from runtime_install import hosted_failure_annotations
+        lines = hosted_failure_annotations("clone-frappe: exit 128\nwarning: foo",
+                                           "clone-frappe")
+        self.assertEqual(len(lines), 2)
+        for line in lines:
+            self.assertTrue(line.startswith("::error "), line)
+            self.assertNotIn("\n", line)
+        self.assertIn("last failed check: clone-frappe", lines[0])
+        self.assertIn("clone-frappe: exit 128 warning: foo", lines[1])
+        runtime = (ROOT / "tools/foundation/runtime_install.py").read_text(encoding="utf-8")
+        self.assertIn("hosted_failure_annotations(", runtime)
+        self.assertIn("print(line, flush=True)", runtime)
+
 
 if __name__ == "__main__":
     unittest.main()

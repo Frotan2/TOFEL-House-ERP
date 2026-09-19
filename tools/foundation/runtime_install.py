@@ -27,6 +27,25 @@ from session_branch import ACTIVE_REF
 from runtime_encryption_key import restore_key_into_config
 
 
+def hosted_failure_annotations(failure: str, last_failed_check: str | None = None) -> list[str]:
+    """Single-line ``::error::`` commands for GitHub check annotations.
+
+    Job logs and artifact zips EOF from this environment. Annotations are the
+    only diagnostic that survives. Multi-line tails are collapsed: a library
+    warning dump as an annotation is how the previous blind spot started.
+    """
+    lines: list[str] = []
+    if last_failed_check:
+        lines.append(
+            "::error file=tools/foundation/runtime_install.py::"
+            f"last failed check: {last_failed_check}")
+    text = " ".join((failure or "runtime_install failed without a recorded exception").split())
+    if len(text) > 700:
+        text = text[:697] + "..."
+    lines.append(f"::error file=tools/foundation/runtime_install.py::{text}")
+    return lines
+
+
 def main() -> int:
     if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("GITHUB_REF") != ACTIVE_REF:
         raise SystemExit("Run only on the authorized branch in an ephemeral Actions runner")
@@ -618,6 +637,13 @@ http {{
                 report["status"] = "fail"
         secret_file.unlink(missing_ok=True)
         (evidence / "runtime-result.json").write_text(redact(json.dumps(report, indent=2)) + "\n")
+        if report.get("status") != "pass":
+            failed_checks = [c.get("name") for c in report.get("checks", [])
+                             if isinstance(c, dict) and c.get("status") == "fail"]
+            for line in hosted_failure_annotations(
+                    report.get("failure") or "runtime_install failed",
+                    failed_checks[-1] if failed_checks else None):
+                print(line, flush=True)
     return 0 if report["status"] == "pass" else 1
 
 
