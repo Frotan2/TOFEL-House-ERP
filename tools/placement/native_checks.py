@@ -3452,6 +3452,22 @@ def main():
             frappe.set_user('Administrator')
             assert rerun['skipped_existing']==5 and not rerun['posted'],(rerun['skipped_existing'],rerun['posted'])
             assert frappe.db.count(ADS)==ads_before+5
+            # A DIFFERENT period that still overlaps the same open-ended
+            # assignments must not pay them again. compute_skill_payable returns
+            # a flat contract amount, not a per-period figure, and assignments
+            # are created open-ended, so every later period selects them. The
+            # payroll posting basis (one-off vs recurring vs pro-rated) is an
+            # unrecorded owner decision, so the command fails closed: it holds
+            # and names the payable instead of doubling it or dropping it.
+            cross=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                'tc_calc_cross_0000001','2026-10-01','2026-10-31',cfx['company'],cfx['earning'],
+                cfx['deduction']))
+            frappe.set_user('Administrator')
+            assert not cross['posted'],('a second overlapping period re-paid an assignment',cross['posted'])
+            assert sorted(cross['held_pending_posting_basis'])==sorted(
+                [a['a1'],a['a2'],a['a3']]),('cross-period hold did not name every already-paid assignment',
+                cross['held_pending_posting_basis'])
+            assert frappe.db.count(ADS)==ads_before+5,('cross-period run posted new payables')
             # no second engine: slips/statutory math stay untouched and native
             assert frappe.db.count('Salary Slip')==slips_before
             assert frappe.db.count('TH Placement Audit Event')>0
@@ -3460,7 +3476,8 @@ def main():
                     'bonus':50.0,'deduction':25.0},
                     'pre_revision_rate_used':True,'supersession_reproducible':True,
                     'superseded_contract_assign_denied':True,
-                    'future_contract_assign_denied':True,'duplicate_pay_prevented':True,
+                    'future_contract_assign_denied':True,'same_period_duplicate_pay_prevented':True,
+                    'cross_period_repay_held_pending_owner_posting_basis':True,
                     'receipt_idempotent':True,'salary_slips_untouched':True,
                     'audit_chain_ref_fields':True}
         check('teaching-compensation-calculation',compensation_calculation)

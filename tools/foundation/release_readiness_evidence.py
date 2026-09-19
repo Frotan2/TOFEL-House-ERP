@@ -42,7 +42,28 @@ def write_json(path: Path, value: Any) -> None:
 
 
 def run(command: list[str], *, stdin: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(command, input=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    """Run a probe subprocess, failing with diagnostics instead of a bare exit code.
+
+    These probes are real executions (git, openssl, frappe/bench), so a
+    transient environment failure — a contended git index lock, a missing
+    binary, resource pressure — previously surfaced as an opaque
+    CalledProcessError with the stderr discarded, which made a flake
+    indistinguishable from a genuine evidence regression. The command, its exit
+    status and its captured stderr are now attached to the failure. No probe
+    result, threshold or assertion is relaxed: a non-zero exit still fails.
+    """
+    try:
+        return subprocess.run(command, input=stdin, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, check=True)
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or b"").decode("utf-8", "replace").strip()[-2000:]
+        raise subprocess.CalledProcessError(
+            exc.returncode, exc.cmd,
+            output=exc.output,
+            stderr=f"{exc.stderr!r}\nprobe failed: {' '.join(map(str, command))}\n{detail}".encode(),
+        ) from exc
+    except OSError as exc:
+        raise OSError(f"probe could not start: {' '.join(map(str, command))}: {exc}") from exc
 
 
 def sha_tree(root: Path) -> dict[str, str]:

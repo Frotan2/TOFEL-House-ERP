@@ -372,11 +372,24 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
 
     Single controlled input path: one native Additional Salary (Earning) per
     assignment, plus one per contract-adjustment batch, each linked back via
-    ref_doctype/ref_docname. Idempotent: an existing enabled Additional
-    Salary for the same reference and payroll date is never duplicated, and
-    the command itself is guarded by the standard request-key receipt. No
-    statutory, tax or slip math happens here (native Salary Slip owns it);
-    fixed-salary instructors are skipped (native Salary Structure path).
+    ref_doctype/ref_docname. Idempotent within a period: an existing enabled
+    Additional Salary for the same reference and payroll date is never
+    duplicated, and the command itself is guarded by the standard request-key
+    receipt. No statutory, tax or slip math happens here (native Salary Slip
+    owns it); fixed-salary instructors are skipped (native Salary Structure
+    path).
+
+    **Cross-period hold (fail closed).** The payable is a flat contract amount,
+    not a per-period or pro-rated figure, and `assign_teaching_skill` creates
+    open-ended assignments that overlap every later period. Re-posting such an
+    assignment in a second period would pay one teaching fact more than once.
+    Whether that flat amount is a one-off payable, a recurring per-period
+    amount, or a sum to be pro-rated across the periods it spans is the owner's
+    *payroll posting basis* decision, which is not recorded in the canonical
+    owner-decision record. Until it is, an assignment already compensated at a
+    different payroll date is **held, not paid**, and is reported under
+    `held_pending_posting_basis` so the payable stays visible and auditable.
+    Nothing is silently dropped and nothing is silently doubled.
 
     Native preconditions (enforced by HRMS, not re-implemented here): the
     employee is Active and holds a submitted Salary Structure Assignment
@@ -404,6 +417,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
             "from `tabTH Teaching Assignment` where effective_start <= %s "
             "and (effective_end is null or effective_end >= %s)", (end, start), as_dict=True)
         posted, skipped_fixed, skipped_existing, adjustments_posted = {}, [], 0, 0
+        held_pending_posting_basis = {}
         contracts = {}
         for instructor in sorted({row.instructor for row in rows}):
             matches = frappe.db.get_all(
@@ -423,10 +437,29 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 if contract.name not in skipped_fixed:
                     skipped_fixed.append(contract.name)
                 continue
-            if frappe.db.exists(ADDITIONAL_SALARY,
-                                {"ref_doctype": ASSIGNMENT, "ref_docname": row.name,
-                                 "payroll_date": end, "disabled": 0}):
+            already_paid = sorted({str(r.payroll_date) for r in frappe.db.get_all(
+                ADDITIONAL_SALARY,
+                filters=[["ref_doctype", "=", ASSIGNMENT], ["ref_docname", "=", row.name],
+                         ["disabled", "=", 0]],
+                fields=["payroll_date"])})
+            if end in already_paid:
                 skipped_existing += 1
+                continue
+            if already_paid:
+                # Fail closed on an unresolved payroll posting basis.
+                #
+                # compute_skill_payable returns a flat contract amount for the
+                # assignment; it is not pro-rated by period length. An
+                # open-ended assignment therefore overlaps every later period,
+                # and posting it again would pay the same teaching fact more
+                # than once. Whether a flat assignment amount is a one-off
+                # payable, a recurring per-period amount, or a sum to be
+                # pro-rated across the periods it spans is an owner decision
+                # (payroll posting basis) that has not been recorded, so no
+                # amount is posted here. The hold is reported explicitly
+                # rather than skipped silently, so the payable stays visible
+                # and auditable until the basis is decided.
+                held_pending_posting_basis[row.name] = already_paid
                 continue
             amount = _payable_for(contract, row)
             salary = frappe.get_doc(dict(
@@ -475,7 +508,8 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                   "assignments": len(rows),
                   "posted": posted, "skipped_fixed_salary_contracts": sorted(skipped_fixed),
                   "skipped_existing": skipped_existing,
-                  "adjustments_posted": adjustments_posted}
+                  "adjustments_posted": adjustments_posted,
+                  "held_pending_posting_basis": held_pending_posting_basis}
         return result, dict(target=digest([start, end, company_name, component]),
                             after_hash=digest(result))
 

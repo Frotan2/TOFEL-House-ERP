@@ -209,6 +209,36 @@ class WiringTests(unittest.TestCase):
         self.assertLessEqual(created, {"ADDITIONAL_SALARY", "CONTRACT", "ASSIGNMENT"})
         self.assertIn("ADDITIONAL_SALARY", created)
 
+    def test_cross_period_repay_is_held_rather_than_posted(self):
+        """Regression: one teaching fact must never be paid twice.
+
+        ``compute_skill_payable`` returns a *flat* contract amount and
+        ``assign_teaching_skill`` creates open-ended assignments, so every later
+        payroll period selects the same assignment again. The Additional Salary
+        dedup key includes ``payroll_date``, so same-period dedup cannot catch
+        it: a run over a different period posts the same flat amount a second
+        time. Whether that amount is a one-off payable, a recurring per-period
+        amount, or a sum to be pro-rated is the owner's *payroll posting basis*
+        decision, which is not recorded, so the command must fail closed and
+        hold the payable visibly instead of guessing.
+        """
+        source = COMPENSATION.read_text()
+        self.assertIn("held_pending_posting_basis", source)
+        self.assertIn("held_pending_posting_basis[row.name] = already_paid", source)
+        fn = next(n for n in ast.walk(ast.parse(source))
+                  if isinstance(n, ast.FunctionDef)
+                  and n.name == "calculate_teaching_compensation")
+        body = ast.dump(fn)
+        # The pre-post lookup must read every payroll date for the assignment,
+        # not only the current period end, or the cross-period case is invisible.
+        self.assertIn("already_paid", body)
+        self.assertIn("payroll_date", body)
+        # And the hold must be reported, never dropped silently.
+        self.assertIn('"held_pending_posting_basis": held_pending_posting_basis', source)
+        # The unresolved owner decision must stay documented at the command.
+        self.assertIn("payroll posting basis", fn.body[0].value.value.lower()
+                      if isinstance(fn.body[0], ast.Expr) else source.lower())
+
 
 class DocTypeShapeTests(unittest.TestCase):
     def test_json_shape(self):
