@@ -4129,6 +4129,32 @@ def main():
                 'is_cancelled':0})>0,('a refused approval reversed the receivable')
             as_user('finance_officer',lambda:corr.deny_fees_correction(
                 'desk-fees-race-deny-01',race['name']))
+            # HOSTILE PROBE 2: the correction window closing between the two
+            # commands. Same shape as the total race, different invariant. The
+            # request must be raised first - the window is checked at request
+            # time too - then the posting date is moved out-of-band so the
+            # window is shut by the time approval runs.
+            win_fee=fdisc['fees']
+            orig_posting=frappe.db.get_value('Fees',win_fee,'posting_date')
+            win=as_user('finance_officer',lambda:corr.request_fees_correction(
+                'desk-fees-win-req-001',win_fee,'SYN window race probe',26000.0))
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Fees',win_fee,'posting_date','2000-01-01',update_modified=False)
+            frappe.db.commit()
+            assert denied(lambda:as_user('finance_officer',lambda:corr.approve_fees_correction(
+                'desk-fees-win-appr-01',win['name']))),(
+                'approval posted a refund after the correction window had closed')
+            frappe.db.set_value('Fees',win_fee,'posting_date',orig_posting,update_modified=False)
+            frappe.db.commit()
+            afterw=frappe.db.get_value('Fees',win_fee,['docstatus','posting_date'],as_dict=True)
+            assert int(afterw.docstatus)==1 and str(afterw.posting_date)==str(orig_posting),(
+                'a refused approval left the fee in a changed state',afterw)
+            assert frappe.db.get_value(CREQ,win['name'],'status')=='Requested',(
+                'a refused window-closure approval must leave the request pending, not posted')
+            assert frappe.db.count('GL Entry',{'against_voucher':win_fee,
+                'is_cancelled':0})>0,('a refused approval reversed the receivable')
+            as_user('finance_officer',lambda:corr.deny_fees_correction(
+                'desk-fees-win-deny-01',win['name']))
             observed['fees_correction']={
                 'target_fee':fee2,'amount':gt2,'request':creq['name'],
                 'http_request_and_approve':True,'replay_identical_receipt':True,
@@ -4137,6 +4163,7 @@ def main():
                 'gl_open_rows_after':0,'desk_shows_named_fee_target':True,
                 'desk_clears_after_posting':True,'denial_keeps_fee':True,
                 'approval_revalidates_fee_total_and_refuses_stale':True,
+                'approval_refuses_after_correction_window_closes':True,
                 'redeny_allowed_after_denial':True,
                 'note':'OD-RD-1 evidence only: ratification waits for the owner'}
             frappe.db.commit()
