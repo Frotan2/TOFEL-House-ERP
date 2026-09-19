@@ -164,7 +164,15 @@ def main():
         import traceback
         detail=redact(traceback.format_exc())
         report['traceback']=detail
-        for line in detail.strip().splitlines()[-14:]:
+        # Emit the exception type and the failing frames, not the tail of the
+        # formatted text: an exception whose message embeds library warnings
+        # pushes the actual `File .../line N` frames out of a fixed-size tail,
+        # which is what happened on run 35420617771.
+        frames=traceback.extract_tb(exc.__traceback__)
+        emit=[f'{type(exc).__name__}: {redact(str(exc))[:600]}']
+        emit += [f'at {f.filename}:{f.lineno} in {f.name}' for f in frames[-8:]]
+        emit += [f'src> {redact((f.line or "").strip())[:300]}' for f in frames[-4:]]
+        for line in emit:
             safe=line.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
             print('::error::'+safe,flush=True)
     finally:
