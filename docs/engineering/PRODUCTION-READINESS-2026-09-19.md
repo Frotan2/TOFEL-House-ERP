@@ -53,10 +53,11 @@ Proven in this repository, not assumed:
 - D11 MIT, D13 RPO 24h / RTO 8h (targets), D14 off-site class (hardware the
   Owner controls, not built).
 - Interim backup **mechanism**: different-volume refusal, openssl encrypt /
-  digest sidecar, and `--restore` which verifies the digest then decrypts into
-  a staging directory that is not the live data root. **Not** a rehearsed
-  restore on the real server; the gate stays BLOCKED until that rehearsal
-  is recorded there.
+  digest sidecar, `--files-root` for a second artifact of `private/files` and
+  `public/files` only (never `site_config.json`), and `--restore` which
+  verifies the digest then decrypts into a staging directory that is not the
+  live data root. **Not** a rehearsed restore on the real server; the gate
+  stays BLOCKED until that rehearsal is recorded there.
 - Concurrent first-writer billing (tuition Fees and placement Sales Invoice)
   hosted-proven on `3eaed7d` (placement **PASS** 35437058766). Invoice
   correction approval re-validates the live invoice, matching the fees path,
@@ -104,7 +105,7 @@ If any of (1)–(3) remain, the honest answer to the acceptance question is
 | Item | State |
 |---|---|
 | Classification | INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY |
-| Mechanism | `python3 -m tools.operations.interim_backup` — dump command in, openssl AES-256-CBC PBKDF2, sha256 sidecar; `--restore` verifies then decrypts to staging |
+| Mechanism | `python3 -m tools.operations.interim_backup` — dump command in, openssl AES-256-CBC PBKDF2, sha256 sidecar; `--files-root` archives `private/files` and `public/files` only (never `site_config.json`); `--restore` verifies then decrypts to staging |
 | Destination | A **different local volume** than the live data (`st_dev` must differ). Same-volume copies are refused. |
 | Retention | 14 daily / 8 weekly / 12 monthly, reported not auto-deleted |
 | Verification | sha256 of the cipher against the sidecar before any decrypt; decrypted dump checked against the sidecar plaintext digest |

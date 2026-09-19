@@ -7,7 +7,11 @@ distinction to a reader's charity.
 
 What it provides: an automated, encrypted, multi-version backup written to a
 volume other than the one holding the live data, with predictable rotation and
-per-artifact integrity verification.
+per-artifact integrity verification. The dump command covers the database.
+``--files-root`` (the site directory) adds a second artifact of the site file
+trees only: ``private/files`` and ``public/files``. It never archives
+``site_config.json`` — that file holds the database password and the site
+encryption key.
 
 What it explicitly does not provide: a second drive inside the same machine does
 not protect against theft, fire, flood, total hardware loss, site loss, or
@@ -167,7 +171,9 @@ def restore_procedure() -> list[str]:
         "Verify the artifact first: compare its sha256 against the manifest. "
         "Do not restore an artifact that fails verification.",
         "Restore the database dump into a fresh database, never over the live one.",
-        "Restore the files archive into a staging directory and inspect it.",
+        "Restore the files archive (the LABEL-files.enc artifact from --files-root) into a "
+        "staging directory and inspect it. The archive holds private/files and "
+        "public/files only; it never holds site_config.",
         "Point the site at the restored database and files, then start the app.",
         "Log in as a real role and confirm a known record is present and correct.",
         "Record the rehearsal: date, artifact digest, elapsed time, and outcome.",
@@ -181,6 +187,40 @@ DEFAULT_ENCRYPT = ["openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-iter", "200000
 DEFAULT_DECRYPT = ["openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000",
                    "-in", "{cipher}", "-out", "{plain}",
                    "-pass", "file:{passphrase_file}"]
+
+# Site file trees only. site_config.json holds the database password and the
+# encryption key; putting it in the same artifact as the files would mean the
+# backup of the data carries the credentials that decrypt it. Independent
+# recovery already excludes site_config from the transferred payload; this
+# tool does the same.
+FILES_ALLOWLIST = ("private/files", "public/files")
+
+
+def files_dump_command(files_root: str) -> list[str]:
+    """tar argv that archives only the site file trees, never site_config."""
+    root = pathlib.Path(files_root)
+    if not root.is_dir():
+        raise BackupPolicyError(
+            f"files backup refused: files root is not a directory: {files_root}")
+    resolved = root.resolve()
+    members: list[str] = []
+    for relative in FILES_ALLOWLIST:
+        if ".." in pathlib.PurePosixPath(relative).parts:
+            raise BackupPolicyError(
+                "files backup refused: allowlist member is not a relative path")
+        candidate = resolved / relative
+        try:
+            candidate.resolve().relative_to(resolved)
+        except ValueError as exc:
+            raise BackupPolicyError(
+                f"files backup refused: {relative} is outside the files root") from exc
+        if candidate.exists():
+            members.append(relative)
+    if not members:
+        raise BackupPolicyError(
+            "files backup refused: files root has no private/files or public/files; "
+            "will not write an empty archive that looks like a backup")
+    return ["tar", "-C", str(resolved), "-cf", "-", *members]
 
 
 @dataclass(frozen=True)
@@ -252,14 +292,16 @@ def run_backup(*, backup_root: str, label: str, dump_command: list[str],
 
 def write_sidecar(run: BackupRun, retention: RetentionPolicy,
                   restore_command: str,
-                  volume_evidence: dict[str, Any] | None = None) -> str:
+                  volume_evidence: dict[str, Any] | None = None,
+                  artifact_kind: str = "database") -> str:
     """Write the manifest next to the artifact and return its path."""
     import json as _json
     evidence = volume_evidence if volume_evidence is not None else run.volume_evidence
     manifest = backup_manifest(
         artifacts=[{"generation": run.generation, "path": run.cipher_path,
                     "sha256": run.cipher_digest, "encrypted": run.encrypted,
-                    "plaintext_sha256": run.plaintext_digest}],
+                    "plaintext_sha256": run.plaintext_digest,
+                    "kind": artifact_kind}],
         retention=retention, volume_evidence=evidence,
         restore_command=restore_command)
     sidecar = pathlib.Path(run.cipher_path + ".manifest.json")
@@ -410,6 +452,7 @@ def main(argv: list[str] | None = None) -> int:
             --backup-root /mnt/toefl-house-backup \\
             --label db-$(date +%Y-%m-%d)-daily \\
             --passphrase-file /etc/toefl-house/backup-passphrase \\
+            --files-root /home/frappe/frappe-bench/sites/site.local \\
             --dump-command mysqldump --single-transaction --routines --triggers SITE_DB
 
     Staging restore (still not a real-server rehearsal):
@@ -434,6 +477,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backup-root")
     parser.add_argument("--label")
     parser.add_argument("--passphrase-file")
+    parser.add_argument("--files-root",
+                        help="Site directory. Archives private/files and "
+                             "public/files only (never site_config). Must "
+                             "appear before --dump-command.")
     parser.add_argument("--dump-command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
 
@@ -472,9 +519,23 @@ def main(argv: list[str] | None = None) -> int:
                      active_data_root=args.active_data_root)
     sidecar = write_sidecar(run, RetentionPolicy(),
                             restore_command="python3 -m tools.operations.interim_backup "
-                            "--print-restore-procedure")
+                            "--print-restore-procedure",
+                            artifact_kind="database")
     print(run.cipher_path)
     print(sidecar)
+    if args.files_root:
+        files_run = run_backup(
+            backup_root=args.backup_root, label=f"{args.label}-files",
+            dump_command=files_dump_command(args.files_root),
+            passphrase_file=args.passphrase_file,
+            active_data_root=args.active_data_root)
+        files_sidecar = write_sidecar(
+            files_run, RetentionPolicy(),
+            restore_command="python3 -m tools.operations.interim_backup "
+            "--print-restore-procedure",
+            artifact_kind="files")
+        print(files_run.cipher_path)
+        print(files_sidecar)
     print("INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY")
     return 0
 

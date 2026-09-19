@@ -20,12 +20,14 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from tools.operations.interim_backup import (  # noqa: E402
+    FILES_ALLOWLIST,
     LIMITATIONS,
     BackupPolicyError,
     RetentionPolicy,
     assert_different_volume,
     backup_manifest,
     classify_generation,
+    files_dump_command,
     restore_procedure,
     retention_plan,
     run_backup,
@@ -139,6 +141,7 @@ class HonestyTests(unittest.TestCase):
         self.assertLess(verify_at, restore_at,
                         "verification must precede the restore, not follow it")
         self.assertTrue(any("never over the live one" in s for s in steps))
+        self.assertTrue(any("never holds site_config" in s for s in steps))
 
 
 class ExecutedBackupRunTests(unittest.TestCase):
@@ -365,6 +368,131 @@ class RestoreMechanismTests(unittest.TestCase):
             self.assertIn("verified", text)
             self.assertIn("NOT A REAL-SERVER REHEARSAL", text)
             self.assertIn("INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY", text)
+
+
+
+
+class FilesArchiveTests(unittest.TestCase):
+    """Site files only: private/files and public/files, never site_config."""
+
+    def _passphrase(self, root):
+        path = os.path.join(root, "passphrase")
+        with open(path, "w") as handle:
+            handle.write("test-passphrase-not-a-secret\n")
+        os.chmod(path, 0o600)
+        return path
+
+    def _site(self, root):
+        site = os.path.join(root, "site")
+        os.makedirs(os.path.join(site, "private", "files"))
+        os.makedirs(os.path.join(site, "public", "files"))
+        os.makedirs(os.path.join(site, "locks"))
+        Path(site, "site_config.json").write_text(
+            '{"db_password": "secret", "encryption_key": "do-not-copy"}\n')
+        Path(site, "private", "files", "hello.txt").write_text("hello-private")
+        Path(site, "public", "files", "world.txt").write_text("world-public")
+        Path(site, "locks", "foo.lock").write_text("lock")
+        return site
+
+    def test_allowlist_is_only_the_file_trees(self):
+        self.assertEqual(FILES_ALLOWLIST, ("private/files", "public/files"))
+        joined = " ".join(FILES_ALLOWLIST)
+        self.assertNotIn("site_config", joined)
+        self.assertNotIn("locks", joined)
+
+    def test_missing_file_trees_are_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            with self.assertRaises(BackupPolicyError) as raised:
+                files_dump_command(root)
+            self.assertIn("empty archive", str(raised.exception))
+
+    def test_a_file_is_not_a_files_root(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = os.path.join(root, "not-a-dir")
+            Path(path).write_text("x")
+            with self.assertRaises(BackupPolicyError) as raised:
+                files_dump_command(path)
+            self.assertIn("not a directory", str(raised.exception))
+
+    def test_the_archive_contains_files_and_not_site_config(self):
+        import json
+        import shutil
+        import tarfile
+        if shutil.which("openssl") is None or shutil.which("tar") is None:
+            self.skipTest("openssl or tar not available")
+        with tempfile.TemporaryDirectory() as root:
+            site = self._site(root)
+            dest = os.path.join(root, "backups")
+            live = os.path.join(root, "live")
+            staging = os.path.join(root, "staging")
+            os.makedirs(live)
+            passphrase = self._passphrase(root)
+            run = run_backup(
+                backup_root=dest, label="daily-files",
+                dump_command=files_dump_command(site),
+                passphrase_file=passphrase,
+                volume_evidence={"different_volume": True, "injected": True})
+            sidecar = write_sidecar(run, RetentionPolicy(),
+                                    restore_command="see restore_procedure()",
+                                    artifact_kind="files")
+            payload = json.loads(Path(sidecar).read_text())
+            self.assertEqual(payload["artifacts"][0]["kind"], "files")
+            restored = run_restore(
+                artifact=run.cipher_path, staging_root=staging,
+                passphrase_file=passphrase, active_data_root=live)
+            self.assertFalse(restored.rehearsal_on_real_server)
+            with tarfile.open(restored.decrypted_path, "r:") as archive:
+                names = archive.getnames()
+            joined = "\n".join(names)
+            self.assertTrue(any(n.endswith("hello.txt") for n in names), names)
+            self.assertTrue(any(n.endswith("world.txt") for n in names), names)
+            self.assertNotIn("site_config", joined)
+            self.assertNotIn("db_password", joined)
+            self.assertNotIn("locks", joined)
+            extract = os.path.join(root, "extract")
+            os.makedirs(extract)
+            with tarfile.open(restored.decrypted_path, "r:") as archive:
+                archive.extractall(extract)
+            self.assertEqual(
+                Path(extract, "private", "files", "hello.txt").read_text(),
+                "hello-private")
+            self.assertEqual(
+                Path(extract, "public", "files", "world.txt").read_text(),
+                "world-public")
+            self.assertFalse(Path(extract, "site_config.json").exists())
+
+    def test_cli_with_files_root_writes_a_second_artifact(self):
+        import io
+        import shutil
+        from contextlib import redirect_stdout
+        from tools.operations.interim_backup import main
+        if shutil.which("openssl") is None or shutil.which("tar") is None:
+            self.skipTest("openssl or tar not available")
+        if not os.path.isdir("/proc"):
+            self.skipTest("no separate /proc filesystem available")
+        with tempfile.TemporaryDirectory() as root:
+            site = self._site(root)
+            dest = os.path.join(root, "backups")
+            passphrase = self._passphrase(root)
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = main([
+                    "--active-data-root", "/proc",
+                    "--backup-root", dest,
+                    "--label", "db-2026-09-19-daily",
+                    "--passphrase-file", passphrase,
+                    "--files-root", site,
+                    "--dump-command", "printf", "SQL\\n",
+                ])
+            self.assertEqual(code, 0)
+            text = buf.getvalue()
+            self.assertIn("INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY", text)
+            self.assertTrue(os.path.isfile(
+                os.path.join(dest, "db-2026-09-19-daily.enc")))
+            self.assertTrue(os.path.isfile(
+                os.path.join(dest, "db-2026-09-19-daily-files.enc")))
+            self.assertTrue(os.path.isfile(
+                os.path.join(dest, "db-2026-09-19-daily-files.enc.manifest.json")))
 
 
 class OperatorCliTests(unittest.TestCase):
