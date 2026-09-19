@@ -2,7 +2,7 @@ name: D8 operations contract validation
 
 on:
   push:
-    branches: [arena/01a0b5c4-tofel-house-erp]
+    branches: [arena/01a0ba0d-tofel-house-erp]
     paths:
       - .github/workflows/d8-operations-contract.yml
       - tools/session_branch.py
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   validate:
-    if: github.ref == 'refs/heads/arena/01a0b5c4-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0ba0d-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

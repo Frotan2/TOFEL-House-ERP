@@ -5,9 +5,21 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
-Active engineering branch: `arena/01a0b5c4-tofel-house-erp`. Historical hosted
+Active engineering branch: `arena/01a0ba0d-tofel-house-erp`. Historical hosted
 runs retain their original branch provenance; see
 [branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
+
+**Engineering rotation (2026-09-19):**
+The session boundary was rotated to `arena/01a0ba0d-tofel-house-erp` on
+2026-09-19 (fourth rotation). No hosted workflow has run on this branch yet,
+so `active_branch_hosted_execution` is the explicit, fail-closed
+`NOT_EXECUTED_ON_THIS_BRANCH` carrying no run, check, commit or report
+identity. The previous active branch `arena/01a0b5c4-tofel-house-erp` moved to
+historical provenance with its genuine execution intact (Foundation runtime
+`35384078097` — failure on SEC-DEPS-01 at commit `e96de8a`). Re-executing the
+named hosted workflows on this branch by push trigger will replace the absence
+with observed results; until then no execution is claimed. Production remains
+**REJECT** and D8 remains **BLOCKED**.
 
 **Engineering review (2026-09-18):**
 Continuing ERP semantic reconciliation work on this session branch.

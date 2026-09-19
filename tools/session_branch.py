@@ -7,7 +7,7 @@ intentionally changed, and update the workflow branch filters and tests in the
 same change.
 """
 
-ACTIVE_BRANCH = "arena/01a0b5c4-tofel-house-erp"
+ACTIVE_BRANCH = "arena/01a0ba0d-tofel-house-erp"
 ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 
 # Hosted-execution identity for the ACTIVE branch.
@@ -24,8 +24,8 @@ ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 # active branch must be a REJECT. tools/foundation/d8_validate.py asserts both the
 # status and this exact run id, so the pin cannot be silently swapped for a
 # different or passing run.
-ACTIVE_RUNTIME_STATE = "EXECUTED"
-ACTIVE_RUNTIME_RUN = "35384078097"
+ACTIVE_RUNTIME_STATE = "NOT_EXECUTED_ON_THIS_BRANCH"
+ACTIVE_RUNTIME_RUN = ""
 
 # Historical provenance pins: the last two Arena session branches that produced
 # a recorded Foundation runtime REJECT. These are evidence identity, never
@@ -35,11 +35,15 @@ ACTIVE_RUNTIME_RUN = "35384078097"
 # active_branch_qualification was NOT_EXECUTED_ON_THIS_BRANCH with empty run),
 # so it falls into the general HISTORICAL_BRANCHES list without a pinned run,
 # and the two evidence-bearing provenance pins stay pinned to their executed runs.
-PRIOR_ACTIVE_BRANCH = "arena/01a0b3a7-tofel-house-erp"
-PRIOR_ACTIVE_RUNTIME_RUN = "35361065542"
+# The 2026-09-19 rotation advances both pins: arena/01a0b5c4-tofel-house-erp
+# (run 35384078097, fail_reject) becomes prior, arena/01a0b3a7-tofel-house-erp
+# (run 35361065542, fail_reject) becomes earlier, and arena/01a0aef4-tofel-house-erp
+# falls into the general HISTORICAL_BRANCHES list with its run kept in the ledger.
+PRIOR_ACTIVE_BRANCH = "arena/01a0b5c4-tofel-house-erp"
+PRIOR_ACTIVE_RUNTIME_RUN = "35384078097"
 
-EARLIER_ACTIVE_BRANCH = "arena/01a0aef4-tofel-house-erp"
-EARLIER_ACTIVE_RUNTIME_RUN = "35218007937"
+EARLIER_ACTIVE_BRANCH = "arena/01a0b3a7-tofel-house-erp"
+EARLIER_ACTIVE_RUNTIME_RUN = "35361065542"
 
 # Every Arena session branch this repository has ever recorded hosted evidence
 # against. A branch reference anywhere in an active surface (workflow filter,
@@ -53,6 +57,7 @@ HISTORICAL_BRANCHES = (
     "arena/01a0b084-tofel-house-erp",
     PRIOR_ACTIVE_BRANCH,
     EARLIER_ACTIVE_BRANCH,
+    "arena/01a0aef4-tofel-house-erp",
     "arena/01a0a9f7-tofel-house-erp",
     "arena/01a0a942-tofel-house-erp",
     "arena/01a0a496-tofel-house-erp",

@@ -1,6 +1,6 @@
 # TOEFL House ERP — Production Operations Implementation Contract
 
-Date: 2026-09-16 · Active branch: `arena/01a0b5c4-tofel-house-erp`
+Date: 2026-09-16 · Active branch: `arena/01a0ba0d-tofel-house-erp`
 
 **Purpose:** record the engineering-selected mechanisms that implement the
 business requirements in [`canonical-owner-decision-record.json`](canonical-owner-decision-record.json).
