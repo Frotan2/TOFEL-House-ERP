@@ -1801,6 +1801,8 @@ class TeacherDeskWorldTests(unittest.TestCase):
         students = self._section(payload, "students")["items"]
         self.assertEqual([item["person"] for item in students],
                          ["Laila Student"])
+        # Identity is the learner (STU-1), not the membership row (R-1).
+        self.assertEqual([item["id"] for item in students], ["STU-1"])
         work = {item["id"]: item
                 for item in self._section(payload, "work")["items"]}
         self.assertIn("RES-1", work)

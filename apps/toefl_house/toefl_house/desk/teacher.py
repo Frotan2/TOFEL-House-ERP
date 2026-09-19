@@ -271,7 +271,9 @@ def work():
     for row in roster:
         group = groups_by_name.get(row.get("parent")) or {}
         student_items.append({
-            "id": row["name"],
+            # Identity is the learner, not the membership row: the same
+            # student keeps one id across classes.
+            "id": row["student"],
             "person": row.get("student_name") or row.get("student") or "",
             "detail": " · ".join(part for part in (
                 group.get("student_group_name") or "",
