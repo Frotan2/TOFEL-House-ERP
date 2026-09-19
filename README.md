@@ -173,14 +173,12 @@ directly or rewrite history. Keep future customizations in the owned application
 and enforce business rules server-side. Never commit real site configuration,
 credentials, student/payroll data, database dumps or backups.
 
-**No product license has been selected — this is open owner decision D11.** The
-declaration is currently inconsistent across three surfaces and engineering has
-deliberately not resolved it: both `hooks.py` files declare `app_license = "MIT"`,
-this README states that no license is selected, no `LICENSE` file exists in the
-repository, and GitHub reports the repository license as `null`. A license is a
-legal grant, it is effectively irreversible once published, and it constrains how
-the pinned upstream Frappe/ERPNext/Education/HRMS apps may be combined and
-distributed, so it is not an engineering choice. Options and the consistency
-requirement: [OWNER-DECISIONS.md §D11](docs/engineering/OWNER-DECISIONS.md).
-Review the initial assessment's licensing section before incorporating or
-distributing upstream software.
+**Product license: MIT — owner decision D11, decided 2026-09-19.** The Course
+Owner selected MIT, so the three surfaces that previously contradicted each other
+are now consistent: [LICENSE](LICENSE) carries the MIT text, both `hooks.py`
+files already declared `app_license = "MIT"`, and this README now states the same
+thing. `tests/foundation/test_licence_consistency.py` enforces that agreement so
+the contradiction cannot silently return. MIT matches what the app metadata has
+declared all along and is compatible with the pinned upstream
+Frappe/ERPNext/Education/HRMS apps; it does not change any production posture,
+which remains **REJECT**.

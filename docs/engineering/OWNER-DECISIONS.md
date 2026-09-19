@@ -138,7 +138,7 @@ commands. **Qualified evidence:** current-branch run `35073376790` at
 13 Page records/assets, each of 12 role-specific Page audiences plus
 seven non-members, and no native-read escalation.
 
-## D11 — Product license (found in the 2026-09-17 engineering review)
+## D11 — Product license — **DECIDED 2026-09-19: MIT**
 **Decide (pick one):** (a) **MIT** — matches what the app metadata already
 declares; (b) a **copyleft** license — must first be checked against the
 upstream Frappe/ERPNext/Education/HRMS terms this product links against;
@@ -208,6 +208,39 @@ production; production remains **REJECT**.
 consequences: one determines how many times a teacher is paid for one teaching
 fact, the other determines which rate applies from which date. Engineering had
 failed both closed rather than guess, and both were escalated.
+
+---
+
+## D13 — Recovery objectives (RPO / RTO) — **DECIDED 2026-09-19**
+**Owner answer:** **RPO 24 hours, RTO 8 hours.** Recover to the last nightly
+backup; tolerate up to roughly one day of lost enrolments and payments; restore
+service within eight hours.
+**Scope:** the local-server + Tailscale deployment currently selected. No
+internet-hosted topology is implied.
+**Authorizes:** engineering to build and rehearse backup and restore against
+those figures and to record measured results against them.
+**Does NOT authorize:** production. Selecting a target is an input to
+engineering, not evidence the target is met — D8-CAPACITY-AVAILABILITY stays
+**BLOCKED** until it is independently proven. Nor does it authorize inventing any
+availability, SLA or capacity number beyond these two figures.
+**Why owner-only:** RPO and RTO are business tolerances for lost tuition records
+and closed-door time, not engineering preferences; §12 forbids inventing them.
+
+## D14 — Off-site backup destination — **DECIDED 2026-09-19**
+**Owner answer:** **off-site hardware the Owner controls** — a separate physical
+location, such as an off-site NAS or a second building. No third-party cloud;
+student data stays in Owner-controlled custody, consistent with the local-server
++ Tailscale architecture.
+**Scope:** the destination *class* and its custody. No specific device, hostname,
+address or vendor is recorded, and none is invented here.
+**Authorizes:** engineering to design and rehearse an encrypted off-site copy to
+Owner-controlled hardware and to prove both the copy and its restore.
+**Does NOT authorize:** production, sending student data to any third-party cloud
+or provider, or naming a specific device, site or address — that remains an
+operational detail the Owner supplies at implementation time.
+D8-BACKUP-RECOVERY stays **BLOCKED** until an off-site restore is proven.
+**Why owner-only:** the destination determines who physically holds student data
+and where a disaster can and cannot destroy it.
 
 ---
 

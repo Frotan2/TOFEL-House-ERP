@@ -81,11 +81,8 @@
     "production_authorization": "REJECT until every applicable release gate is actually proven."
   },
   "unresolved_business_inputs_not_reinterpreted": [
-    "Numeric capacity and availability objectives.",
     "Future internet-hosted provider, hostname, DNS, and public-edge selection.",
-    "Future off-site backup destination.",
-    "Deferred academic grading/progression, advanced guardian, calendar/transfer, tax, refund-term, and metrics-steward policies already recorded in OWNER-DECISIONS.md.",
-    "Product license selection (D11); the declared app metadata, the README statement and the absent LICENSE file are inconsistent and are not reconciled by engineering."
+    "Deferred academic grading/progression, advanced guardian, calendar/transfer, tax, refund-term, and metrics-steward policies already recorded in OWNER-DECISIONS.md."
   ],
   "source_documents": [
     "docs/engineering/PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md",
@@ -271,6 +268,88 @@
       "related": [
         "D2"
       ]
+    },
+    "D13": {
+      "id": "D13",
+      "date": "2026-09-19",
+      "title": "Recovery objectives (RPO / RTO)",
+      "status": "DECIDED",
+      "authority": "Course Owner",
+      "questions": [
+        "What data loss and downtime can the business actually tolerate, so the capacity/availability gate has a real target instead of an unselected one?"
+      ],
+      "owner_answers": [
+        "RPO 24 hours, RTO 8 hours. Recover to the last nightly backup; tolerate up to roughly one day of lost enrolments and payments; restore service within eight hours."
+      ],
+      "exact_scope": "The local-server + Tailscale deployment currently selected. No internet-hosted topology is implied.",
+      "authorizes": [
+        "Engineering to build and rehearse backup and restore against a 24-hour RPO and an 8-hour RTO, and to record measured results against those figures."
+      ],
+      "does_not_authorize": [
+        "Does NOT authorize production. Selecting a target is an input to engineering, not evidence that the target is met; the corresponding D8 gate stays BLOCKED until it is independently proven.",
+        "Inventing availability, SLA or capacity numbers beyond these two figures.",
+        "Treating the targets as met because they are now written down."
+      ],
+      "why_owner_only": "RPO and RTO are business tolerances for lost tuition records and closed-door time, not engineering preferences. Section 12 forbids engineering from inventing them.",
+      "supersedes": null,
+      "related": [
+        "D8",
+        "D8-CAPACITY-AVAILABILITY",
+        "D8-DURABLE-STATE"
+      ]
+    },
+    "D14": {
+      "id": "D14",
+      "date": "2026-09-19",
+      "title": "Off-site backup destination",
+      "status": "DECIDED",
+      "authority": "Course Owner",
+      "questions": [
+        "Where do encrypted backups go so that a single-site loss (fire, flood, theft) does not destroy the data?"
+      ],
+      "owner_answers": [
+        "Off-site hardware the Owner controls - a separate physical location, such as an off-site NAS or a second building. No third-party cloud; student data stays in Owner-controlled custody, consistent with the local-server + Tailscale architecture."
+      ],
+      "exact_scope": "Destination class and custody for encrypted backups. No specific device, hostname, address or vendor is recorded, and none is invented here.",
+      "authorizes": [
+        "Engineering to design and rehearse an encrypted off-site copy to Owner-controlled hardware, and to prove the copy and its restore."
+      ],
+      "does_not_authorize": [
+        "Does NOT authorize production. Selecting a target is an input to engineering, not evidence that the target is met; the corresponding D8 gate stays BLOCKED until it is independently proven.",
+        "Sending student data to any third-party cloud or provider.",
+        "Naming a specific device, site or address; that remains an operational detail the Owner supplies at implementation time."
+      ],
+      "why_owner_only": "The destination determines who physically holds student data and where a disaster can and cannot destroy it. That is a custody decision, not an engineering one.",
+      "supersedes": null,
+      "related": [
+        "D8",
+        "D8-BACKUP-RECOVERY",
+        "D13"
+      ]
+    },
+    "D11": {
+      "id": "D11",
+      "date": "2026-09-19",
+      "title": "Product license",
+      "status": "DECIDED",
+      "authority": "Course Owner",
+      "questions": [
+        "Which licence governs the owned application, given that hooks.py declared MIT, the README said none was selected, and no LICENSE file existed?"
+      ],
+      "owner_answers": [
+        "MIT."
+      ],
+      "exact_scope": "The owned application in this repository.",
+      "authorizes": [
+        "Distribution of the owned application under MIT. LICENSE, both hooks.py declarations and the README statement were made consistent in the same change, and tests/foundation/test_licence_consistency.py enforces the agreement."
+      ],
+      "does_not_authorize": [
+        "Re-licensing the pinned upstream Frappe/ERPNext/Education/HRMS apps; their own terms continue to govern them.",
+        "Any production authorization; production remains REJECT."
+      ],
+      "why_owner_only": "A licence is a legal grant and is effectively irreversible once published.",
+      "supersedes": null,
+      "related": []
     }
   }
 }
