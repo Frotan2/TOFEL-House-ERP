@@ -39,5 +39,43 @@ class DependencyRemediationCandidateTests(unittest.TestCase):
         self.assertIn("would not be an officially released compatible", node["blocker"])
 
 
+class DependencyRemediationReverificationTests(unittest.TestCase):
+    """The 2026-09-19 live re-verification must carry the same verdict with
+    fresh evidence: same blockers, same REJECT, newly observed upstream state."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.assessment = json.loads((ROOT / "docs/engineering/evidence/phase-2/"
+                                     "dependency-remediation-candidate-assessment-2026-09-19.json").read_text())
+
+    def test_reverification_keeps_baseline_unmodified_and_rejects_a_fabricated_candidate(self):
+        self.assertEqual(self.assessment["observed_date"], "2026-09-19")
+        self.assertTrue(self.assessment["baseline_unchanged"])
+        self.assertEqual(self.assessment["status"], "rejected_no_credible_official_candidate")
+        self.assertFalse(self.assessment["candidate_execution"]["built"])
+        self.assertEqual(self.assessment["production_recommendation"], "REJECT")
+
+    def test_reverification_carries_the_same_blocker_set(self):
+        blockers = {item["package"]: item for item in self.assessment["python_remediation_blockers"]}
+        self.assertEqual(set(blockers), {"pdfkit", "pypdf", "weasyprint", "setuptools"})
+        self.assertIsNone(blockers["pdfkit"]["first_patched_version"])
+        self.assertEqual(blockers["setuptools"]["first_patched_version"], "83.0.0")
+        node = self.assessment["node_remediation_blocker"]
+        self.assertEqual((node["observed_entries"], node["observed_packages"]), (97, 36))
+
+    def test_reverification_records_fresh_live_observations(self):
+        review = self.assessment["official_input_review"]
+        pins = review["frappe"]["pins_at_tag"]
+        self.assertEqual((pins["pypdf"], pins["WeasyPrint"], pins["pdfkit"]),
+                         ("==6.15.0", "==68.0", "~=1.0.0"))
+        self.assertEqual(review["hrms"]["newest_non_prerelease"]["tag"], "v16.19.0")
+        self.assertIn("byte-identical", review["hrms"]["comparison"])
+        self.assertEqual(review["bench"]["constraint"], "setuptools>=71.0.0,<82.0.0")
+        fresh = self.assessment["baseline_evidence"]["fresh_hosted_confirmation"]
+        self.assertEqual(fresh["run"], "35450528487")
+        self.assertEqual(fresh["conclusion"], "failure")
+        self.assertIn("NOT established", self.assessment["reachability_notes"]["pdfkit"])
+
+
 if __name__ == "__main__":
     unittest.main()
