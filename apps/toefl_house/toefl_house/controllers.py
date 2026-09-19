@@ -53,10 +53,25 @@ class ProtectedRecord(Document):
         if not (before.status == "Active" and self.status == "Superseded"):
             raise frappe.PermissionError("Illegal contract status transition")
         for field in ("instructor", "employee", "compensation_model", "assignment_basis",
-                      "payment_frequency", "effective_start", "effective_end",
+                      "payment_frequency", "effective_start",
                       "conditions", "supersedes"):
             if before.get(field) != self.get(field):
                 raise frappe.PermissionError("Only the contract status may change on supersession")
+        # Owner decision D12 (2026-09-19): supersession closes the predecessor's
+        # window the day before the successor starts. That is the single
+        # permitted window change, and it may only ever SHORTEN the window - the
+        # end date may be set for the first time or move earlier, never later -
+        # so a closed period can never be reopened and no day the contract
+        # already earned can be taken away from it. Every term, rate, quantity
+        # and adjustment stays immutable below, so historical compensation
+        # remains reproducible from the predecessor exactly as before.
+        before_end = str(before.effective_end) if before.get("effective_end") else ""
+        new_end = str(self.effective_end) if self.get("effective_end") else ""
+        if before_end and (not new_end or new_end > before_end):
+            raise frappe.PermissionError(
+                "A superseded contract's window may only be closed, never extended")
+        if new_end and str(self.effective_start) and new_end < str(self.effective_start):
+            raise frappe.PermissionError("A contract window cannot end before it starts")
 
         def terms(doc):
             return [(t.skill, str(t.rate), t.payable_quantity, str(t.unit_of_payment),

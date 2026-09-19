@@ -262,6 +262,31 @@ class WiringTests(unittest.TestCase):
         self.assertIn("D12", source)
 
 
+    def test_supersession_may_only_shorten_a_contract_window(self):
+        """The D12 window closure must not become a general window edit.
+
+        Contracts are immutable so historical compensation stays reproducible.
+        Owner decision D12 permits exactly one window change - supersession
+        closing the predecessor - and the controller must keep it directional:
+        the end date may be set for the first time or move earlier, never later.
+        Every other field, and all terms and adjustments, stay immutable.
+        """
+        source = (ROOT / "apps/toefl_house/toefl_house/controllers.py").read_text()
+        fn = next(n for n in ast.walk(ast.parse(source))
+                  if isinstance(n, ast.FunctionDef) and n.name == "_validate_contract")
+        # The directional guard, not a blanket exemption.
+        self.assertIn("A superseded contract's window may only be closed, never extended", source)
+        self.assertIn("new_end > before_end", source)
+        # effective_end is no longer in the blanket-immutable tuple, but
+        # effective_start and every identity/term field still is.
+        for field in ("instructor", "employee", "compensation_model", "assignment_basis",
+                      "payment_frequency", "effective_start", "conditions", "supersedes"):
+            self.assertIn(f'"{field}"', ast.get_source_segment(source, fn) or source)
+        # Terms and adjustments remain immutable on supersession.
+        self.assertIn("Contract terms and adjustments are immutable on supersession", source)
+        self.assertIn("Only the contract status may change on supersession", source)
+
+
 class DocTypeShapeTests(unittest.TestCase):
     def test_json_shape(self):
         for name, path in DOCTYPES.items():
