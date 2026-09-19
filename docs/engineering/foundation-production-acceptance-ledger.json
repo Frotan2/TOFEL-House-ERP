@@ -1,982 +1,982 @@
 {
- "date": "2026-09-18",
- "recommendation": "REJECT",
- "phase2_gate_passed": false,
- "security_gate_passed": false,
- "product_implementation_authorized": false,
- "production_candidate_adopted": false,
- "scope": "Current foundation acceptance; architecture remains candidate. Bounded synthetic product evidence is recorded separately; no production implementation or deployment authorization.",
- "verification": "evidence/phase-2/dependency-operations-hosted-verification.json",
- "items": [
-  {
-   "id": "education-dependencies",
-   "status": "fail",
-   "evidence": "hosted/frontend-34823793929.json",
-   "observed": "57 baseline matches; isolated candidate 23; 35 original matches removed, one newly applicable Vite match. Both builds and 8 API checks pass; candidate ranges satisfied, not adopted.",
-   "closure": "Coherent maintained upstream toolchain/UI/parser migration; exact locks, clean full audit, exploit-specific and native integration regressions."
-  },
-  {
-   "id": "web-worker-restart",
-   "status": "pass_scoped",
-   "evidence": "hosted/remaining-34823345078.json: restart",
-   "observed": "Native record/cache marker retained, previously queued job finished, native proxy ping, 47 post-restart authorization checks pass.",
-   "limits": "Gunicorn/RQ only; no claim for DB/Redis/host crash, HA, in-flight exactly-once, existing browser session or measured restart downtime."
-  },
-  {
-   "id": "native-scheduler",
-   "status": "pass_scoped",
-   "evidence": "hosted/remaining-34823345078.json: readiness",
-   "observed": "Actual scheduler-created Complete at 234.2s; tick 240s / budget 360s.",
-   "limits": "Not a long-duration scheduler availability or business-job completeness test."
-  },
-  {
-   "id": "security-regressions",
-   "status": "pass_scoped",
-   "evidence": "hosted/remaining-34823345078.json",
-   "observed": "54 readiness, 6 Guardian browser, 4 realtime checks; native private-file legacy ownership boundary retained.",
-   "limits": "Broad mixed-role/multi-child/lifecycle/print/export/attachment/delegation and app-specific realtime combinations remain unqualified."
-  },
-  {
-   "id": "patch-upgrade",
-   "status": "pass_scoped",
-   "evidence": "hosted/remaining-34823345078.json: upgrade",
-   "observed": "33 stages, nine business checks before and five preservation checks after Frappe patch upgrade with four other app pins fixed.",
-   "limits": "No independent ERPNext/Education/HRMS or security-extension upgrade/rollback proof."
-  },
-  {
-   "id": "hardened-restore",
-   "status": "pass_scoped",
-   "evidence": "hosted/runtime-34823345078.json",
-   "observed": "Separate database/site recovery, native records/files, encrypted credential recovery and copied-session revocation regressions retained.",
-   "limits": "Same controlled runner/Bench; not an independent-host disaster recovery or approved offsite key/backup retention process."
-  },
-  {
-   "id": "resolved-dependency-trees",
-   "status": "fail",
-   "evidence": "Latest Foundation runtime 35090904508 at 6e7ccb99fc9d5f80fe550aa187787c56d72fea47; runtime Check 104787576338 (SHA-256 08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f); remaining-gate Check 104787579362 (SHA-256 3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa)",
-   "observed": "After the actual asset build, the retained active-branch report recorded 14 Python OSV finding records across four packages and 97 npm advisory findings in the supplied installed trees. The full-stack and Education frontend advisory checks failed; the restricted run had 116 checks with 114 passing. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and scoped recovery probes passed.",
-   "limits": "No exploitability/reachability or remediation conclusion; no complete SBOM, host-OS-package or container-image CVE coverage. MariaDB/Redis digest references are inventory-only. Both phase2_gate_passed and security_gate_passed remain false; SEC-DEPS-01 is UPSTREAM-BLOCKED / REJECT.",
-   "closure": "A coherent maintained migration of the affected pinned upstream stack, clean relevant resolved-tree re-runs, and separately selected OS/container dependency coverage where required."
-  },
-  {
-   "id": "official-dependency-remediation-candidate",
-   "status": "rejected_no_credible_official_candidate",
-   "evidence": "evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json",
-   "observed": "Current official Frappe v16.34.0 and ERPNext v16.35.0 dependency source files are byte-identical to current pins; Education has no newer release and its version-16 head has byte-identical reviewed manifests/locks. Frappe retains pdfkit~=1.0.0, pypdf==6.15.0 and WeasyPrint==68.0. pdfkit has no listed patched version; Bench v5.31.0 constrains setuptools <82.0.0 while the listed patched version is 83.0.0.",
-   "limits": "No candidate Bench was built because no official input changes the known fail conditions. No candidate security, audit, lifecycle, recovery, worker, scheduler, realtime, upgrade, restart or browser pass is claimed.",
-   "closure": "Wait for the smallest official compatible source bundle that changes the direct Python and frozen Node dependency inputs, then create a separate immutable candidate matrix and require every unchanged gate before any baseline adoption decision."
-  },
-  {
-   "id": "d8-production-operations-contract",
-   "status": "blocked",
-   "evidence": "d8-production-operations-decision-matrix.json; d8-operational-contract.template.json; tools/foundation/d8_validate.py; .github/workflows/d8-operations-contract.yml",
-   "observed": "Canonical provider-neutral D8 matrix records one selected/delivered role-charter area, seven NOT SELECTED / BLOCKED owner-operation decisions, and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT. The fail-closed validator passed matrix schema, ledger release state, synthetic hard stop, secret hygiene, contract schema, release provenance, and production-enable invariants without infrastructure probes.",
-   "limits": "A structural validator is not topology, deployment, backup/restore, RPO/RTO, monitoring, capacity, availability, edge/TLS/session, rollback, or production evidence. No provider, hostname, storage, target, person, or waiver is selected.",
-   "closure": "Select the seven minimum owner decisions, implement the selected architecture, and collect the matrix-defined evidence. Production remains REJECT until all applicable release gates pass."
-  },
-  {
-   "id": "public-deployment-boundary",
-   "status": "not_qualified",
-   "closure": "Approved hostname/proxy topology/certificates; TLS, Secure cookies, origin/header spoofing, CSRF, private-file routing and realtime authentication tests on that deployment."
-  },
-  {
-   "id": "datastore-host-durability",
-   "status": "not_qualified",
-   "closure": "PARTIALLY EXERCISED, STILL NOT QUALIFIED. Container-level MariaDB and Redis graceful restart, SIGKILL crash-recovery and container destruction with recreation from the same named volume are now genuinely executed with effective settings read back from the running servers (run 35135793802 at commit 866396a, evidence hosted-durability-35135793802.json). Still required to close: host-loss drills beyond a single host, configured persistence verified across a host or region failure, queued and in-flight job handling under failure, and data integrity measured against defined recovery objectives, which need an owner-selected RPO/RTO that does not exist and was not invented."
-  },
-  {
-   "id": "rollback-independent-host-recovery",
-   "status": "not_qualified",
-   "closure": "PARTIALLY EXERCISED, STILL NOT QUALIFIED. Independent-host recovery is now executed on separate infrastructure (run 35170062251 at commit 1378ce4, item independent-system-recovery-execution), including a real destructive trigger and full database, file and HTTP-usability verification. Still required to close: rehearse supported rollback or restore-based rollback with real versioned artifacts; encrypted recovery WITH key availability from separately controlled external custody, plus rotation; session revocation on recovery; and an owner-defined RPO/RTO that is then measured. None of those is proven, so this item stays not_qualified."
-  },
-  {
-   "id": "capacity-monitoring-operations",
-   "status": "not_qualified",
-   "closure": "Define representative concurrency/data scale and availability objectives; prove queue/DB/web capacity, alert delivery, audit/log retention/rotation and incident recovery."
-  },
-  {
-   "id": "wider-business-role-coverage",
-   "status": "not_qualified",
-   "closure": "Native payroll posting/GL and broader staff/HR/finance role, report/export/print and attachment lifecycle coverage; do not substitute draft payroll/report read ACLs."
-  },
-  {
-   "id": "release-readiness-evidence-closure",
-   "status": "pass_scoped",
-   "evidence": "release-readiness-evidence.json; FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md; encrypted-restore-manifest.json",
-   "observed": "A reproducible bounded harness created three encrypted backup versions, rotated to two retained versions, restored version three into a separate system directory, verified source/restore tree equality, and exercised bounded offboarding, audit, branch-model, alert fail-closed, native-authority and rollback checks.",
-   "limits": "No production site, independent host, live MariaDB/Redis, deployed Tailscale edge, monitoring receiver, native branch runtime, measured RPO/RTO, capacity objective, or production authorization. Bounded proofs do not close D8 gates.",
-   "closure": "Retain as scoped engineering evidence only. Production remains REJECT and SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT."
-  },
-  {
-   "id": "independent-system-recovery-execution",
-   "status": "pass_scoped",
-   "evidence": "evidence/production-like-execution/hosted-independent-source-35170062251.json; evidence/production-like-execution/hosted-independent-target-35170062251.json; evidence/production-like-execution/execution-ledger.json#independent_recovery_execution; run 35170062251 at commit 1378ce4 (source check 105041393483, target check 105042127143)",
-   "observed": "Executed on GitHub-hosted infrastructure, not simulated. A source VM built the pinned stack, created synthetic state (12 ToDo and 12 Note records, one private and one public file, one field encrypted with the site key), took a real `bench backup --with-files`, and then destroyed itself with native `bench drop-site --no-backup`: database _0da0781ed64f67b4 present then absent, site directory and both files gone. A SECOND ephemeral VM, proven independent by differing kernel_boot_id, runner_name and dmi_product_uuid with no shared filesystem, volume or container, rebuilt bench at the identical pinned revisions and recovered from the transferred backup alone: both record sets with name digests matching, the private file (552 bytes, is_private=1) and the public file (551 bytes, is_private=0) byte-exact on disk with their File documents, frappe  16.33.1 HEAD and erpnext 16.34.2 HEAD, and a usable application over real HTTP through nginx in front of Gunicorn: ping pong, login 200 as Administrator with a session cookie, a source-created record readable with content matching the manifest and all records listed, both files served with digests matching, and the privacy boundary intact (private refused anonymously, public served anonymously). No mock or simulation was used, and no plaintext secret was staged: the site config backup was excluded, the staged text was scanned, `bench restore --encryption-key` was deliberately not used, and the target set its own Administrator credential.",
-   "limits": "Both halves are GitHub-hosted runners from one pool, so this proves separate ephemeral VMs, not a separate cloud, region or datacentre, and host or region loss is unexercised. The source encryption key never travelled, so the source-encrypted field is recovered intact but undecryptable on the target (asserted as an expected failure, with distinct key fingerprints recorded) - key retrieval and external key custody with rotation are unproven. Session revocation on recovery is unexercised. No RPO/RTO is measured, because no owner objective is selected and none was invented. The backup travelled through a GitHub Actions artifact, so there is no off-site destination, versioning, retention or rotation. All data is synthetic.",
-   "closure": "Recorded as executed scoped evidence only. It does not flip any D8 gate: recovery and backup-restore remain BLOCKED, d8_gate_state remains BLOCKED, this ledger's recommendation remains REJECT, production_authorization remains REJECT and production_enabled remains false. Closing recovery still needs external key custody with rotation and proven key retrieval, session revocation on recovery, an owner-selected RPO/RTO with a measured result, and an external versioned encrypted backup destination with retention."
-  }
- ],
- "architecture_decision": "foundation-architecture-decision.json",
- "risk_acceptance_granted": false,
- "architecture_release_boundary": "Option 2 selected as maintenance direction; baseline is qualification-only and all current release gates remain unchanged.",
- "active_branch_qualification": {
-  "date": "2026-09-19",
-  "branch": "arena/01a0ba0d-tofel-house-erp",
-  "classification": "hosted_synthetic_qualification_only",
-  "hosted_execution_state": "EXECUTED",
-  "qualification_commit": "1ba0ecffebdd5a47c1fa3092c7bc1143f38f196d",
-  "rotated_from": "arena/01a0b5c4-tofel-house-erp",
-  "prior_active_branch": "arena/01a0b5c4-tofel-house-erp",
-  "earlier_active_branch": "arena/01a0b3a7-tofel-house-erp",
-  "production_state": "REJECT",
-  "production_authorized": false,
-  "phase2_gate_passed": false,
-  "security_gate_passed": false,
-  "product_implementation_authorized": false,
-  "observed": "The 2026-09-19 rotation absence (NOT_EXECUTED_ON_THIS_BRANCH) was closed by genuine push-triggered execution on this branch, not by re-labelling. All ten hosted workflows executed here across four commits (path-filtered triggers); the newest Foundation runtime run 35451785714 rejected on SEC-DEPS-01 exactly as predicted. qualification_commit is the head of the pinned runtime run; every evidence subblock carries its own head_sha.",
-  "foundation_runtime": {
-   "run": "35451785714",
-   "head_branch": "arena/01a0ba0d-tofel-house-erp",
-   "head_sha": "1ba0ecffebdd5a47c1fa3092c7bc1143f38f196d",
-   "status": "fail_reject",
-   "conclusion": "failure",
-   "created_at": "2026-09-19T15:25:50Z",
-   "job": "105920099904",
-   "failing_step": "Install and validate the pinned foundation",
-   "observed": "Foundation runtime validation genuinely executed on this branch at commit 1ba0ecffebdd5a47c1fa3092c7bc1143f38f196d and rejected. Verified from the GitHub Actions API: run 35451785714, job 105920099904, conclusion failure, failing at the step 'Install and validate the pinned foundation' with exit code 1; annotations read 'Restricted policy regressions failed: hosted-full-stack-dependency-audit: exit 1; hosted-frontend-advisory-audit: exit 1'. An earlier run on this branch (35450528487 at 83c82de) failed identically. This is the SEC-DEPS-01 condition reproduced on the active branch by push-triggered execution.",
-   "phase2_gate_passed": false,
-   "security_gate_passed": false,
-   "product_implementation_authorized": false,
-   "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; nothing was suppressed, overridden, waived, forked or downgraded. Check-run ids and report SHA-256 digests are deliberately not asserted: the artifact and log blobs are unreachable from the recording sandbox (the results host returns EOF), so no digest is recorded that was not independently read. Advisory findings are not exploitability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. Hosted qualification evidence only; it does not authorize production."
-  },
-  "foundation_runner": {
-   "run": "35449025428",
-   "head_branch": "arena/01a0ba0d-tofel-house-erp",
-   "head_sha": "b9be4d1570306354ddca8ad769856d1ee085f151",
-   "status": "pass_scoped",
-   "conclusion": "success",
-   "created_at": "2026-09-19T14:31:54Z",
-   "observed": "Foundation runner qualification completed successfully on this branch at the rotation base commit. Later pushes did not touch its trigger paths, so this remains its newest genuine execution here.",
-   "limits": "Runner/download/service qualification only. It does not prove restart persistence, crash durability, RDB/AOF persistence or restart recovery."
-  },
-  "placement": {
-   "run": "35451785695",
-   "head_branch": "arena/01a0ba0d-tofel-house-erp",
-   "head_sha": "1ba0ecffebdd5a47c1fa3092c7bc1143f38f196d",
-   "status": "pass_scoped",
-   "conclusion": "success",
-   "created_at": "2026-09-19T15:25:50Z",
-   "observed": "Placement synthetic content qualification completed successfully on this branch at commit 1ba0ecf, including the D16 activation code. An earlier run on this branch (35450528440 at 83c82de) also succeeded.",
-   "limits": "Synthetic content-governance scope on one disposable runner; not multi-branch isolation in a deployed topology, not an independent-host restore, not a destructive-event recovery, not offsite backup, not key custody/rotation, not RPO/RTO, SLA or availability proof. Production remains REJECT."
-  },
-  "frontend_candidate": {
-   "run": "35449025381",
-   "head_branch": "arena/01a0ba0d-tofel-house-erp",
-   "head_sha": "b9be4d1570306354ddca8ad769856d1ee085f151",
-   "status": "fail_reject_not_adopted",
-   "conclusion": "failure",
-   "created_at": "2026-09-19T14:31:54Z",
-   "job": "105912834393",
-   "failing_step": "Compare frozen baseline and isolated candidate",
-   "observed": "The frontend candidate review executed on this branch at the rotation base commit and failed at the baseline-versus-candidate comparison step, continuing this gate's unbroken rejection history on the npm advisory audit. Later pushes did not touch its trigger paths.",
-   "limits": "Candidate is NOT ADOPTED and is not a remediation or production approval. production_pins_changed remains false."
-  },
-  "d8_contract": {
-   "run": "35450528401",
-   "head_branch": "arena/01a0ba0d-tofel-house-erp",
-   "head_sha": "83c82dec2956df9016cc6160761bd9e701b100e4",
-   "status": "pass_structural",
-   "conclusion": "success",
-   "created_at": "2026-09-19T15:01:52Z",
-   "observed": "d8_validate.py and the D8 contract tests ran on this branch at commit 83c82de and passed structurally. The validator exits 0 while reporting d8_gate_state BLOCKED, production_state REJECT, production_enabled false, synthetic-only guard REQUIRED and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT. Later pushes did not touch its trigger paths.",
-   "limits": "Structural contract validation only. A passing D8 contract check is not a D8 PASS and not production authorization."
-  },
-  "other_gates_on_this_branch": {
-   "operational_boundaries": "35449025427 success @b9be4d1",
-   "datastore_durability": "35449025405 success @b9be4d1",
-   "external_key_custody": "35449025377 success @b9be4d1",
-   "independent_system_recovery": "35449025449 success @b9be4d1",
-   "owned_suite": "35452794488 success @523fe5e"
-  },
-  "qualification_scope": "Ten hosted workflows were genuinely executed on this branch by push trigger across four commits, because every workflow except owned-suite is path-filtered: the rotation base b9be4d1 ran the full set of ten; 83c82de re-ran owned-suite, D8 contract, placement and Foundation runtime; 1ba0ecf re-ran owned-suite, placement and Foundation runtime; later commits re-ran owned-suite only (newest 35452794488 at 523fe5e, success). Eight workflows succeed at their newest run; Foundation runtime validation and the frontend candidate review reject. Prior-session evidence is retained unchanged under the provenance blocks and was not counted as an execution on this branch.",
-  "limits": "Nothing here authorizes production. D8 remains BLOCKED, production remains REJECT, and SEC-DEPS-01 remains UPSTREAM-BLOCKED with no waiver. The Foundation runtime REJECTED on this branch exactly as on the previous session branches; execution moved the evidence onto this branch and changed no outcome. The frontend candidate is not adopted."
- },
- "prior_active_branch_provenance": {
   "date": "2026-09-18",
-  "branch": "arena/01a0b5c4-tofel-house-erp",
-  "classification": "historical_provenance",
-  "hosted_execution_state": "EXECUTED",
-  "qualification_commit": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
-  "rotated_from": "arena/01a0b3a7-tofel-house-erp",
-  "prior_active_branch": "arena/01a0b3a7-tofel-house-erp",
-  "earlier_active_branch": "arena/01a0aef4-tofel-house-erp",
-  "production_state": "REJECT",
-  "production_authorized": false,
+  "recommendation": "REJECT",
   "phase2_gate_passed": false,
   "security_gate_passed": false,
   "product_implementation_authorized": false,
-  "foundation_runtime": {
-   "run": "35384078097",
-   "head_branch": "arena/01a0b5c4-tofel-house-erp",
-   "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
-   "status": "fail_reject",
-   "conclusion": "failure",
-   "created_at": "2026-09-18T19:06:37Z",
-   "job": "105726747501",
-   "failing_step": "Install and validate the pinned foundation",
-   "observed": "Foundation runtime validation genuinely executed on this branch at commit e96de8ab21326bea1e7ee2bcafb1992a99c0a82b and rejected. Verified from the GitHub Actions API: run 35384078097, job 105726747501, conclusion failure, failing at the step 'Install and validate the pinned foundation' with exit code 1. This is the SEC-DEPS-01 condition reproduced on the active branch by push-triggered execution rather than re-labelling an earlier branch's run.",
-   "phase2_gate_passed": false,
-   "security_gate_passed": false,
-   "product_implementation_authorized": false,
-   "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; nothing was suppressed, overridden, waived, forked or downgraded. Check-run ids and report SHA-256 digests are deliberately not asserted: the artifact and log blobs are unreachable from the recording sandbox (the results host returns EOF), so no digest is recorded that was not independently read. Advisory findings are not exploitability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. Hosted qualification evidence only; it does not authorize production."
-  },
-  "foundation_runner": {
-   "run": "35384077956",
-   "head_branch": "arena/01a0b5c4-tofel-house-erp",
-   "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
-   "status": "pass_scoped",
-   "conclusion": "success",
-   "observed": "Foundation runner qualification completed successfully on this branch at the same commit.",
-   "limits": "Runner/download/service qualification only. It does not prove restart persistence, crash durability, RDB/AOF persistence or restart recovery."
-  },
-  "placement": {
-   "run": "35384078001",
-   "head_branch": "arena/01a0b5c4-tofel-house-erp",
-   "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
-   "status": "pass_scoped",
-   "conclusion": "success",
-   "observed": "Placement synthetic content qualification completed successfully on this branch at the same commit.",
-   "limits": "Synthetic content-governance scope on one disposable runner; not multi-branch isolation in a deployed topology, not an independent-host restore, not a destructive-event recovery, not offsite backup, not key custody/rotation, not RPO/RTO, SLA or availability proof. The synthetic-only guard was enabled. Production remains REJECT."
-  },
-  "frontend_candidate": {
-   "run": "35384077998",
-   "head_branch": "arena/01a0b5c4-tofel-house-erp",
-   "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
-   "status": "fail_reject_not_adopted",
-   "conclusion": "failure",
-   "job": "105726747229",
-   "failing_step": "Compare frozen baseline and isolated candidate",
-   "observed": "The frontend candidate review executed and failed at the baseline-versus-candidate comparison step, continuing this gate's unbroken rejection history on the npm advisory audit.",
-   "limits": "Candidate is NOT ADOPTED and is not a remediation or production approval. production_pins_changed remains false."
-  },
-  "d8_contract": {
-   "run": "35384077993",
-   "head_branch": "arena/01a0b5c4-tofel-house-erp",
-   "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
-   "status": "pass_structural",
-   "conclusion": "success",
-   "job": "105726747011",
-   "observed": "d8_validate.py and tests.d8.test_contract ran on this branch at this commit and passed. The validator exits 0 while reporting d8_gate_state BLOCKED, production_state REJECT, production_enabled false, synthetic-only guard REQUIRED and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT.",
-   "limits": "Structural contract validation only. A passing D8 contract check is not a D8 PASS and not production authorization."
-  },
-  "other_gates_on_this_branch": {
-   "operational_boundaries": "35384078024 success",
-   "datastore_durability": "35384078002 success",
-   "external_key_custody": "35384077977 success",
-   "independent_system_recovery": "35384078072 success",
-   "owned_suite": "35384078106 success"
-  },
-  "qualification_scope": "Ten hosted workflows were genuinely executed on this branch at commit e96de8ab21326bea1e7ee2bcafb1992a99c0a82b by push trigger: owned-suite, foundation-runtime, foundation-runner, foundation-frontend-review, foundation-operational-boundaries, foundation-durability, foundation-key-custody, foundation-independent-recovery, placement-content and d8-operations-contract. Eight succeeded; Foundation runtime validation and the frontend candidate review both rejected. Prior-session evidence is retained unchanged under the provenance blocks and was not counted as an execution on this branch.",
-  "limits": "Nothing here authorizes production. D8 remains BLOCKED, production remains REJECT, and SEC-DEPS-01 remains UPSTREAM-BLOCKED with no waiver. The Foundation runtime REJECTED on this branch exactly as it did on the two previous session branches; re-execution changed the branch that owns the evidence, not the outcome. The frontend candidate is not adopted.",
-  "supersedes": "arena/01a0b3a7-tofel-house-erp",
-  "former_classification": "hosted_synthetic_qualification_only"
- },
- "earlier_active_branch_provenance": {
-  "date": "2026-09-18",
-  "branch": "arena/01a0b3a7-tofel-house-erp",
-  "classification": "historical_provenance",
-  "hosted_execution_state": "EXECUTED",
-  "qualification_commit": "82275fd4fd917dbe175f7bd67a0b5380ab169017",
-  "rotated_from": "arena/01a0b084-tofel-house-erp",
-  "prior_active_branch": "arena/01a0aef4-tofel-house-erp",
-  "earlier_active_branch": "arena/01a0aafe-tofel-house-erp",
-  "production_state": "REJECT",
-  "production_authorized": false,
-  "phase2_gate_passed": false,
-  "security_gate_passed": false,
-  "product_implementation_authorized": false,
-  "foundation_runtime": {
-   "run": "35361065542",
-   "head_branch": "arena/01a0b3a7-tofel-house-erp",
-   "head_sha": "82275fd4fd917dbe175f7bd67a0b5380ab169017",
-   "status": "fail_reject",
-   "created_at": "2026-09-18T15:13:11Z",
-   "conclusion": "failure",
-   "failing_step": "Install and validate the pinned foundation",
-   "observed": "Foundation runtime validation genuinely executed on this branch and rejected. Verified from the GitHub Actions API: run 35361065542, workflow 'Foundation runtime validation', head_branch arena/01a0b3a7-tofel-house-erp, head_sha 82275fd4fd917dbe175f7bd67a0b5380ab169017, status completed, conclusion failure. The job's step list shows checkout, setup-node, owned qualification policies, pinned Yarn CLI and Python/service setup all succeeding, then 'Install and validate the pinned foundation' failing with exit code 1 - the SEC-DEPS-01 dependency-gate position. A second Foundation runtime run on the same branch, 35356041559 at 53aae309dfd668c66ac30dc6072237f525a5dce0, also concluded failure.",
-   "phase2_gate_passed": false,
-   "security_gate_passed": false,
-   "product_implementation_authorized": false,
-   "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; no waiver, override, suppression or candidate adoption. Check-run ids and report SHA-256 digests are deliberately NOT recorded here: the check-runs endpoint returned 404 for this run and the artifact/log blobs are unreachable from the recording sandbox, so no digest is asserted that was not independently read. Advisory findings are not exploitability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. Hosted qualification evidence only; it does not authorize production."
-  },
-  "qualification_scope": "This block corrects a documentation-versus-reality drift. The block that previously occupied this slot recorded hosted_execution_state NOT_EXECUTED_ON_THIS_BRANCH for arena/01a0b3a7-tofel-house-erp, but the GitHub Actions API shows Foundation runtime validation did execute on that branch and rejected (runs 35361065542 and 35356041559). The stale absence claim is superseded by the observed execution; no run was re-executed or re-labelled to produce it.",
-  "limits": "Nothing here authorizes production. D8 remains BLOCKED, production remains REJECT, and SEC-DEPS-01 remains UPSTREAM-BLOCKED with no waiver. Only the Foundation runtime gate is evidenced for this branch; the runner, placement, frontend-candidate and D8-contract gates are not claimed for it.",
-  "supersedes": "arena/01a0aef4-tofel-house-erp",
-  "former_classification": "hosted_synthetic_qualification_only"
- },
- "historical_branch_requalification": {
-  "date": "2026-09-16",
-  "foundation_runtime": {
-   "run": "35084695840",
-   "commit": "955e4cd5eedc34b90f4fbfce047339e18558f1f2",
-   "check": "104762158723",
-   "report_sha256": "f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc",
-   "remaining_gate_check": "104762162219",
-   "remaining_gate_report_sha256": "b03a2678f7d8a296a90adf8ce1b567b326431d5bcdaca6d808ee0874cf731afe",
-   "status": "fail",
-   "observed": "116 restricted checks ran; 114 passed. The post-asset-build resolved-stack audit inventoried 161 Bench-Python package names and 572 supplied installed Node package names; it recorded 14 PyPI/OSV finding records across four packages and 97 npm advisory entries across 36 packages (2 critical, 49 high, 39 moderate, 7 low). Exact IDs, queried versions and provider ranges are retained in evidence/phase-2/resolved-stack-advisory-2026-09-16.json. The pinned MariaDB/Redis references are inventory-only. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed; both full-stack and Education frontend advisory audits failed.",
-   "limits": "Current REJECT evidence: phase2_gate_passed and security_gate_passed remain false. The audit does not establish exploitability/reachability, a complete SBOM, OS-package or container-image CVE coverage, remediation, or production approval."
-  },
-  "product_restore_rehearsal": {
-   "run": "35076449739",
-   "commit": "ebe77676fffb3e2e1f0b49cac8e18c5e7763180a",
-   "runner_check": "104733077969",
-   "native_check": "104733073877",
-   "runner_report_sha256": "970bef76b54814e8ed7fd26de89417a7d3b83875791538babe792c7ce0d33598",
-   "native_report_sha256": "e1ff7050e10830ae651766b838488a6c90bbe8c7fae679617a250a6f8f58d08f",
-   "status": "pass_scoped",
-   "observed": "542/542 native checks passed. Bench SQL/public/private-file backup restored to a separate synthetic site/database; representative count/name digests across 14 doctypes and a private File SHA-256 passed. Source database credentials were not copied; the site encryption key was restored for encrypted content.",
-   "limits": "One disposable hosted runner only; not full Placement requalification, offsite backup, independent-host disaster recovery, production topology, key custody, RPO/RTO, SLA, or availability proof. Production remains REJECT."
-  },
-  "active_branch": "arena/01a0a9f7-tofel-house-erp",
-  "evidence_branch": "arena/01a0a942-tofel-house-erp",
-  "classification": "historical_provenance"
- },
- "d8_decision_matrix": "d8-production-operations-decision-matrix.json",
- "d8_contract_template": "d8-operational-contract.template.json",
- "d8_gate_state": "BLOCKED",
- "d8_validator": "tools/foundation/d8_validate.py",
- "owner_decision_record": "canonical-owner-decision-record.json",
- "owner_business_policy_state": {
-  "status": "RECORDED / IMPLEMENTATION-EVIDENCE PENDING",
-  "selected": "Authority roles, role-based access/auditability/offboarding, multi-branch isolation, current local/Tailscale deployment, local database/files, encrypted multi-version backup/recovery, preservation priority, configurable business policy, controlled administration, and health/attention visibility.",
-  "unresolved": "Numeric capacity/availability objective, future internet provider/hostname/DNS/public edge, future off-site backup destination, numeric RPO/RTO, and separately deferred domain policies.",
-  "does_not_authorize_production": true
- },
- "release_readiness_evidence": "release-readiness-evidence.json",
- "production_like_gap_closure": {
-  "date": "2026-09-17",
-  "branch": "arena/01a0aafe-tofel-house-erp",
-  "authority": "evidence/production-like-execution/execution-ledger.json; d8-production-operations-decision-matrix.json",
-  "classification": "EXECUTED / HOSTED REAL STACK - separate from the bounded synthetic harness in release-readiness-evidence.json, which stays PASS / BOUNDED and is not upgraded by any of this.",
-  "gates_flipped_to_pass": [],
-  "statement": "No D8 release gate flips to PASS from this work. Every executed pass is scoped or partial, each corresponding gate keeps its prior BLOCKED or REJECT state, this ledger's recommendation stays REJECT, production_authorization stays REJECT and production_enabled stays false. No owner numeric objective was invented: capacity-availability stays BLOCKED with no selected target, and no RPO/RTO figure appears anywhere in this closure. SEC-DEPS-01 stays UPSTREAM-BLOCKED / REJECT - no version was forced, no lock overridden, no package forked, no advisory suppressed and no gate downgraded.",
-  "p1_site_encryption_key_defect": {
-   "status": "CLOSED",
-   "classification": "EXECUTED-HOSTED",
-   "root_cause": "Frappe writes encryption_key into sites/<site>/site_config.json lazily, on the first call to frappe.utils.password.get_encryption_key(); bench new-site does not create it. foundation.localhost installs only erpnext/education/payments/hrms, so nothing triggered key generation before the first backup. The harness then copied the key with `if \"encryption_key\" in original_config:` - a silent no-op - and reported the omission as a passive observation instead of failing the run. placement-test.localhost installs toefl_house, whose after_install() calls get_encryption_key(), which is why that path reported true and masked the defect.",
-   "proof_run": "35133062884",
-   "proof_commit": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
-   "independent_reproduction_run": "35135793582",
-   "independent_reproduction_commit": "866396a127164090c41db9ff1bc310ade555409f",
-   "does_not_upgrade": "This closes one named recovery defect on the same disposable hosted runner. It is not production qualification. Restore still runs on the same host as the source, no destructive trigger has been exercised, external key custody and rotation remain bounded-only, and the recovery and backup-restore gates remain BLOCKED."
-  },
-  "p2_container_durability": {
-   "status": "EXECUTED-HOSTED",
-   "run_id": "35135793802",
-   "commit": "866396a127164090c41db9ff1bc310ade555409f",
-   "check_run": "104927987397",
-   "workflow": "Foundation datastore durability",
-   "archived_evidence": "hosted-durability-35135793802.json",
-   "archived_evidence_sha256": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65",
-   "mocks_or_simulations_used": false,
-   "conclusion": "Container-level MariaDB and Redis restart, crash-recovery and named-volume persistence are now genuinely executed and PASS. The durability gate remains BLOCKED because its area is broader than container restarts."
-  },
-  "p3_independent_system_recovery": {
-   "status": "EXECUTED / CLOSED AS A PROBE; GATES STILL BLOCKED",
-   "run_id": "35170062251",
-   "commit": "1378ce426a6093948eb96f88fcf7a5ba3b1a90c2",
-   "source_check_run": "105041393483",
-   "target_check_run": "105042127143",
-   "source_checks": "29/29",
-   "target_checks": "31/31",
-   "archived_evidence": [
-    "hosted-independent-source-35170062251.json",
-    "hosted-independent-target-35170062251.json"
-   ],
-   "archived_evidence_sha256": [
-    "9c054dd6e41f57d5f073bbe06e2116bf1ec66b9a48fab1d30b7ec48f9f7df1b5",
-    "ea23e9f922eb736eea21437a06db1e5ca0a4d0c223b1ea001268a8720de48cb1"
-   ],
-   "independence_verdict": "INDEPENDENT - verified, not assumed",
-   "required_discriminators": {
-    "kernel_boot_id_differs": true,
-    "runner_name_differs": true,
-    "dmi_product_uuid_differs": true
-   },
-   "observation_only_identifiers": {
-    "hostname": "matches - disproved as a discriminator by run 35143620884",
-    "docker_daemon_id": "matches - disproved as a discriminator by run 35168111875"
-   },
-   "destructive_trigger": "bench --site source.localhost drop-site --no-backup --db-root-password <runner-generated, never printed>",
-   "mocks_or_simulations_used": false,
-   "encrypted_field_limitation": {
-    "decrypts_on_target": false,
-    "keys_differ": true,
-    "source_key_sha256": "433059bd7bb94a9c18e3cfcc3779d9ba65d992ed6c5d34c283098d08f9471291",
-    "target_key_sha256": "249d33a6e5be6f964053670f4fc1060389d631b2e24cbb2ded5f191d33b50a11",
-    "conclusion": "Database and files recovered; source-encrypted field is intact but undecryptable here because the key was never transferred. Closing this requires separately controlled external key custody, which is a distinct requirement."
-   },
-   "not_proven": [
-    "Recovery onto a different cloud provider, region or physical datacentre",
-    "Restoring with the source encryption key, so decryption of source-encrypted fields needs separately controlled external key custody",
-    "Recovery time and recovery point objectives, which need an owner-selected target",
-    "Off-site or air-gapped backup storage, retention and rotation",
-    "TLS termination and the Tailscale boundary, exercised separately",
-    "Any production workload, since all data here is synthetic",
-    "Both halves are GitHub-hosted runners from the same pool: kernel_boot_id, runner_name and dmi_product_uuid prove separate ephemeral VMs, not separate providers, regions or datacentres. Loss of a host, region or provider remains unexercised.",
-    "The backup moves through a GitHub Actions artifact between two ephemeral VMs. There is no off-site or air-gapped destination, no versioned encrypted backup set, no retention policy and no rotation.",
-    "Session revocation on recovery, which D8-BACKUP-RECOVERY also requires, is not exercised.",
-    "No RPO or RTO is measured against an owner-selected objective, because no owner objective exists and none is invented. Step timings are in the check logs but are not a qualification.",
-    "Every record, file and credential is synthetic and generated inside the run; no production workload is exercised."
-   ],
-   "defects_found_and_fixed_by_execution": 6
-  },
-  "p4_key_custody": {
-   "status": "EXECUTED / CLOSED AS A PROBE; GATES STILL BLOCKED",
-   "requirement": "Executable production-like external key custody with rotation and restoration using separately controlled key material; no plaintext secret in any repository artifact.",
-   "why_p3_does_not_cover_it": "Run 35170062251 deliberately left `bench restore --encryption-key` unused so no key material travelled, which is why the source-encrypted field is intact but undecryptable on the target. That executed failure is the evidence that P4 is a separate requirement.",
-   "run_id": "35179445639",
-   "commit": "252345ed8df256d8679db93f835cdf2995318077",
-   "workflow": ".github/workflows/foundation-key-custody.yml",
-   "custodian_check_run": "105068259227",
-   "operator_check_run": "105068842511",
-   "recovery_check_run": "105069423253",
-   "custodian_checks": "10/10",
-   "operator_checks": "29/29",
-   "recovery_checks": "34/37 passing plus 3 REQUIRED FAILURES (negative controls)",
-   "archived_evidence": [
-    "hosted-key-custodian-35179445639.json",
-    "hosted-key-operator-35179445639.json",
-    "hosted-key-recovery-35179445639.json"
-   ],
-   "archived_evidence_sha256": [
-    "b70a5d9370013d8c5827dc787600640f048331d38d3258a37c6e2f489d74342b",
-    "4da48bf94c8f60f8edd8866ac16124f027e63564669db87c0c0015e550153086",
-    "215729b6747157a63721695dfd825a6093319c5f53cdf85083998d5ee9a132b3"
-   ],
-   "three_separate_machines": "SEPARATE MACHINES - verified, not assumed",
-   "required_discriminators": {
-    "kernel_boot_id_differs": true,
-    "runner_name_differs": true,
-    "dmi_product_uuid_differs": true,
-    "pairs_compared": 3
-   },
-   "observation_only_identifiers": {
-    "hostname": "matches on all three (runnervmlun5p) - disproved as a discriminator by run 35143620884",
-    "docker_daemon_id": "absent on the custodian, which started no container, and shared by the operator and the recovery system - disproved as a discriminator by run 35168111875"
-   },
-   "keys_under_custody": {
-    "encryption_key": "site key protecting __Auth ciphertext, installed with frappe.installer.update_site_config",
-    "backup_encryption_key": "backup key passed by bench backup to gpg -c and by bench restore to gpg -d when System Settings encrypt_backup is on",
-    "distinct_native_keys": true,
-    "epochs": [
-     1,
-     2
-    ],
-    "fingerprints": {
-     "epoch1_encryption_key": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
-     "epoch1_backup_encryption_key": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
-     "epoch2_encryption_key": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
-     "epoch2_backup_encryption_key": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0"
+  "production_candidate_adopted": false,
+  "scope": "Current foundation acceptance; architecture remains candidate. Bounded synthetic product evidence is recorded separately; no production implementation or deployment authorization.",
+  "verification": "evidence/phase-2/dependency-operations-hosted-verification.json",
+  "items": [
+    {
+      "id": "education-dependencies",
+      "status": "fail",
+      "evidence": "hosted/frontend-34823793929.json",
+      "observed": "57 baseline matches; isolated candidate 23; 35 original matches removed, one newly applicable Vite match. Both builds and 8 API checks pass; candidate ranges satisfied, not adopted.",
+      "closure": "Coherent maintained upstream toolchain/UI/parser migration; exact locks, clean full audit, exploit-specific and native integration regressions."
     },
-    "split_method": "xor-one-time-pad-over-key-bytes",
-    "channels": [
-     "a",
-     "b"
-    ],
-    "custody_manifest_sha256": "72fd408ec262abbf94f10b336146424c6a3a984786e6bbc69db62d445ec4d966"
-   },
-   "retrieval_proved_load_bearing": {
-    "restore_without_any_key": "exit 1 - 'Encrypted backup file detected. Decrypting using site config. / Decryption failed.'",
-    "restore_with_a_real_key_from_the_wrong_epoch": "exit 1 - 'Decrypting using provided key. / Decryption failed.'",
-    "single_channel_reconstruction": "does not reproduce the fingerprint",
-    "cross_epoch_shares": "do not reproduce the fingerprint",
-    "negative_controls_ran_on_copies": true,
-    "staged_payload_byte_identical_afterwards": true
-   },
-   "encrypted_backup_at_rest": {
-    "artifacts_detected_as": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512",
-    "database_sha256": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7",
-    "database_bytes": 245422,
-    "detection_asserted_with_the_file_command": "the same test bench restore applies when deciding whether to decrypt",
-    "site_config_backup_excluded_because_gpg_does_not_cover_it": true
-   },
-   "p3_limitation_closed": {
-    "then": {
-     "run": 35170062251,
-     "decrypts_on_target": false,
-     "reason": "no key travelled with the backup"
+    {
+      "id": "web-worker-restart",
+      "status": "pass_scoped",
+      "evidence": "hosted/remaining-34823345078.json: restart",
+      "observed": "Native record/cache marker retained, previously queued job finished, native proxy ping, 47 post-restart authorization checks pass.",
+      "limits": "Gunicorn/RQ only; no claim for DB/Redis/host crash, HA, in-flight exactly-once, existing browser session or measured restart downtime."
     },
-    "now": {
-     "run": 35179445639,
-     "decrypts_on_target": true,
-     "reason": "the key was retrieved from separate custody channels"
+    {
+      "id": "native-scheduler",
+      "status": "pass_scoped",
+      "evidence": "hosted/remaining-34823345078.json: readiness",
+      "observed": "Actual scheduler-created Complete at 234.2s; tick 240s / budget 360s.",
+      "limits": "Not a long-duration scheduler availability or business-job completeness test."
     },
-    "ciphertext_sha256_identical_across_the_two_machines": true,
-    "plaintext_digest_matches_the_operators_record": true,
-    "plaintext_published": false
-   },
-   "rotation": {
-    "native_single_command_exists": false,
-    "composed_from": [
-     "frappe.utils.password.decrypt(encryption_key=old)",
-     "frappe.utils.password.set_encrypted_password",
-     "frappe.installer.update_site_config"
-    ],
-    "site_key_orphaning_is_the_native_consequence": true,
-    "native_error_recorded": "ValidationError: Failed to decrypt key User.Administrator.api_secret - Encryption key is invalid! Please check site_config.json",
-    "ciphertext_changed": true,
-    "plaintext_digest_unchanged": true,
-    "epoch_1_key_decrypts_after_rotation": false,
-    "epoch_2_key_decrypts": true,
-    "a_key_custody_never_issued_decrypts": false,
-    "backup_key_rotated_and_proved_at_the_gpg_layer": {
-     "epoch_2_key_opens_the_new_backup": "gpg exit 0, 245301 bytes",
-     "epoch_1_key_rejected": "gpg exit 2",
-     "new_backup_detected_as_aes": true
+    {
+      "id": "security-regressions",
+      "status": "pass_scoped",
+      "evidence": "hosted/remaining-34823345078.json",
+      "observed": "54 readiness, 6 Guardian browser, 4 realtime checks; native private-file legacy ownership boundary retained.",
+      "limits": "Broad mixed-role/multi-child/lifecycle/print/export/attachment/delegation and app-specific realtime combinations remain unqualified."
+    },
+    {
+      "id": "patch-upgrade",
+      "status": "pass_scoped",
+      "evidence": "hosted/remaining-34823345078.json: upgrade",
+      "observed": "33 stages, nine business checks before and five preservation checks after Frappe patch upgrade with four other app pins fixed.",
+      "limits": "No independent ERPNext/Education/HRMS or security-extension upgrade/rollback proof."
+    },
+    {
+      "id": "hardened-restore",
+      "status": "pass_scoped",
+      "evidence": "hosted/runtime-34823345078.json",
+      "observed": "Separate database/site recovery, native records/files, encrypted credential recovery and copied-session revocation regressions retained.",
+      "limits": "Same controlled runner/Bench; not an independent-host disaster recovery or approved offsite key/backup retention process."
+    },
+    {
+      "id": "resolved-dependency-trees",
+      "status": "fail",
+      "evidence": "Latest Foundation runtime 35090904508 at 6e7ccb99fc9d5f80fe550aa187787c56d72fea47; runtime Check 104787576338 (SHA-256 08b0453bf78adfc7096dbef3535877feedbb415da31407b5aa77d497b1f86b3f); remaining-gate Check 104787579362 (SHA-256 3e229cb48c15c8a73d465b82d3f73bbca02f69ba8112b0bddae1e56f2e4cf1aa)",
+      "observed": "After the actual asset build, the retained active-branch report recorded 14 Python OSV finding records across four packages and 97 npm advisory findings in the supplied installed trees. The full-stack and Education frontend advisory checks failed; the restricted run had 116 checks with 114 passing. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and scoped recovery probes passed.",
+      "limits": "No exploitability/reachability or remediation conclusion; no complete SBOM, host-OS-package or container-image CVE coverage. MariaDB/Redis digest references are inventory-only. Both phase2_gate_passed and security_gate_passed remain false; SEC-DEPS-01 is UPSTREAM-BLOCKED / REJECT.",
+      "closure": "A coherent maintained migration of the affected pinned upstream stack, clean relevant resolved-tree re-runs, and separately selected OS/container dependency coverage where required."
+    },
+    {
+      "id": "official-dependency-remediation-candidate",
+      "status": "rejected_no_credible_official_candidate",
+      "evidence": "evidence/phase-2/dependency-remediation-candidate-assessment-2026-09-16.json",
+      "observed": "Current official Frappe v16.34.0 and ERPNext v16.35.0 dependency source files are byte-identical to current pins; Education has no newer release and its version-16 head has byte-identical reviewed manifests/locks. Frappe retains pdfkit~=1.0.0, pypdf==6.15.0 and WeasyPrint==68.0. pdfkit has no listed patched version; Bench v5.31.0 constrains setuptools <82.0.0 while the listed patched version is 83.0.0.",
+      "limits": "No candidate Bench was built because no official input changes the known fail conditions. No candidate security, audit, lifecycle, recovery, worker, scheduler, realtime, upgrade, restart or browser pass is claimed.",
+      "closure": "Wait for the smallest official compatible source bundle that changes the direct Python and frozen Node dependency inputs, then create a separate immutable candidate matrix and require every unchanged gate before any baseline adoption decision."
+    },
+    {
+      "id": "d8-production-operations-contract",
+      "status": "blocked",
+      "evidence": "d8-production-operations-decision-matrix.json; d8-operational-contract.template.json; tools/foundation/d8_validate.py; .github/workflows/d8-operations-contract.yml",
+      "observed": "Canonical provider-neutral D8 matrix records one selected/delivered role-charter area, seven NOT SELECTED / BLOCKED owner-operation decisions, and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT. The fail-closed validator passed matrix schema, ledger release state, synthetic hard stop, secret hygiene, contract schema, release provenance, and production-enable invariants without infrastructure probes.",
+      "limits": "A structural validator is not topology, deployment, backup/restore, RPO/RTO, monitoring, capacity, availability, edge/TLS/session, rollback, or production evidence. No provider, hostname, storage, target, person, or waiver is selected.",
+      "closure": "Select the seven minimum owner decisions, implement the selected architecture, and collect the matrix-defined evidence. Production remains REJECT until all applicable release gates pass."
+    },
+    {
+      "id": "public-deployment-boundary",
+      "status": "not_qualified",
+      "closure": "Approved hostname/proxy topology/certificates; TLS, Secure cookies, origin/header spoofing, CSRF, private-file routing and realtime authentication tests on that deployment."
+    },
+    {
+      "id": "datastore-host-durability",
+      "status": "not_qualified",
+      "closure": "PARTIALLY EXERCISED, STILL NOT QUALIFIED. Container-level MariaDB and Redis graceful restart, SIGKILL crash-recovery and container destruction with recreation from the same named volume are now genuinely executed with effective settings read back from the running servers (run 35135793802 at commit 866396a, evidence hosted-durability-35135793802.json). Still required to close: host-loss drills beyond a single host, configured persistence verified across a host or region failure, queued and in-flight job handling under failure, and data integrity measured against defined recovery objectives, which need an owner-selected RPO/RTO that does not exist and was not invented."
+    },
+    {
+      "id": "rollback-independent-host-recovery",
+      "status": "not_qualified",
+      "closure": "PARTIALLY EXERCISED, STILL NOT QUALIFIED. Independent-host recovery is now executed on separate infrastructure (run 35170062251 at commit 1378ce4, item independent-system-recovery-execution), including a real destructive trigger and full database, file and HTTP-usability verification. Still required to close: rehearse supported rollback or restore-based rollback with real versioned artifacts; encrypted recovery WITH key availability from separately controlled external custody, plus rotation; session revocation on recovery; and an owner-defined RPO/RTO that is then measured. None of those is proven, so this item stays not_qualified."
+    },
+    {
+      "id": "capacity-monitoring-operations",
+      "status": "not_qualified",
+      "closure": "Define representative concurrency/data scale and availability objectives; prove queue/DB/web capacity, alert delivery, audit/log retention/rotation and incident recovery."
+    },
+    {
+      "id": "wider-business-role-coverage",
+      "status": "not_qualified",
+      "closure": "Native payroll posting/GL and broader staff/HR/finance role, report/export/print and attachment lifecycle coverage; do not substitute draft payroll/report read ACLs."
+    },
+    {
+      "id": "release-readiness-evidence-closure",
+      "status": "pass_scoped",
+      "evidence": "release-readiness-evidence.json; FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md; encrypted-restore-manifest.json",
+      "observed": "A reproducible bounded harness created three encrypted backup versions, rotated to two retained versions, restored version three into a separate system directory, verified source/restore tree equality, and exercised bounded offboarding, audit, branch-model, alert fail-closed, native-authority and rollback checks.",
+      "limits": "No production site, independent host, live MariaDB/Redis, deployed Tailscale edge, monitoring receiver, native branch runtime, measured RPO/RTO, capacity objective, or production authorization. Bounded proofs do not close D8 gates.",
+      "closure": "Retain as scoped engineering evidence only. Production remains REJECT and SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT."
+    },
+    {
+      "id": "independent-system-recovery-execution",
+      "status": "pass_scoped",
+      "evidence": "evidence/production-like-execution/hosted-independent-source-35170062251.json; evidence/production-like-execution/hosted-independent-target-35170062251.json; evidence/production-like-execution/execution-ledger.json#independent_recovery_execution; run 35170062251 at commit 1378ce4 (source check 105041393483, target check 105042127143)",
+      "observed": "Executed on GitHub-hosted infrastructure, not simulated. A source VM built the pinned stack, created synthetic state (12 ToDo and 12 Note records, one private and one public file, one field encrypted with the site key), took a real `bench backup --with-files`, and then destroyed itself with native `bench drop-site --no-backup`: database _0da0781ed64f67b4 present then absent, site directory and both files gone. A SECOND ephemeral VM, proven independent by differing kernel_boot_id, runner_name and dmi_product_uuid with no shared filesystem, volume or container, rebuilt bench at the identical pinned revisions and recovered from the transferred backup alone: both record sets with name digests matching, the private file (552 bytes, is_private=1) and the public file (551 bytes, is_private=0) byte-exact on disk with their File documents, frappe  16.33.1 HEAD and erpnext 16.34.2 HEAD, and a usable application over real HTTP through nginx in front of Gunicorn: ping pong, login 200 as Administrator with a session cookie, a source-created record readable with content matching the manifest and all records listed, both files served with digests matching, and the privacy boundary intact (private refused anonymously, public served anonymously). No mock or simulation was used, and no plaintext secret was staged: the site config backup was excluded, the staged text was scanned, `bench restore --encryption-key` was deliberately not used, and the target set its own Administrator credential.",
+      "limits": "Both halves are GitHub-hosted runners from one pool, so this proves separate ephemeral VMs, not a separate cloud, region or datacentre, and host or region loss is unexercised. The source encryption key never travelled, so the source-encrypted field is recovered intact but undecryptable on the target (asserted as an expected failure, with distinct key fingerprints recorded) - key retrieval and external key custody with rotation are unproven. Session revocation on recovery is unexercised. No RPO/RTO is measured, because no owner objective is selected and none was invented. The backup travelled through a GitHub Actions artifact, so there is no off-site destination, versioning, retention or rotation. All data is synthetic.",
+      "closure": "Recorded as executed scoped evidence only. It does not flip any D8 gate: recovery and backup-restore remain BLOCKED, d8_gate_state remains BLOCKED, this ledger's recommendation remains REJECT, production_authorization remains REJECT and production_enabled remains false. Closing recovery still needs external key custody with rotation and proven key retrieval, session revocation on recovery, an owner-selected RPO/RTO with a measured result, and an external versioned encrypted backup destination with retention."
     }
-   },
-   "destructive_trigger": "bench drop-site custody-operator.localhost --no-backup --db-root-password <runner-generated, never printed>, followed by removal of the archived site directory because it holds both plaintext keys",
-   "secret_hygiene": {
-    "plaintext_key_in_any_published_artifact": false,
-    "plaintext_key_surviving_destruction_on_the_operator_machine": false,
-    "secrets_scanned_for": 7,
-    "leaks_found": 0,
-    "masking": "::add-mask:: applied to every key and generated password before any command could echo it",
-    "keys_passed_to_in_bench_scripts_via": "environment variables, never argv"
-   },
-   "mocks_or_simulations_used": false,
-   "contract_tests": "tests/foundation/test_key_custody_contract.py - 67 tests",
-   "defects_found_and_fixed_by_execution": [
-    "frappe appends an '-enc' suffix to every backup artifact name when encrypt_backup is on, so globs written for unencrypted names matched nothing (run 35178965074 died on 'max() iterable argument is empty' after a successful backup); fixed in 252345e",
-    "frappe interpolates backup_encryption_key into the gpg command unquoted and on failure prints 'Files are stored without encryption' and continues, so a key beginning with '-' - about one in 64 - would silently yield a plaintext backup under an '-enc' filename; the generator now refuses a leading dash and the AES detection assertion catches it regardless"
-   ],
-   "environment_blocked": {
-    "external_secret_store": "repository Actions secrets are not accessible to this session's credential (HTTP 403 Resource not accessible by integration; no admin permission), so no KMS, HSM or secret store could be provisioned. Recorded rather than worked around by weakening the model.",
-    "consequence": "custody is a bounded split-share model across two artifact channels and is explicitly NOT a trust boundary: any job able to download both channels can reconstruct the keys. Retrieval, rotation and decryption are proven; authorization of key release is not."
-   },
-   "not_proven": [
-    "A hardware security module, a cloud KMS or an owner-provisioned secret store",
-    "Authorization of key release: any job able to download both channels can reconstruct the keys",
-    "A rotation ceremony held at a different time from issuance",
-    "Key revocation, custodian-side destruction and custody audit logging",
-    "Custody-channel durability beyond the 14-day artifact retention window; no versioned or off-site key store",
-    "HTTP usability after rotation, which run 35170062251 proved for recovery but not for a rotated key",
-    "A second full restore under the rotated backup key; proven at the gpg layer instead",
-    "Session revocation on recovery, which D8-BACKUP-RECOVERY also requires",
-    "Any RPO or RTO measured against an owner objective, because none exists and none is invented",
-    "A product app under custody: the rehearsal site is frappe-only, recorded as a scope limit",
-    "Any production workload: every key, record, file and credential is synthetic",
-    "Separate providers, regions or datacentres: three GitHub-hosted runners from one pool prove three separate ephemeral VMs only"
-   ]
-  },
-  "p5_operational_boundaries": {
-   "status": "NOT STARTED",
-   "requirement": "Exercise the intended TLS/Tailscale boundary, monitoring and alert delivery with retention, and rollback using real versioned artifacts, kept clearly separate from synthetic and bounded evidence."
-  }
- },
- "last_rotation": {
-  "date": "2026-09-19",
-  "active_branch": "arena/01a0ba0d-tofel-house-erp",
-  "rotated_from": "arena/01a0b5c4-tofel-house-erp",
-  "effect": "Fourth branch-boundary rotation, performed with the documented procedure: canonical pin, all eleven workflow filters and ref guards, the ten current-status headers, the D8 matrix/contract/owner records, the acceptance ledger and the qualification tests were updated in the same change. No gate changed state. arena/01a0b5c4-tofel-house-erp moved from active to historical provenance with its genuine execution intact (Foundation runtime run 35384078097, fail_reject); arena/01a0b3a7-tofel-house-erp moved to earlier provenance; arena/01a0aef4-tofel-house-erp moved to older provenance; arena/01a0aafe-tofel-house-erp moved to oldest provenance. The new active branch carries no hosted evidence yet; hosted_execution_state is NOT_EXECUTED_ON_THIS_BRANCH with no run, check or report identity, enforced fail-closed by the D8 validator and its tests."
- },
- "older_active_branch_provenance": {
-  "date": "2026-09-17",
-  "branch": "arena/01a0aef4-tofel-house-erp",
-  "classification": "historical_provenance",
-  "hosted_execution_state": "EXECUTED",
-  "qualification_commit": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
-  "rotated_from": "arena/01a0aafe-tofel-house-erp",
-  "prior_active_branch": "arena/01a0aafe-tofel-house-erp",
-  "earlier_active_branch": "arena/01a0a9f7-tofel-house-erp",
-  "production_state": "REJECT",
-  "production_authorized": false,
-  "phase2_gate_passed": false,
-  "security_gate_passed": false,
-  "product_implementation_authorized": false,
-  "foundation_runtime": {
-   "run": "35218007937",
-   "head_branch": "arena/01a0aef4-tofel-house-erp",
-   "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
-   "status": "fail_reject",
-   "runtime_check": "105198657293",
-   "runtime_report_sha256": "a40ba77552325e46855d006ddbece3022c61d6b86403b8a92bddeb01a7f15139",
-   "remaining_gate_check": "105198661394",
-   "remaining_gate_report_sha256": "3d945a40764c6e2ac878286e8f471917c21919e40bf8935f8111fbfb8d467db1",
-   "restricted_checks": "121 total; 119 pass; hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail",
-   "observed": "Real Docker 28.0.4 execution on ubuntu24 image 20260907.300.1 under the hardened profile. 119 of 121 restricted checks passed. Both dependency audits failed, which is the SEC-DEPS-01 condition: the resolved-stack audit and the npm bulk advisory audit both returned findings. phase2_gate_passed, security_gate_passed and product_implementation_authorized are all false.",
-   "phase2_gate_passed": false,
-   "security_gate_passed": false,
-   "product_implementation_authorized": false,
-   "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; no waiver, override or candidate adoption. Re-executing the workflow on the active branch did not and could not turn this gate green, and it is recorded as a REJECT for exactly that reason. Advisory matches are not exploitability/reachability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. Hosted qualification evidence only; it does not authorize production."
-  },
-  "foundation_runner": {
-   "run": "35218007958",
-   "head_branch": "arena/01a0aef4-tofel-house-erp",
-   "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
-   "status": "pass_scoped",
-   "check": "105191149098",
-   "report_sha256": "101aae91ff7f0d015452d5c86cb571f5410b16db5452e1f18b022d6428492808",
-   "observed": "18/18 checks pass on ubuntu24 image 20260907.300.1. Pinned MariaDB and Redis images started and reached health, and the version, collation and transactional-rollback probes all verified.",
-   "limits": "Runner/download/service qualification only. It proves startup, health and transactional rollback; it does NOT prove restart persistence, crash durability, RDB/AOF persistence or restart recovery. phase2_gate_passed remains false."
-  },
-  "placement": {
-   "run": "35218007995",
-   "head_branch": "arena/01a0aef4-tofel-house-erp",
-   "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
-   "status": "pass_scoped",
-   "runner_check": "105194271874",
-   "runner_report_sha256": "f0063de03be15bfd4f69e8ade7ef2718708dab59df3187a9560fbde74634bd20",
-   "native_check": "105194268740",
-   "native_report_sha256": "7bb5e49cbbcdc8df65002316f380c2686648b96da42c959ba94092871c812ae7",
-   "observed": "Real native execution: 101/101 runner steps exit 0 and 542/542 native checks pass on a bench running frappe, erpnext, education, payments, hrms, foundation_security and toefl_house on placement-test.localhost. The report records production REJECT and runtime_complete true.",
-   "limits": "Synthetic content-governance scope on one disposable runner; not full T01-T20, not multi-branch isolation in a deployed topology, not an independent-host restore, not a destructive-event recovery, not offsite backup, not key custody/rotation, not RPO/RTO, SLA or availability proof. The synthetic-only guard was enabled. Production remains REJECT."
-  },
-  "frontend_candidate": {
-   "run": "35218007871",
-   "head_branch": "arena/01a0aef4-tofel-house-erp",
-   "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
-   "status": "fail_reject_not_adopted",
-   "check": "105191311853",
-   "report_sha256": "62be04f6881f3b8d4ddb60f26c20c9fca3f619bc102634c92cc822136c908afb",
-   "observed": "Frozen baseline and isolated candidate were both installed, built and compared. 20 of 22 checks pass; baseline-audit and candidate-audit both exit 1 on the npm advisory gate, with 1 advisory introduced and 35 removed against the frozen baseline. production_pins_changed false, production_gate_passed false, and application and Frappe UI source unchanged. The candidate remains NOT ADOPTED.",
-   "limits": "Candidate is not adopted and is not a remediation or production approval. This gate has failed on every one of its 10 runs since b1381eb (34823670550 through 35222291762), always on the npm advisory audit and never on the build, install, constraints or module-graph checks."
-  },
-  "d8_contract": {
-   "run": "35218007901",
-   "head_branch": "arena/01a0aef4-tofel-house-erp",
-   "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
-   "status": "pass_structural",
-   "check": "105190997903",
-   "observed": "d8_validate.py and tests.d8.test_contract ran on the active branch. The validator exits 0 while reporting d8_gate_state BLOCKED, production_state REJECT, production_enabled false, synthetic-only guard REQUIRED and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT, with checkout_branch_matches_active true."
-  },
-  "operational_boundaries": {
-   "run": "35218007814",
-   "head_branch": "arena/01a0aef4-tofel-house-erp",
-   "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
-   "status": "pass_scoped",
-   "check": "105191973507",
-   "report_sha256": "5348ac42d9535e600acc957261ef26aba563fc77a81193736609bf144e9aa5a8",
-   "observed": "38/38 checks pass against a real TLS edge in front of a live Frappe site (edge.foundation.internal, frappe 16.33.1 HEAD, mocks_or_simulations_used false). tls_protocol_policy is POLICY ENFORCED: TLS 1.2 and 1.3 negotiated, and SSLv3, TLS 1.0 and TLS 1.1 all rejected, with the two legacy protocols resolved by the policy-independent raw ClientHello probe returning alert protocol_version. certificate_verification enforced; unrelated CA rejected (21) and hostname mismatch rejected (62). required_refusals_observed.complete true with no protocol lacking evidence.",
-   "limits": "This gate failed identically on runs 35197870620 (previous session branch) and 35214660151 (this branch, commit f813a5c) before the F9 fix. tailscale_boundary remains ENVIRONMENT-BLOCKED. ports_follow_the_pinned_template records the 80/443-needs-root deviation. Edge security qualification only."
-  },
-  "qualification_scope": "All five hosted workflows named by the documented rotation procedure - foundation-runtime.yml, foundation-runner.yml, placement-content.yml, foundation-frontend-review.yml and d8-operations-contract.yml - were genuinely re-executed on this branch at commit e8da889b22589a5d64f7843ecaf5d11d9260424c, together with the operational-boundaries, durability, key-custody, independent-recovery and owned-suite gates. Prior-session run evidence is retained unchanged under prior_active_branch_provenance and earlier_active_branch_provenance and was not counted as an execution on this branch.",
-  "corroborating_earlier_execution_on_this_branch": {
-   "commit": "37e4bff8a2074fecd3bbf7592bb4b0a8936d0fe5",
-   "why": "The TLS-edge fix landed on this branch one commit before the pinned qualification commit, so its gate was exercised twice on this branch and agreed both times.",
-   "runs": {
-    "operational_boundaries": "35216709160 success (38/38, POLICY ENFORCED)",
-    "owned_suite": "35216709192 success",
-    "foundation_runtime": "35216709174 failure (SEC-DEPS-01, identical profile)"
-   }
-  },
-  "other_gates_on_this_branch": {
-   "datastore_durability": "35218008053 success (check 105191267035)",
-   "external_key_custody": "35218007872 success",
-   "independent_system_recovery": "35218007835 success",
-   "owned_suite": "35218007896 success (check 105190998479)"
-  },
-  "limits": "Nothing here authorizes production. D8 remains BLOCKED, production remains REJECT, and SEC-DEPS-01 remains UPSTREAM-BLOCKED with no waiver. The Foundation runtime REJECTED on this branch exactly as it did on the two previous session branches; re-execution changed the branch that owns the evidence, not the outcome. The frontend candidate is not adopted.",
-  "supersedes": "arena/01a0aafe-tofel-house-erp",
-  "former_classification": "hosted_synthetic_qualification_only"
- },
- "oldest_active_branch_provenance": {
-  "date": "2026-09-16",
-  "branch": "arena/01a0aafe-tofel-house-erp",
-  "qualification_commit": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
-  "former_classification": "hosted_synthetic_qualification_only",
-  "classification": "historical_provenance",
-  "foundation_runtime": {
-   "run": "35122242581",
-   "head_branch": "arena/01a0aafe-tofel-house-erp",
-   "head_sha": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
-   "status": "fail_reject",
-   "runtime_check": "104889030990",
-   "runtime_report_sha256": "e3964eb242e1bb467725e7a194ff3a7b76535d3afedbc9c5a0c8c77629eb984b",
-   "remaining_gate_check": "104889035777",
-   "remaining_gate_report_sha256": "a1ac7cd78d0ddb5dbd4888f459f38232850083c34562f4b1cd29fec509e6025b",
-   "restricted_checks": "116 total; 114 pass; hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail",
-   "observed": "Real Docker 28.0.4 / Compose 2.38.2 execution. Four sites created (foundation, restore, recovery, upstream-tests) with erpnext, education, payments and hrms installed at pinned revisions; worker, scheduler and socketio all live. 114 of 116 restricted checks passed, including business 9/9, restore 5/5, http-restricted 10/10, isolation 47/47, browser 5/5, restore-secured 7/7 and isolation-recovered 47/47; remaining gates passed readiness 54/54, realtime 4/4, upgrade 33/33, guardian browser 6/6, frontend graph and restart. Both dependency audits failed: the resolved-stack audit inventoried 161 Bench Python and 572 supplied Node package names and recorded 14 PyPI/OSV findings across pdfkit, pypdf, setuptools and weasyprint, and the npm bulk advisory audit queried 255 package names with 21 returning 57 advisory findings (27 high, 26 moderate, 4 low). Real backups were taken (database 1155855 bytes sha256 9aad16baa470599a43a28e316b343c3600436f91f0e7b2f430e4c3997205701e; hardened database 1159791 bytes sha256 bc1324f9ec7b8d8a782f5d98f77563684054c9d3f37192c83b5bba72c2928126) and restore_separate_database is true, but site_encryption_key_restored is FALSE on this path.",
-   "phase2_gate_passed": false,
-   "security_gate_passed": false,
-   "product_implementation_authorized": false,
-   "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; no waiver, override or candidate adoption. Advisory matches are not exploitability/reachability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. The restart probe is Gunicorn/RQ only and explicitly excludes Redis and database restart, host crash and failover. The restore ran into another site/database on the SAME ephemeral runner, not an independent system. site_encryption_key_restored=false is a genuine observed defect and is not reclassified. Hosted qualification evidence only; it does not authorize production."
-  },
-  "prior_active_branch": "arena/01a0a9f7-tofel-house-erp",
-  "qualification_scope": "All five hosted workflows were re-executed on the then-active branch at commit d7df9ca766cd3039d68051ca83cdc8be5e834452 after the branch-boundary rotation. Prior-session run evidence is retained unchanged under what is now earlier_active_branch_provenance and was not counted as an execution on that branch.",
-  "latest_branch_head_at_reconciliation": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
-  "foundation_runner": {
-   "run": "35122242676",
-   "head_branch": "arena/01a0aafe-tofel-house-erp",
-   "head_sha": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
-   "status": "pass_scoped",
-   "check": "104882875418",
-   "report_sha256": "4f1ad7b9bb09a2c5d5933d5ed8490eb42b2ef0e513d1235a4378165d536e5963",
-   "observed": "Real Docker execution on ubuntu-24.04 (image 20260907.300.1). Docker Engine and Compose present; pinned mariadb image digest sha256:8b5f33ebd85d1775657e974ed10434128bb493c80e826ceaa54074fd1a92a112 started and reached healthy in 5 polls; SELECT VERSION(), utf8mb4/utf8mb4_unicode_ci and a START TRANSACTION/ROLLBACK count-0 check all verified; pinned redis digest sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36 returned PONG with the selected version. 18/18 checks pass; python artifact sha256 3959f92825141e04adf44982d3a83ee57af0877e893b0796e04c1468749d9b04.",
-   "limits": "Runner/download/service qualification only. It proves startup, health and transactional rollback; it does NOT prove MariaDB restart persistence, crash durability, Redis RDB/AOF persistence or Redis restart recovery. No ERP workflow or production approval. phase2_gate_passed remains false."
-  },
-  "placement": {
-   "run": "35122242728",
-   "head_branch": "arena/01a0aafe-tofel-house-erp",
-   "head_sha": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
-   "status": "pass_scoped",
-   "runner_check": "104885938426",
-   "runner_report_sha256": "1fc72a2420f96f9727d80346c00670b73c8d4ae43cef6e010319ef36e6e911f9",
-   "native_check": "104885934034",
-   "native_report_sha256": "094111f63a8f4b44e483bfd534a71b404c14b0e87c093477e0a633390ff42251",
-   "observed": "Real native execution: 101/101 runner steps exit 0 and 542/542 native checks pass on a bench running frappe, erpnext, education, payments, hrms, foundation_security and toefl_house across placement-test.localhost and a second isolated site placement-second.localhost, with all five upstream app pins verified unchanged afterwards. A real product restore rehearsal ran end to end: capture-product-restore-snapshot, backup-with-files (database 1266947 bytes sha256 0e25af257844eecfbe0ca9e690efbf65ed9eb908eb951bd18823ee207c48fcc8 plus private and public file digests), new placement-restore.localhost site with all six apps installed, restore-with-files, migrate and verify-product-restore-snapshot. product_restore_context records separate_database=true, source_db_credentials_copied=false and site_encryption_key_restored=true; product_restore verified 14 doctypes by exact record count with private_file_sha256_verified=true. Real authorization behavior includes http-role-revocation-old-session-denied, http-teaching-revoked-scheduler-old-session-denied, 13 CSRF negative-with-positive-control checks, release-read-export-print-paths-denied, release-attachment-paths-guarded and release-observability-probes.",
-   "limits": "Synthetic content-governance scope on one disposable runner; not full T01-T20, not multi-branch (Company/Branch) isolation in a deployed topology, not an independent-host restore, not a destructive-event recovery, not offsite backup, not key custody/rotation, not RPO/RTO, SLA or availability proof. The synthetic-only guard was enabled on every site. Production remains REJECT."
-  },
-  "frontend_candidate": {
-   "run": "35122242647",
-   "head_branch": "arena/01a0aafe-tofel-house-erp",
-   "head_sha": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
-   "status": "fail_reject_not_adopted",
-   "check": "104882992093",
-   "report_sha256": "17d40562f62cddc6168bef34838f128d6dbaa2257a0ab0048739c2c28c6abfb1",
-   "observed": "Frozen baseline and isolated candidate were both built and compared on the runner; production pins were not changed and the production gate did not pass. The candidate remains NOT ADOPTED.",
-   "limits": "Candidate is not adopted and is not a remediation or production approval."
-  },
-  "d8_contract": {
-   "run": "35122242888",
-   "head_branch": "arena/01a0aafe-tofel-house-erp",
-   "head_sha": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
-   "status": "pass_structural",
-   "check": "104882627814",
-   "observed": "d8_validate.py and tests.d8.test_contract ran on the rotated active branch. The validator exits 0 while reporting d8_gate_state BLOCKED, production_state REJECT, production_enabled false, synthetic-only guard REQUIRED and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT, with checkout_branch_matches_active true."
-  },
-  "production_like_execution": {
-   "ledger": "evidence/production-like-execution/execution-ledger.json",
-   "ledger_sha256": "ede33c91b5d87fc0cbfce98b5d4e0f245b2e209ff9efaf0c4f3bf124eaaa0e6e",
-   "requested_local_runner": "ENVIRONMENT-BLOCKED (no Docker Engine/Compose; apt and download.docker.com unreachable; no /lib/modules; read-only /proc; 2 vCPU / 3.8 GiB RAM)",
-   "capability_probe": "evidence/production-like-execution/local-runner-capability-probe.json",
-   "capability_probe_sha256": "d42a00f281fc5a95c5aceef9d4567bc2b8191ad0941c6dab7a14061e64bbadb4",
-   "probes_executed_on_docker_runner": "11 requested probes classified: 2 PASS (EXECUTED)/SCOPED, 6 PARTIAL, 3 BLOCKED or BLOCKED/NOT SELECTED",
-   "observed": "Every classification cites a real run and check identifier. MariaDB startup/health and Redis startup were really executed and passed; MariaDB/Redis restart persistence and durability were never executed. Native runtime, authorization containment, integrity before/after restore, session revocation and artifact upgrade were really executed and passed within their stated scopes. Independent-system restore, destructive trigger, versioned encrypted backup with external key custody and rotation, deployed monitoring/alert delivery/retention, TLS and Tailscale boundaries, and rollback rehearsal remain BLOCKED. No numeric capacity/availability SLO was invented.",
-   "limits": "Local preflight, static and bounded results are recorded separately and are never counted as execution evidence.",
-   "corroboration": "Two independent executions at d7df9ca and c891949 agree on every material outcome, including the SEC-DEPS-01 failure and the site_encryption_key_restored=false defect."
-  },
-  "corroborating_rerun_at_evidence_commit": {
-   "commit": "c891949e7a30267f34a3365eaf9103d925dc42eb",
-   "why": "Pushing the evidence commit re-triggered all five hosted gates because tools/session_branch.py and tools/foundation/d8_validate.py are in their path filters.",
-   "runs": {
-    "d8_contract": "35125669493 success",
-    "foundation_runner": "35125669408 success",
-    "placement": "35125669475 success",
-    "frontend_candidate": "35125669372 failure",
-    "foundation_runtime": "35125669370 failure"
-   },
-   "foundation_runtime": {
-    "run": "35125669370",
-    "head_branch": "arena/01a0aafe-tofel-house-erp",
-    "head_sha": "c891949e7a30267f34a3365eaf9103d925dc42eb",
-    "status": "fail_reject",
-    "failed_step": "7 - Install and validate the pinned foundation",
-    "runtime_check": "104901059475",
-    "runtime_report_sha256": "4a3836f01222e66555ec1799d2b6b57d438532658f2140948be9f6462714b8c0",
-    "remaining_gate_check": "104901062866",
-    "remaining_gate_report_sha256": "75d7df6680b49e9ab924bf36a30346c960cf2eae7f75080272dc759186e3ebbc",
-    "restricted_checks": "116 total; 114 pass; hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail",
-    "observed": "Reproduces run 35122242581 field for field on every material outcome: same SEC-DEPS-01 failure, same 114/116 restricted checks, same four sites (foundation, restore, recovery, upstream-tests) and four installed apps (erpnext, education, payments, hrms) on Docker 28.0.4 / Compose 2.38.2, same readiness 54 / realtime 4 / upgrade 33 / guardian browser 6 passes, same 57 npm advisory findings across 21 of 255 queried packages and 14 PyPI/OSV findings across pdfkit, pypdf, setuptools and weasyprint, and the same site_encryption_key_restored=false with restore_separate_database=true. Foundation runner corroboration 35125669408 passed 18/18 with MariaDB healthy in 4 polls and identical pinned MariaDB/Redis image digests.",
-    "retrieval_note": "This conclusion was initially recorded as NOT RETRIEVED during a GitHub credential outage and was retrieved only after authentication was restored. It was never assumed to be a failure while unobserved.",
+  ],
+  "architecture_decision": "foundation-architecture-decision.json",
+  "risk_acceptance_granted": false,
+  "architecture_release_boundary": "Option 2 selected as maintenance direction; baseline is qualification-only and all current release gates remain unchanged.",
+  "active_branch_qualification": {
+    "date": "2026-09-19",
+    "branch": "arena/01a0ba0d-tofel-house-erp",
+    "classification": "hosted_synthetic_qualification_only",
+    "hosted_execution_state": "EXECUTED",
+    "qualification_commit": "1ba0ecffebdd5a47c1fa3092c7bc1143f38f196d",
+    "rotated_from": "arena/01a0b5c4-tofel-house-erp",
+    "prior_active_branch": "arena/01a0b5c4-tofel-house-erp",
+    "earlier_active_branch": "arena/01a0b3a7-tofel-house-erp",
+    "production_state": "REJECT",
+    "production_authorized": false,
     "phase2_gate_passed": false,
     "security_gate_passed": false,
     "product_implementation_authorized": false,
-    "limits": "Corroboration only. It does not change any gate state, does not authorize production, and does not cure the observed site_encryption_key_restored=false defect. Two independent executions agreeing strengthens the REJECT conclusion. SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT."
-   },
-   "authoritative_evidence": "The probe classifications in evidence/production-like-execution/execution-ledger.json remain bound to commit d7df9ca and runs 35122242676 / 35122242728 / 35122242581 / 35122242647 / 35122242888, whose complete reports are archived. session_branch.ACTIVE_RUNTIME_RUN stays pinned to 35122242581 for that reason."
-  },
-  "encryption_key_defect_closure_run": {
-   "date": "2026-09-16",
-   "commit": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
-   "branch": "arena/01a0aafe-tofel-house-erp",
-   "why": "Closes the one named recovery defect carried by every prior runtime run on this branch: site_encryption_key_restored=false. Fix commits bd5ca02 (native key initialization before the first backup plus fail-closed restore) and 58bd4d1 (Frappe Password-field storage layout). Prior runs are preserved unchanged as historical provenance; this record does not relabel or supersede them.",
-   "foundation_runtime": {
-    "run": "35133062884",
-    "workflow": "Foundation runtime validation",
-    "profile": "hardened",
-    "head_sha": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
-    "status": "fail_reject",
-    "conclusion_reason": "SEC-DEPS-01 only. 121 checks executed; the only failures are hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit. No recovery, restore or encryption check failed.",
-    "runtime_check": "104925371177",
-    "runtime_report_sha256": "fa799c1b259b42750bef2bd7b660f914690eacfe6b389fbcd290a7ea8f5e2780",
-    "runtime_evidence_archive": "evidence/production-like-execution/hosted-runtime-35133062884.json",
-    "remaining_gate_check": "104925376227",
-    "remaining_gate_report_sha256": "981ac18610ae0fb9c744645123922cd7ea78882969f8316ee3416d9ad99a2dda",
-    "remaining_gate_evidence_archive": "evidence/production-like-execution/hosted-remaining-gates-35133062884.json"
-   },
-   "interim_run_that_drove_the_second_fix": {
-    "run": "35131838300",
-    "commit": "bd5ca02625adf1e21d544798247788ce093b974e",
-    "check": "104916683776",
-    "status": "fail",
-    "failed_check": "prepare-native-encrypted-fixture-before-backup",
-    "message": "AssertionError: Password field was not stored as ciphertext",
-    "value": "Confirmed the root-cause fix already worked (site_encryption_key_initialized=true, key fingerprint 0aaefb5a94b3228aca1a2742d358a853225bd18990eb420059ee64e12c69965d) and exposed that reading only the raw model column is not a valid way to observe ciphertext. The successful run confirms the value lives at __Auth.password."
-   },
-   "observed": {
-    "site_encryption_key_initialized": true,
-    "site_encryption_key_sha256": "0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585",
-    "key_length": 44,
-    "encrypted_field": "User.Administrator.api_secret",
-    "storage_location": "__Auth.password",
-    "restore_separate_database": true,
-    "source_db_credentials_copied": false,
-    "site_encryption_key_restored": true,
-    "site_encryption_key_restored_hardened": true,
-    "first_cycle_ciphertext_sha256": "9f771296df54e4c6cd16dead00b62b5993d8d450569ffd0de38b0b21f11caafd",
-    "hardened_cycle_ciphertext_sha256": "029f68b1876ddd0532d1b4e1798faa6e06e458f4b11714f08fe8f2ed8a5ae5c3",
-    "proof_basis": "Fingerprint match against the source, real get_decrypted_password() of content encrypted before the backup, and a byte-identical ciphertext digest - on both restore.localhost and recovery.localhost. Presence of a key string alone is no longer accepted."
-   },
-   "gate_effect": "NONE. recovery and backup-restore remain BLOCKED, durability remains BLOCKED, SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT, production_state remains REJECT and production_enabled remains false. Restore still runs on the same ephemeral host as the source, no destructive trigger has been exercised, and the site key is still generated and copied by that same runner rather than held under separately controlled custody.",
-   "regression_coverage": "tests/foundation/test_encryption_key_recovery.py, 31 tests; full suite 369 tests pass locally; d8_validate.py exits 0 with no gate drift.",
-   "independent_reproduction": {
-    "run": "35135793582",
-    "head_sha": "866396a127164090c41db9ff1bc310ade555409f",
-    "runtime_check": "104934304007",
-    "runtime_report_sha256": "6cfb435d86f3ba0dcb04c8a939cfaf850b4317d00eff3f0442eb6e13e2ad77d5",
-    "evidence_archive": "evidence/production-like-execution/hosted-runtime-35135793582.json",
-    "status": "fail_reject",
-    "conclusion_reason": "SEC-DEPS-01 only; identical failure profile, 121 checks, same two failing audits.",
-    "observed": {
-     "site_encryption_key_initialized": true,
-     "site_encryption_key_sha256": "566c8f5c06ac19a29c556fa146a2095f6fb2447eebf55155b07d2000dd6b55bf",
-     "site_encryption_key_restored": true,
-     "site_encryption_key_restored_hardened": true,
-     "source_db_credentials_copied": false,
-     "storage_location": "__Auth.password",
-     "first_cycle_ciphertext_sha256": "c8bc1cc141c4fb12944068d4fffa0bfe03f03a2559662be1cda61058a57f776a",
-     "hardened_cycle_ciphertext_sha256": "d8f34687db6c4bf749bebaf3aa49a230dee82017c270d958d77e00d746cb5b44"
+    "observed": "The 2026-09-19 rotation absence (NOT_EXECUTED_ON_THIS_BRANCH) was closed by genuine push-triggered execution on this branch, not by re-labelling. All ten hosted workflows executed here across four commits (path-filtered triggers); the newest Foundation runtime run 35451785714 rejected on SEC-DEPS-01 exactly as predicted. qualification_commit is the head of the pinned runtime run; every evidence subblock carries its own head_sha.",
+    "foundation_runtime": {
+      "run": "35451785714",
+      "head_branch": "arena/01a0ba0d-tofel-house-erp",
+      "head_sha": "1ba0ecffebdd5a47c1fa3092c7bc1143f38f196d",
+      "status": "fail_reject",
+      "conclusion": "failure",
+      "created_at": "2026-09-19T15:25:50Z",
+      "job": "105920099904",
+      "failing_step": "Install and validate the pinned foundation",
+      "observed": "Foundation runtime validation genuinely executed on this branch at commit 1ba0ecffebdd5a47c1fa3092c7bc1143f38f196d and rejected. Verified from the GitHub Actions API: run 35451785714, job 105920099904, conclusion failure, failing at the step 'Install and validate the pinned foundation' with exit code 1; annotations read 'Restricted policy regressions failed: hosted-full-stack-dependency-audit: exit 1; hosted-frontend-advisory-audit: exit 1'. An earlier run on this branch (35450528487 at 83c82de) failed identically. This is the SEC-DEPS-01 condition reproduced on the active branch by push-triggered execution.",
+      "phase2_gate_passed": false,
+      "security_gate_passed": false,
+      "product_implementation_authorized": false,
+      "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; nothing was suppressed, overridden, waived, forked or downgraded. Check-run ids and report SHA-256 digests are deliberately not asserted: the artifact and log blobs are unreachable from the recording sandbox (the results host returns EOF), so no digest is recorded that was not independently read. Advisory findings are not exploitability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. Hosted qualification evidence only; it does not authorize production."
     },
-    "why_genuine": "Different run, different commit and freshly generated key material - the fingerprint and both ciphertext digests differ from run 35133062884 because the key is generated per run and Fernet output is randomized per encryption. Every material outcome is nonetheless identical.",
-    "recorded_at_utc": "2026-09-16T19:03:25.194944+00:00"
-   }
-  },
-  "durability_probe_execution": {
-   "date": "2026-09-16",
-   "commit": "866396a127164090c41db9ff1bc310ade555409f",
-   "branch": "arena/01a0aafe-tofel-house-erp",
-   "why": "The durability gate recorded that no MariaDB or Redis restart, no crash or volume-loss probe and no RDB/AOF persistence verification had ever been executed; the only restart probe was Gunicorn/RQ and explicitly excluded the datastore. This is the first genuine execution of datastore durability.",
-   "workflow": "Foundation datastore durability",
-   "run": "35135793802",
-   "check_run": "104927987397",
-   "conclusion": "success",
-   "report_status": "pass",
-   "report_sha256": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65",
-   "evidence_archive": "evidence/production-like-execution/hosted-durability-35135793802.json",
-   "real_services_not_mocks": {
-    "mocks_or_simulations_used": false,
-    "docker_version": "28.0.4 28.0.4",
-    "mariadb": {
-     "index_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
-     "server_reported_version": "11.8.9-MariaDB-ubu2404-log"
+    "foundation_runner": {
+      "run": "35449025428",
+      "head_branch": "arena/01a0ba0d-tofel-house-erp",
+      "head_sha": "b9be4d1570306354ddca8ad769856d1ee085f151",
+      "status": "pass_scoped",
+      "conclusion": "success",
+      "created_at": "2026-09-19T14:31:54Z",
+      "observed": "Foundation runner qualification completed successfully on this branch at the rotation base commit. Later pushes did not touch its trigger paths, so this remains its newest genuine execution here.",
+      "limits": "Runner/download/service qualification only. It does not prove restart persistence, crash durability, RDB/AOF persistence or restart recovery."
     },
-    "redis": {
-     "index_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
-     "server_reported_version": "8.6.6",
-     "mode": "standalone"
+    "placement": {
+      "run": "35451785695",
+      "head_branch": "arena/01a0ba0d-tofel-house-erp",
+      "head_sha": "1ba0ecffebdd5a47c1fa3092c7bc1143f38f196d",
+      "status": "pass_scoped",
+      "conclusion": "success",
+      "created_at": "2026-09-19T15:25:50Z",
+      "observed": "Placement synthetic content qualification completed successfully on this branch at commit 1ba0ecf, including the D16 activation code. An earlier run on this branch (35450528440 at 83c82de) also succeeded.",
+      "limits": "Synthetic content-governance scope on one disposable runner; not multi-branch isolation in a deployed topology, not an independent-host restore, not a destructive-event recovery, not offsite backup, not key custody/rotation, not RPO/RTO, SLA or availability proof. Production remains REJECT."
+    },
+    "frontend_candidate": {
+      "run": "35449025381",
+      "head_branch": "arena/01a0ba0d-tofel-house-erp",
+      "head_sha": "b9be4d1570306354ddca8ad769856d1ee085f151",
+      "status": "fail_reject_not_adopted",
+      "conclusion": "failure",
+      "created_at": "2026-09-19T14:31:54Z",
+      "job": "105912834393",
+      "failing_step": "Compare frozen baseline and isolated candidate",
+      "observed": "The frontend candidate review executed on this branch at the rotation base commit and failed at the baseline-versus-candidate comparison step, continuing this gate's unbroken rejection history on the npm advisory audit. Later pushes did not touch its trigger paths.",
+      "limits": "Candidate is NOT ADOPTED and is not a remediation or production approval. production_pins_changed remains false."
+    },
+    "d8_contract": {
+      "run": "35450528401",
+      "head_branch": "arena/01a0ba0d-tofel-house-erp",
+      "head_sha": "83c82dec2956df9016cc6160761bd9e701b100e4",
+      "status": "pass_structural",
+      "conclusion": "success",
+      "created_at": "2026-09-19T15:01:52Z",
+      "observed": "d8_validate.py and the D8 contract tests ran on this branch at commit 83c82de and passed structurally. The validator exits 0 while reporting d8_gate_state BLOCKED, production_state REJECT, production_enabled false, synthetic-only guard REQUIRED and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT. Later pushes did not touch its trigger paths.",
+      "limits": "Structural contract validation only. A passing D8 contract check is not a D8 PASS and not production authorization."
+    },
+    "other_gates_on_this_branch": {
+      "operational_boundaries": "35449025427 success @b9be4d1",
+      "datastore_durability": "35449025405 success @b9be4d1",
+      "external_key_custody": "35449025377 success @b9be4d1",
+      "independent_system_recovery": "35449025449 success @b9be4d1",
+      "owned_suite": "35452794488 success @523fe5e"
+    },
+    "qualification_scope": "Ten hosted workflows were genuinely executed on this branch by push trigger across four commits, because every workflow except owned-suite is path-filtered: the rotation base b9be4d1 ran the full set of ten; 83c82de re-ran owned-suite, D8 contract, placement and Foundation runtime; 1ba0ecf re-ran owned-suite, placement and Foundation runtime; later commits re-ran owned-suite only (newest 35452794488 at 523fe5e, success). Eight workflows succeed at their newest run; Foundation runtime validation and the frontend candidate review reject. Prior-session evidence is retained unchanged under the provenance blocks and was not counted as an execution on this branch.",
+    "limits": "Nothing here authorizes production. D8 remains BLOCKED, production remains REJECT, and SEC-DEPS-01 remains UPSTREAM-BLOCKED with no waiver. The Foundation runtime REJECTED on this branch exactly as on the previous session branches; execution moved the evidence onto this branch and changed no outcome. The frontend candidate is not adopted."
+  },
+  "prior_active_branch_provenance": {
+    "date": "2026-09-18",
+    "branch": "arena/01a0b5c4-tofel-house-erp",
+    "classification": "historical_provenance",
+    "hosted_execution_state": "EXECUTED",
+    "qualification_commit": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+    "rotated_from": "arena/01a0b3a7-tofel-house-erp",
+    "prior_active_branch": "arena/01a0b3a7-tofel-house-erp",
+    "earlier_active_branch": "arena/01a0aef4-tofel-house-erp",
+    "production_state": "REJECT",
+    "production_authorized": false,
+    "phase2_gate_passed": false,
+    "security_gate_passed": false,
+    "product_implementation_authorized": false,
+    "foundation_runtime": {
+      "run": "35384078097",
+      "head_branch": "arena/01a0b5c4-tofel-house-erp",
+      "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+      "status": "fail_reject",
+      "conclusion": "failure",
+      "created_at": "2026-09-18T19:06:37Z",
+      "job": "105726747501",
+      "failing_step": "Install and validate the pinned foundation",
+      "observed": "Foundation runtime validation genuinely executed on this branch at commit e96de8ab21326bea1e7ee2bcafb1992a99c0a82b and rejected. Verified from the GitHub Actions API: run 35384078097, job 105726747501, conclusion failure, failing at the step 'Install and validate the pinned foundation' with exit code 1. This is the SEC-DEPS-01 condition reproduced on the active branch by push-triggered execution rather than re-labelling an earlier branch's run.",
+      "phase2_gate_passed": false,
+      "security_gate_passed": false,
+      "product_implementation_authorized": false,
+      "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; nothing was suppressed, overridden, waived, forked or downgraded. Check-run ids and report SHA-256 digests are deliberately not asserted: the artifact and log blobs are unreachable from the recording sandbox (the results host returns EOF), so no digest is recorded that was not independently read. Advisory findings are not exploitability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. Hosted qualification evidence only; it does not authorize production."
+    },
+    "foundation_runner": {
+      "run": "35384077956",
+      "head_branch": "arena/01a0b5c4-tofel-house-erp",
+      "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+      "status": "pass_scoped",
+      "conclusion": "success",
+      "observed": "Foundation runner qualification completed successfully on this branch at the same commit.",
+      "limits": "Runner/download/service qualification only. It does not prove restart persistence, crash durability, RDB/AOF persistence or restart recovery."
+    },
+    "placement": {
+      "run": "35384078001",
+      "head_branch": "arena/01a0b5c4-tofel-house-erp",
+      "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+      "status": "pass_scoped",
+      "conclusion": "success",
+      "observed": "Placement synthetic content qualification completed successfully on this branch at the same commit.",
+      "limits": "Synthetic content-governance scope on one disposable runner; not multi-branch isolation in a deployed topology, not an independent-host restore, not a destructive-event recovery, not offsite backup, not key custody/rotation, not RPO/RTO, SLA or availability proof. The synthetic-only guard was enabled. Production remains REJECT."
+    },
+    "frontend_candidate": {
+      "run": "35384077998",
+      "head_branch": "arena/01a0b5c4-tofel-house-erp",
+      "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+      "status": "fail_reject_not_adopted",
+      "conclusion": "failure",
+      "job": "105726747229",
+      "failing_step": "Compare frozen baseline and isolated candidate",
+      "observed": "The frontend candidate review executed and failed at the baseline-versus-candidate comparison step, continuing this gate's unbroken rejection history on the npm advisory audit.",
+      "limits": "Candidate is NOT ADOPTED and is not a remediation or production approval. production_pins_changed remains false."
+    },
+    "d8_contract": {
+      "run": "35384077993",
+      "head_branch": "arena/01a0b5c4-tofel-house-erp",
+      "head_sha": "e96de8ab21326bea1e7ee2bcafb1992a99c0a82b",
+      "status": "pass_structural",
+      "conclusion": "success",
+      "job": "105726747011",
+      "observed": "d8_validate.py and tests.d8.test_contract ran on this branch at this commit and passed. The validator exits 0 while reporting d8_gate_state BLOCKED, production_state REJECT, production_enabled false, synthetic-only guard REQUIRED and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT.",
+      "limits": "Structural contract validation only. A passing D8 contract check is not a D8 PASS and not production authorization."
+    },
+    "other_gates_on_this_branch": {
+      "operational_boundaries": "35384078024 success",
+      "datastore_durability": "35384078002 success",
+      "external_key_custody": "35384077977 success",
+      "independent_system_recovery": "35384078072 success",
+      "owned_suite": "35384078106 success"
+    },
+    "qualification_scope": "Ten hosted workflows were genuinely executed on this branch at commit e96de8ab21326bea1e7ee2bcafb1992a99c0a82b by push trigger: owned-suite, foundation-runtime, foundation-runner, foundation-frontend-review, foundation-operational-boundaries, foundation-durability, foundation-key-custody, foundation-independent-recovery, placement-content and d8-operations-contract. Eight succeeded; Foundation runtime validation and the frontend candidate review both rejected. Prior-session evidence is retained unchanged under the provenance blocks and was not counted as an execution on this branch.",
+    "limits": "Nothing here authorizes production. D8 remains BLOCKED, production remains REJECT, and SEC-DEPS-01 remains UPSTREAM-BLOCKED with no waiver. The Foundation runtime REJECTED on this branch exactly as it did on the two previous session branches; re-execution changed the branch that owns the evidence, not the outcome. The frontend candidate is not adopted.",
+    "supersedes": "arena/01a0b3a7-tofel-house-erp",
+    "former_classification": "hosted_synthetic_qualification_only"
+  },
+  "earlier_active_branch_provenance": {
+    "date": "2026-09-18",
+    "branch": "arena/01a0b3a7-tofel-house-erp",
+    "classification": "historical_provenance",
+    "hosted_execution_state": "EXECUTED",
+    "qualification_commit": "82275fd4fd917dbe175f7bd67a0b5380ab169017",
+    "rotated_from": "arena/01a0b084-tofel-house-erp",
+    "prior_active_branch": "arena/01a0aef4-tofel-house-erp",
+    "earlier_active_branch": "arena/01a0aafe-tofel-house-erp",
+    "production_state": "REJECT",
+    "production_authorized": false,
+    "phase2_gate_passed": false,
+    "security_gate_passed": false,
+    "product_implementation_authorized": false,
+    "foundation_runtime": {
+      "run": "35361065542",
+      "head_branch": "arena/01a0b3a7-tofel-house-erp",
+      "head_sha": "82275fd4fd917dbe175f7bd67a0b5380ab169017",
+      "status": "fail_reject",
+      "created_at": "2026-09-18T15:13:11Z",
+      "conclusion": "failure",
+      "failing_step": "Install and validate the pinned foundation",
+      "observed": "Foundation runtime validation genuinely executed on this branch and rejected. Verified from the GitHub Actions API: run 35361065542, workflow 'Foundation runtime validation', head_branch arena/01a0b3a7-tofel-house-erp, head_sha 82275fd4fd917dbe175f7bd67a0b5380ab169017, status completed, conclusion failure. The job's step list shows checkout, setup-node, owned qualification policies, pinned Yarn CLI and Python/service setup all succeeding, then 'Install and validate the pinned foundation' failing with exit code 1 - the SEC-DEPS-01 dependency-gate position. A second Foundation runtime run on the same branch, 35356041559 at 53aae309dfd668c66ac30dc6072237f525a5dce0, also concluded failure.",
+      "phase2_gate_passed": false,
+      "security_gate_passed": false,
+      "product_implementation_authorized": false,
+      "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; no waiver, override, suppression or candidate adoption. Check-run ids and report SHA-256 digests are deliberately NOT recorded here: the check-runs endpoint returned 404 for this run and the artifact/log blobs are unreachable from the recording sandbox, so no digest is asserted that was not independently read. Advisory findings are not exploitability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. Hosted qualification evidence only; it does not authorize production."
+    },
+    "qualification_scope": "This block corrects a documentation-versus-reality drift. The block that previously occupied this slot recorded hosted_execution_state NOT_EXECUTED_ON_THIS_BRANCH for arena/01a0b3a7-tofel-house-erp, but the GitHub Actions API shows Foundation runtime validation did execute on that branch and rejected (runs 35361065542 and 35356041559). The stale absence claim is superseded by the observed execution; no run was re-executed or re-labelled to produce it.",
+    "limits": "Nothing here authorizes production. D8 remains BLOCKED, production remains REJECT, and SEC-DEPS-01 remains UPSTREAM-BLOCKED with no waiver. Only the Foundation runtime gate is evidenced for this branch; the runner, placement, frontend-candidate and D8-contract gates are not claimed for it.",
+    "supersedes": "arena/01a0aef4-tofel-house-erp",
+    "former_classification": "hosted_synthetic_qualification_only"
+  },
+  "historical_branch_requalification": {
+    "date": "2026-09-16",
+    "foundation_runtime": {
+      "run": "35084695840",
+      "commit": "955e4cd5eedc34b90f4fbfce047339e18558f1f2",
+      "check": "104762158723",
+      "report_sha256": "f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc",
+      "remaining_gate_check": "104762162219",
+      "remaining_gate_report_sha256": "b03a2678f7d8a296a90adf8ce1b567b326431d5bcdaca6d808ee0874cf731afe",
+      "status": "fail",
+      "observed": "116 restricted checks ran; 114 passed. The post-asset-build resolved-stack audit inventoried 161 Bench-Python package names and 572 supplied installed Node package names; it recorded 14 PyPI/OSV finding records across four packages and 97 npm advisory entries across 36 packages (2 critical, 49 high, 39 moderate, 7 low). Exact IDs, queried versions and provider ranges are retained in evidence/phase-2/resolved-stack-advisory-2026-09-16.json. The pinned MariaDB/Redis references are inventory-only. Readiness, realtime, upgrade, Guardian browser, frontend graph, restart and remaining-gate probes passed; both full-stack and Education frontend advisory audits failed.",
+      "limits": "Current REJECT evidence: phase2_gate_passed and security_gate_passed remain false. The audit does not establish exploitability/reachability, a complete SBOM, OS-package or container-image CVE coverage, remediation, or production approval."
+    },
+    "product_restore_rehearsal": {
+      "run": "35076449739",
+      "commit": "ebe77676fffb3e2e1f0b49cac8e18c5e7763180a",
+      "runner_check": "104733077969",
+      "native_check": "104733073877",
+      "runner_report_sha256": "970bef76b54814e8ed7fd26de89417a7d3b83875791538babe792c7ce0d33598",
+      "native_report_sha256": "e1ff7050e10830ae651766b838488a6c90bbe8c7fae679617a250a6f8f58d08f",
+      "status": "pass_scoped",
+      "observed": "542/542 native checks passed. Bench SQL/public/private-file backup restored to a separate synthetic site/database; representative count/name digests across 14 doctypes and a private File SHA-256 passed. Source database credentials were not copied; the site encryption key was restored for encrypted content.",
+      "limits": "One disposable hosted runner only; not full Placement requalification, offsite backup, independent-host disaster recovery, production topology, key custody, RPO/RTO, SLA, or availability proof. Production remains REJECT."
+    },
+    "active_branch": "arena/01a0a9f7-tofel-house-erp",
+    "evidence_branch": "arena/01a0a942-tofel-house-erp",
+    "classification": "historical_provenance"
+  },
+  "d8_decision_matrix": "d8-production-operations-decision-matrix.json",
+  "d8_contract_template": "d8-operational-contract.template.json",
+  "d8_gate_state": "BLOCKED",
+  "d8_validator": "tools/foundation/d8_validate.py",
+  "owner_decision_record": "canonical-owner-decision-record.json",
+  "owner_business_policy_state": {
+    "status": "RECORDED / IMPLEMENTATION-EVIDENCE PENDING",
+    "selected": "Authority roles, role-based access/auditability/offboarding, multi-branch isolation, current local/Tailscale deployment, local database/files, encrypted multi-version backup/recovery, preservation priority, configurable business policy, controlled administration, and health/attention visibility.",
+    "unresolved": "Numeric capacity/availability objective, future internet provider/hostname/DNS/public edge, future off-site backup destination, numeric RPO/RTO, and separately deferred domain policies.",
+    "does_not_authorize_production": true
+  },
+  "release_readiness_evidence": "release-readiness-evidence.json",
+  "production_like_gap_closure": {
+    "date": "2026-09-17",
+    "branch": "arena/01a0aafe-tofel-house-erp",
+    "authority": "evidence/production-like-execution/execution-ledger.json; d8-production-operations-decision-matrix.json",
+    "classification": "EXECUTED / HOSTED REAL STACK - separate from the bounded synthetic harness in release-readiness-evidence.json, which stays PASS / BOUNDED and is not upgraded by any of this.",
+    "gates_flipped_to_pass": [],
+    "statement": "No D8 release gate flips to PASS from this work. Every executed pass is scoped or partial, each corresponding gate keeps its prior BLOCKED or REJECT state, this ledger's recommendation stays REJECT, production_authorization stays REJECT and production_enabled stays false. No owner numeric objective was invented: capacity-availability stays BLOCKED with no selected target, and no RPO/RTO figure appears anywhere in this closure. SEC-DEPS-01 stays UPSTREAM-BLOCKED / REJECT - no version was forced, no lock overridden, no package forked, no advisory suppressed and no gate downgraded.",
+    "p1_site_encryption_key_defect": {
+      "status": "CLOSED",
+      "classification": "EXECUTED-HOSTED",
+      "root_cause": "Frappe writes encryption_key into sites/<site>/site_config.json lazily, on the first call to frappe.utils.password.get_encryption_key(); bench new-site does not create it. foundation.localhost installs only erpnext/education/payments/hrms, so nothing triggered key generation before the first backup. The harness then copied the key with `if \"encryption_key\" in original_config:` - a silent no-op - and reported the omission as a passive observation instead of failing the run. placement-test.localhost installs toefl_house, whose after_install() calls get_encryption_key(), which is why that path reported true and masked the defect.",
+      "proof_run": "35133062884",
+      "proof_commit": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
+      "independent_reproduction_run": "35135793582",
+      "independent_reproduction_commit": "866396a127164090c41db9ff1bc310ade555409f",
+      "does_not_upgrade": "This closes one named recovery defect on the same disposable hosted runner. It is not production qualification. Restore still runs on the same host as the source, no destructive trigger has been exercised, external key custody and rotation remain bounded-only, and the recovery and backup-restore gates remain BLOCKED."
+    },
+    "p2_container_durability": {
+      "status": "EXECUTED-HOSTED",
+      "run_id": "35135793802",
+      "commit": "866396a127164090c41db9ff1bc310ade555409f",
+      "check_run": "104927987397",
+      "workflow": "Foundation datastore durability",
+      "archived_evidence": "hosted-durability-35135793802.json",
+      "archived_evidence_sha256": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65",
+      "mocks_or_simulations_used": false,
+      "conclusion": "Container-level MariaDB and Redis restart, crash-recovery and named-volume persistence are now genuinely executed and PASS. The durability gate remains BLOCKED because its area is broader than container restarts."
+    },
+    "p3_independent_system_recovery": {
+      "status": "EXECUTED / CLOSED AS A PROBE; GATES STILL BLOCKED",
+      "run_id": "35170062251",
+      "commit": "1378ce426a6093948eb96f88fcf7a5ba3b1a90c2",
+      "source_check_run": "105041393483",
+      "target_check_run": "105042127143",
+      "source_checks": "29/29",
+      "target_checks": "31/31",
+      "archived_evidence": [
+        "hosted-independent-source-35170062251.json",
+        "hosted-independent-target-35170062251.json"
+      ],
+      "archived_evidence_sha256": [
+        "9c054dd6e41f57d5f073bbe06e2116bf1ec66b9a48fab1d30b7ec48f9f7df1b5",
+        "ea23e9f922eb736eea21437a06db1e5ca0a4d0c223b1ea001268a8720de48cb1"
+      ],
+      "independence_verdict": "INDEPENDENT - verified, not assumed",
+      "required_discriminators": {
+        "kernel_boot_id_differs": true,
+        "runner_name_differs": true,
+        "dmi_product_uuid_differs": true
+      },
+      "observation_only_identifiers": {
+        "hostname": "matches - disproved as a discriminator by run 35143620884",
+        "docker_daemon_id": "matches - disproved as a discriminator by run 35168111875"
+      },
+      "destructive_trigger": "bench --site source.localhost drop-site --no-backup --db-root-password <runner-generated, never printed>",
+      "mocks_or_simulations_used": false,
+      "encrypted_field_limitation": {
+        "decrypts_on_target": false,
+        "keys_differ": true,
+        "source_key_sha256": "433059bd7bb94a9c18e3cfcc3779d9ba65d992ed6c5d34c283098d08f9471291",
+        "target_key_sha256": "249d33a6e5be6f964053670f4fc1060389d631b2e24cbb2ded5f191d33b50a11",
+        "conclusion": "Database and files recovered; source-encrypted field is intact but undecryptable here because the key was never transferred. Closing this requires separately controlled external key custody, which is a distinct requirement."
+      },
+      "not_proven": [
+        "Recovery onto a different cloud provider, region or physical datacentre",
+        "Restoring with the source encryption key, so decryption of source-encrypted fields needs separately controlled external key custody",
+        "Recovery time and recovery point objectives, which need an owner-selected target",
+        "Off-site or air-gapped backup storage, retention and rotation",
+        "TLS termination and the Tailscale boundary, exercised separately",
+        "Any production workload, since all data here is synthetic",
+        "Both halves are GitHub-hosted runners from the same pool: kernel_boot_id, runner_name and dmi_product_uuid prove separate ephemeral VMs, not separate providers, regions or datacentres. Loss of a host, region or provider remains unexercised.",
+        "The backup moves through a GitHub Actions artifact between two ephemeral VMs. There is no off-site or air-gapped destination, no versioned encrypted backup set, no retention policy and no rotation.",
+        "Session revocation on recovery, which D8-BACKUP-RECOVERY also requires, is not exercised.",
+        "No RPO or RTO is measured against an owner-selected objective, because no owner objective exists and none is invented. Step timings are in the check logs but are not a qualification.",
+        "Every record, file and credential is synthetic and generated inside the run; no production workload is exercised."
+      ],
+      "defects_found_and_fixed_by_execution": 6
+    },
+    "p4_key_custody": {
+      "status": "EXECUTED / CLOSED AS A PROBE; GATES STILL BLOCKED",
+      "requirement": "Executable production-like external key custody with rotation and restoration using separately controlled key material; no plaintext secret in any repository artifact.",
+      "why_p3_does_not_cover_it": "Run 35170062251 deliberately left `bench restore --encryption-key` unused so no key material travelled, which is why the source-encrypted field is intact but undecryptable on the target. That executed failure is the evidence that P4 is a separate requirement.",
+      "run_id": "35179445639",
+      "commit": "252345ed8df256d8679db93f835cdf2995318077",
+      "workflow": ".github/workflows/foundation-key-custody.yml",
+      "custodian_check_run": "105068259227",
+      "operator_check_run": "105068842511",
+      "recovery_check_run": "105069423253",
+      "custodian_checks": "10/10",
+      "operator_checks": "29/29",
+      "recovery_checks": "34/37 passing plus 3 REQUIRED FAILURES (negative controls)",
+      "archived_evidence": [
+        "hosted-key-custodian-35179445639.json",
+        "hosted-key-operator-35179445639.json",
+        "hosted-key-recovery-35179445639.json"
+      ],
+      "archived_evidence_sha256": [
+        "b70a5d9370013d8c5827dc787600640f048331d38d3258a37c6e2f489d74342b",
+        "4da48bf94c8f60f8edd8866ac16124f027e63564669db87c0c0015e550153086",
+        "215729b6747157a63721695dfd825a6093319c5f53cdf85083998d5ee9a132b3"
+      ],
+      "three_separate_machines": "SEPARATE MACHINES - verified, not assumed",
+      "required_discriminators": {
+        "kernel_boot_id_differs": true,
+        "runner_name_differs": true,
+        "dmi_product_uuid_differs": true,
+        "pairs_compared": 3
+      },
+      "observation_only_identifiers": {
+        "hostname": "matches on all three (runnervmlun5p) - disproved as a discriminator by run 35143620884",
+        "docker_daemon_id": "absent on the custodian, which started no container, and shared by the operator and the recovery system - disproved as a discriminator by run 35168111875"
+      },
+      "keys_under_custody": {
+        "encryption_key": "site key protecting __Auth ciphertext, installed with frappe.installer.update_site_config",
+        "backup_encryption_key": "backup key passed by bench backup to gpg -c and by bench restore to gpg -d when System Settings encrypt_backup is on",
+        "distinct_native_keys": true,
+        "epochs": [
+          1,
+          2
+        ],
+        "fingerprints": {
+          "epoch1_encryption_key": "7ca9c12dcd0a0297a96a570cc4e75c1f75de0186dabee85cbe154408f36c5ee7",
+          "epoch1_backup_encryption_key": "3d9dd7d826db6f5bb9b4dc54dbd8af9da48b020c681de3752657ba7a6573aa29",
+          "epoch2_encryption_key": "82441542816ab41cfa93508d9f1239c1d7a0d86045b337610d801752ec04ad6a",
+          "epoch2_backup_encryption_key": "718d96a5e45970ed4e0ed6cb3997b57799ea780ccd47f1ac2ece4a7f3c6ba8c0"
+        },
+        "split_method": "xor-one-time-pad-over-key-bytes",
+        "channels": [
+          "a",
+          "b"
+        ],
+        "custody_manifest_sha256": "72fd408ec262abbf94f10b336146424c6a3a984786e6bbc69db62d445ec4d966"
+      },
+      "retrieval_proved_load_bearing": {
+        "restore_without_any_key": "exit 1 - 'Encrypted backup file detected. Decrypting using site config. / Decryption failed.'",
+        "restore_with_a_real_key_from_the_wrong_epoch": "exit 1 - 'Decrypting using provided key. / Decryption failed.'",
+        "single_channel_reconstruction": "does not reproduce the fingerprint",
+        "cross_epoch_shares": "do not reproduce the fingerprint",
+        "negative_controls_ran_on_copies": true,
+        "staged_payload_byte_identical_afterwards": true
+      },
+      "encrypted_backup_at_rest": {
+        "artifacts_detected_as": "PGP symmetric key encrypted data - AES with 256-bit key salted & iterated - SHA512",
+        "database_sha256": "0f337270c29dcf5e6ef4e25e05ce2183fae239d35c713f1c6243677103f60df7",
+        "database_bytes": 245422,
+        "detection_asserted_with_the_file_command": "the same test bench restore applies when deciding whether to decrypt",
+        "site_config_backup_excluded_because_gpg_does_not_cover_it": true
+      },
+      "p3_limitation_closed": {
+        "then": {
+          "run": 35170062251,
+          "decrypts_on_target": false,
+          "reason": "no key travelled with the backup"
+        },
+        "now": {
+          "run": 35179445639,
+          "decrypts_on_target": true,
+          "reason": "the key was retrieved from separate custody channels"
+        },
+        "ciphertext_sha256_identical_across_the_two_machines": true,
+        "plaintext_digest_matches_the_operators_record": true,
+        "plaintext_published": false
+      },
+      "rotation": {
+        "native_single_command_exists": false,
+        "composed_from": [
+          "frappe.utils.password.decrypt(encryption_key=old)",
+          "frappe.utils.password.set_encrypted_password",
+          "frappe.installer.update_site_config"
+        ],
+        "site_key_orphaning_is_the_native_consequence": true,
+        "native_error_recorded": "ValidationError: Failed to decrypt key User.Administrator.api_secret - Encryption key is invalid! Please check site_config.json",
+        "ciphertext_changed": true,
+        "plaintext_digest_unchanged": true,
+        "epoch_1_key_decrypts_after_rotation": false,
+        "epoch_2_key_decrypts": true,
+        "a_key_custody_never_issued_decrypts": false,
+        "backup_key_rotated_and_proved_at_the_gpg_layer": {
+          "epoch_2_key_opens_the_new_backup": "gpg exit 0, 245301 bytes",
+          "epoch_1_key_rejected": "gpg exit 2",
+          "new_backup_detected_as_aes": true
+        }
+      },
+      "destructive_trigger": "bench drop-site custody-operator.localhost --no-backup --db-root-password <runner-generated, never printed>, followed by removal of the archived site directory because it holds both plaintext keys",
+      "secret_hygiene": {
+        "plaintext_key_in_any_published_artifact": false,
+        "plaintext_key_surviving_destruction_on_the_operator_machine": false,
+        "secrets_scanned_for": 7,
+        "leaks_found": 0,
+        "masking": "::add-mask:: applied to every key and generated password before any command could echo it",
+        "keys_passed_to_in_bench_scripts_via": "environment variables, never argv"
+      },
+      "mocks_or_simulations_used": false,
+      "contract_tests": "tests/foundation/test_key_custody_contract.py - 67 tests",
+      "defects_found_and_fixed_by_execution": [
+        "frappe appends an '-enc' suffix to every backup artifact name when encrypt_backup is on, so globs written for unencrypted names matched nothing (run 35178965074 died on 'max() iterable argument is empty' after a successful backup); fixed in 252345e",
+        "frappe interpolates backup_encryption_key into the gpg command unquoted and on failure prints 'Files are stored without encryption' and continues, so a key beginning with '-' - about one in 64 - would silently yield a plaintext backup under an '-enc' filename; the generator now refuses a leading dash and the AES detection assertion catches it regardless"
+      ],
+      "environment_blocked": {
+        "external_secret_store": "repository Actions secrets are not accessible to this session's credential (HTTP 403 Resource not accessible by integration; no admin permission), so no KMS, HSM or secret store could be provisioned. Recorded rather than worked around by weakening the model.",
+        "consequence": "custody is a bounded split-share model across two artifact channels and is explicitly NOT a trust boundary: any job able to download both channels can reconstruct the keys. Retrieval, rotation and decryption are proven; authorization of key release is not."
+      },
+      "not_proven": [
+        "A hardware security module, a cloud KMS or an owner-provisioned secret store",
+        "Authorization of key release: any job able to download both channels can reconstruct the keys",
+        "A rotation ceremony held at a different time from issuance",
+        "Key revocation, custodian-side destruction and custody audit logging",
+        "Custody-channel durability beyond the 14-day artifact retention window; no versioned or off-site key store",
+        "HTTP usability after rotation, which run 35170062251 proved for recovery but not for a rotated key",
+        "A second full restore under the rotated backup key; proven at the gpg layer instead",
+        "Session revocation on recovery, which D8-BACKUP-RECOVERY also requires",
+        "Any RPO or RTO measured against an owner objective, because none exists and none is invented",
+        "A product app under custody: the rehearsal site is frappe-only, recorded as a scope limit",
+        "Any production workload: every key, record, file and credential is synthetic",
+        "Separate providers, regions or datacentres: three GitHub-hosted runners from one pool prove three separate ephemeral VMs only"
+      ]
+    },
+    "p5_operational_boundaries": {
+      "status": "NOT STARTED",
+      "requirement": "Exercise the intended TLS/Tailscale boundary, monitoring and alert delivery with retention, and rollback using real versioned artifacts, kept clearly separate from synthetic and bounded evidence."
     }
-   },
-   "effective_settings_read_back": {
-    "mariadb": {
-     "innodb_flush_log_at_trx_commit": "1",
-     "sync_binlog": "1",
-     "log_bin": "1"
-    },
-    "redis": {
-     "aof_enabled": "1",
-     "appendfsync": "always",
-     "aof_last_write_status": "ok",
-     "rdb_last_bgsave_status": "ok"
-    }
-   },
-   "pre_state": {
-    "mariadb_committed_rows": 25,
-    "mariadb_payload_crc32_sum": 51945241053,
-    "mariadb_uncommitted_visible": "0",
-    "redis_dbsize": 2,
-    "redis_queue_length": 25
-   },
-   "scenarios_passed": {
-    "graceful_restart": true,
-    "sigkill_crash_recovery": true,
-    "container_destruction_recreated_from_same_named_volume": true,
-    "negative_control_volume_removal_yields_empty_database": true
-   },
-   "independent_restart_proof": "Binary log rotated once per server start: mariadb-bin.000001 -> 000002 -> 000003 -> 000004 -> 000005.",
-   "new_container_ids_after_destruction": {
-    "mariadb": "12e831ef68ca -> c081c5c03e39",
-    "redis": "c25b3f0c1c9e -> 0b72e4d5ec16"
-   },
-   "known_evidence_gap_in_this_run": "SUPERSEDED: innodb_recovery_messages was empty in run 35135793802 because the log filter matched only 'recovery'/'crash'. Commit 699ad7e broadened it and run 35137645608 then showed the broadened filter matching only startup noise, which commit e92c66e corrects by separating the two and adding INNODB STATUS as the authoritative source.",
-   "gate_effect": "NONE. The durability gate remains BLOCKED. Its area also covers configuration, private/public file and encryption-key durability, none of which is proven; host or region loss, storage-array failure, off-site replication, HA and failover are unproven; application-level workflow correctness after recovery is unproven; and the owner durability references required by D8-DURABLE-STATE remain NOT SELECTED and are not invented here. production_state remains REJECT and production_enabled remains false.",
-   "regression_coverage": "tests/foundation/test_durability_contract.py, 27 tests; full suite 371 tests pass locally; d8_validate.py exits 0 with no gate drift.",
-   "blocked_on": "RESOLVED. Credentials restored; 699ad7e and 9b96199 pushed. Both the stricter probe (run 35137645608) and the honest-labelling probe (run 35138416558) have hosted PASS results.",
-   "recorded_at_utc": "2026-09-16T18:48:44.369211+00:00",
-   "stricter_probe_rerun": {
-    "run": "35137645608",
-    "head_sha": "9b96199839dea77569bbbaf8321953af9fd43815",
-    "check_run": "104934194163",
-    "conclusion": "success",
-    "report_status": "pass",
-    "report_sha256": "6f9b379d132ed131d38e68647397b9b9f197312fe5312990e75c191fd0da408b",
-    "evidence_archive": "evidence/production-like-execution/hosted-durability-35137645608.json",
-    "binlog_rotation_progression": {
-     "pre_state": 2,
-     "graceful_restart": 3,
-     "crash_recovery": 4,
-     "volume_persistence_after_container_destruction": 5
-    },
-    "all_scenarios_survived_identically": {
-     "committed_row_count": 25,
-     "payload_crc32_sum": 51945241053,
-     "uncommitted_visible": "0",
-     "redis_queue_length": 25
-    },
-    "negative_control_confirms_data_lived_in_the_volume": true,
-    "evidence_quality_defect_found_and_fixed": "innodb_recovery_messages held one line, '[Entrypoint]: Starting temporary server' - startup noise, not InnoDB recovery. Commit e92c66e separates crash from startup markers, records SHOW ENGINE INNODB STATUS's LOG section as the authoritative native source, and requires innodb_force_recovery=0. The substantive durability proof was never affected.",
-    "recorded_at_utc": "2026-09-16T19:03:25.194944+00:00"
-   },
-   "honest_labelling_rerun": {
-    "run_id": "35138416558",
-    "commit": "fd94e8f760205a3e5bc7aae236bd896813634388",
-    "check_run": "104936842736",
-    "conclusion": "success",
-    "report_status": "pass",
-    "archived_evidence": "hosted-durability-35138416558.json",
-    "archived_evidence_sha256": "b5bd967bfa51c84040911404a3c32f2170baace6388c3a81016c5c4f0596fd9b",
-    "binlog_rotation_progression": {
-     "pre_state": 2,
-     "graceful restart": 3,
-     "crash recovery": 4,
-     "volume persistence after container destruction": 5
-    },
-    "innodb_force_recovery": "0",
-    "innodb_status_log_section": [
-     "Log sequence number 52305",
-     "Log flushed up to   52305",
-     "Pages flushed up to 51911",
-     "Last checkpoint at  51911"
-    ],
-    "innodb_recovery_messages": [],
-    "server_startup_messages_captured": true,
-    "all_scenarios_survived_identically": {
-     "committed_row_count": 25,
-     "payload_crc32_sum": 51945241053,
-     "uncommitted_visible": "0"
-    },
-    "negative_control": {
-     "table_present_after_volume_loss": "0",
-     "confirms_data_lived_in_the_volume": true
-    },
-    "new_containers_created": true,
-    "why_this_run_is_the_authoritative_durability_evidence": "It is the first run in which the crash scenario is corroborated by an authoritative native source rather than a log grep. innodb_recovery_messages is correctly EMPTY - MariaDB 11.8 emits no crash-recovery lines at default verbosity - and the previously mislabeled startup noise now sits in its own server_startup_messages field. SHOW ENGINE INNODB STATUS supplies the real recovery position (log sequence number 52305 equal to log flushed up to 52305, last checkpoint at 51911), and innodb_force_recovery=0 proves recovery was not bypassed. The run would now fail closed if neither a genuine InnoDB log line nor an INNODB STATUS LOG section were present.",
-    "recorded_at_utc": "2026-09-16T19:07:22.443749+00:00",
-    "evidence_archive": "evidence/production-like-execution/hosted-durability-35138416558.json"
-   }
   },
-  "provenance_note": "Former active_branch_qualification block, reclassified as historical provenance by the arena/01a0aef4-tofel-house-erp branch-boundary rotation. Every run, check, commit and SHA-256 identity below is exactly as recorded when it was the active block; none of it is re-executed, re-labelled or counted as an execution on the current branch."
- }
+  "last_rotation": {
+    "date": "2026-09-19",
+    "active_branch": "arena/01a0ba0d-tofel-house-erp",
+    "rotated_from": "arena/01a0b5c4-tofel-house-erp",
+    "effect": "Fourth branch-boundary rotation, performed with the documented procedure: canonical pin, all eleven workflow filters and ref guards, the ten current-status headers, the D8 matrix/contract/owner records, the acceptance ledger and the qualification tests were updated in the same change. No gate changed state. arena/01a0b5c4-tofel-house-erp moved from active to historical provenance with its genuine execution intact (Foundation runtime run 35384078097, fail_reject); arena/01a0b3a7-tofel-house-erp moved to earlier provenance; arena/01a0aef4-tofel-house-erp moved to older provenance; arena/01a0aafe-tofel-house-erp moved to oldest provenance. The new active branch carries no hosted evidence yet; hosted_execution_state is NOT_EXECUTED_ON_THIS_BRANCH with no run, check or report identity, enforced fail-closed by the D8 validator and its tests."
+  },
+  "older_active_branch_provenance": {
+    "date": "2026-09-17",
+    "branch": "arena/01a0aef4-tofel-house-erp",
+    "classification": "historical_provenance",
+    "hosted_execution_state": "EXECUTED",
+    "qualification_commit": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+    "rotated_from": "arena/01a0aafe-tofel-house-erp",
+    "prior_active_branch": "arena/01a0aafe-tofel-house-erp",
+    "earlier_active_branch": "arena/01a0a9f7-tofel-house-erp",
+    "production_state": "REJECT",
+    "production_authorized": false,
+    "phase2_gate_passed": false,
+    "security_gate_passed": false,
+    "product_implementation_authorized": false,
+    "foundation_runtime": {
+      "run": "35218007937",
+      "head_branch": "arena/01a0aef4-tofel-house-erp",
+      "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+      "status": "fail_reject",
+      "runtime_check": "105198657293",
+      "runtime_report_sha256": "a40ba77552325e46855d006ddbece3022c61d6b86403b8a92bddeb01a7f15139",
+      "remaining_gate_check": "105198661394",
+      "remaining_gate_report_sha256": "3d945a40764c6e2ac878286e8f471917c21919e40bf8935f8111fbfb8d467db1",
+      "restricted_checks": "121 total; 119 pass; hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail",
+      "observed": "Real Docker 28.0.4 execution on ubuntu24 image 20260907.300.1 under the hardened profile. 119 of 121 restricted checks passed. Both dependency audits failed, which is the SEC-DEPS-01 condition: the resolved-stack audit and the npm bulk advisory audit both returned findings. phase2_gate_passed, security_gate_passed and product_implementation_authorized are all false.",
+      "phase2_gate_passed": false,
+      "security_gate_passed": false,
+      "product_implementation_authorized": false,
+      "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; no waiver, override or candidate adoption. Re-executing the workflow on the active branch did not and could not turn this gate green, and it is recorded as a REJECT for exactly that reason. Advisory matches are not exploitability/reachability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. Hosted qualification evidence only; it does not authorize production."
+    },
+    "foundation_runner": {
+      "run": "35218007958",
+      "head_branch": "arena/01a0aef4-tofel-house-erp",
+      "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+      "status": "pass_scoped",
+      "check": "105191149098",
+      "report_sha256": "101aae91ff7f0d015452d5c86cb571f5410b16db5452e1f18b022d6428492808",
+      "observed": "18/18 checks pass on ubuntu24 image 20260907.300.1. Pinned MariaDB and Redis images started and reached health, and the version, collation and transactional-rollback probes all verified.",
+      "limits": "Runner/download/service qualification only. It proves startup, health and transactional rollback; it does NOT prove restart persistence, crash durability, RDB/AOF persistence or restart recovery. phase2_gate_passed remains false."
+    },
+    "placement": {
+      "run": "35218007995",
+      "head_branch": "arena/01a0aef4-tofel-house-erp",
+      "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+      "status": "pass_scoped",
+      "runner_check": "105194271874",
+      "runner_report_sha256": "f0063de03be15bfd4f69e8ade7ef2718708dab59df3187a9560fbde74634bd20",
+      "native_check": "105194268740",
+      "native_report_sha256": "7bb5e49cbbcdc8df65002316f380c2686648b96da42c959ba94092871c812ae7",
+      "observed": "Real native execution: 101/101 runner steps exit 0 and 542/542 native checks pass on a bench running frappe, erpnext, education, payments, hrms, foundation_security and toefl_house on placement-test.localhost. The report records production REJECT and runtime_complete true.",
+      "limits": "Synthetic content-governance scope on one disposable runner; not full T01-T20, not multi-branch isolation in a deployed topology, not an independent-host restore, not a destructive-event recovery, not offsite backup, not key custody/rotation, not RPO/RTO, SLA or availability proof. The synthetic-only guard was enabled. Production remains REJECT."
+    },
+    "frontend_candidate": {
+      "run": "35218007871",
+      "head_branch": "arena/01a0aef4-tofel-house-erp",
+      "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+      "status": "fail_reject_not_adopted",
+      "check": "105191311853",
+      "report_sha256": "62be04f6881f3b8d4ddb60f26c20c9fca3f619bc102634c92cc822136c908afb",
+      "observed": "Frozen baseline and isolated candidate were both installed, built and compared. 20 of 22 checks pass; baseline-audit and candidate-audit both exit 1 on the npm advisory gate, with 1 advisory introduced and 35 removed against the frozen baseline. production_pins_changed false, production_gate_passed false, and application and Frappe UI source unchanged. The candidate remains NOT ADOPTED.",
+      "limits": "Candidate is not adopted and is not a remediation or production approval. This gate has failed on every one of its 10 runs since b1381eb (34823670550 through 35222291762), always on the npm advisory audit and never on the build, install, constraints or module-graph checks."
+    },
+    "d8_contract": {
+      "run": "35218007901",
+      "head_branch": "arena/01a0aef4-tofel-house-erp",
+      "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+      "status": "pass_structural",
+      "check": "105190997903",
+      "observed": "d8_validate.py and tests.d8.test_contract ran on the active branch. The validator exits 0 while reporting d8_gate_state BLOCKED, production_state REJECT, production_enabled false, synthetic-only guard REQUIRED and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT, with checkout_branch_matches_active true."
+    },
+    "operational_boundaries": {
+      "run": "35218007814",
+      "head_branch": "arena/01a0aef4-tofel-house-erp",
+      "head_sha": "e8da889b22589a5d64f7843ecaf5d11d9260424c",
+      "status": "pass_scoped",
+      "check": "105191973507",
+      "report_sha256": "5348ac42d9535e600acc957261ef26aba563fc77a81193736609bf144e9aa5a8",
+      "observed": "38/38 checks pass against a real TLS edge in front of a live Frappe site (edge.foundation.internal, frappe 16.33.1 HEAD, mocks_or_simulations_used false). tls_protocol_policy is POLICY ENFORCED: TLS 1.2 and 1.3 negotiated, and SSLv3, TLS 1.0 and TLS 1.1 all rejected, with the two legacy protocols resolved by the policy-independent raw ClientHello probe returning alert protocol_version. certificate_verification enforced; unrelated CA rejected (21) and hostname mismatch rejected (62). required_refusals_observed.complete true with no protocol lacking evidence.",
+      "limits": "This gate failed identically on runs 35197870620 (previous session branch) and 35214660151 (this branch, commit f813a5c) before the F9 fix. tailscale_boundary remains ENVIRONMENT-BLOCKED. ports_follow_the_pinned_template records the 80/443-needs-root deviation. Edge security qualification only."
+    },
+    "qualification_scope": "All five hosted workflows named by the documented rotation procedure - foundation-runtime.yml, foundation-runner.yml, placement-content.yml, foundation-frontend-review.yml and d8-operations-contract.yml - were genuinely re-executed on this branch at commit e8da889b22589a5d64f7843ecaf5d11d9260424c, together with the operational-boundaries, durability, key-custody, independent-recovery and owned-suite gates. Prior-session run evidence is retained unchanged under prior_active_branch_provenance and earlier_active_branch_provenance and was not counted as an execution on this branch.",
+    "corroborating_earlier_execution_on_this_branch": {
+      "commit": "37e4bff8a2074fecd3bbf7592bb4b0a8936d0fe5",
+      "why": "The TLS-edge fix landed on this branch one commit before the pinned qualification commit, so its gate was exercised twice on this branch and agreed both times.",
+      "runs": {
+        "operational_boundaries": "35216709160 success (38/38, POLICY ENFORCED)",
+        "owned_suite": "35216709192 success",
+        "foundation_runtime": "35216709174 failure (SEC-DEPS-01, identical profile)"
+      }
+    },
+    "other_gates_on_this_branch": {
+      "datastore_durability": "35218008053 success (check 105191267035)",
+      "external_key_custody": "35218007872 success",
+      "independent_system_recovery": "35218007835 success",
+      "owned_suite": "35218007896 success (check 105190998479)"
+    },
+    "limits": "Nothing here authorizes production. D8 remains BLOCKED, production remains REJECT, and SEC-DEPS-01 remains UPSTREAM-BLOCKED with no waiver. The Foundation runtime REJECTED on this branch exactly as it did on the two previous session branches; re-execution changed the branch that owns the evidence, not the outcome. The frontend candidate is not adopted.",
+    "supersedes": "arena/01a0aafe-tofel-house-erp",
+    "former_classification": "hosted_synthetic_qualification_only"
+  },
+  "oldest_active_branch_provenance": {
+    "date": "2026-09-16",
+    "branch": "arena/01a0aafe-tofel-house-erp",
+    "qualification_commit": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+    "former_classification": "hosted_synthetic_qualification_only",
+    "classification": "historical_provenance",
+    "foundation_runtime": {
+      "run": "35122242581",
+      "head_branch": "arena/01a0aafe-tofel-house-erp",
+      "head_sha": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+      "status": "fail_reject",
+      "runtime_check": "104889030990",
+      "runtime_report_sha256": "e3964eb242e1bb467725e7a194ff3a7b76535d3afedbc9c5a0c8c77629eb984b",
+      "remaining_gate_check": "104889035777",
+      "remaining_gate_report_sha256": "a1ac7cd78d0ddb5dbd4888f459f38232850083c34562f4b1cd29fec509e6025b",
+      "restricted_checks": "116 total; 114 pass; hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail",
+      "observed": "Real Docker 28.0.4 / Compose 2.38.2 execution. Four sites created (foundation, restore, recovery, upstream-tests) with erpnext, education, payments and hrms installed at pinned revisions; worker, scheduler and socketio all live. 114 of 116 restricted checks passed, including business 9/9, restore 5/5, http-restricted 10/10, isolation 47/47, browser 5/5, restore-secured 7/7 and isolation-recovered 47/47; remaining gates passed readiness 54/54, realtime 4/4, upgrade 33/33, guardian browser 6/6, frontend graph and restart. Both dependency audits failed: the resolved-stack audit inventoried 161 Bench Python and 572 supplied Node package names and recorded 14 PyPI/OSV findings across pdfkit, pypdf, setuptools and weasyprint, and the npm bulk advisory audit queried 255 package names with 21 returning 57 advisory findings (27 high, 26 moderate, 4 low). Real backups were taken (database 1155855 bytes sha256 9aad16baa470599a43a28e316b343c3600436f91f0e7b2f430e4c3997205701e; hardened database 1159791 bytes sha256 bc1324f9ec7b8d8a782f5d98f77563684054c9d3f37192c83b5bba72c2928126) and restore_separate_database is true, but site_encryption_key_restored is FALSE on this path.",
+      "phase2_gate_passed": false,
+      "security_gate_passed": false,
+      "product_implementation_authorized": false,
+      "limits": "SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT; no waiver, override or candidate adoption. Advisory matches are not exploitability/reachability proof, a full SBOM, OS-package or container-CVE coverage, or remediation. The restart probe is Gunicorn/RQ only and explicitly excludes Redis and database restart, host crash and failover. The restore ran into another site/database on the SAME ephemeral runner, not an independent system. site_encryption_key_restored=false is a genuine observed defect and is not reclassified. Hosted qualification evidence only; it does not authorize production."
+    },
+    "prior_active_branch": "arena/01a0a9f7-tofel-house-erp",
+    "qualification_scope": "All five hosted workflows were re-executed on the then-active branch at commit d7df9ca766cd3039d68051ca83cdc8be5e834452 after the branch-boundary rotation. Prior-session run evidence is retained unchanged under what is now earlier_active_branch_provenance and was not counted as an execution on that branch.",
+    "latest_branch_head_at_reconciliation": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+    "foundation_runner": {
+      "run": "35122242676",
+      "head_branch": "arena/01a0aafe-tofel-house-erp",
+      "head_sha": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+      "status": "pass_scoped",
+      "check": "104882875418",
+      "report_sha256": "4f1ad7b9bb09a2c5d5933d5ed8490eb42b2ef0e513d1235a4378165d536e5963",
+      "observed": "Real Docker execution on ubuntu-24.04 (image 20260907.300.1). Docker Engine and Compose present; pinned mariadb image digest sha256:8b5f33ebd85d1775657e974ed10434128bb493c80e826ceaa54074fd1a92a112 started and reached healthy in 5 polls; SELECT VERSION(), utf8mb4/utf8mb4_unicode_ci and a START TRANSACTION/ROLLBACK count-0 check all verified; pinned redis digest sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36 returned PONG with the selected version. 18/18 checks pass; python artifact sha256 3959f92825141e04adf44982d3a83ee57af0877e893b0796e04c1468749d9b04.",
+      "limits": "Runner/download/service qualification only. It proves startup, health and transactional rollback; it does NOT prove MariaDB restart persistence, crash durability, Redis RDB/AOF persistence or Redis restart recovery. No ERP workflow or production approval. phase2_gate_passed remains false."
+    },
+    "placement": {
+      "run": "35122242728",
+      "head_branch": "arena/01a0aafe-tofel-house-erp",
+      "head_sha": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+      "status": "pass_scoped",
+      "runner_check": "104885938426",
+      "runner_report_sha256": "1fc72a2420f96f9727d80346c00670b73c8d4ae43cef6e010319ef36e6e911f9",
+      "native_check": "104885934034",
+      "native_report_sha256": "094111f63a8f4b44e483bfd534a71b404c14b0e87c093477e0a633390ff42251",
+      "observed": "Real native execution: 101/101 runner steps exit 0 and 542/542 native checks pass on a bench running frappe, erpnext, education, payments, hrms, foundation_security and toefl_house across placement-test.localhost and a second isolated site placement-second.localhost, with all five upstream app pins verified unchanged afterwards. A real product restore rehearsal ran end to end: capture-product-restore-snapshot, backup-with-files (database 1266947 bytes sha256 0e25af257844eecfbe0ca9e690efbf65ed9eb908eb951bd18823ee207c48fcc8 plus private and public file digests), new placement-restore.localhost site with all six apps installed, restore-with-files, migrate and verify-product-restore-snapshot. product_restore_context records separate_database=true, source_db_credentials_copied=false and site_encryption_key_restored=true; product_restore verified 14 doctypes by exact record count with private_file_sha256_verified=true. Real authorization behavior includes http-role-revocation-old-session-denied, http-teaching-revoked-scheduler-old-session-denied, 13 CSRF negative-with-positive-control checks, release-read-export-print-paths-denied, release-attachment-paths-guarded and release-observability-probes.",
+      "limits": "Synthetic content-governance scope on one disposable runner; not full T01-T20, not multi-branch (Company/Branch) isolation in a deployed topology, not an independent-host restore, not a destructive-event recovery, not offsite backup, not key custody/rotation, not RPO/RTO, SLA or availability proof. The synthetic-only guard was enabled on every site. Production remains REJECT."
+    },
+    "frontend_candidate": {
+      "run": "35122242647",
+      "head_branch": "arena/01a0aafe-tofel-house-erp",
+      "head_sha": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+      "status": "fail_reject_not_adopted",
+      "check": "104882992093",
+      "report_sha256": "17d40562f62cddc6168bef34838f128d6dbaa2257a0ab0048739c2c28c6abfb1",
+      "observed": "Frozen baseline and isolated candidate were both built and compared on the runner; production pins were not changed and the production gate did not pass. The candidate remains NOT ADOPTED.",
+      "limits": "Candidate is not adopted and is not a remediation or production approval."
+    },
+    "d8_contract": {
+      "run": "35122242888",
+      "head_branch": "arena/01a0aafe-tofel-house-erp",
+      "head_sha": "d7df9ca766cd3039d68051ca83cdc8be5e834452",
+      "status": "pass_structural",
+      "check": "104882627814",
+      "observed": "d8_validate.py and tests.d8.test_contract ran on the rotated active branch. The validator exits 0 while reporting d8_gate_state BLOCKED, production_state REJECT, production_enabled false, synthetic-only guard REQUIRED and SEC-DEPS-01 UPSTREAM-BLOCKED / REJECT, with checkout_branch_matches_active true."
+    },
+    "production_like_execution": {
+      "ledger": "evidence/production-like-execution/execution-ledger.json",
+      "ledger_sha256": "ede33c91b5d87fc0cbfce98b5d4e0f245b2e209ff9efaf0c4f3bf124eaaa0e6e",
+      "requested_local_runner": "ENVIRONMENT-BLOCKED (no Docker Engine/Compose; apt and download.docker.com unreachable; no /lib/modules; read-only /proc; 2 vCPU / 3.8 GiB RAM)",
+      "capability_probe": "evidence/production-like-execution/local-runner-capability-probe.json",
+      "capability_probe_sha256": "d42a00f281fc5a95c5aceef9d4567bc2b8191ad0941c6dab7a14061e64bbadb4",
+      "probes_executed_on_docker_runner": "11 requested probes classified: 2 PASS (EXECUTED)/SCOPED, 6 PARTIAL, 3 BLOCKED or BLOCKED/NOT SELECTED",
+      "observed": "Every classification cites a real run and check identifier. MariaDB startup/health and Redis startup were really executed and passed; MariaDB/Redis restart persistence and durability were never executed. Native runtime, authorization containment, integrity before/after restore, session revocation and artifact upgrade were really executed and passed within their stated scopes. Independent-system restore, destructive trigger, versioned encrypted backup with external key custody and rotation, deployed monitoring/alert delivery/retention, TLS and Tailscale boundaries, and rollback rehearsal remain BLOCKED. No numeric capacity/availability SLO was invented.",
+      "limits": "Local preflight, static and bounded results are recorded separately and are never counted as execution evidence.",
+      "corroboration": "Two independent executions at d7df9ca and c891949 agree on every material outcome, including the SEC-DEPS-01 failure and the site_encryption_key_restored=false defect."
+    },
+    "corroborating_rerun_at_evidence_commit": {
+      "commit": "c891949e7a30267f34a3365eaf9103d925dc42eb",
+      "why": "Pushing the evidence commit re-triggered all five hosted gates because tools/session_branch.py and tools/foundation/d8_validate.py are in their path filters.",
+      "runs": {
+        "d8_contract": "35125669493 success",
+        "foundation_runner": "35125669408 success",
+        "placement": "35125669475 success",
+        "frontend_candidate": "35125669372 failure",
+        "foundation_runtime": "35125669370 failure"
+      },
+      "foundation_runtime": {
+        "run": "35125669370",
+        "head_branch": "arena/01a0aafe-tofel-house-erp",
+        "head_sha": "c891949e7a30267f34a3365eaf9103d925dc42eb",
+        "status": "fail_reject",
+        "failed_step": "7 - Install and validate the pinned foundation",
+        "runtime_check": "104901059475",
+        "runtime_report_sha256": "4a3836f01222e66555ec1799d2b6b57d438532658f2140948be9f6462714b8c0",
+        "remaining_gate_check": "104901062866",
+        "remaining_gate_report_sha256": "75d7df6680b49e9ab924bf36a30346c960cf2eae7f75080272dc759186e3ebbc",
+        "restricted_checks": "116 total; 114 pass; hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit fail",
+        "observed": "Reproduces run 35122242581 field for field on every material outcome: same SEC-DEPS-01 failure, same 114/116 restricted checks, same four sites (foundation, restore, recovery, upstream-tests) and four installed apps (erpnext, education, payments, hrms) on Docker 28.0.4 / Compose 2.38.2, same readiness 54 / realtime 4 / upgrade 33 / guardian browser 6 passes, same 57 npm advisory findings across 21 of 255 queried packages and 14 PyPI/OSV findings across pdfkit, pypdf, setuptools and weasyprint, and the same site_encryption_key_restored=false with restore_separate_database=true. Foundation runner corroboration 35125669408 passed 18/18 with MariaDB healthy in 4 polls and identical pinned MariaDB/Redis image digests.",
+        "retrieval_note": "This conclusion was initially recorded as NOT RETRIEVED during a GitHub credential outage and was retrieved only after authentication was restored. It was never assumed to be a failure while unobserved.",
+        "phase2_gate_passed": false,
+        "security_gate_passed": false,
+        "product_implementation_authorized": false,
+        "limits": "Corroboration only. It does not change any gate state, does not authorize production, and does not cure the observed site_encryption_key_restored=false defect. Two independent executions agreeing strengthens the REJECT conclusion. SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT."
+      },
+      "authoritative_evidence": "The probe classifications in evidence/production-like-execution/execution-ledger.json remain bound to commit d7df9ca and runs 35122242676 / 35122242728 / 35122242581 / 35122242647 / 35122242888, whose complete reports are archived. session_branch.ACTIVE_RUNTIME_RUN stays pinned to 35122242581 for that reason."
+    },
+    "encryption_key_defect_closure_run": {
+      "date": "2026-09-16",
+      "commit": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
+      "branch": "arena/01a0aafe-tofel-house-erp",
+      "why": "Closes the one named recovery defect carried by every prior runtime run on this branch: site_encryption_key_restored=false. Fix commits bd5ca02 (native key initialization before the first backup plus fail-closed restore) and 58bd4d1 (Frappe Password-field storage layout). Prior runs are preserved unchanged as historical provenance; this record does not relabel or supersede them.",
+      "foundation_runtime": {
+        "run": "35133062884",
+        "workflow": "Foundation runtime validation",
+        "profile": "hardened",
+        "head_sha": "58bd4d12f0c755e2f83c4c35eb206db40dfeafd7",
+        "status": "fail_reject",
+        "conclusion_reason": "SEC-DEPS-01 only. 121 checks executed; the only failures are hosted-full-stack-dependency-audit and hosted-frontend-advisory-audit. No recovery, restore or encryption check failed.",
+        "runtime_check": "104925371177",
+        "runtime_report_sha256": "fa799c1b259b42750bef2bd7b660f914690eacfe6b389fbcd290a7ea8f5e2780",
+        "runtime_evidence_archive": "evidence/production-like-execution/hosted-runtime-35133062884.json",
+        "remaining_gate_check": "104925376227",
+        "remaining_gate_report_sha256": "981ac18610ae0fb9c744645123922cd7ea78882969f8316ee3416d9ad99a2dda",
+        "remaining_gate_evidence_archive": "evidence/production-like-execution/hosted-remaining-gates-35133062884.json"
+      },
+      "interim_run_that_drove_the_second_fix": {
+        "run": "35131838300",
+        "commit": "bd5ca02625adf1e21d544798247788ce093b974e",
+        "check": "104916683776",
+        "status": "fail",
+        "failed_check": "prepare-native-encrypted-fixture-before-backup",
+        "message": "AssertionError: Password field was not stored as ciphertext",
+        "value": "Confirmed the root-cause fix already worked (site_encryption_key_initialized=true, key fingerprint 0aaefb5a94b3228aca1a2742d358a853225bd18990eb420059ee64e12c69965d) and exposed that reading only the raw model column is not a valid way to observe ciphertext. The successful run confirms the value lives at __Auth.password."
+      },
+      "observed": {
+        "site_encryption_key_initialized": true,
+        "site_encryption_key_sha256": "0b0a2acd41573cc685791fd845a241b5c5a1c554e707c6930d59a960fb17e585",
+        "key_length": 44,
+        "encrypted_field": "User.Administrator.api_secret",
+        "storage_location": "__Auth.password",
+        "restore_separate_database": true,
+        "source_db_credentials_copied": false,
+        "site_encryption_key_restored": true,
+        "site_encryption_key_restored_hardened": true,
+        "first_cycle_ciphertext_sha256": "9f771296df54e4c6cd16dead00b62b5993d8d450569ffd0de38b0b21f11caafd",
+        "hardened_cycle_ciphertext_sha256": "029f68b1876ddd0532d1b4e1798faa6e06e458f4b11714f08fe8f2ed8a5ae5c3",
+        "proof_basis": "Fingerprint match against the source, real get_decrypted_password() of content encrypted before the backup, and a byte-identical ciphertext digest - on both restore.localhost and recovery.localhost. Presence of a key string alone is no longer accepted."
+      },
+      "gate_effect": "NONE. recovery and backup-restore remain BLOCKED, durability remains BLOCKED, SEC-DEPS-01 remains UPSTREAM-BLOCKED / REJECT, production_state remains REJECT and production_enabled remains false. Restore still runs on the same ephemeral host as the source, no destructive trigger has been exercised, and the site key is still generated and copied by that same runner rather than held under separately controlled custody.",
+      "regression_coverage": "tests/foundation/test_encryption_key_recovery.py, 31 tests; full suite 369 tests pass locally; d8_validate.py exits 0 with no gate drift.",
+      "independent_reproduction": {
+        "run": "35135793582",
+        "head_sha": "866396a127164090c41db9ff1bc310ade555409f",
+        "runtime_check": "104934304007",
+        "runtime_report_sha256": "6cfb435d86f3ba0dcb04c8a939cfaf850b4317d00eff3f0442eb6e13e2ad77d5",
+        "evidence_archive": "evidence/production-like-execution/hosted-runtime-35135793582.json",
+        "status": "fail_reject",
+        "conclusion_reason": "SEC-DEPS-01 only; identical failure profile, 121 checks, same two failing audits.",
+        "observed": {
+          "site_encryption_key_initialized": true,
+          "site_encryption_key_sha256": "566c8f5c06ac19a29c556fa146a2095f6fb2447eebf55155b07d2000dd6b55bf",
+          "site_encryption_key_restored": true,
+          "site_encryption_key_restored_hardened": true,
+          "source_db_credentials_copied": false,
+          "storage_location": "__Auth.password",
+          "first_cycle_ciphertext_sha256": "c8bc1cc141c4fb12944068d4fffa0bfe03f03a2559662be1cda61058a57f776a",
+          "hardened_cycle_ciphertext_sha256": "d8f34687db6c4bf749bebaf3aa49a230dee82017c270d958d77e00d746cb5b44"
+        },
+        "why_genuine": "Different run, different commit and freshly generated key material - the fingerprint and both ciphertext digests differ from run 35133062884 because the key is generated per run and Fernet output is randomized per encryption. Every material outcome is nonetheless identical.",
+        "recorded_at_utc": "2026-09-16T19:03:25.194944+00:00"
+      }
+    },
+    "durability_probe_execution": {
+      "date": "2026-09-16",
+      "commit": "866396a127164090c41db9ff1bc310ade555409f",
+      "branch": "arena/01a0aafe-tofel-house-erp",
+      "why": "The durability gate recorded that no MariaDB or Redis restart, no crash or volume-loss probe and no RDB/AOF persistence verification had ever been executed; the only restart probe was Gunicorn/RQ and explicitly excluded the datastore. This is the first genuine execution of datastore durability.",
+      "workflow": "Foundation datastore durability",
+      "run": "35135793802",
+      "check_run": "104927987397",
+      "conclusion": "success",
+      "report_status": "pass",
+      "report_sha256": "8c93b6e7de91f6d58bb2794c9cd45ac0510ad1aed659c5bae250236d00666e65",
+      "evidence_archive": "evidence/production-like-execution/hosted-durability-35135793802.json",
+      "real_services_not_mocks": {
+        "mocks_or_simulations_used": false,
+        "docker_version": "28.0.4 28.0.4",
+        "mariadb": {
+          "index_digest": "mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62",
+          "server_reported_version": "11.8.9-MariaDB-ubu2404-log"
+        },
+        "redis": {
+          "index_digest": "redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36",
+          "server_reported_version": "8.6.6",
+          "mode": "standalone"
+        }
+      },
+      "effective_settings_read_back": {
+        "mariadb": {
+          "innodb_flush_log_at_trx_commit": "1",
+          "sync_binlog": "1",
+          "log_bin": "1"
+        },
+        "redis": {
+          "aof_enabled": "1",
+          "appendfsync": "always",
+          "aof_last_write_status": "ok",
+          "rdb_last_bgsave_status": "ok"
+        }
+      },
+      "pre_state": {
+        "mariadb_committed_rows": 25,
+        "mariadb_payload_crc32_sum": 51945241053,
+        "mariadb_uncommitted_visible": "0",
+        "redis_dbsize": 2,
+        "redis_queue_length": 25
+      },
+      "scenarios_passed": {
+        "graceful_restart": true,
+        "sigkill_crash_recovery": true,
+        "container_destruction_recreated_from_same_named_volume": true,
+        "negative_control_volume_removal_yields_empty_database": true
+      },
+      "independent_restart_proof": "Binary log rotated once per server start: mariadb-bin.000001 -> 000002 -> 000003 -> 000004 -> 000005.",
+      "new_container_ids_after_destruction": {
+        "mariadb": "12e831ef68ca -> c081c5c03e39",
+        "redis": "c25b3f0c1c9e -> 0b72e4d5ec16"
+      },
+      "known_evidence_gap_in_this_run": "SUPERSEDED: innodb_recovery_messages was empty in run 35135793802 because the log filter matched only 'recovery'/'crash'. Commit 699ad7e broadened it and run 35137645608 then showed the broadened filter matching only startup noise, which commit e92c66e corrects by separating the two and adding INNODB STATUS as the authoritative source.",
+      "gate_effect": "NONE. The durability gate remains BLOCKED. Its area also covers configuration, private/public file and encryption-key durability, none of which is proven; host or region loss, storage-array failure, off-site replication, HA and failover are unproven; application-level workflow correctness after recovery is unproven; and the owner durability references required by D8-DURABLE-STATE remain NOT SELECTED and are not invented here. production_state remains REJECT and production_enabled remains false.",
+      "regression_coverage": "tests/foundation/test_durability_contract.py, 27 tests; full suite 371 tests pass locally; d8_validate.py exits 0 with no gate drift.",
+      "blocked_on": "RESOLVED. Credentials restored; 699ad7e and 9b96199 pushed. Both the stricter probe (run 35137645608) and the honest-labelling probe (run 35138416558) have hosted PASS results.",
+      "recorded_at_utc": "2026-09-16T18:48:44.369211+00:00",
+      "stricter_probe_rerun": {
+        "run": "35137645608",
+        "head_sha": "9b96199839dea77569bbbaf8321953af9fd43815",
+        "check_run": "104934194163",
+        "conclusion": "success",
+        "report_status": "pass",
+        "report_sha256": "6f9b379d132ed131d38e68647397b9b9f197312fe5312990e75c191fd0da408b",
+        "evidence_archive": "evidence/production-like-execution/hosted-durability-35137645608.json",
+        "binlog_rotation_progression": {
+          "pre_state": 2,
+          "graceful_restart": 3,
+          "crash_recovery": 4,
+          "volume_persistence_after_container_destruction": 5
+        },
+        "all_scenarios_survived_identically": {
+          "committed_row_count": 25,
+          "payload_crc32_sum": 51945241053,
+          "uncommitted_visible": "0",
+          "redis_queue_length": 25
+        },
+        "negative_control_confirms_data_lived_in_the_volume": true,
+        "evidence_quality_defect_found_and_fixed": "innodb_recovery_messages held one line, '[Entrypoint]: Starting temporary server' - startup noise, not InnoDB recovery. Commit e92c66e separates crash from startup markers, records SHOW ENGINE INNODB STATUS's LOG section as the authoritative native source, and requires innodb_force_recovery=0. The substantive durability proof was never affected.",
+        "recorded_at_utc": "2026-09-16T19:03:25.194944+00:00"
+      },
+      "honest_labelling_rerun": {
+        "run_id": "35138416558",
+        "commit": "fd94e8f760205a3e5bc7aae236bd896813634388",
+        "check_run": "104936842736",
+        "conclusion": "success",
+        "report_status": "pass",
+        "archived_evidence": "hosted-durability-35138416558.json",
+        "archived_evidence_sha256": "b5bd967bfa51c84040911404a3c32f2170baace6388c3a81016c5c4f0596fd9b",
+        "binlog_rotation_progression": {
+          "pre_state": 2,
+          "graceful restart": 3,
+          "crash recovery": 4,
+          "volume persistence after container destruction": 5
+        },
+        "innodb_force_recovery": "0",
+        "innodb_status_log_section": [
+          "Log sequence number 52305",
+          "Log flushed up to   52305",
+          "Pages flushed up to 51911",
+          "Last checkpoint at  51911"
+        ],
+        "innodb_recovery_messages": [],
+        "server_startup_messages_captured": true,
+        "all_scenarios_survived_identically": {
+          "committed_row_count": 25,
+          "payload_crc32_sum": 51945241053,
+          "uncommitted_visible": "0"
+        },
+        "negative_control": {
+          "table_present_after_volume_loss": "0",
+          "confirms_data_lived_in_the_volume": true
+        },
+        "new_containers_created": true,
+        "why_this_run_is_the_authoritative_durability_evidence": "It is the first run in which the crash scenario is corroborated by an authoritative native source rather than a log grep. innodb_recovery_messages is correctly EMPTY - MariaDB 11.8 emits no crash-recovery lines at default verbosity - and the previously mislabeled startup noise now sits in its own server_startup_messages field. SHOW ENGINE INNODB STATUS supplies the real recovery position (log sequence number 52305 equal to log flushed up to 52305, last checkpoint at 51911), and innodb_force_recovery=0 proves recovery was not bypassed. The run would now fail closed if neither a genuine InnoDB log line nor an INNODB STATUS LOG section were present.",
+        "recorded_at_utc": "2026-09-16T19:07:22.443749+00:00",
+        "evidence_archive": "evidence/production-like-execution/hosted-durability-35138416558.json"
+      }
+    },
+    "provenance_note": "Former active_branch_qualification block, reclassified as historical provenance by the arena/01a0aef4-tofel-house-erp branch-boundary rotation. Every run, check, commit and SHA-256 identity below is exactly as recorded when it was the active block; none of it is re-executed, re-labelled or counted as an execution on the current branch."
+  }
 }
