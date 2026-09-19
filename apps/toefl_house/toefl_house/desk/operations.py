@@ -11,6 +11,7 @@ from toefl_house.desk import (
     BOUNCE_WINDOW,
     DESKS,
     LIMIT_QUEUES,
+    _assert_projection,
     active_cohort_rows,
     open_cohort_keys,
     project_rows,
@@ -312,6 +313,55 @@ SCHEDULED_JOB_TYPE = "Scheduled Job Type"
 SCHEDULED_JOB_LOG = "Scheduled Job Log"
 
 
+RQ_JOB_FAILED_FIELDS = ["name", "job_name", "queue", "status",
+                        "started_at", "ended_at"]
+
+
+def _rq_failed_jobs(limit):
+    """Failed background-job rows from the native RQ registries.
+
+    RQ Job is a VIRTUAL doctype on pinned frappe, and its controller
+    gates every read on ``frappe.has_permission("RQ Job")`` (rq_job.py
+    ``get_custom_queues``), ignoring ``ignore_permissions`` — so the
+    sanctioned ``project_rows`` projection 403s for desk audiences. This
+    fallback reads the same native facts the controller itself reads
+    (queue.failed_job_registry + Job.fetch_many + serialize_job),
+    confined to the ("management", "RQ Job") projection allow-list.
+    Returns (rows, readable): readable is False when the registries
+    cannot be reached at all (unknown, never zero).
+    """
+    _assert_projection("management", RQ_JOB, RQ_JOB_FAILED_FIELDS)
+    try:
+        from rq.job import Job
+
+        from frappe.core.doctype.rq_job.rq_job import (
+            fetch_job_ids,
+            filter_current_site_jobs,
+            get_job_status,
+            serialize_job,
+        )
+        from frappe.utils.background_jobs import get_queues, get_redis_conn
+
+        ids = []
+        for queue in get_queues():
+            ids.extend(fetch_job_ids(queue, "failed"))
+        conn = get_redis_conn()
+        rows = []
+        for job in Job.fetch_many(job_ids=filter_current_site_jobs(ids)[:5000],
+                                  connection=conn):
+            if job is None or get_job_status(job) != "failed":
+                continue
+            job_dict = serialize_job(job)
+            rows.append({field: job_dict.get(field)
+                         for field in RQ_JOB_FAILED_FIELDS})
+        known = [row for row in rows if not isinstance(row.get("ended_at"), str)]
+        unknown = [row for row in rows if isinstance(row.get("ended_at"), str)]
+        known.sort(key=lambda row: row["ended_at"], reverse=True)
+        return (known + unknown)[:int(limit)], True
+    except Exception:
+        return [], False
+
+
 def _system_health():
     """Native health/worker/failed-job facts + alert conditions.
 
@@ -328,11 +378,17 @@ def _system_health():
                               ["name", "method", "seen", "creation"],
                               filters={"seen": 0},
                               order_by="creation desc", limit=LIMIT_QUEUES)
-    failed_jobs = project_rows("management", RQ_JOB,
-                               ["name", "job_name", "queue", "status",
-                                "started_at", "ended_at"],
-                               filters={"status": "failed"},
-                               order_by="ended_at desc", limit=LIMIT_QUEUES)
+    try:
+        failed_jobs = project_rows("management", RQ_JOB,
+                                   RQ_JOB_FAILED_FIELDS,
+                                   filters={"status": "failed"},
+                                   order_by="ended_at desc", limit=LIMIT_QUEUES)
+        jobs_readable = True
+    except frappe.PermissionError:
+        # Virtual-doctype controller gate (see _rq_failed_jobs): the desk
+        # audience holds no RQ Job read, so project the same native
+        # registry facts without the controller.
+        failed_jobs, jobs_readable = _rq_failed_jobs(LIMIT_QUEUES)
     workers = project_rows("management", RQ_WORKER,
                            ["name", "worker_name", "queue", "queue_type", "status",
                             "failed_job_count", "successful_job_count",
@@ -362,8 +418,8 @@ def _system_health():
          "definition": "Native Error Log rows not yet marked seen. The error text stays on the native form.",
          "value": summary["unseen_error_logs"], "owner": "General Manager"},
         {"label": "Failed background jobs",
-         "definition": "Native background jobs in failed status. Tracebacks stay on the native job form.",
-         "value": summary["failed_jobs"], "owner": "General Manager"},
+         "definition": "Native background jobs in failed status. Tracebacks stay on the native job form. When the native job registry cannot be read at all, this shows Not readable instead of a count.",
+         "value": summary["failed_jobs"] if jobs_readable else "Not readable", "owner": "General Manager"},
         {"label": "Workers observed",
          "definition": "Native background workers known to the scheduler, with their verbatim reported state.",
          "value": summary["workers_observed"], "owner": None},

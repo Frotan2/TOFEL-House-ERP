@@ -237,6 +237,10 @@ PROJECTION_FIELDS = {
     ("management", "Error Log"): [
         "name", "method", "seen", "creation",
     ],
+    # RQ Job is VIRTUAL on the pinned version and its controller gates
+    # every read on has_permission("RQ Job"), ignoring ignore_permissions;
+    # desk audiences read the same registry facts through the fallback in
+    # operations._rq_failed_jobs, still confined to these fields.
     ("management", "RQ Job"): [
         "name", "job_name", "queue", "status", "started_at", "ended_at",
     ],
