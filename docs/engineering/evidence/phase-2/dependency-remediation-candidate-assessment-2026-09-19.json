@@ -1,1 +1,187 @@
-{"baseline_evidence":{"advisory_record":"resolved-stack-advisory-2026-09-16.json","commit":"955e4cd5eedc34b90f4fbfce047339e18558f1f2","finding_set_unchanged":true,"fresh_hosted_confirmation":{"conclusion":"failure","run":"35450528487","run_date":"2026-09-19","workflow":"Foundation runtime validation","why":"Identical fail-closed annotation to the pre-D16 run 35449025432: hosted-full-stack-dependency-audit exit 1 and hosted-frontend-advisory-audit exit 1. The audits exit 1 if and only if advisories match the pinned trees (audit_stack.py status fail on any finding; audit_frontend.py exit 1 on any advisory). No new failure mode; the gate still fails on the recorded finding set."},"inventory":{"npm_advisory_entries":97,"pypi_osv_records":14,"pypi_unique_vulnerabilities":7},"run":"35084695840","runtime_check":"104762158723","runtime_report_sha256":"f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc"},"baseline_unchanged":true,"candidate_execution":{"built":false,"not_claimed":["Full-stack dependency-audit pass","Security-gate pass","542 native lifecycle qualification","Backup/restore, worker/scheduler/realtime, upgrade/restart, or browser regression qualification"],"reason":"The live re-verification proves every current official input still carries known fail conditions before any Bench build. Running a fabricated override candidate would not meet the required clean full-stack audit and would create unsupported evidence theater."},"decision":"No isolated package-lock, constraints override, forced resolver input, or baseline-pin replacement was built. Current official inputs cannot yield a clean SEC-DEPS-01 result; manufacturing such a candidate would be unsupported and would not meet the gate. Re-verified live on 2026-09-19: no newer Frappe/ERPNext/Education/Bench release since the 2026-09-16 review, and the one newer HRMS release changes no dependency manifest.","node_remediation_blocker":{"blocker":"No newer released Frappe/ERPNext/Education input changes any reviewed Node manifest or frozen lockfile, and HRMS v16.19.0 carries byte-identical dependency manifests to v16.18.1. Manually changing nested locks, package resolutions, or registry inputs would not be an officially released compatible bundle.","observed_entries":97,"observed_packages":36,"source":"resolved-stack-advisory-2026-09-16.json"},"observed_date":"2026-09-19","official_input_review":{"bench":{"constraint":"setuptools>=71.0.0,<82.0.0","constraint_source":"pyproject.toml line 29 at v5.31.0, fetched 2026-09-19","effect":"The setuptools 83.0.0 fix remains unreachable through the reviewed official Bench input.","newest_non_prerelease":{"published_at":"2026-06-16T16:24:55Z","source":"https://api.github.com/repos/frappe/bench/releases?per_page=100","tag":"v5.31.0"}},"education":{"comparison":"No newer release since the baseline; nothing to re-compare.","newest_non_prerelease":{"published_at":"2026-06-29T14:06:57Z","source":"https://api.github.com/repos/frappe/education/releases?per_page=100","tag":"v16.1.0"}},"erpnext":{"carries_pins_of_the_four":false,"evidence":"pyproject.toml at v16.35.0 contains no pdfkit/pypdf/WeasyPrint/setuptools requirement (only a comment naming pypdfium2).","newest_non_prerelease":{"published_at":"2026-09-15T18:46:19Z","source":"https://api.github.com/repos/frappe/erpnext/releases?per_page=100","tag":"v16.35.0"}},"frappe":{"branch_head_observation":"The official version-16 branch head carries the identical three pins; no relief is staged there either. A moving branch is not substituted for a release.","newest_non_prerelease":{"published_at":"2026-09-15T18:00:39Z","source":"https://api.github.com/repos/frappe/frappe/releases?per_page=100","tag":"v16.34.0"},"pins_at_tag":{"WeasyPrint":"==68.0","pdfkit":"~=1.0.0","pypdf":"==6.15.0","source":"pyproject.toml lines 25, 31, 56 at v16.34.0, fetched 2026-09-19"}},"hrms":{"comparison":"Dependency manifests are byte-identical between v16.18.1 and v16.19.0 (identical git blob SHAs), and HRMS declares no third-party Python or Node dependencies of its own (only frappe/erpnext >=16,<17 ranges). The newer release changes nothing for SEC-DEPS-01.","manifest_blob_sha":{"package.json":"6477a5211711c5620029f9e23686d4adb8f730a1","pyproject.toml":"bb843611f6b72e43d668cb3d8d5658ac1be3c3e7"},"newest_non_prerelease":{"published_at":"2026-09-17T04:32:33Z","source":"https://api.github.com/repos/frappe/hrms/releases?per_page=100","tag":"v16.19.0","tag_sha":"7e0fba4bf11a63ac7b21a717610e235310815c1a"},"review_baseline_tag":"v16.18.1"}},"production_recommendation":"REJECT","pypi_latest_observed":{"as_of":"2026-09-19","pdfkit":"1.0.0","pypdf":"6.19.0","setuptools":"84.0.0","source":"https://pypi.org/pypi/<package>/json","weasyprint":"70.0"},"python_remediation_blockers":[{"advisory":"GHSA-9g3x-6x24-vf9f","advisory_state_reverified":"2026-09-19: still no patched version listed (advisory updated_at unchanged at 2026-06-18T14:38:10Z); PyPI latest is still 1.0.0.","blocker":"Frappe v16.34.0 continues to require pdfkit~=1.0.0 and the advisory lists no patched release.","first_patched_version":null,"installed_version":"1.0.0","package":"pdfkit","provider_range":"<= 1.0.0","source":"https://api.github.com/advisories/GHSA-9g3x-6x24-vf9f"},{"advisories":["GHSA-23w6-3w8w-8484","GHSA-763m-79hh-57f2","GHSA-jp53-mhqp-8xcg"],"blocker":"Frappe v16.34.0 continues to pin pypdf==6.15.0 while PyPI offers 6.19.0 with all three fixes; the fix is unreachable through official Frappe inputs.","first_patched_versions":["6.16.1","6.16.1","6.16.0"],"installed_version":"6.15.0","package":"pypdf","provider_ranges":["< 6.16.1","< 6.16.1","< 6.16.0"],"source":"https://api.github.com/advisories/GHSA-23w6-3w8w-8484"},{"advisories":["GHSA-jf6q-chmf-3h3v","GHSA-jhhc-3hcp-qhm5"],"advisory_state_reverified":"2026-09-19: GHSA-jhhc (CSS injection) still lists no patched version (updated_at unchanged at 2026-07-06); GHSA-jf6q (SSRF) fixed in 70.0, which PyPI offers but Frappe does not pin.","blocker":"Frappe v16.34.0 continues to pin WeasyPrint==68.0.","first_patched_versions":["70.0",null],"installed_version":"68.0","package":"weasyprint","provider_ranges":["< 70.0","<= 68.1"],"source":"https://api.github.com/advisories/GHSA-jf6q-chmf-3h3v"},{"advisory":"GHSA-h35f-9h28-mq5c","blocker":"The selected official Bench v5.31.0 constraint is still setuptools>=71.0.0,<82.0.0 while the fix requires >=83.0.0. A >=83 override would violate the reviewed upstream constraint.","first_patched_version":"83.0.0","installed_version":"80.9.0","package":"setuptools","provider_range":"< 83.0.0","source":"https://api.github.com/advisories/GHSA-h35f-9h28-mq5c"}],"reachability_notes":{"audited":"2026-09-19, this branch","owned_call_sites":"Zero: no pdfkit/pypdf/WeasyPrint/setuptools import exists under apps/ or tools/, apps/toefl_house/pyproject.toml declares no runtime dependencies (setuptools==80.9.0 is build-system only), and no package.json exists under apps/. All recorded findings are consumed exclusively through upstream Frappe/Bench/Node trees.","pdfkit":"R3 hosted negative checks (run 35053305607 @ 46e5040, check release-read-export-print-paths-denied) prove frappe.utils.print_format.download_pdf is denied for non-member roles on the guarded ledgers via native validate_print_permission. NOT established: whether attacker-influenced content printed by an AUTHORIZED user reaches pdfkit from_string with script execution enabled. That residual unknown keeps the HIGH pdfkit item unmitigated by in-repo evidence.","pypdf_weasyprint":"Upstream-only consumers (Frappe PDF/print paths). No owned input reaches them directly; authorized-print residual unknown applies as for pdfkit.","setuptools":"Owned use is build-system only. The advisory is a build-time sdist-construction issue; no owned runtime path executes setuptools."},"schema_version":1,"smallest_viable_upstream_change":["An officially released, Frappe-compatible source bundle that removes/replaces pdfkit or supplies a supported remediation for its no-fixed-version advisory.","An officially released compatible Frappe v16 dependency update with pypdf at least 6.16.1 and WeasyPrint outside all recorded affected ranges, plus a compatible official Bench release permitting setuptools at least 83.0.0 or an upstream-supported alternative.","An officially released compatible Education v16 dependency/lockfile update that removes all applicable resolved Node advisory matches; Frappe/ERPNext Node locks must also change where they carry matches.","Only after such source inputs exist: create a separate immutable candidate matrix, build a disposable Bench, require a clean full-stack audit and security gates, then run the unchanged 542 native lifecycle and all recovery/worker/scheduler/realtime/upgrade/restart/browser regressions before any baseline replacement decision."],"status":"rejected_no_credible_official_candidate"}
+{
+ "baseline_evidence": {
+  "advisory_record": "resolved-stack-advisory-2026-09-16.json",
+  "commit": "955e4cd5eedc34b90f4fbfce047339e18558f1f2",
+  "finding_set_unchanged": true,
+  "fresh_hosted_confirmation": {
+   "conclusion": "failure",
+   "run": "35450528487",
+   "run_date": "2026-09-19",
+   "why": "Identical fail-closed annotation to the pre-D16 run 35449025432: hosted-full-stack-dependency-audit exit 1 and hosted-frontend-advisory-audit exit 1. The audits exit 1 if and only if advisories match the pinned trees (audit_stack.py status fail on any finding; audit_frontend.py exit 1 on any advisory). No new failure mode; the gate still fails on the recorded finding set.",
+   "workflow": "Foundation runtime validation"
+  },
+  "inventory": {
+   "npm_advisory_entries": 97,
+   "pypi_osv_records": 14,
+   "pypi_unique_vulnerabilities": 7
+  },
+  "run": "35084695840",
+  "runtime_check": "104762158723",
+  "runtime_report_sha256": "f004c4893e80fa6e4477c816bc67019280e54d06b9121fc0f06642a6b1f651fc"
+ },
+ "baseline_unchanged": true,
+ "candidate_execution": {
+  "built": false,
+  "not_claimed": [
+   "Full-stack dependency-audit pass",
+   "Security-gate pass",
+   "542 native lifecycle qualification",
+   "Backup/restore, worker/scheduler/realtime, upgrade/restart, or browser regression qualification"
+  ],
+  "reason": "The live re-verification proves every current official input still carries known fail conditions before any Bench build. Running a fabricated override candidate would not meet the required clean full-stack audit and would create unsupported evidence theater."
+ },
+ "decision": "No isolated package-lock, constraints override, forced resolver input, or baseline-pin replacement was built. Current official inputs cannot yield a clean SEC-DEPS-01 result; manufacturing such a candidate would be unsupported and would not meet the gate. Re-verified live on 2026-09-19: no newer Frappe/ERPNext/Education/Bench release since the 2026-09-16 review, and the one newer HRMS release changes no dependency manifest.",
+ "node_remediation_blocker": {
+  "blocker": "No newer released Frappe/ERPNext/Education input changes any reviewed Node manifest or frozen lockfile, and HRMS v16.19.0 carries byte-identical dependency manifests to v16.18.1. Manually changing nested locks, package resolutions, or registry inputs would not be an officially released compatible bundle.",
+  "observed_entries": 97,
+  "observed_packages": 36,
+  "source": "resolved-stack-advisory-2026-09-16.json"
+ },
+ "observed_date": "2026-09-19",
+ "official_input_review": {
+  "bench": {
+   "constraint": "setuptools>=71.0.0,<82.0.0",
+   "constraint_source": "pyproject.toml line 29 at v5.31.0, fetched 2026-09-19",
+   "effect": "The setuptools 83.0.0 fix remains unreachable through the reviewed official Bench input.",
+   "newest_non_prerelease": {
+    "published_at": "2026-06-16T16:24:55Z",
+    "source": "https://api.github.com/repos/frappe/bench/releases?per_page=100",
+    "tag": "v5.31.0"
+   }
+  },
+  "education": {
+   "comparison": "No newer release since the baseline; nothing to re-compare.",
+   "newest_non_prerelease": {
+    "published_at": "2026-06-29T14:06:57Z",
+    "source": "https://api.github.com/repos/frappe/education/releases?per_page=100",
+    "tag": "v16.1.0"
+   }
+  },
+  "erpnext": {
+   "carries_pins_of_the_four": false,
+   "evidence": "pyproject.toml at v16.35.0 contains no pdfkit/pypdf/WeasyPrint/setuptools requirement (only a comment naming pypdfium2).",
+   "newest_non_prerelease": {
+    "published_at": "2026-09-15T18:46:19Z",
+    "source": "https://api.github.com/repos/frappe/erpnext/releases?per_page=100",
+    "tag": "v16.35.0"
+   }
+  },
+  "frappe": {
+   "branch_head_observation": "The official version-16 branch head carries the identical three pins; no relief is staged there either. A moving branch is not substituted for a release.",
+   "newest_non_prerelease": {
+    "published_at": "2026-09-15T18:00:39Z",
+    "source": "https://api.github.com/repos/frappe/frappe/releases?per_page=100",
+    "tag": "v16.34.0"
+   },
+   "pins_at_tag": {
+    "WeasyPrint": "==68.0",
+    "pdfkit": "~=1.0.0",
+    "pypdf": "==6.15.0",
+    "source": "pyproject.toml lines 25, 31, 56 at v16.34.0, fetched 2026-09-19"
+   }
+  },
+  "hrms": {
+   "comparison": "Dependency manifests are byte-identical between v16.18.1 and v16.19.0 (identical git blob SHAs), and HRMS declares no third-party Python or Node dependencies of its own (only frappe/erpnext >=16,<17 ranges). The newer release changes nothing for SEC-DEPS-01.",
+   "manifest_blob_sha": {
+    "package.json": "6477a5211711c5620029f9e23686d4adb8f730a1",
+    "pyproject.toml": "bb843611f6b72e43d668cb3d8d5658ac1be3c3e7"
+   },
+   "newest_non_prerelease": {
+    "published_at": "2026-09-17T04:32:33Z",
+    "source": "https://api.github.com/repos/frappe/hrms/releases?per_page=100",
+    "tag": "v16.19.0",
+    "tag_sha": "7e0fba4bf11a63ac7b21a717610e235310815c1a"
+   },
+   "review_baseline_tag": "v16.18.1"
+  }
+ },
+ "production_recommendation": "REJECT",
+ "pypi_latest_observed": {
+  "as_of": "2026-09-19",
+  "pdfkit": "1.0.0",
+  "pypdf": "6.19.0",
+  "setuptools": "84.0.0",
+  "source": "https://pypi.org/pypi/<package>/json",
+  "weasyprint": "70.0"
+ },
+ "python_remediation_blockers": [
+  {
+   "advisory": "GHSA-9g3x-6x24-vf9f",
+   "advisory_state_reverified": "2026-09-19: still no patched version listed (advisory updated_at unchanged at 2026-06-18T14:38:10Z); PyPI latest is still 1.0.0.",
+   "blocker": "Frappe v16.34.0 continues to require pdfkit~=1.0.0 and the advisory lists no patched release.",
+   "first_patched_version": null,
+   "installed_version": "1.0.0",
+   "package": "pdfkit",
+   "provider_range": "<= 1.0.0",
+   "source": "https://api.github.com/advisories/GHSA-9g3x-6x24-vf9f"
+  },
+  {
+   "advisories": [
+    "GHSA-23w6-3w8w-8484",
+    "GHSA-763m-79hh-57f2",
+    "GHSA-jp53-mhqp-8xcg"
+   ],
+   "blocker": "Frappe v16.34.0 continues to pin pypdf==6.15.0 while PyPI offers 6.19.0 with all three fixes; the fix is unreachable through official Frappe inputs.",
+   "first_patched_versions": [
+    "6.16.1",
+    "6.16.1",
+    "6.16.0"
+   ],
+   "installed_version": "6.15.0",
+   "package": "pypdf",
+   "provider_ranges": [
+    "< 6.16.1",
+    "< 6.16.1",
+    "< 6.16.0"
+   ],
+   "source": "https://api.github.com/advisories/GHSA-23w6-3w8w-8484"
+  },
+  {
+   "advisories": [
+    "GHSA-jf6q-chmf-3h3v",
+    "GHSA-jhhc-3hcp-qhm5"
+   ],
+   "advisory_state_reverified": "2026-09-19: GHSA-jhhc (CSS injection) still lists no patched version (updated_at unchanged at 2026-07-06); GHSA-jf6q (SSRF) fixed in 70.0, which PyPI offers but Frappe does not pin.",
+   "blocker": "Frappe v16.34.0 continues to pin WeasyPrint==68.0.",
+   "first_patched_versions": [
+    "70.0",
+    null
+   ],
+   "installed_version": "68.0",
+   "package": "weasyprint",
+   "provider_ranges": [
+    "< 70.0",
+    "<= 68.1"
+   ],
+   "source": "https://api.github.com/advisories/GHSA-jf6q-chmf-3h3v"
+  },
+  {
+   "advisory": "GHSA-h35f-9h28-mq5c",
+   "blocker": "The selected official Bench v5.31.0 constraint is still setuptools>=71.0.0,<82.0.0 while the fix requires >=83.0.0. A >=83 override would violate the reviewed upstream constraint.",
+   "first_patched_version": "83.0.0",
+   "installed_version": "80.9.0",
+   "package": "setuptools",
+   "provider_range": "< 83.0.0",
+   "source": "https://api.github.com/advisories/GHSA-h35f-9h28-mq5c"
+  }
+ ],
+ "reachability_notes": {
+  "audited": "2026-09-19, this branch",
+  "owned_call_sites": "Zero: no pdfkit/pypdf/WeasyPrint/setuptools import exists under apps/ or tools/, apps/toefl_house/pyproject.toml declares no runtime dependencies (setuptools==80.9.0 is build-system only), and no package.json exists under apps/. All recorded findings are consumed exclusively through upstream Frappe/Bench/Node trees.",
+  "pdfkit": "R3 hosted negative checks (run 35053305607 @ 46e5040, check release-read-export-print-paths-denied) prove frappe.utils.print_format.download_pdf is denied for non-member roles on the guarded ledgers via native validate_print_permission. NOT established: whether attacker-influenced content printed by an AUTHORIZED user reaches pdfkit from_string with script execution enabled. That residual unknown keeps the HIGH pdfkit item unmitigated by in-repo evidence.",
+  "pypdf_weasyprint": "Upstream-only consumers (Frappe PDF/print paths). No owned input reaches them directly; authorized-print residual unknown applies as for pdfkit.",
+  "setuptools": "Owned use is build-system only. The advisory is a build-time sdist-construction issue; no owned runtime path executes setuptools."
+ },
+ "reachability_trace": {
+  "document": "docs/engineering/evidence/sec-deps-01/pdf-reachability-trace-2026-09-19.md",
+  "result": "pdfkit HIGH mitigated by forced disable-javascript/disable-local-file-access at the single Frappe call site; pypdf MODERATEs reachable via native PDF upload (DoS); WeasyPrint gated on beta-builder print formats the product does not ship; setuptools has no runtime trigger. Gate verdict unchanged: REJECT."
+ },
+ "schema_version": 1,
+ "smallest_viable_upstream_change": [
+  "An officially released, Frappe-compatible source bundle that removes/replaces pdfkit or supplies a supported remediation for its no-fixed-version advisory.",
+  "An officially released compatible Frappe v16 dependency update with pypdf at least 6.16.1 and WeasyPrint outside all recorded affected ranges, plus a compatible official Bench release permitting setuptools at least 83.0.0 or an upstream-supported alternative.",
+  "An officially released compatible Education v16 dependency/lockfile update that removes all applicable resolved Node advisory matches; Frappe/ERPNext Node locks must also change where they carry matches.",
+  "Only after such source inputs exist: create a separate immutable candidate matrix, build a disposable Bench, require a clean full-stack audit and security gates, then run the unchanged 542 native lifecycle and all recovery/worker/scheduler/realtime/upgrade/restart/browser regressions before any baseline replacement decision."
+ ],
+ "status": "rejected_no_credible_official_candidate"
+}
