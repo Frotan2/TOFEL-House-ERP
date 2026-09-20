@@ -265,7 +265,7 @@ Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp` @ `62b3c58`
 - **reason:** Operational visibility shipped with evidence; deployed alerting remains with obs-deployed-operation (needs a real environment).
 - **dependency:** None (in-repo).
 - **responsible:** Engineering.
-- **implementation_or_evidence_required:** None; preserve. Evidence: hosted placement run 35466677597 @62b3c58 (574/574 pass, report a30ce49b…e67a); GM + owner health cells in role-desk-hosted-qualification + role-desk-observability-hosted; desk-contract health worlds + test_rq_fallback green.
+- **implementation_or_evidence_required:** None; preserve. Evidence: hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173…fb0a); GM + owner health cells in role-desk-hosted-qualification + role-desk-observability-hosted; desk-contract health worlds + test_rq_fallback green.
 - **acceptance_test:** MET 2026-09-19: contract + hosted tests green; desks surface worker/failed-job facts from native sources only, tracebacks stay on native forms.
 
 ### `gates-passed` — D8 scoped PASS gates stay green.
@@ -285,7 +285,7 @@ Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp` @ `62b3c58`
 - **reason:** Isolation proven by execution across surfaces, not asserted from source.
 - **dependency:** None (hosted suite runs on push).
 - **responsible:** Engineering.
-- **implementation_or_evidence_required:** None; preserve. Evidence: hosted placement run 35466677597 @62b3c58 (574/574 pass, report a30ce49b…e67a); desk-broad-isolation-matrix pass with branch_groups [SYN-GRP-ISOL-A, SYN-GRP-ISOL-B] observation.
+- **implementation_or_evidence_required:** None; preserve. Evidence: hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173…fb0a); desk-broad-isolation-matrix pass with branch_groups [SYN-GRP-ISOL-A, SYN-GRP-ISOL-B] observation.
 - **acceptance_test:** MET 2026-09-19: hosted placement-content run green with the S9 matrix over Desk/REST/RPC/list/report/export/print/file surfaces.
 
 ### `teacher-daily-use` — Teacher daily-use path (mission §10).
@@ -295,7 +295,7 @@ Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp` @ `62b3c58`
 - **reason:** Daily-use completeness for the teacher role; fail-closed on native identity.
 - **dependency:** None (native identity chain; no new policy).
 - **responsible:** Engineering.
-- **implementation_or_evidence_required:** None; preserve. Evidence: role-desk-teacher-hosted + teacher cells in role-desk-hosted-qualification green in hosted placement run 35466677597 @62b3c58 (574/574 pass, report a30ce49b…e67a); TeacherDeskWorldTests green.
+- **implementation_or_evidence_required:** None; preserve. Evidence: role-desk-teacher-hosted + teacher cells in role-desk-hosted-qualification green in hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173…fb0a); TeacherDeskWorldTests green.
 - **acceptance_test:** MET 2026-09-19: assigned-only classes, today/next-action clarity, empty/closed/unavailable states, non-authoritative finance facts; no unrelated data reachable; wrong-role refusal tested.
 
 ### `finance-polish` — Finance final operational polish (mission §12).
@@ -305,7 +305,7 @@ Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp` @ `62b3c58`
 - **reason:** Daily-use completeness without touching native finance authority.
 - **dependency:** None (in-repo).
 - **responsible:** Engineering.
-- **implementation_or_evidence_required:** None; preserve. Evidence: FinanceOutstandingWorldTests (3000.00 USD pin, mutation-verified) + finance cells in role-desk-hosted-qualification, hosted placement run 35466677597 @62b3c58 (574/574 pass, report a30ce49b…e67a).
+- **implementation_or_evidence_required:** None; preserve. Evidence: FinanceOutstandingWorldTests (3000.00 USD pin, mutation-verified) + finance cells in role-desk-hosted-qualification, hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173…fb0a).
 - **acceptance_test:** MET 2026-09-19: outstanding/next-action/correction-status/blocked-reason/duplicate/config-guidance/invoice-state/native-ref from facts only; no settlement logic added.
 
 ### `academic-setup-finalization` — Academic Setup finalization (mission §13).
@@ -315,7 +315,7 @@ Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp` @ `62b3c58`
 - **reason:** Setup transparency for daily operation.
 - **dependency:** None (in-repo). D1 grading stays out.
 - **responsible:** Engineering.
-- **implementation_or_evidence_required:** None; preserve. Evidence: SetupDeskWorldTests (years/duration/grading/discounts) + setup cells in role-desk-hosted-qualification, hosted placement run 35466677597 @62b3c58 (574/574 pass, report a30ce49b…e67a).
+- **implementation_or_evidence_required:** None; preserve. Evidence: SetupDeskWorldTests (years/duration/grading/discounts) + setup cells in role-desk-hosted-qualification, hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173…fb0a).
 - **acceptance_test:** MET 2026-09-19: configuration health/programs/levels/progression/fee plans/discounts/years from configuration records; D1 answers stay fail-closed placeholders.
 
 ### `lifecycle-journey-audit` — Reception → Academic → Finance lifecycle audit (mission §11).
