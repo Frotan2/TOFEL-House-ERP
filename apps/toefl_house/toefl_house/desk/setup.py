@@ -14,12 +14,14 @@ integrity fault (a level without its native anchor) is surfaced, not hidden.
 import frappe
 
 from toefl_house.academic import rules
+from toefl_house.configuration import rules as configuration_rules
 from toefl_house.desk import (
     DESKS,
     LIMIT_QUEUES,
     guided_action,
     issuable_plans,
     plan_with_components,
+    project_count,
     project_rows,
     require_desk_audience,
     section,
@@ -37,6 +39,9 @@ FEE_CATEGORY = "Fee Category"
 FEE_STRUCTURE = "Fee Structure"
 FEE_ROW = "Fee Component"
 DISCOUNT_RULE = "TH Discount Rule"
+ASSESSMENT_POLICY = "TH Assessment Policy"
+ASSESSMENT_VERSION = "TH Assessment Policy Version"
+CONFIG_AUDIT = "TH Configuration Audit Event"
 
 PROGRAM_FIELDS = ["name", "code", "title", "status", "modified"]
 LEVEL_FIELDS = ["name", "family", "code", "title", "sequence", "status",
@@ -51,6 +56,11 @@ FEE_ROW_FIELDS = ["name", "parent", "parenttype", "fees_category", "amount", "id
 DISCOUNT_RULE_FIELDS = ["name", "code", "title", "discount_percentage", "precedence",
                         "status", "fee_category", "program", "description", "modified",
                         "modified_by"]
+ASSESSMENT_POLICY_FIELDS = ["name", "family", "code", "title", "status",
+                            "description", "modified"]
+ASSESSMENT_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
+                             "grading_scale", "assessment_plan", "reason",
+                             "set_by", "set_on", "superseded_on"]
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -83,6 +93,14 @@ def work():
                                    order_by="program_name asc", limit=LIMIT_QUEUES)
     discount_rules = project_rows("setup", DISCOUNT_RULE, DISCOUNT_RULE_FIELDS,
                                   order_by="precedence desc, code asc", limit=LIMIT_QUEUES)
+    assessment_policies = project_rows("setup", ASSESSMENT_POLICY,
+                                       ASSESSMENT_POLICY_FIELDS,
+                                       order_by="code asc", limit=LIMIT_QUEUES)
+    assessment_versions = project_rows("setup", ASSESSMENT_VERSION,
+                                       ASSESSMENT_VERSION_FIELDS,
+                                       filters={"parenttype": ASSESSMENT_POLICY},
+                                       order_by="effective_from asc",
+                                       limit=LIMIT_QUEUES * 4)
 
     versions_by_level = {}
     for row in versions:
@@ -580,21 +598,8 @@ def work():
                     empty_body="Define the first academic year from Setup actions; "
                                "fee plans, enrollments and classes key on it."),
             section("grading", "Grading (owner decision D1)", "queue",
-                    items=[{
-                        "id": "grading-policy",
-                        "person": "Grading policy",
-                        "detail": "No grading rules are configured.",
-                        "status": "Not decided",
-                        "stage": "Grading",
-                        "stage_definition": ("Grade scales, cutoffs and result "
-                                           "computation are owner decision D1, which "
-                                           "has not been made. Nothing in the product "
-                                           "computes or interprets grades."),
-                        "next": ("The Course Owner decides the grading policy; until "
-                               "then desks show recorded scores only."),
-                        "next_role": "Course Owner",
-                        "waiting_since": None,
-                    }],
+                    items=_grading_items(assessment_policies,
+                                         assessment_versions, today),
                     empty_title="Grading is undecided",
                     empty_body="Owner decision D1 has not been made."),
         ],
@@ -612,3 +617,151 @@ def _current_year(years, today):
         if start and end and start <= str(today) <= end:
             return row["name"]
     return years[-1]["name"]
+
+
+def _current_validation(policy_name, snapshot):
+    """Whether a validation event commits to this exact version snapshot.
+
+    Matched by count, never projected: the hash stays in the filter, so no
+    hash field ever enters a desk projection (read-boundary discipline).
+    One bounded count per policy; policies are few by nature.
+    """
+    return project_count("setup", CONFIG_AUDIT, filters={
+        "target": policy_name, "action": "validate_assessment_policy",
+        "after_hash": snapshot,
+    }) > 0
+
+
+def _grading_items(policies, versions, today):
+    """Assessment policies with computed readiness (D1 reference structure).
+
+    With no policies this is the explicit owner placeholder: D1 undecided,
+    nothing computes grades — plus the one action that can succeed (define
+    the first policy shell). With policies, each item states its computed
+    readiness and offers exactly the actions the server rule allows.
+    """
+    if not policies:
+        return [{
+            "id": "grading-policy",
+            "person": "Grading policy",
+            "detail": "No grading rules are configured.",
+            "status": "Not decided",
+            "stage": "Grading",
+            "stage_definition": ("Grade scales, cutoffs and result "
+                               "computation are owner decision D1, which "
+                               "has not been made. Nothing in the product "
+                               "computes or interprets grades."),
+            "next": ("The Course Owner decides the grading policy; until "
+                     "then desks show recorded scores only."),
+            "next_role": "Course Owner",
+            "waiting_since": None,
+            "action": guided_action(
+                "Course Owner",
+                "toefl_house.academic.create_assessment_policy",
+                "Define assessment policy", {}),
+        }]
+    versions_by_policy = {}
+    for row in versions:
+        versions_by_policy.setdefault(row.get("parent"), []).append(row)
+    items = []
+    for policy in policies:
+        rows = versions_by_policy.get(policy["name"], [])
+        snapshot = configuration_rules.snapshot_digest(rows)
+        evidence = ([{"after_hash": snapshot}]
+                    if rows and _current_validation(policy["name"], snapshot)
+                    else [])
+        try:
+            readiness = configuration_rules.compute_readiness(
+                status=policy.get("status"), versions=rows,
+                validations=evidence, today=today,
+                what="assessment policy")
+        except ValueError as exc:
+            items.append({
+                "id": policy["code"],
+                "person": policy["title"],
+                "detail": str(exc),
+                "status": "Integrity fault",
+                "stage": "Assessment policy",
+                "stage_definition": ("The version history contradicts "
+                                     "itself, so no readiness state can be "
+                                     "computed and nothing resolves "
+                                     "against it."),
+                "next": ("Ask the administrator to repair the version "
+                         "history; no action is offered until then."),
+                "next_role": "Course Owner",
+                "waiting_since": None,
+            })
+            continue
+        governing = configuration_rules.resolve_governing(rows, today)
+        if governing:
+            detail = (f"{len(rows)} version(s); governing since "
+                      f"{governing.get('effective_from')}")
+        elif rows:
+            detail = f"{len(rows)} version(s); nothing effective yet"
+        else:
+            detail = "No versions yet"
+        item = {
+            "id": policy["code"],
+            "person": policy["title"],
+            "detail": detail,
+            "status": readiness.capitalize(),
+            "stage": "Assessment policy",
+            "stage_definition": ("Computed configuration readiness. "
+                                 "Versions carry native-carrier links only; "
+                                 "grading values arrive with owner "
+                                 "decision D1."),
+            "next": _assessment_next(policy, readiness, governing),
+            "next_role": "Course Owner",
+            "waiting_since": None,
+        }
+        actions = _assessment_actions(policy, readiness)
+        if actions:
+            item["action"] = actions[0]
+            if len(actions) > 1:
+                item["actions"] = actions[1:]
+        items.append(item)
+    return items
+
+
+def _assessment_next(policy, readiness, governing):
+    code = policy["code"]
+    if readiness == "incomplete":
+        return (f"Add the first version of {code}; the policy governs "
+                "nothing until then.")
+    if readiness == "configured":
+        return (f"Validate {code}; versions exist but no validation covers "
+                "the current set.")
+    if readiness == "validated":
+        return f"{code} is validated and takes effect on its first version date."
+    if readiness == "effective":
+        since = governing.get("effective_from") if governing else ""
+        return f"{code} governs since {since}."
+    return f"{code} is retired; it governs nothing."
+
+
+def _assessment_actions(policy, readiness):
+    """Exactly the version/status/validate actions the server rule allows."""
+    code = policy["code"]
+    retired = readiness == "retired"
+    if retired:
+        primary = guided_action(
+            "Course Owner", "toefl_house.academic.set_assessment_policy_status",
+            "Reactivate policy", {"policy": code, "active": "1"})
+        return [primary] if primary else []
+    secondaries = []
+    version_action = guided_action(
+        "Course Owner", "toefl_house.academic.set_assessment_policy_version",
+        "Add version", {"policy": code})
+    retire_action = guided_action(
+        "Course Owner", "toefl_house.academic.set_assessment_policy_status",
+        "Retire policy", {"policy": code, "active": "0"})
+    if readiness == "incomplete":
+        ordered = [version_action, retire_action]
+    elif readiness == "configured":
+        validate_action = guided_action(
+            "Course Owner", "toefl_house.academic.validate_assessment_policy",
+            "Validate policy", {"policy": code})
+        ordered = [validate_action, version_action, retire_action]
+    else:
+        ordered = [version_action, retire_action]
+    return [action for action in ordered if action]

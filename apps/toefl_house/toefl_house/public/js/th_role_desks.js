@@ -1,7 +1,8 @@
 /*
  * Role desk client (docs/product/ROLE-DESKS.md).
  *
- * Seven daily-work surfaces over one whitelisted read endpoint each. The desks
+ * Eight surfaces (seven daily-work desks plus the Configuration map) over
+ * one whitelisted read endpoint each. The desks
  * contain no document query, no CRUD and no authority decision of their own:
  * every fact, queue item and guided action arrives from the server projection,
  * which has already applied the desk audience, field allow-lists and bounds.
@@ -54,6 +55,11 @@ frappe.provide("toefl_house.role_desks");
 			endpoint: "toefl_house.desk.teacher.work",
 			title: "TOEFL House Teacher Desk",
 			description: "My classes, today's sessions, attendance, students, academic work and compensation facts — assigned classes only, resolved through the native identity chain.",
+		},
+		"th-configuration": {
+			endpoint: "toefl_house.desk.configuration.work",
+			title: "TOEFL House Configuration",
+			description: "The configuration map: every configuration domain with its computed readiness, linking to each domain's own surface. Configuration readiness is shown here; production readiness is separate and is never decided here.",
 		},
 	});
 
@@ -348,6 +354,26 @@ frappe.provide("toefl_house.role_desks");
 		"toefl_house.academic.set_level_status": [
 			{ fieldname: "level", label: "Level code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Select", options: "1\n0", reqd: 1, description: "0 retires the level; refused while submitted enrollments still run on it." },
+		],
+		"toefl_house.academic.create_assessment_policy": [
+			{ fieldname: "family", label: "Program code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "code", label: "Policy code (stable)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text" },
+		],
+		"toefl_house.academic.set_assessment_policy_version": [
+			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "effective_from", label: "Effective from (after the current latest version)", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason (mandatory)", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "grading_scale", label: "Grading scale (native, optional)", fieldtype: "Data" },
+			{ fieldname: "assessment_plan", label: "Assessment plan (native, optional)", fieldtype: "Data" },
+		],
+		"toefl_house.academic.set_assessment_policy_status": [
+			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Select", options: "1\n0", reqd: 1, description: "0 retires the policy; it governs nothing while retired." },
+		],
+		"toefl_house.academic.validate_assessment_policy": [
+			{ fieldname: "policy", label: "Policy code", fieldtype: "Data", reqd: 1 },
 		],
 		"toefl_house.academic.create_academic_year": [
 			{ fieldname: "name", label: "Academic year name (e.g. 2026-27)", fieldtype: "Data", reqd: 1 },

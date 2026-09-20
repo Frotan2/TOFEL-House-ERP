@@ -30,7 +30,7 @@ APP = ROOT / "apps/toefl_house/toefl_house"
 DESK = APP / "desk"
 
 DESK_MODULES = ("__init__", "lifecycle", "reception", "academic", "finance",
-                "operations", "owner", "setup", "teacher")
+                "operations", "owner", "setup", "teacher", "configuration")
 
 SENSITIVE_FIELDS = {
     "answer", "content_hash", "result_json", "seed", "pool_digest",
@@ -269,7 +269,7 @@ class DeskGateTests(unittest.TestCase):
 
     def test_every_whitelisted_desk_endpoint_gates_on_its_audience_first(self):
         for module in ("reception", "academic", "finance", "operations", "owner",
-                       "setup", "teacher"):
+                       "setup", "teacher", "configuration"):
             endpoints = self.whitelisted(self.trees[module])
             self.assertTrue(endpoints, f"{module} ships no whitelisted endpoint")
             for func in endpoints:
@@ -313,7 +313,7 @@ class DeskReadBoundaryTests(unittest.TestCase):
                            "frappe.db.get_all", "frappe.db.sql", "frappe.get_doc",
                            "frappe.db.insert", "frappe.db.delete", "frappe.db.count")
         for name in ("reception", "academic", "finance", "operations", "owner",
-                     "setup", "teacher"):
+                     "setup", "teacher", "configuration"):
             for node in ast.walk(self.trees[name]):
                 if isinstance(node, ast.Call):
                     rendered = ast.unparse(node.func)
@@ -334,7 +334,7 @@ class DeskReadBoundaryTests(unittest.TestCase):
 
     def test_every_projection_call_names_explicit_fields_and_a_limit(self):
         for name in ("reception", "academic", "finance", "operations", "owner",
-                     "setup", "teacher"):
+                     "setup", "teacher", "configuration"):
             for node in ast.walk(self.trees[name]):
                 if not (isinstance(node, ast.Call) and ast.unparse(node.func) in (
                         "project_rows", "project_count")):
@@ -390,7 +390,7 @@ class DeskAudienceTieTests(unittest.TestCase):
         self.assertEqual(set(self.desks), {
             "th-reception-desk", "th-academic-desk", "th-finance-desk",
             "th-operations-desk", "th-owner-cockpit", "th-academic-setup",
-            "th-teacher-desk"})
+            "th-teacher-desk", "th-configuration"})
         roles = {row["name"] for row in json.loads(
             (APP / "fixtures/role.json").read_text(encoding="utf-8"))}
         for slug, spec in self.desks.items():
@@ -427,6 +427,7 @@ class DeskAudienceTieTests(unittest.TestCase):
             "th-owner-cockpit": "owner.cockpit",
             "th-academic-setup": "setup.work",
             "th-teacher-desk": "teacher.work",
+            "th-configuration": "configuration.work",
         }
         for slug, dotted in module_of.items():
             self.assertIn(f'"toefl_house.desk.{dotted}"', self.client,
@@ -519,7 +520,7 @@ class DeskSchemaFidelityTests(unittest.TestCase):
 
     def test_every_desk_query_site_uses_real_columns(self):
         for name in ("reception", "academic", "finance", "operations", "owner",
-                     "setup", "teacher"):
+                     "setup", "teacher", "configuration"):
             tree = self.trees[name]
             strings, lists = {}, {}
             for node in tree.body:
@@ -816,7 +817,7 @@ class DeskPlainLanguageTests(unittest.TestCase):
 
     def test_display_fields_carry_no_doctype_plumbing(self):
         for module in ("reception", "academic", "lifecycle", "finance", "operations",
-                       "owner", "setup", "teacher"):
+                       "owner", "setup", "teacher", "configuration"):
             tree = ast.parse((DESK / f"{module}.py").read_text(encoding="utf-8"))
             banned = self.COMMON_BANNED if module in ("finance", "owner", "setup") \
                 else self.STAFF_BANNED
@@ -880,6 +881,19 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                   ["request_key", "student_group", "schedule_date",
                                                    "from_time", "to_time", "instructor", "room",
                                                    "course"]),
+        "toefl_house.academic.create_assessment_policy": ("academic/__init__.py",
+                                                         ["request_key", "family", "code",
+                                                          "title", "description"]),
+        "toefl_house.academic.set_assessment_policy_version": ("academic/__init__.py",
+                                                              ["request_key", "policy",
+                                                               "effective_from", "reason",
+                                                               "grading_scale",
+                                                               "assessment_plan"]),
+        "toefl_house.academic.set_assessment_policy_status": ("academic/__init__.py",
+                                                             ["request_key", "policy",
+                                                              "active"]),
+        "toefl_house.academic.validate_assessment_policy": ("academic/__init__.py",
+                                                           ["request_key", "policy"]),
     }
 
     def test_every_guided_endpoint_is_whitelisted_with_the_expected_signature(self):
@@ -914,6 +928,7 @@ class DeskWorkSmokeTests(unittest.TestCase):
         ("owner", "cockpit", {"Course Owner"}),
         ("setup", "work", {"Course Owner"}),
         ("teacher", "work", {"Instructor"}),
+        ("configuration", "work", {"Course Owner"}),
     )
 
     def test_every_desk_endpoint_runs_and_returns_sections(self):
@@ -1108,6 +1123,122 @@ class SetupDeskWorldTests(unittest.TestCase):
 
         setup_act = self._item(payload, "setup", "new-discount-rule")
         self.assertEqual(setup_act["action"]["label"], "Define discount rule")
+
+
+class ConfigurationDeskWorldTests(unittest.TestCase):
+    """The configuration map against a small configured world.
+
+    Each assessment policy renders its COMPUTED readiness (never a stored
+    flag), ambiguous history surfaces as an integrity fault instead of a
+    state, future domains stay explicit non-links, and no hash value ever
+    reaches the payload (validation is matched by count server-side).
+    """
+
+    def _run(self, *, validated=(), ambiguous=False):
+        world = {
+            "TH Assessment Policy": [
+                {"name": "ASM-EFF", "family": "PROG-GEN", "code": "ASM-EFF",
+                 "title": "Effective policy", "status": "Active",
+                 "description": "", "modified": "2026-09-01 10:00:00"},
+                {"name": "ASM-EMPTY", "family": "PROG-GEN", "code": "ASM-EMPTY",
+                 "title": "Empty policy", "status": "Active",
+                 "description": "", "modified": "2026-09-01 10:00:00"},
+                {"name": "ASM-OLD", "family": "PROG-GEN", "code": "ASM-OLD",
+                 "title": "Old policy", "status": "Retired",
+                 "description": "", "modified": "2026-09-01 10:00:00"},
+            ],
+            "TH Assessment Policy Version": [
+                {"name": "VER-1", "parent": "ASM-EFF",
+                 "parenttype": "TH Assessment Policy",
+                 "effective_from": "2026-01-01", "grading_scale": None,
+                 "assessment_plan": None, "reason": "first",
+                 "set_by": "owner@example.com", "set_on": "2026-01-01",
+                 "superseded_on": None},
+                {"name": "VER-2", "parent": "ASM-OLD",
+                 "parenttype": "TH Assessment Policy",
+                 "effective_from": "2026-01-01", "grading_scale": None,
+                 "assessment_plan": None, "reason": "first",
+                 "set_by": "owner@example.com", "set_on": "2026-01-01",
+                 "superseded_on": None},
+            ],
+        }
+        if ambiguous:
+            world["TH Assessment Policy Version"].append({
+                "name": "VER-3", "parent": "ASM-EFF",
+                "parenttype": "TH Assessment Policy",
+                "effective_from": "2026-01-01", "grading_scale": None,
+                "assessment_plan": None, "reason": "duplicate",
+                "set_by": "owner@example.com", "set_on": "2026-02-01",
+                "superseded_on": None,
+            })
+
+        def world_get_all(doctype, filters=None, fields=None, order_by=None,
+                          limit_start=None, limit_page_length=None, **kwargs):
+            assert_columns_real("configuration world", doctype,
+                                list(fields or []) + list((filters or {}).keys()))
+            rows = world.get(doctype, [])
+            filters = filters or {}
+            return [dict(row) for row in rows
+                    if all(row.get(key) == value
+                           for key, value in filters.items()
+                           if key in row or value is not None)]
+
+        module = _import_desk("configuration", roles={"Course Owner"})
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        validated_set = set(validated)
+        module.project_count = (
+            lambda desk, doctype, filters=None, **kwargs: 1
+            if (filters or {}).get("target") in validated_set else 0)
+        return module.work()
+
+    @staticmethod
+    def _section(payload, sid):
+        return next(sect for sect in payload["sections"] if sect["id"] == sid)
+
+    def test_nine_sections_with_computed_readiness(self):
+        payload = self._run(validated=("ASM-EFF",))
+        self.assertEqual(len(payload["sections"]), 9)
+        academic = self._section(payload, "academic")
+        self.assertEqual(academic["kind"], "links")
+        self.assertEqual(academic["items"][0]["slug"], "th-academic-setup")
+        items = {item["id"]: item
+                 for item in self._section(payload, "system-readiness")["items"]}
+        self.assertEqual(items["ASM-EFF"]["status"], "Effective")
+        self.assertIn("governing since 2026-01-01", items["ASM-EFF"]["detail"])
+        self.assertEqual(items["ASM-EMPTY"]["status"], "Incomplete")
+        self.assertEqual(items["ASM-OLD"]["status"], "Retired")
+        self.assertEqual(items["finance"]["status"], "Not implemented")
+        self.assertNotIn("action", items["finance"],
+                         "future domains offer no dead buttons")
+        for item in items.values():
+            self.assertNotIn("action", item,
+                             "the map desk configures nothing")
+        self.assertIn("never decided here",
+                      items["ASM-EFF"]["stage_definition"])
+
+    def test_unvalidated_policy_stays_configured(self):
+        payload = self._run()
+        items = {item["id"]: item
+                 for item in self._section(payload, "system-readiness")["items"]}
+        self.assertEqual(items["ASM-EFF"]["status"], "Configured")
+
+    def test_ambiguous_history_surfaces_as_fault_not_state(self):
+        payload = self._run(validated=("ASM-EFF",), ambiguous=True)
+        items = self._section(payload, "system-readiness")["items"]
+        faults = [item for item in items
+                  if item["status"] == "Integrity fault"]
+        self.assertEqual(len(faults), 1)
+        self.assertIn("ASM-EFF", faults[0]["detail"])
+        self.assertNotIn("action", faults[0])
+
+    def test_no_hash_value_reaches_the_payload(self):
+        import json as _json
+        import re as _re
+        payload = self._run(validated=("ASM-EFF",))
+        text = _json.dumps(payload)
+        self.assertIsNone(_re.search(r"[0-9a-f]{64}", text),
+                          "a hash digest leaked into the desk payload")
 
 
 class FinanceBillingGuidanceWorldTests(unittest.TestCase):

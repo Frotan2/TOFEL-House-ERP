@@ -23,7 +23,7 @@ Discipline (binding for every module in this package):
 import frappe
 
 DESK_MODULES = ("reception", "academic", "finance", "operations", "owner", "setup",
-                "teacher")
+                "teacher", "configuration")
 
 DESKS = {
     "th-reception-desk": {
@@ -66,6 +66,12 @@ DESKS = {
         "title": "TOEFL House Teacher Desk",
         "description": "My classes, today's sessions, attendance, students, academic work and compensation facts — assigned classes only, resolved through the native identity chain.",
         "roles": ["Instructor"],
+        "module": "Operations",
+    },
+    "th-configuration": {
+        "title": "TOEFL House Configuration",
+        "description": "The configuration map: every configuration domain with its computed readiness, linking to each domain's own surface. Configuration readiness is shown here; production readiness is separate and is never decided here.",
+        "roles": ["Course Owner"],
         "module": "Operations",
     },
 }
@@ -273,6 +279,23 @@ PROJECTION_FIELDS = {
         "status", "fee_category", "program", "description", "modified",
         "modified_by",
     ],
+    # D1 reference structure: assessment policies, their effective-dated
+    # versions, and the validation audit events behind computed readiness.
+    # No grading values exist anywhere in Phase 1 — structure only.
+    ("setup", "TH Assessment Policy"): [
+        "name", "family", "code", "title", "status", "description",
+        "modified",
+    ],
+    ("setup", "TH Assessment Policy Version"): [
+        "name", "parent", "parenttype", "effective_from", "grading_scale",
+        "assessment_plan", "reason", "set_by", "set_on", "superseded_on",
+    ],
+    # Validation evidence is matched by count, never projected: desks ask
+    # "does a validation event commit to this snapshot" via project_count,
+    # so hashes never enter a projection (read-boundary discipline).
+    ("setup", "TH Configuration Audit Event"): [
+        "name",
+    ],
     ("setup", "Program Enrollment"): [
         "name", "program", "enrollment_date", "docstatus",
     ],
@@ -295,6 +318,20 @@ PROJECTION_FIELDS = {
     ],
     ("setup", "Fee Component"): [
         "name", "parent", "parenttype", "fees_category", "amount", "idx",
+    ],
+    # Configuration map (Course Owner): the same D1 reference reads, for the
+    # computed configuration-readiness rollup. No other domain has any
+    # configuration records in Phase 1.
+    ("configuration", "TH Assessment Policy"): [
+        "name", "family", "code", "title", "status", "description",
+        "modified",
+    ],
+    ("configuration", "TH Assessment Policy Version"): [
+        "name", "parent", "parenttype", "effective_from", "grading_scale",
+        "assessment_plan", "reason", "set_by", "set_on", "superseded_on",
+    ],
+    ("configuration", "TH Configuration Audit Event"): [
+        "name",
     ],
     # Teacher desk (Instructor): the teacher's own classes only, resolved
     # through session User -> Employee.user_id -> Instructor.employee ->

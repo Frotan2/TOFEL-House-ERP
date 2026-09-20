@@ -18,8 +18,14 @@ Design invariants (docs/product/CONFIGURATION-PLANE.md):
    this date" would be ambiguous.
 5. Deactivation is the only destructive action; it is refused, in business
    language, while live records still depend on the configuration.
+
+The generic version primitives live in the configuration foundation
+(``toefl_house.configuration.rules``) and are delegated to — not copied —
+below, so every domain resolves history by one implementation.
 """
 import re
+
+from toefl_house.configuration import rules as foundation
 
 CODE_PATTERN = re.compile(r"[A-Z0-9][A-Z0-9-]{1,31}")
 DURATION_UNITS = ("Month", "Week", "Day")
@@ -109,7 +115,7 @@ def parse_date(value, what="Effective date"):
 
 def normalize_versions(rows):
     """Order version rows by effective date (input order breaks ties)."""
-    return sorted(list(rows or []), key=lambda row: str(row.get("effective_from") or ""))
+    return foundation.normalize_versions(rows)
 
 
 def resolve_duration(rows, on_date):
@@ -122,14 +128,7 @@ def resolve_duration(rows, on_date):
     enrollment that recorded its governing version can never be invalidated
     by later changes.
     """
-    governing = None
-    for row in rows or []:
-        effective = str(row.get("effective_from") or "")
-        if not effective or str(on_date) < effective:
-            continue
-        if governing is None or effective >= str(governing.get("effective_from") or ""):
-            governing = row
-    return governing
+    return foundation.resolve_governing(rows, on_date)
 
 
 def duration_label(row):
@@ -146,14 +145,7 @@ def duration_label(row):
 def check_version_appends(rows, new_effective_from):
     """The monotone-version rule: a new version must start strictly after the
     latest existing one, so every date resolves to exactly one version."""
-    existing = normalize_versions(rows)
-    if existing:
-        latest = existing[-1]
-        if str(new_effective_from) <= str(latest.get("effective_from") or ""):
-            raise ValueError(
-                "A new duration version must start after the latest version "
-                f"({latest.get('effective_from')}); backdated or same-day versions "
-                "would make history ambiguous")
+    foundation.check_appends(rows, new_effective_from, what="duration version")
 
 
 def validate_fee_amount(value):
@@ -239,8 +231,7 @@ def duration_history_counts(rows, enrollment_dates):
 
 def latest_version(rows):
     """The most recently effective version row, or None."""
-    existing = normalize_versions(rows)
-    return existing[-1] if existing else None
+    return foundation.latest_version(rows)
 
 
 def validate_next_level(level_code, next_code, family_of, next_of, max_depth=64):

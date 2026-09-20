@@ -31,7 +31,7 @@ page_js = {name: "public/js/th_command_pages.js" for name in _COMMAND_PAGES}
 _DESK_PAGES = (
     "th-reception-desk", "th-academic-desk", "th-finance-desk",
     "th-operations-desk", "th-owner-cockpit", "th-academic-setup",
-    "th-teacher-desk",
+    "th-teacher-desk", "th-configuration",
 )
 page_js.update({name: "public/js/th_role_desks.js" for name in _DESK_PAGES})
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception", "Instructor"]]]},
@@ -48,12 +48,17 @@ has_permission = {
                  "TH Teaching Assignment", "TH Correction Policy",
                  "TH Correction Request",
                  "TH Academic Program", "TH Program Level",
-                 "TH Discount Rule", "TH Skill")
+                 "TH Discount Rule", "TH Skill",
+                 "TH Assessment Policy", "TH Configuration Operation",
+                 "TH Configuration Audit Event")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Program Level"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Discount Rule"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Skill"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Assessment Policy"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
 permission_query_conditions = {
     name: "toefl_house.permissions.query_" + suffix
     for name, suffix in (
@@ -77,6 +82,9 @@ permission_query_conditions["TH Academic Program"] = "toefl_house.permissions.co
 permission_query_conditions["TH Program Level"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Discount Rule"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Skill"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Assessment Policy"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
 override_whitelisted_methods = {
     "education.education.api.enroll_student": "toefl_house.admission.deny_enroll_student",
 }
@@ -105,6 +113,15 @@ doc_events = {
     "TH Skill": {
         "validate": "toefl_house.teaching.doctype.th_skill.th_skill.validate",
         "before_save": "toefl_house.teaching.doctype.th_skill.th_skill.before_save",
+    },
+    "TH Assessment Policy": {
+        "validate": "toefl_house.academic.doctype.th_assessment_policy.th_assessment_policy.validate",
+    },
+    "TH Configuration Operation": {
+        "validate": "toefl_house.operations.doctype.th_configuration_operation.th_configuration_operation.validate",
+    },
+    "TH Configuration Audit Event": {
+        "validate": "toefl_house.operations.doctype.th_configuration_audit_event.th_configuration_audit_event.validate",
     },
     "Program Enrollment": {
         "validate": "toefl_house.enrollment.guard_program_enrollment",

@@ -23,10 +23,15 @@ date IS business meaning, not just audit metadata.
 import frappe
 
 from toefl_house.academic import rules
-from toefl_house.policy import validate_request_key
+from toefl_house.configuration import audit as configuration_audit
+from toefl_house.configuration import rules as configuration_rules
+from toefl_house.policy import digest, validate_request_key
 
 PROGRAM = "TH Academic Program"
 LEVEL = "TH Program Level"
+ASSESSMENT_POLICY = "TH Assessment Policy"
+GRADING_SCALE = "Grading Scale"
+ASSESSMENT_PLAN = "Assessment Plan"
 DURATION = "TH Level Duration"
 NATIVE_PROGRAM = "Program"
 ENROLLMENT = "Program Enrollment"
@@ -603,4 +608,245 @@ def set_discount_rule_status(request_key, code, active):
         "name": doc.name, "code": doc.code, "title": doc.title,
         "status": doc.status,
     }
+
+
+def _assessment_policy_doc(code, for_update=False):
+    name = frappe.db.get_value(ASSESSMENT_POLICY, {"code": code}, "name")
+    if not name:
+        raise frappe.ValidationError(f"Unknown assessment policy: {code}")
+    return frappe.get_doc(ASSESSMENT_POLICY, name, for_update=for_update)
+
+
+def _assessment_policy_result(doc, extra=None):
+    versions = [dict(row) for row in (doc.get("versions") or [])]
+    governing = configuration_rules.resolve_governing(
+        versions, frappe.utils.today())
+    result = {
+        "name": doc.name, "code": doc.code, "title": doc.title,
+        "status": doc.status, "family": doc.family,
+        "version_count": len(versions),
+        "governing_effective_from": (
+            str(governing.get("effective_from")) if governing else ""),
+    }
+    if extra:
+        result.update(extra)
+    return result
+
+
+@frappe.whitelist(methods=["POST"])
+def create_assessment_policy(request_key, family, code, title,
+                             description=""):
+    """Define an assessment policy shell (D1 reference structure).
+
+    Creates the policy with NO versions: readiness stays ``incomplete``
+    until the Course Owner appends the first effective-dated version. The
+    shell carries no grading values — thresholds arrive only through
+    versions, and only after owner decision D1 is made.
+    """
+    def work(actor):
+        try:
+            clean_family = rules.validate_code(family)
+            clean_code = rules.validate_code(code)
+            clean_title = rules.validate_title(title, "Assessment policy title")
+            clean_description = rules.validate_reason(description)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        family_doc = _family_doc(clean_family, for_update=True)
+        if family_doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Program {clean_family} is retired; reactivate it before "
+                "adding an assessment policy")
+        if frappe.db.exists(ASSESSMENT_POLICY, clean_code):
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} already exists")
+        doc = frappe.get_doc({
+            "doctype": ASSESSMENT_POLICY, "family": family_doc.name,
+            "code": clean_code, "title": clean_title, "status": "Active",
+            "description": clean_description,
+        })
+        doc.insert(ignore_permissions=True)
+        return _assessment_policy_result(doc), {
+            "target": doc.name, "before_hash": "",
+            "after_hash": configuration_rules.snapshot_digest([]),
+        }
+
+    payload = {"family": family, "code": code, "title": title,
+               "description": description}
+    return configuration_audit.execute(
+        "create_assessment_policy", request_key, payload, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_assessment_policy_version(request_key, policy, effective_from,
+                                  reason, grading_scale="",
+                                  assessment_plan=""):
+    """Append an effective-dated assessment policy version (D1 reference).
+
+    The version carries native-carrier LINKS only (Grading Scale,
+    Assessment Plan); threshold/weight/retake VALUE fields arrive with the
+    D1 decision slice and are deliberately not invented here. A change
+    reason is mandatory; backdated or same-day versions are refused.
+    """
+    def work(actor):
+        try:
+            clean_code = rules.validate_code(policy)
+            clean_from = rules.parse_date(effective_from)
+            clean_reason = configuration_rules.validate_change_reason(reason)
+            clean_scale = (rules.validate_title(grading_scale, "Grading scale")
+                           if grading_scale else "")
+            clean_plan = (rules.validate_title(assessment_plan, "Assessment plan")
+                          if assessment_plan else "")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _assessment_policy_doc(clean_code, for_update=True)
+        if doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} is retired; reactivate it "
+                "before adding a version")
+        family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+        if family_status != "Active":
+            raise frappe.ValidationError(
+                f"The program family {doc.family} is retired; reactivate it "
+                "before adding a version")
+        if clean_scale and not frappe.db.exists(GRADING_SCALE, clean_scale):
+            raise frappe.ValidationError(
+                f"Grading scale {clean_scale} does not exist; define it "
+                "natively first")
+        if clean_plan and not frappe.db.exists(ASSESSMENT_PLAN, clean_plan):
+            raise frappe.ValidationError(
+                f"Assessment plan {clean_plan} does not exist; define it "
+                "natively first")
+        versions = [dict(row) for row in (doc.get("versions") or [])]
+        try:
+            configuration_rules.check_appends(
+                versions, clean_from, what="assessment policy version")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        current = configuration_rules.latest_version(versions)
+        before = configuration_audit.latest_after_hash(doc.name)
+        doc.append("versions", {
+            "effective_from": clean_from,
+            "grading_scale": clean_scale or None,
+            "assessment_plan": clean_plan or None,
+            "reason": clean_reason, "set_by": actor,
+            "set_on": frappe.utils.now_datetime(),
+        })
+        if current:
+            # Close the superseded version; never rewrite its meaning, only
+            # record the date it stopped governing new activity.
+            for row in doc.get("versions") or []:
+                if (str(row.get("effective_from")) == str(current.get("effective_from"))
+                        and not row.get("superseded_on")):
+                    row.superseded_on = clean_from
+                    break
+        doc.save(ignore_permissions=True)
+        after = configuration_rules.snapshot_digest(
+            [dict(row) for row in (doc.get("versions") or [])])
+        return _assessment_policy_result(doc), {
+            "target": doc.name, "before_hash": before, "after_hash": after,
+        }
+
+    payload = {"policy": policy, "effective_from": effective_from,
+               "reason": reason, "grading_scale": grading_scale,
+               "assessment_plan": assessment_plan}
+    return configuration_audit.execute(
+        "set_assessment_policy_version", request_key, payload, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_assessment_policy_status(request_key, policy, active):
+    """Deactivate (retire) or reactivate an assessment policy.
+
+    No live-use refusal exists yet: no consumer slice reads these policies
+    until A06 lands, and inventing a fake dependency check would be worse
+    than the honest gap. A06 extends this command with the real
+    in-use refusal (recorded in the Phase 1 boundary).
+    """
+    def work(actor):
+        try:
+            clean_code = rules.validate_code(policy)
+            flag = _as_bool(active, "active")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _assessment_policy_doc(clean_code, for_update=True)
+        if flag:
+            family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+            if family_status != "Active":
+                raise frappe.ValidationError(
+                    f"The program family {doc.family} is retired; reactivate "
+                    "it first")
+        before = configuration_audit.latest_after_hash(doc.name)
+        doc.status = "Active" if flag else "Retired"
+        doc.save(ignore_permissions=True)
+        versions = [dict(row) for row in (doc.get("versions") or [])]
+        after = digest(["status", doc.status,
+                        configuration_rules.snapshot_digest(versions)])
+        return _assessment_policy_result(doc), {
+            "target": doc.name, "before_hash": before, "after_hash": after,
+        }
+
+    payload = {"policy": policy, "active": active}
+    return configuration_audit.execute(
+        "set_assessment_policy_status", request_key, payload, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def validate_assessment_policy(request_key, policy):
+    """Validate an assessment policy's structure and record the evidence.
+
+    Structural checks only (active policy and family, versions present
+    and unambiguous, carrier links resolve): policy COMPLETENESS criteria
+    arrive with the D1 decision slice. Success writes a validation audit
+    event over the exact version snapshot; any later version change
+    stales it automatically, returning readiness to ``configured``.
+    """
+    def work(actor):
+        try:
+            clean_code = rules.validate_code(policy)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _assessment_policy_doc(clean_code)
+        if doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} is retired; only active "
+                "policies validate")
+        family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+        if family_status != "Active":
+            raise frappe.ValidationError(
+                f"The program family {doc.family} is retired; reactivate it "
+                "before validating")
+        versions = [dict(row) for row in (doc.get("versions") or [])]
+        if not versions:
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} has no versions yet; add "
+                "the first version before validating")
+        try:
+            configuration_rules.assert_no_ambiguous_versions(
+                versions, what="assessment policy version")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        for row in versions:
+            scale = row.get("grading_scale") or ""
+            plan = row.get("assessment_plan") or ""
+            if scale and not frappe.db.exists(GRADING_SCALE, scale):
+                raise frappe.ValidationError(
+                    f"Grading scale {scale} no longer exists; repair the "
+                    "policy version before validating")
+            if plan and not frappe.db.exists(ASSESSMENT_PLAN, plan):
+                raise frappe.ValidationError(
+                    f"Assessment plan {plan} no longer exists; repair the "
+                    "policy version before validating")
+        before = configuration_audit.latest_after_hash(doc.name)
+        after = configuration_rules.snapshot_digest(versions)
+        readiness = configuration_rules.compute_readiness(
+            status=doc.status, versions=versions,
+            validations=[{"after_hash": after}],
+            today=frappe.utils.today(), what="assessment policy")
+        return _assessment_policy_result(doc, extra={"readiness": readiness}), {
+            "target": doc.name, "before_hash": before, "after_hash": after,
+        }
+
+    payload = {"policy": policy}
+    return configuration_audit.execute(
+        "validate_assessment_policy", request_key, payload, work)
 

@@ -72,7 +72,10 @@ class _Doc:
         # Real frappe stamps docstatus 0 on insert; the fake mirrors that so
         # docstatus filters behave.
         self._payload.setdefault("docstatus", 0)
-        key = (self._payload.get("code") or self._payload.get("program_name")
+        # Real frappe keeps an explicitly assigned name (idempotency
+        # receipts name themselves); the fake mirrors that.
+        key = (self._payload.get("name") or self._payload.get("code")
+               or self._payload.get("program_name")
                or self._payload.get("academic_year_name")
                or self._payload.get("category_name"))
         if not key:
@@ -211,7 +214,17 @@ def _load_module(roles, enrollments=()):
     fake = _FakeFrappe(roles, enrollments)
     previous = {key: sys.modules.get(key)
                 for key in ("frappe", "frappe.utils", "toefl_house", "toefl_house.policy",
-                            "toefl_house.academic", "toefl_house.academic.rules")}
+                            "toefl_house.academic", "toefl_house.academic.rules",
+                            "toefl_house.configuration", "toefl_house.configuration.rules",
+                            "toefl_house.configuration.audit", "toefl_house.transactions")}
+    # Auto-loaded command modules bind `import frappe` at import time: evict
+    # them so every test re-imports against ITS stub instead of inheriting
+    # the first test's backend (stale gates, writes landing in the wrong
+    # store, and exception classes the current fake cannot catch).
+    for key in ("toefl_house.configuration", "toefl_house.configuration.rules",
+                "toefl_house.configuration.audit", "toefl_house.transactions",
+                "toefl_house.academic.rules"):
+        sys.modules.pop(key, None)
     stub = types.ModuleType("frappe")
     for attr in ("session", "PermissionError", "ValidationError", "utils",
                  "get_roles", "get_value", "exists", "count", "get_all", "get_doc",
@@ -222,6 +235,7 @@ def _load_module(roles, enrollments=()):
     stub.QueryDeadlockError = type("QueryDeadlockError", (Exception,), {})
     stub.QueryTimeoutError = type("QueryTimeoutError", (Exception,), {})
     stub.DoesNotExistError = type("DoesNotExistError", (Exception,), {})
+    stub.DuplicateEntryError = type("DuplicateEntryError", (Exception,), {})
     stub.db = types.SimpleNamespace(
         get_value=fake.get_value, exists=fake.exists,
         count=fake.count, get_all=fake.get_all, sql=fake.sql,
@@ -601,6 +615,266 @@ class AcceptanceRehearsalTests(unittest.TestCase):
             self.assertEqual(int(fees_2.docstatus), 2)
             # Student A remains submitted and unchanged
             self.assertEqual(int(fees_1.docstatus), 1)
+
+
+def _foundation():
+    """The real foundation rules (frappe-free; resolves in any context)."""
+    from toefl_house.configuration import rules as foundation
+    return foundation
+
+
+class D1LifecycleTests(unittest.TestCase):
+    """Lifecycle proof for the D1 assessment-policy reference structure.
+
+    Drives the REAL D1 guarded commands against the in-memory backend:
+    versionless creation (incomplete), version appends (configured),
+    validation (validated/effective), staleness on new versions,
+    historical resolution, retirement, and every fail-closed refusal —
+    with the hash-chained audit behind each step.
+    """
+
+    def _setup(self, academic, fake):
+        academic.create_program("SETUP-PROGRAM-0001", "GEN-ENG",
+                                "General English", "")
+        fake.store.setdefault("Grading Scale", {})["GS-1"] = {"name": "GS-1"}
+        fake.store.setdefault("Assessment Plan", {})["AP-1"] = {"name": "AP-1"}
+        return academic, fake
+
+    def _events(self, fake):
+        return [dict(target=doc.target, before_hash=doc.before_hash,
+                     after_hash=doc.after_hash)
+                for doc in fake.store.get(
+                    "TH Configuration Audit Event", {}).values()]
+
+    def _readiness(self, academic, fake, code):
+        foundation = _foundation()
+        policy = fake.store["TH Assessment Policy"][code]
+        rows = [dict(row) for row in (policy.get("versions") or [])]
+        evidence = [event for event in self._events(fake)
+                    if event["target"] == policy.name]
+        validations = [
+            fake.store["TH Configuration Audit Event"][name]
+            for name in fake.store.get("TH Configuration Audit Event", {})]
+        validations = [{"after_hash": doc.after_hash} for doc in validations
+                       if doc.target == policy.name
+                       and doc.action == "validate_assessment_policy"]
+        return foundation.compute_readiness(
+            status=policy.status, versions=rows, validations=validations,
+            today="2026-09-17", what="assessment policy"), rows, evidence
+
+    def test_create_policy_is_versionless_and_incomplete(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            result = academic.create_assessment_policy(
+                "D1-CREATE-KEY-0001", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            self.assertEqual(result["code"], "ASM-GEN")
+            self.assertEqual(result["status"], "Active")
+            self.assertEqual(result["version_count"], 0)
+            self.assertEqual(result["governing_effective_from"], "")
+            policy = fake.store["TH Assessment Policy"]["ASM-GEN"]
+            self.assertEqual(policy.get("versions") or [], [])
+            readiness, _rows, events = self._readiness(academic, fake, "ASM-GEN")
+            self.assertEqual(readiness, "incomplete")
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["before_hash"], "")
+            foundation = _foundation()
+            self.assertEqual(events[0]["after_hash"],
+                             foundation.snapshot_digest([]))
+            receipts = fake.store.get("TH Configuration Operation", {})
+            self.assertEqual(len(receipts), 1)
+            receipt = next(iter(receipts.values()))
+            self.assertEqual(receipt.status, "Complete")
+            self.assertEqual(receipt.kind, "create_assessment_policy")
+
+    def test_replay_returns_the_recorded_result_and_conflicts_refuse(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            first = academic.create_assessment_policy(
+                "D1-REPLAY-KEY-0001", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            replay = academic.create_assessment_policy(
+                "D1-REPLAY-KEY-0001", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            self.assertEqual(replay, first)
+            self.assertEqual(len(self._events(fake)), 1,
+                             "a replay must not double-apply")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.create_assessment_policy(
+                    "D1-REPLAY-KEY-0001", "GEN-ENG", "ASM-GEN",
+                    "A different title", "")
+            self.assertIn("conflicts", str(ctx.exception))
+
+    def test_non_owner_is_refused(self):
+        for academic, fake in _load_module({"Academic Manager"}):
+            with self.assertRaises(fake.PermissionError):
+                academic.create_assessment_policy(
+                    "D1-NONOWNER-KEY-01", "GEN-ENG", "ASM-GEN",
+                    "General assessment", "")
+
+    def test_unknown_operations_authority_is_not_a_backdoor(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            from toefl_house.configuration import audit as configuration_audit
+            with self.assertRaises(fake.PermissionError):
+                configuration_audit.require_authority("operations")
+            with self.assertRaises(fake.PermissionError):
+                configuration_audit.require_authority("custody")
+            with self.assertRaises(fake.PermissionError):
+                configuration_audit.execute(
+                    "invented_command", "D1-UNKNOWN-KIND-01", {}, lambda actor: None)
+
+    def test_version_append_validate_and_staleness(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.create_assessment_policy(
+                "D1-LIFE-CREATE-0001", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            result = academic.set_assessment_policy_version(
+                "D1-LIFE-VERSION-01", "ASM-GEN", "2026-01-01",
+                "First structure", grading_scale="GS-1",
+                assessment_plan="AP-1")
+            self.assertEqual(result["version_count"], 1)
+            self.assertEqual(result["governing_effective_from"], "2026-01-01")
+            readiness, _rows, _events = self._readiness(
+                academic, fake, "ASM-GEN")
+            self.assertEqual(readiness, "configured")
+            validated = academic.validate_assessment_policy(
+                "D1-LIFE-VALIDATE-1", "ASM-GEN")
+            self.assertEqual(validated["readiness"], "effective")
+            readiness, _rows, _events = self._readiness(
+                academic, fake, "ASM-GEN")
+            self.assertEqual(readiness, "effective")
+            # A new version stales the validation automatically.
+            academic.set_assessment_policy_version(
+                "D1-LIFE-VERSION-02", "ASM-GEN", "2027-01-01",
+                "Second structure")
+            readiness, rows, _events = self._readiness(
+                academic, fake, "ASM-GEN")
+            self.assertEqual(readiness, "configured")
+            # The superseded row is closed, never rewritten.
+            first = next(row for row in rows
+                         if row["effective_from"] == "2026-01-01")
+            self.assertEqual(first["superseded_on"], "2027-01-01")
+            self.assertEqual(first["grading_scale"], "GS-1")
+            # History resolves by date, forever.
+            foundation = _foundation()
+            governing_then = foundation.resolve_governing_strict(
+                rows, "2026-06-01", what="assessment policy version")
+            governing_later = foundation.resolve_governing_strict(
+                rows, "2027-06-01", what="assessment policy version")
+            self.assertEqual(governing_then["grading_scale"], "GS-1")
+            self.assertIsNone(governing_later.get("grading_scale"))
+            self.assertEqual(foundation.verify_chain(self._events(fake)), 4)
+
+    def test_backdated_same_day_empty_reason_and_unknown_carrier_refuse(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.create_assessment_policy(
+                "D1-REFUSE-CREATE-01", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            academic.set_assessment_policy_version(
+                "D1-REFUSE-VERSION1", "ASM-GEN", "2026-06-01",
+                "First structure")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_assessment_policy_version(
+                    "D1-REFUSE-BACKDATE1", "ASM-GEN", "2026-01-01",
+                    "Backdated attempt")
+            self.assertIn("must start after the latest version",
+                          str(ctx.exception))
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_policy_version(
+                    "D1-REFUSE-SAMEDAY-1", "ASM-GEN", "2026-06-01",
+                    "Same-day attempt")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_assessment_policy_version(
+                    "D1-REFUSE-NOREASON1", "ASM-GEN", "2027-01-01", "   ")
+            self.assertIn("required", str(ctx.exception))
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_assessment_policy_version(
+                    "D1-REFUSE-NOSCALE-1", "ASM-GEN", "2027-01-01",
+                    "Unknown carrier", grading_scale="NO-SUCH-SCALE")
+            self.assertIn("does not exist", str(ctx.exception))
+            readiness, _rows, _events = self._readiness(
+                academic, fake, "ASM-GEN")
+            self.assertEqual(readiness, "configured")
+
+    def test_retire_reactivate_and_validate_refusals(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.create_assessment_policy(
+                "D1-STATUS-CREATE-01", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.validate_assessment_policy(
+                    "D1-STATUS-VALID-001", "ASM-GEN")
+            self.assertIn("no versions yet", str(ctx.exception))
+            academic.set_assessment_policy_version(
+                "D1-STATUS-VERSION1", "ASM-GEN", "2026-01-01",
+                "First structure")
+            academic.validate_assessment_policy(
+                "D1-STATUS-VALID-002", "ASM-GEN")
+            retired = academic.set_assessment_policy_status(
+                "D1-STATUS-RETIRE-01", "ASM-GEN", "0")
+            self.assertEqual(retired["status"], "Retired")
+            readiness, _rows, _events = self._readiness(
+                academic, fake, "ASM-GEN")
+            self.assertEqual(readiness, "retired")
+            with self.assertRaises(fake.ValidationError):
+                academic.validate_assessment_policy(
+                    "D1-STATUS-VALID-003", "ASM-GEN")
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_policy_version(
+                    "D1-STATUS-VERSION2", "ASM-GEN", "2027-01-01",
+                    "Attempt on retired policy")
+            reactivated = academic.set_assessment_policy_status(
+                "D1-STATUS-REACT-001", "ASM-GEN", "1")
+            self.assertEqual(reactivated["status"], "Active")
+            readiness, _rows, _events = self._readiness(
+                academic, fake, "ASM-GEN")
+            self.assertEqual(readiness, "effective")
+
+    def test_retired_family_blocks_policy_changes(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.create_assessment_policy(
+                "D1-FAMILY-CREATE-01", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            academic.set_program_status("D1-FAMILY-RETIRE-1", "GEN-ENG", "0")
+            with self.assertRaises(fake.ValidationError):
+                academic.create_assessment_policy(
+                    "D1-FAMILY-CREATE-02", "GEN-ENG", "ASM-GEN-2",
+                    "Second policy", "")
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_policy_version(
+                    "D1-FAMILY-VERSION1", "ASM-GEN", "2026-01-01",
+                    "Attempt on retired family")
+            with self.assertRaises(fake.ValidationError):
+                academic.validate_assessment_policy(
+                    "D1-FAMILY-VALID-001", "ASM-GEN")
+
+    def test_unknown_policy_duplicate_code_and_carrier_repair(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_policy_version(
+                    "D1-UNKNOWN-POL-001", "NO-SUCH-POLICY", "2026-01-01",
+                    "Attempt on unknown policy")
+            academic.create_assessment_policy(
+                "D1-DUP-CREATE-00001", "GEN-ENG", "ASM-GEN",
+                "General assessment", "")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.create_assessment_policy(
+                    "D1-DUP-CREATE-00002", "GEN-ENG", "ASM-GEN",
+                    "Duplicate code", "")
+            self.assertIn("already exists", str(ctx.exception))
+            academic.set_assessment_policy_version(
+                "D1-REPAIR-VERSION-01", "ASM-GEN", "2026-01-01",
+                "First structure", grading_scale="GS-1")
+            del fake.store["Grading Scale"]["GS-1"]
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.validate_assessment_policy(
+                    "D1-REPAIR-VALID-001", "ASM-GEN")
+            self.assertIn("no longer exists", str(ctx.exception))
 
 
 def rules_governing(versions, on_date):

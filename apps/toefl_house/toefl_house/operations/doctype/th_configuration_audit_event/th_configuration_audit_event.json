@@ -1,0 +1,109 @@
+{
+ "actions": [],
+ "creation": "2026-09-20 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "actor",
+  "operation",
+  "column_break_1",
+  "action",
+  "target",
+  "section_break_1",
+  "before_hash",
+  "after_hash"
+ ],
+ "fields": [
+  {
+   "fieldname": "actor",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Actor",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "operation",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Operation",
+   "options": "TH Configuration Operation",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Action",
+   "reqd": 1
+  },
+  {
+   "fieldname": "target",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Target",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Previous after-hash for this target (empty for the chain genesis).",
+   "fieldname": "before_hash",
+   "fieldtype": "Data",
+   "label": "Before hash"
+  },
+  {
+   "description": "Digest of the configuration state this event leaves behind; validation events commit to the exact version snapshot.",
+   "fieldname": "after_hash",
+   "fieldtype": "Data",
+   "label": "After hash",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-20 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Operations",
+ "name": "TH Configuration Audit Event",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Course Owner",
+   "select": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "select": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Academic Manager",
+   "select": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

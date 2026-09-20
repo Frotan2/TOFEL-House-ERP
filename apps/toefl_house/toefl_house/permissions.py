@@ -50,7 +50,13 @@ CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager", 
 # the synthetic-guarded DOCTYPES world. These records are governance state,
 # readable by management roles, mutable only through the guarded
 # toefl_house.academic commands (docs/product/CONFIGURATION-PLANE.md).
-GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount Rule", "TH Skill"}
+# The configuration audit ledger (Operation receipts + Audit Events) is
+# governed the same way: it trails the configuration, so it shares the
+# configuration's readership (mirroring how native Version rows inherit
+# their document's readers) and is read-only for every role.
+GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount Rule", "TH Skill",
+                        "TH Assessment Policy", "TH Configuration Operation",
+                        "TH Configuration Audit Event"}
 
 
 def configuration_has_permission(doc, ptype=None, user=None, **kwargs):
