@@ -43,6 +43,8 @@ def validate(doc, method=None):
                          "Version effective date")
         foundation.validate_change_reason(row.get("reason") or "",
                                           "Version reason")
+        rules.validate_policy_facets(
+            {facet: row.get(facet) for facet in rules.ASSESSMENT_FACETS})
     _assert_versions_sound(doc)
 
 

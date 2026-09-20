@@ -58,9 +58,12 @@ DISCOUNT_RULE_FIELDS = ["name", "code", "title", "discount_percentage", "precede
                         "modified_by"]
 ASSESSMENT_POLICY_FIELDS = ["name", "family", "code", "title", "status",
                             "description", "modified"]
+ASSESSMENT_FACET_FIELDS = ["components", "weights", "pass_rules", "rubrics",
+                           "progression", "retakes", "level_mapping"]
 ASSESSMENT_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
-                             "grading_scale", "assessment_plan", "reason",
-                             "set_by", "set_on", "superseded_on"]
+                             "grading_scale"] + ASSESSMENT_FACET_FIELDS + [
+                                 "reason", "set_by", "set_on",
+                                 "superseded_on"]
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -696,6 +699,10 @@ def _grading_items(policies, versions, today):
         if governing:
             detail = (f"{len(rows)} version(s); governing since "
                       f"{governing.get('effective_from')}")
+            defined = [facet.replace("_", " ") for facet in
+                       ASSESSMENT_FACET_FIELDS if governing.get(facet)]
+            detail += ("; facets defined: " + ", ".join(defined)
+                       if defined else "; no facets defined yet")
         elif rows:
             detail = f"{len(rows)} version(s); nothing effective yet"
         else:
@@ -707,9 +714,10 @@ def _grading_items(policies, versions, today):
             "status": readiness.capitalize(),
             "stage": "Assessment policy",
             "stage_definition": ("Computed configuration readiness. "
-                                 "Versions carry native-carrier links only; "
-                                 "grading values arrive with owner "
-                                 "decision D1."),
+                                 "Versions carry the grading-scale link and "
+                                 "the owned facet structures; each facet "
+                                 "stays empty until the Course Owner "
+                                 "defines it."),
             "next": _assessment_next(policy, readiness, governing),
             "next_role": "Course Owner",
             "waiting_since": None,
@@ -739,8 +747,24 @@ def _assessment_next(policy, readiness, governing):
     return f"{code} is retired; it governs nothing."
 
 
+FACET_ACTIONS = (
+    ("toefl_house.academic.set_assessment_components", "Set components"),
+    ("toefl_house.academic.set_assessment_weights", "Set weights"),
+    ("toefl_house.academic.set_assessment_pass_rules", "Set pass rules"),
+    ("toefl_house.academic.set_assessment_rubrics", "Set rubrics"),
+    ("toefl_house.academic.set_assessment_progression", "Set progression"),
+    ("toefl_house.academic.set_assessment_retakes", "Set retakes"),
+    ("toefl_house.academic.set_assessment_mapping", "Set level mapping"),
+)
+
+
 def _assessment_actions(policy, readiness):
-    """Exactly the version/status/validate actions the server rule allows."""
+    """Exactly the version/facet/status/validate actions the server allows.
+
+    Facet commands append versions under the same server rules as the
+    carrier version command (active policy and family, monotone dates),
+    so they are offered everywhere the version action is.
+    """
     code = policy["code"]
     retired = readiness == "retired"
     if retired:
@@ -748,20 +772,23 @@ def _assessment_actions(policy, readiness):
             "Course Owner", "toefl_house.academic.set_assessment_policy_status",
             "Reactivate policy", {"policy": code, "active": "1"})
         return [primary] if primary else []
-    secondaries = []
     version_action = guided_action(
         "Course Owner", "toefl_house.academic.set_assessment_policy_version",
         "Add version", {"policy": code})
+    facet_actions = [guided_action("Course Owner", endpoint, label,
+                                   {"policy": code})
+                     for endpoint, label in FACET_ACTIONS]
     retire_action = guided_action(
         "Course Owner", "toefl_house.academic.set_assessment_policy_status",
         "Retire policy", {"policy": code, "active": "0"})
     if readiness == "incomplete":
-        ordered = [version_action, retire_action]
+        ordered = [version_action] + facet_actions + [retire_action]
     elif readiness == "configured":
         validate_action = guided_action(
             "Course Owner", "toefl_house.academic.validate_assessment_policy",
             "Validate policy", {"policy": code})
-        ordered = [validate_action, version_action, retire_action]
+        ordered = ([validate_action, version_action] + facet_actions
+                   + [retire_action])
     else:
-        ordered = [version_action, retire_action]
+        ordered = [version_action] + facet_actions + [retire_action]
     return [action for action in ordered if action]

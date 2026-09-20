@@ -28,12 +28,20 @@ AUDIT = "TH Configuration Audit Event"
 
 # Command kind -> bound authority. Only kinds listed here may write the
 # ledger; the authority must be bound in foundation.AUTHORITIES or the
-# command refuses. Phase 1 binds the D1 reference commands only.
+# command refuses. The D1 configuration commands (policy shell, versions,
+# status, validation, and the seven facet setters) bind here.
 KIND_AUTHORITY = {
     "create_assessment_policy": "business_policy",
     "set_assessment_policy_version": "business_policy",
     "set_assessment_policy_status": "business_policy",
     "validate_assessment_policy": "business_policy",
+    "set_assessment_components": "business_policy",
+    "set_assessment_weights": "business_policy",
+    "set_assessment_pass_rules": "business_policy",
+    "set_assessment_rubrics": "business_policy",
+    "set_assessment_progression": "business_policy",
+    "set_assessment_retakes": "business_policy",
+    "set_assessment_mapping": "business_policy",
 }
 
 

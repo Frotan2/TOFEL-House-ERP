@@ -279,16 +279,19 @@ PROJECTION_FIELDS = {
         "status", "fee_category", "program", "description", "modified",
         "modified_by",
     ],
-    # D1 reference structure: assessment policies, their effective-dated
-    # versions, and the validation audit events behind computed readiness.
-    # No grading values exist anywhere in Phase 1 — structure only.
+    # D1 configuration plane: assessment policies, their effective-dated
+    # versions with the owned facet structures, and the validation audit
+    # events behind computed readiness. Facets stay empty until the Course
+    # Owner defines them through the guarded facet commands.
     ("setup", "TH Assessment Policy"): [
         "name", "family", "code", "title", "status", "description",
         "modified",
     ],
     ("setup", "TH Assessment Policy Version"): [
         "name", "parent", "parenttype", "effective_from", "grading_scale",
-        "assessment_plan", "reason", "set_by", "set_on", "superseded_on",
+        "components", "weights", "pass_rules", "rubrics", "progression",
+        "retakes", "level_mapping", "reason", "set_by", "set_on",
+        "superseded_on",
     ],
     # Validation evidence is matched by count, never projected: desks ask
     # "does a validation event commit to this snapshot" via project_count,
@@ -328,7 +331,9 @@ PROJECTION_FIELDS = {
     ],
     ("configuration", "TH Assessment Policy Version"): [
         "name", "parent", "parenttype", "effective_from", "grading_scale",
-        "assessment_plan", "reason", "set_by", "set_on", "superseded_on",
+        "components", "weights", "pass_rules", "rubrics", "progression",
+        "retakes", "level_mapping", "reason", "set_by", "set_on",
+        "superseded_on",
     ],
     ("configuration", "TH Configuration Audit Event"): [
         "name",

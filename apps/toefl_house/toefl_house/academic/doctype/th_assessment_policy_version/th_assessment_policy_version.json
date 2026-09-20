@@ -8,7 +8,14 @@
   "effective_from",
   "column_break_1",
   "grading_scale",
-  "assessment_plan",
+  "section_break_facets",
+  "components",
+  "weights",
+  "pass_rules",
+  "rubrics",
+  "progression",
+  "retakes",
+  "level_mapping",
   "section_break_1",
   "reason",
   "column_break_2",
@@ -37,12 +44,51 @@
    "options": "Grading Scale"
   },
   {
-   "description": "Native Assessment Plan this version governs through. Links only; assessment values arrive with owner decision D1 and are never invented here.",
-   "fieldname": "assessment_plan",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Assessment plan",
-   "options": "Assessment Plan"
+   "fieldname": "section_break_facets",
+   "fieldtype": "Section Break",
+   "label": "Policy facets (owner-defined)"
+  },
+  {
+   "description": "Owned assessment components as canonical JSON, written only by the guarded facet commands. Empty until the Course Owner defines them; native per-group Assessment Plans are scheduled instances and are never referenced here.",
+   "fieldname": "components",
+   "fieldtype": "Long Text",
+   "label": "Components"
+  },
+  {
+   "description": "Owned component weights as canonical JSON. Native Course weight columns are never read; combination semantics arrive with a future owner rule.",
+   "fieldname": "weights",
+   "fieldtype": "Long Text",
+   "label": "Weights"
+  },
+  {
+   "description": "Owned pass and cutoff rules as canonical JSON. No native pass or fail concept exists; every cutoff is owner-entered.",
+   "fieldname": "pass_rules",
+   "fieldtype": "Long Text",
+   "label": "Pass rules"
+  },
+  {
+   "description": "Owned rubric requirements as canonical JSON: required evidence and rating levels per rubric. Score conversion is a future owner rule.",
+   "fieldname": "rubrics",
+   "fieldtype": "Long Text",
+   "label": "Rubrics"
+  },
+  {
+   "description": "Owned progression rules as canonical JSON: required evidence and the target level. A progression decision never enrolls by itself.",
+   "fieldname": "progression",
+   "fieldtype": "Long Text",
+   "label": "Progression"
+  },
+  {
+   "description": "Owned retake rules as canonical JSON: attempts, waits, scope and which attempt governs. Prior attempts are always preserved.",
+   "fieldname": "retakes",
+   "fieldtype": "Long Text",
+   "label": "Retakes"
+  },
+  {
+   "description": "Owned level mapping as canonical JSON: the level codes this policy version governs. Empty governs nothing.",
+   "fieldname": "level_mapping",
+   "fieldtype": "Long Text",
+   "label": "Level mapping"
   },
   {
    "fieldname": "section_break_1",

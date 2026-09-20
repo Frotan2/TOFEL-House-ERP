@@ -24,6 +24,12 @@ Phase 1 pins, offline:
    restores the outer kind). The wiring — commands establish it, the
    controllers require it, native writes meet the business-language
    refusal — is pinned by the lifecycle boundary tests.
+8. The D1 FACET STRUCTURES — the seven owner-defined policy facets
+   (components, weights, pass rules, rubrics, progression, retakes,
+   level mapping): shapes, bounds, structural vocabularies,
+   cross-references and canonical storage, all without a single business
+   value. Reusable policy stays separated from per-group scheduled
+   plans (A-D1-1) and native weight columns are never read (A-D1-2).
 """
 import ast
 import json
@@ -320,7 +326,7 @@ class AssessmentPolicyContractTests(unittest.TestCase):
                 self.assertIsNone(row.get("create"),
                                   f"{row['role']} must be read-only")
 
-    def test_version_rows_are_carrier_links_and_audit_columns_only(self):
+    def test_version_rows_carry_scale_link_and_facet_structures(self):
         version = _doctype(self.VERSION)
         self.assertEqual(version.get("istable"), 1)
         fields = {row["fieldname"]: row for row in version["fields"]}
@@ -330,10 +336,15 @@ class AssessmentPolicyContractTests(unittest.TestCase):
                          "the change reason is mandatory on every version")
         self.assertEqual(fields["grading_scale"]["fieldtype"], "Link")
         self.assertEqual(fields["grading_scale"]["options"], "Grading Scale")
-        self.assertEqual(fields["assessment_plan"]["fieldtype"], "Link")
-        self.assertEqual(fields["assessment_plan"]["options"], "Assessment Plan")
-        for optional in ("grading_scale", "assessment_plan", "set_by",
-                         "set_on", "superseded_on"):
+        self.assertNotIn("assessment_plan", fields,
+                         "A-D1-1: per-group scheduled plans are instances, "
+                         "never reusable policy references")
+        facets = ("components", "weights", "pass_rules", "rubrics",
+                  "progression", "retakes", "level_mapping")
+        for facet in facets:
+            self.assertEqual(fields[facet]["fieldtype"], "Long Text", facet)
+        for optional in ("grading_scale", "set_by", "set_on",
+                         "superseded_on") + facets:
             self.assertIsNone(fields[optional].get("reqd"),
                               f"{optional} must stay optional (structure only)")
         # Zero business values in structure: no defaults on any value
@@ -424,6 +435,13 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "set_assessment_policy_version": "business_policy",
             "set_assessment_policy_status": "business_policy",
             "validate_assessment_policy": "business_policy",
+            "set_assessment_components": "business_policy",
+            "set_assessment_weights": "business_policy",
+            "set_assessment_pass_rules": "business_policy",
+            "set_assessment_rubrics": "business_policy",
+            "set_assessment_progression": "business_policy",
+            "set_assessment_retakes": "business_policy",
+            "set_assessment_mapping": "business_policy",
         })
 
     def test_audit_reuses_the_command_pattern_without_site_gates(self):
@@ -445,10 +463,26 @@ class D1CommandContractTests(unittest.TestCase):
                                      "title", "description"],
         "set_assessment_policy_version": ["request_key", "policy",
                                           "effective_from", "reason",
-                                          "grading_scale",
-                                          "assessment_plan"],
+                                          "grading_scale"],
         "set_assessment_policy_status": ["request_key", "policy", "active"],
         "validate_assessment_policy": ["request_key", "policy"],
+        "set_assessment_components": ["request_key", "policy",
+                                      "effective_from", "reason",
+                                      "components"],
+        "set_assessment_weights": ["request_key", "policy", "effective_from",
+                                   "reason", "weights"],
+        "set_assessment_pass_rules": ["request_key", "policy",
+                                      "effective_from", "reason",
+                                      "pass_rules"],
+        "set_assessment_rubrics": ["request_key", "policy", "effective_from",
+                                   "reason", "rubrics"],
+        "set_assessment_progression": ["request_key", "policy",
+                                       "effective_from", "reason",
+                                       "progression"],
+        "set_assessment_retakes": ["request_key", "policy", "effective_from",
+                                   "reason", "retakes"],
+        "set_assessment_mapping": ["request_key", "policy", "effective_from",
+                                   "reason", "mapping"],
     }
 
     @classmethod
@@ -482,6 +516,8 @@ class D1CommandContractTests(unittest.TestCase):
     def test_commands_consume_the_pure_rules(self):
         for literal in ("rules.validate_code",
                         "rules.parse_date",
+                        "rules.canonical_facet",
+                        "rules.validate_policy_facets",
                         "configuration_rules.validate_change_reason",
                         "configuration_rules.check_appends",
                         "configuration_rules.snapshot_digest",
@@ -493,7 +529,14 @@ class D1CommandContractTests(unittest.TestCase):
     def test_commands_row_lock_and_stay_governance(self):
         for name in ("create_assessment_policy",
                      "set_assessment_policy_version",
-                     "set_assessment_policy_status"):
+                     "set_assessment_policy_status",
+                     "set_assessment_components",
+                     "set_assessment_weights",
+                     "set_assessment_pass_rules",
+                     "set_assessment_rubrics",
+                     "set_assessment_progression",
+                     "set_assessment_retakes",
+                     "set_assessment_mapping"):
             body = ast.unparse(self.functions[name])
             self.assertIn("for_update=True", body,
                           f"{name} mutations must row-lock the target")
@@ -550,11 +593,24 @@ class ConfigurationNavigationTests(unittest.TestCase):
             "toefl_house.academic.create_assessment_policy":
                 ["family", "code", "title", "description"],
             "toefl_house.academic.set_assessment_policy_version":
-                ["policy", "effective_from", "reason", "grading_scale",
-                 "assessment_plan"],
+                ["policy", "effective_from", "reason", "grading_scale"],
             "toefl_house.academic.set_assessment_policy_status":
                 ["policy", "active"],
             "toefl_house.academic.validate_assessment_policy": ["policy"],
+            "toefl_house.academic.set_assessment_components":
+                ["policy", "effective_from", "reason", "components"],
+            "toefl_house.academic.set_assessment_weights":
+                ["policy", "effective_from", "reason", "weights"],
+            "toefl_house.academic.set_assessment_pass_rules":
+                ["policy", "effective_from", "reason", "pass_rules"],
+            "toefl_house.academic.set_assessment_rubrics":
+                ["policy", "effective_from", "reason", "rubrics"],
+            "toefl_house.academic.set_assessment_progression":
+                ["policy", "effective_from", "reason", "progression"],
+            "toefl_house.academic.set_assessment_retakes":
+                ["policy", "effective_from", "reason", "retakes"],
+            "toefl_house.academic.set_assessment_mapping":
+                ["policy", "effective_from", "reason", "mapping"],
         }
         import re
         for endpoint, fields in expected.items():
@@ -632,6 +688,252 @@ class CommandOnlyBoundaryTests(unittest.TestCase):
                 self.assertEqual(foundation.active_command(), "inner")
             self.assertEqual(foundation.active_command(), "outer")
         self.assertIsNone(foundation.active_command())
+
+
+class D1FacetValidationTests(unittest.TestCase):
+    """Facet shapes, bounds, vocabularies and canonical storage.
+
+    Structures only: every literal below is test scaffolding for shape
+    validation, never a business value, and the hard-coded-policy test
+    keeps it that way.
+    """
+
+    COMPONENTS = [
+        {"code": "SPK", "title": "Speaking", "maximum_score": 25,
+         "criteria": "Speaking"},
+        {"code": "WRT", "title": "Writing", "maximum_score": 25},
+    ]
+
+    def test_components_shape_and_canonical_form(self):
+        import json
+        stored = academic_rules.canonical_facet("components", self.COMPONENTS)
+        self.assertEqual(json.loads(stored), [
+            {"code": "SPK", "criteria": "Speaking",
+             "maximum_score": 25.0, "title": "Speaking"},
+            {"code": "WRT", "maximum_score": 25.0, "title": "Writing"},
+        ])
+        # Key order in input does not affect the stored form (list order
+        # is meaning and is preserved).
+        shuffled = [{"maximum_score": 25, "code": "SPK", "title": "Speaking",
+                     "criteria": "Speaking"},
+                    {"title": "Writing", "maximum_score": 25,
+                     "code": "WRT"}]
+        self.assertEqual(
+            academic_rules.canonical_facet("components", shuffled), stored)
+
+    def test_components_refuse_bad_shapes(self):
+        for bad in ("not json", 7, {"code": "SPK"}):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                academic_rules.canonical_facet("components", bad)
+        with self.assertRaises(ValueError):
+            academic_rules.canonical_facet(
+                "components", [{"code": "SPK", "title": "S",
+                               "maximum_score": 25, "typo": 1}])
+        with self.assertRaises(ValueError):
+            academic_rules.canonical_facet(
+                "components", [{"code": "SPK", "title": "One",
+                                "maximum_score": 25},
+                               {"code": "SPK", "title": "Two",
+                                "maximum_score": 25}])
+        for score in (0, -5, "25", None):
+            with self.assertRaises(ValueError, msg=repr(score)):
+                academic_rules.canonical_facet(
+                    "components", [{"code": "SPK", "title": "Speaking",
+                                    "maximum_score": score}])
+
+    def test_absent_and_withdrawn_facets_normalize_to_empty(self):
+        for facet, empty in (("components", []), ("weights", []),
+                             ("pass_rules", {}), ("rubrics", []),
+                             ("progression", {}), ("retakes", {}),
+                             ("level_mapping", {})):
+            for raw in (None, "", empty):
+                self.assertEqual(
+                    academic_rules.canonical_facet(facet, raw), "",
+                    f"{facet} {raw!r} must normalize to absent")
+
+    def test_weights_reference_defined_components(self):
+        stored = academic_rules.canonical_facet(
+            "weights", [{"component": "SPK", "weight": 3},
+                        {"component": "WRT", "weight": 1}],
+            self.COMPONENTS)
+        import json
+        self.assertEqual(json.loads(stored), [
+            {"component": "SPK", "weight": 3.0},
+            {"component": "WRT", "weight": 1.0}])
+        with self.assertRaises(ValueError):
+            academic_rules.canonical_facet(
+                "weights", [{"component": "SPK", "weight": 1}], None)
+        with self.assertRaises(ValueError):
+            academic_rules.canonical_facet(
+                "weights", [{"component": "NOPE", "weight": 1}],
+                self.COMPONENTS)
+        with self.assertRaises(ValueError):
+            academic_rules.canonical_facet(
+                "weights", [{"component": "SPK", "weight": -1}],
+                self.COMPONENTS)
+        with self.assertRaises(ValueError):
+            academic_rules.canonical_facet(
+                "weights", [{"component": "SPK", "weight": 1},
+                            {"component": "SPK", "weight": 2}],
+                self.COMPONENTS)
+
+    def test_pass_rules_accept_percent_or_grade_minima(self):
+        payload = {
+            "components": [
+                {"component": "SPK",
+                 "minimum": {"kind": "percent", "value": 60}},
+                {"component": "WRT",
+                 "minimum": {"kind": "grade", "value": "B"}}],
+            "overall": {"kind": "percent", "value": 50},
+        }
+        import json
+        stored = academic_rules.canonical_facet(
+            "pass_rules", payload, self.COMPONENTS)
+        self.assertEqual(json.loads(stored)["overall"],
+                         {"kind": "percent", "value": 50.0})
+        overall_only = academic_rules.canonical_facet(
+            "pass_rules", {"overall": {"kind": "grade", "value": "C"}},
+            self.COMPONENTS)
+        self.assertEqual(json.loads(overall_only)["components"], [])
+        for bad in ({"components": [], "overall": None},
+                    {"components": []},
+                    {"components": [
+                        {"component": "SPK",
+                         "minimum": {"kind": "stars", "value": 3}}]},
+                    {"components": [
+                        {"component": "SPK",
+                         "minimum": {"kind": "percent", "value": 101}}]},
+                    {"components": [
+                        {"component": "NOPE",
+                         "minimum": {"kind": "percent", "value": 10}}]},
+                    {"components": [], "overall": {"kind": "grade"}}):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                academic_rules.canonical_facet(
+                    "pass_rules", bad, self.COMPONENTS)
+
+    def test_rubrics_require_evidence_and_unique_codes(self):
+        payload = [{"code": "SPK-R1", "title": "Speaking fluency",
+                    "component": "SPK",
+                    "evidence": ["recorded sample", "assessor notes"],
+                    "levels": [{"code": "L1", "title": "Basic",
+                                "description": "hesitant"}]}]
+        import json
+        stored = academic_rules.canonical_facet(
+            "rubrics", payload, self.COMPONENTS)
+        self.assertEqual(len(json.loads(stored)), 1)
+        for bad in ([{"code": "R1", "title": "T",
+                      "evidence": []}],
+                    [{"code": "R1", "title": "T"}],
+                    [{"code": "R1", "title": "T",
+                      "component": "NOPE", "evidence": ["x"]}],
+                    [{"code": "R1", "title": "T", "evidence": ["x"]},
+                     {"code": "R1", "title": "U", "evidence": ["y"]}],
+                    [{"code": "R1", "title": "T", "evidence": ["x"],
+                      "levels": [{"code": "L1", "title": "A"},
+                                 {"code": "L1", "title": "B"}]}]):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                academic_rules.canonical_facet(
+                    "rubrics", bad, self.COMPONENTS)
+
+    def test_progression_evidence_kinds_and_target(self):
+        payload = {"target": "next",
+                   "requires": [
+                       {"kind": "assessment_pass", "policy": "ASM-GEN"},
+                       {"kind": "attendance", "minimum_percent": 80},
+                       {"kind": "approval", "role": "Academic Manager"}]}
+        import json
+        stored = academic_rules.canonical_facet("progression", payload)
+        self.assertEqual(json.loads(stored)["target"], "next")
+        explicit = academic_rules.canonical_facet(
+            "progression", {"target": "PREP-1",
+                            "requires": [{"kind": "approval",
+                                          "role": "General Manager"}]})
+        self.assertEqual(json.loads(explicit)["target"], "PREP-1")
+        for bad in ({"target": "next", "requires": []},
+                    {"target": "next"},
+                    {"requires": [{"kind": "approval",
+                                   "role": "Academic Manager"}]},
+                    {"target": "next",
+                     "requires": [{"kind": "lottery"}]},
+                    {"target": "next",
+                     "requires": [{"kind": "attendance",
+                                   "minimum_percent": 120}]},
+                    {"target": "next",
+                     "requires": [{"kind": "assessment_pass"}]}):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                academic_rules.canonical_facet("progression", bad)
+
+    def test_retakes_are_all_explicit(self):
+        import json
+        stored = academic_rules.canonical_facet(
+            "retakes", {"max_attempts": 2, "wait_days": 7,
+                        "scope": "full", "governing": "latest"})
+        self.assertEqual(json.loads(stored)["wait_days"], 7)
+        unlimited = academic_rules.canonical_facet(
+            "retakes", {"max_attempts": None, "wait_days": 0,
+                        "scope": "partial", "governing": "best"})
+        self.assertIsNone(json.loads(unlimited)["max_attempts"])
+        base = {"max_attempts": 2, "wait_days": 7, "scope": "full",
+                "governing": "latest"}
+        for key in base:
+            partial = {other: base[other] for other in base if other != key}
+            with self.assertRaises(ValueError, msg=key):
+                academic_rules.canonical_facet("retakes", partial)
+        for bad in (dict(base, max_attempts=0),
+                    dict(base, wait_days=-1),
+                    dict(base, wait_days=1.5),
+                    dict(base, scope="sometimes"),
+                    dict(base, governing="loudest"),
+                    dict(base, max_attempts=True)):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                academic_rules.canonical_facet("retakes", bad)
+
+    def test_level_mapping_is_an_explicit_code_list(self):
+        import json
+        stored = academic_rules.canonical_facet(
+            "level_mapping", {"levels": ["PREP-1", "GEN-A1"]})
+        self.assertEqual(json.loads(stored),
+                         {"levels": ["PREP-1", "GEN-A1"]})
+        empty = academic_rules.canonical_facet(
+            "level_mapping", {"levels": []})
+        self.assertEqual(json.loads(empty), {"levels": []})
+        for bad in ({"levels": ["PREP-1", "PREP-1"]},
+                    {"levels": "PREP-1"},
+                    {"levels": ["x"]},
+                    {"stages": []}):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                academic_rules.canonical_facet("level_mapping", bad)
+
+    def test_policy_facets_validate_coherently_per_row(self):
+        row = {"components": academic_rules.canonical_facet(
+                   "components", self.COMPONENTS),
+               "weights": academic_rules.canonical_facet(
+                   "weights", [{"component": "SPK", "weight": 1}],
+                   self.COMPONENTS)}
+        parsed = academic_rules.validate_policy_facets(row)
+        self.assertEqual(set(parsed), {"components", "weights"})
+        self.assertEqual(academic_rules.validate_policy_facets({}), {})
+        with self.assertRaises(ValueError):
+            academic_rules.validate_policy_facets({"weights": "[oops"})
+        with self.assertRaises(ValueError):
+            academic_rules.validate_policy_facets(
+                {"weights": academic_rules.canonical_facet(
+                    "weights", [{"component": "SPK", "weight": 1}],
+                    self.COMPONENTS)})
+
+    def test_owned_code_never_reads_native_weight_columns(self):
+        offenders = []
+        for path in APP.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for marker in ("Course Assessment Criteria",
+                           "get_assessment_criteria"):
+                if marker in text:
+                    offenders.append((str(path), marker))
+        self.assertEqual(offenders, [],
+                         "A-D1-2: owned code must never read native weight "
+                         "columns; weighting is the owned weights facet")
 
 
 if __name__ == "__main__":

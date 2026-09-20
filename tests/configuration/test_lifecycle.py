@@ -637,7 +637,6 @@ class D1LifecycleTests(unittest.TestCase):
         academic.create_program("SETUP-PROGRAM-0001", "GEN-ENG",
                                 "General English", "")
         fake.store.setdefault("Grading Scale", {})["GS-1"] = {"name": "GS-1"}
-        fake.store.setdefault("Assessment Plan", {})["AP-1"] = {"name": "AP-1"}
         return academic, fake
 
     def _events(self, fake):
@@ -731,8 +730,7 @@ class D1LifecycleTests(unittest.TestCase):
                 "General assessment", "")
             result = academic.set_assessment_policy_version(
                 "D1-LIFE-VERSION-01", "ASM-GEN", "2026-01-01",
-                "First structure", grading_scale="GS-1",
-                assessment_plan="AP-1")
+                "First structure", grading_scale="GS-1")
             self.assertEqual(result["version_count"], 1)
             self.assertEqual(result["governing_effective_from"], "2026-01-01")
             readiness, _rows, _events = self._readiness(
@@ -1102,6 +1100,278 @@ class CommandOnlyBoundaryTests(unittest.TestCase):
                         loaded["TH Configuration Audit Event"].validate(
                             event)
                 self.assertIn("target", str(ctx.exception))
+
+
+class D1FacetLifecycleTests(unittest.TestCase):
+    """Lifecycle proof for the D1 owned facet structures.
+
+    Drives the REAL facet commands against the in-memory backend:
+    facet versions append and carry forward, history resolves against
+    the governing row's facets, withdrawals clear one facet only, every
+    structural and referential refusal fails closed, and validation
+    re-resolves references instead of trusting them.
+    """
+
+    def _setup(self, academic, fake):
+        academic.create_program("SETUP-PROGRAM-0001", "GEN-ENG",
+                                "General English", "")
+        academic.create_level("SETUP-LEVEL-000001", "GEN-ENG", "LV-1",
+                              "Level One", 1, 2, "Month", "2026-01-01")
+        academic.create_level("SETUP-LEVEL-000002", "GEN-ENG", "LV-2",
+                              "Level Two", 2, 2, "Month", "2026-01-01")
+        fake.store.setdefault("Grading Scale", {})["GS-1"] = {"name": "GS-1"}
+        intervals = fake.store.setdefault("Grading Scale Interval", {})
+        intervals["GS-1-A"] = {"parent": "GS-1", "grade_code": "A"}
+        intervals["GS-1-B"] = {"parent": "GS-1", "grade_code": "B"}
+        fake.store.setdefault("Assessment Criteria", {})["Speaking"] = {
+            "name": "Speaking"}
+        fake.store.setdefault("Role", {})["Academic Manager"] = {
+            "name": "Academic Manager"}
+        academic.create_assessment_policy(
+            "FACET-POLICY-00001", "GEN-ENG", "ASM-GEN",
+            "General assessment", "")
+        return academic, fake
+
+    def _rows(self, fake, code="ASM-GEN"):
+        policy = fake.store["TH Assessment Policy"][code]
+        return [dict(row) for row in (policy.get("versions") or [])]
+
+    def _events(self, fake):
+        return [dict(target=doc.target, before_hash=doc.before_hash,
+                     after_hash=doc.after_hash)
+                for doc in fake.store.get(
+                    "TH Configuration Audit Event", {}).values()]
+
+    def test_facets_append_versions_and_carry_forward(self):
+        import json
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.set_assessment_policy_version(
+                "FACET-VERSION-00001", "ASM-GEN", "2026-01-01",
+                "First structure", grading_scale="GS-1")
+            components = [{"code": "SPK", "title": "Speaking",
+                           "maximum_score": 25, "criteria": "Speaking"}]
+            academic.set_assessment_components(
+                "FACET-COMPONENTS-001", "ASM-GEN", "2026-02-01",
+                "Define components", json.dumps(components))
+            academic.set_assessment_weights(
+                "FACET-WEIGHTS-000001", "ASM-GEN", "2026-03-01",
+                "Define weights",
+                json.dumps([{"component": "SPK", "weight": 3}]))
+            rows = self._rows(fake)
+            self.assertEqual(len(rows), 3)
+            latest = rows[-1]
+            self.assertEqual(latest["grading_scale"], "GS-1")
+            self.assertEqual(json.loads(latest["components"]), [
+                {"code": "SPK", "criteria": "Speaking",
+                 "maximum_score": 25.0, "title": "Speaking"}])
+            self.assertEqual(json.loads(latest["weights"]),
+                             [{"component": "SPK", "weight": 3.0}])
+            self.assertEqual(rows[0].get("components") or "", "")
+            self.assertNotIn("assessment_plan", latest)
+            foundation = _foundation()
+            self.assertEqual(
+                foundation.verify_chain(self._events(fake)), 4)
+
+    def test_governing_version_carries_governing_facets(self):
+        import json
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.set_assessment_components(
+                "FACET-GOV-COMP-00001", "ASM-GEN", "2026-01-01",
+                "First components",
+                json.dumps([{"code": "SPK", "title": "Speaking",
+                             "maximum_score": 25}]))
+            academic.set_assessment_components(
+                "FACET-GOV-COMP-00002", "ASM-GEN", "2027-01-01",
+                "Second components",
+                json.dumps([{"code": "SPK", "title": "Speaking",
+                             "maximum_score": 30}]))
+            rows = self._rows(fake)
+            foundation = _foundation()
+            then = foundation.resolve_governing_strict(
+                rows, "2026-06-01", what="assessment policy version")
+            later = foundation.resolve_governing_strict(
+                rows, "2027-06-01", what="assessment policy version")
+            self.assertEqual(
+                json.loads(then["components"])[0]["maximum_score"], 25.0)
+            self.assertEqual(
+                json.loads(later["components"])[0]["maximum_score"], 30.0)
+            self.assertEqual(then["superseded_on"], "2027-01-01")
+
+    def test_withdrawal_clears_one_facet_only(self):
+        import json
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.set_assessment_components(
+                "FACET-WD-COMP-000001", "ASM-GEN", "2026-01-01",
+                "First components",
+                json.dumps([{"code": "SPK", "title": "Speaking",
+                             "maximum_score": 25}]))
+            academic.set_assessment_weights(
+                "FACET-WD-WGHT-000001", "ASM-GEN", "2026-02-01",
+                "First weights",
+                json.dumps([{"component": "SPK", "weight": 1}]))
+            academic.set_assessment_weights(
+                "FACET-WD-WGHT-000002", "ASM-GEN", "2026-03-01",
+                "Withdraw weights", "[]")
+            rows = self._rows(fake)
+            self.assertEqual(len(rows), 3)
+            self.assertEqual(rows[-1].get("weights") or "", "")
+            self.assertEqual(
+                json.loads(rows[-1]["components"])[0]["code"], "SPK")
+
+    def test_facet_shape_refusals_fail_closed(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_components(
+                    "FACET-REF-BADJSON01", "ASM-GEN", "2026-01-01",
+                    "Malformed", "[oops")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_assessment_weights(
+                    "FACET-REF-NOCOMP-001", "ASM-GEN", "2026-01-01",
+                    "Weights first",
+                    "[{\"component\": \"SPK\", \"weight\": 1}]")
+            self.assertIn("components first", str(ctx.exception))
+            academic.set_assessment_components(
+                "FACET-REF-COMP-00001", "ASM-GEN", "2026-01-01",
+                "First components",
+                "[{\"code\": \"SPK\", \"title\": \"Speaking\", "
+                "\"maximum_score\": 25}]")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_assessment_weights(
+                    "FACET-REF-UNKCOMP01", "ASM-GEN", "2026-02-01",
+                    "Unknown component",
+                    "[{\"component\": \"NOPE\", \"weight\": 1}]")
+            self.assertIn("unknown component", str(ctx.exception))
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_pass_rules(
+                    "FACET-REF-NOMIN-001", "ASM-GEN", "2026-02-01",
+                    "No minima", "{\"components\": []}")
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_retakes(
+                    "FACET-REF-PARTIAL01", "ASM-GEN", "2026-02-01",
+                    "Partial retakes", "{\"scope\": \"full\"}")
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_mapping(
+                    "FACET-REF-BACKDATE1", "ASM-GEN", "2026-01-01",
+                    "Backdated mapping", "{\"levels\": []}")
+            self.assertEqual(len(self._rows(fake)), 1,
+                             "refused facets must append nothing")
+
+    def test_facet_reference_refusals_fail_closed(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.create_program("SETUP-PROGRAM-0002", "MATH",
+                                    "Mathematics", "")
+            academic.create_level("SETUP-LEVEL-000003", "MATH", "MTH-1",
+                                  "Math One", 1, 2, "Month", "2026-01-01")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_assessment_components(
+                    "FACET-REF-NOCRIT-001", "ASM-GEN", "2026-01-01",
+                    "Unknown criteria",
+                    "[{\"code\": \"SPK\", \"title\": \"Speaking\", "
+                    "\"maximum_score\": 25, \"criteria\": \"NOPE\"}]")
+            self.assertIn("does not exist", str(ctx.exception))
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_assessment_mapping(
+                    "FACET-REF-NOLVL-001", "ASM-GEN", "2026-01-01",
+                    "Unknown level", "{\"levels\": [\"NOPE\"]}")
+            self.assertIn("Unknown level", str(ctx.exception))
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_assessment_mapping(
+                    "FACET-REF-XFAM-0001", "ASM-GEN", "2026-01-01",
+                    "Cross-family level", "{\"levels\": [\"MTH-1\"]}")
+            self.assertIn("outside the GEN-ENG", str(ctx.exception))
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_progression(
+                    "FACET-REF-NOPOL-001", "ASM-GEN", "2026-01-01",
+                    "Unknown policy",
+                    "{\"target\": \"next\", \"requires\": [{\"kind\": "
+                    "\"assessment_pass\", \"policy\": \"NOPE\"}]}")
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_progression(
+                    "FACET-REF-NOROLE-001", "ASM-GEN", "2026-01-01",
+                    "Unknown role",
+                    "{\"target\": \"next\", \"requires\": [{\"kind\": "
+                    "\"approval\", \"role\": \"No Such Role\"}]}")
+            academic.set_assessment_mapping(
+                "FACET-REF-MAPOK-0001", "ASM-GEN", "2026-01-01",
+                "Same-family mapping", "{\"levels\": [\"LV-1\"]}")
+            self.assertEqual(len(self._rows(fake)), 1)
+
+    def test_grade_codes_resolve_against_the_linked_scale(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.set_assessment_policy_version(
+                "FACET-GRADE-V000001", "ASM-GEN", "2026-01-01",
+                "Linked scale", grading_scale="GS-1")
+            academic.set_assessment_components(
+                "FACET-GRADE-C000001", "ASM-GEN", "2026-02-01",
+                "First components",
+                "[{\"code\": \"SPK\", \"title\": \"Speaking\", "
+                "\"maximum_score\": 25}]")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_assessment_pass_rules(
+                    "FACET-GRADE-BAD-001", "ASM-GEN", "2026-03-01",
+                    "Unknown grade code",
+                    "{\"components\": [{\"component\": \"SPK\", "
+                    "\"minimum\": {\"kind\": \"grade\", \"value\": \"Z\"}}]}")
+            self.assertIn("not on grading scale", str(ctx.exception))
+            academic.set_assessment_pass_rules(
+                "FACET-GRADE-OK-0001", "ASM-GEN", "2026-03-01",
+                "Known grade code",
+                "{\"components\": [{\"component\": \"SPK\", "
+                "\"minimum\": {\"kind\": \"grade\", \"value\": \"B\"}}]}")
+            self.assertEqual(len(self._rows(fake)), 3)
+
+    def test_retired_policy_and_family_block_facet_changes(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.set_assessment_policy_status(
+                "FACET-STATUS-RET01", "ASM-GEN", "0")
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_components(
+                    "FACET-STATUS-C00001", "ASM-GEN", "2026-01-01",
+                    "Attempt on retired policy", "[]")
+            academic.set_assessment_policy_status(
+                "FACET-STATUS-REAC01", "ASM-GEN", "1")
+            academic.set_level_status("FACET-STATUS-LV101", "LV-1", "0")
+            academic.set_level_status("FACET-STATUS-LV201", "LV-2", "0")
+            academic.set_program_status("FACET-STATUS-FAM01", "GEN-ENG", "0")
+            with self.assertRaises(fake.ValidationError):
+                academic.set_assessment_components(
+                    "FACET-STATUS-C00002", "ASM-GEN", "2026-01-01",
+                    "Attempt on retired family", "[]")
+            self.assertEqual(self._rows(fake), [])
+
+    def test_non_owner_cannot_set_facets(self):
+        for academic, fake in _load_module({"Academic Manager"}):
+            with self.assertRaises(fake.PermissionError):
+                academic.set_assessment_components(
+                    "FACET-GATE-00000001", "ASM-GEN", "2026-01-01",
+                    "Attempt by non-owner", "[]")
+
+    def test_validate_rechecks_facet_references(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            self._setup(academic, fake)
+            academic.set_assessment_components(
+                "FACET-VAL-COMP-00001", "ASM-GEN", "2026-01-01",
+                "First components",
+                "[{\"code\": \"SPK\", \"title\": \"Speaking\", "
+                "\"maximum_score\": 25, \"criteria\": \"Speaking\"}]")
+            academic.set_assessment_mapping(
+                "FACET-VAL-MAP-000001", "ASM-GEN", "2026-02-01",
+                "First mapping", "{\"levels\": [\"LV-1\"]}")
+            validated = academic.validate_assessment_policy(
+                "FACET-VAL-OK-0000001", "ASM-GEN")
+            self.assertEqual(validated["readiness"], "effective")
+            del fake.store["Assessment Criteria"]["Speaking"]
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.validate_assessment_policy(
+                    "FACET-VAL-BAD-00001", "ASM-GEN")
+            self.assertIn("no longer exists", str(ctx.exception))
 
 
 def rules_governing(versions, on_date):

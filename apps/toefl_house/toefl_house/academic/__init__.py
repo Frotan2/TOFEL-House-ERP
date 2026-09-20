@@ -31,7 +31,8 @@ PROGRAM = "TH Academic Program"
 LEVEL = "TH Program Level"
 ASSESSMENT_POLICY = "TH Assessment Policy"
 GRADING_SCALE = "Grading Scale"
-ASSESSMENT_PLAN = "Assessment Plan"
+GRADING_INTERVAL = "Grading Scale Interval"
+ASSESSMENT_CRITERIA = "Assessment Criteria"
 DURATION = "TH Level Duration"
 NATIVE_PROGRAM = "Program"
 ENROLLMENT = "Program Enrollment"
@@ -617,6 +618,21 @@ def _assessment_policy_doc(code, for_update=False):
     return frappe.get_doc(ASSESSMENT_POLICY, name, for_update=for_update)
 
 
+def _carried_facets(versions):
+    """The facet payload the next version row inherits unchanged.
+
+    Every version row is full policy state: a command that sets one facet
+    (or the grading-scale link) copies the other facets forward from the
+    latest version, so history keeps resolving against complete rows and
+    no facet is ever lost by appending an unrelated change.
+    """
+    latest = configuration_rules.latest_version(versions or [])
+    carried = {}
+    for facet in rules.ASSESSMENT_FACETS:
+        carried[facet] = (latest.get(facet) or "") if latest else ""
+    return carried
+
+
 def _assessment_policy_result(doc, extra=None):
     versions = [dict(row) for row in (doc.get("versions") or [])]
     governing = configuration_rules.resolve_governing(
@@ -678,14 +694,16 @@ def create_assessment_policy(request_key, family, code, title,
 
 @frappe.whitelist(methods=["POST"])
 def set_assessment_policy_version(request_key, policy, effective_from,
-                                  reason, grading_scale="",
-                                  assessment_plan=""):
-    """Append an effective-dated assessment policy version (D1 reference).
+                                  reason, grading_scale=""):
+    """Append an effective-dated assessment policy version (D1 configuration).
 
-    The version carries native-carrier LINKS only (Grading Scale,
-    Assessment Plan); threshold/weight/retake VALUE fields arrive with the
-    D1 decision slice and are deliberately not invented here. A change
-    reason is mandatory; backdated or same-day versions are refused.
+    The version carries the reusable native Grading Scale LINK plus the
+    owned facet structures (components, weights, pass rules, rubrics,
+    progression, retakes, level mapping), each defined later by the Course
+    Owner through the facet commands. Native per-group Assessment Plans
+    are scheduled instances, not reusable policy, and are never referenced
+    here (A-D1-1). Facets carry forward unchanged; a change reason is
+    mandatory; backdated or same-day versions are refused.
     """
     def work(actor):
         try:
@@ -694,8 +712,6 @@ def set_assessment_policy_version(request_key, policy, effective_from,
             clean_reason = configuration_rules.validate_change_reason(reason)
             clean_scale = (rules.validate_title(grading_scale, "Grading scale")
                            if grading_scale else "")
-            clean_plan = (rules.validate_title(assessment_plan, "Assessment plan")
-                          if assessment_plan else "")
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         doc = _assessment_policy_doc(clean_code, for_update=True)
@@ -712,10 +728,6 @@ def set_assessment_policy_version(request_key, policy, effective_from,
             raise frappe.ValidationError(
                 f"Grading scale {clean_scale} does not exist; define it "
                 "natively first")
-        if clean_plan and not frappe.db.exists(ASSESSMENT_PLAN, clean_plan):
-            raise frappe.ValidationError(
-                f"Assessment plan {clean_plan} does not exist; define it "
-                "natively first")
         versions = [dict(row) for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
@@ -723,14 +735,14 @@ def set_assessment_policy_version(request_key, policy, effective_from,
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         current = configuration_rules.latest_version(versions)
+        carried = _carried_facets(versions)
         before = configuration_audit.latest_after_hash(doc.name)
-        doc.append("versions", {
-            "effective_from": clean_from,
-            "grading_scale": clean_scale or None,
-            "assessment_plan": clean_plan or None,
-            "reason": clean_reason, "set_by": actor,
-            "set_on": frappe.utils.now_datetime(),
-        })
+        row = {"effective_from": clean_from,
+               "grading_scale": clean_scale or None,
+               "reason": clean_reason, "set_by": actor,
+               "set_on": frappe.utils.now_datetime()}
+        row.update(carried)
+        doc.append("versions", row)
         if current:
             # Close the superseded version; never rewrite its meaning, only
             # record the date it stopped governing new activity.
@@ -747,10 +759,506 @@ def set_assessment_policy_version(request_key, policy, effective_from,
         }
 
     payload = {"policy": policy, "effective_from": effective_from,
-               "reason": reason, "grading_scale": grading_scale,
-               "assessment_plan": assessment_plan}
+               "reason": reason, "grading_scale": grading_scale}
     return configuration_audit.execute(
         "set_assessment_policy_version", request_key, payload, work)
+
+
+def _append_facet_version(doc, actor, clean_from, clean_reason, scale,
+                          carried):
+    """Append one facet-carrying version row and close the superseded one.
+
+    Every row is full state: the caller passes the carried facets with its
+    own facet already replaced, plus the (carried) grading-scale link.
+    """
+    row = {"effective_from": clean_from, "grading_scale": scale,
+           "reason": clean_reason, "set_by": actor,
+           "set_on": frappe.utils.now_datetime()}
+    row.update(carried)
+    doc.append("versions", row)
+
+
+def _close_superseded_facet(doc, current, clean_from):
+    if current:
+        # Close the superseded version; never rewrite its meaning, only
+        # record the date it stopped governing new activity.
+        for row in doc.get("versions") or []:
+            if (str(row.get("effective_from")) == str(current.get("effective_from"))
+                    and not row.get("superseded_on")):
+                row.superseded_on = clean_from
+                break
+
+
+def _grade_codes_of_scale(scale):
+    """Grade codes on a native scale, or None when no scale is linked."""
+    if not scale:
+        return None
+    return [str(row.get("grade_code") or "")
+            for row in frappe.db.get_all(
+                GRADING_INTERVAL, filters={"parent": scale},
+                fields=["grade_code"])]
+
+
+def _refuse_unknown_grade_codes(pass_rules, codes, scale):
+    found = []
+    for entry in (pass_rules.get("components") or []):
+        minimum = entry.get("minimum") or {}
+        if minimum.get("kind") == "grade":
+            found.append(minimum.get("value"))
+    overall = pass_rules.get("overall") or {}
+    if overall.get("kind") == "grade":
+        found.append(overall.get("value"))
+    for code in found:
+        if code not in codes:
+            raise frappe.ValidationError(
+                f"Grade code {code!r} is not on grading scale {scale}; "
+                "define it on the scale first")
+
+
+@frappe.whitelist(methods=["POST"])
+def set_assessment_components(request_key, policy, effective_from, reason,
+                              components):
+    """Define the owned assessment components (D1 configuration plane).
+
+    Components are the assessed parts (code, title, maximum score, and an
+    optional native Assessment Criteria link each), supplied as JSON. A new
+    version carries every other facet forward unchanged; an explicit empty
+    list withdraws the facet. Weights, pass rules and rubrics reference
+    these codes and therefore need components defined first.
+    """
+    def work(actor):
+        try:
+            clean_code = rules.validate_code(policy)
+            clean_from = rules.parse_date(effective_from)
+            clean_reason = configuration_rules.validate_change_reason(reason)
+            canonical = rules.canonical_facet("components", components)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _assessment_policy_doc(clean_code, for_update=True)
+        if doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} is retired; reactivate it "
+                "before changing its facets")
+        family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+        if family_status != "Active":
+            raise frappe.ValidationError(
+                f"The program family {doc.family} is retired; reactivate it "
+                "before changing its facets")
+        versions = [dict(row) for row in (doc.get("versions") or [])]
+        try:
+            configuration_rules.check_appends(
+                versions, clean_from, what="assessment policy version")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        current = configuration_rules.latest_version(versions)
+        for entry in rules.parse_facet("components", canonical) or []:
+            criteria = entry.get("criteria") or ""
+            if criteria and not frappe.db.exists(ASSESSMENT_CRITERIA,
+                                                 criteria):
+                raise frappe.ValidationError(
+                    f"Assessment criteria {criteria} does not exist; define "
+                    "it natively first")
+        carried = _carried_facets(versions)
+        carried["components"] = canonical
+        before = configuration_audit.latest_after_hash(doc.name)
+        _append_facet_version(
+            doc, actor, clean_from, clean_reason,
+            (current.get("grading_scale") if current else None), carried)
+        _close_superseded_facet(doc, current, clean_from)
+        doc.save(ignore_permissions=True)
+        after = configuration_rules.snapshot_digest(
+            [dict(row) for row in (doc.get("versions") or [])])
+        return _assessment_policy_result(doc), {
+            "target": doc.name, "before_hash": before, "after_hash": after,
+        }
+
+    payload = {"policy": policy, "effective_from": effective_from,
+               "reason": reason, "components": components}
+    return configuration_audit.execute(
+        "set_assessment_components", request_key, payload, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_assessment_weights(request_key, policy, effective_from, reason,
+                           weights):
+    """Define the owned component weights (D1 configuration plane).
+
+    Each entry pairs a defined component code with a non-negative number,
+    supplied as JSON. These owned numbers are the only weighting the
+    configuration plane recognizes: native Course weight columns are never
+    read (A-D1-2), and combination semantics arrive with a future owner
+    rule. An explicit empty list withdraws the facet.
+    """
+    def work(actor):
+        try:
+            clean_code = rules.validate_code(policy)
+            clean_from = rules.parse_date(effective_from)
+            clean_reason = configuration_rules.validate_change_reason(reason)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _assessment_policy_doc(clean_code, for_update=True)
+        if doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} is retired; reactivate it "
+                "before changing its facets")
+        family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+        if family_status != "Active":
+            raise frappe.ValidationError(
+                f"The program family {doc.family} is retired; reactivate it "
+                "before changing its facets")
+        versions = [dict(row) for row in (doc.get("versions") or [])]
+        try:
+            configuration_rules.check_appends(
+                versions, clean_from, what="assessment policy version")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        current = configuration_rules.latest_version(versions)
+        carried = _carried_facets(versions)
+        try:
+            canonical = rules.canonical_facet(
+                "weights", weights,
+                rules.parse_facet("components",
+                                  carried.get("components")))
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        carried["weights"] = canonical
+        before = configuration_audit.latest_after_hash(doc.name)
+        _append_facet_version(
+            doc, actor, clean_from, clean_reason,
+            (current.get("grading_scale") if current else None), carried)
+        _close_superseded_facet(doc, current, clean_from)
+        doc.save(ignore_permissions=True)
+        after = configuration_rules.snapshot_digest(
+            [dict(row) for row in (doc.get("versions") or [])])
+        return _assessment_policy_result(doc), {
+            "target": doc.name, "before_hash": before, "after_hash": after,
+        }
+
+    payload = {"policy": policy, "effective_from": effective_from,
+               "reason": reason, "weights": weights}
+    return configuration_audit.execute(
+        "set_assessment_weights", request_key, payload, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_assessment_pass_rules(request_key, policy, effective_from, reason,
+                              pass_rules):
+    """Define the owned pass and cutoff rules (D1 configuration plane).
+
+    Per-component and overall minima, each either a percentage or a grade
+    code, supplied as JSON. Grade codes resolve against the version's
+    linked grading scale when one is linked. No native pass or fail
+    concept exists; every cutoff here is owner-entered, and at least one
+    minimum must be defined. An explicit empty object withdraws the facet.
+    """
+    def work(actor):
+        try:
+            clean_code = rules.validate_code(policy)
+            clean_from = rules.parse_date(effective_from)
+            clean_reason = configuration_rules.validate_change_reason(reason)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _assessment_policy_doc(clean_code, for_update=True)
+        if doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} is retired; reactivate it "
+                "before changing its facets")
+        family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+        if family_status != "Active":
+            raise frappe.ValidationError(
+                f"The program family {doc.family} is retired; reactivate it "
+                "before changing its facets")
+        versions = [dict(row) for row in (doc.get("versions") or [])]
+        try:
+            configuration_rules.check_appends(
+                versions, clean_from, what="assessment policy version")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        current = configuration_rules.latest_version(versions)
+        carried = _carried_facets(versions)
+        try:
+            canonical = rules.canonical_facet(
+                "pass_rules", pass_rules,
+                rules.parse_facet("components",
+                                  carried.get("components")))
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        scale = current.get("grading_scale") if current else ""
+        codes = _grade_codes_of_scale(scale)
+        if codes is not None:
+            _refuse_unknown_grade_codes(
+                rules.parse_facet("pass_rules", canonical) or {}, codes,
+                scale)
+        carried["pass_rules"] = canonical
+        before = configuration_audit.latest_after_hash(doc.name)
+        _append_facet_version(doc, actor, clean_from, clean_reason,
+                              scale or None, carried)
+        _close_superseded_facet(doc, current, clean_from)
+        doc.save(ignore_permissions=True)
+        after = configuration_rules.snapshot_digest(
+            [dict(row) for row in (doc.get("versions") or [])])
+        return _assessment_policy_result(doc), {
+            "target": doc.name, "before_hash": before, "after_hash": after,
+        }
+
+    payload = {"policy": policy, "effective_from": effective_from,
+               "reason": reason, "pass_rules": pass_rules}
+    return configuration_audit.execute(
+        "set_assessment_pass_rules", request_key, payload, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_assessment_rubrics(request_key, policy, effective_from, reason,
+                           rubrics):
+    """Define the owned rubric requirements (D1 configuration plane).
+
+    Each rubric names its required evidence and optional rating levels,
+    and may attach to a defined component, supplied as JSON. This is the
+    requirements structure only: score conversion is a future owner rule
+    and is deliberately not represented here. An explicit empty list
+    withdraws the facet.
+    """
+    def work(actor):
+        try:
+            clean_code = rules.validate_code(policy)
+            clean_from = rules.parse_date(effective_from)
+            clean_reason = configuration_rules.validate_change_reason(reason)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _assessment_policy_doc(clean_code, for_update=True)
+        if doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} is retired; reactivate it "
+                "before changing its facets")
+        family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+        if family_status != "Active":
+            raise frappe.ValidationError(
+                f"The program family {doc.family} is retired; reactivate it "
+                "before changing its facets")
+        versions = [dict(row) for row in (doc.get("versions") or [])]
+        try:
+            configuration_rules.check_appends(
+                versions, clean_from, what="assessment policy version")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        current = configuration_rules.latest_version(versions)
+        carried = _carried_facets(versions)
+        try:
+            canonical = rules.canonical_facet(
+                "rubrics", rubrics,
+                rules.parse_facet("components",
+                                  carried.get("components")))
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        carried["rubrics"] = canonical
+        before = configuration_audit.latest_after_hash(doc.name)
+        _append_facet_version(
+            doc, actor, clean_from, clean_reason,
+            (current.get("grading_scale") if current else None), carried)
+        _close_superseded_facet(doc, current, clean_from)
+        doc.save(ignore_permissions=True)
+        after = configuration_rules.snapshot_digest(
+            [dict(row) for row in (doc.get("versions") or [])])
+        return _assessment_policy_result(doc), {
+            "target": doc.name, "before_hash": before, "after_hash": after,
+        }
+
+    payload = {"policy": policy, "effective_from": effective_from,
+               "reason": reason, "rubrics": rubrics}
+    return configuration_audit.execute(
+        "set_assessment_rubrics", request_key, payload, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_assessment_progression(request_key, policy, effective_from, reason,
+                               progression):
+    """Define the owned progression rules (D1 configuration plane).
+
+    Required evidence (assessment passes under named policies, an
+    attendance minimum, human approvals) and the target level — either
+    the chain's next level or an explicit same-family level code —
+    supplied as JSON. A progression decision recommends; it never enrolls
+    by itself. An explicit empty object withdraws the facet.
+    """
+    def work(actor):
+        try:
+            clean_code = rules.validate_code(policy)
+            clean_from = rules.parse_date(effective_from)
+            clean_reason = configuration_rules.validate_change_reason(reason)
+            canonical = rules.canonical_facet("progression", progression)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _assessment_policy_doc(clean_code, for_update=True)
+        if doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} is retired; reactivate it "
+                "before changing its facets")
+        family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+        if family_status != "Active":
+            raise frappe.ValidationError(
+                f"The program family {doc.family} is retired; reactivate it "
+                "before changing its facets")
+        versions = [dict(row) for row in (doc.get("versions") or [])]
+        try:
+            configuration_rules.check_appends(
+                versions, clean_from, what="assessment policy version")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        current = configuration_rules.latest_version(versions)
+        parsed = rules.parse_facet("progression", canonical) or {}
+        target = (parsed.get("target") or "")
+        if target and target != rules.PROGRESSION_NEXT:
+            level = _level_doc(target)
+            if level.family != doc.family:
+                raise frappe.ValidationError(
+                    f"Progression target {target} is outside the {doc.family} "
+                    "program family")
+        for entry in parsed.get("requires") or []:
+            if entry.get("kind") == "assessment_pass":
+                name = frappe.db.get_value(
+                    ASSESSMENT_POLICY, {"code": entry.get("policy")}, "name")
+                if not name:
+                    raise frappe.ValidationError(
+                        f"Unknown assessment policy: {entry.get('policy')}")
+            elif entry.get("kind") == "approval":
+                if not frappe.db.exists("Role", entry.get("role")):
+                    raise frappe.ValidationError(
+                        f"Unknown role: {entry.get('role')}")
+        carried = _carried_facets(versions)
+        carried["progression"] = canonical
+        before = configuration_audit.latest_after_hash(doc.name)
+        _append_facet_version(
+            doc, actor, clean_from, clean_reason,
+            (current.get("grading_scale") if current else None), carried)
+        _close_superseded_facet(doc, current, clean_from)
+        doc.save(ignore_permissions=True)
+        after = configuration_rules.snapshot_digest(
+            [dict(row) for row in (doc.get("versions") or [])])
+        return _assessment_policy_result(doc), {
+            "target": doc.name, "before_hash": before, "after_hash": after,
+        }
+
+    payload = {"policy": policy, "effective_from": effective_from,
+               "reason": reason, "progression": progression}
+    return configuration_audit.execute(
+        "set_assessment_progression", request_key, payload, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_assessment_retakes(request_key, policy, effective_from, reason,
+                           retakes):
+    """Define the owned retake rules (D1 configuration plane).
+
+    Attempt limit, wait, scope (full or partial reassessment) and which
+    attempt governs, supplied as JSON with every key explicit — an empty
+    attempt limit means unlimited only when written as an explicit null.
+    Prior attempts are always preserved. An explicit empty object
+    withdraws the facet.
+    """
+    def work(actor):
+        try:
+            clean_code = rules.validate_code(policy)
+            clean_from = rules.parse_date(effective_from)
+            clean_reason = configuration_rules.validate_change_reason(reason)
+            canonical = rules.canonical_facet("retakes", retakes)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _assessment_policy_doc(clean_code, for_update=True)
+        if doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} is retired; reactivate it "
+                "before changing its facets")
+        family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+        if family_status != "Active":
+            raise frappe.ValidationError(
+                f"The program family {doc.family} is retired; reactivate it "
+                "before changing its facets")
+        versions = [dict(row) for row in (doc.get("versions") or [])]
+        try:
+            configuration_rules.check_appends(
+                versions, clean_from, what="assessment policy version")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        current = configuration_rules.latest_version(versions)
+        carried = _carried_facets(versions)
+        carried["retakes"] = canonical
+        before = configuration_audit.latest_after_hash(doc.name)
+        _append_facet_version(
+            doc, actor, clean_from, clean_reason,
+            (current.get("grading_scale") if current else None), carried)
+        _close_superseded_facet(doc, current, clean_from)
+        doc.save(ignore_permissions=True)
+        after = configuration_rules.snapshot_digest(
+            [dict(row) for row in (doc.get("versions") or [])])
+        return _assessment_policy_result(doc), {
+            "target": doc.name, "before_hash": before, "after_hash": after,
+        }
+
+    payload = {"policy": policy, "effective_from": effective_from,
+               "reason": reason, "retakes": retakes}
+    return configuration_audit.execute(
+        "set_assessment_retakes", request_key, payload, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_assessment_mapping(request_key, policy, effective_from, reason,
+                           mapping):
+    """Define which levels the policy governs (D1 configuration plane).
+
+    The policy is configured per program family but assessments run per
+    level, so the mapping names the governed level codes explicitly as
+    JSON. Every level must exist in the policy's own family; an empty
+    list governs nothing. An explicit empty object withdraws the facet.
+    """
+    def work(actor):
+        try:
+            clean_code = rules.validate_code(policy)
+            clean_from = rules.parse_date(effective_from)
+            clean_reason = configuration_rules.validate_change_reason(reason)
+            canonical = rules.canonical_facet("level_mapping", mapping)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _assessment_policy_doc(clean_code, for_update=True)
+        if doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Assessment policy {clean_code} is retired; reactivate it "
+                "before changing its facets")
+        family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+        if family_status != "Active":
+            raise frappe.ValidationError(
+                f"The program family {doc.family} is retired; reactivate it "
+                "before changing its facets")
+        versions = [dict(row) for row in (doc.get("versions") or [])]
+        try:
+            configuration_rules.check_appends(
+                versions, clean_from, what="assessment policy version")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        current = configuration_rules.latest_version(versions)
+        parsed = rules.parse_facet("level_mapping", canonical) or {}
+        for code in parsed.get("levels") or []:
+            level = _level_doc(code)
+            if level.family != doc.family:
+                raise frappe.ValidationError(
+                    f"Level {code} is outside the {doc.family} program family")
+        carried = _carried_facets(versions)
+        carried["level_mapping"] = canonical
+        before = configuration_audit.latest_after_hash(doc.name)
+        _append_facet_version(
+            doc, actor, clean_from, clean_reason,
+            (current.get("grading_scale") if current else None), carried)
+        _close_superseded_facet(doc, current, clean_from)
+        doc.save(ignore_permissions=True)
+        after = configuration_rules.snapshot_digest(
+            [dict(row) for row in (doc.get("versions") or [])])
+        return _assessment_policy_result(doc), {
+            "target": doc.name, "before_hash": before, "after_hash": after,
+        }
+
+    payload = {"policy": policy, "effective_from": effective_from,
+               "reason": reason, "mapping": mapping}
+    return configuration_audit.execute(
+        "set_assessment_mapping", request_key, payload, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -794,11 +1302,14 @@ def set_assessment_policy_status(request_key, policy, active):
 def validate_assessment_policy(request_key, policy):
     """Validate an assessment policy's structure and record the evidence.
 
-    Structural checks only (active policy and family, versions present
-    and unambiguous, carrier links resolve): policy COMPLETENESS criteria
-    arrive with the D1 decision slice. Success writes a validation audit
-    event over the exact version snapshot; any later version change
-    stales it automatically, returning readiness to ``configured``.
+    Structural checks only: active policy and family, versions present
+    and unambiguous, every row's facets well-formed and coherent, and
+    every referenced master (grading scale, criteria, levels, policies,
+    roles) still resolving. Facet presence is reported as desk facts, not
+    judged here — no completeness gate is invented. Success writes a
+    validation audit event over the exact version snapshot; any later
+    version change stales it automatically, returning readiness to
+    ``configured``.
     """
     def work(actor):
         try:
@@ -827,15 +1338,58 @@ def validate_assessment_policy(request_key, policy):
             raise frappe.ValidationError(str(exc)) from exc
         for row in versions:
             scale = row.get("grading_scale") or ""
-            plan = row.get("assessment_plan") or ""
             if scale and not frappe.db.exists(GRADING_SCALE, scale):
                 raise frappe.ValidationError(
                     f"Grading scale {scale} no longer exists; repair the "
                     "policy version before validating")
-            if plan and not frappe.db.exists(ASSESSMENT_PLAN, plan):
-                raise frappe.ValidationError(
-                    f"Assessment plan {plan} no longer exists; repair the "
-                    "policy version before validating")
+            try:
+                facets = rules.validate_policy_facets({
+                    facet: row.get(facet)
+                    for facet in rules.ASSESSMENT_FACETS})
+            except ValueError as exc:
+                raise frappe.ValidationError(str(exc)) from exc
+            for entry in (facets.get("components") or []):
+                criteria = entry.get("criteria") or ""
+                if criteria and not frappe.db.exists(ASSESSMENT_CRITERIA,
+                                                     criteria):
+                    raise frappe.ValidationError(
+                        f"Assessment criteria {criteria} no longer exists; "
+                        "repair the policy version before validating")
+            codes = _grade_codes_of_scale(scale)
+            if codes is not None and "pass_rules" in facets:
+                _refuse_unknown_grade_codes(facets["pass_rules"], codes,
+                                            scale)
+            for code in (facets.get("level_mapping") or {}).get("levels",
+                                                                []):
+                level = _level_doc(code)
+                if level.family != doc.family:
+                    raise frappe.ValidationError(
+                        f"Level {code} is outside the {doc.family} program "
+                        "family; repair the policy version before validating")
+            progression = facets.get("progression") or {}
+            target = progression.get("target") or ""
+            if target and target != rules.PROGRESSION_NEXT:
+                level = _level_doc(target)
+                if level.family != doc.family:
+                    raise frappe.ValidationError(
+                        f"Progression target {target} is outside the "
+                        f"{doc.family} program family; repair the policy "
+                        "version before validating")
+            for entry in progression.get("requires") or []:
+                if entry.get("kind") == "assessment_pass":
+                    name = frappe.db.get_value(
+                        ASSESSMENT_POLICY, {"code": entry.get("policy")},
+                        "name")
+                    if not name:
+                        raise frappe.ValidationError(
+                            f"Assessment policy {entry.get('policy')} no "
+                            "longer exists; repair the policy version "
+                            "before validating")
+                elif entry.get("kind") == "approval":
+                    if not frappe.db.exists("Role", entry.get("role")):
+                        raise frappe.ValidationError(
+                            f"Role {entry.get('role')} no longer exists; "
+                            "repair the policy version before validating")
         before = configuration_audit.latest_after_hash(doc.name)
         after = configuration_rules.snapshot_digest(versions)
         readiness = configuration_rules.compute_readiness(

@@ -33,9 +33,11 @@ CONFIG_AUDIT = "TH Configuration Audit Event"
 
 POLICY_FIELDS = ["name", "family", "code", "title", "status", "description",
                  "modified"]
+FACET_FIELDS = ["components", "weights", "pass_rules", "rubrics",
+                "progression", "retakes", "level_mapping"]
 VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
-                  "grading_scale", "assessment_plan", "reason", "set_by",
-                  "set_on", "superseded_on"]
+                  "grading_scale"] + FACET_FIELDS + [
+                      "reason", "set_by", "set_on", "superseded_on"]
 
 # Domains with no configuration surface in Phase 1. Each renders as an
 # explicit "not implemented" fact — never a dead link, never a guessing
@@ -167,6 +169,10 @@ def _readiness_items(policies, versions_by_policy, readiness_by_policy,
         detail = f"{len(rows)} version(s)"
         if governing:
             detail += f"; governing since {governing.get('effective_from')}"
+            defined = [facet.replace("_", " ") for facet in FACET_FIELDS
+                       if governing.get(facet)]
+            detail += ("; facets defined: " + ", ".join(defined)
+                       if defined else "; no facets defined yet")
         elif rows:
             detail += "; nothing effective yet"
         else:
