@@ -1,72 +1,12 @@
 # Final closure register (human-readable projection)
 
-Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp` @ `523fe5e`
+Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp` @ `62b3c58`
 
 > Projected from `final-closure-register.json` (the machine-readable source of
 > truth). Regenerate — do not hand-edit — via:
 > `python3 tools/foundation/project_closure_register.py`
 
-## IMPLEMENTABLE NOW (6)
-
-### `obs-engineering-layer` — Actionable operational visibility inside the product (mission §7, engineering layer).
-
-- **source:** FINAL-COMPLETION mission §7; gap map 1.6 Monitoring row
-- **current_state:** Attention projections + native Error Log roundtrip, scheduler registry, health ping (R3). No health endpoint, worker-health projection, failed-job visibility, or alert-condition generator in product.
-- **reason:** Actionable in-repo work; needs no owner policy or environment.
-- **dependency:** None (in-repo).
-- **responsible:** Engineering.
-- **implementation_or_evidence_required:** Read-only health/worker/failed-job probes over native sources + alert-condition generation with documented receiver boundary.
-- **acceptance_test:** Unit + hosted contract tests green for the new probes; desks surface worker/failed-job facts from native sources only.
-
-### `broad-isolation-proofs` — Broad branch/role isolation proofs across product surfaces (mission §9).
-
-- **source:** FINAL-COMPLETION mission §9; RELEASE-GAP-MAP.md 1.5
-- **current_state:** A13 (523/523) + R3 (533/533) prove containment for implemented slices; broad matrix (branches, stale/revoked/disabled actors, job surfaces) not yet encoded as hosted checks.
-- **reason:** Isolation must be proven by execution across surfaces, not asserted from source.
-- **dependency:** None (hosted suite runs on push).
-- **responsible:** Engineering.
-- **implementation_or_evidence_required:** Extend tools/placement/native_checks.py with the §9 matrix (allow + deny paths); qualify on push-triggered hosted runs.
-- **acceptance_test:** Hosted placement-content run green with new checks; two-branch/two-student/role-matrix fixtures exercised over Desk/REST/RPC/list/report/export/print/file surfaces.
-
-### `teacher-daily-use` — Teacher daily-use path (mission §10).
-
-- **source:** FINAL-COMPLETION mission §10; STAFF-JOURNEY-AUDIT gap 4
-- **current_state:** Backend implemented (contracts, assignments, groups, schedules, attendance); no teacher-facing desk (journey gap J4). Identity chain verified native: session User → Employee.user_id → Instructor.employee → Teaching Assignment → Student Group; users outside the chain get a fail-closed empty state, no invented link.
-- **reason:** Daily-use completeness for the teacher role; fail-closed on native identity.
-- **dependency:** None (native identity chain; no new policy).
-- **responsible:** Engineering.
-- **implementation_or_evidence_required:** Teacher desk surface (My Classes → Today → Session → Attendance → Students → Academic Work → Compensation Facts) + desk contract tests incl. wrong-role refusal.
-- **acceptance_test:** Teacher desk + contract tests: assigned-only classes, today/next-action clarity, empty/closed/unavailable states, finance facts clearly non-authoritative; no unrelated data reachable.
-
-### `finance-polish` — Finance final operational polish (mission §12).
-
-- **source:** FINAL-COMPLETION mission §12
-- **current_state:** Finance desk exists as projection + command-launch surface; usability gaps listed in mission §12 unaddressed.
-- **reason:** Daily-use completeness without touching native finance authority.
-- **dependency:** None (in-repo).
-- **responsible:** Engineering.
-- **implementation_or_evidence_required:** Desk projection improvements with native-record references; contract tests.
-- **acceptance_test:** Finance desk surfaces outstanding/next-action/correction-status/blocked-reason/duplicate/config-guidance/invoice-state/native-ref from facts only; contract tests green; no settlement logic added.
-
-### `academic-setup-finalization` — Academic Setup finalization (mission §13).
-
-- **source:** FINAL-COMPLETION mission §13
-- **current_state:** Academic desk exists; completeness against the §13 question list unverified.
-- **reason:** Setup transparency for daily operation.
-- **dependency:** None (in-repo). D1 grading stays out.
-- **responsible:** Engineering.
-- **implementation_or_evidence_required:** Desk completeness pass + contract tests; D1 answers stay fail-closed placeholders.
-- **acceptance_test:** Academic Setup desk answers program/levels/duration/progression/year/fee-type/fee-structure/discount/active-retired/actor/version from configuration records; contract tests green; no grading policy invented.
-
-### `lifecycle-journey-audit` — Reception → Academic → Finance lifecycle audit (mission §11).
-
-- **source:** FINAL-COMPLETION mission §11
-- **current_state:** STAFF-JOURNEY-AUDIT-2026-09-19 covers the ordinary path on synthetic sites; no hosted click-through on a live site (journey gap J3).
-- **reason:** End-to-end usability proof for the RC journey.
-- **dependency:** Deployment for the click-through half.
-- **responsible:** Engineering (audit) + owner (live click-through).
-- **implementation_or_evidence_required:** Complete 18-step audit now; hosted click-through becomes REAL-ENVIRONMENT follow-up.
-- **acceptance_test:** Journey document traces all 18 steps with source-of-truth/actor/permission/record/next/failure/audit each; hosted click-through recorded when the deployment exists.
+## IMPLEMENTABLE NOW (0)
 
 ## OWNER DECISION REQUIRED (10)
 
@@ -316,7 +256,17 @@ Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp` @ `523fe5e`
 - **implementation_or_evidence_required:** None in this mission.
 - **acceptance_test:** No waitlist/transfer/freeze invented engines; transfer/withdrawal use native semantics until D5.
 
-## CLOSED (6)
+## CLOSED (12)
+
+### `obs-engineering-layer` — Actionable operational visibility inside the product (mission §7, engineering layer).
+
+- **source:** FINAL-COMPLETION mission §7; gap map 1.6 Monitoring row
+- **current_state:** Shipped + green: toefl_house/observability.py (summarize_snapshot, evaluate_alert_conditions; pure, no thresholds/severity/receivers) + desk/operations._system_health shared by the GM desk and owner cockpit (ping, unseen errors, failed jobs, verbatim worker states, stopped schedules, failed runs; conditions generated, never delivered). RQ reads use the native registries confined to the allow-list with a Not readable fallback (2788eda).
+- **reason:** Operational visibility shipped with evidence; deployed alerting remains with obs-deployed-operation (needs a real environment).
+- **dependency:** None (in-repo).
+- **responsible:** Engineering.
+- **implementation_or_evidence_required:** None; preserve. Evidence: hosted placement run 35466677597 @62b3c58 (574/574 pass, report a30ce49b…e67a); GM + owner health cells in role-desk-hosted-qualification + role-desk-observability-hosted; desk-contract health worlds + test_rq_fallback green.
+- **acceptance_test:** MET 2026-09-19: contract + hosted tests green; desks surface worker/failed-job facts from native sources only, tracebacks stay on native forms.
 
 ### `gates-passed` — D8 scoped PASS gates stay green.
 
@@ -327,6 +277,56 @@ Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp` @ `523fe5e`
 - **responsible:** Engineering (preserve).
 - **implementation_or_evidence_required:** None; preserve evidence.
 - **acceptance_test:** Existing hosted proofs retained (A13 523/523, R3 533/533, realtime grep 0 emit sites, ownership charter PASS).
+
+### `broad-isolation-proofs` — Broad branch/role isolation proofs across product surfaces (mission §9).
+
+- **source:** FINAL-COMPLETION mission §9; RELEASE-GAP-MAP.md 1.5
+- **current_state:** desk-broad-isolation-matrix green: two branches, two students, LIST + DESK + REST + EXPORT + PRINT + REPORT + desk-RPC (7 desks x 8 logins) allow/deny cells with three asserted boundaries (desk-path UP-blindness, Student master role-wide, non-strict branchless visibility). Exact scoping proven between populated branches (9edf821); teacher identity resolves scope-exempt (4837bee); export header matched to runtime CSV (62b3c58).
+- **reason:** Isolation proven by execution across surfaces, not asserted from source.
+- **dependency:** None (hosted suite runs on push).
+- **responsible:** Engineering.
+- **implementation_or_evidence_required:** None; preserve. Evidence: hosted placement run 35466677597 @62b3c58 (574/574 pass, report a30ce49b…e67a); desk-broad-isolation-matrix pass with branch_groups [SYN-GRP-ISOL-A, SYN-GRP-ISOL-B] observation.
+- **acceptance_test:** MET 2026-09-19: hosted placement-content run green with the S9 matrix over Desk/REST/RPC/list/report/export/print/file surfaces.
+
+### `teacher-daily-use` — Teacher daily-use path (mission §10).
+
+- **source:** FINAL-COMPLETION mission §10; STAFF-JOURNEY-AUDIT gap 4
+- **current_state:** th-teacher-desk live for the Instructor audience (desk/teacher.py work(): classes, today, sessions/attendance, roster-only students, academic work without thresholds, compensation facts without calculation); native chain User to Employee.user_id to Instructor.employee to TH Teaching Assignment; unlinked logins get the named empty state; student identity is the learner (676d8d4); identity resolves scope-exempt under branch rules (4837bee, mutation-pinned contract test).
+- **reason:** Daily-use completeness for the teacher role; fail-closed on native identity.
+- **dependency:** None (native identity chain; no new policy).
+- **responsible:** Engineering.
+- **implementation_or_evidence_required:** None; preserve. Evidence: role-desk-teacher-hosted + teacher cells in role-desk-hosted-qualification green in hosted placement run 35466677597 @62b3c58 (574/574 pass, report a30ce49b…e67a); TeacherDeskWorldTests green.
+- **acceptance_test:** MET 2026-09-19: assigned-only classes, today/next-action clarity, empty/closed/unavailable states, non-authoritative finance facts; no unrelated data reachable; wrong-role refusal tested.
+
+### `finance-polish` — Finance final operational polish (mission §12).
+
+- **source:** FINAL-COMPLETION mission §12
+- **current_state:** Collected-today sums per paying-account currency (finance._summarize currency_key=paid_from_account_currency; Payment Entry carries no flat currency column at the pin, verified against the pinned schema ledger). Billing/corrections/outstanding/today/money-facts sections green in contract + hosted finance cells.
+- **reason:** Daily-use completeness without touching native finance authority.
+- **dependency:** None (in-repo).
+- **responsible:** Engineering.
+- **implementation_or_evidence_required:** None; preserve. Evidence: FinanceOutstandingWorldTests (3000.00 USD pin, mutation-verified) + finance cells in role-desk-hosted-qualification, hosted placement run 35466677597 @62b3c58 (574/574 pass, report a30ce49b…e67a).
+- **acceptance_test:** MET 2026-09-19: outstanding/next-action/correction-status/blocked-reason/duplicate/config-guidance/invoice-state/native-ref from facts only; no settlement logic added.
+
+### `academic-setup-finalization` — Academic Setup finalization (mission §13).
+
+- **source:** FINAL-COMPLETION mission §13
+- **current_state:** Setup desk answers programs/levels/duration/progression/year/fee-type/fee-structure/discount/active-retired/actor/version (setup.py: academic-years coverage, governing duration actor+reason, discount modified_by); grading stays the permanent D1 placeholder (no grading rules anywhere).
+- **reason:** Setup transparency for daily operation.
+- **dependency:** None (in-repo). D1 grading stays out.
+- **responsible:** Engineering.
+- **implementation_or_evidence_required:** None; preserve. Evidence: SetupDeskWorldTests (years/duration/grading/discounts) + setup cells in role-desk-hosted-qualification, hosted placement run 35466677597 @62b3c58 (574/574 pass, report a30ce49b…e67a).
+- **acceptance_test:** MET 2026-09-19: configuration health/programs/levels/progression/fee plans/discounts/years from configuration records; D1 answers stay fail-closed placeholders.
+
+### `lifecycle-journey-audit` — Reception → Academic → Finance lifecycle audit (mission §11).
+
+- **source:** FINAL-COMPLETION mission §11
+- **current_state:** docs/audit/LIFECYCLE-JOURNEY-AUDIT-2026-09-19.md traces the learner chain (candidate5, applicant, admission, Student, enrollment, SYN-GRP-MAIN-1/2, tuition, corrections) across 8 stages and 18 governed steps, each step carrying source-of-truth/actor/permission/record/next/failure/audit; every claim points at a check, command, or pinned behavior.
+- **reason:** End-to-end usability proof for the RC journey.
+- **dependency:** Deployment for the click-through half (moved to launch-rehearsal).
+- **responsible:** Engineering (audit) + owner (live click-through).
+- **implementation_or_evidence_required:** Audit half done; the hosted click-through on a live deployment is future work owned by launch-rehearsal (no deployment exists to click through).
+- **acceptance_test:** MET 2026-09-19 for the audit half: 18 steps x 7 facets traced; click-through pending deployment (see launch-rehearsal).
 
 ### `D16-closed` — D16 production activation mechanism.
 
