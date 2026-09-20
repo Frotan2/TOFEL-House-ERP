@@ -877,6 +877,233 @@ class D1LifecycleTests(unittest.TestCase):
             self.assertIn("no longer exists", str(ctx.exception))
 
 
+class CommandOnlyBoundaryTests(unittest.TestCase):
+    """Native writes refuse; guarded commands pass (the A1 boundary).
+
+    Loads the REAL controllers against the stub backend and runs the
+    fake's insert/save through them — mirroring real frappe, where the
+    controller validate fires on every write path, including the
+    ignore_permissions writes the commands themselves make.
+    """
+
+    CONTROLLERS = {
+        "TH Assessment Policy":
+            APP / "academic/doctype/th_assessment_policy/th_assessment_policy.py",
+        "TH Configuration Operation":
+            APP / "operations/doctype/th_configuration_operation/th_configuration_operation.py",
+        "TH Configuration Audit Event":
+            APP / "operations/doctype/th_configuration_audit_event/th_configuration_audit_event.py",
+    }
+
+    def _controllers(self):
+        """Import the real controllers against the CURRENT stub frappe.
+
+        Yields {doctype: module}; restores sys.modules afterwards so no
+        stub-bound controller leaks into other tests. Must run inside a
+        _load_module loop, since the stub backend is per-test.
+        """
+        import importlib.util
+        stub = sys.modules["frappe"]
+        if not hasattr(stub, "_"):
+            stub._ = lambda message: message
+        if not hasattr(stub, "throw"):
+            def _throw(message, exc=None):
+                raise stub.ValidationError(message)
+            stub.throw = _throw
+        added = []
+        try:
+            model = types.ModuleType("frappe.model")
+            model.__path__ = []
+            document = types.ModuleType("frappe.model.document")
+            document.Document = object
+            for key, module in (("frappe.model", model),
+                                ("frappe.model.document", document)):
+                if key not in sys.modules:
+                    sys.modules[key] = module
+                    added.append(key)
+            loaded = {}
+            for index, (doctype, path) in enumerate(
+                    self.CONTROLLERS.items()):
+                name = f"boundary_controller_{index}"
+                spec = importlib.util.spec_from_file_location(name, path)
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[name] = module
+                added.append(name)
+                spec.loader.exec_module(module)
+                loaded[doctype] = module
+            yield loaded
+        finally:
+            for key in added:
+                sys.modules.pop(key, None)
+
+    def _hooked_writes(self, loaded):
+        """Run the fake's insert/save through the real controller guards."""
+        original_insert, original_save = _Doc.insert, _Doc.save
+
+        def _checked(doc):
+            controller = loaded.get(doc.doctype)
+            if controller is not None:
+                if "get_doc_before_save" not in doc.__dict__:
+                    object.__setattr__(
+                        doc, "get_doc_before_save", lambda: None)
+                controller.validate(doc)
+
+        def insert(doc_self, ignore_permissions=False):
+            _checked(doc_self)
+            return original_insert(
+                doc_self, ignore_permissions=ignore_permissions)
+
+        def save(doc_self, ignore_permissions=False):
+            _checked(doc_self)
+            return original_save(
+                doc_self, ignore_permissions=ignore_permissions)
+
+        _Doc.insert, _Doc.save = insert, save
+        try:
+            yield
+        finally:
+            _Doc.insert, _Doc.save = original_insert, original_save
+
+    def test_execute_establishes_the_command_context(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            from toefl_house.configuration import audit as configuration_audit
+            from toefl_house.configuration import rules as foundation
+            seen = []
+
+            def work(actor):
+                seen.append(foundation.active_command())
+                return {"ok": True}, {"target": "BOUNDARY-PROBE",
+                                     "before_hash": "",
+                                     "after_hash": "probe-hash"}
+
+            result = configuration_audit.execute(
+                "create_assessment_policy", "BOUNDARY-CONTEXT-01",
+                {"probe": True}, work)
+            self.assertEqual(result, {"ok": True})
+            self.assertEqual(seen, ["create_assessment_policy"])
+            self.assertIsNone(
+                foundation.active_command(),
+                "the context must not leak past the command")
+
+    def test_guarded_commands_pass_and_native_writes_refuse(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            academic.create_program("SETUP-PROGRAM-0001", "GEN-ENG",
+                                    "General English", "")
+            fake.store.setdefault("Grading Scale", {})["GS-1"] = {
+                "name": "GS-1"}
+            for loaded in self._controllers():
+                for _hooked in self._hooked_writes(loaded):
+                    academic.create_assessment_policy(
+                        "BOUNDARY-CREATE-01", "GEN-ENG", "ASM-GEN",
+                        "General assessment", "")
+                    academic.set_assessment_policy_version(
+                        "BOUNDARY-VERSION-01", "ASM-GEN", "2026-01-01",
+                        "First structure", grading_scale="GS-1")
+                    policy = fake.store["TH Assessment Policy"]["ASM-GEN"]
+                    self.assertEqual(len(policy.get("versions")), 1)
+                    self.assertEqual(len(fake.store.get(
+                        "TH Configuration Audit Event", {})), 2)
+                    # THE A1 SHAPE: a rules-valid native version append —
+                    # sound date, known carrier, real reason — must
+                    # refuse in business language instead of landing
+                    # ledger-silent, with or without ignore_permissions.
+                    saved = list(policy.get("versions"))
+                    for kwargs in ({}, {"ignore_permissions": True}):
+                        policy.append("versions", {
+                            "effective_from": "2027-01-01",
+                            "grading_scale": "GS-1",
+                            "reason": "Native edit",
+                            "set_by": "owner@example.com"})
+                        with self.assertRaises(
+                                fake.PermissionError, msg=repr(kwargs)) as ctx:
+                            policy.save(**kwargs)
+                        self.assertIn("guided Course Owner actions",
+                                      str(ctx.exception))
+                        # A refused save writes nothing: restore the
+                        # in-memory doc to its saved state.
+                        policy.set("versions", saved)
+                    # A forged receipt and a forged event refuse the same
+                    # way, and the refusal lands before any persistence.
+                    operations = len(fake.store.get(
+                        "TH Configuration Operation", {}))
+                    events = len(fake.store.get(
+                        "TH Configuration Audit Event", {}))
+                    receipt = fake.get_doc({
+                        "doctype": "TH Configuration Operation",
+                        "name": "FORGED", "kind": "create_assessment_policy",
+                        "actor": "owner@example.com",
+                        "input_hash": "x" * 64, "status": "Complete",
+                        "result_json": "{}"})
+                    with self.assertRaises(fake.PermissionError):
+                        receipt.insert(ignore_permissions=True)
+                    event = fake.get_doc({
+                        "doctype": "TH Configuration Audit Event",
+                        "actor": "owner@example.com", "operation": "FORGED",
+                        "action": "forged", "target": "ASM-GEN",
+                        "after_hash": "y"})
+                    with self.assertRaises(fake.PermissionError):
+                        event.insert(ignore_permissions=True)
+                    self.assertEqual(len(fake.store.get(
+                        "TH Configuration Operation", {})), operations)
+                    self.assertEqual(len(fake.store.get(
+                        "TH Configuration Audit Event", {})), events)
+
+    def test_data_rules_still_bind_inside_commands(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            from toefl_house.configuration import rules as foundation
+            for loaded in self._controllers():
+                policy = fake.get_doc({
+                    "doctype": "TH Assessment Policy", "code": "ASM-X",
+                    "title": "No family", "family": "",
+                    "status": "Active"})
+                # Authorization first: the same invalid doc meets the
+                # refusal outside a command, its data error inside one.
+                with self.assertRaises(fake.PermissionError):
+                    loaded["TH Assessment Policy"].validate(policy)
+                with foundation.command_context("create_assessment_policy"):
+                    with self.assertRaises(
+                            fake.ValidationError) as ctx:
+                        loaded["TH Assessment Policy"].validate(policy)
+                self.assertIn("program family", str(ctx.exception))
+                reasonless = fake.get_doc({
+                    "doctype": "TH Assessment Policy", "code": "ASM-X",
+                    "title": "No reason", "family": "GEN-ENG",
+                    "status": "Active", "versions": [
+                        {"effective_from": "2026-01-01", "reason": ""}]})
+                with self.assertRaises(fake.PermissionError):
+                    loaded["TH Assessment Policy"].validate(reasonless)
+                with foundation.command_context(
+                        "set_assessment_policy_version"):
+                    with self.assertRaises(ValueError) as ctx:
+                        loaded["TH Assessment Policy"].validate(reasonless)
+                self.assertIn("Version reason is required",
+                              str(ctx.exception))
+                receipt = fake.get_doc({
+                    "doctype": "TH Configuration Operation",
+                    "status": "Forged"})
+                with self.assertRaises(fake.PermissionError):
+                    loaded["TH Configuration Operation"].validate(receipt)
+                with foundation.command_context("create_assessment_policy"):
+                    with self.assertRaises(
+                            fake.ValidationError):
+                        loaded["TH Configuration Operation"].validate(receipt)
+                event = fake.get_doc({
+                    "doctype": "TH Configuration Audit Event",
+                    "actor": "owner@example.com", "operation": "OP-1",
+                    "action": "create_assessment_policy",
+                    "after_hash": "y"})
+                object.__setattr__(
+                    event, "get_doc_before_save", lambda: None)
+                with self.assertRaises(fake.PermissionError):
+                    loaded["TH Configuration Audit Event"].validate(event)
+                with foundation.command_context("create_assessment_policy"):
+                    with self.assertRaises(
+                            fake.ValidationError) as ctx:
+                        loaded["TH Configuration Audit Event"].validate(
+                            event)
+                self.assertIn("target", str(ctx.exception))
+
+
 def rules_governing(versions, on_date):
     """Resolve through the real pure rules (imported fresh, no frappe needed)."""
     import importlib.util

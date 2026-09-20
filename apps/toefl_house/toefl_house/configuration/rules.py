@@ -24,6 +24,8 @@ Foundation invariants (the approved configuration architecture):
 """
 import hashlib
 import json
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 # --- Configuration Readiness (computed, never toggled) --------------------
 READINESS_INCOMPLETE = "incomplete"
@@ -242,6 +244,43 @@ def compute_readiness(*, status, versions, validations, today,
     if governing is None:
         return READINESS_VALIDATED
     return READINESS_EFFECTIVE
+
+
+# --- Command-only mutation boundary --------------------------------------------
+# Policy records mutate ONLY through the guarded configuration commands.
+# The mechanism mirrors toefl_house.security's command ContextVar minus the
+# site gate (governance boundary): configuration_audit.execute() runs every
+# command inside command_context(), and the controllers refuse any save
+# made outside it — native form, REST API, data import, or stray
+# ignore_permissions write — with a business-language refusal. Token reset
+# keeps an outer context intact if commands ever nest.
+_COMMAND_CONTEXT = ContextVar("toefl_house_configuration_command", default=None)
+
+
+def active_command():
+    """The configuration command kind currently mutating, or None."""
+    return _COMMAND_CONTEXT.get()
+
+
+@contextmanager
+def command_context(kind):
+    token = _COMMAND_CONTEXT.set(kind)
+    try:
+        yield kind
+    finally:
+        _COMMAND_CONTEXT.reset(token)
+
+
+def assert_command_context(message):
+    """Refuse any mutation attempted outside a configuration command.
+
+    Controllers call this FIRST in validate() — before any data check — so
+    an unauthorized path always meets the authorization refusal, never a
+    data error. Raises ValueError carrying the caller's business-language
+    message; controllers convert it to frappe.PermissionError.
+    """
+    if _COMMAND_CONTEXT.get() is None:
+        raise ValueError(message)
 
 
 # --- Hash-chain verification --------------------------------------------------

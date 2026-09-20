@@ -1,11 +1,12 @@
-"""Controller for TH Assessment Policy: the D1 reference rules bind on EVERY write path.
+"""Controller for TH Assessment Policy: commands are the ONLY write path.
 
-The guarded toefl_house.academic assessment commands are the only
-sanctioned mutation surface, but the Course Owner does hold native write
-permission on this master. These hooks make the configuration integrity
-rules unconditional: even a native-form edit cannot break identity,
-close or rewrite version history, share one effective date between two
-versions, or save a version without its mandatory change reason.
+The guarded toefl_house.academic assessment commands mutate this master
+exclusively, from inside the command context. The Course Owner holds
+native write permission only so the form stays reachable; this
+controller refuses any save attempted outside a configuration command —
+native form, REST API, or data import — so no version can ever bypass
+its mandatory change reason and hash-chained audit. Inside a command,
+the D1 reference rules below bind on every write.
 """
 import frappe
 from frappe import _
@@ -21,6 +22,16 @@ class THAssessmentPolicy(Document):
 
 
 def validate(doc, method=None):
+    # Authorization first: outside a configuration command this is a
+    # native/API/import write, refused in business language before any
+    # data check runs. Inside a command the rules below bind as before.
+    try:
+        foundation.assert_command_context(_(
+            "Assessment policies change only through the guided Course "
+            "Owner actions, so every change keeps its reason and audit "
+            "trail — please use the desk action instead of editing here"))
+    except ValueError as exc:
+        raise frappe.PermissionError(str(exc)) from exc
     rules.validate_code(doc.code or "")
     rules.validate_title(doc.title or "", "Assessment policy title")
     if not doc.family:

@@ -19,6 +19,11 @@ Phase 1 pins, offline:
    and the dialog-signature mirroring for the D1 guided actions.
 6. The HARD-CODED-POLICY EXTENSION — no assessment numeric literals in
    owned code and no policy defaults/options in the D1 structure.
+7. The COMMAND-ONLY BOUNDARY — the ContextVar mechanism itself (no
+   command active by default, marked inside, always reset, nesting
+   restores the outer kind). The wiring — commands establish it, the
+   controllers require it, native writes meet the business-language
+   refusal — is pinned by the lifecycle boundary tests.
 """
 import ast
 import json
@@ -599,6 +604,34 @@ class FoundationHardCodedPolicyTests(unittest.TestCase):
         for field in version["fields"]:
             self.assertNotEqual(field.get("fieldtype"), "Select",
                                 "no Select-encoded policy on version rows")
+
+
+class CommandOnlyBoundaryTests(unittest.TestCase):
+    """The command-only mechanism: marked inside commands, absent outside."""
+
+    def test_no_command_is_active_by_default(self):
+        self.assertIsNone(foundation.active_command())
+        with self.assertRaises(ValueError) as ctx:
+            foundation.assert_command_context("business-language refusal")
+        self.assertEqual(str(ctx.exception), "business-language refusal")
+
+    def test_context_marks_the_command_and_always_resets(self):
+        with foundation.command_context("set_assessment_policy_version"):
+            self.assertEqual(foundation.active_command(),
+                             "set_assessment_policy_version")
+        self.assertIsNone(foundation.active_command())
+        # A failing command must not leak its context into later writes.
+        with self.assertRaises(RuntimeError):
+            with foundation.command_context("create_assessment_policy"):
+                raise RuntimeError("boom")
+        self.assertIsNone(foundation.active_command())
+
+    def test_nested_contexts_restore_the_outer_command(self):
+        with foundation.command_context("outer"):
+            with foundation.command_context("inner"):
+                self.assertEqual(foundation.active_command(), "inner")
+            self.assertEqual(foundation.active_command(), "outer")
+        self.assertIsNone(foundation.active_command())
 
 
 if __name__ == "__main__":

@@ -93,6 +93,15 @@ def _execute_once(kind, request_key, payload, work):
         raise frappe.PermissionError(
             f"Unknown configuration command: {kind}")
     actor = require_authority(authority)
+    # The command context is what the controllers require: every write
+    # below (receipt, policy mutation, audit event) happens inside it, so
+    # any save attempted outside a command — native form, REST, import —
+    # meets the controllers' business-language refusal instead.
+    with foundation.command_context(kind):
+        return _apply_once(kind, request_key, payload, work, actor)
+
+
+def _apply_once(kind, request_key, payload, work, actor):
     try:
         validate_request_key(request_key)
     except ValueError as exc:
