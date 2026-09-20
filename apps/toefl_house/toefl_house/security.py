@@ -60,6 +60,8 @@ KIND_ROLES = {
     # approve/deny commands additionally require the policy-configured
     # approver role (checked in-command, dual key).
     "configure_correction_policy": "Finance Officer",
+    "set_correction_policy_status": "Finance Officer",
+    "validate_correction_policy": "Finance Officer",
     "request_invoice_correction": "Finance Officer",
     "approve_invoice_correction": "Finance Officer",
     "deny_invoice_correction": "Finance Officer",

@@ -10,6 +10,7 @@ Sections are specified in docs/product/ROLE-DESKS.md.
 import frappe
 from frappe.utils import today
 
+from toefl_house.configuration import rules as foundation
 from toefl_house.desk import (
     BOUNCE_WINDOW,
     DESKS,
@@ -18,6 +19,7 @@ from toefl_house.desk import (
     guided_action,
     issuable_plans,
     plan_with_components,
+    project_count,
     project_rows,
     require_desk_audience,
     section,
@@ -35,6 +37,15 @@ FEE_STRUCTURE = "Fee Structure"
 FEE_ROW = "Fee Component"
 ASSIGNMENT = "TH Teaching Assignment"
 PLAN_FIELDS = ["name", "program", "academic_year", "company", "docstatus"]
+POLICY_FIELDS = ["name", "approver_role", "correction_window_days",
+                 "effective_from", "reason", "set_by", "set_on",
+                 "superseded_on", "status", "synthetic"]
+AUDIT = "TH Placement Audit Event"
+POLICY_STREAM = "TH Correction Policy"
+VALIDATE_ACTION = "validate_correction_policy"
+CONFIGURE_ENDPOINT = "toefl_house.finance.corrections.configure_correction_policy"
+VALIDATE_ENDPOINT = "toefl_house.finance.corrections.validate_correction_policy"
+STATUS_ENDPOINT = "toefl_house.finance.corrections.set_correction_policy_status"
 ASSIGNMENT_FIELDS = ["name", "student_group", "skill", "instructor", "contract",
                      "course_schedule", "effective_start", "effective_end"]
 PLAN_ROW_FIELDS = ["name", "parent", "parenttype", "fees_category", "amount", "idx"]
@@ -63,13 +74,24 @@ def _invoice_display_state(row):
     return _money_state(row)
 
 
-def _correction_items(rows):
-    approver_role = _active_policy_role()
+def _correction_items(rows, policies=()):
+    roles_by_policy = {row.get("name"): row.get("approver_role")
+                       for row in (policies or [])}
+    fallback_role = None
+    fallback_known = False
     items = []
     for row in rows:
         pending = row["status"] == "Requested"
         is_fees = bool(row.get("fees"))
         target = row.get("fees") or row.get("sales_invoice") or ""
+        # Each request carries the approver role of the version it pinned;
+        # rows that predate versioned policy fall back to the active one.
+        approver_role = roles_by_policy.get(row.get("correction_policy") or "")
+        if not approver_role and not fallback_known:
+            fallback_role = _active_policy_role()
+            fallback_known = True
+        if not approver_role:
+            approver_role = fallback_role
         item = {
             "id": row["name"],
             "person": target,
@@ -100,6 +122,171 @@ def _active_policy_role():
                         ["name", "approver_role", "correction_window_days", "status"],
                         filters={"status": "Active"}, order_by="modified desc", limit=1)
     return rows[0]["approver_role"] if rows else None
+
+
+def _current_validation(snapshot):
+    """Whether a validation event commits to this exact version snapshot.
+
+    Matched by count, never projected: the hash stays in the filter, so no
+    hash field ever enters a desk projection (read-boundary discipline).
+    """
+    return project_count("finance", AUDIT, filters={
+        "target": POLICY_STREAM, "action": VALIDATE_ACTION,
+        "after_hash": snapshot,
+    }) > 0
+
+
+def _policy_sections(policies, day):
+    """Correction-policy configuration: readiness facts + version queue.
+
+    Readiness is COMPUTED from the version rows on every load - never
+    stored, never toggled. Each version item states its own terms and
+    state; the latest item carries the single next recommended action.
+    """
+    try:
+        rows = [dict(row) for row in (policies or [])]
+        snapshot = foundation.snapshot_digest(rows)
+        evidence = ([{"after_hash": snapshot}]
+                    if rows and _current_validation(snapshot)
+                    else [])
+        latest = foundation.latest_version(rows)
+        status = latest.get("status") if latest else "Active"
+        readiness = foundation.compute_readiness(
+            status=status, versions=rows, validations=evidence,
+            today=day, what="correction policy")
+        fault = ""
+    except ValueError as exc:
+        # Ambiguous history is an integrity fault: surfaced, never
+        # hidden, and never rendered as a readiness state.
+        rows, readiness, fault = [], "", str(exc)
+    if fault:
+        facts = [{
+            "label": "Policy readiness",
+            "definition": "The version history contradicts itself, so no "
+                          "readiness state can be computed.",
+            "value": "Integrity fault", "owner": "Finance Officer",
+        }]
+        items = [{
+            "id": "fault",
+            "person": "Configuration integrity fault",
+            "detail": fault,
+            "status": "Integrity fault",
+            "stage": "Correction policy",
+            "stage_definition": ("The version history contradicts itself, "
+                                 "so no readiness state can be computed."),
+            "next": ("Ask the administrator to repair the version history; "
+                     "new requests fail closed until then."),
+            "next_role": "Finance Officer",
+            "waiting_since": None,
+        }]
+        return facts, items
+    governing = foundation.resolve_governing(rows, day) if rows else None
+    facts = [{
+        "label": "Policy readiness",
+        "definition": ("Computed configuration readiness of the correction "
+                       "policy versions. Production readiness is separate "
+                       "and is never decided here."),
+        "value": readiness.capitalize(), "owner": "Finance Officer",
+    }]
+    if governing:
+        facts.append({
+            "label": "Governing version",
+            "definition": ("The policy version governing new correction "
+                           "requests."),
+            "value": (f"Effective {governing.get('effective_from')}; "
+                      f"approver {governing.get('approver_role')}; "
+                      f"window {governing.get('correction_window_days')} days"),
+            "owner": "Finance Officer",
+        })
+    elif rows:
+        facts.append({
+            "label": "Governing version",
+            "definition": ("The policy version governing new correction "
+                           "requests."),
+            "value": ("Nothing effective yet; the latest version is "
+                      "scheduled for the future"),
+            "owner": "Finance Officer",
+        })
+    else:
+        facts.append({
+            "label": "Governing version",
+            "definition": ("The policy version governing new correction "
+                           "requests."),
+            "value": "No versions recorded yet",
+            "owner": "Finance Officer",
+        })
+    ordered = foundation.normalize_versions(rows)
+    latest_name = latest.get("name") if latest else None
+    items = []
+    for row in ordered:
+        state = foundation.version_state(row, day)
+        detail = (f"Approver {row.get('approver_role')}; window "
+                  f"{row.get('correction_window_days')} days; {state}")
+        is_latest = row.get("name") == latest_name
+        if is_latest:
+            detail += f"; policy readiness {readiness}"
+            next_text, action = _latest_policy_next(
+                row, readiness, ordered, day)
+        elif state == "scheduled":
+            next_text, action = (
+                f"Takes effect {row.get('effective_from')}.", None)
+        else:
+            next_text, action = (
+                "No action; superseded by a newer version.", None)
+        item = {
+            "id": row.get("name"),
+            "person": f"Effective {row.get('effective_from')}",
+            "detail": detail,
+            "status": (row.get("status") or state).capitalize()
+            if is_latest else state.capitalize(),
+            "stage": "Correction policy",
+            "stage_definition": ("One effective-dated correction policy "
+                                 "version. Older versions are closed, never "
+                                 "rewritten."),
+            "next": next_text,
+            "next_role": "Finance Officer",
+            "waiting_since": row.get("set_on"),
+        }
+        if action:
+            item["action"] = action
+        items.append(item)
+    return facts, items
+
+
+def _latest_policy_next(row, readiness, ordered, day):
+    """The single next recommended step for the latest version."""
+    if readiness == "retired":
+        return ("The policy is retired and governs nothing; reactivate it "
+                "to allow new requests.",
+                guided_action(
+                    "Finance Officer", STATUS_ENDPOINT,
+                    "Reactivate policy", {"status": "Active"}))
+    if readiness == "configured":
+        return ("Versions exist but no validation covers the current set; "
+                "validate the policy.",
+                guided_action(
+                    "Finance Officer", VALIDATE_ENDPOINT,
+                    "Validate policy", {}))
+    if readiness == "validated":
+        first = str(row.get("effective_from") or "")
+        return (f"The policy is validated and takes effect {first}.",
+                guided_action(
+                    "Finance Officer", CONFIGURE_ENDPOINT,
+                    "Record new version", {}))
+    if readiness == "effective":
+        governing = foundation.resolve_governing(ordered, day)
+        since = (governing.get("effective_from")
+                 if governing else row.get("effective_from"))
+        return (f"The policy governs since {since}. Record a new version "
+                "to change future terms.",
+                guided_action(
+                    "Finance Officer", CONFIGURE_ENDPOINT,
+                    "Record new version", {}))
+    return ("Record the first version; the policy governs nothing until "
+            "then.",
+            guided_action(
+                "Finance Officer", CONFIGURE_ENDPOINT,
+                "Record new version", {}))
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -147,10 +334,15 @@ def work():
                                     order_by="due_date asc, name asc", limit=LIMIT_QUEUES)
 
     corrections = project_rows("finance", CORRECTION,
-                               ["name", "sales_invoice", "fees", "reason", "requested_amount",
+                               ["name", "sales_invoice", "fees", "correction_policy",
+                                "reason", "requested_amount",
                                 "status", "approved_by", "credit_note", "modified"],
                                filters={"status": ("in", ["Requested", "Approved", "Denied", "Posted"])},
                                order_by="modified desc", limit=LIMIT_QUEUES)
+
+    policies = project_rows("finance", POLICY, POLICY_FIELDS,
+                            order_by="effective_from asc", limit=LIMIT_QUEUES)
+    policy_facts, version_items = _policy_sections(policies, day)
 
     # Awaiting billing: submitted enrollments with no Fees row referencing them.
     enrollments = project_rows("finance", ENROLLMENT,
@@ -336,8 +528,14 @@ def work():
             section("billing", "Awaiting billing", "queue", items=billing_items,
                     empty_title="Everything submitted is billed",
                     empty_body="Every confirmed enrollment has an issued bill, or no enrollment has been confirmed yet."),
+            section("policy", "Correction policy", "facts", facts=policy_facts,
+                    empty_title="No correction policy yet",
+                    empty_body="No correction policy version is recorded; new correction requests fail closed until a Finance Officer records the first version."),
+            section("policy-versions", "Policy versions", "queue", items=version_items,
+                    empty_title="No policy versions",
+                    empty_body="No correction policy version is recorded; new correction requests fail closed until a Finance Officer records the first version."),
             section("corrections", "Correction queue", "queue",
-                    items=_correction_items(corrections),
+                    items=_correction_items(corrections, policies),
                     empty_title="No correction requests",
                     empty_body="No correction request (invoice or tuition fee) is open. Requests appear here the moment they are created."),
             section("assignments", "Teaching assignments (native payroll)", "queue",

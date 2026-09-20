@@ -44,7 +44,8 @@ VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
 # readiness badge.
 FUTURE_DOMAINS = (
     ("finance", "Finance",
-     "Correction terms and tax readiness arrive in a later phase."),
+     "Correction terms live on the Finance desk; tax readiness arrives "
+     "in a later phase."),
     ("student-guardian", "Student & Guardian",
      "Delegation and guardianship rules arrive in a later phase."),
     ("enrollment-lifecycle", "Enrollment & Lifecycle",

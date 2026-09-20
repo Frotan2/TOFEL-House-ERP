@@ -9,6 +9,7 @@
   "field_order": [
     "sales_invoice",
     "fees",
+    "correction_policy",
     "reason",
     "requested_amount",
     "status",
@@ -30,6 +31,15 @@
       "fieldtype": "Link",
       "options": "Fees",
       "reqd": 0
+    },
+    {
+      "fieldname": "correction_policy",
+      "label": "Correction Policy Version",
+      "fieldtype": "Link",
+      "options": "TH Correction Policy",
+      "reqd": 1,
+      "read_only": 1,
+      "description": "The governing policy version pinned at request creation. Approvals judge terms against this version even after it is superseded or retired; the pin never changes."
     },
     {
       "fieldname": "reason",

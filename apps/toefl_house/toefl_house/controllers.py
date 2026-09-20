@@ -109,19 +109,45 @@ class ProtectedRecord(Document):
             raise frappe.ValidationError("Assignment end precedes assignment start")
 
     def _validate_correction_policy(self, before):
-        """Owner-configured approval terms are immutable; reconfigure via a
-        superseding policy (Active -> Retired is the only legal change)."""
+        """Version rows are immutable; only the status may retire or
+        reactivate, and only the latest version may be Active.
+
+        Terms, dates, reason and audit stamps never change in place: a
+        change is a new effective-dated version that supersedes this one.
+        """
         if self.status == before.status:
             raise frappe.PermissionError("Correction policies are immutable; reconfigure instead")
-        if not (before.status == "Active" and self.status == "Retired"):
+        if (before.status, self.status) not in (("Active", "Retired"),
+                                                ("Retired", "Active")):
             raise frappe.PermissionError("Illegal correction policy status transition")
-        if (before.approver_role != self.approver_role
-                or int(before.correction_window_days) != int(self.correction_window_days)):
-            raise frappe.PermissionError("Only the policy status may change on retirement")
+        for field in ("approver_role", "correction_window_days",
+                      "effective_from", "reason", "set_by", "set_on"):
+            if before.get(field) != self.get(field):
+                raise frappe.PermissionError(
+                    "Correction policy versions are immutable; only the status may change")
+        if before.get("superseded_on") and self.get("superseded_on") != before.get("superseded_on"):
+            raise frappe.PermissionError("A closed version stays closed")
+        if (not before.get("superseded_on") and self.get("superseded_on")
+                and (before.status, self.status) != ("Active", "Retired")):
+            raise frappe.PermissionError("Only a superseding version closes its predecessor")
+        if self.status == "Active":
+            others = frappe.db.get_all(
+                "TH Correction Policy",
+                filters={"status": "Active", "name": ("!=", self.name)},
+                fields=["name"])
+            if others:
+                raise frappe.PermissionError("Only one correction policy version may be Active")
+            newer = frappe.db.get_all(
+                "TH Correction Policy",
+                filters={"effective_from": (">", str(self.effective_from or ""))},
+                fields=["name"])
+            if newer:
+                raise frappe.PermissionError("Only the latest correction policy version may be Active")
 
     def _validate_correction_request(self, before):
         """Request facts are immutable; the decision is one-shot."""
-        for field in ("sales_invoice", "fees", "reason", "requested_amount"):
+        for field in ("sales_invoice", "fees", "correction_policy", "reason",
+                      "requested_amount"):
             if before.get(field) != self.get(field):
                 raise frappe.PermissionError("Correction request facts are immutable")
         if before.status == self.status:

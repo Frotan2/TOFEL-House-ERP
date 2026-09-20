@@ -670,9 +670,19 @@ def compute_skill_payable(quantity, rate, minimum=None, maximum=None):
 # No window, approver or partial-refund rule is invented here.
 CORRECTION_POLICY_STATUSES = ("Active", "Retired")
 CORRECTION_REQUEST_STATUSES = ("Requested", "Posted", "Denied")
+# Typo-guard ceiling for the owner-entered correction window, in the
+# DURATION_MAX tradition: a data-entry plausibility bound, not a policy
+# cap. A window beyond ~10 years is a mistyped value, not a term; the
+# owner chooses any value at or below it. The lower bound 0 is the
+# mathematical minimum (a same-posting-date-only window); negative
+# durations are meaningless. Integer-only is day granularity.
+CORRECTION_WINDOW_MAX_DAYS = 3650
 
 
 def validate_correction_window_days(value):
-    if isinstance(value, bool) or not isinstance(value, int) or not (0 <= value <= 3650):
-        raise ValueError("Correction window must be an integer number of days (0-3650)")
+    if isinstance(value, bool) or not isinstance(value, int) or not (
+            0 <= value <= CORRECTION_WINDOW_MAX_DAYS):
+        raise ValueError(
+            "Correction window must be an integer number of days "
+            f"(0-{CORRECTION_WINDOW_MAX_DAYS})")
     return value

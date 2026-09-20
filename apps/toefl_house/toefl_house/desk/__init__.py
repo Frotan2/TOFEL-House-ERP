@@ -170,11 +170,19 @@ PROJECTION_FIELDS = {
         "posting_date", "docstatus",
     ],
     ("finance", "TH Correction Request"): [
-        "name", "sales_invoice", "fees", "reason", "requested_amount", "status",
+        "name", "sales_invoice", "fees", "correction_policy", "reason",
+        "requested_amount", "status",
         "approved_by", "credit_note", "modified",
     ],
     ("finance", "TH Correction Policy"): [
-        "name", "approver_role", "correction_window_days", "status",
+        "name", "approver_role", "correction_window_days", "effective_from",
+        "reason", "set_by", "set_on", "superseded_on", "status", "synthetic",
+    ],
+    # Validation evidence is matched by count, never projected: the hash
+    # stays in the filter (read-boundary discipline, same as the
+    # configuration desk).
+    ("finance", "TH Placement Audit Event"): [
+        "name",
     ],
     ("finance", "Program Enrollment"): [
         "name", "student", "student_name", "program", "academic_year",

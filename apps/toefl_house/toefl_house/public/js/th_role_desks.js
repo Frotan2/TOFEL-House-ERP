@@ -307,6 +307,16 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "posting_date", label: "Posting date", fieldtype: "Date", reqd: 1 },
 			{ fieldname: "due_date", label: "Due date", fieldtype: "Date", reqd: 1 },
 		],
+		"toefl_house.finance.corrections.configure_correction_policy": [
+			{ fieldname: "approver_role", label: "Approver role", fieldtype: "Link", options: "Role", reqd: 1 },
+			{ fieldname: "correction_window_days", label: "Correction window (days)", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Change reason", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.finance.corrections.set_correction_policy_status": [
+			{ fieldname: "status", label: "Status", fieldtype: "Select", options: "Active\nRetired", reqd: 1 },
+		],
+		"toefl_house.finance.corrections.validate_correction_policy": [],
 		"toefl_house.finance.corrections.approve_invoice_correction": [
 			{ fieldname: "request", label: "Correction request", fieldtype: "Data", reqd: 1 },
 		],

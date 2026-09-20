@@ -3627,8 +3627,10 @@ def main():
         def correction_sod_and_window():
             frappe.set_user('Administrator')
             pol=as_user('finance_officer',lambda:corr.configure_correction_policy(
-                'fc_policy_0000000001','Accounts User',30))
+                'fc_policy_0000000001','Accounts User',30,
+                str(frappe.utils.today()),'SYN initial correction policy'))
             assert pol['approver_role']=='Accounts User' and pol['correction_window_days']==30
+            assert pol['effective_from']==str(frappe.utils.today()),pol
             gt=float(frappe.db.get_value('Sales Invoice',cfx2['si'],'grand_total'))
             # role containment around the framework commands
             assert denied(lambda:as_user('outsider',lambda:corr.request_invoice_correction(
@@ -3652,6 +3654,7 @@ def main():
             # alone (Finance Auditor without command access) cannot either
             req=as_user('finance_officer',lambda:corr.request_invoice_correction(
                 'fc_req_ok_00000000001',cfx2['si'],'SYN fixture correction',gt))
+            assert req['correction_policy']==pol['name'],req
             assert denied(lambda:as_user('correction_probe',lambda:corr.approve_invoice_correction(
                 'fc_appr_probe_0000001',req['name']))),('non-approver Finance Officer approved')
             assert denied(lambda:as_user('finance_auditor',lambda:corr.approve_invoice_correction(
@@ -3754,6 +3757,64 @@ def main():
             return {'invoice_total_race_refused':True,'invoice_window_race_refused':True,
                     'invoice_unsubmitted_race_refused':True,'no_credit_note_from_refused_approvals':True}
         check('finance-correction-invoice-approval-revalidation',correction_invoice_approval_revalidation)
+        def correction_policy_versioning():
+            # Policy terms are append-only effective-dated versions: a new
+            # version supersedes (never rewrites) its predecessor, requests
+            # pin the version governing their creation date, and retirement
+            # fails new requests closed while raised requests keep
+            # resolving their pin.
+            frappe.set_user('Administrator')
+            today=str(frappe.utils.today())
+            future=str(frappe.utils.add_days(today,30))
+            v1=csod['policy']
+            v1_row=frappe.db.get_value(POLICY,v1,['status','effective_from'],as_dict=True)
+            assert v1_row.status=='Active' and str(v1_row.effective_from)==today,v1_row
+            v2=as_user('finance_officer',lambda:corr.configure_correction_policy(
+                'fc_pol_v2_00000000001','Accounts User',30,future,'SYN scheduled second version'))
+            assert v2['effective_from']==future,v2
+            v1_after=frappe.db.get_value(POLICY,v1,['status','superseded_on',
+                'correction_window_days'],as_dict=True)
+            assert v1_after.status=='Retired' and str(v1_after.superseded_on)==future,v1_after
+            assert int(v1_after.correction_window_days)==30,v1_after
+            # same-date and backdated appends are refused in business language
+            assert denied(lambda:as_user('finance_officer',lambda:corr.configure_correction_policy(
+                'fc_pol_dup_0000000001','Accounts User',30,future,'SYN duplicate date')))
+            assert denied(lambda:as_user('finance_officer',lambda:corr.configure_correction_policy(
+                'fc_pol_back_0000000001','Accounts User',30,today,'SYN backdated version')))
+            # the scheduled version does not govern yet: new requests pin v1
+            gt=float(frappe.db.get_value('Sales Invoice',cfx2['si2'],'grand_total'))
+            req=as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_pin_0000000001',cfx2['si2'],'SYN pin probe',gt))
+            assert req['correction_policy']==v1,req
+            # validation commits to the exact snapshot; the future latest
+            # reads validated, never effective
+            rep=as_user('finance_officer',lambda:corr.validate_correction_policy('fc_val_0000000000001'))
+            assert rep=={'versions':2,'readiness':'validated','latest_effective_from':future},rep
+            # retirement fails new requests closed; the raised request still
+            # resolves its pin (denied here, so no money moves)
+            as_user('finance_officer',lambda:corr.set_correction_policy_status('fc_ret_0000000000001','Retired'))
+            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_ret_0000000001',cfx2['si2'],'SYN retired probe',gt)))
+            denied_req=as_user('finance_officer',lambda:corr.deny_invoice_correction(
+                'fc_deny_pin_0000000001',req['name']))
+            assert denied_req['status']=='Denied'
+            as_user('finance_officer',lambda:corr.set_correction_policy_status('fc_react_000000000001','Active'))
+            req2=as_user('finance_officer',lambda:corr.request_invoice_correction(
+                'fc_req_react_000000001',cfx2['si2'],'SYN reactivated probe',gt))
+            assert req2['correction_policy']==v1,req2
+            as_user('finance_officer',lambda:corr.deny_invoice_correction(
+                'fc_deny_react_00000001',req2['name']))
+            # the singleton stream links every policy event in one chain
+            events=frappe.db.get_all('TH Placement Audit Event',filters={'target':POLICY},
+                fields=['action','before_hash','after_hash'],order_by='creation asc')
+            kinds={row.action for row in events}
+            assert {'configure_correction_policy','validate_correction_policy',
+                'set_correction_policy_status'}<=kinds,kinds
+            for first,second in zip(events,events[1:]):
+                assert second.before_hash==first.after_hash
+            frappe.db.commit()
+            return {'versions':2,'pin_stable':True,'retire_reactivate':True,'stream_chained':True}
+        check('finance-correction-policy-versioning',correction_policy_versioning)
         # ---- OD-CP money semantics at the fees seam (fee-handoff audit,
         # 2026-09-18): G1 discount resolution must reach the receivable
         # (single winner per line, never stacked); G3 money configuration is

@@ -27,6 +27,8 @@ DOCTYPES = {
 }
 COMMANDS = {
     "configure_correction_policy": "Finance Officer",
+    "set_correction_policy_status": "Finance Officer",
+    "validate_correction_policy": "Finance Officer",
     "request_invoice_correction": "Finance Officer",
     "approve_invoice_correction": "Finance Officer",
     "deny_invoice_correction": "Finance Officer",
@@ -132,13 +134,32 @@ class DocTypeShapeTests(unittest.TestCase):
                 self.assertLessEqual(granted, {"read", "select"},
                                      "no role may hold direct write")
             fields = {f["fieldname"] for f in data["fields"]}
+            by_name = {f["fieldname"]: f for f in data["fields"]}
+            # The readable order is the readable contract: every stored
+            # field is ordered exactly once.
+            self.assertEqual(sorted(data["field_order"]), sorted(fields))
             if name == "TH Correction Policy":
                 self.assertLessEqual({"approver_role", "correction_window_days",
-                                      "status", "synthetic"}, fields)
+                                      "effective_from", "reason", "set_by",
+                                      "set_on", "superseded_on", "status",
+                                      "synthetic"}, fields)
+                # Versions are effective-dated and unique-dated: the unique
+                # date is the serialization backstop against concurrent
+                # same-date appends.
+                self.assertEqual(by_name["effective_from"].get("reqd"), 1)
+                self.assertEqual(by_name["effective_from"].get("unique"), 1)
+                self.assertEqual(by_name["reason"].get("reqd"), 1)
+                for stamp in ("set_by", "set_on", "superseded_on"):
+                    self.assertEqual(by_name[stamp].get("read_only"), 1, stamp)
             if name == "TH Correction Request":
-                self.assertLessEqual({"sales_invoice", "fees", "reason", "requested_amount",
+                self.assertLessEqual({"sales_invoice", "fees", "correction_policy",
+                                      "reason", "requested_amount",
                                       "status", "approved_by", "credit_note",
                                       "synthetic"}, fields)
+                # The pin is mandatory and command-written: requests always
+                # resolve the version that governed their creation.
+                self.assertEqual(by_name["correction_policy"].get("reqd"), 1)
+                self.assertEqual(by_name["correction_policy"].get("read_only"), 1)
 
 
 class ApprovalRevalidationTests(unittest.TestCase):
@@ -188,6 +209,146 @@ class ApprovalRevalidationTests(unittest.TestCase):
         self.assertIn("The invoice total changed after this request was raised", body)
         self.assertIn("Correction window for this invoice has closed", body)
         self.assertIn("no longer exists", body)
+
+
+def _correction_function_body(name):
+    source = CORRECTIONS.read_text()
+    tree = ast.parse(source)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == name)
+    return ast.get_source_segment(source, fn) or ""
+
+
+class PolicyVersioningTests(unittest.TestCase):
+    """Correction policy terms are append-only effective-dated versions.
+
+    Configuring NEVER rewrites: a new version starts strictly after the
+    latest one, every previous Active version is superseded (closed with
+    the new effective date), and the unique effective date refuses a
+    concurrent same-date append in business language. The audit stream is
+    the singleton policy behind a stable target, so the hash chain spans
+    versions; status changes and validation commit to the exact version
+    snapshot.
+    """
+
+    def test_configure_appends_a_version_with_reason(self):
+        tree = ast.parse(CORRECTIONS.read_text())
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef)
+                  and n.name == "configure_correction_policy")
+        params = [arg.arg for arg in fn.args.args]
+        self.assertEqual(params, ["request_key", "approver_role",
+                                  "correction_window_days",
+                                  "effective_from", "reason"])
+        body = _correction_function_body("configure_correction_policy")
+        self.assertIn("validate_schedule_date", body)
+        self.assertIn("validate_change_reason", body)
+        self.assertIn("check_appends", body)
+        self.assertIn("superseded_on", body)
+        self.assertIn("DuplicateEntryError", body)
+        self.assertIn("snapshot_digest", body)
+        self.assertIn("POLICY_STREAM", body)
+        # No version is ever edited in place: the only writes are the
+        # retire-and-close stamp on predecessors and the new-row insert.
+        self.assertNotIn(".approver_role =", body)
+        self.assertNotIn(".correction_window_days =", body)
+        self.assertNotIn(".effective_from =", body)
+
+    def test_status_command_only_retires_or_reactivates_latest(self):
+        body = _correction_function_body("set_correction_policy_status")
+        self.assertIn("CORRECTION_POLICY_STATUSES", body)
+        self.assertIn("latest_version", body)
+        self.assertIn("is already", body)
+        self.assertIn("snapshot_digest", body)
+        self.assertIn("POLICY_STREAM", body)
+
+    def test_validate_commits_to_the_exact_snapshot(self):
+        body = _correction_function_body("validate_correction_policy")
+        self.assertIn("assert_no_ambiguous_versions", body)
+        self.assertIn("Two correction policy versions are Active", body)
+        self.assertIn("no longer exists", body)
+        self.assertIn("compute_readiness", body)
+        self.assertIn("latest_effective_from", body)
+        self.assertIn("POLICY_STREAM", body)
+
+    def test_no_business_default_terms(self):
+        """No command carries a default: every term arrives as an
+        owner-supplied argument, never as a literal in the code."""
+        tree = ast.parse(CORRECTIONS.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name in COMMANDS:
+                self.assertEqual(node.args.defaults, [], node.name)
+                self.assertEqual(node.args.kw_defaults, [], node.name)
+
+    def test_window_bound_is_a_named_typo_guard(self):
+        """The 0-3650 window bound is input hygiene, not a policy term: the
+        literal lives once at the named constant and the validator only
+        references the constant."""
+        from toefl_house.policy import CORRECTION_WINDOW_MAX_DAYS
+        self.assertEqual(CORRECTION_WINDOW_MAX_DAYS, 3650)
+        source = (APP / "policy.py").read_text()
+        tree = ast.parse(source)
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef)
+                  and n.name == "validate_correction_window_days")
+        body = ast.get_source_segment(source, fn) or ""
+        self.assertIn("CORRECTION_WINDOW_MAX_DAYS", body)
+        self.assertNotIn("3650", body)
+
+    def test_controller_guards_the_version_chain(self):
+        controllers = (APP / "controllers.py").read_text()
+        tree = ast.parse(controllers)
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef)
+                  and n.name == "_validate_correction_policy")
+        body = ast.get_source_segment(controllers, fn) or ""
+        self.assertIn("Only one correction policy version may be Active", body)
+        self.assertIn("Only the latest correction policy version may be Active", body)
+        self.assertIn("A closed version stays closed", body)
+        self.assertIn("superseded_on", body)
+        req = next(n for n in ast.walk(tree)
+                   if isinstance(n, ast.FunctionDef)
+                   and n.name == "_validate_correction_request")
+        req_body = ast.get_source_segment(controllers, req) or ""
+        self.assertIn("correction_policy", req_body)
+
+
+class PolicyPinningTests(unittest.TestCase):
+    """Requests pin the governing version; decisions judge the pin.
+
+    Policy edits never reinterpret a raised request: each request stores
+    the version governing its creation date, and every decision (approve
+    or deny, invoice or fees) resolves the approver role and the window
+    from that pinned version - while live document facts are still
+    re-proven against the live document.
+    """
+
+    def test_requests_pin_the_governing_version(self):
+        for name in ("request_invoice_correction",
+                     "request_fees_correction"):
+            body = _correction_function_body(name)
+            self.assertIn("_governing_policy", body, name)
+            self.assertIn('correction_policy=governing["name"]', body, name)
+            self.assertIn('"correction_policy": governing["name"]', body, name)
+
+    def test_decisions_judge_the_pin_before_the_role(self):
+        for name in ("approve_invoice_correction",
+                     "deny_invoice_correction",
+                     "approve_fees_correction",
+                     "deny_fees_correction"):
+            body = _correction_function_body(name)
+            self.assertIn("_pinned_policy", body, name)
+            self.assertLess(body.index("_pinned_policy"),
+                            body.index("_require_approver"),
+                            f"{name}: pinned terms resolve before the role is judged")
+            self.assertNotIn("_governing_policy", body, name)
+            self.assertNotIn("_active_policy", body, name)
+
+    def test_approval_windows_come_from_pinned_terms(self):
+        for name in ("approve_invoice_correction",
+                     "approve_fees_correction"):
+            body = _correction_function_body(name)
+            self.assertIn("terms.correction_window_days", body, name)
 
 
 if __name__ == "__main__":

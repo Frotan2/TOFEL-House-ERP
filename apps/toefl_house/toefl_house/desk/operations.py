@@ -74,6 +74,8 @@ ACTION_LABELS = {
     "assign_teaching_skill": "Assigned a teaching skill",
     "end_teaching_assignment": "Ended a teaching assignment",
     "configure_correction_policy": "Configured a correction policy",
+    "set_correction_policy_status": "Changed the correction policy status",
+    "validate_correction_policy": "Validated the correction policy",
     "request_invoice_correction": "Requested an invoice correction",
     "approve_invoice_correction": "Approved an invoice correction",
     "deny_invoice_correction": "Denied an invoice correction",

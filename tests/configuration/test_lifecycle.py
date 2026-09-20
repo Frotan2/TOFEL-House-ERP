@@ -601,10 +601,14 @@ class AcceptanceRehearsalTests(unittest.TestCase):
             self.assertEqual(float(fees_2.grand_total), 5400.0)  # 6000 - 10% scholarship = 5400
 
             # 10. REFUND VIA CORRECTION FRAMEWORK (OD-CP-2 Option B)
-            corrections.configure_correction_policy("P" * 24, "Finance Manager", 30)
+            policy = corrections.configure_correction_policy(
+                "P" * 24, "Finance Manager", 30, "2026-01-01",
+                "Rehearsal correction terms")
+            self.assertEqual(policy["effective_from"], "2026-01-01")
             corr_req = corrections.request_fees_correction(
                 "C" * 24, fees_res_2["fees"], "Student withdrew within window", 5400.0)
             self.assertEqual(corr_req["status"], "Requested")
+            self.assertEqual(corr_req["correction_policy"], policy["name"])
 
             # Approver approves fees correction
             approved = corrections.approve_fees_correction("A" * 24, corr_req["name"])
@@ -615,6 +619,181 @@ class AcceptanceRehearsalTests(unittest.TestCase):
             self.assertEqual(int(fees_2.docstatus), 2)
             # Student A remains submitted and unchanged
             self.assertEqual(int(fees_1.docstatus), 1)
+
+
+def _load_corrections():
+    """The REAL corrections commands, bound to the current fake backend.
+
+    Must be called inside the ``_load_module`` loop, after ``sys.modules``
+    carries the test's stub. The command executor and its gate module are
+    evicted first: without that, the second test in the class would reuse
+    the first test's executor, and idempotency receipts plus audit events
+    would land in the wrong backend's store.
+    """
+    import importlib.util
+    import sys
+    for key in ("toefl_house.api", "toefl_house.security"):
+        sys.modules.pop(key, None)
+    corr_spec = importlib.util.spec_from_file_location(
+        "toefl_house.finance.corrections", APP / "finance/corrections.py")
+    corrections = importlib.util.module_from_spec(corr_spec)
+    corr_spec.loader.exec_module(corrections)
+    return corrections
+
+
+class D3LifecycleTests(unittest.TestCase):
+    """Lifecycle proof for the versioned D3 correction policy.
+
+    Drives the REAL guarded commands against the in-memory backend:
+    fail-closed with no versions, version appends with a change reason,
+    refusal of backdates/same-dates/empty reasons/unknown roles/wild
+    windows, request pinning, pinned-term approvals across a
+    supersession, validation with computed readiness, retirement and
+    reactivation, and the hash-chained singleton audit stream.
+    """
+
+    ROLES = {"Finance Officer", "Finance Manager"}
+
+    def _seed_roles(self, fake):
+        for role in ("Finance Officer", "Finance Manager"):
+            fake.store.setdefault("Role", {})[role] = {"name": role}
+
+    def _fee(self, fake, name, total, posting):
+        fee = _Doc(fake, "Fees", {"name": name, "grand_total": total,
+                                  "posting_date": posting})
+        fee.insert()
+        fee.submit()
+        return fee
+
+    def _stream_events(self, fake):
+        return [doc for doc in fake.store.get(
+            "TH Placement Audit Event", {}).values()
+            if doc.get("target") == "TH Correction Policy"]
+
+    def test_version_appends_and_refusals(self):
+        from datetime import date
+        for _academic, fake in _load_module(self.ROLES):
+            corrections = _load_corrections()
+            self._seed_roles(fake)
+            fee = self._fee(fake, "FEE-V", 100.0, date.today().isoformat())
+            with self.assertRaises(fake.ValidationError):
+                corrections.request_fees_correction(
+                    "V" * 23 + "1", fee.name, "no policy yet", 100.0)
+            # The first version may start in the past; nothing governs
+            # dates before it, and the audit stamps record the author.
+            v1 = corrections.configure_correction_policy(
+                "V" * 23 + "2", "Finance Manager", 30, "2026-01-01",
+                "Initial correction terms")
+            self.assertEqual(v1["effective_from"], "2026-01-01")
+            stored = fake.store["TH Correction Policy"][v1["name"]]
+            self.assertEqual(stored.get("reason"), "Initial correction terms")
+            self.assertEqual(stored.get("set_by"), "owner@example.com")
+            self.assertEqual(stored.get("status"), "Active")
+            # Every refusal keeps its business language.
+            with self.assertRaises(fake.ValidationError):
+                corrections.configure_correction_policy(
+                    "V" * 23 + "3", "Finance Manager", 30, "2026-01-01",
+                    "Same date twice")
+            with self.assertRaises(fake.ValidationError):
+                corrections.configure_correction_policy(
+                    "V" * 23 + "4", "Finance Manager", 30, "2025-12-31",
+                    "Backdated terms")
+            with self.assertRaises(fake.ValidationError):
+                corrections.configure_correction_policy(
+                    "V" * 23 + "5", "Finance Manager", 30, "2026-09-17", "  ")
+            with self.assertRaises(fake.ValidationError):
+                corrections.configure_correction_policy(
+                    "V" * 23 + "6", "No Such Role", 30, "2026-09-17",
+                    "Unknown approver")
+            with self.assertRaises(fake.ValidationError):
+                corrections.configure_correction_policy(
+                    "V" * 23 + "7", "Finance Manager", 3651, "2026-09-17",
+                    "Window beyond the guard")
+            # The second version supersedes: the predecessor is closed,
+            # never rewritten.
+            v2 = corrections.configure_correction_policy(
+                "V" * 23 + "8", "Finance Officer", 0, "2026-09-17",
+                "Same-day window from today")
+            v1_after = fake.store["TH Correction Policy"][v1["name"]]
+            self.assertEqual(v1_after.get("status"), "Retired")
+            self.assertEqual(v1_after.get("superseded_on"), "2026-09-17")
+            self.assertEqual(v1_after.get("correction_window_days"), 30)
+            self.assertEqual(v2["status"], "Active")
+
+    def test_pins_hold_across_a_supersession(self):
+        from datetime import date, timedelta
+        for _academic, fake in _load_module(self.ROLES):
+            corrections = _load_corrections()
+            self._seed_roles(fake)
+            stale = (date.today() - timedelta(days=5)).isoformat()
+            fresh = date.today().isoformat()
+            fee_old = self._fee(fake, "FEE-OLD", 200.0, stale)
+            fee_new = self._fee(fake, "FEE-NEW", 300.0, fresh)
+            v1 = corrections.configure_correction_policy(
+                "N" * 23 + "1", "Finance Manager", 30, "2026-01-01",
+                "Generous window first")
+            req_old = corrections.request_fees_correction(
+                "N" * 23 + "2", fee_old.name, "Stale fee under v1", 200.0)
+            self.assertEqual(req_old["correction_policy"], v1["name"])
+            corrections.configure_correction_policy(
+                "N" * 23 + "3", "Finance Officer", 0, "2026-09-17",
+                "Same-day window from today")
+            req_new = corrections.request_fees_correction(
+                "N" * 23 + "4", fee_new.name, "Fresh fee under v2", 300.0)
+            self.assertNotEqual(req_new["correction_policy"], v1["name"])
+            # The old request still judges v1's window: approvable even
+            # though v1 is superseded and v2 would refuse it.
+            approved = corrections.approve_fees_correction(
+                "N" * 23 + "5", req_old["name"])
+            self.assertEqual(approved["status"], "Posted")
+            # A new request for a stale fee judges v2's same-day window
+            # and is refused.
+            fee_old2 = self._fee(fake, "FEE-OLD2", 200.0, stale)
+            with self.assertRaises(fake.ValidationError):
+                corrections.request_fees_correction(
+                    "N" * 23 + "6", fee_old2.name, "Stale fee under v2", 200.0)
+
+    def test_validate_retire_reactivate_and_audit_chain(self):
+        from datetime import date
+        for _academic, fake in _load_module(self.ROLES):
+            corrections = _load_corrections()
+            self._seed_roles(fake)
+            fee = self._fee(fake, "FEE-R", 100.0, date.today().isoformat())
+            with self.assertRaises(fake.ValidationError):
+                corrections.validate_correction_policy("R" * 23 + "1")
+            v1 = corrections.configure_correction_policy(
+                "R" * 23 + "2", "Finance Manager", 30, "2026-01-01",
+                "Initial terms")
+            pending = corrections.request_fees_correction(
+                "R" * 23 + "3", fee.name, "Request before retirement", 100.0)
+            report = corrections.validate_correction_policy("R" * 23 + "4")
+            self.assertEqual(report["readiness"], "effective")
+            self.assertEqual(report["versions"], 1)
+            self.assertEqual(report["latest_effective_from"], "2026-01-01")
+            corrections.set_correction_policy_status("R" * 23 + "5", "Retired")
+            with self.assertRaises(fake.ValidationError):
+                corrections.set_correction_policy_status("R" * 23 + "6", "Retired")
+            with self.assertRaises(fake.ValidationError):
+                corrections.validate_correction_policy("R" * 23 + "7")
+            fee2 = self._fee(fake, "FEE-R2", 50.0, date.today().isoformat())
+            with self.assertRaises(fake.ValidationError):
+                corrections.request_fees_correction(
+                    "R" * 23 + "8", fee2.name, "Request while retired", 50.0)
+            # The raised request still resolves its pin while retired.
+            denied = corrections.deny_fees_correction(
+                "R" * 23 + "9", pending["name"])
+            self.assertEqual(denied["status"], "Denied")
+            corrections.set_correction_policy_status("R" * 23 + "A", "Active")
+            again = corrections.request_fees_correction(
+                "R" * 23 + "B", fee2.name, "Request after reactivation", 50.0)
+            self.assertEqual(again["correction_policy"], v1["name"])
+            # And the singleton stream links every policy event.
+            events = self._stream_events(fake)
+            self.assertEqual(len(events), 4)
+            self.assertEqual(events[0].get("before_hash"), "")
+            for first, second in zip(events, events[1:]):
+                self.assertEqual(second.get("before_hash"),
+                                 first.get("after_hash"))
 
 
 def _foundation():

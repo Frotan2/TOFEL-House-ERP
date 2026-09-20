@@ -869,6 +869,14 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                    ["request_key", "program_enrollment", "fee_structure", "posting_date", "due_date"]),
         "toefl_house.finance.corrections.approve_invoice_correction": ("finance/corrections.py",
                                                                        ["request_key", "request"]),
+        "toefl_house.finance.corrections.configure_correction_policy": ("finance/corrections.py",
+                                                                       ["request_key", "approver_role",
+                                                                        "correction_window_days",
+                                                                        "effective_from", "reason"]),
+        "toefl_house.finance.corrections.set_correction_policy_status": ("finance/corrections.py",
+                                                                       ["request_key", "status"]),
+        "toefl_house.finance.corrections.validate_correction_policy": ("finance/corrections.py",
+                                                                       ["request_key"]),
         "toefl_house.teaching.create_student_group": ("teaching/__init__.py",
                                                        ["request_key", "group_name", "program",
                                                         "academic_year", "academic_term",
@@ -1656,6 +1664,14 @@ class RecordedActionsWorldTests(unittest.TestCase):
         self.assertNotIn("revise_draft", module.ACTION_LABELS)
         self.assertIn("issue_tuition_fees", module.ACTION_LABELS)
 
+    def test_correction_policy_lifecycle_actions_are_labeled(self):
+        """Policy version events must render as sentences, not raw kinds."""
+        module = _import_desk("operations", roles={"General Manager"})
+        self.assertEqual(module.ACTION_LABELS["set_correction_policy_status"],
+                         "Changed the correction policy status")
+        self.assertEqual(module.ACTION_LABELS["validate_correction_policy"],
+                         "Validated the correction policy")
+
     def test_projection_allow_list_excludes_hashes_and_keys(self):
         allow = _literal_block(desk_sources()["__init__"], "PROJECTION_FIELDS = {")
         fields = allow[("management", "TH Placement Audit Event")]
@@ -2060,19 +2076,24 @@ class FinanceOutstandingWorldTests(unittest.TestCase):
             ],
             "TH Correction Request": [
                 {"name": "COR-PEND", "sales_invoice": "INV-OWING",
-                 "fees": None, "reason": "duplicate line",
+                 "fees": None, "correction_policy": "POL-1",
+                 "reason": "duplicate line",
                  "requested_amount": 500.0, "status": "Requested",
                  "approved_by": None, "credit_note": None,
                  "modified": "2026-09-16 09:00:00"},
                 {"name": "COR-DONE", "sales_invoice": None,
-                 "fees": "FEE-OWING", "reason": "wrong level",
+                 "fees": "FEE-OWING", "correction_policy": "POL-1",
+                 "reason": "wrong level",
                  "requested_amount": 8000.0, "status": "Approved",
                  "approved_by": "officer@example.com", "credit_note": None,
                  "modified": "2026-09-15 09:00:00"},
             ],
             "TH Correction Policy": ([
                 {"name": "POL-1", "approver_role": "Finance Officer",
-                 "correction_window_days": 30, "status": "Active"},
+                 "correction_window_days": 30, "effective_from": "2026-01-01",
+                 "reason": "seed terms", "set_by": "officer@example.com",
+                 "set_on": "2026-01-01 09:00:00", "superseded_on": None,
+                 "status": "Active", "synthetic": 0},
             ] if policy_active else []),
             "Program Enrollment": [],
             "TH Teaching Assignment": [],
@@ -2081,10 +2102,14 @@ class FinanceOutstandingWorldTests(unittest.TestCase):
         }
 
     def _payload(self, **kwargs):
-        module = _import_desk("finance", roles={"Finance Manager"})
+        count = kwargs.pop("count", None)
+        module = _import_desk("finance", roles={"Finance Manager",
+                                                "Finance Officer"})
         getter = desk_world_get_all("finance outstanding", self._world(**kwargs))
         module.frappe.get_all = getter
         module.frappe.db.get_all = getter
+        if count is not None:
+            module.project_count = lambda *args, **kwargs: count
         return module.work()
 
     @staticmethod
@@ -2134,6 +2159,52 @@ class FinanceOutstandingWorldTests(unittest.TestCase):
                  for item in self._section(payload, "corrections")["items"]}
         self.assertNotIn("action", items["COR-PEND"])
         self.assertIn("No active correction policy", items["COR-PEND"]["next"])
+
+    def test_policy_sections_report_computed_readiness_and_terms(self):
+        payload = self._payload()
+        facts = {fact["label"]: fact["value"]
+                 for fact in self._section(payload, "policy")["facts"]}
+        self.assertEqual(facts["Policy readiness"], "Configured")
+        self.assertIn("Finance Officer", facts["Governing version"])
+        self.assertIn("30 days", facts["Governing version"])
+        items = {item["id"]: item
+                 for item in self._section(payload, "policy-versions")["items"]}
+        self.assertIn("POL-1", items)
+        self.assertIn("readiness configured", items["POL-1"]["detail"])
+        self.assertEqual(items["POL-1"]["action"]["endpoint"],
+                         "toefl_house.finance.corrections.validate_correction_policy")
+
+    def test_validated_policy_governs_with_a_record_action(self):
+        payload = self._payload(count=1)
+        facts = {fact["label"]: fact["value"]
+                 for fact in self._section(payload, "policy")["facts"]}
+        self.assertEqual(facts["Policy readiness"], "Effective")
+        items = {item["id"]: item
+                 for item in self._section(payload, "policy-versions")["items"]}
+        self.assertEqual(items["POL-1"]["action"]["endpoint"],
+                         "toefl_house.finance.corrections.configure_correction_policy")
+
+    def test_correction_actions_use_the_pinned_approver(self):
+        """The approval button names the role from the request's pinned
+        version - not the currently active one."""
+        world = self._world()
+        world["TH Correction Policy"].append(
+            {"name": "POL-OLD", "approver_role": "Retired Approver",
+             "correction_window_days": 7, "effective_from": "2025-01-01",
+             "reason": "older terms", "set_by": "officer@example.com",
+             "set_on": "2025-01-01 09:00:00", "superseded_on": "2026-01-01",
+             "status": "Retired", "synthetic": 0})
+        world["TH Correction Request"][0]["correction_policy"] = "POL-OLD"
+        module = _import_desk("finance", roles={"Finance Manager",
+                                                "Finance Officer",
+                                                "Retired Approver"})
+        getter = desk_world_get_all("finance outstanding", world)
+        module.frappe.get_all = getter
+        module.frappe.db.get_all = getter
+        payload = module.work()
+        items = {item["id"]: item
+                 for item in self._section(payload, "corrections")["items"]}
+        self.assertEqual(items["COR-PEND"]["action"]["role"], "Retired Approver")
 
 
 
