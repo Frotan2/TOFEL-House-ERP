@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 import frappe
 from frappe.utils import get_datetime
+from toefl_house.admission import policies as returning_policies
 from toefl_house.api import ATTEMPT, DECISION, _execute, _now
 from toefl_house.policy import ADMISSION_OUTCOMES, digest, validate_admission_text
 from toefl_house.security import is_production, record_synthetic_flag
@@ -140,6 +141,27 @@ def _active_duplicate(applicant_name):
     )
 
 
+def _open_journey_for_subject(subject):
+    """An open journey: an unconsumed decision on any applicant of this subject.
+
+    Per-applicant activity (``_active_duplicate``) never expires — a
+    converted Approved decision stays Approved forever. The
+    returning-student rule is per SUBJECT instead: a journey is open
+    while its decision is active AND has no linked native Student. A
+    consumed journey (converted, then enrolled) does not block the
+    subject's next placement-per-term journey; a mid-flight one does.
+    """
+    return frappe.db.sql(
+        "select d.name from `tabTH Admission Decision` d "
+        "join `tabStudent Applicant` a on a.name=d.student_applicant "
+        "where a.student_email_id=%s "
+        "and d.status in ('Draft','Review','Approved','Conditional') "
+        "and ifnull(d.native_student,'')='' for update",
+        (subject,),
+        as_dict=True,
+    )
+
+
 @frappe.whitelist(methods=["POST"])
 def deny_enroll_student(source_name=None):
     """A13 containment: native enroll_student is not an Admission API."""
@@ -180,7 +202,19 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
                       (case_name,))
         if frappe.db.sql("select name from `tabStudent Applicant` "
                          "where student_email_id=%s for update", (subject,)):
-            raise frappe.ValidationError("Applicant already exists for this placement subject")
+            # OD-NEW-01/B: a second applicant for one subject is a
+            # returning student re-sitting placement. Fail-closed three
+            # ways — no policy, no governing version, retired policy —
+            # plus a fourth: the subject's previous journey must be
+            # consumed (converted), never mid-flight. All of this runs
+            # under the BUG-ADM-01 case-row lock above.
+            if returning_policies.governing_returning_mode() != "placement_per_term":
+                raise frappe.ValidationError(
+                    "Applicant already exists for this placement subject")
+            if _open_journey_for_subject(subject):
+                raise frappe.ValidationError(
+                    "This subject has an open admission journey; a returning "
+                    "applicant starts only after the previous journey converts")
         applicant = frappe.get_doc(dict(
             doctype=APPLICANT,
             first_name=first,
@@ -469,8 +503,7 @@ def convert_applicant(request_key, name, expected_version):
             raise frappe.ValidationError("Offer acceptance is required before Student conversion")
         if doc.native_student:
             raise frappe.ValidationError("Applicant already has a converted Student")
-        if doc.existing_student:
-            raise frappe.ValidationError("Returning-student conversion is not part of this slice")
+        returning = doc.existing_student or ""
         if actor == doc.drafted_by:
             raise frappe.PermissionError("Officer cannot convert their own draft")
         if actor == doc.reviewed_by:
@@ -488,35 +521,66 @@ def convert_applicant(request_key, name, expected_version):
             raise frappe.ValidationError("Applicant is not in Applied status")
         if frappe.db.exists(STUDENT, {"student_applicant": applicant.name}):
             raise frappe.ValidationError("A native Student already exists for this applicant")
-        student = frappe.get_doc(dict(
-            doctype=STUDENT,
-            first_name=applicant.first_name,
-            last_name=applicant.last_name,
-            student_email_id=applicant.student_email_id,
-            student_applicant=applicant.name,
-            joining_date=frappe.utils.today(),
-            naming_series="EDU-STU-.YYYY.-",
-            enabled=1,
-        ))
-        student.flags.ignore_permissions = True
-        student.flags.ignore_links = True
-        with _native_student_write():
-            student.insert(ignore_permissions=True)
-        if frappe.db.exists("Program Enrollment", {"student": student.name}):
-            raise frappe.ValidationError("Student conversion must not create Program Enrollment")
-        customer = student.customer or frappe.db.get_value(STUDENT, student.name, "customer")
-        if customer and frappe.db.exists("Sales Invoice", {"customer": customer}):
-            raise frappe.ValidationError("Student conversion must not create a Sales Invoice")
+        if returning:
+            # Returning lane: LINK the existing Student, never create one.
+            # Native Student.student_email_id is unique, so a second
+            # Student for this person cannot exist; the email match below
+            # proves the officer-linked Student IS this applicant, and the
+            # existing Customer (with its invoice history) carries over
+            # structurally — no new Customer row is created.
+            linked = frappe.db.get_value(
+                STUDENT, returning,
+                ["name", "student_email_id", "enabled", "customer"],
+                as_dict=True,
+            )
+            if not linked:
+                raise frappe.ValidationError("Existing Student not found")
+            if not int(linked.enabled or 0):
+                raise frappe.ValidationError("Existing Student is disabled")
+            if (linked.student_email_id or "") != (applicant.student_email_id or ""):
+                raise frappe.ValidationError(
+                    "Existing Student does not belong to this applicant")
+            if frappe.db.sql(
+                    "select name from `tabProgram Enrollment` where student=%s "
+                    "and program=%s and academic_year=%s "
+                    "and ifnull(academic_term,'')=%s and docstatus<2",
+                    (linked.name, doc.program, doc.academic_year,
+                     doc.academic_term or "")):
+                raise frappe.ValidationError("Student is already enrolled")
+            student_name = linked.name
+            customer = linked.customer or frappe.db.get_value(STUDENT, student_name, "customer")
+        else:
+            student = frappe.get_doc(dict(
+                doctype=STUDENT,
+                first_name=applicant.first_name,
+                last_name=applicant.last_name,
+                student_email_id=applicant.student_email_id,
+                student_applicant=applicant.name,
+                joining_date=frappe.utils.today(),
+                naming_series="EDU-STU-.YYYY.-",
+                enabled=1,
+            ))
+            student.flags.ignore_permissions = True
+            student.flags.ignore_links = True
+            with _native_student_write():
+                student.insert(ignore_permissions=True)
+            if frappe.db.exists("Program Enrollment", {"student": student.name}):
+                raise frappe.ValidationError("Student conversion must not create Program Enrollment")
+            student_name = student.name
+            customer = student.customer or frappe.db.get_value(STUDENT, student.name, "customer")
+            if customer and frappe.db.exists("Sales Invoice", {"customer": customer}):
+                raise frappe.ValidationError("Student conversion must not create a Sales Invoice")
         converted_at = _now()
-        _advance(doc, native_student=student.name, converted_at=converted_at)
+        _advance(doc, native_student=student_name, converted_at=converted_at)
         native_status = frappe.db.get_value(APPLICANT, applicant.name, "application_status")
         result = _result(doc)
-        result["native_student"] = student.name
+        result["native_student"] = student_name
         result["native_application_status"] = native_status
         result["customer"] = customer or ""
+        result["returning"] = bool(returning)
         result["program_enrollment"] = 0
         result["converted_at"] = _iso(converted_at)
-        return result, dict(target=doc.name, after_hash=digest([doc.name, student.name]))
+        return result, dict(target=doc.name, after_hash=digest([doc.name, student_name]))
 
     return _execute("convert_applicant", request_key,
                     {"name": name, "expected_version": expected_version}, work)

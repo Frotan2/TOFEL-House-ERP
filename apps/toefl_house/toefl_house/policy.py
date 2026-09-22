@@ -464,7 +464,10 @@ def validate_attendance_statuses(value):
 def enrollment_is_eligible(status, accepted, native_student, existing_student="", conditions=""):
     """Pure predicate: native Program Enrollment is allowed only after convert.
 
-    Returning-student and Conditional paths remain denied in this slice.
+    Conditional paths remain denied. Returning students enroll through
+    the same predicate: convert links ``native_student`` to the
+    officer-declared ``existing_student``, and any divergence between
+    the two is a linkage break, never a silent substitution.
     """
     if status != "Approved":
         raise ValueError("Only an Approved admission can enroll")
@@ -472,8 +475,8 @@ def enrollment_is_eligible(status, accepted, native_student, existing_student=""
         raise ValueError("Offer acceptance is required before enrollment")
     if not native_student:
         raise ValueError("Native Student conversion is required before enrollment")
-    if existing_student:
-        raise ValueError("Returning-student enrollment is not part of this slice")
+    if existing_student and native_student != existing_student:
+        raise ValueError("Returning-student linkage is broken")
     if conditions:
         raise ValueError("Conditional admission is not permission to enroll")
     return True

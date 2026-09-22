@@ -55,8 +55,8 @@ CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager", 
 # configuration's readership (mirroring how native Version rows inherit
 # their document's readers) and is read-only for every role.
 GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount Rule", "TH Skill",
-                        "TH Assessment Policy", "TH Configuration Operation",
-                        "TH Configuration Audit Event"}
+                        "TH Assessment Policy", "TH Returning Student Policy",
+                        "TH Configuration Operation", "TH Configuration Audit Event"}
 
 
 def configuration_has_permission(doc, ptype=None, user=None, **kwargs):

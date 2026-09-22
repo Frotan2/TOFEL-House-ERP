@@ -31,9 +31,14 @@ class EnrollmentEligibilityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             enrollment_is_eligible("Rejected", 0, "")
 
-    def test_returning_student_denied(self):
-        with self.assertRaises(ValueError):
-            enrollment_is_eligible("Approved", 1, "EDU-STU-2026-00001", existing_student="EDU-STU-2025-00001")
+    def test_returning_student_allowed_only_with_intact_linkage(self):
+        self.assertTrue(enrollment_is_eligible(
+            "Approved", 1, "EDU-STU-2025-00001",
+            existing_student="EDU-STU-2025-00001"))
+        with self.assertRaises(ValueError) as ctx:
+            enrollment_is_eligible("Approved", 1, "EDU-STU-2026-00001",
+                                   existing_student="EDU-STU-2025-00001")
+        self.assertIn("linkage", str(ctx.exception))
 
 
 class EnrollmentReadBoundaryTests(unittest.TestCase):

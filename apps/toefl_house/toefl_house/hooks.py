@@ -49,14 +49,15 @@ has_permission = {
                  "TH Correction Request",
                  "TH Academic Program", "TH Program Level",
                  "TH Discount Rule", "TH Skill",
-                 "TH Assessment Policy", "TH Configuration Operation",
-                 "TH Configuration Audit Event")
+                 "TH Assessment Policy", "TH Returning Student Policy",
+                 "TH Configuration Operation", "TH Configuration Audit Event")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Program Level"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Discount Rule"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Skill"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Assessment Policy"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Returning Student Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
 permission_query_conditions = {
@@ -83,6 +84,7 @@ permission_query_conditions["TH Program Level"] = "toefl_house.permissions.confi
 permission_query_conditions["TH Discount Rule"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Skill"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Assessment Policy"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Returning Student Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
 override_whitelisted_methods = {
@@ -116,6 +118,9 @@ doc_events = {
     },
     "TH Assessment Policy": {
         "validate": "toefl_house.academic.doctype.th_assessment_policy.th_assessment_policy.validate",
+    },
+    "TH Returning Student Policy": {
+        "validate": "toefl_house.admission.doctype.th_returning_student_policy.th_returning_student_policy.validate",
     },
     "TH Configuration Operation": {
         "validate": "toefl_house.operations.doctype.th_configuration_operation.th_configuration_operation.validate",

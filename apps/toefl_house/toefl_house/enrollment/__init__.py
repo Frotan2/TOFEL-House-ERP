@@ -119,7 +119,14 @@ def enroll_in_program(request_key, admission_decision):
         linked = frappe.db.get_value(STUDENT, student, ["name", "student_applicant", "customer"], as_dict=True)
         if not linked:
             raise frappe.ValidationError("Native Student not found")
-        if (linked.student_applicant or "") != row.student_applicant:
+        if row.existing_student:
+            # Returning lane: the Student keeps its ORIGINAL applicant
+            # link (native history is never rewritten); identity was
+            # proven at convert by email match, so here the linkage
+            # itself is verified instead.
+            if linked.name != row.existing_student:
+                raise frappe.ValidationError("Student does not match the returning admission")
+        elif (linked.student_applicant or "") != row.student_applicant:
             raise frappe.ValidationError("Student does not match the admission applicant")
         if not frappe.db.exists(PROGRAM, row.program):
             raise frappe.ValidationError("Unknown program")

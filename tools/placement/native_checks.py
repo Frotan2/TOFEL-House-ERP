@@ -16,6 +16,7 @@ def main():
     import requests
     from toefl_house import api
     from toefl_house import admission as adm
+    from toefl_house.admission import policies as admp
     from toefl_house import enrollment as enr
     from toefl_house import teaching as tea
     from toefl_house import finance as fin_m
@@ -4875,6 +4876,58 @@ def main():
             return {'satisfied_by':approver2,'student':conv['native_student'],
                     'program_enrollment':result['program_enrollment']}
         check('admission-s6-conditional-satisfy-convert-enroll',traced(s6_conditional_journey))
+        def s7_returning_journey():
+            # S7 (GAP-REENROLL / OD-NEW-01-B): placement-per-term return.
+            # Unconfigured intake refuses the second applicant; after the
+            # Course Owner opts in, the returner re-sits placement and the
+            # journey links the SAME Student and Customer — no duplicate
+            # Customer row — then enrolls and bills tuition on the reuse.
+            frappe.set_user('Administrator')
+            prior=frappe.db.get_value('Student',{'student_email_id':users['candidate4']},
+                                      ['name','customer'],as_dict=True)
+            assert prior and prior.customer,prior
+            alloc=digital_finalize(case4['name'],'s7_pipe4')
+            rel=as_user('releaser',lambda:api.release_decision(
+                's7_rel000000000001',alloc['attempt'],7))
+            assert denied(lambda:as_user('officer',lambda:adm.record_applicant(
+                's7_rec_denied_00001',rel['decision'],'SYNTHETIC S7 Returner',
+                cat['program'],cat['academic_year'])))
+            customers_before=frappe.db.count('Customer')
+            pol=as_user('course_owner',lambda:admp.create_returning_student_policy(
+                's7_pol_create_00001','SYN-RETURNING','SYN returning rule'))
+            assert pol['version_count']==0 and pol['governing_mode']=='',pol
+            ver=as_user('course_owner',lambda:admp.set_returning_student_policy_version(
+                's7_pol_versn_000001','SYN-RETURNING',str(frappe.utils.today()),
+                'SYN owner enables placement-per-term returns','placement_per_term'))
+            assert ver['governing_mode']=='placement_per_term',ver
+            app=as_user('officer',lambda:adm.record_applicant(
+                's7_rec000000000001',rel['decision'],'SYNTHETIC S7 Returner',
+                cat['program'],cat['academic_year']))
+            dec=as_user('officer',lambda:adm.create_admission(
+                's7_cre000000000001',app['name'],rel['decision'],prior.name))
+            as_user('admissions_reviewer',lambda:adm.review_admission(
+                's7_rev000000000001',dec['name'],1))
+            out=as_user('approver',lambda:adm.decide_admission(
+                's7_dec000000000001',dec['name'],2,'Approved',REASON))
+            assert out['status']=='Approved',out
+            as_user('officer',lambda:adm.accept_offer(
+                's7_acc000000000001',dec['name'],3))
+            conv=as_user('approver',lambda:adm.convert_applicant(
+                's7_conv00000000001',dec['name'],4))
+            assert conv['native_student']==prior.name,conv
+            assert conv['customer']==prior.customer and conv['returning'],conv
+            assert frappe.db.count('Customer')==customers_before
+            second=as_user('enrollment_officer',lambda:enr.enroll_in_program(
+                's7_enr000000000001',dec['name']))
+            assert second['docstatus']==1 and second['student']==prior.name,second
+            fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
+                's7_tuit00000000001',second['program_enrollment'],fin['fee_structure'],
+                '2026-09-01','2026-09-30'))
+            assert fees['student']==prior.name and float(fees['grand_total'])>0,fees
+            frappe.db.commit()
+            return {'student':prior.name,'customer':prior.customer,
+                    'program_enrollment':second['program_enrollment'],'fees':fees['fees']}
+        check('admission-s7-returning-link-reuse-enroll-bill',traced(s7_returning_journey))
         report['status']='pass'
 
     except Exception as exc:

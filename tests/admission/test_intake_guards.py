@@ -52,6 +52,8 @@ class IntakeGuardTests(unittest.TestCase):
     def setUp(self):
         self.calls = []
         self.applicant_probe = []
+        self.returning_mode = ""
+        self.open_journeys = []
         previous = dict(sys.modules)
         self.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
         fake = self
@@ -61,6 +63,9 @@ class IntakeGuardTests(unittest.TestCase):
             if "tabTH Placement Case" in query:
                 assert "for update" in query
                 return [{"name": values[0]}]
+            if "tabTH Admission Decision" in query and "join" in query:
+                assert "for update" in query
+                return list(fake.open_journeys)
             if "tabStudent Applicant" in query:
                 return list(fake.applicant_probe)
             raise AssertionError(f"unexpected sql {query[:80]}")
@@ -115,6 +120,9 @@ class IntakeGuardTests(unittest.TestCase):
         api._execute = lambda kind, key, payload, work: work(ACTOR)[0]
         api._now = lambda: datetime(2026, 9, 22, 12, 0, 0)
         sys.modules["toefl_house.api"] = api
+        returning = types.ModuleType("toefl_house.admission.policies")
+        returning.governing_returning_mode = lambda on_date=None: fake.returning_mode
+        sys.modules["toefl_house.admission.policies"] = returning
         self.admission = _load_real("toefl_house.admission", APP / "admission/__init__.py")
         self.case_name = "CASE-1"
 
@@ -136,8 +144,36 @@ class IntakeGuardTests(unittest.TestCase):
 
     def test_existing_applicant_denied_after_probe(self):
         self.applicant_probe = [{"name": "APP-OLD"}]
-        with self.assertRaises(_ValidationError):
+        with self.assertRaises(_ValidationError) as ctx:
             self._record()
+        self.assertIn("already exists for this placement subject", str(ctx.exception))
+
+    def test_returning_applicant_denied_without_governing_policy(self):
+        # Fail-closed: unconfigured, retired, or version-less all read ""
+        self.applicant_probe = [{"name": "APP-OLD"}]
+        self.returning_mode = ""
+        with self.assertRaises(_ValidationError) as ctx:
+            self._record()
+        self.assertIn("already exists for this placement subject", str(ctx.exception))
+
+    def test_returning_applicant_denied_with_open_journey(self):
+        self.applicant_probe = [{"name": "APP-OLD"}]
+        self.returning_mode = "placement_per_term"
+        self.open_journeys = [{"name": "ADM-OLD"}]
+        with self.assertRaises(_ValidationError) as ctx:
+            self._record()
+        self.assertIn("open admission journey", str(ctx.exception))
+
+    def test_returning_applicant_allowed_after_consumed_journey(self):
+        self.applicant_probe = [{"name": "APP-OLD"}]
+        self.returning_mode = "placement_per_term"
+        self.open_journeys = []
+        result = self._record()
+        self.assertEqual(result["student_email_id"], "subject@example.test")
+        kinds = ["case" if "Placement Case" in query
+                 else "probe" if "tabStudent Applicant" in query and "join" not in query
+                 else "journey" for query, _ in self.calls]
+        self.assertEqual(kinds, ["case", "probe", "journey"])
 
     def test_missing_attempt_case_fails_closed(self):
         self.case_name = ""

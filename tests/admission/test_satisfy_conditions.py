@@ -120,6 +120,9 @@ class SatisfyConditionsTests(unittest.TestCase):
         api._execute = _execute
         api._now = lambda: datetime(2026, 9, 22, 12, 0, 0)
         sys.modules["toefl_house.api"] = api
+        returning = types.ModuleType("toefl_house.admission.policies")
+        returning.governing_returning_mode = lambda on_date=None: ""
+        sys.modules["toefl_house.admission.policies"] = returning
         self.admission = _load_real("toefl_house.admission", APP / "admission/__init__.py")
 
     def _satisfy(self, key="test-key-satisfy-00000001", evidence="Transcripts verified"):
