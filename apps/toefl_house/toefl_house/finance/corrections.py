@@ -284,7 +284,7 @@ def validate_correction_policy(request_key):
             validations=[{"after_hash": after}],
             today=frappe.utils.today(), what="correction policy")
         result = {"versions": len(rows), "readiness": readiness,
-                  "latest_effective_from": latest.get("effective_from")}
+                  "latest_effective_from": str(latest.get("effective_from"))}
         return result, dict(target=POLICY_STREAM, before_hash=before,
                             after_hash=after)
 

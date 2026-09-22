@@ -351,5 +351,77 @@ class PolicyPinningTests(unittest.TestCase):
             self.assertIn("terms.correction_window_days", body, name)
 
 
+class ValidateResultJsonTests(unittest.TestCase):
+    """Command results must be receipt-serializable.
+
+    Hosted regression (pre-existing, found while unblocking S1 proof):
+    validate_correction_policy returned the raw DB date for
+    latest_effective_from, and receipt storage json.dumps() the result,
+    so the first hosted validate died with "Object of type date is not
+    JSON serializable". The hosted check pins the contract: the field is
+    an ISO date STRING.
+    """
+
+    def test_latest_effective_from_is_a_json_safe_string(self):
+        import importlib.util
+        import types
+        from datetime import date
+        from types import SimpleNamespace
+
+        previous = dict(sys.modules)
+        self.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
+
+        rows = [{"name": "POL-V1", "approver_role": "Accounts User",
+                 "correction_window_days": 30, "effective_from": date(2026, 10, 22),
+                 "reason": "SYN", "set_by": "officer", "set_on": date(2026, 9, 22),
+                 "superseded_on": None, "status": "Active", "synthetic": 1}]
+
+        def get_all(doctype, filters=None, fields=None, **kwargs):
+            if doctype == "TH Correction Policy":
+                return [dict(row) for row in rows]
+            if doctype == "TH Placement Audit Event":
+                return []
+            raise AssertionError(f"unexpected get_all {doctype}")
+
+        stub = types.ModuleType("frappe")
+        stub.ValidationError = type("ValidationError", (Exception,), {})
+        stub.PermissionError = type("PermissionError", (Exception,), {})
+        stub.whitelist = lambda **kwargs: (lambda func: func)
+        stub.db = SimpleNamespace(get_all=get_all,
+                                  exists=lambda doctype, name: True)
+        stub.utils = SimpleNamespace(today=lambda: "2026-09-22")
+        sys.modules["frappe"] = stub
+
+        package = types.ModuleType("toefl_house")
+        package.__path__ = [str(APP)]
+        sys.modules["toefl_house"] = package
+
+        def load(modname, path):
+            spec = importlib.util.spec_from_file_location(modname, path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[modname] = module
+            spec.loader.exec_module(module)
+            return module
+
+        load("toefl_house.policy", APP / "policy.py")
+        config_pkg = types.ModuleType("toefl_house.configuration")
+        config_pkg.__path__ = [str(APP / "configuration")]
+        sys.modules["toefl_house.configuration"] = config_pkg
+        load("toefl_house.configuration.rules", APP / "configuration/rules.py")
+        security = types.ModuleType("toefl_house.security")
+        security.record_synthetic_flag = lambda: 1
+        sys.modules["toefl_house.security"] = security
+        api = types.ModuleType("toefl_house.api")
+        api._execute = lambda kind, key, payload, work: work("officer")[0]
+        sys.modules["toefl_house.api"] = api
+        corr = load("toefl_house.finance.corrections",
+                    APP / "finance/corrections.py")
+
+        result = corr.validate_correction_policy("test-key-validate-00001")
+        self.assertEqual(result["latest_effective_from"], "2026-10-22")
+        self.assertEqual(result["versions"], 1)
+        json.dumps(result)  # receipt storage serializes the result
+
+
 if __name__ == "__main__":
     unittest.main()
