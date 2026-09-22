@@ -4342,7 +4342,7 @@ def main():
                     assert word not in text,(name,word)
             # registry: server-decided, per audience
             assert {d['slug'] for d in desk_get('receptionist','available')['desks']}=={'th-reception-desk'}
-            assert {d['slug'] for d in desk_get('course_owner','available')['desks']}=={'th-owner-cockpit','th-academic-setup'}
+            assert {d['slug'] for d in desk_get('course_owner','available')['desks']}=={'th-owner-cockpit','th-academic-setup','th-configuration'}
             assert {d['slug'] for d in desk_get('teacher_one','available')['desks']}=={'th-teacher-desk'}
             assert desk_get('outsider','available')['desks']==[]
             # guest: registry answers empty; desk loads are denied
