@@ -335,7 +335,9 @@ owner reopens it.)
 - Domain: release. Statement: hosted suite execution on the working branch
   at its HEAD (branch-boundary pins updated; no relabeling of older runs).
 - Status: EVIDENCE REQUIRED (working branch
-  `arena/01a0c987-tofel-house-erp` has no cited hosted run at HEAD `2f8b681`).
+  `arena/01a0c987-tofel-house-erp` has no cited hosted run at HEAD `e82936f`;
+  branch-boundary pins rotated to this branch 2026-09-22 per procedure, still
+  awaiting genuine push-triggered execution — see CURRENT-BASELINE.md).
 - Source: CURRENT-BASELINE.md; branch-boundary tests. Affected: release.
 
 ---

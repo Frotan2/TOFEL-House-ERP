@@ -18,7 +18,7 @@ milestone (slice completion, gate change, authorization change).
 | HEAD date | 2026-09-20 |
 | Parent | `05a3e35eef97bcd9e9f8167d262844354b20ff98` — "D1: owner-configurable assessment policy facets (configuration plane)", 2026-09-20 (verified from the HEAD commit object; the parent itself records parent `12087cba…`, so history is deeper than two commits). `9eccff9` ("Initial commit") is the tip of `main` in this clone, not HEAD's parent. Clone is shallow: ancestry beyond the fetched parent is not traversable locally. |
 | Working tree | CLEAN at baseline capture (before operating-system docs are added) |
-| Canonical `active_branch` in governance files | `arena/01a0ba0d-tofel-house-erp` (previous session branch — rotation pending, see §Tests) |
+| Canonical `active_branch` in governance files | `arena/01a0c987-tofel-house-erp` (fifth rotation completed 2026-09-22 in `e82936f`; previous session branch `arena/01a0ba0d-tofel-house-erp` is now historical provenance — see update log) |
 
 ## Last validated baseline
 
@@ -28,6 +28,15 @@ milestone (slice completion, gate change, authorization change).
 | `ruff check .` | NOT EXECUTED in this sandbox (no `ruff` binary/module installed). No Python files are added or modified by this governance-only change, so lint status is unchanged from HEAD; `.github/workflows/owned-suite.yml` re-verifies on push. |
 | Hosted qualification at this HEAD | **NOT EXECUTED ON THIS BRANCH** — no cited hosted run for `2f8b681` on `arena/01a0c987-tofel-house-erp`. Older-branch runs are historical provenance only and must not be relabeled. |
 | `d8_validate.py` | VERIFIED 2026-09-22: exit 0 with D8 BLOCKED / production REJECT, `sec_deps` UPSTREAM-BLOCKED / REJECT, `synthetic_only_guard` REQUIRED, 14/14 `checks` PASS, gate states domain-qualification/authorization-isolation/ownership PASS. `checkout_branch_matches_active` is `false` because the canonical pin still names the previous session branch (the D8 test failure mechanism; posture assertions all hold). |
+
+### Re-validation after the 2026-09-22 rotation (HEAD `e82936f`)
+
+| Check | Result (this branch, HEAD `e82936f`) |
+|---|---|
+| `python3 -m unittest discover -s tests -t .` | 1107 tests: **1107 pass, 0 fail** — the 3 stale-pin failures are resolved by the rotation; the active branch now records an explicit `NOT_EXECUTED_ON_THIS_BRANCH` absence with no run pinned. Zero functional/domain failures. |
+| `ruff check .` | NOT EXECUTED in this sandbox (no `ruff` binary/module installed). The rotation touched two Python files (`tools/session_branch.py`, `tests/d8/test_contract.py`) following existing style; `.github/workflows/owned-suite.yml` re-verifies on push. |
+| Hosted qualification at this HEAD | **NOT_EXECUTED ON THIS BRANCH** — no cited hosted run for `e82936f` on `arena/01a0c987-tofel-house-erp`. Pushing the rotation commit will genuinely execute the named hosted workflows here; older-branch runs stay historical provenance and must not be relabeled. |
+| `d8_validate.py` | VERIFIED 2026-09-22: exit 0 with D8 BLOCKED / production REJECT, `active_branch_hosted_execution` `NOT_EXECUTED_ON_THIS_BRANCH`, `checkout_branch_matches_active` `true`, `sec_deps` UPSTREAM-BLOCKED / REJECT, 14/14 `checks` PASS. Fail-closed absence enforced: any execution identity on the active block fails the contract. |
 
 ## Completed domains (with qualifying evidence)
 
@@ -113,4 +122,12 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
   `d8_validate.py` row (verified exit 0 / BLOCKED / REJECT / 14-14 checks PASS);
   fixed `SKILL.md` §C numbering typo; added the recorded-baseline exception to the
   §J commit gate so pre-existing unrelated failures cannot block an unrelated change.
+- 2026-09-22 (branch-boundary rotation) — Rotated the canonical pin
+  `arena/01a0ba0d-tofel-house-erp` → `arena/01a0c987-tofel-house-erp` via the
+  documented procedure (commit `e82936f`: pin, 11 workflow filters/guards, 10
+  status headers, D8 records, ledger shift with `01a0ba0d` → prior provenance,
+  closure register, 4 qualification tests rewritten to the honest absence).
+  Suite re-validated at `e82936f`: 1107/1107 pass. Posting this entry updates
+  the canonical-`active_branch` row and adds the re-validation table above;
+  the `2f8b681` capture record is left intact as history.
   No code, tests, permissions, hooks, or behavior touched.
