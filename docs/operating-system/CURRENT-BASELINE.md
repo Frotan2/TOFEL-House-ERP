@@ -176,3 +176,17 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
   evidence. Local suite 1135/1135, ruff clean. S4 remains owner-gated
   (OD-NEW-01..08 open). Verdict: S1–S3 proven; production still blocked
   pending S4 owner decisions.
+- 2026-09-22 (S5+S6 HOSTED-PROVEN) — Placement synthetic content
+  qualification green 583/583 (run 35767412041, HEAD 6ea35aa): the S5
+  catalog-receipt check (replay/conflict/duplicate + receipt presence) and
+  the S6 conditional journey (Conditional → accept → independent satisfy →
+  convert → enroll) pass with zero nonpass. Push cycle repaired four
+  S6 proof-harness issues (missing approval-Page command form per the D10
+  contract, candidate9 applicant collision → candidate2, missing
+  Conditional→Approved controller edge, clear-only conditions exemption)
+  without weakening any gate. Local suite 1146/1146, ruff clean, Node
+  suites green. Mandate evolved: OD-NEW-01..08 no longer block — business
+  policy ships as versioned/effective-dated/audited Owner-Settings
+  mechanisms, fail-closed when unconfigured, values never invented.
+  Verdict: S1–S3 + S5 + S6 proven; production still blocked on owner S4
+  value-setting + activation.

@@ -113,9 +113,28 @@ WRONG and is retracted. Consequences:
 - **S3 hardening:** BUG-ADM-01 + BUG-ADMIN-01 + BUG-INST-01 + isolation probe +
   enabled-actor gates. (Retired-level guard reclassified to GAP-CATALOG-LINKAGE.)
   **HOSTED-PROVEN 2026-09-22** (same green run; probe settled REPEATABLE-READ).
+- **S5 academic idempotency (GAP-ACADEMIC-IDEMPOTENCY):** all 12 catalog
+  commands routed through `configuration_audit.execute` receipts under
+  `business_policy` (same Course-Owner gate parity, replay/conflict
+  semantics). Local: 5 catalog-idempotency tests, mutation-discriminating.
+  **HOSTED-PROVEN 2026-09-22** (583/583 placement checks green, run
+  35767412041; `academic-s5-catalog-command-receipts`).
+- **S6 conditional satisfaction (GAP-CONDITIONAL):** `satisfy_conditions`
+  moves Conditional → Approved with conditions cleared, recorded
+  satisfier/time/evidence, independent-verifier rule (satisfier ≠ decider),
+  unexpired-placement re-check; controller edge added with
+  attestation-required + clear-only conditions exemption; approval Page form
+  added per the D10 contract. Local: 6 regression tests.
+  **HOSTED-PROVEN 2026-09-22** (same green run;
+  `admission-s6-conditional-satisfy-convert-enroll`: Conditional → accept →
+  satisfy → convert → enroll on candidate2 with a second approver).
 - **S4 lifecycle design (gated on OD answers):** GAP-REENROLL, GAP-CONDITIONAL,
   GAP-ROSTER, GAP-ATT-CORRECT, GAP-EXIT, GAP-CATALOG-LINKAGE. Design docs first,
   then slices. Plus later engineering slice GAP-ACADEMIC-IDEMPOTENCY (not gated).
+  (Sequencing superseded 2026-09-22: GAP-CONDITIONAL and
+  GAP-ACADEMIC-IDEMPOTENCY shipped as S6/S5; remaining policy gaps ship as
+  versioned, effective-dated, audited Owner-Settings mechanisms that fail
+  closed when unconfigured — no invented values; see baseline log.)
 
 ## Stub-fidelity warning (permanent)
 
