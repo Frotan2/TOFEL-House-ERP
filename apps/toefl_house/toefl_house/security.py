@@ -48,6 +48,8 @@ KIND_ROLES = {
     "transition_class": "Teaching Scheduler",
     "schedule_session": "Teaching Scheduler",
     "record_attendance": "Attendance Recorder",
+    "add_class_member": "Teaching Scheduler",
+    "move_class_member": "Teaching Scheduler",
     "issue_tuition_fees": "Finance Officer",
     "issue_placement_fee": "Finance Officer",
     # D2 teaching compensation: contracts and payroll calculation are the
@@ -218,6 +220,8 @@ TEACHING_COMMANDS = {
     "transition_class": "Student Group",
     "schedule_session": "Course Schedule",
     "record_attendance": "Student Attendance",
+    "add_class_member": "Student Group",
+    "move_class_member": "Student Group",
 }
 
 

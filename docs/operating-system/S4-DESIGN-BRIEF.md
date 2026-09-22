@@ -44,6 +44,12 @@ and section splits are impossible.
 - Option B — re-creation flow: close and re-create the class (loses session
   continuity; likely wrong for attendance history).
 - Owner decides: who authorizes mid-term roster changes and the cutoff rules.
+- SHIPPED AS S8 2026-09-22 (HOSTED-PROVEN pending at write time): option A
+  with the cutoff as an effective-dated owner mechanism (TH Roster Change
+  Policy: single `changes_allowed_until` facet, fail-closed unconfigured,
+  retire = off-switch). Teaching Scheduler executes; moves deactivate the
+  source row (native counts every row toward max_strength); eligibility
+  mirrors intake (submitted enrollment for the target program/year/term).
 
 ## GAP-ATT-CORRECT → OD-NEW-06
 

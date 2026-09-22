@@ -17,6 +17,15 @@ only the explicit ``transition_class`` command may change ``th_class_status``
 delivery mode, or branch after creation require an explicit owner amendment
 policy and are deliberately refused until then — no silent ad-hoc Desk edit,
 API call, or script may rewrite class facts.
+
+The roster (``students`` table) is deliberately NOT a class fact: mid-term
+additions and inter-class moves are governed separately by the single
+TH Roster Change Policy (``toefl_house.teaching.policies``). With no
+policy, no governing version, a retired policy, or a passed cutoff, the
+``add_class_member`` / ``move_class_member`` commands refuse — the owner
+opts in by appending a version with a live cutoff, never by default.
+Moves deactivate the source row (membership history is preserved) and
+(natively) every row, active or not, counts toward ``max_strength``.
 """
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -29,8 +38,11 @@ from toefl_house.policy import (DELIVERY_MODES, digest, is_valid_class_transitio
                                 validate_group_name, validate_schedule_date,
                                 validate_session_window)
 from toefl_house.security import active_command_kind, is_production, require_operational, teaching_command_active
+from toefl_house.teaching import policies as roster_policies
 
 GROUP = "Student Group"
+STUDENT = "Student"
+ENROLLMENT = "Program Enrollment"
 SCHEDULE = "Course Schedule"
 ATTENDANCE = "Student Attendance"
 PROGRAM = "Program"
@@ -490,3 +502,227 @@ def record_attendance(request_key, course_schedule, statuses):
 
     return _execute("record_attendance", request_key,
                     {"course_schedule": course_schedule, "statuses": statuses}, work)
+
+
+_TERMINAL_CLASS_STATUSES = ("Completed", "Cancelled")
+
+
+def _require_open_cutoff():
+    """Resolve the governing roster cutoff; refuse when closed or unset.
+
+    The cutoff rides the receipt and the result so every roster change
+    permanently records which owner window governed it.
+    """
+    cutoff = roster_policies.governing_cutoff_date()
+    if not cutoff:
+        raise frappe.ValidationError(
+            "Roster changes are not enabled; no roster-change policy "
+            "version is in effect")
+    if cutoff < frappe.utils.today():
+        raise frappe.ValidationError(
+            f"Roster changes closed after {cutoff}")
+    return cutoff
+
+
+def _require_active_student(student_name):
+    if not frappe.db.exists(STUDENT, student_name):
+        raise frappe.ValidationError(f"Unknown student: {student_name}")
+    if not frappe.db.get_value(STUDENT, student_name, "enabled"):
+        raise frappe.ValidationError(
+            f"Student {student_name} is disabled and cannot join a class")
+
+
+def _locked_group_facts(group_name):
+    frappe.db.sql("select name from `tabStudent Group` where name=%s for update",
+                  (group_name,))
+    facts = frappe.db.get_value(
+        GROUP, group_name,
+        ["program", "academic_year", "academic_term", "max_strength",
+         "disabled", "th_class_status"], as_dict=True)
+    if facts is None:
+        raise frappe.ValidationError(f"Unknown student group: {group_name}")
+    return facts
+
+
+def _require_mutable_class(group_name, facts):
+    if facts.disabled:
+        raise frappe.ValidationError(
+            f"Student group {group_name} is disabled; roster changes apply "
+            "to enabled classes only")
+    if facts.th_class_status in _TERMINAL_CLASS_STATUSES:
+        raise frappe.ValidationError(
+            f"Student group {group_name} is {facts.th_class_status}; roster "
+            "changes apply to Planned or Active classes only")
+
+
+def _require_matching_enrollment(student_name, facts, group_name):
+    """The student must hold a submitted enrollment for the class intake.
+
+    Mirrors intake semantics exactly: the enrollment must name the
+    group's program and year; when the group names a term the
+    enrollment must name the same term, otherwise any term qualifies.
+    """
+    params = [student_name, facts.program, facts.academic_year]
+    condition = ""
+    if facts.academic_term:
+        condition = " and academic_term=%s"
+        params.append(facts.academic_term)
+    rows = frappe.db.sql(
+        "select name from `tabProgram Enrollment` where student=%s "
+        "and program=%s and academic_year=%s and docstatus=1" + condition +
+        " for update", tuple(params))
+    if not rows:
+        intake = f"{facts.program} {facts.academic_year}"
+        if facts.academic_term:
+            intake += f" {facts.academic_term}"
+        raise frappe.ValidationError(
+            f"Student {student_name} is not enrolled in {intake}; "
+            f"only enrolled students may join {group_name}")
+
+
+def _locked_roster_row(group_name, student_name):
+    rows = frappe.db.sql(
+        "select student, active from `tabStudent Group Student` "
+        "where parent=%s and student=%s for update",
+        (group_name, student_name), as_dict=True)
+    return rows[0] if rows else None
+
+
+def _require_capacity(group_name, facts):
+    """Refuse when a brand-new row would breach max_strength.
+
+    Native Student Group counts EVERY roster row — active or
+    deactivated — toward max_strength, so this pre-check must count
+    the same total; otherwise the save backstop would refuse with a
+    native error. Deactivation preserves membership history, not
+    capacity.
+    """
+    total = frappe.db.sql(
+        "select count(*) from `tabStudent Group Student` where parent=%s",
+        (group_name,))[0][0]
+    if facts.max_strength and total >= facts.max_strength:
+        raise frappe.ValidationError(
+            f"Student group {group_name} is full "
+            f"({total}/{facts.max_strength}); no new member fits")
+
+
+def _set_membership(group_name, student_name, student_label, active):
+    """Activate, deactivate, or append the student's roster row, then save.
+
+    Never appends a second row for one student: an existing inactive
+    row is reactivated instead (native duplicate-student validation
+    counts inactive rows too). Native strength, duplicate, roll-number
+    and disabled-student validations run on save as the backstop.
+    """
+    doc = frappe.get_doc(GROUP, group_name)
+    rows = [row for row in (doc.get("students") or [])
+            if row.get("student") == student_name]
+    if rows:
+        rows[0].active = 1 if active else 0
+    elif active:
+        doc.append("students", {
+            "student": student_name, "student_name": student_label,
+            "active": 1})
+    else:
+        raise frappe.ValidationError(
+            f"Student {student_name} has no roster row in {group_name}")
+    doc.flags.ignore_permissions = True
+    doc.flags.ignore_links = True
+    doc.save(ignore_permissions=True)
+
+
+@frappe.whitelist(methods=["POST"])
+def add_class_member(request_key, student_group, student):
+    """Add an enrolled student to a Planned/Active class roster.
+
+    Executed by the Teaching Scheduler inside an open roster-change
+    window. The class must be enabled and non-terminal, the student
+    enabled and enrolled for the class intake, and the roster must
+    have room (native max_strength counts deactivated rows). A former
+    member whose row was deactivated by an earlier move is
+    reactivated, never duplicated.
+    """
+    def work(actor):
+        group_name = _bounded_name(student_group, "Student group")
+        student_name = _bounded_name(student, "Student")
+        _require_active_student(student_name)
+        if not frappe.db.exists(GROUP, group_name):
+            raise frappe.ValidationError(f"Unknown student group: {group_name}")
+        facts = _locked_group_facts(group_name)
+        _require_mutable_class(group_name, facts)
+        cutoff = _require_open_cutoff()
+        _require_matching_enrollment(student_name, facts, group_name)
+        existing = _locked_roster_row(group_name, student_name)
+        if existing is not None and int(existing.active or 0):
+            raise frappe.ValidationError(
+                f"Student {student_name} is already an active member of "
+                f"{group_name}")
+        label = frappe.db.get_value(STUDENT, student_name, "student_name")
+        if existing is None:
+            _require_capacity(group_name, facts)
+        _set_membership(group_name, student_name, label, True)
+        result = {"student_group": group_name, "student": student_name,
+                  "reactivated": existing is not None, "cutoff": cutoff}
+        return result, dict(
+            target=group_name,
+            after_hash=digest([group_name, student_name, cutoff,
+                               "reactivated" if existing is not None else "added"]))
+
+    return _execute("add_class_member", request_key,
+                    {"student_group": student_group, "student": student}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def move_class_member(request_key, student_group, student, to_group):
+    """Move an active member from one class roster to another, atomically.
+
+    Same gates as ``add_class_member`` on BOTH classes (each enabled,
+    non-terminal, inside one open window) plus: the student must be an
+    active member of the source, must be enrolled for the TARGET
+    intake, and must not already be an active member of the target.
+    Both group rows lock in name order so concurrent moves cannot
+    deadlock; the source row is deactivated (history preserved) and
+    the target row appended or reactivated in one transaction.
+    """
+    def work(actor):
+        source = _bounded_name(student_group, "Student group")
+        target = _bounded_name(to_group, "Target student group")
+        student_name = _bounded_name(student, "Student")
+        if source == target:
+            raise frappe.ValidationError(
+                "Source and target classes must differ")
+        _require_active_student(student_name)
+        for name in (source, target):
+            if not frappe.db.exists(GROUP, name):
+                raise frappe.ValidationError(f"Unknown student group: {name}")
+        facts_by_name = {name: _locked_group_facts(name)
+                         for name in sorted({source, target})}
+        source_facts = facts_by_name[source]
+        target_facts = facts_by_name[target]
+        _require_mutable_class(source, source_facts)
+        _require_mutable_class(target, target_facts)
+        cutoff = _require_open_cutoff()
+        current = _locked_roster_row(source, student_name)
+        if current is None or not int(current.active or 0):
+            raise frappe.ValidationError(
+                f"Student {student_name} is not an active member of {source}")
+        _require_matching_enrollment(student_name, target_facts, target)
+        existing = _locked_roster_row(target, student_name)
+        if existing is not None and int(existing.active or 0):
+            raise frappe.ValidationError(
+                f"Student {student_name} is already an active member of {target}")
+        label = frappe.db.get_value(STUDENT, student_name, "student_name")
+        if existing is None:
+            _require_capacity(target, target_facts)
+        _set_membership(source, student_name, label, False)
+        _set_membership(target, student_name, label, True)
+        result = {"from_group": source, "to_group": target,
+                  "student": student_name,
+                  "reactivated": existing is not None, "cutoff": cutoff}
+        return result, dict(
+            target=target,
+            after_hash=digest([source, target, student_name, cutoff]))
+
+    return _execute("move_class_member", request_key,
+                    {"student_group": student_group, "student": student,
+                     "to_group": to_group}, work)

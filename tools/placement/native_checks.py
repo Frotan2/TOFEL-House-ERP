@@ -19,6 +19,7 @@ def main():
     from toefl_house.admission import policies as admp
     from toefl_house import enrollment as enr
     from toefl_house import teaching as tea
+    from toefl_house.teaching import policies as teap
     from toefl_house import finance as fin_m
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
@@ -4934,6 +4935,96 @@ def main():
             return {'student':prior.name,'customer':prior.customer,
                     'program_enrollment':second['program_enrollment'],'fees':fees['fees']}
         check('admission-s7-returning-link-reuse-enroll-bill',traced(s7_returning_journey))
+        def s8_roster_journey():
+            # S8 (GAP-ROSTER / OD-NEW-05): policy-gated mid-term roster ops.
+            # Unconfigured and shell policies refuse; after the Course
+            # Owner sets a live cutoff, the scheduler adds a freshly
+            # enrolled student (enrolled after group creation, so on no
+            # roster), moves them between classes, and the retire
+            # off-switch closes the window again. Moves deactivate the
+            # source row; re-adding reactivates instead of duplicating.
+            frappe.set_user('Administrator')
+            enrolled=frappe.db.count('Program Enrollment',
+                {'program':cat['program'],'academic_year':cat['academic_year'],'docstatus':1})
+            assert enrolled>=1,enrolled
+            room=enrolled+2
+            as_user('teaching_scheduler',lambda:tea.create_student_group(
+                's8_grp_c_key_000001','SYN-GRP-S8-C',cat['program'],cat['academic_year'],'',room,
+                '2026-09-01','2026-12-31'))
+            as_user('teaching_scheduler',lambda:tea.create_student_group(
+                's8_grp_d_key_000001','SYN-GRP-S8-D',cat['program'],cat['academic_year'],'',room,
+                '2026-09-01','2026-12-31'))
+            alloc=digital_finalize(case_of('candidate3'),'s8_pipe3')
+            rel=as_user('releaser',lambda:api.release_decision(
+                's8_rel000000000001',alloc['attempt'],7))
+            app=as_user('officer',lambda:adm.record_applicant(
+                's8_rec000000000001',rel['decision'],'SYNTHETIC S8 Roster',cat['program'],cat['academic_year']))
+            assert not app['reused'],app
+            dec=as_user('officer',lambda:adm.create_admission(
+                's8_cre000000000001',app['name'],rel['decision']))
+            as_user('admissions_reviewer',lambda:adm.review_admission(
+                's8_rev000000000001',dec['name'],1))
+            out=as_user('approver',lambda:adm.decide_admission(
+                's8_dec000000000001',dec['name'],2,'Approved',REASON))
+            assert out['status']=='Approved',out
+            as_user('officer',lambda:adm.accept_offer(
+                's8_acc000000000001',dec['name'],3))
+            conv=as_user('approver',lambda:adm.convert_applicant(
+                's8_conv00000000001',dec['name'],4))
+            new_student=conv['native_student']
+            enr_new=as_user('enrollment_officer',lambda:enr.enroll_in_program(
+                's8_enr000000000001',dec['name']))
+            assert enr_new['docstatus']==1 and enr_new['student']==new_student,enr_new
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tea.add_class_member(
+                's8_add_denied_00001','SYN-GRP-S8-C',new_student)))
+            pol=as_user('course_owner',lambda:teap.create_roster_change_policy(
+                's8_pol_create_00001','SYN-ROSTER','SYN roster rule'))
+            assert pol['version_count']==0 and pol['governing_changes_allowed_until']=='',pol
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tea.add_class_member(
+                's8_add_shelldeny001','SYN-GRP-S8-C',new_student)))
+            cutoff=str(frappe.utils.add_days(frappe.utils.today(),30))
+            ver=as_user('course_owner',lambda:teap.set_roster_change_policy_version(
+                's8_pol_versn_000001','SYN-ROSTER',str(frappe.utils.today()),
+                'SYN owner opens mid-term roster fixes',cutoff))
+            assert ver['governing_changes_allowed_until']==cutoff,ver
+            added=as_user('teaching_scheduler',lambda:tea.add_class_member(
+                's8_add000000000001','SYN-GRP-S8-C',new_student))
+            assert added['cutoff']==cutoff and not added['reactivated'],added
+            assert frappe.db.get_value('Student Group Student',
+                {'parent':'SYN-GRP-S8-C','student':new_student},'active')==1
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tea.add_class_member(
+                's8_add_dup_0000001','SYN-GRP-S8-C',new_student)))
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tea.add_class_member(
+                's8_add_unk_0000001','SYN-GRP-S8-C','STU-NOPE')))
+            moved=as_user('teaching_scheduler',lambda:tea.move_class_member(
+                's8_move00000000001','SYN-GRP-S8-C',new_student,'SYN-GRP-S8-D'))
+            assert moved['from_group']=='SYN-GRP-S8-C' and moved['to_group']=='SYN-GRP-S8-D',moved
+            assert frappe.db.get_value('Student Group Student',
+                {'parent':'SYN-GRP-S8-C','student':new_student},'active')==0
+            assert frappe.db.get_value('Student Group Student',
+                {'parent':'SYN-GRP-S8-D','student':new_student},'active')==1
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tea.move_class_member(
+                's8_move_again_0001','SYN-GRP-S8-C',new_student,'SYN-GRP-S8-D')))
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tea.move_class_member(
+                's8_move_full_00001','SYN-GRP-S8-D',new_student,GRP_A)))
+            back=as_user('teaching_scheduler',lambda:tea.move_class_member(
+                's8_move_back_00001','SYN-GRP-S8-D',new_student,'SYN-GRP-S8-C'))
+            assert back['reactivated'],back
+            off=as_user('course_owner',lambda:teap.set_roster_change_policy_status(
+                's8_pol_retire_0001','SYN-ROSTER',0))
+            assert off['status']=='Retired',off
+            assert denied(lambda:as_user('teaching_scheduler',lambda:tea.move_class_member(
+                's8_move_off_000001','SYN-GRP-S8-C',new_student,'SYN-GRP-S8-D')))
+            on=as_user('course_owner',lambda:teap.set_roster_change_policy_status(
+                's8_pol_react_00001','SYN-ROSTER',1))
+            assert on['status']=='Active',on
+            final=as_user('teaching_scheduler',lambda:tea.move_class_member(
+                's8_move_final_0001','SYN-GRP-S8-C',new_student,'SYN-GRP-S8-D'))
+            assert final['reactivated'],final
+            frappe.db.commit()
+            return {'student':new_student,'program_enrollment':enr_new['program_enrollment'],
+                    'cutoff':cutoff,'policy':pol['name']}
+        check('teaching-s8-roster-policy-add-move-offswitch',traced(s8_roster_journey))
         report['status']='pass'
 
     except Exception as exc:

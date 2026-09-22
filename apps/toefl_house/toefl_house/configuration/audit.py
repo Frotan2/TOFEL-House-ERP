@@ -59,6 +59,9 @@ KIND_AUTHORITY = {
     "create_returning_student_policy": "business_policy",
     "set_returning_student_policy_version": "business_policy",
     "set_returning_student_policy_status": "business_policy",
+    "create_roster_change_policy": "business_policy",
+    "set_roster_change_policy_version": "business_policy",
+    "set_roster_change_policy_status": "business_policy",
 }
 
 

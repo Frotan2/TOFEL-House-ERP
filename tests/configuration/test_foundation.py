@@ -459,6 +459,9 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "create_returning_student_policy": "business_policy",
             "set_returning_student_policy_version": "business_policy",
             "set_returning_student_policy_status": "business_policy",
+            "create_roster_change_policy": "business_policy",
+            "set_roster_change_policy_version": "business_policy",
+            "set_roster_change_policy_status": "business_policy",
         })
 
     def test_audit_reuses_the_command_pattern_without_site_gates(self):

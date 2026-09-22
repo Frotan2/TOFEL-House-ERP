@@ -56,6 +56,7 @@ CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager", 
 # their document's readers) and is read-only for every role.
 GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount Rule", "TH Skill",
                         "TH Assessment Policy", "TH Returning Student Policy",
+                        "TH Roster Change Policy",
                         "TH Configuration Operation", "TH Configuration Audit Event"}
 
 
