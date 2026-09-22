@@ -32,7 +32,8 @@ from datetime import datetime, timedelta
 import frappe
 from toefl_house.api import _execute
 from toefl_house.academic.rules import resolve_duration
-from toefl_house.policy import (DELIVERY_MODES, digest, is_valid_class_transition,
+from toefl_house.policy import (DELIVERY_MODES, digest, distinct_roster_rows,
+                                is_valid_class_transition,
                                 validate_attendance_statuses, validate_capacity,
                                 validate_class_status, validate_delivery_mode,
                                 validate_group_name, validate_schedule_date,
@@ -289,7 +290,8 @@ def create_student_group(request_key, group_name, program, academic_year, academ
             raise frappe.ValidationError("Class end date cannot precede start date")
         frappe.db.sql("select name from `tabProgram` where name=%s for update", (program_name,))
         from education.education.doctype.student_group.student_group import get_program_enrollment
-        roster_rows = get_program_enrollment(year_name, term_name or None, program_name)
+        roster_rows = distinct_roster_rows(
+            get_program_enrollment(year_name, term_name or None, program_name))
         if not roster_rows:
             raise frappe.ValidationError("No submitted program enrollment for this intake")
         if len(roster_rows) > capacity:

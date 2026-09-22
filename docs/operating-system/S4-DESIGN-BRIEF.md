@@ -28,6 +28,10 @@ continuing to the next level/term has no path except a second email identity.
   construction on the returning lane), and the returning journey
   enrolls into the NEXT term — same-intake double enrollment stays
   refused by both convert and enroll_in_program.
+  HOSTED-PROVEN 2026-09-22: check
+  `admission-s7-returning-link-reuse-enroll-bill` passed in run
+  35792113368 (585 checks; the run itself went on to fail at the S8
+  journey, fixed separately).
 
 ## GAP-CONDITIONAL → OD-NEW-02
 

@@ -368,6 +368,25 @@ ATTENDANCE_STATUSES = ("Present", "Absent", "Leave")
 TIME_PATTERN = re.compile(r"([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?")
 
 
+def distinct_roster_rows(rows):
+    """One roster row per student, in enrollment order; first row wins.
+
+    A student with several submitted enrollments (a returning student
+    enrolled per term) must still appear once — the roster lists
+    people, not enrollments. Without this, group creation appends one
+    row per enrollment and native duplicate-student validation refuses
+    the insert (hosted run 35792113368).
+    """
+    seen = set()
+    unique = []
+    for row in rows or []:
+        if row["student"] in seen:
+            continue
+        seen.add(row["student"])
+        unique.append(row)
+    return unique
+
+
 def validate_group_name(value, *, production=False):
     """Class roster names are explicit synthetic fixtures, not real classes."""
     if production:

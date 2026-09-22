@@ -12,7 +12,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps/toefl_house"))
 from toefl_house.policy import CLASS_STATUSES, DELIVERY_MODES, \
-    is_valid_class_transition, validate_class_status, validate_delivery_mode
+    distinct_roster_rows, is_valid_class_transition, validate_class_status, \
+    validate_delivery_mode
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "apps/toefl_house/toefl_house"
@@ -55,6 +56,29 @@ class ClassStatusPolicyTests(unittest.TestCase):
         """The transition matrix must be declared once in policy.py — no magic."""
         src = POLICY.read_text()
         self.assertIn("CLASS_TRANSITIONS", src)
+
+    def test_roster_fill_lists_each_student_once(self):
+        """Hosted S8 (run 35792113368): a returning student holds two
+        enrollments, but group creation must fill one row per student —
+        otherwise native duplicate-student validation refuses insert."""
+        rows = [
+            {"student": "STU-1", "student_name": "One"},
+            {"student": "STU-2", "student_name": "Two"},
+            {"student": "STU-2", "student_name": "Two"},
+            {"student": "STU-3", "student_name": "Three"},
+        ]
+        unique = distinct_roster_rows(rows)
+        self.assertEqual([r["student"] for r in unique],
+                         ["STU-1", "STU-2", "STU-3"])
+        self.assertEqual(distinct_roster_rows([]), [])
+        self.assertEqual(distinct_roster_rows(None), [])
+
+    def test_create_student_group_dedupes_the_intake_fill(self):
+        """The creation command must route its enrollment fill through the
+        distinct-student rule, so multi-enrollment students never reach
+        the native duplicate check."""
+        src = TEACHING_INIT.read_text(encoding="utf-8")
+        self.assertIn("distinct_roster_rows(", src)
 
 
 class TeachingModuleStructureTests(unittest.TestCase):
