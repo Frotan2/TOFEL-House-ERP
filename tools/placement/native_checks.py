@@ -3471,10 +3471,14 @@ def main():
                 assert row.salary_component==cfx['earning']
                 linked=frappe.get_doc(ASSIGN,aname)
                 assert linked.contract==econtract,(aname,linked.contract,econtract)
-            bonus=frappe.db.get_value(ADS,{'ref_doctype':CON,'ref_docname':cauth['contracts']['one'],
+            # S2 (BUG-PAY-02): each adjustment links its own TH Contract
+            # Adjustment row, so distinct adjustments post independently.
+            adj_one=frappe.get_doc(CON,cauth['contracts']['one']).adjustments[0].name
+            adj_two=frappe.get_doc(CON,cauth['contracts']['two']).adjustments[0].name
+            bonus=frappe.db.get_value(ADS,{'ref_doctype':'TH Contract Adjustment','ref_docname':adj_one,
                 'payroll_date':'2026-09-30','disabled':0},['name','amount','type'],as_dict=True)
             assert bonus and float(bonus.amount)==50.0,(bonus,)
-            deduct=frappe.db.get_value(ADS,{'ref_doctype':CON,'ref_docname':cauth['contracts']['two'],
+            deduct=frappe.db.get_value(ADS,{'ref_doctype':'TH Contract Adjustment','ref_docname':adj_two,
                 'payroll_date':'2026-09-30','disabled':0},['name','amount','type','salary_component'],as_dict=True)
             assert deduct and float(deduct.amount)==25.0 and deduct.type=='Deduction',(deduct,)
             assert deduct.salary_component==cfx['deduction']
@@ -3546,6 +3550,49 @@ def main():
                     'receipt_idempotent':True,'salary_slips_untouched':True,
                     'audit_chain_ref_fields':True}
         check('teaching-compensation-calculation',compensation_calculation)
+        def compensation_concurrent_calc():
+            # S2 (BUG-PAY-01): two different-key calculations over the same
+            # period must not double-post. A fourth assignment (Temp on
+            # MAIN-2/SK1, a group+skill no other payable uses, on a Temp-only
+            # contract so the teacher-desk persons() asserts are untouched) is
+            # the single raced payable: September-compensated a1/a3 are held
+            # by both runners, a4 is posted exactly once.
+            frappe.set_user('Administrator')
+            ctemp=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                's2_temp_contract_00001',cfx['ins']['Temp'],cfx['emps']['Temp'],'Skill-Based',
+                'SYN race-fixture coverage','Monthly','2026-10-01','',
+                '',[dict(skill=SK1,unit_of_payment='SYN Session',rate=11,payable_quantity=10)],[]))
+            a4=as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                's2_assign_a4_00000001','SYN-GRP-MAIN-2',SK1,cfx['ins']['Temp'],
+                ctemp['name'],'2026-10-15'))
+            frappe.db.commit()
+            ads_before=frappe.db.count(ADS)
+            payload=dict(period_start='2026-10-01',period_end='2026-10-31',
+                         company=cfx['company'],salary_component=cfx['earning'],
+                         deduction_component=cfx['deduction'])
+            def request(key):
+                s=requests.Session();s.headers.update(sessions['finance_officer'].headers);s.cookies.update(sessions['finance_officer'].cookies)
+                return key,s.post(base+'/api/method/toefl_house.teaching.compensation.calculate_teaching_compensation',
+                                  json=dict(payload,request_key=key),timeout=60)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                rs=list(pool.map(request,('s2_race_calc_a_000001','s2_race_calc_b_000001')))
+            for key,resp in rs:
+                assert resp.status_code==200,(key,resp.status_code,resp.text[:300])
+            messages=[resp.json()['message'] for _,resp in rs]
+            assert {m['assignments'] for m in messages}=={3},([m['assignments'] for m in messages],)
+            def posted_a4(message):
+                return any(entry.get('assignment')==a4['name']
+                           for entries in message['posted'].values() for entry in entries)
+            assert sum(1 for m in messages if posted_a4(m))==1,([m['posted'] for m in messages],)
+            frappe.db.commit()
+            rows=frappe.db.get_all(ADS,{'ref_doctype':ASSIGN,'ref_docname':a4['name'],
+                                        'disabled':0},['name','payroll_date','amount'])
+            assert len(rows)==1,(len(rows),rows)
+            assert str(rows[0].payroll_date)=='2026-10-31' and float(rows[0].amount)==110.0,(rows[0],)
+            assert frappe.db.count(ADS)==ads_before+1,(frappe.db.count(ADS),ads_before)
+            return {'raced_assignment':a4['name'],'single_posting':rows[0].name,
+                    'one_winner_one_skipper':True}
+        check('teaching-compensation-concurrent-calc-first-writer',traced(compensation_concurrent_calc))
         def retired_skill_runtime():
             # Item 9 (runtime): retiring a configured skill preserves every
             # historical reference and keeps the record operable, while new

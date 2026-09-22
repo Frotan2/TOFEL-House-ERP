@@ -204,7 +204,9 @@ class WiringTests(unittest.TestCase):
         source = COMPENSATION.read_text()
         self.assertIn('ADDITIONAL_SALARY = "Additional Salary"', source)
         created = set()
-        for match in re.finditer(r"doctype=([A-Z_]+|\"[^\"]+\")", source):
+        # S2: ref_doctype= references (ASSIGNMENT/ADJUSTMENT audit links) are
+        # not creations; only bare doctype= payloads count.
+        for match in re.finditer(r"(?<!ref_)doctype=([A-Z_]+|\"[^\"]+\")", source):
             created.add(match.group(1))
         self.assertLessEqual(created, {"ADDITIONAL_SALARY", "CONTRACT", "ASSIGNMENT"})
         self.assertIn("ADDITIONAL_SALARY", created)
@@ -232,7 +234,12 @@ class WiringTests(unittest.TestCase):
         # Adjustments carry the identical flat-amount defect and must be covered
         # by the same one-off rule, not left as a second double-posting path.
         self.assertIn("adjustment_paid", body)
-        self.assertIn("already_compensated[contract.name] = adjustment_paid", source)
+        # S2 (BUG-PAY-02): the one-off key is the adjustment ROW, not the
+        # contract — a per-contract key swallowed every later adjustment once
+        # any one of them had posted. Pin the per-row key and its audit link.
+        self.assertIn('already_compensated[f"{contract.name}:{adjustment.name}"] = adjustment_paid', source)
+        self.assertIn("ref_doctype=ADJUSTMENT, ref_docname=adjustment.name", source)
+        self.assertNotIn("already_compensated[contract.name] = adjustment_paid", source)
         self.assertIn('"already_compensated_prior_period": already_compensated', source)
         # The superseded hold vocabulary must be gone, so the decided policy
         # cannot silently regress back into the undecided state.

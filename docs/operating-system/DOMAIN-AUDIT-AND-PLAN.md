@@ -47,6 +47,10 @@ missing enabled check; `set_level_duration` retry errors instead of replaying re
 - **GAP-FEE-TIMING:** placement fee billable at any case state (correct iff the fee is an
   upfront entry fee — intent unverified).
 - **GAP-BREAKGLASS:** withdraw/revoke paths have no admin override if the actor leaves.
+- **GAP-ADJUST-ORPHAN (found during S2):** the calc only evaluates adjustments for
+  instructors with in-period assignments; a due adjustment in an assignment-free
+  period is silently skipped. Posting vs skipping is contract semantics — owner
+  question, not invented (OD-NEW-08).
 
 ## Owner-decision list (added; no invention)
 
@@ -57,6 +61,8 @@ missing enabled check; `set_level_duration` retry errors instead of replaying re
 - OD-NEW-05 roster-change authority (who may add/move students post-creation).
 - OD-NEW-06 attendance-correction authority + window.
 - OD-NEW-07 student exit/unenroll policy + financial consequences.
+- OD-NEW-08 whether contract adjustments post in periods with no assignments
+  (GAP-ADJUST-ORPHAN).
 
 ## Isolation note (settled empirically; mechanism unproven)
 

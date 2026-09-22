@@ -372,3 +372,5 @@ design slices stay scoped-only until answered. No owner answer is invented or as
 - **OD-NEW-05** roster-change authority (who may add/move students post-creation).
 - **OD-NEW-06** attendance-correction authority + window.
 - **OD-NEW-07** student exit/unenroll policy + financial consequences.
+- **OD-NEW-08** whether contract adjustments post in periods with no assignments
+  (GAP-ADJUST-ORPHAN; found during S2).

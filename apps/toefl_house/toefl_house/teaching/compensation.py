@@ -26,6 +26,7 @@ from toefl_house.security import record_synthetic_flag
 
 CONTRACT = "TH Instructor Contract"
 ASSIGNMENT = "TH Teaching Assignment"
+ADJUSTMENT = "TH Contract Adjustment"
 ADDITIONAL_SALARY = "Additional Salary"
 INSTRUCTOR = "Instructor"
 EMPLOYEE = "Employee"
@@ -377,6 +378,64 @@ def end_teaching_assignment(request_key, assignment, effective_end):
                     {"assignment": assignment, "effective_end": effective_end}, work)
 
 
+def _paid_dates(ref_doctype, ref_docname):
+    """Payroll dates already posted for one payable reference.
+
+    A locking read: concurrent calculations serialize on the contract rows
+    first (see below), and this re-read runs after the lock wait, so it
+    observes the winner's post on every isolation level. Without it two
+    overlapping calculations could both read "unpaid" and double-post
+    (BUG-PAY-01). Served by the th_ads_ref index (install.py).
+    """
+    return sorted({str(payroll_date) for (payroll_date,) in frappe.db.sql(
+        "select payroll_date from `tabAdditional Salary` where ref_doctype=%s "
+        "and ref_docname=%s and disabled=0 for update", (ref_doctype, ref_docname))})
+
+
+def _covering_contract_name(instructor, start, end):
+    """The single contract covering an instructor's payroll period, or refuse."""
+    matches = frappe.db.get_all(
+        CONTRACT, filters={"instructor": instructor},
+        fields=["name", "effective_start", "effective_end", "compensation_model"])
+    overlapping = [m for m in matches
+                   if windows_overlap(start, end, str(m.effective_start),
+                                      str(m.effective_end) if m.effective_end else None)]
+    if len(overlapping) != 1:
+        raise frappe.ValidationError(
+            "Exactly one contract must cover the period for instructor "
+            + instructor + f" (found {len(overlapping)}); use a narrower period or revise contracts")
+    return overlapping[0].name
+
+
+def _lock_covering_contracts(contracts, start, end):
+    """Serialize overlapping calculations on the covering contract rows.
+
+    Contract names are locked in sorted order so concurrent calculations
+    cannot deadlock against each other. After the locks are held each
+    contract is re-fetched with a locking read (current terms and status on
+    every isolation level): a contract revised while this calculation waited
+    fails closed with a retry instead of paying under superseded terms, and
+    the exactly-one rule is re-checked against post-lock state.
+    """
+    for name in sorted({contract.name for contract in contracts.values()}):
+        frappe.db.sql("select name from `tabTH Instructor Contract` where name=%s for update",
+                      (name,))
+    for instructor in sorted(contracts):
+        fresh = frappe.get_doc(CONTRACT, contracts[instructor].name, for_update=True)
+        if fresh.status != "Active":
+            raise frappe.ValidationError(
+                f"Contract {fresh.name} is no longer active; recalculation required")
+        if not windows_overlap(start, end, str(fresh.effective_start),
+                               str(fresh.effective_end) if fresh.effective_end else None):
+            raise frappe.ValidationError(
+                f"Contract {fresh.name} no longer covers the period; recalculation required")
+        if _covering_contract_name(instructor, start, end) != fresh.name:
+            raise frappe.ValidationError(
+                f"Contract cover for {instructor} changed during calculation; recalculation required")
+        contracts[instructor] = fresh
+    return contracts
+
+
 def _payable_for(contract, assignment):
     for term in contract.skill_terms or []:
         if term.skill == assignment.skill:
@@ -393,13 +452,17 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
     """Project contract terms over actual teaching facts into native payroll inputs.
 
     Single controlled input path: one native Additional Salary (Earning) per
-    assignment, plus one per contract-adjustment batch, each linked back via
-    ref_doctype/ref_docname. Idempotent within a period: an existing enabled
+    assignment, plus one per due contract adjustment, each linked back via
+    ref_doctype/ref_docname (assignments reference the assignment; adjustments
+    reference the TH Contract Adjustment row, so distinct adjustments post
+    independently). Idempotent within a period: an existing enabled
     Additional Salary for the same reference and payroll date is never
     duplicated, and the command itself is guarded by the standard request-key
-    receipt. No statutory, tax or slip math happens here (native Salary Slip
-    owns it); fixed-salary instructors are skipped (native Salary Structure
-    path).
+    receipt. Overlapping calculations serialize on the covering contract rows
+    (locked in sorted-name order) and re-read postings with locking reads, so
+    concurrent runs cannot double-post on any isolation level. No statutory,
+    tax or slip math happens here (native Salary Slip owns it); fixed-salary
+    instructors are skipped (native Salary Structure path).
 
     **One-off payable (owner decision D12, 2026-09-19).** The payable is a flat
     contract amount, not a per-period or pro-rated figure, and
@@ -431,6 +494,9 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
         if deduction and not frappe.db.exists("Salary Component", deduction):
             raise frappe.ValidationError("Unknown deduction salary component")
         currency = frappe.db.get_value("Company", company_name, "default_currency")
+        if not currency:
+            raise frappe.ValidationError(
+                f"Company {company_name} has no default currency; payroll input cannot be priced")
         rows = frappe.db.sql(
             "select name, student_group, skill, instructor, contract, effective_start, effective_end "
             "from `tabTH Teaching Assignment` where effective_start <= %s "
@@ -439,28 +505,16 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
         already_compensated = {}
         contracts = {}
         for instructor in sorted({row.instructor for row in rows}):
-            matches = frappe.db.get_all(
-                CONTRACT, filters={"instructor": instructor},
-                fields=["name", "effective_start", "effective_end", "compensation_model"])
-            overlapping = [m for m in matches
-                           if windows_overlap(start, end, str(m.effective_start),
-                                              str(m.effective_end) if m.effective_end else None)]
-            if len(overlapping) != 1:
-                raise frappe.ValidationError(
-                    "Exactly one contract must cover the period for instructor "
-                    + instructor + f" (found {len(overlapping)}); use a narrower period or revise contracts")
-            contracts[instructor] = frappe.get_doc(CONTRACT, overlapping[0].name)
+            contracts[instructor] = frappe.get_doc(
+                CONTRACT, _covering_contract_name(instructor, start, end))
+        _lock_covering_contracts(contracts, start, end)
         for row in rows:
             contract = contracts[row.instructor]
             if contract.compensation_model == "Fixed Salary":
                 if contract.name not in skipped_fixed:
                     skipped_fixed.append(contract.name)
                 continue
-            already_paid = sorted({str(r.payroll_date) for r in frappe.db.get_all(
-                ADDITIONAL_SALARY,
-                filters=[["ref_doctype", "=", ASSIGNMENT], ["ref_docname", "=", row.name],
-                         ["disabled", "=", 0]],
-                fields=["payroll_date"])})
+            already_paid = _paid_dates(ASSIGNMENT, row.name)
             if end in already_paid:
                 skipped_existing += 1
                 continue
@@ -494,24 +548,19 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
             if any(a.adjustment_type == "Deduction" for a in due) and not deduction:
                 raise frappe.ValidationError(
                     "Deduction adjustments require an explicit deduction salary component")
-            # Same fail-closed hold as the assignment path above: adjustment
-            # amounts are flat, and this dedup key includes payroll_date, so a
-            # second overlapping period would post the same bonus or deduction
-            # again. Hold and report instead of doubling it.
-            adjustment_paid = sorted({str(r.payroll_date) for r in frappe.db.get_all(
-                ADDITIONAL_SALARY,
-                filters=[["ref_doctype", "=", CONTRACT],
-                         ["ref_docname", "=", contract.name], ["disabled", "=", 0]],
-                fields=["payroll_date"])})
-            if end in adjustment_paid:
-                skipped_existing += len(due)
-                continue
-            if adjustment_paid:
-                # Same one-off basis as the assignment path (D12): a bonus or
-                # deduction is posted once, not once per overlapping period.
-                already_compensated[contract.name] = adjustment_paid
-                continue
+            # BUG-PAY-02: the one-off key is the adjustment ROW, not the
+            # contract. A per-contract key swallowed every later adjustment
+            # once any one of them had posted. Each due adjustment carries its
+            # own audit link (TH Contract Adjustment row name) and its own
+            # one-off state, exactly like the assignment path above.
             for adjustment in due:
+                adjustment_paid = _paid_dates(ADJUSTMENT, adjustment.name)
+                if end in adjustment_paid:
+                    skipped_existing += 1
+                    continue
+                if adjustment_paid:
+                    already_compensated[f"{contract.name}:{adjustment.name}"] = adjustment_paid
+                    continue
                 salary = frappe.get_doc(dict(
                     doctype=ADDITIONAL_SALARY, employee=contract.employee,
                     salary_component=(deduction if adjustment.adjustment_type == "Deduction"
@@ -519,7 +568,7 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                     amount=float(adjustment.amount),
                     payroll_date=end, company=company_name, currency=currency,
                     type="Earning" if adjustment.adjustment_type == "Bonus" else "Deduction",
-                    ref_doctype=CONTRACT, ref_docname=contract.name))
+                    ref_doctype=ADJUSTMENT, ref_docname=adjustment.name))
                 salary.flags.ignore_permissions = True
                 salary.flags.ignore_links = True
                 salary.insert(ignore_permissions=True)

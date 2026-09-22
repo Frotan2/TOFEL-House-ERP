@@ -145,3 +145,13 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
   `native_checks.py` (out-of-band denial control, converted-student billing,
   converted-student correction, customer-history enrollment). Local suite
   1115/1115. Hosted proof executes on push CI; no push without authorization.
+- 2026-09-22 (S2 implemented, hosted proof pending) — BUG-PAY-01 (contract-row
+  locks in sorted-name order + locking posting re-reads + post-lock
+  re-validation; `th_ads_ref` index on Additional Salary) + BUG-PAY-02
+  (per-adjustment-row one-off key and audit ref) + currency fail-closed in
+  `teaching/compensation.py`; 7 mock-based local regression tests
+  (`tests/teaching/test_compensation_guards.py`, all fail with the fix
+  reverted); 2 static wiring tests updated to pin the per-row key (one regex
+  tightened to its documented intent); hosted ref assertions updated + new
+  concurrent-calc first-writer race check. Local suite 1122/1122. Found
+  GAP-ADJUST-ORPHAN → OD-NEW-08 (owner question, not implemented).

@@ -84,6 +84,10 @@ def after_migrate():
                           ("th_class_start_date", "th_sg_start_date")):
         if frappe.db.has_column("Student Group", column):
             frappe.db.add_index("Student Group", [column], index)
+    # D2 compensation locking reads (BUG-PAY-01): the one-off existence probes
+    # lock matching Additional Salary rows; the covering index keeps the lock
+    # footprint to the referenced rows instead of a table scan.
+    frappe.db.add_index("Additional Salary", ["ref_doctype", "ref_docname"], "th_ads_ref")
     # D3 correction framework lookups.
     frappe.db.add_index("TH Correction Policy", ["status"], "th_correction_policy_status")
     frappe.db.add_index("TH Correction Request", ["sales_invoice"], "th_correction_request_invoice")
