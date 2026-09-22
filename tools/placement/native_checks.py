@@ -3969,7 +3969,7 @@ def main():
             frappe.set_user('Administrator')
             assert not frappe.db.exists('Student Applicant',
                 {'student_email_id': users['candidate4']}), 'candidate4 already an applicant'
-            alloc = digital_finalize(case4['name'], 's1_pipe')
+            alloc = digital_finalize(case4['name'], 's1_pipe4')
             rel = as_user('releaser', lambda: api.release_decision(
                 's1_rel000000000001', alloc['attempt'], 7))
             app = as_user('officer', lambda: adm.record_applicant(
