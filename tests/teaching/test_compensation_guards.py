@@ -175,8 +175,6 @@ class S2CompensationTests(unittest.TestCase):
                                            effective_end=None, compensation_model="Skill-Based")],
                  "INS-B": [SimpleNamespace(name="C-ZEBRA", effective_start="2026-01-01",
                                            effective_end=None, compensation_model="Skill-Based")]}
-        real_get_all = self.comp.frappe.db.get_all
-
         def dispatch(doctype, filters=None, fields=None, **kwargs):
             return list(lists[filters["instructor"]])
 
