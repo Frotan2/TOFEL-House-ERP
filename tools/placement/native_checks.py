@@ -4839,7 +4839,7 @@ def main():
                     new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
                     roles=[{'role':'Admission Approver'}])).insert()
                 frappe.db.commit()
-            alloc=digital_finalize(CASE9,'s6_pipe9')
+            alloc=digital_finalize(case_of('candidate2'),'s6_pipe2')
             rel=as_user('releaser',lambda:api.release_decision(
                 's6_rel000000000001',alloc['attempt'],7))
             app=as_user('officer',lambda:adm.record_applicant(
