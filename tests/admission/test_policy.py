@@ -23,11 +23,19 @@ class AdmissionTransitionTests(unittest.TestCase):
         self.assertTrue(is_admission_transition("Review", "Withdrawn"))
         self.assertTrue(is_admission_transition("Approved", "Expired"))
         self.assertTrue(is_admission_transition("Conditional", "Expired"))
+        self.assertTrue(is_admission_transition("Conditional", "Approved"))
         self.assertFalse(is_admission_transition("Draft", "Approved"))
         self.assertFalse(is_admission_transition("Approved", "Review"))
         self.assertFalse(is_admission_transition("Rejected", "Approved"))
-        self.assertFalse(is_admission_transition("Conditional", "Approved"))
         self.assertNotIn(("Approved", "Enrolled"), ADMISSION_TRANSITIONS)
+        self.assertEqual(ADMISSION_TRANSITIONS, {
+            ("Draft", "Review"), ("Draft", "Withdrawn"),
+            ("Review", "Approved"), ("Review", "Conditional"),
+            ("Review", "Deferred"), ("Review", "Rejected"),
+            ("Review", "Withdrawn"), ("Approved", "Revoked"),
+            ("Approved", "Expired"), ("Conditional", "Approved"),
+            ("Conditional", "Revoked"), ("Conditional", "Expired"),
+        })
         self.assertEqual(ADMISSION_OUTCOMES,
                          ("Approved", "Conditional", "Deferred", "Rejected"))
 

@@ -361,6 +361,7 @@ class AdmissionDecisionRecord(ProtectedRecord):
     CLOCKS = (
         "reviewed_by", "reviewed_at", "decided_by", "decided_at",
         "outcome_reason", "conditions", "accepted_by", "accepted_at",
+        "satisfied_by", "satisfied_at", "satisfaction_evidence",
         "revoked_by", "revoked_at", "native_student", "converted_at",
     )
 
@@ -398,6 +399,10 @@ class AdmissionDecisionRecord(ProtectedRecord):
             raise frappe.ValidationError("Conditional admission requires recorded conditions")
         if self.status == "Approved" and self.conditions:
             raise frappe.ValidationError("Approved admission cannot carry unresolved conditions")
+        if (before.status == "Conditional" and self.status == "Approved"
+                and not (self.satisfied_by and self.satisfied_at
+                         and self.satisfaction_evidence)):
+            raise frappe.ValidationError("Condition satisfaction actor, time and evidence required")
         if self.status == "Revoked" and not (self.revoked_by and self.revoked_at):
             raise frappe.ValidationError("Revocation actor and time required")
         if before.status in ("Approved", "Conditional") and before.native_student:

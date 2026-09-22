@@ -342,6 +342,7 @@ ADMISSION_TRANSITIONS = {
     ("Review", "Withdrawn"),
     ("Approved", "Revoked"),
     ("Approved", "Expired"),
+    ("Conditional", "Approved"),
     ("Conditional", "Revoked"),
     ("Conditional", "Expired"),
 }
