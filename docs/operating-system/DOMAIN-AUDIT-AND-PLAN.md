@@ -77,15 +77,27 @@ operational effect at all (GAP-CATALOG-LINKAGE, S4 design).
 - OD-NEW-08 whether contract adjustments post in periods with no assignments
   (GAP-ADJUST-ORPHAN).
 
-## Isolation note (settled empirically; mechanism unproven)
+## Isolation note (SETTLED by hosted probe 2026-09-22; billing paradox stands)
 
-Hosted first-writer races (2-worker gunicorn, stock MariaDB, forced lock overlap) are
-green with anchor-lock + plain-exists checks, which is only consistent with
-statement-current (RC-effective) worker connections. No in-repo probe asserts the
-effective level, and two `native_checks.py` comments attribute runner-side staleness to
-REPEATABLE READ (more likely Frappe value-cache/lock phenomena). Rule: new money paths
-use lock + locking re-read (safe under BOTH isolations). Recommend a hosted probe
-(`SELECT @@SESSION.transaction_isolation`) plus overlap-asserting race tests.
+The S3 `finance-isolation-evidence` probe reports session + global
+**REPEATABLE-READ** (MariaDB 11.8.9). The earlier "RC-effective" inference was
+WRONG and is retracted. Consequences:
+
+- All S1/S2/S3 money-path patterns are RR-sound by construction: exclusive
+  coverage is established through row locks plus LOCKING re-reads (which see
+  current committed state on every level), never through plain reads
+  after a lock. The S2 first revision additionally refused non-Active
+  contracts; hosted CI proved that wrong (September payroll legitimately
+  resolves from Superseded-but-covering revisions) and it was corrected to
+  window-coverage-only re-validation within the same push cycle.
+- PARADOX (open, not ours to fix): the closed-slice billing pattern
+  (anchor lock + plain `exists`) is green on hosted under RR, which the
+  InnoDB snapshot model says should double-bill under true overlap. Either
+  hosted races structurally never overlap, or a Frappe/session mechanism
+  outside the audit's reach refreshes the snapshot. The pattern is proven
+  green, closed-slice, and untouched; the D8 verdict does not depend on it.
+- Rule (unchanged, now RR-grounded): new money paths use lock + locking
+  re-read. Overlap-asserting race tests remain recommended as follow-up.
 
 ## Remediation slices (priority order)
 

@@ -412,19 +412,20 @@ def _lock_covering_contracts(contracts, start, end):
 
     Contract names are locked in sorted order so concurrent calculations
     cannot deadlock against each other. After the locks are held each
-    contract is re-fetched with a locking read (current terms and status on
-    every isolation level): a contract revised while this calculation waited
-    fails closed with a retry instead of paying under superseded terms, and
-    the exactly-one rule is re-checked against post-lock state.
+    contract is re-fetched with a locking read (current terms and window on
+    every isolation level): a contract whose window no longer covers the
+    period fails closed with a retry instead of paying under stale terms,
+    and the exactly-one rule is re-checked against post-lock state. A
+    Superseded status alone is NOT a refusal: superseded contracts
+    legitimately cover the past periods before their successor starts
+    (historical reproducibility — the September payroll resolves from the
+    September-covering revision, whatever its status today).
     """
     for name in sorted({contract.name for contract in contracts.values()}):
         frappe.db.sql("select name from `tabTH Instructor Contract` where name=%s for update",
                       (name,))
     for instructor in sorted(contracts):
         fresh = frappe.get_doc(CONTRACT, contracts[instructor].name, for_update=True)
-        if fresh.status != "Active":
-            raise frappe.ValidationError(
-                f"Contract {fresh.name} is no longer active; recalculation required")
         if not windows_overlap(start, end, str(fresh.effective_start),
                                str(fresh.effective_end) if fresh.effective_end else None):
             raise frappe.ValidationError(

@@ -196,16 +196,32 @@ class S2CompensationTests(unittest.TestCase):
         self.assertEqual(len(self.posted), 4)  # 2 assignments + 2 adjustments
         self.assertEqual(result["adjustments_posted"], 2)
 
-    def test_locking_refetch_fails_closed_on_superseded_contract(self):
-        self.fresh_doc = _contract("C-1", status="Superseded")
-        # Post-lock re-check still resolves the same name; the status refusal
-        # must fire first.
+    def test_window_closed_during_calculation_fails_closed(self):
+        # A contract revised after candidate selection but before the lock
+        # is caught by the locking re-fetch: a window that no longer covers
+        # the payroll period refuses to pay. Nothing posted.
+        self.fresh_doc = _contract("C-1", status="Superseded", end="2026-08-31")
         self.contract_lists.append([SimpleNamespace(
             name="C-1", effective_start="2026-01-01", effective_end=None,
             compensation_model="Skill-Based")])
         with self.assertRaises(_ValidationError):
             self._calc()
         self.assertEqual(self.posted, [])
+
+    def test_superseded_but_covering_contract_pays(self):
+        # Historical reproducibility: a Superseded status alone is NOT a
+        # refusal. A superseded contract whose window still covers the
+        # payroll period pays normally (past payrolls resolve from the
+        # revision that covered them). This test fails on the first S2
+        # revision, which wrongly refused any non-Active contract.
+        self.fresh_doc = _contract("C-1", [_adjustment("ADJ-1")], status="Superseded")
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        result = self._calc()
+        self.assertEqual(result["assignments"], 1)
+        self.assertEqual(result["adjustments_posted"], 1)
+        self.assertEqual(len(self.posted), 2)
 
     def test_cover_change_during_calculation_fails_closed(self):
         self.contract_lists.append([SimpleNamespace(
