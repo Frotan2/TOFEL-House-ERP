@@ -327,6 +327,50 @@ def decide_admission(request_key, name, expected_version, outcome, reason, condi
 
 
 @frappe.whitelist(methods=["POST"])
+def satisfy_conditions(request_key, name, expected_version, evidence):
+    """Declare a Conditional decision's conditions met (S6, OD-NEW-02).
+
+    Conditional → Approved with the conditions cleared, so the normal
+    accept/convert path proceeds. The lattice rule is independent
+    verification: the satisfier must be an Admission Approver OTHER than
+    the deciding approver (mirroring reviewer≠decider and
+    officer≠converter), and the evidence note is mandatory — no format is
+    imposed on it. The placement decision must still be unexpired, as at
+    every forward step. History is preserved: the audit event chains the
+    transition and the satisfied_by/at/evidence fields record the act.
+    """
+    def work(actor):
+        doc = _locked_decision(name, expected_version)
+        if doc.status != "Conditional":
+            raise frappe.ValidationError(
+                "Only Conditional decisions can have their conditions satisfied")
+        if actor == doc.decided_by:
+            raise frappe.PermissionError(
+                "The deciding approver cannot verify their own conditions; "
+                "ask another Admission Approver")
+        try:
+            clean_evidence = validate_admission_text(evidence, "evidence")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        row = _placement_row(doc.placement_decision)
+        _unexpired(row)
+        satisfied_at = _now()
+        _advance(doc, "Approved", satisfied_by=actor,
+                 satisfied_at=satisfied_at,
+                 satisfaction_evidence=clean_evidence, conditions="")
+        result = _result(doc)
+        result["satisfied_by"] = actor
+        result["satisfied_at"] = _iso(satisfied_at)
+        result["satisfaction_evidence"] = clean_evidence
+        return result, dict(target=doc.name,
+                            after_hash=digest([doc.name, "Approved", actor]))
+
+    return _execute("satisfy_conditions", request_key,
+                    {"name": name, "expected_version": expected_version,
+                     "evidence": evidence}, work)
+
+
+@frappe.whitelist(methods=["POST"])
 def accept_offer(request_key, name, expected_version):
     def work(actor):
         doc = _locked_decision(name, expected_version)

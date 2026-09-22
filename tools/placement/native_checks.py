@@ -4825,6 +4825,56 @@ def main():
             frappe.db.commit()
             return {'replayed':True,'conflict_denied':True,'duplicate_denied':True}
         check('academic-s5-catalog-command-receipts',traced(s5_catalog_receipts))
+        def s6_conditional_journey():
+            # S6 (GAP-CONDITIONAL): Conditional -> accept -> satisfy by an
+            # independent approver -> convert -> enroll. Self-satisfy and
+            # wrong-status satisfy are denied; the satisfied decision
+            # converts and enrolls through the unchanged normal path.
+            frappe.set_user('Administrator')
+            approver2='synthetic-approver2@example.test'
+            if not frappe.db.exists('User',approver2):
+                frappe.get_doc(dict(doctype='User',email=approver2,
+                    first_name='Synthetic approver2',enabled=1,
+                    send_welcome_email=0,
+                    new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
+                    roles=[{'role':'Admission Approver'}])).insert()
+                frappe.db.commit()
+            alloc=digital_finalize(CASE9,'s6_pipe9')
+            rel=as_user('releaser',lambda:api.release_decision(
+                's6_rel000000000001',alloc['attempt'],7))
+            app=as_user('officer',lambda:adm.record_applicant(
+                's6_rec000000000001',rel['decision'],'SYNTHETIC S6 Conditional',
+                cat['program'],cat['academic_year']))
+            dec=as_user('officer',lambda:adm.create_admission(
+                's6_cre000000000001',app['name'],rel['decision']))
+            as_user('admissions_reviewer',lambda:adm.review_admission(
+                's6_rev000000000001',dec['name'],1))
+            cond=as_user('approver',lambda:adm.decide_admission(
+                's6_dec000000000001',dec['name'],2,'Conditional',REASON,COND))
+            assert cond['status']=='Conditional' and cond['conditions']==COND,cond
+            as_user('officer',lambda:adm.accept_offer(
+                's6_acc000000000001',dec['name'],3))
+            assert denied(lambda:as_user('approver',lambda:adm.satisfy_conditions(
+                's6_self00000000001',dec['name'],4,'SYN self verify')))
+            frappe.set_user(approver2)
+            sat=adm.satisfy_conditions(
+                's6_sat000000000001',dec['name'],4,'SYN transcripts verified')
+            frappe.set_user('Administrator')
+            assert sat['status']=='Approved' and sat['conditions']=='',sat
+            assert sat['satisfied_by']==approver2,sat
+            assert sat['version']==5,sat
+            assert denied(lambda:as_user('approver',lambda:adm.satisfy_conditions(
+                's6_again0000000001',dec['name'],5,'SYN already approved')))
+            conv=as_user('approver',lambda:adm.convert_applicant(
+                's6_conv00000000001',dec['name'],5))
+            assert conv['native_student'],conv
+            result=as_user('enrollment_officer',lambda:enr.enroll_in_program(
+                's6_enr000000000001',dec['name']))
+            assert result['docstatus']==1 and result['student']==conv['native_student'],result
+            frappe.db.commit()
+            return {'satisfied_by':approver2,'student':conv['native_student'],
+                    'program_enrollment':result['program_enrollment']}
+        check('admission-s6-conditional-satisfy-convert-enroll',traced(s6_conditional_journey))
         report['status']='pass'
 
     except Exception as exc:

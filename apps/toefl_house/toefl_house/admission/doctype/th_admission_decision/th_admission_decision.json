@@ -123,6 +123,21 @@
       "fieldtype": "Small Text"
     },
     {
+      "fieldname": "satisfied_by",
+      "label": "Satisfied By",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "satisfied_at",
+      "label": "Satisfied At",
+      "fieldtype": "Datetime"
+    },
+    {
+      "fieldname": "satisfaction_evidence",
+      "label": "Satisfaction Evidence",
+      "fieldtype": "Small Text"
+    },
+    {
       "fieldname": "accepted",
       "label": "Accepted",
       "fieldtype": "Check",

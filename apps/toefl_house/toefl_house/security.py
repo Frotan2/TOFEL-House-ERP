@@ -37,6 +37,7 @@ KIND_ROLES = {
     "create_admission": "Admission Officer",
     "review_admission": "Admission Reviewer",
     "decide_admission": "Admission Approver",
+    "satisfy_conditions": "Admission Approver",
     "accept_offer": "Admission Officer",
     "withdraw_admission": "Admission Officer",
     "revoke_admission": "Admission Approver",
