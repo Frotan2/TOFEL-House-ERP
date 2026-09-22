@@ -137,3 +137,11 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
   7 open owner questions (OD-NEW-01..07, see DECISION-REGISTER.md), 4 remediation
   slices (S1..S4). Verdict NOT READY; production stays REJECT/BLOCKED. Audit commit
   is docs-only; implementation slices follow under the principal-owner mandate.
+- 2026-09-22 (S1 implemented, hosted proof pending) — BUG-INV-01 (in-command
+  exemption in `deny_premature_invoice`) + BUG-ENR-02 (before/after invoice
+  name-set diff in `enroll_in_program`) fixed in `enrollment/__init__.py`;
+  8 mock-based local regression tests (`tests/enrollment/test_billing_guards.py`,
+  mutation-checked: 5 fail with the fix reverted); 4 hosted checks in
+  `native_checks.py` (out-of-band denial control, converted-student billing,
+  converted-student correction, customer-history enrollment). Local suite
+  1115/1115. Hosted proof executes on push CI; no push without authorization.

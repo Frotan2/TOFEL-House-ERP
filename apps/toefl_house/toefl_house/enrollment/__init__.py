@@ -10,7 +10,7 @@ from toefl_house.admission import (
 )
 from toefl_house.api import _execute
 from toefl_house.policy import digest, enrollment_is_eligible
-from toefl_house.security import enrollment_command_active, require_operational
+from toefl_house.security import enrollment_command_active, finance_command_active, require_operational
 
 PE = "Program Enrollment"
 CE = "Course Enrollment"
@@ -57,6 +57,12 @@ def guard_course_enrollment(doc, method=None):
 
 def deny_premature_invoice(doc, method=None):
     require_operational()
+    if finance_command_active("Sales Invoice"):
+        # Governed finance commands (issue_placement_fee and the invoice-correction
+        # approval that posts the credit note) carry their own billing validations;
+        # the guard blocks out-of-band invoices only. Without this exemption no
+        # converted student could ever be billed or corrected (BUG-INV-01).
+        return
     customer = getattr(doc, "customer", None)
     if not customer:
         return
@@ -121,6 +127,12 @@ def enroll_in_program(request_key, admission_decision):
             raise frappe.ValidationError("Unknown academic year")
         if _existing_enrollment(student, row.program, row.academic_year, row.academic_term):
             raise frappe.ValidationError("Student is already enrolled")
+        customer = linked.customer or frappe.db.get_value(STUDENT, student, "customer")
+        # BUG-ENR-02: snapshot before the native submit so only invoices CREATED
+        # by this enrollment are refused; a linked customer with older history
+        # (e.g. a unified walk-in payer record) must not block enrollment.
+        billed_before = set(frappe.get_all(
+            "Sales Invoice", filters={"customer": customer}, pluck="name")) if customer else set()
         pe = frappe.get_doc(dict(
             doctype=PE,
             student=student,
@@ -138,9 +150,11 @@ def enroll_in_program(request_key, admission_decision):
             pe.submit()
         if int(pe.docstatus or 0) != 1:
             raise frappe.ValidationError("Program Enrollment must be submitted")
-        customer = linked.customer or frappe.db.get_value(STUDENT, student, "customer")
-        if customer and frappe.db.exists("Sales Invoice", {"customer": customer}):
-            raise frappe.ValidationError("Enrollment must not create a Sales Invoice")
+        if customer:
+            billed_after = set(frappe.get_all(
+                "Sales Invoice", filters={"customer": customer}, pluck="name"))
+            if billed_after - billed_before:
+                raise frappe.ValidationError("Enrollment must not create a Sales Invoice")
         course_count = frappe.db.count(CE, {"program_enrollment": pe.name})
         result = {
             "admission_decision": name,

@@ -3815,6 +3815,119 @@ def main():
             frappe.db.commit()
             return {'versions':2,'pin_stable':True,'retire_reactivate':True,'stream_chained':True}
         check('finance-correction-policy-versioning',correction_policy_versioning)
+        # ---- S1 converted-student billing + enrollment history diff ----
+        # BUG-INV-01: the premature-billing guard refused every Sales Invoice
+        # for a converted student, including governed in-command invoices, so
+        # late placement-fee billing and all invoice corrections on the
+        # mainline path failed. BUG-ENR-02: enrollment refused any linked
+        # customer with invoice history instead of only invoices it created.
+        def s1_out_of_band_denied():
+            # Containment control first: a fully valid native invoice for a
+            # converted student's customer is still refused, and the refusal
+            # comes from the premature-billing guard itself.
+            frappe.set_user('Administrator')
+            customer = converted['customer']
+            assert customer, 'converted student has no customer'
+            frappe.db.savepoint('s1_probe')
+            try:
+                frappe.get_doc(dict(doctype='Sales Invoice', customer=customer,
+                    company='TOEFL House', posting_date='2026-09-02',
+                    due_date='2026-10-02',
+                    th_placement_case=case_of('candidate5'),
+                    items=[dict(item_code='SYN-PLACEMENT-FEE', qty=1)])).insert(
+                        ignore_permissions=True)
+            except frappe.ValidationError as exc:
+                assert 'Premature billing' in str(exc), str(exc)[:200]
+            else:
+                raise AssertionError('out-of-band converted-student invoice accepted')
+            finally:
+                frappe.db.rollback(save_point='s1_probe')
+            return {'premature_guard_fires': True}
+        check('finance-s1-converted-student-out-of-band-denied', traced(s1_out_of_band_denied))
+        def s1_converted_billing():
+            # The governed placement-fee command bills the converted mainline
+            # student (candidate5, converted and enrolled long before this
+            # billing). Pre-fix this raised the premature-billing refusal.
+            frappe.set_user('Administrator')
+            customer = converted['customer']
+            case = case_of('candidate5')
+            assert not frappe.db.exists('Sales Invoice',
+                {'th_placement_case': case, 'docstatus': ('!=', 2)}), \
+                'candidate5 case already billed; S1 probe inventory changed'
+            inv = as_user('finance_officer', lambda: fin_m.issue_placement_fee(
+                's1_conv_bill_0000001', case, customer, '2026-09-02', '2026-10-02'))
+            assert inv['customer'] == customer and inv['case'] == case, inv
+            assert float(inv['grand_total']) == 4000.0 and inv['currency'] == 'AFN', inv
+            frappe.db.commit()
+            return {'sales_invoice': inv['sales_invoice'], 'customer': customer}
+        s1inv = check('finance-s1-converted-student-placement-billing', traced(s1_converted_billing))
+        def s1_converted_correction():
+            # The D3 correction path resolves on a converted student's
+            # invoice: request pins the reactivated policy, approval posts
+            # the credit note through the in-command exemption.
+            frappe.set_user('Administrator')
+            si = s1inv['sales_invoice']
+            gt = float(frappe.db.get_value('Sales Invoice', si, 'grand_total'))
+            req = as_user('finance_officer', lambda: corr.request_invoice_correction(
+                's1_conv_req_00000001', si, 'SYN converted-student correction', gt))
+            posted = as_user('finance_officer', lambda: corr.approve_invoice_correction(
+                's1_conv_appr_0000001', req['name']))
+            frappe.set_user('Administrator')
+            assert posted['status'] == 'Posted', posted
+            note = frappe.db.get_value('Sales Invoice', posted['credit_note'],
+                ['name', 'is_return', 'return_against', 'grand_total', 'docstatus'],
+                as_dict=True)
+            assert int(note.is_return) == 1 and note.return_against == si, note
+            assert int(note.docstatus) == 1 and round(float(note.grand_total), 2) == -round(gt, 2), note
+            frappe.db.commit()
+            return {'credit_note': note.name, 'request': req['name']}
+        check('finance-s1-converted-student-correction-posting', traced(s1_converted_correction))
+        def s1_history_enrollment():
+            # Full fourth intake on candidate4's case (new attempt ordinal):
+            # convert, bill the placement fee to the student customer BEFORE
+            # enrollment, correct that invoice BEFORE enrollment, then enroll
+            # with invoice history present. Pre-fix the enrollment refused
+            # with 'must not create a Sales Invoice'.
+            frappe.set_user('Administrator')
+            assert not frappe.db.exists('Student Applicant',
+                {'student_email_id': users['candidate4']}), 'candidate4 already an applicant'
+            alloc = digital_finalize(case4['name'], 's1_pipe')
+            rel = as_user('releaser', lambda: api.release_decision(
+                's1_rel000000000001', alloc['attempt'], 7))
+            app = as_user('officer', lambda: adm.record_applicant(
+                's1_record_app_000001', rel['decision'], 'SYNTHETIC S1 Fourth',
+                cat['program'], cat['academic_year']))
+            dec = as_user('officer', lambda: adm.create_admission(
+                's1_create_adm_000001', app['name'], rel['decision']))
+            as_user('admissions_reviewer', lambda: adm.review_admission(
+                's1_review_adm_000001', dec['name'], 1))
+            as_user('approver', lambda: adm.decide_admission(
+                's1_decide_adm_000001', dec['name'], 2, 'Approved', REASON))
+            as_user('officer', lambda: adm.accept_offer(
+                's1_accept_adm_000001', dec['name'], 3))
+            conv = as_user('approver', lambda: adm.convert_applicant(
+                's1_convert_adm_000001', dec['name'], 4))
+            customer = conv['customer']
+            assert customer, 'fourth intake conversion produced no customer'
+            inv = as_user('finance_officer', lambda: fin_m.issue_placement_fee(
+                's1_hist_bill_0000001', case4['name'], customer,
+                '2026-09-02', '2026-10-02'))
+            gt = float(frappe.db.get_value('Sales Invoice', inv['sales_invoice'], 'grand_total'))
+            creq = as_user('finance_officer', lambda: corr.request_invoice_correction(
+                's1_hist_req_00000001', inv['sales_invoice'],
+                'SYN pre-enrollment correction', gt))
+            cposted = as_user('finance_officer', lambda: corr.approve_invoice_correction(
+                's1_hist_appr_0000001', creq['name']))
+            assert cposted['status'] == 'Posted', cposted
+            result = as_user('enrollment_officer', lambda: enr.enroll_in_program(
+                's1_hist_enroll_000001', dec['name']))
+            assert result['docstatus'] == 1 and result['sales_invoice'] == 0, result
+            assert result['student'] == conv['native_student'], result
+            frappe.db.commit()
+            return {'student': conv['native_student'],
+                    'program_enrollment': result['program_enrollment'],
+                    'corrected_before_enroll': cposted['credit_note']}
+        check('enrollment-s1-customer-history-enrollment', traced(s1_history_enrollment))
         # ---- OD-CP money semantics at the fees seam (fee-handoff audit,
         # 2026-09-18): G1 discount resolution must reach the receivable
         # (single winner per line, never stacked); G3 money configuration is
