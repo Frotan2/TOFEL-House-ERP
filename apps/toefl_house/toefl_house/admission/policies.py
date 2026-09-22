@@ -54,7 +54,7 @@ def _as_bool(value, what):
 
 
 def _policy_result(doc, extra=None):
-    versions = [dict(row) for row in (doc.get("versions") or [])]
+    versions = [row.as_dict() for row in (doc.get("versions") or [])]
     governing = configuration_rules.resolve_governing(
         versions, frappe.utils.today())
     result = {
@@ -83,7 +83,7 @@ def governing_returning_mode(on_date=None):
     doc = frappe.get_doc(POLICY, rows[0]["name"])
     if doc.status != "Active":
         return ""
-    versions = [dict(row) for row in (doc.get("versions") or [])]
+    versions = [row.as_dict() for row in (doc.get("versions") or [])]
     governing = configuration_rules.resolve_governing(
         versions, on_date or frappe.utils.today())
     if not governing:
@@ -152,7 +152,7 @@ def set_returning_student_policy_version(request_key, policy, effective_from,
             raise frappe.ValidationError(
                 f"Returning-student policy {clean_code} is retired; reactivate it "
                 "before adding a version")
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
                 versions, clean_from, what="returning-student policy version")
@@ -174,7 +174,7 @@ def set_returning_student_policy_version(request_key, policy, effective_from,
                     break
         doc.save(ignore_permissions=True)
         after = configuration_rules.snapshot_digest(
-            [dict(row) for row in (doc.get("versions") or [])])
+            [row.as_dict() for row in (doc.get("versions") or [])])
         return _policy_result(doc), {
             "target": doc.name, "before_hash": before, "after_hash": after,
         }
@@ -204,7 +204,7 @@ def set_returning_student_policy_status(request_key, policy, active):
         before = configuration_audit.latest_after_hash(doc.name)
         doc.status = "Active" if flag else "Retired"
         doc.save(ignore_permissions=True)
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         after = digest(["status", doc.status,
                         configuration_rules.snapshot_digest(versions)])
         return _policy_result(doc), {

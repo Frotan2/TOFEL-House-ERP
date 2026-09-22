@@ -21,7 +21,12 @@ APP = REPO / "apps/toefl_house/toefl_house"
 
 
 class _Row(dict):
-    """A child-table row; attribute writes must stick (superseded_on stamp)."""
+    """A child-table row; attribute writes must stick (superseded_on stamp).
+
+    Real Frappe child Documents are NOT dict-convertible (proven by the
+    first hosted version write: dict(row) raises TypeError), so owned
+    code must use row.as_dict() — mirrored here.
+    """
 
     def __getattr__(self, key):
         try:
@@ -31,6 +36,9 @@ class _Row(dict):
 
     def __setattr__(self, key, value):
         self[key] = value
+
+    def as_dict(self):
+        return dict(self)
 
 
 class _Doc:

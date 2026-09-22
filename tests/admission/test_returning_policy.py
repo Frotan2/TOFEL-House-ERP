@@ -41,7 +41,11 @@ def _load_real(modname, path):
 
 
 class _Row(dict):
-    """A Frappe child row: dict access plus attribute read/write."""
+    """A Frappe child row: dict access plus attribute read/write.
+
+    Real child Documents are NOT dict-convertible, so owned code must
+    use row.as_dict() — mirrored here.
+    """
 
     def __getattr__(self, name):
         try:
@@ -51,6 +55,9 @@ class _Row(dict):
 
     def __setattr__(self, name, value):
         self[name] = value
+
+    def as_dict(self):
+        return dict(self)
 
 
 class _PolicyDoc:

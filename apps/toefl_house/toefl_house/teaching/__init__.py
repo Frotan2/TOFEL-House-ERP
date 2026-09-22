@@ -199,7 +199,7 @@ def _suggested_end_date(start_date_str, program_name):
     if not level_name:
         return None
     level = frappe.get_doc(LEVEL, level_name)
-    versions = [dict(row) for row in (level.get("durations") or [])]
+    versions = [row.as_dict() for row in (level.get("durations") or [])]
     governing = resolve_duration(versions, start_date_str)
     if not governing:
         return None

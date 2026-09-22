@@ -199,5 +199,23 @@ class AppAssemblyTests(unittest.TestCase):
                              f"{doctype} pins a different guard per seam")
 
 
+class ChildRowConversionTests(unittest.TestCase):
+    """Child-table rows from doc.get() convert via row.as_dict(), never dict().
+
+    The first hosted version write (S7) proved pinned Frappe child
+    Documents are not dict-convertible: dict(row) raises TypeError on a
+    live site while passing against dict-based local stubs. dict() stays
+    legal only over get_all/project_rows results, which are real dicts.
+    """
+
+    def test_no_dict_conversion_over_document_child_rows(self):
+        offenders = []
+        for path in sorted(APP.rglob("*.py")):
+            for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if "dict(row) for row in" in line and ".get(\"" in line:
+                    offenders.append(f"{path.relative_to(ROOT)}:{lineno}")
+        self.assertEqual(offenders, [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -205,7 +205,7 @@ def set_level_duration(request_key, level, duration_value, duration_unit,
             raise frappe.ValidationError(
                 f"Level {level} is retired; reactivate it before changing its duration")
         try:
-            versions = [dict(row) for row in (doc.get("durations") or [])]
+            versions = [row.as_dict() for row in (doc.get("durations") or [])]
             rules.check_version_appends(versions, clean_from)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
@@ -634,7 +634,7 @@ def _program_result(doc, extra=None):
 
 def _level_result(doc, extra=None):
     current = rules.resolve_duration(
-        [dict(row) for row in (doc.get("durations") or [])], frappe.utils.today())
+        [row.as_dict() for row in (doc.get("durations") or [])], frappe.utils.today())
     result = {
         "name": doc.name, "code": doc.code, "title": doc.title,
         "status": doc.status, "family": doc.family,
@@ -770,7 +770,7 @@ def _carried_facets(versions):
 
 
 def _assessment_policy_result(doc, extra=None):
-    versions = [dict(row) for row in (doc.get("versions") or [])]
+    versions = [row.as_dict() for row in (doc.get("versions") or [])]
     governing = configuration_rules.resolve_governing(
         versions, frappe.utils.today())
     result = {
@@ -864,7 +864,7 @@ def set_assessment_policy_version(request_key, policy, effective_from,
             raise frappe.ValidationError(
                 f"Grading scale {clean_scale} does not exist; define it "
                 "natively first")
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
                 versions, clean_from, what="assessment policy version")
@@ -889,7 +889,7 @@ def set_assessment_policy_version(request_key, policy, effective_from,
                     break
         doc.save(ignore_permissions=True)
         after = configuration_rules.snapshot_digest(
-            [dict(row) for row in (doc.get("versions") or [])])
+            [row.as_dict() for row in (doc.get("versions") or [])])
         return _assessment_policy_result(doc), {
             "target": doc.name, "before_hash": before, "after_hash": after,
         }
@@ -980,7 +980,7 @@ def set_assessment_components(request_key, policy, effective_from, reason,
             raise frappe.ValidationError(
                 f"The program family {doc.family} is retired; reactivate it "
                 "before changing its facets")
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
                 versions, clean_from, what="assessment policy version")
@@ -1003,7 +1003,7 @@ def set_assessment_components(request_key, policy, effective_from, reason,
         _close_superseded_facet(doc, current, clean_from)
         doc.save(ignore_permissions=True)
         after = configuration_rules.snapshot_digest(
-            [dict(row) for row in (doc.get("versions") or [])])
+            [row.as_dict() for row in (doc.get("versions") or [])])
         return _assessment_policy_result(doc), {
             "target": doc.name, "before_hash": before, "after_hash": after,
         }
@@ -1042,7 +1042,7 @@ def set_assessment_weights(request_key, policy, effective_from, reason,
             raise frappe.ValidationError(
                 f"The program family {doc.family} is retired; reactivate it "
                 "before changing its facets")
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
                 versions, clean_from, what="assessment policy version")
@@ -1065,7 +1065,7 @@ def set_assessment_weights(request_key, policy, effective_from, reason,
         _close_superseded_facet(doc, current, clean_from)
         doc.save(ignore_permissions=True)
         after = configuration_rules.snapshot_digest(
-            [dict(row) for row in (doc.get("versions") or [])])
+            [row.as_dict() for row in (doc.get("versions") or [])])
         return _assessment_policy_result(doc), {
             "target": doc.name, "before_hash": before, "after_hash": after,
         }
@@ -1104,7 +1104,7 @@ def set_assessment_pass_rules(request_key, policy, effective_from, reason,
             raise frappe.ValidationError(
                 f"The program family {doc.family} is retired; reactivate it "
                 "before changing its facets")
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
                 versions, clean_from, what="assessment policy version")
@@ -1132,7 +1132,7 @@ def set_assessment_pass_rules(request_key, policy, effective_from, reason,
         _close_superseded_facet(doc, current, clean_from)
         doc.save(ignore_permissions=True)
         after = configuration_rules.snapshot_digest(
-            [dict(row) for row in (doc.get("versions") or [])])
+            [row.as_dict() for row in (doc.get("versions") or [])])
         return _assessment_policy_result(doc), {
             "target": doc.name, "before_hash": before, "after_hash": after,
         }
@@ -1171,7 +1171,7 @@ def set_assessment_rubrics(request_key, policy, effective_from, reason,
             raise frappe.ValidationError(
                 f"The program family {doc.family} is retired; reactivate it "
                 "before changing its facets")
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
                 versions, clean_from, what="assessment policy version")
@@ -1194,7 +1194,7 @@ def set_assessment_rubrics(request_key, policy, effective_from, reason,
         _close_superseded_facet(doc, current, clean_from)
         doc.save(ignore_permissions=True)
         after = configuration_rules.snapshot_digest(
-            [dict(row) for row in (doc.get("versions") or [])])
+            [row.as_dict() for row in (doc.get("versions") or [])])
         return _assessment_policy_result(doc), {
             "target": doc.name, "before_hash": before, "after_hash": after,
         }
@@ -1234,7 +1234,7 @@ def set_assessment_progression(request_key, policy, effective_from, reason,
             raise frappe.ValidationError(
                 f"The program family {doc.family} is retired; reactivate it "
                 "before changing its facets")
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
                 versions, clean_from, what="assessment policy version")
@@ -1269,7 +1269,7 @@ def set_assessment_progression(request_key, policy, effective_from, reason,
         _close_superseded_facet(doc, current, clean_from)
         doc.save(ignore_permissions=True)
         after = configuration_rules.snapshot_digest(
-            [dict(row) for row in (doc.get("versions") or [])])
+            [row.as_dict() for row in (doc.get("versions") or [])])
         return _assessment_policy_result(doc), {
             "target": doc.name, "before_hash": before, "after_hash": after,
         }
@@ -1309,7 +1309,7 @@ def set_assessment_retakes(request_key, policy, effective_from, reason,
             raise frappe.ValidationError(
                 f"The program family {doc.family} is retired; reactivate it "
                 "before changing its facets")
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
                 versions, clean_from, what="assessment policy version")
@@ -1325,7 +1325,7 @@ def set_assessment_retakes(request_key, policy, effective_from, reason,
         _close_superseded_facet(doc, current, clean_from)
         doc.save(ignore_permissions=True)
         after = configuration_rules.snapshot_digest(
-            [dict(row) for row in (doc.get("versions") or [])])
+            [row.as_dict() for row in (doc.get("versions") or [])])
         return _assessment_policy_result(doc), {
             "target": doc.name, "before_hash": before, "after_hash": after,
         }
@@ -1364,7 +1364,7 @@ def set_assessment_mapping(request_key, policy, effective_from, reason,
             raise frappe.ValidationError(
                 f"The program family {doc.family} is retired; reactivate it "
                 "before changing its facets")
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         try:
             configuration_rules.check_appends(
                 versions, clean_from, what="assessment policy version")
@@ -1386,7 +1386,7 @@ def set_assessment_mapping(request_key, policy, effective_from, reason,
         _close_superseded_facet(doc, current, clean_from)
         doc.save(ignore_permissions=True)
         after = configuration_rules.snapshot_digest(
-            [dict(row) for row in (doc.get("versions") or [])])
+            [row.as_dict() for row in (doc.get("versions") or [])])
         return _assessment_policy_result(doc), {
             "target": doc.name, "before_hash": before, "after_hash": after,
         }
@@ -1422,7 +1422,7 @@ def set_assessment_policy_status(request_key, policy, active):
         before = configuration_audit.latest_after_hash(doc.name)
         doc.status = "Active" if flag else "Retired"
         doc.save(ignore_permissions=True)
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         after = digest(["status", doc.status,
                         configuration_rules.snapshot_digest(versions)])
         return _assessment_policy_result(doc), {
@@ -1462,7 +1462,7 @@ def validate_assessment_policy(request_key, policy):
             raise frappe.ValidationError(
                 f"The program family {doc.family} is retired; reactivate it "
                 "before validating")
-        versions = [dict(row) for row in (doc.get("versions") or [])]
+        versions = [row.as_dict() for row in (doc.get("versions") or [])]
         if not versions:
             raise frappe.ValidationError(
                 f"Assessment policy {clean_code} has no versions yet; add "
