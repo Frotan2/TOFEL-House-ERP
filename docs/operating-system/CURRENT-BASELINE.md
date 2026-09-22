@@ -164,3 +164,15 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
   mutation-checked; 1 governance static test re-pinned to the exact-match
   receipt. Local suite 1132/1132. Reclassified retired-level → GAP-CATALOG-LINKAGE
   (S4); recorded GAP-ACADEMIC-IDEMPOTENCY (later engineering slice).
+- 2026-09-22 (S1+S2+S3 HOSTED-PROVEN) — Placement synthetic content
+  qualification green 581/581 (run 35758871057, HEAD 5863db9): all four S1
+  checks, the S2 concurrent-calc race, the S3 isolation probe
+  (REPEATABLE-READ, MariaDB 11.8.9), corrections policy-versioning, and desk
+  qualification pass. Push cycle also repaired three pre-existing failures
+  born in the parent D3 commit (correction-date TypeError, readiness
+  semantics, stale owner-registry assert) plus four S1/S2 proof-harness
+  issues (ruff F841, revoked finance session, short key prefix, unrestored
+  reviewer2); S2 re-validation corrected to window-coverage-only per hosted
+  evidence. Local suite 1135/1135, ruff clean. S4 remains owner-gated
+  (OD-NEW-01..08 open). Verdict: S1–S3 proven; production still blocked
+  pending S4 owner decisions.

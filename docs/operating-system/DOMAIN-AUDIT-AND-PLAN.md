@@ -105,11 +105,14 @@ WRONG and is retracted. Consequences:
   regression tests (guard context behavior; invoice diff) + hosted checks
   (bill-then-convert-then-correct; customer-with-history enrollment). Unblocks late
   placement billing, invoice corrections, customer unification.
+  **HOSTED-PROVEN 2026-09-22** (581/581 placement checks green, run 35758871057).
 - **S2 payroll correctness:** BUG-PAY-01 + BUG-PAY-02 + currency fail-closed. Local
   mock-based tests (lock queries issued; per-adjustment dedup) + hosted concurrency
-  check for the calc.
+  check for the calc. **HOSTED-PROVEN 2026-09-22** (same green run; includes the
+  hosted-corrected window-coverage-only re-validation).
 - **S3 hardening:** BUG-ADM-01 + BUG-ADMIN-01 + BUG-INST-01 + isolation probe +
   enabled-actor gates. (Retired-level guard reclassified to GAP-CATALOG-LINKAGE.)
+  **HOSTED-PROVEN 2026-09-22** (same green run; probe settled REPEATABLE-READ).
 - **S4 lifecycle design (gated on OD answers):** GAP-REENROLL, GAP-CONDITIONAL,
   GAP-ROSTER, GAP-ATT-CORRECT, GAP-EXIT, GAP-CATALOG-LINKAGE. Design docs first,
   then slices. Plus later engineering slice GAP-ACADEMIC-IDEMPOTENCY (not gated).
