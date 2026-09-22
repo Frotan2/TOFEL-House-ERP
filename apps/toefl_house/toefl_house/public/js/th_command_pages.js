@@ -37,6 +37,7 @@ frappe.provide("toefl_house.command_pages");
 	const ADMISSION_OUTCOMES = ["Approved", "Conditional", "Deferred", "Rejected"];
 	const DELIVERY_MODES = ["On-site", "Online", "Hybrid"];
 	const CLASS_TRANSITIONS = ["Active", "Completed", "Cancelled"];
+	const ATTENDANCE_MARKS = ["Present", "Absent", "Leave"];
 	/* Teaching skills are configured server-side in TH Skill (Active only).
 	 * The client fetches them at page open; if the fetch fails the field
 	 * falls back to a free-text Data input so the server (which authoritatively
@@ -236,9 +237,12 @@ frappe.provide("toefl_house.command_pages");
 		"th-attendance-recording": {
 			role: "Attendance Recorder",
 			title: "TOEFL House Attendance Recording",
-			description: "Record submitted native Student Attendance facts for a scheduled session through the guarded command. Supply the complete status JSON required by the server.",
+			description: "Record submitted native Student Attendance facts for a scheduled session through the guarded command. Supply the complete status JSON required by the server. Corrections run as request/approve/deny inside the owner policy window.",
 			commands: [
 				{ label: "Record attendance", method: "toefl_house.teaching.record_attendance", dispatches: ["record_attendance"], fields: [data("course_schedule", "Course schedule", { reqd: 1 }), json("statuses", "Statuses JSON", { reqd: 1 })] },
+				{ label: "Request attendance correction", method: "toefl_house.teaching.attendance_corrections.request_attendance_correction", dispatches: ["request_attendance_correction"], fields: [data("attendance", "Student attendance", { reqd: 1 }), select("requested_status", "Requested mark", ATTENDANCE_MARKS, { reqd: 1 }), note("reason", "Reason", { reqd: 1 })] },
+				{ label: "Approve attendance correction", method: "toefl_house.teaching.attendance_corrections.approve_attendance_correction", dispatches: ["approve_attendance_correction"], fields: [data("request", "Correction request", { reqd: 1 })] },
+				{ label: "Deny attendance correction", method: "toefl_house.teaching.attendance_corrections.deny_attendance_correction", dispatches: ["deny_attendance_correction"], fields: [data("request", "Correction request", { reqd: 1 })] },
 			],
 		},
 	});

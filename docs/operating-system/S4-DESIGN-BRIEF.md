@@ -64,6 +64,12 @@ Fact: submitted Student Attendance has no correction path; errors are permanent.
   and audit event; native record amended through the command context.
 - Option B — same-day recorder edit: narrow window, no approval.
 - Owner decides: authority, window, and whether history must show both marks.
+- SHIPPED AS S9 2026-09-22 (HOSTED-PROVEN pending at write time): option A
+  as a D3-shaped request/approve/deny flow (TH Attendance Correction
+  Policy with approver-role + window-days terms; requests value-pin the
+  governing terms). Approval voids the erroneous mark and submits a
+  replacement for the same student/session, so history shows both marks
+  by construction; no mark is ever rewritten in place.
 
 ## GAP-EXIT → OD-NEW-07
 

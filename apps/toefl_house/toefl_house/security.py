@@ -50,6 +50,9 @@ KIND_ROLES = {
     "record_attendance": "Attendance Recorder",
     "add_class_member": "Teaching Scheduler",
     "move_class_member": "Teaching Scheduler",
+    "request_attendance_correction": "Attendance Recorder",
+    "approve_attendance_correction": "Attendance Recorder",
+    "deny_attendance_correction": "Attendance Recorder",
     "issue_tuition_fees": "Finance Officer",
     "issue_placement_fee": "Finance Officer",
     # D2 teaching compensation: contracts and payroll calculation are the
@@ -84,6 +87,7 @@ DOCTYPES = {
     "TH Admission Decision",
     "TH Instructor Contract", "TH Teaching Assignment",
     "TH Correction Policy", "TH Correction Request",
+    "TH Attendance Correction Request",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision",
                    "TH Placement Course Map Revision")
@@ -222,6 +226,9 @@ TEACHING_COMMANDS = {
     "record_attendance": "Student Attendance",
     "add_class_member": "Student Group",
     "move_class_member": "Student Group",
+    # the approval command voids the erroneous mark and submits the
+    # replacement (both Student Attendance) inside the guarded context
+    "approve_attendance_correction": "Student Attendance",
 }
 
 

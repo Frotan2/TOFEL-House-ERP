@@ -19,6 +19,7 @@ KINDS = {
     "TH Teaching Assignment": "assignment",
     "TH Correction Policy": "correction_policy",
     "TH Correction Request": "correction_request",
+    "TH Attendance Correction Request": "attendance_correction",
 }
 TABLES = {
     "item": "`tabTH Placement Item Revision`",
@@ -39,6 +40,7 @@ TABLES = {
     "assignment": "`tabTH Teaching Assignment`",
     "correction_policy": "`tabTH Correction Policy`",
     "correction_request": "`tabTH Correction Request`",
+    "attendance_correction": "`tabTH Attendance Correction Request`",
 }
 LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
 STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score", "decision")
@@ -57,6 +59,7 @@ CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager", 
 GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount Rule", "TH Skill",
                         "TH Assessment Policy", "TH Returning Student Policy",
                         "TH Roster Change Policy",
+                        "TH Attendance Correction Policy",
                         "TH Configuration Operation", "TH Configuration Audit Event"}
 
 
@@ -122,6 +125,8 @@ def query(kind, user=None):
                                  "Finance Officer", "Finance Auditor"} else "1=0"
     if kind in ("correction_policy", "correction_request"):
         return "1=1" if roles & {"Finance Officer", "Finance Auditor"} else "1=0"
+    if kind == "attendance_correction":
+        return "1=1" if roles & {"Attendance Recorder", "Teaching Auditor"} else "1=0"
     if "Placement Publisher" in roles:
         return "1=1"
     if kind in ("case", "attempt", "exposure", "response") and "Placement Invigilator" in roles:
@@ -163,3 +168,4 @@ def query_contract(user=None): return query("contract", user)
 def query_assignment(user=None): return query("assignment", user)
 def query_correction_policy(user=None): return query("correction_policy", user)
 def query_correction_request(user=None): return query("correction_request", user)
+def query_attendance_correction(user=None): return query("attendance_correction", user)

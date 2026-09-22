@@ -62,6 +62,9 @@ KIND_AUTHORITY = {
     "create_roster_change_policy": "business_policy",
     "set_roster_change_policy_version": "business_policy",
     "set_roster_change_policy_status": "business_policy",
+    "create_attendance_correction_policy": "business_policy",
+    "set_attendance_correction_policy_version": "business_policy",
+    "set_attendance_correction_policy_status": "business_policy",
 }
 
 

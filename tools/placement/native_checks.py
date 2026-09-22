@@ -20,6 +20,7 @@ def main():
     from toefl_house import enrollment as enr
     from toefl_house import teaching as tea
     from toefl_house.teaching import policies as teap
+    from toefl_house.teaching import attendance_corrections as teac
     from toefl_house import finance as fin_m
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
@@ -5033,6 +5034,87 @@ def main():
             return {'student':new_student,'program_enrollment':enr_new['program_enrollment'],
                     'cutoff':cutoff,'policy':pol['name']}
         check('teaching-s8-roster-policy-add-move-offswitch',traced(s8_roster_journey))
+        def s9_correction_journey():
+            # S9 (GAP-ATT-CORRECT / OD-NEW-06): D3-shaped attendance
+            # corrections. Unconfigured requests refuse; after the owner
+            # sets terms, the recorder requests, and a dual-key approver
+            # voids the erroneous mark and submits a replacement — both
+            # marks stay visible. Requests pin their version's terms:
+            # narrowing the window later cannot strand an in-flight
+            # request, and new requests judge the narrowed terms.
+            frappe.set_user('Administrator')
+            approver='synthetic-attendance-approver@example.test'
+            if not frappe.db.exists('User',approver):
+                frappe.get_doc(dict(doctype='User',email=approver,
+                    first_name='Synthetic attendance approver',enabled=1,
+                    send_welcome_email=0,
+                    new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
+                    roles=[{'role':'Attendance Recorder'},{'role':'Teaching Auditor'}])).insert()
+                frappe.db.commit()
+            member=frappe.db.get_value('Student Group Student',{'parent':GRP_A},'student')
+            assert member
+            yesterday=str(frappe.utils.add_days(frappe.utils.today(),-1))
+            sched=as_user('teaching_scheduler',lambda:tea.schedule_session(
+                's9_sched_0000000001',GRP_A,yesterday,'09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))
+            marked=as_user('attendance_recorder',lambda:tea.record_attendance(
+                's9_rec_000000000001',sched['name'],{member:'Absent'}))
+            att=marked['records'][member]
+            assert denied(lambda:as_user('attendance_recorder',lambda:teac.request_attendance_correction(
+                's9_req_unconf_00001',att,'Present','SYN no policy yet')))
+            pol=as_user('course_owner',lambda:teac.create_attendance_correction_policy(
+                's9_pol_create_00001','SYN-ATT-CORRECT','SYN correction rule'))
+            assert pol['version_count']==0 and pol['governing_approver_role']=='',pol
+            assert denied(lambda:as_user('attendance_recorder',lambda:teac.request_attendance_correction(
+                's9_req_shell_000001',att,'Present','SYN shell governs nothing')))
+            v1=as_user('course_owner',lambda:teac.set_attendance_correction_policy_version(
+                's9_pol_versn_0000001','SYN-ATT-CORRECT',yesterday,
+                'SYN owner opens attendance corrections','Teaching Auditor',7))
+            assert v1['governing_approver_role']=='Teaching Auditor',v1
+            assert denied(lambda:as_user('attendance_recorder',lambda:teac.request_attendance_correction(
+                's9_req_badmark_0001',att,'Late','SYN unknown mark')))
+            assert denied(lambda:as_user('attendance_recorder',lambda:teac.request_attendance_correction(
+                's9_req_samemark_001',att,'Absent','SYN same mark')))
+            r1=as_user('attendance_recorder',lambda:teac.request_attendance_correction(
+                's9_req0000000000001',att,'Present','SYN misread the sheet'))
+            assert r1['from_status']=='Absent' and r1['requested_status']=='Present',r1
+            assert denied(lambda:as_user('attendance_recorder',lambda:teac.request_attendance_correction(
+                's9_req_dup_00000001',att,'Leave','SYN duplicate pending')))
+            v2=as_user('course_owner',lambda:teac.set_attendance_correction_policy_version(
+                's9_pol_versn_0000002','SYN-ATT-CORRECT',str(frappe.utils.today()),
+                'SYN owner narrows the window','Teaching Auditor',0))
+            assert v2['governing_window_days']==0,v2
+            frappe.set_user(approver)
+            assert denied(lambda:as_user('attendance_recorder',lambda:teac.approve_attendance_correction(
+                's9_app_role_0000001',r1['name'])))
+            posted=teac.approve_attendance_correction('s9_app0000000000001',r1['name'])
+            frappe.set_user('Administrator')
+            assert posted['status']=='Posted',posted
+            assert frappe.db.get_value('Student Attendance',att,'docstatus')==2
+            fixed=frappe.db.get_value('Student Attendance',posted['replacement_attendance'],
+                                      ['docstatus','status','student','course_schedule'],as_dict=True)
+            assert fixed and int(fixed.docstatus)==1 and fixed.status=='Present',fixed
+            assert fixed.student==member and fixed.course_schedule==sched['name'],fixed
+            r2=as_user('attendance_recorder',lambda:teac.request_attendance_correction(
+                's9_req0000000000002',posted['replacement_attendance'],'Absent','SYN second look'))
+            frappe.set_user(approver)
+            assert denied(lambda:teac.approve_attendance_correction(
+                's9_app_closed_000001',r2['name']))
+            r2denied=teac.deny_attendance_correction('s9_deny000000000002',r2['name'])
+            frappe.set_user('Administrator')
+            assert r2denied['status']=='Denied',r2denied
+            r3=as_user('attendance_recorder',lambda:teac.request_attendance_correction(
+                's9_req0000000000003',posted['replacement_attendance'],'Leave','SYN on reflection'))
+            assert denied(lambda:as_user('attendance_recorder',lambda:teac.deny_attendance_correction(
+                's9_deny_role_000001',r3['name'])))
+            frappe.set_user(approver)
+            denied_outcome=teac.deny_attendance_correction('s9_deny000000000001',r3['name'])
+            frappe.set_user('Administrator')
+            assert denied_outcome['status']=='Denied',denied_outcome
+            assert frappe.db.get_value('Student Attendance',posted['replacement_attendance'],'docstatus')==1
+            frappe.db.commit()
+            return {'request':r1['name'],'voided':att,'replacement':posted['replacement_attendance'],
+                    'policy':pol['name']}
+        check('teaching-s9-attendance-correction-pin-window',traced(s9_correction_journey))
         report['status']='pass'
 
     except Exception as exc:
