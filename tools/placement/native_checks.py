@@ -5055,7 +5055,7 @@ def main():
             assert member
             yesterday=str(frappe.utils.add_days(frappe.utils.today(),-1))
             sched=as_user('teaching_scheduler',lambda:tea.schedule_session(
-                's9_sched_0000000001',GRP_A,yesterday,'09:00:00','10:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))
+                's9_sched_0000000001',GRP_A,yesterday,'16:00:00','17:30:00',INS_ONE,ROOM_A,'SYN-COURSE-CORE'))
             marked=as_user('attendance_recorder',lambda:tea.record_attendance(
                 's9_rec_000000000001',sched['name'],{member:'Absent'}))
             att=marked['records'][member]
