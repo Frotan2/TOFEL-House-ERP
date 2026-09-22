@@ -3574,6 +3574,14 @@ def main():
             # the single raced payable: September-compensated a1/a3 are held
             # by both runners, a4 is posted exactly once.
             frappe.set_user('Administrator')
+            # The finance revoke check wiped this user's roles and killed
+            # their HTTP session (later direct calls pass on the runner's
+            # warm role cache). HTTP needs the real thing: restore the
+            # fixture roles and take a fresh login before racing.
+            restored=frappe.get_doc('User',users['finance_officer'])
+            restored.set('roles',[{'role':r} for r in ('Finance Officer','Accounts User')])
+            restored.save();frappe.db.commit()
+            sessions['finance_officer']=login('finance_officer')
             ctemp=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
                 's2_temp_contract_00001',cfx['ins']['Temp'],cfx['emps']['Temp'],'Skill-Based',
                 'SYN race-fixture coverage','Monthly','2026-10-01','',
