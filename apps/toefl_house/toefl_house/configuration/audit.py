@@ -29,7 +29,9 @@ AUDIT = "TH Configuration Audit Event"
 # Command kind -> bound authority. Only kinds listed here may write the
 # ledger; the authority must be bound in foundation.AUTHORITIES or the
 # command refuses. The D1 configuration commands (policy shell, versions,
-# status, validation, and the seven facet setters) bind here.
+# status, validation, and the seven facet setters) bind here, as do the
+# twelve academic catalog commands (S5 idempotency: they validate keys
+# and now keep receipts, so a retried call replays instead of erroring).
 KIND_AUTHORITY = {
     "create_assessment_policy": "business_policy",
     "set_assessment_policy_version": "business_policy",
@@ -42,6 +44,18 @@ KIND_AUTHORITY = {
     "set_assessment_progression": "business_policy",
     "set_assessment_retakes": "business_policy",
     "set_assessment_mapping": "business_policy",
+    "create_program": "business_policy",
+    "create_level": "business_policy",
+    "set_level_duration": "business_policy",
+    "set_next_level": "business_policy",
+    "set_program_status": "business_policy",
+    "set_level_status": "business_policy",
+    "create_academic_year": "business_policy",
+    "create_fee_type": "business_policy",
+    "set_level_fee_component": "business_policy",
+    "remove_level_fee_component": "business_policy",
+    "create_discount_rule": "business_policy",
+    "set_discount_rule_status": "business_policy",
 }
 
 

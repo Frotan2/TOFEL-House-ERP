@@ -4804,6 +4804,27 @@ def main():
                 frappe.delete_doc('User Permission',up.name,ignore_permissions=True)
                 frappe.db.commit()
         check('desk-broad-isolation-matrix',traced(desk_isolation_matrix))
+        def s5_catalog_receipts():
+            # S5: catalog commands keep configuration receipts. Same-key
+            # replay returns the recorded result without double-applying; a
+            # conflicting payload under the same key is refused; the
+            # business uniqueness rule still fires under a fresh key.
+            frappe.set_user('Administrator')
+            first=as_user('course_owner',lambda:acm.create_program(
+                's5_prog_replay_00001','SYN-S5-PROBE','S5 Receipt Probe',''))
+            replay=as_user('course_owner',lambda:acm.create_program(
+                's5_prog_replay_00001','SYN-S5-PROBE','S5 Receipt Probe',''))
+            assert replay==first,(replay,first)
+            assert denied(lambda:as_user('course_owner',lambda:acm.create_program(
+                's5_prog_replay_00001','SYN-S5-PROBE','A different title','')))
+            assert denied(lambda:as_user('course_owner',lambda:acm.create_program(
+                's5_prog_dup_00000001','SYN-S5-PROBE','S5 Receipt Probe','')))
+            ops=frappe.db.get_all('TH Configuration Operation',
+                filters={'kind':'create_program'},fields=['name','status'])
+            assert any(op['status']=='Complete' for op in ops),'no receipt recorded'
+            frappe.db.commit()
+            return {'replayed':True,'conflict_denied':True,'duplicate_denied':True}
+        check('academic-s5-catalog-command-receipts',traced(s5_catalog_receipts))
         report['status']='pass'
 
     except Exception as exc:

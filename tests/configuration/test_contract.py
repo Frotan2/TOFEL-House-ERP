@@ -394,18 +394,34 @@ class CommandContractTests(unittest.TestCase):
             self.assertIn("@frappe.whitelist", source[max(0, position - 200):position])
 
     def test_gate_is_course_owner_and_never_synthetic(self):
+        # S5: the Course Owner gate moved from a per-command direct call
+        # into configuration_audit.execute (same role, same enabled rule,
+        # same non-administrator rule). Every command must route through it
+        # under its own kind, and every kind must bind business_policy.
+        import ast as _ast
+
         source = _module_source("__init__.py")
         self.assertIn('"Course Owner" not in set(frappe.get_roles(user))', source)
         self.assertNotIn("require_synthetic", source,
                          "configuration is a governance surface, not a synthetic command")
         self.assertNotIn("ignore_permissions=True) if False", source)
-        # Every command opens the gate first.
+        audit_source = (APP / "configuration/audit.py").read_text(encoding="utf-8")
+        audit_tree = _ast.parse(audit_source)
+        kinds = None
+        for node in _ast.walk(audit_tree):
+            if (isinstance(node, _ast.Assign)
+                    and getattr(node.targets[0], "id", "") == "KIND_AUTHORITY"):
+                kinds = _ast.literal_eval(node.value)
         tree = self._tree()
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name in self.COMMANDS:
                 calls = ast.unparse(node)
-                self.assertIn("_require_course_owner()", calls,
-                              f"{node.name} must gate on Course Owner")
+                self.assertIn("configuration_audit.execute(", calls,
+                              f"{node.name} must route through the receipted gate")
+                self.assertIn(f"'{node.name}', request_key", calls,
+                              f"{node.name} must execute under its own kind")
+                self.assertEqual(kinds.get(node.name), "business_policy",
+                                 f"{node.name} must bind the Course Owner authority")
 
     def test_commands_delegate_to_the_pure_rules(self):
         source = _module_source("__init__.py")

@@ -78,26 +78,37 @@ def _level_doc(code, for_update=False):
 def create_program(request_key, code, title, description=""):
     """Define a program family (e.g. a language track the institution sells).
 
-    Retry-safe by the unique code: a replayed request fails as a duplicate
-    instead of double-applying. The family owns no money and no enrollment —
-    it orders and governs its levels.
+    Receipted (S5): a replayed (kind, key) with the identical payload
+    returns the recorded result instead of double-applying; a conflicting
+    payload under the same key is refused. A different key for an existing
+    code still fails as a duplicate. The family owns no money and no
+    enrollment — it orders and governs its levels.
     """
-    _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_code = rules.validate_code(code)
-        clean_title = rules.validate_title(title, "Program title")
-        clean_description = rules.validate_reason(description)
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
-    if frappe.db.exists(PROGRAM, clean_code):
-        raise frappe.ValidationError(f"Program {clean_code} already exists")
-    doc = frappe.get_doc({
-        "doctype": PROGRAM, "code": clean_code, "title": clean_title,
-        "status": "Active", "description": clean_description,
-    })
-    doc.insert(ignore_permissions=True)
-    return _program_result(doc)
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_code = rules.validate_code(code)
+            clean_title = rules.validate_title(title, "Program title")
+            clean_description = rules.validate_reason(description)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        if frappe.db.exists(PROGRAM, clean_code):
+            raise frappe.ValidationError(f"Program {clean_code} already exists")
+        doc = frappe.get_doc({
+            "doctype": PROGRAM, "code": clean_code, "title": clean_title,
+            "status": "Active", "description": clean_description,
+        })
+        doc.insert(ignore_permissions=True)
+        result = _program_result(doc)
+        return result, {
+            "target": doc.name,
+            "before_hash": configuration_audit.latest_after_hash(doc.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "create_program", request_key,
+        {"code": code, "title": title, "description": description}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -110,55 +121,66 @@ def create_level(request_key, family, code, title, sequence,
     Assessment Plan and every dashboard consume the level without any
     TOEFL-specific master. The anchor is written once and never changed.
     """
-    actor = _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_family = rules.validate_code(family)
-        clean_code = rules.validate_code(code)
-        clean_title = rules.validate_title(title, "Level title")
-        clean_sequence = rules.validate_sequence(sequence)
-        clean_value = rules.validate_duration_value(duration_value, duration_unit)
-        clean_from = rules.parse_date(effective_from)
-        clean_next = rules.validate_reason(next_level or "")
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_family = rules.validate_code(family)
+            clean_code = rules.validate_code(code)
+            clean_title = rules.validate_title(title, "Level title")
+            clean_sequence = rules.validate_sequence(sequence)
+            clean_value = rules.validate_duration_value(duration_value, duration_unit)
+            clean_from = rules.parse_date(effective_from)
+            clean_next = rules.validate_reason(next_level or "")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
 
-    family_doc = _family_doc(clean_family, for_update=True)
-    if family_doc.status != "Active":
-        raise frappe.ValidationError(
-            f"Program {clean_family} is retired; reactivate it before adding levels")
-    if frappe.db.exists(LEVEL, clean_code):
-        raise frappe.ValidationError(f"Level {clean_code} already exists")
-    siblings = frappe.db.get_all(LEVEL, filters={"family": family_doc.name},
-                                 fields=["code", "sequence"])
-    if any(int(row["sequence"]) == clean_sequence for row in siblings):
-        raise frappe.ValidationError(
-            f"Level position {clean_sequence} is already taken in {clean_family}; "
-            "two levels cannot share one position")
-    if clean_next:
-        rules.validate_next_level(
-            clean_code, clean_next,
-            family_of=lambda c: _family_of(c),
-            next_of=lambda c: _next_of(c))
+        family_doc = _family_doc(clean_family, for_update=True)
+        if family_doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Program {clean_family} is retired; reactivate it before adding levels")
+        if frappe.db.exists(LEVEL, clean_code):
+            raise frappe.ValidationError(f"Level {clean_code} already exists")
+        siblings = frappe.db.get_all(LEVEL, filters={"family": family_doc.name},
+                                     fields=["code", "sequence"])
+        if any(int(row["sequence"]) == clean_sequence for row in siblings):
+            raise frappe.ValidationError(
+                f"Level position {clean_sequence} is already taken in {clean_family}; "
+                "two levels cannot share one position")
+        if clean_next:
+            rules.validate_next_level(
+                clean_code, clean_next,
+                family_of=lambda c: _family_of(c),
+                next_of=lambda c: _next_of(c))
 
-    native = frappe.get_doc({
-        "doctype": NATIVE_PROGRAM,
-        "program_name": f"{family_doc.title} — {clean_title}",
-        "program_abbreviation": clean_code,
-    })
-    native.insert(ignore_permissions=True)
-    doc = frappe.get_doc({
-        "doctype": LEVEL, "family": family_doc.name, "code": clean_code,
-        "title": clean_title, "sequence": clean_sequence, "status": "Active",
-        "native_program": native.name, "next_level": clean_next or None,
-        "durations": [{
-            "duration_value": clean_value, "duration_unit": duration_unit,
-            "effective_from": clean_from, "reason": "Initial configuration",
-            "set_by": actor, "set_on": frappe.utils.now_datetime(),
-        }],
-    })
-    doc.insert(ignore_permissions=True)
-    return _level_result(doc)
+        native = frappe.get_doc({
+            "doctype": NATIVE_PROGRAM,
+            "program_name": f"{family_doc.title} — {clean_title}",
+            "program_abbreviation": clean_code,
+        })
+        native.insert(ignore_permissions=True)
+        doc = frappe.get_doc({
+            "doctype": LEVEL, "family": family_doc.name, "code": clean_code,
+            "title": clean_title, "sequence": clean_sequence, "status": "Active",
+            "native_program": native.name, "next_level": clean_next or None,
+            "durations": [{
+                "duration_value": clean_value, "duration_unit": duration_unit,
+                "effective_from": clean_from, "reason": "Initial configuration",
+                "set_by": actor, "set_on": frappe.utils.now_datetime(),
+            }],
+        })
+        doc.insert(ignore_permissions=True)
+        result = _level_result(doc)
+        return result, {
+            "target": doc.name,
+            "before_hash": configuration_audit.latest_after_hash(doc.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "create_level", request_key,
+        {"family": family, "code": code, "title": title, "sequence": sequence,
+         "duration_value": duration_value, "duration_unit": duration_unit,
+         "effective_from": effective_from, "next_level": next_level}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -170,88 +192,117 @@ def set_level_duration(request_key, level, duration_value, duration_unit,
     and fees created under the previous version keep their historical truth,
     and every date still resolves to exactly one governing version.
     """
-    actor = _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_value = rules.validate_duration_value(duration_value, duration_unit)
-        clean_from = rules.parse_date(effective_from)
-        clean_reason = rules.validate_reason(reason)
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
-    doc = _level_doc(level, for_update=True)
-    if doc.status != "Active":
-        raise frappe.ValidationError(
-            f"Level {level} is retired; reactivate it before changing its duration")
-    try:
-        versions = [dict(row) for row in (doc.get("durations") or [])]
-        rules.check_version_appends(versions, clean_from)
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
-    current = rules.latest_version(versions)
-    doc.append("durations", {
-        "duration_value": clean_value, "duration_unit": duration_unit,
-        "effective_from": clean_from, "reason": clean_reason,
-        "set_by": actor, "set_on": frappe.utils.now_datetime(),
-    })
-    if current:
-        # Close the superseded version; never rewrite its meaning, only record
-        # the date it stopped governing new activity.
-        for row in doc.get("durations") or []:
-            if (str(row.get("effective_from")) == str(current.get("effective_from"))
-                    and not row.get("superseded_on")):
-                row.superseded_on = clean_from
-                break
-    doc.save(ignore_permissions=True)
-    return _level_result(doc, extra={
-        "previous_version": (rules.duration_label(current) if current else ""),
-        "previous_effective_from": (str(current.get("effective_from")) if current else ""),
-    })
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_value = rules.validate_duration_value(duration_value, duration_unit)
+            clean_from = rules.parse_date(effective_from)
+            clean_reason = rules.validate_reason(reason)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _level_doc(level, for_update=True)
+        if doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Level {level} is retired; reactivate it before changing its duration")
+        try:
+            versions = [dict(row) for row in (doc.get("durations") or [])]
+            rules.check_version_appends(versions, clean_from)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        current = rules.latest_version(versions)
+        doc.append("durations", {
+            "duration_value": clean_value, "duration_unit": duration_unit,
+            "effective_from": clean_from, "reason": clean_reason,
+            "set_by": actor, "set_on": frappe.utils.now_datetime(),
+        })
+        if current:
+            # Close the superseded version; never rewrite its meaning, only record
+            # the date it stopped governing new activity.
+            for row in doc.get("durations") or []:
+                if (str(row.get("effective_from")) == str(current.get("effective_from"))
+                        and not row.get("superseded_on")):
+                    row.superseded_on = clean_from
+                    break
+        doc.save(ignore_permissions=True)
+        result = _level_result(doc, extra={
+            "previous_version": (rules.duration_label(current) if current else ""),
+            "previous_effective_from": (str(current.get("effective_from")) if current else ""),
+        })
+        return result, {
+            "target": doc.name,
+            "before_hash": configuration_audit.latest_after_hash(doc.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "set_level_duration", request_key,
+        {"level": level, "duration_value": duration_value,
+         "duration_unit": duration_unit, "effective_from": effective_from,
+         "reason": reason}, work)
 
 
 @frappe.whitelist(methods=["POST"])
 def set_next_level(request_key, level, next_level):
     """Configure where students normally progress after this level."""
-    _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_code = rules.validate_code(level)
-        clean_next = rules.validate_reason(next_level or "")
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
-    doc = _level_doc(clean_code, for_update=True)
-    if clean_next:
-        rules.validate_next_level(
-            clean_code, clean_next,
-            family_of=lambda c: _family_of(c),
-            next_of=lambda c: _next_of(c))
-        if _level_doc(clean_next).status != "Active":
-            raise frappe.ValidationError(
-                f"The next level {clean_next} is retired; progression must point "
-                "at an active level")
-    doc.next_level = clean_next or None
-    doc.save(ignore_permissions=True)
-    return _level_result(doc)
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_code = rules.validate_code(level)
+            clean_next = rules.validate_reason(next_level or "")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _level_doc(clean_code, for_update=True)
+        if clean_next:
+            rules.validate_next_level(
+                clean_code, clean_next,
+                family_of=lambda c: _family_of(c),
+                next_of=lambda c: _next_of(c))
+            if _level_doc(clean_next).status != "Active":
+                raise frappe.ValidationError(
+                    f"The next level {clean_next} is retired; progression must point "
+                    "at an active level")
+        doc.next_level = clean_next or None
+        doc.save(ignore_permissions=True)
+        result = _level_result(doc)
+        return result, {
+            "target": doc.name,
+            "before_hash": configuration_audit.latest_after_hash(doc.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "set_next_level", request_key,
+        {"level": level, "next_level": next_level}, work)
 
 
 @frappe.whitelist(methods=["POST"])
 def set_program_status(request_key, program, active):
     """Deactivate (retire) or reactivate a program family."""
-    _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_code = rules.validate_code(program)
-        flag = _as_bool(active, "active")
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
-    doc = _family_doc(clean_code, for_update=True)
-    if not flag:
-        active_levels = frappe.db.count(
-            LEVEL, {"family": doc.name, "status": "Active"})
-        if active_levels:
-            raise frappe.ValidationError(rules.program_has_levels_message(clean_code, active_levels))
-    doc.status = "Active" if flag else "Retired"
-    doc.save(ignore_permissions=True)
-    return _program_result(doc)
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_code = rules.validate_code(program)
+            flag = _as_bool(active, "active")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _family_doc(clean_code, for_update=True)
+        if not flag:
+            active_levels = frappe.db.count(
+                LEVEL, {"family": doc.name, "status": "Active"})
+            if active_levels:
+                raise frappe.ValidationError(rules.program_has_levels_message(clean_code, active_levels))
+        doc.status = "Active" if flag else "Retired"
+        doc.save(ignore_permissions=True)
+        result = _program_result(doc)
+        return result, {
+            "target": doc.name,
+            "before_hash": configuration_audit.latest_after_hash(doc.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "set_program_status", request_key,
+        {"program": program, "active": active}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -261,29 +312,38 @@ def set_level_status(request_key, level, active):
     Deactivation is refused in business language while submitted native
     enrollments still run on the level (no raw exception, no silent damage).
     """
-    _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_code = rules.validate_code(level)
-        flag = _as_bool(active, "active")
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
-    doc = _level_doc(clean_code, for_update=True)
-    if not flag:
-        if not doc.native_program:
-            raise frappe.ValidationError(rules.level_missing_native_message(clean_code))
-        in_use = frappe.db.count(
-            ENROLLMENT, {"program": doc.native_program, "docstatus": 1})
-        if in_use:
-            raise frappe.ValidationError(rules.level_in_use_message(clean_code, in_use))
-    else:
-        family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
-        if family_status != "Active":
-            raise frappe.ValidationError(
-                f"The program family {doc.family} is retired; reactivate it first")
-    doc.status = "Active" if flag else "Retired"
-    doc.save(ignore_permissions=True)
-    return _level_result(doc)
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_code = rules.validate_code(level)
+            flag = _as_bool(active, "active")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        doc = _level_doc(clean_code, for_update=True)
+        if not flag:
+            if not doc.native_program:
+                raise frappe.ValidationError(rules.level_missing_native_message(clean_code))
+            in_use = frappe.db.count(
+                ENROLLMENT, {"program": doc.native_program, "docstatus": 1})
+            if in_use:
+                raise frappe.ValidationError(rules.level_in_use_message(clean_code, in_use))
+        else:
+            family_status = frappe.db.get_value(PROGRAM, doc.family, "status")
+            if family_status != "Active":
+                raise frappe.ValidationError(
+                    f"The program family {doc.family} is retired; reactivate it first")
+        doc.status = "Active" if flag else "Retired"
+        doc.save(ignore_permissions=True)
+        result = _level_result(doc)
+        return result, {
+            "target": doc.name,
+            "before_hash": configuration_audit.latest_after_hash(doc.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "set_level_status", request_key,
+        {"level": level, "active": active}, work)
 
 
 def _as_bool(value, what):
@@ -305,21 +365,30 @@ def create_academic_year(request_key, name, start_date, end_date):
     command closes that setup gap through the same governed gate as the rest
     of the control plane.
     """
-    _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_name = rules.validate_title(name, "Academic year name")
-        start, end = rules.validate_year_bounds(start_date, end_date)
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
-    if frappe.db.exists(YEAR, clean_name):
-        raise frappe.ValidationError(f"Academic year {clean_name} already exists")
-    doc = frappe.get_doc({
-        "doctype": YEAR, "academic_year_name": clean_name,
-        "year_start_date": start, "year_end_date": end,
-    })
-    doc.insert(ignore_permissions=True)
-    return {"name": doc.name, "start_date": start, "end_date": end}
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_name = rules.validate_title(name, "Academic year name")
+            start, end = rules.validate_year_bounds(start_date, end_date)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        if frappe.db.exists(YEAR, clean_name):
+            raise frappe.ValidationError(f"Academic year {clean_name} already exists")
+        doc = frappe.get_doc({
+            "doctype": YEAR, "academic_year_name": clean_name,
+            "year_start_date": start, "year_end_date": end,
+        })
+        doc.insert(ignore_permissions=True)
+        result = {"name": doc.name, "start_date": start, "end_date": end}
+        return result, {
+            "target": doc.name,
+            "before_hash": configuration_audit.latest_after_hash(doc.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "create_academic_year", request_key,
+        {"name": name, "start_date": start_date, "end_date": end_date}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -330,26 +399,36 @@ def create_fee_type(request_key, name, description=""):
     accounting Item itself (verified at the pinned commit), so the Owner
     defines the *type* and native authority owns the accounting object.
     """
-    _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_name = rules.validate_title(name, "Fee type name")
-        clean_description = rules.validate_reason(description)
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
-    if frappe.db.exists(FEE_CATEGORY, clean_name):
-        raise frappe.ValidationError(f"Fee type {clean_name} already exists")
-    if not frappe.db.exists("Item Group", "Fee Component"):
-        raise frappe.ValidationError(
-            "The native 'Fee Component' item group is missing, so fee types "
-            "cannot receive their accounting Item. Ask the administrator to "
-            "complete the Education app setup, then retry.")
-    doc = frappe.get_doc({
-        "doctype": FEE_CATEGORY, "category_name": clean_name,
-        "description": clean_description,
-    })
-    doc.insert(ignore_permissions=True)
-    return {"name": doc.name, "item": frappe.db.get_value(FEE_CATEGORY, doc.name, "item")}
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_name = rules.validate_title(name, "Fee type name")
+            clean_description = rules.validate_reason(description)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        if frappe.db.exists(FEE_CATEGORY, clean_name):
+            raise frappe.ValidationError(f"Fee type {clean_name} already exists")
+        if not frappe.db.exists("Item Group", "Fee Component"):
+            raise frappe.ValidationError(
+                "The native 'Fee Component' item group is missing, so fee types "
+                "cannot receive their accounting Item. Ask the administrator to "
+                "complete the Education app setup, then retry.")
+        doc = frappe.get_doc({
+            "doctype": FEE_CATEGORY, "category_name": clean_name,
+            "description": clean_description,
+        })
+        doc.insert(ignore_permissions=True)
+        result = {"name": doc.name,
+                  "item": frappe.db.get_value(FEE_CATEGORY, doc.name, "item")}
+        return result, {
+            "target": doc.name,
+            "before_hash": configuration_audit.latest_after_hash(doc.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "create_fee_type", request_key,
+        {"name": name, "description": description}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -363,37 +442,59 @@ def set_level_fee_component(request_key, level, academic_year, fee_category, amo
     stays editable; issued Fees copy their components at issuance, so
     changing this configuration never touches a posted document.
     """
-    _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_level = rules.validate_code(level)
-        clean_amount = rules.validate_fee_amount(amount)
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
-    level_doc = _level_doc(clean_level, for_update=True)
-    if level_doc.status != "Active":
-        raise frappe.ValidationError(
-            f"Level {clean_level} is retired; reactivate it before configuring fees")
-    if not level_doc.native_program:
-        raise frappe.ValidationError(rules.level_missing_native_message(clean_level))
-    if not frappe.db.exists(YEAR, academic_year):
-        raise frappe.ValidationError(
-            f"Academic year {academic_year} does not exist yet; define it first")
-    if not frappe.db.exists(FEE_CATEGORY, fee_category):
-        raise frappe.ValidationError(
-            f"Fee type {fee_category} does not exist yet; define it first")
-    structure = _managed_fee_structure(level_doc.native_program, academic_year, company)
-    rows = structure.get("components") or []
-    for row in rows:
-        if row.get("fees_category") == fee_category:
-            if float(row.get("amount") or 0) == float(clean_amount):
-                return _fee_plan_result(structure, clean_level, academic_year, replayed=True)
-            row.amount = clean_amount
-            structure.save(ignore_permissions=True)
-            return _fee_plan_result(structure, clean_level, academic_year)
-    structure.append("components", {"fees_category": fee_category, "amount": clean_amount})
-    structure.save(ignore_permissions=True)
-    return _fee_plan_result(structure, clean_level, academic_year)
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_level = rules.validate_code(level)
+            clean_amount = rules.validate_fee_amount(amount)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        level_doc = _level_doc(clean_level, for_update=True)
+        if level_doc.status != "Active":
+            raise frappe.ValidationError(
+                f"Level {clean_level} is retired; reactivate it before configuring fees")
+        if not level_doc.native_program:
+            raise frappe.ValidationError(rules.level_missing_native_message(clean_level))
+        if not frappe.db.exists(YEAR, academic_year):
+            raise frappe.ValidationError(
+                f"Academic year {academic_year} does not exist yet; define it first")
+        if not frappe.db.exists(FEE_CATEGORY, fee_category):
+            raise frappe.ValidationError(
+                f"Fee type {fee_category} does not exist yet; define it first")
+        structure = _managed_fee_structure(level_doc.native_program, academic_year, company)
+        rows = structure.get("components") or []
+        for row in rows:
+            if row.get("fees_category") == fee_category:
+                if float(row.get("amount") or 0) == float(clean_amount):
+                    result = _fee_plan_result(structure, clean_level, academic_year,
+                                              replayed=True)
+                    return result, {
+                        "target": structure.name,
+                        "before_hash": configuration_audit.latest_after_hash(structure.name),
+                        "after_hash": digest(result),
+                    }
+                row.amount = clean_amount
+                structure.save(ignore_permissions=True)
+                result = _fee_plan_result(structure, clean_level, academic_year)
+                return result, {
+                    "target": structure.name,
+                    "before_hash": configuration_audit.latest_after_hash(structure.name),
+                    "after_hash": digest(result),
+                }
+        structure.append("components", {"fees_category": fee_category, "amount": clean_amount})
+        structure.save(ignore_permissions=True)
+        result = _fee_plan_result(structure, clean_level, academic_year)
+        return result, {
+            "target": structure.name,
+            "before_hash": configuration_audit.latest_after_hash(structure.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "set_level_fee_component", request_key,
+        {"level": level, "academic_year": academic_year,
+         "fee_category": fee_category, "amount": amount,
+         "company": company}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -403,31 +504,41 @@ def remove_level_fee_component(request_key, level, academic_year, fee_category):
     Issued Fees keep their copied components; only future issuance is
     affected. The plan must keep at least one component.
     """
-    _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_level = rules.validate_code(level)
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
-    level_doc = _level_doc(clean_level, for_update=True)
-    if not level_doc.native_program:
-        raise frappe.ValidationError(rules.level_missing_native_message(clean_level))
-    if not frappe.db.exists(YEAR, academic_year):
-        raise frappe.ValidationError(f"Academic year {academic_year} does not exist")
-    structure = _managed_fee_structure(level_doc.native_program, academic_year)
-    rows = structure.get("components") or []
-    remaining = [row for row in rows if row.get("fees_category") != fee_category]
-    if len(remaining) == len(rows):
-        raise frappe.ValidationError(
-            f"Fee type {fee_category} is not part of the "
-            f"{clean_level} plan for {academic_year}")
-    if not remaining:
-        raise frappe.ValidationError(
-            "A fee plan must keep at least one component; remove the whole "
-            "plan with Finance if the level should bill nothing")
-    structure.set("components", remaining)
-    structure.save(ignore_permissions=True)
-    return _fee_plan_result(structure, clean_level, academic_year)
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_level = rules.validate_code(level)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
+        level_doc = _level_doc(clean_level, for_update=True)
+        if not level_doc.native_program:
+            raise frappe.ValidationError(rules.level_missing_native_message(clean_level))
+        if not frappe.db.exists(YEAR, academic_year):
+            raise frappe.ValidationError(f"Academic year {academic_year} does not exist")
+        structure = _managed_fee_structure(level_doc.native_program, academic_year)
+        rows = structure.get("components") or []
+        remaining = [row for row in rows if row.get("fees_category") != fee_category]
+        if len(remaining) == len(rows):
+            raise frappe.ValidationError(
+                f"Fee type {fee_category} is not part of the "
+                f"{clean_level} plan for {academic_year}")
+        if not remaining:
+            raise frappe.ValidationError(
+                "A fee plan must keep at least one component; remove the whole "
+                "plan with Finance if the level should bill nothing")
+        structure.set("components", remaining)
+        structure.save(ignore_permissions=True)
+        result = _fee_plan_result(structure, clean_level, academic_year)
+        return result, {
+            "target": structure.name,
+            "before_hash": configuration_audit.latest_after_hash(structure.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "remove_level_fee_component", request_key,
+        {"level": level, "academic_year": academic_year,
+         "fee_category": fee_category}, work)
 
 
 FEE_STRUCTURE_NAMING = "EDU-FST-.YYYY.-"  # native default from the pinned doctype
@@ -551,68 +662,89 @@ def create_discount_rule(request_key, code, title, discount_percentage,
     Single discount per charge line; explicit configured precedence resolves
     competing rules. Zero or one discount only; never stacks.
     """
-    _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_code = rules.validate_code(code)
-        clean_title = rules.validate_title(title, "Discount rule title")
-        clean_percent = rules.validate_discount_percentage(discount_percentage)
-        clean_precedence = rules.validate_precedence(precedence)
-        clean_description = rules.validate_reason(description)
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_code = rules.validate_code(code)
+            clean_title = rules.validate_title(title, "Discount rule title")
+            clean_percent = rules.validate_discount_percentage(discount_percentage)
+            clean_precedence = rules.validate_precedence(precedence)
+            clean_description = rules.validate_reason(description)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
 
-    if frappe.db.exists(DISCOUNT_RULE, clean_code):
-        raise frappe.ValidationError(f"Discount rule {clean_code} already exists")
+        if frappe.db.exists(DISCOUNT_RULE, clean_code):
+            raise frappe.ValidationError(f"Discount rule {clean_code} already exists")
 
-    clean_category = ""
-    if fee_category:
-        clean_category = rules.validate_title(fee_category, "Fee category")
-        if not frappe.db.exists(FEE_CATEGORY, clean_category):
-            raise frappe.ValidationError(
-                f"Fee type {clean_category} does not exist yet; define it first")
+        clean_category = ""
+        if fee_category:
+            clean_category = rules.validate_title(fee_category, "Fee category")
+            if not frappe.db.exists(FEE_CATEGORY, clean_category):
+                raise frappe.ValidationError(
+                    f"Fee type {clean_category} does not exist yet; define it first")
 
-    clean_program = ""
-    if program:
-        clean_program = rules.validate_code(program)
-        if not frappe.db.exists(PROGRAM, clean_program):
-            raise frappe.ValidationError(
-                f"Program {clean_program} does not exist yet; define it first")
+        clean_program = ""
+        if program:
+            clean_program = rules.validate_code(program)
+            if not frappe.db.exists(PROGRAM, clean_program):
+                raise frappe.ValidationError(
+                    f"Program {clean_program} does not exist yet; define it first")
 
-    doc = frappe.get_doc({
-        "doctype": DISCOUNT_RULE, "code": clean_code, "title": clean_title,
-        "discount_percentage": clean_percent, "precedence": clean_precedence,
-        "status": "Active", "fee_category": clean_category or None,
-        "program": clean_program or None, "description": clean_description,
-    })
-    doc.insert(ignore_permissions=True)
-    return {
-        "name": doc.name, "code": doc.code, "title": doc.title,
-        "discount_percentage": float(doc.discount_percentage),
-        "precedence": int(doc.precedence), "status": doc.status,
-        "fee_category": doc.fee_category or "",
-        "program": doc.program or "",
-    }
+        doc = frappe.get_doc({
+            "doctype": DISCOUNT_RULE, "code": clean_code, "title": clean_title,
+            "discount_percentage": clean_percent, "precedence": clean_precedence,
+            "status": "Active", "fee_category": clean_category or None,
+            "program": clean_program or None, "description": clean_description,
+        })
+        doc.insert(ignore_permissions=True)
+        result = {
+            "name": doc.name, "code": doc.code, "title": doc.title,
+            "discount_percentage": float(doc.discount_percentage),
+            "precedence": int(doc.precedence), "status": doc.status,
+            "fee_category": doc.fee_category or "",
+            "program": doc.program or "",
+        }
+        return result, {
+            "target": doc.name,
+            "before_hash": configuration_audit.latest_after_hash(doc.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "create_discount_rule", request_key,
+        {"code": code, "title": title,
+         "discount_percentage": discount_percentage, "precedence": precedence,
+         "fee_category": fee_category, "program": program,
+         "description": description}, work)
 
 
 @frappe.whitelist(methods=["POST"])
 def set_discount_rule_status(request_key, code, active):
     """Deactivate (retire) or reactivate a discount rule."""
-    _require_course_owner()
-    try:
-        validate_request_key(request_key)
-        clean_code = rules.validate_code(code)
-        flag = _as_bool(active, "active")
-    except ValueError as exc:
-        raise frappe.ValidationError(str(exc)) from exc
+    def work(actor):
+        try:
+            validate_request_key(request_key)
+            clean_code = rules.validate_code(code)
+            flag = _as_bool(active, "active")
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
 
-    doc = _discount_rule_doc(clean_code, for_update=True)
-    doc.status = "Active" if flag else "Retired"
-    doc.save(ignore_permissions=True)
-    return {
-        "name": doc.name, "code": doc.code, "title": doc.title,
-        "status": doc.status,
-    }
+        doc = _discount_rule_doc(clean_code, for_update=True)
+        doc.status = "Active" if flag else "Retired"
+        doc.save(ignore_permissions=True)
+        result = {
+            "name": doc.name, "code": doc.code, "title": doc.title,
+            "status": doc.status,
+        }
+        return result, {
+            "target": doc.name,
+            "before_hash": configuration_audit.latest_after_hash(doc.name),
+            "after_hash": digest(result),
+        }
+
+    return configuration_audit.execute(
+        "set_discount_rule_status", request_key,
+        {"code": code, "active": active}, work)
 
 
 def _assessment_policy_doc(code, for_update=False):

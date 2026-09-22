@@ -423,6 +423,8 @@ class ConfigurationAuditContractTests(unittest.TestCase):
         self.assertIn("Configuration audit events are append-only", event)
 
     def test_kinds_bind_exactly_the_d1_commands_to_business_policy(self):
+        # S5: the twelve academic catalog commands join the eleven D1
+        # commands on the same business_policy (Course Owner) authority.
         source = (APP / "configuration/audit.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
         kinds = None
@@ -442,6 +444,18 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "set_assessment_progression": "business_policy",
             "set_assessment_retakes": "business_policy",
             "set_assessment_mapping": "business_policy",
+            "create_program": "business_policy",
+            "create_level": "business_policy",
+            "set_level_duration": "business_policy",
+            "set_next_level": "business_policy",
+            "set_program_status": "business_policy",
+            "set_level_status": "business_policy",
+            "create_academic_year": "business_policy",
+            "create_fee_type": "business_policy",
+            "set_level_fee_component": "business_policy",
+            "remove_level_fee_component": "business_policy",
+            "create_discount_rule": "business_policy",
+            "set_discount_rule_status": "business_policy",
         })
 
     def test_audit_reuses_the_command_pattern_without_site_gates(self):

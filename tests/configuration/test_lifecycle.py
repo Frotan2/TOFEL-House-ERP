@@ -268,13 +268,99 @@ def _load_module(roles, enrollments=()):
                 sys.modules[key] = value
 
 
+class CatalogIdempotencyTests(unittest.TestCase):
+    """S5: the twelve catalog commands keep configuration receipts.
+
+    A replayed (kind, key) with the identical payload returns the recorded
+    result instead of double-applying; a conflicting payload under the same
+    key is refused; the business uniqueness rules still fire under fresh
+    keys; and each target's audit chain stays continuous across commands.
+    """
+
+    def _target_events(self, fake, target):
+        return [dict(target=doc.target, before_hash=doc.before_hash,
+                     after_hash=doc.after_hash)
+                for doc in fake.store.get(
+                    "TH Configuration Audit Event", {}).values()
+                if doc.target == target]
+
+    def test_replay_returns_recorded_result_without_double_apply(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            first = academic.create_program(
+                "S5-REPLAY-KEY-00001", "GEN-ENG", "General English", "")
+            replay = academic.create_program(
+                "S5-REPLAY-KEY-00001", "GEN-ENG", "General English", "")
+            self.assertEqual(replay, first)
+            self.assertEqual(len(self._target_events(fake, "GEN-ENG")), 1)
+            receipts = [doc for doc in fake.store.get(
+                "TH Configuration Operation", {}).values()]
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(receipts[0].status, "Complete")
+
+    def test_conflicting_payload_is_refused(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            academic.create_program(
+                "S5-CONFLICT-KEY-001", "GEN-ENG", "General English", "")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.create_program(
+                    "S5-CONFLICT-KEY-001", "GEN-ENG", "A different title", "")
+            self.assertIn("conflicts", str(ctx.exception))
+
+    def test_business_uniqueness_still_fires_under_fresh_keys(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            academic.create_program(
+                "S5-UNIQUE-KEY-0001", "GEN-ENG", "General English", "")
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.create_program(
+                    "S5-UNIQUE-KEY-0002", "GEN-ENG", "General English", "")
+            self.assertIn("already exists", str(ctx.exception))
+
+    def test_status_commands_replay_and_chain(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            academic.create_program(
+                "S5-CHAIN-KEY-00001", "GEN-ENG", "General English", "")
+            retired = academic.set_program_status(
+                "S5-CHAIN-KEY-00002", "GEN-ENG", 0)
+            self.assertEqual(retired["status"], "Retired")
+            replay = academic.set_program_status(
+                "S5-CHAIN-KEY-00002", "GEN-ENG", 0)
+            self.assertEqual(replay, retired)
+            events = self._target_events(fake, "GEN-ENG")
+            self.assertEqual(len(events), 2)
+            foundation = _foundation()
+            self.assertEqual(foundation.verify_chain(events), 2)
+            self.assertEqual(events[0]["before_hash"], "")
+
+    def test_fee_component_upsert_replays(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            AcademicLifecycleTests()._lifecycle(academic, fake)
+            academic.create_academic_year(
+                "S5-FEE-KEY-0000001", "2026-27", "2026-07-01", "2027-06-30")
+            fake.store.setdefault("Item Group", {})["Fee Component"] = {
+                "name": "Fee Component"}
+            fake.store.setdefault("Company", {})["TOEFL House"] = {
+                "name": "TOEFL House",
+                "default_receivable_account": "Debtors - TH"}
+            academic.create_fee_type(
+                "S5-FEE-KEY-0000002", "Tuition Fee", "")
+            first = academic.set_level_fee_component(
+                "S5-FEE-KEY-0000003", "STARTER", "2026-27", "Tuition Fee", 5000)
+            replay = academic.set_level_fee_component(
+                "S5-FEE-KEY-0000003", "STARTER", "2026-27", "Tuition Fee", 5000)
+            self.assertEqual(replay, first)
+            structures = fake.store.get("Fee Structure", {})
+            self.assertEqual(len(structures), 1)
+
+
 class AcademicLifecycleTests(unittest.TestCase):
     def _lifecycle(self, academic, fake):
+        # S5: catalog commands keep receipts, so every same-kind call needs
+        # its own key (reusing a key with a different payload is a conflict).
         academic.create_program("R" * 24, "GEN-ENG", "General English",
                                 "The owner typed this title.")
-        academic.create_level("R" * 24, "GEN-ENG", "STARTER", "Starter", 1,
+        academic.create_level("S" * 24, "GEN-ENG", "STARTER", "Starter", 1,
                               2, "Month", "2026-01-01")
-        academic.create_level("R" * 24, "GEN-ENG", "PREP-1", "Prep One", 2,
+        academic.create_level("T" * 24, "GEN-ENG", "PREP-1", "Prep One", 2,
                               2, "Month", "2026-01-01", next_level="")
         academic.set_next_level("R" * 24, "STARTER", "PREP-1")
         return academic, fake
@@ -319,7 +405,7 @@ class AcademicLifecycleTests(unittest.TestCase):
             self.assertIn("2 submitted enrollment", str(ctx.exception))
             self.assertIn("cannot be deactivated", str(ctx.exception))
             # A level without enrollments retires cleanly:
-            academic.set_level_status("R" * 24, "PREP-1", 0)
+            academic.set_level_status("S" * 24, "PREP-1", 0)
             self.assertEqual(fake.store["TH Program Level"]["PREP-1"].status, "Retired")
 
     def test_disabled_owner_holds_no_configuration_authority(self):
@@ -352,10 +438,10 @@ class AcademicLifecycleTests(unittest.TestCase):
         for academic, fake in _load_module({"Course Owner"}):
             self._lifecycle(academic, fake)
             with self.assertRaises(fake.ValidationError) as ctx:
-                academic.create_program("R" * 24, "GEN-ENG", "Duplicate")
+                academic.create_program("P" * 24, "GEN-ENG", "Duplicate")
             self.assertIn("already exists", str(ctx.exception))
             with self.assertRaises(fake.ValidationError) as ctx:
-                academic.create_level("R" * 24, "GEN-ENG", "PREP-2", "Prep Two", 1,
+                academic.create_level("P" * 24, "GEN-ENG", "PREP-2", "Prep Two", 1,
                                       2, "Month", "2026-01-01")
             self.assertIn("cannot share one position", str(ctx.exception))
             with self.assertRaises(fake.ValidationError) as ctx:
@@ -363,7 +449,7 @@ class AcademicLifecycleTests(unittest.TestCase):
                                             "2025-01-01")  # before the latest version
             self.assertIn("after the latest version", str(ctx.exception))
             with self.assertRaises(fake.ValidationError):
-                academic.create_level("R" * 24, "GEN-ENG", "BAD CODE!", "Bad", 3,
+                academic.create_level("Q" * 24, "GEN-ENG", "BAD CODE!", "Bad", 3,
                                       2, "Month", "2026-01-01")
 
 
@@ -375,8 +461,8 @@ class FeeConfigurationLifecycleTests(unittest.TestCase):
         fake.store.setdefault("Item Group", {})["Fee Component"] = {"name": "Fee Component"}
         fake.store.setdefault("Company", {})["TOEFL House"] = {
             "name": "TOEFL House", "default_receivable_account": "Debtors - TH"}
-        for fee_type in ("Tuition Fee", "Identity Card Fee"):
-            academic.create_fee_type("R" * 24, fee_type, "")
+        for index, fee_type in enumerate(("Tuition Fee", "Identity Card Fee")):
+            academic.create_fee_type("F" * 23 + str(index), fee_type, "")
         return academic, fake
 
     def _world(self):
@@ -386,9 +472,9 @@ class FeeConfigurationLifecycleTests(unittest.TestCase):
 
     def test_owner_configures_a_fee_plan_component_by_component(self):
         for academic, fake in self._world():
-            academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+            academic.set_level_fee_component("C" * 24, "STARTER", "2026-27",
                                              "Tuition Fee", 5000)
-            result = academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+            result = academic.set_level_fee_component("D" * 24, "STARTER", "2026-27",
                                                       "Identity Card Fee", 300)
             self.assertEqual(result["total"], 5300.0)
             structure = fake.store["Fee Structure"][result["fee_structure"]]
@@ -403,50 +489,58 @@ class FeeConfigurationLifecycleTests(unittest.TestCase):
 
     def test_upsert_updates_and_replays_without_duplicating(self):
         for academic, fake in self._world():
-            academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+            academic.set_level_fee_component("C" * 24, "STARTER", "2026-27",
                                              "Tuition Fee", 5000)
-            academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+            academic.set_level_fee_component("D" * 24, "STARTER", "2026-27",
                                              "Tuition Fee", 6000)
-            result = academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+            result = academic.set_level_fee_component("E" * 24, "STARTER", "2026-27",
                                                       "Tuition Fee", 6000)
             self.assertTrue(result["replayed"])
             self.assertEqual(len(result["components"]), 1)
             self.assertEqual(result["total"], 6000.0)
+            # S5: the key-level receipt replays the recorded result without
+            # re-executing (no new audit event for the same key).
+            events_before = len(fake.store.get("TH Configuration Audit Event", {}))
+            again = academic.set_level_fee_component("E" * 24, "STARTER", "2026-27",
+                                                     "Tuition Fee", 6000)
+            self.assertEqual(again, result)
+            self.assertEqual(len(fake.store.get("TH Configuration Audit Event", {})),
+                             events_before)
 
     def test_removal_keeps_at_least_one_component(self):
         for academic, fake in self._world():
-            academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+            academic.set_level_fee_component("C" * 24, "STARTER", "2026-27",
                                              "Tuition Fee", 5000)
-            academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+            academic.set_level_fee_component("D" * 24, "STARTER", "2026-27",
                                              "Identity Card Fee", 300)
-            result = academic.remove_level_fee_component("R" * 24, "STARTER",
+            result = academic.remove_level_fee_component("E" * 24, "STARTER",
                                                          "2026-27", "Identity Card Fee")
             self.assertEqual([row["category"] for row in result["components"]],
                              ["Tuition Fee"])
             with self.assertRaises(fake.ValidationError) as ctx:
-                academic.remove_level_fee_component("R" * 24, "STARTER",
+                academic.remove_level_fee_component("F" * 24, "STARTER",
                                                     "2026-27", "Tuition Fee")
             self.assertIn("at least one component", str(ctx.exception))
 
     def test_fee_refusals_name_the_missing_configuration(self):
         for academic, fake in self._world():
             with self.assertRaises(fake.ValidationError) as ctx:
-                academic.set_level_fee_component("R" * 24, "STARTER", "2025-26",
+                academic.set_level_fee_component("C" * 24, "STARTER", "2025-26",
                                                  "Tuition Fee", 5000)
             self.assertIn("2025-26 does not exist yet", str(ctx.exception))
             with self.assertRaises(fake.ValidationError) as ctx:
-                academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                academic.set_level_fee_component("D" * 24, "STARTER", "2026-27",
                                                  "Diploma Fee", 5000)
             self.assertIn("Diploma Fee does not exist yet", str(ctx.exception))
             # Ambiguity refuses instead of guessing:
             fake.store["Company"]["Second Co"] = {
                 "name": "Second Co", "default_receivable_account": "Debtors - S2"}
             with self.assertRaises(fake.ValidationError) as ctx:
-                academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+                academic.set_level_fee_component("E" * 24, "STARTER", "2026-27",
                                                  "Tuition Fee", 5000)
             self.assertIn("More than one company", str(ctx.exception))
             # Explicit company resolves it:
-            result = academic.set_level_fee_component("R" * 24, "STARTER", "2026-27",
+            result = academic.set_level_fee_component("F" * 24, "STARTER", "2026-27",
                                                       "Tuition Fee", 5000,
                                                       company="Second Co")
             self.assertEqual(result["company"], "Second Co")
@@ -474,18 +568,19 @@ class DiscountConfigurationLifecycleTests(unittest.TestCase):
             self.assertEqual(rule["precedence"], 10)
             self.assertEqual(rule["status"], "Active")
 
-            # Duplicate rejected
+            # Duplicate rejected (fresh key: the same key with a different
+            # payload is an idempotency conflict, not the business rule)
             with self.assertRaises(fake.ValidationError) as ctx:
                 academic.create_discount_rule(
-                    "R" * 24, "SCHOLARSHIP-10", "Duplicate", 10.0)
+                    "D" * 24, "SCHOLARSHIP-10", "Duplicate", 10.0)
             self.assertIn("already exists", str(ctx.exception))
 
             # Deactivate (retire)
-            retired = academic.set_discount_rule_status("R" * 24, "SCHOLARSHIP-10", 0)
+            retired = academic.set_discount_rule_status("E" * 24, "SCHOLARSHIP-10", 0)
             self.assertEqual(retired["status"], "Retired")
 
             # Reactivate
-            active = academic.set_discount_rule_status("R" * 24, "SCHOLARSHIP-10", 1)
+            active = academic.set_discount_rule_status("F" * 24, "SCHOLARSHIP-10", 1)
             self.assertEqual(active["status"], "Active")
 
     def test_discount_commands_refuse_unauthorized_roles(self):
@@ -530,8 +625,8 @@ class AcceptanceRehearsalTests(unittest.TestCase):
                 ("LVL-5", "Upper-Intermediate", 5),
             ]
             for code, title, seq in levels:
-                lvl = academic.create_level("R" * 24, "GEN-ENG", code, title, seq,
-                                            2, "Month", "2026-01-01")
+                lvl = academic.create_level("L" * 23 + str(seq), "GEN-ENG", code,
+                                            title, seq, 2, "Month", "2026-01-01")
                 self.assertEqual(lvl["duration"], "2 months")
 
             # 4. Owner defines progression rule: LVL-1 progresses to LVL-2
@@ -587,7 +682,7 @@ class AcceptanceRehearsalTests(unittest.TestCase):
 
             # 9. LATER TUITION CHANGE (§45)
             # Owner changes Tuition Fee from 5000 to 6000
-            updated_plan = academic.set_level_fee_component("R" * 24, "LVL-1", "2026-27",
+            updated_plan = academic.set_level_fee_component("U" * 24, "LVL-1", "2026-27",
                                                             "Tuition Fee", 6000)
             self.assertEqual(updated_plan["total"], 6000.0)
 
@@ -869,9 +964,13 @@ class D1LifecycleTests(unittest.TestCase):
             foundation = _foundation()
             self.assertEqual(events[0]["after_hash"],
                              foundation.snapshot_digest([]))
-            receipts = fake.store.get("TH Configuration Operation", {})
+            # S5: catalog setup commands keep their own receipts now, so the
+            # count scopes to this command's kind (intent: one receipt here).
+            receipts = [doc for doc in fake.store.get(
+                "TH Configuration Operation", {}).values()
+                if doc.kind == "create_assessment_policy"]
             self.assertEqual(len(receipts), 1)
-            receipt = next(iter(receipts.values()))
+            receipt = receipts[0]
             self.assertEqual(receipt.status, "Complete")
             self.assertEqual(receipt.kind, "create_assessment_policy")
 
@@ -885,7 +984,9 @@ class D1LifecycleTests(unittest.TestCase):
                 "D1-REPLAY-KEY-0001", "GEN-ENG", "ASM-GEN",
                 "General assessment", "")
             self.assertEqual(replay, first)
-            self.assertEqual(len(self._events(fake)), 1,
+            policy_events = [event for event in self._events(fake)
+                             if event["target"] == "ASM-GEN"]
+            self.assertEqual(len(policy_events), 1,
                              "a replay must not double-apply")
             with self.assertRaises(fake.ValidationError) as ctx:
                 academic.create_assessment_policy(
@@ -951,7 +1052,9 @@ class D1LifecycleTests(unittest.TestCase):
                 rows, "2027-06-01", what="assessment policy version")
             self.assertEqual(governing_then["grading_scale"], "GS-1")
             self.assertIsNone(governing_later.get("grading_scale"))
-            self.assertEqual(foundation.verify_chain(self._events(fake)), 4)
+            policy_events = [event for event in self._events(fake)
+                             if event["target"] == "ASM-GEN"]
+            self.assertEqual(foundation.verify_chain(policy_events), 4)
 
     def test_backdated_same_day_empty_reason_and_unknown_carrier_refuse(self):
         for academic, fake in _load_module({"Course Owner"}):
@@ -1188,8 +1291,11 @@ class CommandOnlyBoundaryTests(unittest.TestCase):
                         "First structure", grading_scale="GS-1")
                     policy = fake.store["TH Assessment Policy"]["ASM-GEN"]
                     self.assertEqual(len(policy.get("versions")), 1)
-                    self.assertEqual(len(fake.store.get(
-                        "TH Configuration Audit Event", {})), 2)
+                    policy_events = [
+                        doc for doc in fake.store.get(
+                            "TH Configuration Audit Event", {}).values()
+                        if doc.target == policy.name]
+                    self.assertEqual(len(policy_events), 2)
                     # THE A1 SHAPE: a rules-valid native version append —
                     # sound date, known carrier, real reason — must
                     # refuse in business language instead of landing
@@ -1359,8 +1465,10 @@ class D1FacetLifecycleTests(unittest.TestCase):
             self.assertEqual(rows[0].get("components") or "", "")
             self.assertNotIn("assessment_plan", latest)
             foundation = _foundation()
+            policy_events = [event for event in self._events(fake)
+                             if event["target"] == "ASM-GEN"]
             self.assertEqual(
-                foundation.verify_chain(self._events(fake)), 4)
+                foundation.verify_chain(policy_events), 4)
 
     def test_governing_version_carries_governing_facets(self):
         import json
