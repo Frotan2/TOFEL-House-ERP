@@ -131,3 +131,9 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
   the canonical-`active_branch` row and adds the re-validation table above;
   the `2f8b681` capture record is left intact as history.
   No code, tests, permissions, hooks, or behavior touched.
+- 2026-09-22 (principal-owner domain audit) — Full domain audit recorded in
+  `DOMAIN-AUDIT-AND-PLAN.md`: 7 real bugs (BUG-INV-01, BUG-ENR-02, BUG-PAY-01,
+  BUG-PAY-02, BUG-ADM-01, BUG-ADMIN-01, BUG-INST-01), 8 gaps (GAP-REENROLL critical),
+  7 open owner questions (OD-NEW-01..07, see DECISION-REGISTER.md), 4 remediation
+  slices (S1..S4). Verdict NOT READY; production stays REJECT/BLOCKED. Audit commit
+  is docs-only; implementation slices follow under the principal-owner mandate.

@@ -358,3 +358,17 @@ owner reopens it.)
 Each deferred item records: authority = owner (or architecture where noted);
 status = DEFERRED; source = the cited gate/capability record; consequence =
 no implementation, no consumer assumption, no placeholder.
+
+## OPEN OWNER QUESTIONS (principal-owner domain audit, 2026-09-22)
+
+Authority = owner; status = AWAITING ANSWER; source =
+`docs/operating-system/DOMAIN-AUDIT-AND-PLAN.md`; consequence = the S4 lifecycle
+design slices stay scoped-only until answered. No owner answer is invented or assumed.
+
+- **OD-NEW-01** returning-student identity + continuation rules (new placement per term?).
+- **OD-NEW-02** conditional-satisfaction authority + upgrade path.
+- **OD-NEW-03** billing date bounds (future/backdate policy).
+- **OD-NEW-04** placement-fee timing (upfront vs on-delivery) + one-customer-per-person guidance.
+- **OD-NEW-05** roster-change authority (who may add/move students post-creation).
+- **OD-NEW-06** attendance-correction authority + window.
+- **OD-NEW-07** student exit/unenroll policy + financial consequences.
