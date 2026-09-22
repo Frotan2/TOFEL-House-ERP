@@ -3969,6 +3969,12 @@ def main():
             frappe.set_user('Administrator')
             assert not frappe.db.exists('Student Applicant',
                 {'student_email_id': users['candidate4']}), 'candidate4 already an applicant'
+            # release-probe-users-restored re-grants every pipeline actor
+            # EXCEPT reviewer2 (the probes never finalize); the fourth
+            # intake finalizes, so restore the fixture role first.
+            rev2 = frappe.get_doc('User', users['reviewer2'])
+            rev2.set('roles', [{'role': 'Placement Reviewer'}])
+            rev2.save(); frappe.db.commit()
             alloc = digital_finalize(case4['name'], 's1_pipe4')
             rel = as_user('releaser', lambda: api.release_decision(
                 's1_rel000000000001', alloc['attempt'], 7))
