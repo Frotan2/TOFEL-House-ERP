@@ -387,6 +387,9 @@ class AdmissionDecisionRecord(ProtectedRecord):
         if not is_admission_transition(before.status, self.status):
             raise frappe.PermissionError("Illegal admission state transition")
         for field in self.CLOCKS:
+            if (field == "conditions" and before.status == "Conditional"
+                    and self.status == "Approved" and not self.get(field)):
+                continue
             if before.get(field) and before.get(field) != self.get(field):
                 raise frappe.PermissionError("Admission clock fields are immutable once set")
         if before.accepted and not self.accepted:
