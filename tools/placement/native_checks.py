@@ -3901,12 +3901,19 @@ def main():
             assert customer, 'converted student has no customer'
             frappe.db.savepoint('s1_probe')
             try:
+                # Fully valid native shape (mirrors issue_placement_fee):
+                # without the company currency + price list the native
+                # currency check fires before the guard under test.
                 frappe.get_doc(dict(doctype='Sales Invoice', customer=customer,
-                    company='TOEFL House', posting_date='2026-09-02',
-                    due_date='2026-10-02',
+                    company='TOEFL House',
+                    currency=frappe.get_cached_value('Company', 'TOEFL House',
+                                                     'default_currency'),
+                    posting_date='2026-09-02', due_date='2026-10-02',
+                    set_posting_time=0, is_pos=0,
                     th_placement_case=case_of('candidate5'),
-                    items=[dict(item_code='SYN-PLACEMENT-FEE', qty=1)])).insert(
-                        ignore_permissions=True)
+                    selling_price_list='TOEFL House Standard',
+                    items=[dict(item_code='SYN-PLACEMENT-FEE', qty=1,
+                                rate=4000)])).insert(ignore_permissions=True)
             except frappe.ValidationError as exc:
                 assert 'Premature billing' in str(exc), str(exc)[:200]
             else:
