@@ -203,9 +203,10 @@ frappe.provide("toefl_house.command_pages");
 		"th-admission-approval": {
 			role: "Admission Approver",
 			title: "TOEFL House Admission Approval",
-			description: "Run the existing admission decision, revocation and native Student conversion commands. Eligibility and transition controls remain server-side.",
+			description: "Run the existing admission decision, condition satisfaction, revocation and native Student conversion commands. Eligibility and transition controls remain server-side.",
 			commands: [
 				{ label: "Decide admission", method: "toefl_house.admission.decide_admission", dispatches: ["decide_admission"], fields: [data("name", "Admission decision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), select("outcome", "Outcome", ADMISSION_OUTCOMES, { reqd: 1 }), note("reason", "Reason", { reqd: 1 }), note("conditions", "Conditions")] },
+				{ label: "Satisfy conditions", method: "toefl_house.admission.satisfy_conditions", dispatches: ["satisfy_conditions"], fields: [data("name", "Admission decision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), note("evidence", "Verification evidence", { reqd: 1 })] },
 				{ label: "Revoke admission", method: "toefl_house.admission.revoke_admission", dispatches: ["revoke_admission"], fields: [data("name", "Admission decision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 }), note("reason", "Reason", { reqd: 1 })] },
 				{ label: "Convert applicant", method: "toefl_house.admission.convert_applicant", dispatches: ["convert_applicant"], fields: [data("name", "Admission decision", { reqd: 1 }), integer("expected_version", "Expected version", { reqd: 1 })] },
 			],
