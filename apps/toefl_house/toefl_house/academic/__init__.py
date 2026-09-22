@@ -48,6 +48,10 @@ def _require_course_owner():
         raise frappe.PermissionError(
             "The Course Owner configures the academic control plane; "
             "ask the Course Owner for this change")
+    # S3: a disabled login holds no authority even with the role still
+    # attached (same rule the desk audience gate enforces).
+    if not frappe.db.get_value("User", user, "enabled"):
+        raise frappe.PermissionError("This account has been disabled.")
     return user
 
 

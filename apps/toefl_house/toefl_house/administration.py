@@ -26,6 +26,10 @@ def _require_control_role():
     roles = set(frappe.get_roles(frappe.session.user))
     if not roles.intersection(CONTROL_ROLES):
         raise frappe.PermissionError("Course Owner or General Manager role required")
+    # S3: a disabled login holds no authority even with the role still
+    # attached (same rule the desk audience gate enforces).
+    if not frappe.db.get_value("User", frappe.session.user, "enabled"):
+        raise frappe.PermissionError("This account has been disabled.")
     return roles
 
 
@@ -90,6 +94,8 @@ def set_managed_role(request_key, user, role, enabled):
     actor_roles = set(frappe.get_roles(frappe.session.user))
     if "Course Owner" not in actor_roles:
         raise frappe.PermissionError("Course Owner role required")
+    if not frappe.db.get_value("User", frappe.session.user, "enabled"):
+        raise frappe.PermissionError("This account has been disabled.")
     try:
         validate_request_key(request_key)
     except ValueError as exc:
@@ -114,20 +120,29 @@ def set_managed_role(request_key, user, role, enabled):
     # table or operation ledger; the row lock is held through the native User
     # change and its Version audit insert.
     target = frappe.get_doc("User", user, for_update=True)
-    prior = frappe.get_list(
+    # BUG-ADMIN-01: `_` is legal in request keys but wild in LIKE, and a bare
+    # limit-1 LIKE could return a neighbor key's row instead of this key's own
+    # receipt. Escape the pattern, scan every candidate, and replay only on an
+    # EXACT key match; anything else (including an unreadable neighbor row) is
+    # not this request's receipt.
+    escaped = request_key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    candidates = frappe.get_list(
         "Version",
-        filters={"ref_doctype": "User", "docname": user, "data": ["like", f"%{request_key}%"]},
+        filters={"ref_doctype": "User", "docname": user, "data": ["like", f"%{escaped}%"]},
         fields=["data"],
-        limit_page_length=1,
+        limit_page_length=25,
         ignore_permissions=True,
     )
-    if prior:
+    recorded = None
+    for candidate in candidates:
         try:
-            recorded = json.loads(prior[0]["data"])
-        except (TypeError, ValueError) as exc:
-            raise frappe.ValidationError("Existing audit record is not valid") from exc
-        if not isinstance(recorded, dict):
-            raise frappe.ValidationError("Existing audit record is not valid")
+            row = json.loads(candidate["data"])
+        except (TypeError, ValueError):
+            continue
+        if isinstance(row, dict) and row.get("request_key") == request_key:
+            recorded = row
+            break
+    if recorded is not None:
         if recorded.get("managed_role") != role or recorded.get("enabled") != enabled:
             raise frappe.ValidationError("Idempotency key conflicts with an existing role change")
         return {

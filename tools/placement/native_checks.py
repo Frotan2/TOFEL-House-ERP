@@ -2540,6 +2540,22 @@ def main():
                     'receivable':comp.default_receivable_account,'payer':payers['one'],
                     'payer_waiver':payers['two'],'before':fin_before}
         fin=check('finance-native-catalog',traced(finance_catalog))
+        def isolation_evidence():
+            # S3: record the effective transaction isolation the first-writer
+            # races run under. Every money path uses anchor locks + locking
+            # re-reads, which are correct on every level; this check exists so
+            # the assumption is evidence, not folklore. (Runner connection;
+            # workers share the server default and the same Frappe stack.)
+            frappe.set_user('Administrator')
+            session_level=frappe.db.sql('SELECT @@SESSION.transaction_isolation')[0][0]
+            global_level=frappe.db.sql('SELECT @@GLOBAL.transaction_isolation')[0][0]
+            version=frappe.db.sql('SELECT VERSION()')[0][0]
+            assert session_level in ('REPEATABLE-READ','READ-COMMITTED',
+                                     'READ-UNCOMMITTED','SERIALIZABLE'),session_level
+            frappe.db.commit()
+            return {'session_isolation':session_level,'global_isolation':global_level,
+                    'server_version':version}
+        check('finance-isolation-evidence',traced(isolation_evidence))
         def case_of(label):
             # Cases are autonamed; the request key is only the receipt identity.
             return frappe.db.get_value(api.CASE,{'subject':users[label]},'name')

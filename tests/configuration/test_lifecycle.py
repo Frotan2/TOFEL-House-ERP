@@ -322,6 +322,16 @@ class AcademicLifecycleTests(unittest.TestCase):
             academic.set_level_status("R" * 24, "PREP-1", 0)
             self.assertEqual(fake.store["TH Program Level"]["PREP-1"].status, "Retired")
 
+    def test_disabled_owner_holds_no_configuration_authority(self):
+        # S3: a disabled login cannot run academic commands even with the
+        # Course Owner role still attached (same rule as the desk gate).
+        for academic, fake in _load_module({"Course Owner"}):
+            self._lifecycle(academic, fake)
+            fake.store["User"]["owner@example.com"]["enabled"] = 0
+            with self.assertRaises(fake.PermissionError):
+                academic.set_level_duration("R" * 24, "STARTER", 3, "Month",
+                                            "2026-07-01", "Semester restructure")
+
     def test_program_deactivation_refuses_while_levels_are_active(self):
         for academic, fake in _load_module({"Course Owner"}):
             self._lifecycle(academic, fake)

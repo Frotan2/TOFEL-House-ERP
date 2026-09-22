@@ -169,7 +169,17 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             raise frappe.ValidationError("Unknown program")
         if not frappe.db.exists(YEAR, year_name):
             raise frappe.ValidationError("Unknown academic year")
-        if frappe.db.exists(APPLICANT, {"student_email_id": subject}):
+        # BUG-ADM-01: serialize concurrent intake on the placement case row.
+        # The subject is unique per case, so same-subject contenders always
+        # share this row even across different decisions; the locking probe
+        # then observes the winner's applicant on every isolation level.
+        case_name = frappe.db.get_value(ATTEMPT, row.attempt, "case_name")
+        if not case_name:
+            raise frappe.ValidationError("Placement decision is missing its attempt case")
+        frappe.db.sql("select name from `tabTH Placement Case` where name=%s for update",
+                      (case_name,))
+        if frappe.db.sql("select name from `tabStudent Applicant` "
+                         "where student_email_id=%s for update", (subject,)):
             raise frappe.ValidationError("Applicant already exists for this placement subject")
         applicant = frappe.get_doc(dict(
             doctype=APPLICANT,

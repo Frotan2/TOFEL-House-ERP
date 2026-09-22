@@ -33,8 +33,11 @@ def _seed_skills():
             })
             doc.flags.ignore_permissions = True
             doc.insert(ignore_permissions=True)
-        except Exception:
+        except frappe.DuplicateEntryError:
             # Another migrate or parallel process may have created it concurrently.
+            # BUG-INST-01: only the duplicate race is swallowed. Any other
+            # failure (validation, schema, connectivity) must fail the migrate
+            # loudly instead of leaving the masters missing.
             frappe.db.rollback()
 
 

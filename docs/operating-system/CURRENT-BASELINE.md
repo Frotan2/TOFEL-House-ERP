@@ -155,3 +155,12 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
   tightened to its documented intent); hosted ref assertions updated + new
   concurrent-calc first-writer race check. Local suite 1122/1122. Found
   GAP-ADJUST-ORPHAN → OD-NEW-08 (owner question, not implemented).
+- 2026-09-22 (S3 implemented, hosted proof pending) — BUG-ADM-01 (case-row lock
+  + locking applicant probe in `record_applicant`) + BUG-ADMIN-01 (escaped LIKE,
+  exact-key receipt scan in `set_managed_role`) + BUG-INST-01 (duplicate-only
+  swallow in `_seed_skills`) + enabled-actor gates (academic + administration) +
+  hosted isolation-evidence probe. Local tests: 3 intake guards, 4 new admin
+  tests (+harness db stub), 1 lifecycle test, 2 install tests, all
+  mutation-checked; 1 governance static test re-pinned to the exact-match
+  receipt. Local suite 1132/1132. Reclassified retired-level → GAP-CATALOG-LINKAGE
+  (S4); recorded GAP-ACADEMIC-IDEMPOTENCY (later engineering slice).

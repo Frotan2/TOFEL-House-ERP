@@ -43,7 +43,10 @@ class GovernanceSurfaceTests(unittest.TestCase):
         self.assertIn('"audit_authority": "Version"', source)
         self.assertIn('for_update=True', source)
         self.assertIn('"changed": not already', source)
-        self.assertIn("not isinstance(recorded, dict)", source)
+        # S3 (BUG-ADMIN-01): receipts validate as dicts and replay only on an
+        # EXACT request_key match (never a bare LIKE hit).
+        self.assertIn("isinstance(row, dict)", source)
+        self.assertIn('row.get("request_key") == request_key', source)
         self.assertIn("cannot revoke its own operational role", source)
         self.assertIn("MANAGED_ROLES", source)
         self.assertIn("PROTECTED_USERS", source)

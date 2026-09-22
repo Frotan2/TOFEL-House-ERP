@@ -27,9 +27,13 @@ is the only net for races and native behavior.
 | BUG-ADMIN-01 | `administration.py` `set_managed_role` | Version replay lookup uses unescaped `LIKE %key%` (`_` is a wildcard in valid keys) and never compares `recorded.request_key` exactly: a crafted key can false-replay and silently drop a role change when state drifted natively. | Escape LIKE wildcards + exact key comparison. |
 | BUG-INST-01 | `install.py` `_seed_skills` | Bare `except Exception` + rollback masks real seed failures; migrate reports success with missing masters. | Catch `DuplicateEntryError` only. |
 
-Small hardening in passing: currency fail-closed in compensation calc (`None` fallback);
-retired TH levels still enrollable/billable (consumers must check status); `_require_course_owner`
-missing enabled check; `set_level_duration` retry errors instead of replaying receipt.
+Small hardening in passing: currency fail-closed in compensation calc (`None` fallback,
+done in S2); `_require_course_owner` missing enabled check (done in S3, plus the
+administration actor gates); `set_level_duration` retry errors instead of replaying
+receipt (stays: academic commands carry no receipt store — GAP-ACADEMIC-IDEMPOTENCY,
+later engineering slice, not owner-gated). Retired TH levels: reclassified — operations
+run on native programs and never consume the TH catalog, so retirement has no
+operational effect at all (GAP-CATALOG-LINKAGE, S4 design).
 
 ## GAPS (missing for real daily use; design slices, some need owner answers)
 
@@ -51,6 +55,15 @@ missing enabled check; `set_level_duration` retry errors instead of replaying re
   instructors with in-period assignments; a due adjustment in an assignment-free
   period is silently skipped. Posting vs skipping is contract semantics — owner
   question, not invented (OD-NEW-08).
+- **GAP-CATALOG-LINKAGE (reclassified during S3):** admission/enrollment/billing
+  run on native programs and never consult the TH academic catalog; retiring a TH
+  level changes no operational behavior. Whether the catalog must govern
+  operations is S4 design (may need an owner answer on the catalog's authority).
+- **GAP-ACADEMIC-IDEMPOTENCY (recorded during S3):** academic control-plane
+  commands validate request keys but keep no receipt store, so a retried call
+  errors instead of replaying. Safe (monotone-version rules refuse the duplicate),
+  but confusing after a timeout. Later engineering slice: route academic commands
+  through receipt semantics. Not owner-gated.
 
 ## Owner-decision list (added; no invention)
 
@@ -84,9 +97,10 @@ use lock + locking re-read (safe under BOTH isolations). Recommend a hosted prob
   mock-based tests (lock queries issued; per-adjustment dedup) + hosted concurrency
   check for the calc.
 - **S3 hardening:** BUG-ADM-01 + BUG-ADMIN-01 + BUG-INST-01 + isolation probe +
-  retired-level guard + small hardening items.
+  enabled-actor gates. (Retired-level guard reclassified to GAP-CATALOG-LINKAGE.)
 - **S4 lifecycle design (gated on OD answers):** GAP-REENROLL, GAP-CONDITIONAL,
-  GAP-ROSTER, GAP-ATT-CORRECT, GAP-EXIT. Design docs first, then slices.
+  GAP-ROSTER, GAP-ATT-CORRECT, GAP-EXIT, GAP-CATALOG-LINKAGE. Design docs first,
+  then slices. Plus later engineering slice GAP-ACADEMIC-IDEMPOTENCY (not gated).
 
 ## Stub-fidelity warning (permanent)
 
