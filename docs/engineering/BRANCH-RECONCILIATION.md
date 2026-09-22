@@ -1,14 +1,47 @@
 # Branch and evidence reconciliation
 
-Date: 2026-09-16 UTC · Rotation record: 2026-09-19 UTC (four rotations)
+Date: 2026-09-16 UTC · Rotation record: 2026-09-22 UTC (five rotations)
 
 ## Active engineering branch
 
 The Arena session branch for current engineering work and hosted qualification is
-`arena/01a0ba0d-tofel-house-erp`. The executable branch boundary is defined once
+`arena/01a0c987-tofel-house-erp`. The executable branch boundary is defined once
 in `tools/session_branch.py`; workflow filters, hosted guards, and their tests
 must remain aligned with it. `tests/foundation/test_branch_boundary.py` now
 enforces that mechanically instead of leaving it to review.
+
+### Rotation of 2026-09-22 (fifth): `arena/01a0ba0d-tofel-house-erp` → historical provenance
+
+The Arena session branch changed again — `arena/01a0c987-tofel-house-erp` is the
+intentional continuation of the previous session branch — so the boundary was
+rotated using the recorded procedure: the canonical value in
+`tools/session_branch.py`, all eleven workflow branch filters and their
+`github.ref` guards, the ten current-status document headers, the D8
+matrix/contract/owner records, the acceptance ledger and the qualification tests
+were updated in the same change. `arena/01a0ba0d-tofel-house-erp` moved from
+**active** to **historical provenance** with its genuine execution intact
+(Foundation runtime run `35451785714`, `fail_reject`, newest head `1ba0ecf`);
+`arena/01a0b5c4-tofel-house-erp` moved to `earlier_active_branch_provenance`;
+`arena/01a0b3a7-tofel-house-erp` moved to `older_active_branch_provenance`;
+`arena/01a0aef4-tofel-house-erp` moved to `oldest_active_branch_provenance`.
+Every run, check, commit and SHA-256 identity in those blocks is unchanged — a
+rotation moves the boundary, never the evidence.
+
+The previously oldest slot (`arena/01a0aafe-tofel-house-erp`, Foundation runtime
+run `35122242581`) retired from the ledger's fixed slots; its full block remains
+verbatim in git history and its run identities stay recorded in the Release Gap
+Map and the immutable production-like-execution evidence, so no evidence
+identity was lost.
+
+At rotation time no hosted workflow had run on `arena/01a0c987-tofel-house-erp`
+yet, so `hosted_execution_state` was recorded as the explicit, fail-closed
+`NOT_EXECUTED_ON_THIS_BRANCH` state carrying **no** run, check, commit or
+report identifier, and `session_branch.ACTIVE_RUNTIME_RUN` pins no run (empty).
+`tools/foundation/d8_validate.py` enforced that absence: any execution identity
+attached to the active block fails the contract, so no earlier branch's run
+could be re-labelled as this branch's execution. Pushing the rotation commit
+will genuinely execute the hosted workflows here; only that observed execution
+may close the absence.
 
 ### Rotation of 2026-09-19 (fourth): `arena/01a0b5c4-tofel-house-erp` → historical provenance
 

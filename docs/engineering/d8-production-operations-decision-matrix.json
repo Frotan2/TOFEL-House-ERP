@@ -2,7 +2,7 @@
   "schema_version": 1,
   "matrix_id": "D8-PRODUCTION-OPERATIONS",
   "date": "2026-09-16",
-  "active_branch": "arena/01a0ba0d-tofel-house-erp",
+  "active_branch": "arena/01a0c987-tofel-house-erp",
   "production_state": "REJECT",
   "overall_gate_state": "BLOCKED",
   "security_dependency_state": "UPSTREAM-BLOCKED / REJECT",

@@ -7,7 +7,7 @@ name: Foundation independent-system recovery
 # identity it observes matches the source's.
 on:
   push:
-    branches: [arena/01a0ba0d-tofel-house-erp]
+    branches: [arena/01a0c987-tofel-house-erp]
     paths:
       - .github/workflows/foundation-independent-recovery.yml
       - tools/foundation/bench_bootstrap.py
@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   source:
-    if: github.ref == 'refs/heads/arena/01a0ba0d-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0c987-tofel-house-erp'
     name: Independent recovery - source system
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -75,7 +75,7 @@ jobs:
           retention-days: 14
 
   target:
-    if: github.ref == 'refs/heads/arena/01a0ba0d-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0c987-tofel-house-erp'
     name: Independent recovery - target system
     needs: source
     runs-on: ubuntu-24.04

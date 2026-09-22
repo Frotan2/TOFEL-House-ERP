@@ -1,6 +1,6 @@
 # Final closure register (human-readable projection)
 
-Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp` @ `62b3c58`
+Date: 2026-09-19 · Active branch: `arena/01a0c987-tofel-house-erp` @ `62b3c58`
 
 > Projected from `final-closure-register.json` (the machine-readable source of
 > truth). Regenerate — do not hand-edit — via:

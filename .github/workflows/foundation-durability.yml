@@ -2,7 +2,7 @@ name: Foundation datastore durability
 
 on:
   push:
-    branches: [arena/01a0ba0d-tofel-house-erp]
+    branches: [arena/01a0c987-tofel-house-erp]
     paths:
       - .github/workflows/foundation-durability.yml
       - tools/foundation/runtime_durability.py
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   durability:
-    if: github.ref == 'refs/heads/arena/01a0ba0d-tofel-house-erp'
+    if: github.ref == 'refs/heads/arena/01a0c987-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:

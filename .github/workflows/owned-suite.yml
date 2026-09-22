@@ -12,7 +12,7 @@ name: Owned suite
 # REJECT and D8 stays BLOCKED regardless of the colour of this check.
 on:
   push:
-    branches: [arena/01a0ba0d-tofel-house-erp]
+    branches: [arena/01a0c987-tofel-house-erp]
   pull_request:
   workflow_dispatch:
 
@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   owned-suite:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/arena/01a0ba0d-tofel-house-erp'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/arena/01a0c987-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
