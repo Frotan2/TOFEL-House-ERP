@@ -59,6 +59,7 @@ class ReturningConvertTests(unittest.TestCase):
         self.student_missing = False
         self.student_customer = "CUST-OLD"
         self.applicant_owned = False
+        self.applicant_status = "Admitted"
         self.already_enrolled = []
         self.drafted_by = "officer@example.com"
         previous = dict(sys.modules)
@@ -76,9 +77,9 @@ class ReturningConvertTests(unittest.TestCase):
             if doctype == "Student Applicant" and as_dict:
                 return SimpleNamespace(name="APP-NEW", first_name="SYNTHETIC Return",
                                        last_name="Applicant", student_email_id=SUBJECT,
-                                       application_status="Admitted")
+                                       application_status=fake.applicant_status)
             if doctype == "Student Applicant" and fieldname == "application_status":
-                return "Admitted"
+                return fake.applicant_status
             if doctype == "Student" and as_dict and not fake.student_missing:
                 return SimpleNamespace(name=fake.existing_student,
                                        student_email_id=fake.student_email,
@@ -178,7 +179,18 @@ class ReturningConvertTests(unittest.TestCase):
             self._convert()
         self.assertIn("Existing Student not found", str(ctx.exception))
 
-    def test_applicant_with_a_student_cannot_link_again(self):
+    def test_returning_convert_succeeds_when_the_student_exists(self):
+        # Hosted S7 (run 35775071986): the pre-existing linked Student
+        # is the returning lane's normal case, not a double conversion —
+        # the duplicate-Student guard must not run on this path.
+        self.applicant_owned = True
+        result = self._convert()
+        self.assertEqual(result["native_student"], "EDU-STU-2025-00001")
+        self.assertTrue(result["returning"])
+
+    def test_first_time_convert_still_refuses_a_double_conversion(self):
+        self.applicant_status = "Applied"
+        self.existing_student = ""
         self.applicant_owned = True
         with self.assertRaises(_ValidationError) as ctx:
             self._convert()

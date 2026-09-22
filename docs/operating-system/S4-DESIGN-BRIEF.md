@@ -23,6 +23,11 @@ continuing to the next level/term has no path except a second email identity.
   journey REUSES the one applicant row and the new decision is the
   per-journey vehicle (open = active + unconverted). Convert links the
   existing Student/Customer. Option A (placement-free lane) deferred.
+  Fix 2026-09-22 (hosted run 35775071986): the duplicate-Student guard
+  runs on the first-time lane only (the linked Student pre-exists by
+  construction on the returning lane), and the returning journey
+  enrolls into the NEXT term — same-intake double enrollment stays
+  refused by both convert and enroll_in_program.
 
 ## GAP-CONDITIONAL → OD-NEW-02
 

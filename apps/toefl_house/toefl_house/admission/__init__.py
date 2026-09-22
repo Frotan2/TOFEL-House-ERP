@@ -554,9 +554,13 @@ def convert_applicant(request_key, name, expected_version):
                 "declare it to open a returning journey")
         if convert_status not in ("Applied", "Admitted"):
             raise frappe.ValidationError("Applicant is not in Applied status")
-        if frappe.db.exists(STUDENT, {"student_applicant": applicant.name}):
-            raise frappe.ValidationError("A native Student already exists for this applicant")
         if returning:
+            # Returning lane: LINK the existing Student — one already
+            # exists for this applicant BY CONSTRUCTION (it was created
+            # by the previous journey and the officer declared it), so
+            # the duplicate-Student guard below must not run here. The
+            # branch itself verifies the link (existence, enabled,
+            # email match) and refuses same-intake double enrollment.
             # Returning lane: LINK the existing Student, never create one.
             # Native Student.student_email_id is unique, so a second
             # Student for this person cannot exist; the email match below
@@ -585,6 +589,10 @@ def convert_applicant(request_key, name, expected_version):
             student_name = linked.name
             customer = linked.customer or frappe.db.get_value(STUDENT, student_name, "customer")
         else:
+            # First-time lane only: no Student may already point at this
+            # applicant, otherwise this would double-convert one person.
+            if frappe.db.exists(STUDENT, {"student_applicant": applicant.name}):
+                raise frappe.ValidationError("A native Student already exists for this applicant")
             student = frappe.get_doc(dict(
                 doctype=STUDENT,
                 first_name=applicant.first_name,

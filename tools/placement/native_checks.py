@@ -4883,11 +4883,16 @@ def main():
             # the returner re-sits placement, reuses the ONE native
             # applicant row, and the journey links the SAME Student and
             # Customer — no duplicate applicant, student, or customer —
-            # then enrolls and bills tuition on the reuse.
+            # then enrolls into the NEXT term and bills tuition there.
             frappe.set_user('Administrator')
             prior=frappe.db.get_value('Student',{'student_email_id':users['candidate4']},
                                       ['name','customer','student_applicant'],as_dict=True)
             assert prior and prior.customer and prior.student_applicant,prior
+            term2=cat['academic_year']+' (SYN-TERM-S7-2)'
+            if not frappe.db.exists('Academic Term',term2):
+                frappe.get_doc(dict(doctype='Academic Term',academic_year=cat['academic_year'],
+                    term_name='SYN-TERM-S7-2',term_start_date='2026-09-01',term_end_date='2026-12-31')).insert()
+                frappe.db.commit()
             alloc=digital_finalize(case4['name'],'s7_pipe4')
             rel=as_user('releaser',lambda:api.release_decision(
                 's7_rel000000000001',alloc['attempt'],7))
@@ -4910,8 +4915,9 @@ def main():
                                    {'student_email_id':users['candidate4']})==1
             dec=as_user('officer',lambda:adm.create_admission(
                 's7_cre000000000001',app['name'],rel['decision'],prior.name,
-                cat['program'],cat['academic_year']))
+                cat['program'],cat['academic_year'],term2))
             assert dec['program']==cat['program'],dec
+            assert frappe.db.get_value(adm.DECISION_DT,dec['name'],'academic_term')==term2
             as_user('admissions_reviewer',lambda:adm.review_admission(
                 's7_rev000000000001',dec['name'],1))
             out=as_user('approver',lambda:adm.decide_admission(
@@ -4927,6 +4933,8 @@ def main():
             second=as_user('enrollment_officer',lambda:enr.enroll_in_program(
                 's7_enr000000000001',dec['name']))
             assert second['docstatus']==1 and second['student']==prior.name,second
+            assert frappe.db.get_value('Program Enrollment',second['program_enrollment'],'academic_term')==term2
+            assert frappe.db.count('Program Enrollment',{'student':prior.name,'docstatus':1})==2
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
                 's7_tuit00000000001',second['program_enrollment'],fin['fee_structure'],
                 '2026-09-01','2026-09-30'))
