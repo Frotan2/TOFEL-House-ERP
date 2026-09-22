@@ -283,11 +283,14 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "name", label: "Admission decision", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "expected_version", label: "Expected version", fieldtype: "Int", reqd: 1 },
 		],
-		"toefl_house.admission.create_admission": [
-			{ fieldname: "student_applicant", label: "Student applicant", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "placement_decision", label: "Released placement decision", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "existing_student", label: "Existing student", fieldtype: "Data" },
-		],
+			"toefl_house.admission.create_admission": [
+				{ fieldname: "student_applicant", label: "Student applicant", fieldtype: "Data", reqd: 1 },
+				{ fieldname: "placement_decision", label: "Released placement decision", fieldtype: "Data", reqd: 1 },
+				{ fieldname: "existing_student", label: "Existing student", fieldtype: "Data" },
+				{ fieldname: "program", label: "Program", fieldtype: "Data", description: "Returning journeys only; blank inherits the applicant record." },
+				{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", description: "Returning journeys only; blank inherits the applicant record." },
+				{ fieldname: "academic_term", label: "Academic term", fieldtype: "Data", description: "Returning journeys only; blank inherits the applicant record." },
+			],
 		"toefl_house.admission.record_applicant": [
 			{ fieldname: "placement_decision", label: "Released placement decision", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "first_name", label: "First name", fieldtype: "Data", reqd: 1 },

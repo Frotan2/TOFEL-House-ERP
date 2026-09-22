@@ -4878,14 +4878,15 @@ def main():
         check('admission-s6-conditional-satisfy-convert-enroll',traced(s6_conditional_journey))
         def s7_returning_journey():
             # S7 (GAP-REENROLL / OD-NEW-01-B): placement-per-term return.
-            # Unconfigured intake refuses the second applicant; after the
-            # Course Owner opts in, the returner re-sits placement and the
-            # journey links the SAME Student and Customer — no duplicate
-            # Customer row — then enrolls and bills tuition on the reuse.
+            # Unconfigured intake refuses; after the Course Owner opts in,
+            # the returner re-sits placement, reuses the ONE native
+            # applicant row, and the journey links the SAME Student and
+            # Customer — no duplicate applicant, student, or customer —
+            # then enrolls and bills tuition on the reuse.
             frappe.set_user('Administrator')
             prior=frappe.db.get_value('Student',{'student_email_id':users['candidate4']},
-                                      ['name','customer'],as_dict=True)
-            assert prior and prior.customer,prior
+                                      ['name','customer','student_applicant'],as_dict=True)
+            assert prior and prior.customer and prior.student_applicant,prior
             alloc=digital_finalize(case4['name'],'s7_pipe4')
             rel=as_user('releaser',lambda:api.release_decision(
                 's7_rel000000000001',alloc['attempt'],7))
@@ -4903,8 +4904,13 @@ def main():
             app=as_user('officer',lambda:adm.record_applicant(
                 's7_rec000000000001',rel['decision'],'SYNTHETIC S7 Returner',
                 cat['program'],cat['academic_year']))
+            assert app['reused'] and app['name']==prior.student_applicant,app
+            assert frappe.db.count('Student Applicant',
+                                   {'student_email_id':users['candidate4']})==1
             dec=as_user('officer',lambda:adm.create_admission(
-                's7_cre000000000001',app['name'],rel['decision'],prior.name))
+                's7_cre000000000001',app['name'],rel['decision'],prior.name,
+                cat['program'],cat['academic_year']))
+            assert dec['program']==cat['program'],dec
             as_user('admissions_reviewer',lambda:adm.review_admission(
                 's7_rev000000000001',dec['name'],1))
             out=as_user('approver',lambda:adm.decide_admission(

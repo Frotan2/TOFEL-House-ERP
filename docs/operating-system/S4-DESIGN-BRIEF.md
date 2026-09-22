@@ -17,6 +17,12 @@ continuing to the next level/term has no path except a second email identity.
   email rule to one ACTIVE applicant per subject instead of one ever.
 - Owner decides: identity rule (A, B, or hybrid) and whether continuation needs
   a new admission decision or a lighter enrollment-only act.
+- SHIPPED AS S7 2026-09-22 (HOSTED-PROVEN pending at write time): option B
+  with a native-forced pivot — pinned native Student Applicant email is
+  UNIQUE, so "one active applicant" is impossible; instead the returning
+  journey REUSES the one applicant row and the new decision is the
+  per-journey vehicle (open = active + unconverted). Convert links the
+  existing Student/Customer. Option A (placement-free lane) deferred.
 
 ## GAP-CONDITIONAL → OD-NEW-02
 

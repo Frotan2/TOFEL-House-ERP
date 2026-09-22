@@ -76,9 +76,9 @@ class ReturningConvertTests(unittest.TestCase):
             if doctype == "Student Applicant" and as_dict:
                 return SimpleNamespace(name="APP-NEW", first_name="SYNTHETIC Return",
                                        last_name="Applicant", student_email_id=SUBJECT,
-                                       application_status="Applied")
+                                       application_status="Admitted")
             if doctype == "Student Applicant" and fieldname == "application_status":
-                return "Applied"
+                return "Admitted"
             if doctype == "Student" and as_dict and not fake.student_missing:
                 return SimpleNamespace(name=fake.existing_student,
                                        student_email_id=fake.student_email,
@@ -158,7 +158,7 @@ class ReturningConvertTests(unittest.TestCase):
         self.assertTrue(result["returning"])
         self.assertEqual(result["version"], 6)
         self.assertEqual(result["program_enrollment"], 0)
-        self.assertEqual(result["native_application_status"], "Applied")
+        self.assertEqual(result["native_application_status"], "Admitted")
 
     def test_email_mismatch_is_refused(self):
         self.student_email = "someone.else@example.test"

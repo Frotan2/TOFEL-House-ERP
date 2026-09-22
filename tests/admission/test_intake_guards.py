@@ -54,6 +54,8 @@ class IntakeGuardTests(unittest.TestCase):
         self.applicant_probe = []
         self.returning_mode = ""
         self.open_journeys = []
+        self.prior_status = "Admitted"
+        self.prior_paid = 0
         previous = dict(sys.modules)
         self.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
         fake = self
@@ -63,7 +65,7 @@ class IntakeGuardTests(unittest.TestCase):
             if "tabTH Placement Case" in query:
                 assert "for update" in query
                 return [{"name": values[0]}]
-            if "tabTH Admission Decision" in query and "join" in query:
+            if "tabTH Admission Decision" in query:
                 assert "for update" in query
                 return list(fake.open_journeys)
             if "tabStudent Applicant" in query:
@@ -100,9 +102,18 @@ class IntakeGuardTests(unittest.TestCase):
             return True
 
         stub.db = SimpleNamespace(get_value=get_value, sql=sql, exists=exists)
-        stub.get_doc = lambda doctype, name=None, **k: _Doc(
-            doctype["doctype"] if isinstance(doctype, dict) else doctype,
-            doctype if isinstance(doctype, dict) else {})
+
+        def get_doc(doctype, name=None, **kwargs):
+            if isinstance(doctype, dict):
+                return _Doc(doctype["doctype"], doctype)
+            if doctype == "Student Applicant":
+                return SimpleNamespace(name=name, program="TH-PROG",
+                                       academic_year="2026-27",
+                                       application_status=fake.prior_status,
+                                       paid=fake.prior_paid)
+            raise AssertionError(f"unexpected get_doc {doctype}")
+
+        stub.get_doc = get_doc
         sys.modules["frappe"] = stub
         sys.modules["frappe.utils"] = stub.utils
 
@@ -164,16 +175,32 @@ class IntakeGuardTests(unittest.TestCase):
             self._record()
         self.assertIn("open admission journey", str(ctx.exception))
 
-    def test_returning_applicant_allowed_after_consumed_journey(self):
+    def test_returning_intake_reuses_the_prior_applicant(self):
         self.applicant_probe = [{"name": "APP-OLD"}]
         self.returning_mode = "placement_per_term"
         self.open_journeys = []
         result = self._record()
+        self.assertEqual(result["name"], "APP-OLD")
+        self.assertTrue(result["reused"])
         self.assertEqual(result["student_email_id"], "subject@example.test")
+        self.assertEqual(result["placement_decision"], "PD-1")
         kinds = ["case" if "Placement Case" in query
-                 else "probe" if "tabStudent Applicant" in query and "join" not in query
+                 else "probe" if "tabStudent Applicant" in query
                  else "journey" for query, _ in self.calls]
         self.assertEqual(kinds, ["case", "probe", "journey"])
+
+    def test_fresh_intake_is_not_a_reuse(self):
+        result = self._record()
+        self.assertFalse(result["reused"])
+
+    def test_paid_prior_applicant_is_refused(self):
+        self.applicant_probe = [{"name": "APP-OLD"}]
+        self.returning_mode = "placement_per_term"
+        self.open_journeys = []
+        self.prior_paid = 1
+        with self.assertRaises(_ValidationError) as ctx:
+            self._record()
+        self.assertIn("not an admission substitute", str(ctx.exception))
 
     def test_missing_attempt_case_fails_closed(self):
         self.case_name = ""

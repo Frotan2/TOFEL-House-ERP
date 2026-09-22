@@ -12,6 +12,7 @@ APPLICANT = "Student Applicant"
 STUDENT = "Student"
 PROGRAM = "Program"
 YEAR = "Academic Year"
+TERM = "Academic Term"
 
 
 def _iso(value):
@@ -132,32 +133,20 @@ def _native_student_write():
         StudentController.update_linked_customer = original_update
 
 
-def _active_duplicate(applicant_name):
-    return frappe.db.sql(
-        "select name from `tabTH Admission Decision` where student_applicant=%s "
-        "and status in ('Draft','Review','Approved','Conditional') for update",
-        (applicant_name,),
-        as_dict=True,
-    )
+def _open_decision_for_applicant(applicant_name):
+    """An open journey on this applicant: an unconsumed active decision.
 
-
-def _open_journey_for_subject(subject):
-    """An open journey: an unconsumed decision on any applicant of this subject.
-
-    Per-applicant activity (``_active_duplicate``) never expires — a
-    converted Approved decision stays Approved forever. The
-    returning-student rule is per SUBJECT instead: a journey is open
-    while its decision is active AND has no linked native Student. A
-    consumed journey (converted, then enrolled) does not block the
-    subject's next placement-per-term journey; a mid-flight one does.
+    Converted Approved decisions stay Approved forever, so bare
+    activity never expires; openness (active AND no linked native
+    Student) is what blocks a new journey. Native Student Applicant
+    email is unique, so one applicant IS one subject — no wider join
+    is ever needed.
     """
     return frappe.db.sql(
-        "select d.name from `tabTH Admission Decision` d "
-        "join `tabStudent Applicant` a on a.name=d.student_applicant "
-        "where a.student_email_id=%s "
-        "and d.status in ('Draft','Review','Approved','Conditional') "
-        "and ifnull(d.native_student,'')='' for update",
-        (subject,),
+        "select name from `tabTH Admission Decision` where student_applicant=%s "
+        "and status in ('Draft','Review','Approved','Conditional') "
+        "and ifnull(native_student,'')='' for update",
+        (applicant_name,),
         as_dict=True,
     )
 
@@ -200,21 +189,40 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             raise frappe.ValidationError("Placement decision is missing its attempt case")
         frappe.db.sql("select name from `tabTH Placement Case` where name=%s for update",
                       (case_name,))
-        if frappe.db.sql("select name from `tabStudent Applicant` "
-                         "where student_email_id=%s for update", (subject,)):
-            # OD-NEW-01/B: a second applicant for one subject is a
-            # returning student re-sitting placement. Fail-closed three
-            # ways — no policy, no governing version, retired policy —
-            # plus a fourth: the subject's previous journey must be
-            # consumed (converted), never mid-flight. All of this runs
-            # under the BUG-ADM-01 case-row lock above.
+        prior = frappe.db.sql("select name from `tabStudent Applicant` "
+                               "where student_email_id=%s for update", (subject,),
+                               as_dict=True)
+        if prior:
+            # OD-NEW-01/B: native applicant email is unique, so a
+            # returning student re-sitting placement REUSES their one
+            # applicant row; the new decision (not a new applicant) is
+            # the per-journey vehicle. Fail-closed three ways — no
+            # policy, no governing version, retired policy — plus a
+            # fourth: the previous journey must be consumed
+            # (converted), never mid-flight. All of this runs under the
+            # BUG-ADM-01 case-row lock above.
             if returning_policies.governing_returning_mode() != "placement_per_term":
                 raise frappe.ValidationError(
                     "Applicant already exists for this placement subject")
-            if _open_journey_for_subject(subject):
+            if _open_decision_for_applicant(prior[0]["name"]):
                 raise frappe.ValidationError(
                     "This subject has an open admission journey; a returning "
-                    "applicant starts only after the previous journey converts")
+                    "journey starts only after the previous journey converts")
+            applicant = frappe.get_doc(APPLICANT, prior[0]["name"])
+            if int(applicant.paid or 0):
+                raise frappe.ValidationError("Paid applicants are not an admission substitute")
+            result = {
+                "name": applicant.name,
+                "student_email_id": subject,
+                "program": applicant.program,
+                "academic_year": applicant.academic_year,
+                "application_status": applicant.application_status or "Applied",
+                "paid": int(applicant.paid or 0),
+                "placement_decision": row.name,
+                "reused": True,
+            }
+            return result, dict(target=applicant.name,
+                                after_hash=digest([applicant.name, subject, row.name]))
         applicant = frappe.get_doc(dict(
             doctype=APPLICANT,
             first_name=first,
@@ -238,6 +246,7 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             "application_status": applicant.application_status or "Applied",
             "paid": int(applicant.paid or 0),
             "placement_decision": row.name,
+            "reused": False,
         }
         return result, dict(target=applicant.name, after_hash=digest([applicant.name, subject, program_name]))
 
@@ -247,7 +256,8 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
 
 
 @frappe.whitelist(methods=["POST"])
-def create_admission(request_key, student_applicant, placement_decision, existing_student=""):
+def create_admission(request_key, student_applicant, placement_decision, existing_student="",
+                     program="", academic_year="", academic_term=""):
     def work(actor):
         applicant_name = _name(student_applicant, "Student Applicant")
         frappe.db.sql("select name from `tabStudent Applicant` where name=%s for update",
@@ -256,14 +266,27 @@ def create_admission(request_key, student_applicant, placement_decision, existin
             applicant = frappe.get_doc(APPLICANT, applicant_name)
         except frappe.DoesNotExistError as exc:
             raise frappe.ValidationError("Student Applicant not found") from exc
-        if (applicant.application_status or "Applied") != "Applied":
+        native_status = applicant.application_status or "Applied"
+        if native_status == "Admitted" and not existing_student:
+            raise frappe.ValidationError(
+                "Admitted applicants convert through their existing Student; "
+                "declare it to open a returning journey")
+        if native_status not in ("Applied", "Admitted"):
             raise frappe.ValidationError("Applicant is not in Applied status")
         if int(applicant.paid or 0):
             raise frappe.ValidationError("Paid applicants are not an admission substitute")
-        if not frappe.db.exists(PROGRAM, applicant.program):
+        if (program or academic_year or academic_term) and not existing_student:
+            raise frappe.ValidationError(
+                "Journey program is declared only for returning admissions")
+        journey_program = _name(program, "Program") if program else applicant.program
+        journey_year = _name(academic_year, "Academic Year") if academic_year else applicant.academic_year
+        journey_term = _name(academic_term, "Academic Term") if academic_term else (applicant.get("academic_term") or "")
+        if not frappe.db.exists(PROGRAM, journey_program):
             raise frappe.ValidationError("Unknown program")
-        if not frappe.db.exists(YEAR, applicant.academic_year):
+        if not frappe.db.exists(YEAR, journey_year):
             raise frappe.ValidationError("Unknown academic year")
+        if journey_term and not frappe.db.exists(TERM, journey_term):
+            raise frappe.ValidationError("Unknown academic term")
         row = _placement_row(placement_decision)
         _unexpired(row)
         subject = _placement_subject(row)
@@ -272,10 +295,14 @@ def create_admission(request_key, student_applicant, placement_decision, existin
         returning = None
         if existing_student:
             returning = _name(existing_student, "Existing Student")
-            if not frappe.db.exists(STUDENT, returning):
+            linked_email = frappe.db.get_value(STUDENT, returning, "student_email_id")
+            if linked_email is None:
                 raise frappe.ValidationError("Existing Student not found")
-        if _active_duplicate(applicant_name):
-            raise frappe.ValidationError("Applicant already has an active admission decision")
+            if (linked_email or "") != (applicant.student_email_id or ""):
+                raise frappe.ValidationError(
+                    "Existing Student does not belong to this applicant")
+        if _open_decision_for_applicant(applicant_name):
+            raise frappe.ValidationError("Applicant already has an open admission decision")
         linked = frappe.db.sql(
             "select name from `tabTH Admission Decision` where placement_decision=%s "
             "and status in ('Draft','Review','Approved','Conditional') for update",
@@ -284,8 +311,8 @@ def create_admission(request_key, student_applicant, placement_decision, existin
             raise frappe.ValidationError("Placement decision is already attached to an active admission")
         doc = frappe.get_doc(dict(
             doctype=DECISION_DT, student_applicant=applicant_name,
-            program=applicant.program, academic_year=applicant.academic_year,
-            academic_term=applicant.get("academic_term") or None,
+            program=journey_program, academic_year=journey_year,
+            academic_term=journey_term or None,
             placement_decision=row.name, existing_student=returning,
             status="Draft", version=1, drafted_by=actor, accepted=0, synthetic=record_synthetic_flag(),
         ))
@@ -296,7 +323,10 @@ def create_admission(request_key, student_applicant, placement_decision, existin
     return _execute("create_admission", request_key,
                     {"student_applicant": student_applicant,
                      "placement_decision": placement_decision,
-                     "existing_student": existing_student or ""}, work)
+                     "existing_student": existing_student or "",
+                     "program": program or "",
+                     "academic_year": academic_year or "",
+                     "academic_term": academic_term or ""}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -517,7 +547,12 @@ def convert_applicant(request_key, name, expected_version):
         )
         if not applicant:
             raise frappe.ValidationError("Student Applicant not found")
-        if (applicant.application_status or "Applied") != "Applied":
+        convert_status = applicant.application_status or "Applied"
+        if convert_status == "Admitted" and not returning:
+            raise frappe.ValidationError(
+                "Admitted applicants convert through their existing Student; "
+                "declare it to open a returning journey")
+        if convert_status not in ("Applied", "Admitted"):
             raise frappe.ValidationError("Applicant is not in Applied status")
         if frappe.db.exists(STUDENT, {"student_applicant": applicant.name}):
             raise frappe.ValidationError("A native Student already exists for this applicant")
