@@ -362,19 +362,13 @@ class ValidateResultJsonTests(unittest.TestCase):
     an ISO date STRING.
     """
 
-    def test_latest_effective_from_is_a_json_safe_string(self):
+    def _validate_with_rows(self, rows):
         import importlib.util
         import types
-        from datetime import date
         from types import SimpleNamespace
 
         previous = dict(sys.modules)
         self.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
-
-        rows = [{"name": "POL-V1", "approver_role": "Accounts User",
-                 "correction_window_days": 30, "effective_from": date(2026, 10, 22),
-                 "reason": "SYN", "set_by": "officer", "set_on": date(2026, 9, 22),
-                 "superseded_on": None, "status": "Active", "synthetic": 1}]
 
         def get_all(doctype, filters=None, fields=None, **kwargs):
             if doctype == "TH Correction Policy":
@@ -417,10 +411,39 @@ class ValidateResultJsonTests(unittest.TestCase):
         corr = load("toefl_house.finance.corrections",
                     APP / "finance/corrections.py")
 
-        result = corr.validate_correction_policy("test-key-validate-00001")
+        return corr.validate_correction_policy("test-key-validate-00001")
+
+    def test_latest_effective_from_is_a_json_safe_string(self):
+        from datetime import date
+
+        result = self._validate_with_rows(
+            [{"name": "POL-V1", "approver_role": "Accounts User",
+              "correction_window_days": 30, "effective_from": date(2026, 10, 22),
+              "reason": "SYN", "set_by": "officer", "set_on": date(2026, 9, 22),
+              "superseded_on": None, "status": "Active", "synthetic": 1}])
         self.assertEqual(result["latest_effective_from"], "2026-10-22")
         self.assertEqual(result["versions"], 1)
         json.dumps(result)  # receipt storage serializes the result
+
+    def test_scheduled_latest_reads_validated_never_effective(self):
+        # Second pre-existing layer of the same hosted check: with v1
+        # still governing today and a scheduled v2 latest, readiness
+        # tracks the latest version (validated), not current governance.
+        from datetime import date
+
+        result = self._validate_with_rows(
+            [{"name": "POL-V1", "approver_role": "Accounts User",
+              "correction_window_days": 30, "effective_from": date(2026, 9, 22),
+              "reason": "SYN v1", "set_by": "officer", "set_on": date(2026, 9, 22),
+              "superseded_on": date(2026, 10, 22), "status": "Retired",
+              "synthetic": 1},
+             {"name": "POL-V2", "approver_role": "Accounts User",
+              "correction_window_days": 30, "effective_from": date(2026, 10, 22),
+              "reason": "SYN v2", "set_by": "officer", "set_on": date(2026, 9, 22),
+              "superseded_on": None, "status": "Active", "synthetic": 1}])
+        self.assertEqual(result, {"versions": 2, "readiness": "validated",
+                                  "latest_effective_from": "2026-10-22"})
+        json.dumps(result)
 
 
 if __name__ == "__main__":

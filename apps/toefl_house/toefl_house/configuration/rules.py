@@ -239,9 +239,14 @@ def compute_readiness(*, status, versions, validations, today,
                     for item in (validations or []))
     if not validated:
         return READINESS_CONFIGURED
-    governing = resolve_governing_strict(
-        existing, today, what=what, date_field=date_field)
-    if governing is None:
+    # Readiness tracks the LATEST version, not current governance: a
+    # scheduled (future) latest reads validated even while a predecessor
+    # still governs today; it reads effective only once the latest itself
+    # is in effect. (Ambiguity already fails closed above, so the strict
+    # resolver's duplicate-date raise is unreachable here.)
+    latest_effective = str(
+        (latest_version(existing, date_field) or {}).get(date_field) or "")
+    if not latest_effective or str(today) < latest_effective:
         return READINESS_VALIDATED
     return READINESS_EFFECTIVE
 
