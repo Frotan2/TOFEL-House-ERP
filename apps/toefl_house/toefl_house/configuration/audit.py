@@ -68,6 +68,9 @@ KIND_AUTHORITY = {
     "create_enrollment_exit_policy": "business_policy",
     "set_enrollment_exit_policy_version": "business_policy",
     "set_enrollment_exit_policy_status": "business_policy",
+    "create_billing_policy": "business_policy",
+    "set_billing_policy_version": "business_policy",
+    "set_billing_policy_status": "business_policy",
 }
 
 

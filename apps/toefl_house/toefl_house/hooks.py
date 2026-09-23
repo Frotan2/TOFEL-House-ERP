@@ -54,6 +54,7 @@ has_permission = {
                  "TH Roster Change Policy",
                  "TH Attendance Correction Policy",
                  "TH Enrollment Exit Policy",
+                 "TH Billing Policy",
                  "TH Configuration Operation", "TH Configuration Audit Event")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
@@ -65,6 +66,7 @@ has_permission["TH Returning Student Policy"] = "toefl_house.permissions.configu
 has_permission["TH Roster Change Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Attendance Correction Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Enrollment Exit Policy"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Billing Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
 permission_query_conditions = {
@@ -97,6 +99,7 @@ permission_query_conditions["TH Returning Student Policy"] = "toefl_house.permis
 permission_query_conditions["TH Roster Change Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Attendance Correction Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Enrollment Exit Policy"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Billing Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
 override_whitelisted_methods = {
@@ -142,6 +145,9 @@ doc_events = {
     },
     "TH Enrollment Exit Policy": {
         "validate": "toefl_house.enrollment.doctype.th_enrollment_exit_policy.th_enrollment_exit_policy.validate",
+    },
+    "TH Billing Policy": {
+        "validate": "toefl_house.finance.doctype.th_billing_policy.th_billing_policy.validate",
     },
     "TH Configuration Operation": {
         "validate": "toefl_house.operations.doctype.th_configuration_operation.th_configuration_operation.validate",

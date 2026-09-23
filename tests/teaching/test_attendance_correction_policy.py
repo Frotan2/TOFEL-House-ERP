@@ -129,6 +129,7 @@ POLICY_CONTROLLERS = (
     APP / "teaching/doctype/th_attendance_correction_policy/th_attendance_correction_policy.py",
     APP / "teaching/doctype/th_roster_change_policy/th_roster_change_policy.py",
     APP / "enrollment/doctype/th_enrollment_exit_policy/th_enrollment_exit_policy.py",
+    APP / "finance/doctype/th_billing_policy/th_billing_policy.py",
 )
 
 

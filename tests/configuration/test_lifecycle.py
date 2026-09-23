@@ -668,6 +668,18 @@ class AcceptanceRehearsalTests(unittest.TestCase):
             corrections = importlib.util.module_from_spec(corr_spec)
             corr_spec.loader.exec_module(corrections)
 
+            # 8b. Owner opens bounded billing (S11): tuition bills only
+            # under a governing billing policy, like every deployment.
+            bill_spec = importlib.util.spec_from_file_location(
+                "toefl_house.finance.policies", APP / "finance/policies.py")
+            billing = importlib.util.module_from_spec(bill_spec)
+            bill_spec.loader.exec_module(billing)
+            billing.create_billing_policy("B" * 24, "MISSION-BILLING",
+                                          "Mission billing rule")
+            billing.set_billing_policy_version(
+                "V" * 24, "MISSION-BILLING", "2026-08-01",
+                "Owner opens bounded mission billing", 90, 30, "any")
+
             # Native Program for LVL-1:
             lvl1_doc = fake.store["TH Program Level"]["LVL-1"]
             native_prog = lvl1_doc.native_program

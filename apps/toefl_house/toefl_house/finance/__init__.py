@@ -83,6 +83,17 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             raise frappe.ValidationError(str(exc)) from exc
         if not frappe.db.exists(PROGRAM_ENROLLMENT, pe_name):
             raise frappe.ValidationError("Unknown program enrollment")
+        from toefl_house.finance import policies as billing_policies
+        terms = billing_policies.governing_billing_terms()
+        try:
+            if not terms:
+                raise ValueError("No active billing policy governs this date; "
+                                 "the Course Owner must set one first")
+            billing_policies.check_posting_bounds(
+                posting, frappe.utils.today(),
+                terms["max_backdate_days"], terms["max_future_days"])
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
         frappe.db.sql("select name from `tabProgram Enrollment` where name=%s for update",
                       (pe_name,))
         pe = frappe.db.get_value(PROGRAM_ENROLLMENT, pe_name,
@@ -212,6 +223,19 @@ def issue_placement_fee(request_key, case, customer, posting_date, due_date):
             raise frappe.ValidationError(str(exc)) from exc
         if not frappe.db.exists("TH Placement Case", case_name):
             raise frappe.ValidationError("Unknown placement case")
+        from toefl_house.finance import policies as billing_policies
+        terms = billing_policies.governing_billing_terms()
+        try:
+            if not terms:
+                raise ValueError("No active billing policy governs this date; "
+                                 "the Course Owner must set one first")
+            billing_policies.check_posting_bounds(
+                posting, frappe.utils.today(),
+                terms["max_backdate_days"], terms["max_future_days"])
+            billing_policies.check_fee_timing(
+                case_name, terms["placement_fee_timing"])
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
         frappe.db.sql("select name from `tabTH Placement Case` where name=%s for update",
                       (case_name,))
         if not frappe.db.exists("TH Placement Case", case_name):

@@ -23,6 +23,7 @@ def main():
     from toefl_house.teaching import policies as teap
     from toefl_house.teaching import attendance_corrections as teac
     from toefl_house import finance as fin_m
+    from toefl_house.finance import policies as billp
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
     report={'scope':'Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20','status':'running','checks':[],
@@ -2564,6 +2565,25 @@ def main():
             # Cases are autonamed; the request key is only the receipt identity.
             return frappe.db.get_value(api.CASE,{'subject':users[label]},'name')
         CASE9=case_of('candidate9')
+        check('finance-billing-unconfigured-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_nopolicy_0000001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
+        def billing_fixture():
+            # S11 (OD-NEW-03/OD-NEW-04): the billing policy fixture. No
+            # policy exists before this point (proven by the check
+            # above); the fixture opens bounded billing for every
+            # journey below. Bounds and timing are fixture
+            # configuration, not approved operational policy.
+            frappe.set_user('Administrator')
+            pol=as_user('course_owner',lambda:billp.create_billing_policy(
+                'fin_billpol_create01','SYN-BILLING','SYN billing rule'))
+            assert pol['version_count']==0,pol
+            v1=as_user('course_owner',lambda:billp.set_billing_policy_version(
+                'fin_billpol_versn001','SYN-BILLING','2026-01-01',
+                'SYN fixture opens bounded billing',90,30,'any'))
+            assert v1['governing_max_backdate_days']==90 and v1['governing_max_future_days']==30,v1
+            assert v1['governing_placement_fee_timing']=='any',v1
+            frappe.db.commit()
+            return {'policy':pol['name']}
+        check('finance-billing-fixture',traced(billing_fixture))
         check('finance-tuition-unknown-enrollment-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_pe_0000000001','NO-SUCH-PE',fin['fee_structure'],'2026-09-01','2026-09-30'))))
         check('finance-tuition-bad-window-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_window_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-30','2026-09-01'))))
         def wrong_year_structure():
@@ -5236,6 +5256,65 @@ def main():
             return {'withdrawal':wd['name'],'dismissal':posted['name'],'denied':d2['name'],
                     'policy':pol['name']}
         check('enrollment-s10-exit-withdraw-dismiss',traced(s10_exit_journey))
+        def s11_billing_journey():
+            # S11 (GAP-BILL-POLICY / OD-NEW-03/OD-NEW-04): billing policy
+            # bounds + placement-fee timing. Posting dates judge the
+            # governing backdate/future bounds while due dates stay
+            # native terms; the placement fee judges the governing
+            # timing threshold; narrowed terms bind new bills live; and
+            # retiring the policy is the billing off-switch.
+            frappe.set_user('Administrator')
+            frappe.db.set_value('Item Price',{'item_code':'SYN-PLACEMENT-FEE','price_list':'TOEFL House Standard'},'price_list_rate',4000)
+            today=str(frappe.utils.today())
+            back90=str(frappe.utils.add_days(today,-90));back91=str(frappe.utils.add_days(today,-91))
+            fwd30=str(frappe.utils.add_days(today,30));fwd31=str(frappe.utils.add_days(today,31))
+            back7=str(frappe.utils.add_days(today,-7));back8=str(frappe.utils.add_days(today,-8))
+            longdue=str(frappe.utils.add_days(today,400))
+            subs={}
+            for label in ('s11a','s11b','s11c','s11d','s11e','s11f'):
+                email='synthetic-'+label+'@example.test'
+                if not frappe.db.exists('User',email):
+                    frappe.get_doc(dict(doctype='User',email=email,first_name='Synthetic '+label,
+                        enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],roles=[])).insert()
+                subs[label]=email
+            if not frappe.db.exists('Customer',{'customer_name':'SYN S11 Payer'}):
+                frappe.get_doc(dict(doctype='Customer',naming_series='CUST-.YYYY.-',
+                    customer_name='SYN S11 Payer',customer_group='Commercial',
+                    territory=frappe.get_all('Territory',limit=1)[0].name)).insert()
+            payer=frappe.db.get_value('Customer',{'customer_name':'SYN S11 Payer'})
+            frappe.db.commit()
+            cases={}
+            for label in ('s11a','s11b','s11c','s11d','s11e','s11f'):
+                cases[label]=as_user('publisher',lambda:api.create_case('s11_case_'+label+'_0001',subs[label]))['name']
+            bill=lambda key,case,post,due:as_user('finance_officer',lambda:fin_m.issue_placement_fee(key,case,payer,post,due))
+            assert unavailable(lambda:bill('s11_back_out_000001',cases['s11a'],back91,today),'more than 90 days back')
+            b1=bill('s11_back_edge_00001',cases['s11a'],back90,today)
+            assert b1['case']==cases['s11a'],b1
+            assert unavailable(lambda:bill('s11_fwd_out_0000001',cases['s11b'],fwd31,fwd31),'more than 30 days forward')
+            b2=bill('s11_fwd_edge_0000001',cases['s11b'],fwd30,fwd30)
+            assert b2['case']==cases['s11b'],b2
+            b3=bill('s11_longdue_00000001',cases['s11c'],today,longdue)
+            assert b3['case']==cases['s11c'],b3
+            v2=as_user('course_owner',lambda:billp.set_billing_policy_version('s11_pol_versn_000001','SYN-BILLING',today,'SYN owner narrows billing to release',7,7,'released'))
+            assert v2['governing_max_backdate_days']==7 and v2['governing_placement_fee_timing']=='released',v2
+            polname=frappe.db.get_value('TH Billing Policy',{'code':'SYN-BILLING'},'name')
+            assert str(frappe.db.get_value('TH Billing Policy Version',{'parent':polname,'effective_from':'2026-01-01'},'superseded_on'))==today
+            assert unavailable(lambda:bill('s11_back8_000000001',cases['s11e'],back8,today),'more than 7 days back')
+            assert unavailable(lambda:bill('s11_time_unrel_00001',cases['s11d'],today,today),'after the decision is released')
+            rel=frappe.db.sql("select a.case_name as cn from `tabTH Placement Decision` d join `tabTH Placement Attempt` a on a.name=d.attempt left join `tabSales Invoice` si on si.th_placement_case=a.case_name and si.docstatus!=2 where si.name is null order by d.creation asc limit 2",as_dict=True)
+            assert len(rel)==2,rel
+            b4=bill('s11_back7_000000001',rel[0].cn,back7,today)
+            assert b4['case']==rel[0].cn,b4
+            off=as_user('course_owner',lambda:billp.set_billing_policy_status('s11_pol_retire_00001','SYN-BILLING',0))
+            assert off['status']=='Retired',off
+            assert unavailable(lambda:bill('s11_off_00000000001',cases['s11f'],today,today),'No active billing policy')
+            on=as_user('course_owner',lambda:billp.set_billing_policy_status('s11_pol_react_000001','SYN-BILLING',1))
+            assert on['status']=='Active',on
+            b5=bill('s11_rel0000000000001',rel[1].cn,today,today)
+            assert b5['case']==rel[1].cn,b5
+            frappe.db.commit()
+            return {'back_edge':b1['sales_invoice'],'fwd_edge':b2['sales_invoice'],'long_due':b3['sales_invoice'],'narrowed':b4['sales_invoice'],'reactivated':b5['sales_invoice']}
+        check('finance-s11-billing-policy-bounds-timing',traced(s11_billing_journey))
         report['status']='pass'
 
     except Exception as exc:

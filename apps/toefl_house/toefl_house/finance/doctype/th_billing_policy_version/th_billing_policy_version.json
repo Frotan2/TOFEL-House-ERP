@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "creation": "2026-09-23 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "effective_from",
+  "column_break_1",
+  "max_backdate_days",
+  "max_future_days",
+  "placement_fee_timing",
+  "section_break_1",
+  "reason",
+  "column_break_2",
+  "set_by",
+  "set_on",
+  "superseded_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "effective_from",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Effective from",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "How far back a posting date may reach from the billing day.",
+   "fieldname": "max_backdate_days",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Max backdate days",
+   "reqd": 1
+  },
+  {
+   "description": "How far forward a posting date may reach from the billing day.",
+   "fieldname": "max_future_days",
+   "fieldtype": "Int",
+   "label": "Max future days",
+   "reqd": 1
+  },
+  {
+   "description": "Pipeline progress a case must show before its placement fee bills: any (upfront), a native attempt stage, or released.",
+   "fieldname": "placement_fee_timing",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Placement fee timing",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Why the owner set these terms. Mandatory on every version; part of the audit trail.",
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "set_by",
+   "fieldtype": "Link",
+   "label": "Set by",
+   "options": "User"
+  },
+  {
+   "fieldname": "set_on",
+   "fieldtype": "Datetime",
+   "label": "Set on"
+  },
+  {
+   "description": "Date this version stopped governing new bills. Set by the next version's append; never edited.",
+   "fieldname": "superseded_on",
+   "fieldtype": "Date",
+   "label": "Superseded on"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Finance",
+ "name": "TH Billing Policy Version",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
