@@ -5086,6 +5086,7 @@ def main():
             frappe.set_user(approver)
             assert denied(lambda:as_user('attendance_recorder',lambda:teac.approve_attendance_correction(
                 's9_app_role_0000001',r1['name'])))
+            frappe.set_user(approver)
             posted=teac.approve_attendance_correction('s9_app0000000000001',r1['name'])
             frappe.set_user('Administrator')
             assert posted['status']=='Posted',posted
