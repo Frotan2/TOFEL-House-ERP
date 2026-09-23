@@ -177,6 +177,7 @@ class EnrollmentExitCommandTests(unittest.TestCase):
         stub.db = SimpleNamespace(get_value=get_value, get_all=get_all,
                                   sql=sql, exists=exists)
         stub.get_roles = lambda user: set(fake.actor_roles)
+        stub.get_list = lambda *args, **kwargs: []
 
         def delete_doc(doctype, name, ignore_permissions=False, **kwargs):
             assert doctype == "Course Enrollment"
@@ -444,6 +445,23 @@ class EnrollmentExitCommandTests(unittest.TestCase):
             self.exits.deny_enrollment_dismissal(
                 "test-key-enrexit-dn02", "EXIT-1")
         self.assertIn("approver role", str(ctx.exception))
+
+    def test_native_cancel_read_scopes_ignore_permissions_to_course_enrollment(self):
+        stub = sys.modules["frappe"]
+        seen = []
+
+        def recorder(doctype, *args, **kwargs):
+            seen.append((doctype, kwargs.get("ignore_permissions")))
+            return []
+
+        stub.get_list = recorder
+        with self.exits._native_cancel_read():
+            stub.get_list("Course Enrollment",
+                          filters={"program_enrollment": "PE-1"})
+            stub.get_list("Program Enrollment", filters={"name": "PE-1"})
+        self.assertEqual(seen, [("Course Enrollment", True),
+                                ("Program Enrollment", None)])
+        self.assertIs(stub.get_list, recorder)
 
 
 if __name__ == "__main__":

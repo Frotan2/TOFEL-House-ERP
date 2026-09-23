@@ -68,7 +68,7 @@ Fact: submitted Student Attendance has no correction path; errors are permanent.
   and audit event; native record amended through the command context.
 - Option B — same-day recorder edit: narrow window, no approval.
 - Owner decides: authority, window, and whether history must show both marks.
-- SHIPPED AS S9 2026-09-22 (HOSTED-PROVEN pending at write time): option A
+- SHIPPED AS S9 2026-09-22 (HOSTED-PROVEN 2026-09-23, run 35826357916): option A
   as a D3-shaped request/approve/deny flow (TH Attendance Correction
   Policy with approver-role + window-days terms; requests value-pin the
   governing terms). Approval voids the erroneous mark and submits a
@@ -85,6 +85,14 @@ Fact: no unenroll/withdraw/expel path; no post-conversion revocation.
 - Owner decides: exit categories, authorities, and financial consequences
   (forfeit vs prorate vs refund — amounts stay native config, but the POLICY is
   the owner's).
+- SHIPPED AS S10 2026-09-23 (HOSTED-PROVEN pending at write time): option A
+  as withdrawals single-shot plus D3-shaped dismissal request/approve/deny
+  (TH Enrollment Exit Policy with approver-role terms; exits value-pin the
+  governing terms). Posting deletes the derived Course Enrollments and
+  cancels the Program Enrollment (row preserved); roster, attendance, and
+  admission history are untouched. Submitted Fees block every exit until
+  finance settles the receivable; each exit snapshots every Fees on record,
+  so the consequence is referenced, never re-implemented.
 
 ## GAP-CATALOG-LINKAGE → possible OD-NEW-09
 

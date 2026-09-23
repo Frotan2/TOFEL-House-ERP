@@ -21,6 +21,7 @@ is refused while submitted Fees bill the enrollment, and the exit row
 snapshots every Fees on record so finance acts on native documents.
 """
 
+from contextlib import contextmanager
 from datetime import date
 import frappe
 
@@ -307,13 +308,41 @@ def _check_exit_date(clean_exit, enrollment_date):
         raise frappe.ValidationError("Exit date cannot precede the enrollment date")
 
 
+@contextmanager
+def _native_cancel_read():
+    """Let native on_cancel re-query Course Enrollments without a read grant.
+
+    Native ProgramEnrollment.on_cancel lists its Course Enrollments via
+    the permission-checked frappe.get_list — the query is gated even
+    when it returns nothing, and the Enrollment Officer deliberately
+    holds no Course Enrollment read grant. The command already deleted
+    the rows explicitly, so this scoped patch only lets the native
+    no-op read run; it forces ignore_permissions for Course Enrollment
+    reads alone, and only for the cancel call. Do not patch
+    frappe.has_permission or call set_user: both persist onto the
+    Enrollment Officer SID on gunicorn workers.
+    """
+    original_get_list = frappe.get_list
+
+    def get_list(doctype, *args, **kwargs):
+        if doctype == CE:
+            kwargs["ignore_permissions"] = True
+        return original_get_list(doctype, *args, **kwargs)
+
+    frappe.get_list = get_list
+    try:
+        yield
+    finally:
+        frappe.get_list = original_get_list
+
+
 def _cancel_enrollment(pe_name):
     """Delete derived Course Enrollments, then cancel the enrollment.
 
     Native ProgramEnrollment.on_cancel deletes the Course Enrollments
     itself, but its delete_doc calls carry no permission context — the
     command deletes them explicitly first (identical outcome,
-    deterministic permission), leaving native on_cancel a no-op.
+    deterministic permission), leaving native on_cancel a no-op read.
     """
     ce_names = frappe.db.get_all(
         CE, filters={"program_enrollment": pe_name}, pluck="name")
@@ -321,7 +350,8 @@ def _cancel_enrollment(pe_name):
         frappe.delete_doc(CE, ce_name, ignore_permissions=True)
     pe = frappe.get_doc(PE, pe_name)
     pe.flags.ignore_permissions = True
-    pe.cancel()
+    with _native_cancel_read():
+        pe.cancel()
     if int(pe.docstatus or 0) != 2:
         raise frappe.ValidationError("The program enrollment was not cancelled")
     return list(ce_names)
