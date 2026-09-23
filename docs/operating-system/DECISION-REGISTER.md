@@ -364,13 +364,25 @@ no implementation, no consumer assumption, no placeholder.
 Authority = owner; status = AWAITING ANSWER; source =
 `docs/operating-system/DOMAIN-AUDIT-AND-PLAN.md`; consequence = the S4 lifecycle
 design slices stay scoped-only until answered. No owner answer is invented or assumed.
+Where a slice already shipped the effective-dated owner mechanism, the entry notes
+the shipment and its hosted proof; the owner's VALUES stay awaited and the
+mechanism fails closed until the owner sets them.
 
 - **OD-NEW-01** returning-student identity + continuation rules (new placement per term?).
 - **OD-NEW-02** conditional-satisfaction authority + upgrade path.
 - **OD-NEW-03** billing date bounds (future/backdate policy).
+  Mechanism SHIPPED as S11 2026-09-23 (TH Billing Policy bounds facet;
+  hosted-proven run 35830061680, 590/590) — owner values (how far back /
+  forward a posting date may reach) still AWAITING ANSWER.
 - **OD-NEW-04** placement-fee timing (upfront vs on-delivery) + one-customer-per-person guidance.
+  Mechanism SHIPPED as S11 2026-09-23 (TH Billing Policy timing facet:
+  any / attempt stage / released; hosted-proven run 35830061680,
+  590/590) — owner values (the timing threshold) still AWAITING ANSWER.
 - **OD-NEW-05** roster-change authority (who may add/move students post-creation).
 - **OD-NEW-06** attendance-correction authority + window.
 - **OD-NEW-07** student exit/unenroll policy + financial consequences.
+  Mechanism SHIPPED as S10 2026-09-23 (TH Enrollment Exit Policy;
+  hosted-proven run 35827688760, 587/587) — owner values (exit
+  categories, approver, financial consequences) still AWAITING ANSWER.
 - **OD-NEW-08** whether contract adjustments post in periods with no assignments
   (GAP-ADJUST-ORPHAN; found during S2).

@@ -109,6 +109,15 @@ retiring a TH level changes nothing operationally.
 Billing-date bounds and placement-fee timing are pure policy inputs. Engineering
 needs only the answer; implementation is validators + tests (small slice).
 
+- SHIPPED AS S11 2026-09-23 (HOSTED-PROVEN 2026-09-23, run 35830061680):
+  both answers as one effective-dated owner mechanism (TH Billing Policy
+  with max-backdate/max-future-days bounds plus placement-fee timing:
+  any / native attempt stage / released). Both billing commands judge the
+  live governing terms: the POSTING date must sit inside the bounds (due
+  dates stay native terms) and the fee bills only once the case reaches
+  the timing threshold; unconfigured / retired / version-less refuses.
+  Fail-closed; retire = off-switch.
+
 ## GAP-ACADEMIC-IDEMPOTENCY (not owner-gated)
 
 Academic control-plane commands validate request keys but keep no receipts, so a
