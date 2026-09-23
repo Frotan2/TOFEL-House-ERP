@@ -201,6 +201,27 @@ owner reopens it.)
 - Status: RESOLVED. Source: PRODUCTION-READINESS-2026-09-19; gap map.
 - Affected: security, release.
 
+### R-VBRANCH — This-branch hosted qualification — RECORDED 2026-09-23
+- Domain: release. Authority: observed CI execution (no owner act needed).
+- Statement: genuine push-triggered hosted execution on
+  `arena/01a0c987-tofel-house-erp`, recorded in the acceptance ledger's
+  active block (EXECUTED): Foundation runtime validation newest run
+  `35826357964` @ `bfab083` (fail_reject — the SEC-DEPS-01 condition
+  reproduced here, not waived); Placement synthetic content qualification
+  newest run `35834461078` @ `89b393e`, 596/596; Owned suite newest run
+  `35837939344` @ `cda062d`; all ten named workflows with newest-run
+  identities in the ledger. Branch pins match the working branch; no
+  older-branch run relabeled.
+- Status: RESOLVED. Source:
+  `docs/engineering/foundation-production-acceptance-ledger.json`
+  (`active_branch_qualification`); `tools/session_branch.py`
+  (`ACTIVE_RUNTIME_RUN`); this entry supersedes V-BRANCH (2026-09-22),
+  which honestly recorded the pre-execution absence.
+- Consequences: currency is maintained by CI mechanism (every push re-runs
+  the owned suite; path-filtered workflows re-run when their trigger paths
+  change; any future rotation re-opens the absence by procedure), not by
+  hand-editing. Affected: release.
+
 ---
 
 ## OWNER DECISION REQUIRED (awaiting owner answers)
@@ -331,14 +352,6 @@ owner reopens it.)
 - Status: EVIDENCE REQUIRED (P4 structural model executed; trust boundary not).
 - Source: gap map §1.6 (P4). Affected: backup-restore/durability gates.
 
-### V-BRANCH — This-branch hosted qualification
-- Domain: release. Statement: hosted suite execution on the working branch
-  at its HEAD (branch-boundary pins updated; no relabeling of older runs).
-- Status: EVIDENCE REQUIRED (working branch
-  `arena/01a0c987-tofel-house-erp` has no cited hosted run at HEAD `e82936f`;
-  branch-boundary pins rotated to this branch 2026-09-22 per procedure, still
-  awaiting genuine push-triggered execution — see CURRENT-BASELINE.md).
-- Source: CURRENT-BASELINE.md; branch-boundary tests. Affected: release.
 
 ---
 

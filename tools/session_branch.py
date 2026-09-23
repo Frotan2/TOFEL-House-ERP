@@ -14,15 +14,17 @@ ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 #
 # A rotation moves the previous session branch and its runs into historical
 # provenance; it does not move the runs with it. At the 2026-09-22 rotation
-# (fifth) the active branch has NO hosted runtime evidence, recorded as the
-# explicit NOT_EXECUTED_ON_THIS_BRANCH state with no run pinned: pushing the
-# rotation commit will genuinely execute the hosted workflows here, and only
-# that observed execution may close the absence. tools/foundation/d8_validate.py
-# fails closed on this state: any execution identity attached to the active
-# block fails the contract, so no earlier branch's run can be re-labelled as
+# (fifth) the active branch had NO hosted runtime evidence, recorded as the
+# explicit NOT_EXECUTED_ON_THIS_BRANCH state with no run pinned. Genuine
+# push-triggered execution has since closed the absence: Foundation runtime
+# validation newest run 35826357964 (fail_reject) at bfab083, recorded
+# 2026-09-23 with the full newest-run set in the acceptance ledger's
+# active_branch_qualification block. tools/foundation/d8_validate.py asserts
+# both the EXECUTED status and the exact executed run, so the pinned run may
+# not be silently swapped and no earlier branch's run can be re-labelled as
 # an execution on this branch.
-ACTIVE_RUNTIME_STATE = "NOT_EXECUTED_ON_THIS_BRANCH"
-ACTIVE_RUNTIME_RUN = ""
+ACTIVE_RUNTIME_STATE = "EXECUTED"
+ACTIVE_RUNTIME_RUN = "35826357964"
 
 # Historical provenance pins: the last two Arena session branches that produced
 # a recorded Foundation runtime REJECT. These are evidence identity, never

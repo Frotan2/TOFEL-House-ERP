@@ -1,8 +1,10 @@
 # S4 Lifecycle Design Brief (options only — no owner answer invented)
 
-Status: SCOPED ONLY. Nothing below is implemented. Each item names the gap, the
-decision the owner must make, and the engineering options once answered. Verdict
-stays NOT READY; production stays REJECT/BLOCKED.
+Status: ALL ITEMS SHIPPED 2026-09-23 as versioned/effective-dated/audited owner
+mechanisms (S6–S13, hosted-proven; owner VALUES still awaited — see
+DECISION-REGISTER.md). Each item names the gap, the decision the owner must
+make, and the engineering options once answered. Verdict stays NOT READY;
+production stays REJECT/BLOCKED.
 
 ## GAP-REENROLL (critical) → OD-NEW-01
 

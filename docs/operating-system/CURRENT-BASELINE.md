@@ -38,6 +38,16 @@ milestone (slice completion, gate change, authorization change).
 | Hosted qualification at this HEAD | **NOT_EXECUTED ON THIS BRANCH** — no cited hosted run for `e82936f` on `arena/01a0c987-tofel-house-erp`. Pushing the rotation commit will genuinely execute the named hosted workflows here; older-branch runs stay historical provenance and must not be relabeled. |
 | `d8_validate.py` | VERIFIED 2026-09-22: exit 0 with D8 BLOCKED / production REJECT, `active_branch_hosted_execution` `NOT_EXECUTED_ON_THIS_BRANCH`, `checkout_branch_matches_active` `true`, `sec_deps` UPSTREAM-BLOCKED / REJECT, 14/14 `checks` PASS. Fail-closed absence enforced: any execution identity on the active block fails the contract. |
 
+### Re-validation after the S7–S13 lifecycle arc (HEAD `cda062d`)
+
+| Check | Result (this branch, HEAD `cda062d`) |
+|---|---|
+| `python3 -m unittest discover -s tests -t .` | 1333 tests: **1333 pass, 0 fail** (verified at `89b393e` pre-push; docs-only `cda062d` re-verified in tree). Zero functional/domain failures. |
+| `ruff check .` | Clean via `.foundation/lint-venv` (verified at `89b393e`; docs-only changes since). |
+| `node --test` (4 `tests/foundation/*.cjs` files) | 4 pass, 0 fail (verified at `89b393e`). |
+| Hosted qualification at this HEAD | Placement synthetic content qualification green **596/596** (run `35834461078` @ `89b393e`, report SHA-256 independently verified `51169d6e…590b`, production REJECT). Docs-only `cda062d` re-verified by the Owned suite (run `35837939344`, success); the placement workflow's path filters exclude docs-only pushes by design. Ledger active block now EXECUTED (see update log). |
+| `d8_validate.py` | VERIFIED 2026-09-23: exit 0 with D8 BLOCKED / production REJECT, `active_branch_hosted_execution` `EXECUTED` (newest Foundation runtime run `35826357964`, fail_reject), `checkout_branch_matches_active` `true`, `sec_deps` UPSTREAM-BLOCKED / REJECT, 14/14 `checks` PASS. |
+
 ## Completed domains (with qualifying evidence)
 
 - Placement: CLOSED / QUALIFIED — `4571e6c`, run `34932512626`, 332/332.
@@ -50,16 +60,20 @@ milestone (slice completion, gate change, authorization change).
 - T1/T2 (compensation framework): `fa02137`, run `35066349129`, 536/536. T4 (D3 framework): `ed2d81d`, run `35069740378`, 539/539. T3 (command Pages): `3587700`, run `35073376790`, 542/542.
 - Academic Control Plane slices 1–5 + D1 assessment-policy carrier (structure only) + D3 effective-dated versions (HEAD): local suites (`tests/configuration`, `tests/finance/test_corrections.py`, `tests/desk`) + controller-registration hosted run `35317973709` @ `c2b779b` (75 checks + 600+ scenarios, 0 errors).
 - Desks (7 role surfaces): `tests/desk` + `test_role_desks.cjs` (local contract + runtime smoke).
+- Lifecycle arc S1–S13 (audited bugs + owner-policy mechanisms for
+  OD-NEW-01..09): latest `89b393e`, run `35834461078`, 596/596, report
+  `51169d6e…590b`, production REJECT (per-slice proofs in the update log).
 
 ## Current next slice
 
-**No implementation slice is currently authorized beyond evidence/rotation work.**
-The next actions available without new owner decisions are:
+**S1–S13 are hosted-proven; no further implementation slice is authorized
+without new owner answers.** The owner-policy mechanisms for OD-NEW-01..09
+are shipped and fail closed; the owner's VALUES for each are still awaited
+(see `DECISION-REGISTER.md`), as are the D1/D3-remainder/D4/D5/D6a/D7/D8N
+answers. The next actions available without new owner decisions are:
 
-1. Branch-boundary rotation for `arena/01a0c987-tofel-house-erp` (canonical pin,
-   workflow filters, headers, governance JSON, ledger provenance — the G1/G2
-   precedent), followed by re-execution of the named hosted workflows on this
-   branch. Until then, hosted state is honestly `NOT_EXECUTED_ON_THIS_BRANCH`.
+1. Owner value-setting in Owner Settings for the shipped OD-NEW mechanisms
+   (values only — no engineering).
 2. Readable dependency-audit output from a log-capable environment (SEC-DEPS-01
    evidence, no waiver).
 3. Real-server restore rehearsal record + TLS/session evidence on the Tailscale
@@ -70,12 +84,15 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
 
 ## Known blockers
 
-1. Branch rotation pending (3 pin tests fail by design until rotated).
-2. SEC-DEPS-01 REJECT (upstream-blocked; standing owner REJECT).
+1. Branch rotation for this session branch COMPLETE (`e82936f`; pins green;
+   ledger active block EXECUTED with genuine runs — see update log).
+2. SEC-DEPS-01 REJECT (upstream-blocked; standing owner REJECT; reproduced
+   on this branch by run `35826357964`, not waived).
 3. Synthetic-only REQUIRED (owner lift decision pending).
 4. Backup-restore rehearsal unrecorded; off-site hardware unbuilt.
 5. TLS/session evidence on the Tailscale URL missing.
-6. Owner-value gates: D1 values, D3 partials, D4, D5, D6a, D7, D8 numerics.
+6. Owner-value gates: OD-NEW-01..09 values; D1 values, D3 partials, D4, D5,
+   D6a, D7, D8 numerics.
 7. Production authorization absent (REJECT enforced by five `d8_validate.py` guards).
 
 ## Known architectural risks
@@ -190,3 +207,57 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
   mechanisms, fail-closed when unconfigured, values never invented.
   Verdict: S1–S3 + S5 + S6 proven; production still blocked on owner S4
   value-setting + activation.
+- 2026-09-22 (S7 journey-proven) — Returning-student lane (OD-NEW-01/B):
+  the journey reuses the single native applicant row and the fresh decision
+  is the per-journey vehicle; convert links the existing Student/Customer;
+  the duplicate-Student guard runs on the first-time lane only; the
+  returning journey enrolls into the NEXT term. Journey check
+  `admission-s7-returning-link-reuse-enroll-bill` passed in run 35792113368
+  @ `a6e91fd` (585 checks; the run went on to fail at the S8 journey, fixed
+  separately). Option A (placement-free lane) deferred.
+- 2026-09-22 (S8+S9 journey-proven) — Policy-gated roster changes (OD-NEW-05):
+  TH Roster Change Policy with effective-dated `changes_allowed_until`,
+  Teaching Scheduler executes, moves deactivate the source row; attendance
+  corrections (OD-NEW-06): D3-shaped request/approve/deny with TH Attendance
+  Correction Policy (approver-role + window-days terms), approval voids the
+  erroneous mark and submits a replacement so history shows both. Journey
+  checks passed in run 35793620978 @ `a05d6bc` (S8; 586 checks, failed later
+  at S9, fixed separately) and run 35826357916 @ `bfab083` (S9; 587 checks,
+  failed later at S10, fixed separately).
+- 2026-09-23 (S10 HOSTED-PROVEN) — Enrollment exits (OD-NEW-07): withdrawals
+  single-shot plus D3-shaped dismissal request/approve/deny under TH
+  Enrollment Exit Policy; posting deletes derived Course Enrollments and
+  cancels the Program Enrollment (row preserved); submitted Fees block every
+  exit until finance settles; each exit snapshots every Fees on record.
+  Green 587/587, run 35827688760 @ `0eb21d8`. Push cycle repaired the native
+  `on_cancel` permission-checked re-query for narrow roles.
+- 2026-09-23 (S11 HOSTED-PROVEN) — Billing policy (OD-NEW-03/04): TH Billing
+  Policy with max-backdate/max-future-days bounds plus placement-fee timing
+  (any / attempt stage / released); both billing commands judge the live
+  governing terms. Green 590/590, run 35830061680 @ `e2d3fc0`.
+- 2026-09-23 (S12 HOSTED-PROVEN) — Catalog linkage (OD-NEW-09): TH Catalog
+  Linkage Policy with advisory/enforcing enforcement; under enforcing,
+  `enroll_in_program` resolves the TH level anchored to the admission's
+  native program and refuses retired levels. Green 593/593, run 35832956762
+  @ `48ffa87` (fix commit: S12 applicant names marked SYNTHETIC per the
+  admission rule).
+- 2026-09-23 (S13 HOSTED-PROVEN) — Orphan adjustments (OD-NEW-08): TH
+  Adjustment Posting Policy with post/skip orphan_posting; under post, due
+  orphan adjustments pay through the covering contract exactly once, under
+  skip they are reported per contract and paid nothing; unconfigured /
+  retired / version-less refuses. Green 596/596, run 35834461078 @
+  `89b393e` (report SHA-256 independently verified). Local gate at push:
+  1333/1333, ruff clean, Node 4/4. GAP-ACADEMIC-IDEMPOTENCY verified CLOSED
+  (all 23 academic commands replay through `configuration_audit.execute`;
+  hosted receipt probe green) — no slice needed. Every S6–S13 journey
+  re-passes in this run.
+- 2026-09-23 (D8 absence closed: EXECUTED) — Genuine push-triggered execution
+  on this branch closed the `NOT_EXECUTED_ON_THIS_BRANCH` absence recorded
+  at the fifth rotation: newest Foundation runtime run 35826357964 @
+  `bfab083` (fail_reject — the SEC-DEPS-01 condition reproduced here, not
+  waived), with the full newest-run set for all ten named workflows recorded
+  in the ledger's `active_branch_qualification` block and the run pinned in
+  `tools/session_branch.py`. `d8_validate.py` exits 0 (14/14 checks PASS);
+  D8 stays BLOCKED, production stays REJECT. V-BRANCH superseded by
+  R-VBRANCH in the register. Verdict: S1–S13 proven; production still
+  blocked on owner value-setting + activation + evidence gates.
