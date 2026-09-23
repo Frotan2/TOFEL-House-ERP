@@ -42,6 +42,12 @@ Fact: Conditional decisions can never convert and have no onward transition.
 - Option B — direct conditional conversion: convert accepts Conditional with
   recorded acceptance of the conditions.
 - Owner decides: who may declare conditions met, and what evidence is required.
+- SHIPPED AS S6 2026-09-22 (HOSTED-PROVEN 2026-09-22, run 35767412041, 583/583):
+  option A with an SoD lattice rule — `satisfy_conditions` moves Conditional →
+  Approved with a mandatory evidence note, cleared only by an Admission
+  Approver other than the deciding approver (mirroring reviewer≠decider);
+  the placement must still be unexpired. The normal accept/convert path
+  then runs unchanged.
 
 ## GAP-ROSTER → OD-NEW-05
 
@@ -53,7 +59,9 @@ and section splits are impossible.
 - Option B — re-creation flow: close and re-create the class (loses session
   continuity; likely wrong for attendance history).
 - Owner decides: who authorizes mid-term roster changes and the cutoff rules.
-- SHIPPED AS S8 2026-09-22 (HOSTED-PROVEN pending at write time): option A
+- SHIPPED AS S8 2026-09-22 (journey check passed in run 35793620978, which then
+  failed at the S9 journey — fixed separately; re-proven 596/596 in run
+  35834461078): option A
   with the cutoff as an effective-dated owner mechanism (TH Roster Change
   Policy: single `changes_allowed_until` facet, fail-closed unconfigured,
   retire = off-switch). Teaching Scheduler executes; moves deactivate the
@@ -68,7 +76,9 @@ Fact: submitted Student Attendance has no correction path; errors are permanent.
   and audit event; native record amended through the command context.
 - Option B — same-day recorder edit: narrow window, no approval.
 - Owner decides: authority, window, and whether history must show both marks.
-- SHIPPED AS S9 2026-09-22 (HOSTED-PROVEN 2026-09-23, run 35826357916): option A
+- SHIPPED AS S9 2026-09-22 (journey check passed in run 35826357916, which then
+  failed at the S10 journey — fixed separately; re-proven 596/596 in run
+  35834461078): option A
   as a D3-shaped request/approve/deny flow (TH Attendance Correction
   Policy with approver-role + window-days terms; requests value-pin the
   governing terms). Approval voids the erroneous mark and submits a
@@ -126,12 +136,33 @@ needs only the answer; implementation is validators + tests (small slice).
   the timing threshold; unconfigured / retired / version-less refuses.
   Fail-closed; retire = off-switch.
 
+## GAP-ADJUST-ORPHAN → OD-NEW-08
+
+Fact: contract adjustments for instructors with no assignments in the payroll
+period were silently dropped — no row, no report.
+
+- Owner decides: whether orphan adjustments post in assignment-less periods
+  or stay unposted-but-reported.
+- SHIPPED AS S13 2026-09-23 (HOSTED-PROVEN 2026-09-23, run 35834461078, 596/596):
+  both answers as one effective-dated owner mechanism (TH Adjustment Posting
+  Policy with post/skip orphan_posting). Under post, due orphan adjustments
+  pay through the covering contract exactly once; under skip they are
+  reported per contract and paid nothing. Unconfigured / retired /
+  version-less refuses; fixed-salary exclusions unchanged. Fail-closed;
+  retire = off-switch.
+
 ## GAP-ACADEMIC-IDEMPOTENCY (not owner-gated)
 
 Academic control-plane commands validate request keys but keep no receipts, so a
 retried call errors instead of replaying. Later engineering slice: route academic
 commands through receipt semantics (new kinds in KIND_ROLES + op/audit writes).
 Sequenced after S4 decisions, or alongside if capacity allows — no owner input needed.
+
+- CLOSED 2026-09-23 (no slice needed): S5 routed the academic commands through
+  `configuration_audit.execute` receipt semantics, and every later academic
+  command follows the same gate — verified all 23 whitelisted commands replay
+  identical retries from receipts and refuse conflicting payloads, and the
+  hosted receipt-replay probe stays green.
 
 ## Sequencing rule
 

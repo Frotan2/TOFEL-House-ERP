@@ -369,7 +369,16 @@ the shipment and its hosted proof; the owner's VALUES stay awaited and the
 mechanism fails closed until the owner sets them.
 
 - **OD-NEW-01** returning-student identity + continuation rules (new placement per term?).
+  Mechanism SHIPPED as S7 2026-09-22 (returning lane reuses the single native
+  applicant row; the fresh decision is the per-journey vehicle; journey check
+  passed in run 35792113368, which then failed at the S8 journey — fixed
+  separately; re-proven in run 35834461078, 596/596) — owner values
+  (identity rule, continuation vehicle) still AWAITING ANSWER.
 - **OD-NEW-02** conditional-satisfaction authority + upgrade path.
+  Mechanism SHIPPED as S6 2026-09-22 (`satisfy_conditions`: Conditional →
+  Approved with a mandatory evidence note, cleared only by an Admission
+  Approver other than the decider; hosted-proven run 35767412041, 583/583)
+  — owner values (who may satisfy, what evidence) still AWAITING ANSWER.
 - **OD-NEW-03** billing date bounds (future/backdate policy).
   Mechanism SHIPPED as S11 2026-09-23 (TH Billing Policy bounds facet;
   hosted-proven run 35830061680, 590/590) — owner values (how far back /
@@ -379,13 +388,24 @@ mechanism fails closed until the owner sets them.
   any / attempt stage / released; hosted-proven run 35830061680,
   590/590) — owner values (the timing threshold) still AWAITING ANSWER.
 - **OD-NEW-05** roster-change authority (who may add/move students post-creation).
+  Mechanism SHIPPED as S8 2026-09-22 (TH Roster Change Policy: effective-dated
+  `changes_allowed_until`; journey check passed in run 35793620978, which
+  then failed at the S9 journey — fixed separately; re-proven in run
+  35834461078, 596/596) — owner values (the cutoff) still AWAITING ANSWER.
 - **OD-NEW-06** attendance-correction authority + window.
+  Mechanism SHIPPED as S9 2026-09-22 (TH Attendance Correction Policy with
+  approver-role + window-days terms; journey check passed in run 35826357916,
+  which then failed at the S10 journey — fixed separately; re-proven in run
+  35834461078, 596/596) — owner values (approver, window) still AWAITING ANSWER.
 - **OD-NEW-07** student exit/unenroll policy + financial consequences.
   Mechanism SHIPPED as S10 2026-09-23 (TH Enrollment Exit Policy;
   hosted-proven run 35827688760, 587/587) — owner values (exit
   categories, approver, financial consequences) still AWAITING ANSWER.
 - **OD-NEW-08** whether contract adjustments post in periods with no assignments
   (GAP-ADJUST-ORPHAN; found during S2).
+  Mechanism SHIPPED as S13 2026-09-23 (TH Adjustment Posting Policy with
+  post/skip orphan_posting; hosted-proven run 35834461078, 596/596) — owner
+  values (post vs skip) still AWAITING ANSWER.
 - **OD-NEW-09** catalog authority: whether the TH academic catalog governs
   intake (GAP-CATALOG-LINKAGE) or stays advisory.
   Mechanism SHIPPED as S12 2026-09-23 (TH Catalog Linkage Policy with
