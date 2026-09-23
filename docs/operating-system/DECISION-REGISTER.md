@@ -386,3 +386,8 @@ mechanism fails closed until the owner sets them.
   categories, approver, financial consequences) still AWAITING ANSWER.
 - **OD-NEW-08** whether contract adjustments post in periods with no assignments
   (GAP-ADJUST-ORPHAN; found during S2).
+- **OD-NEW-09** catalog authority: whether the TH academic catalog governs
+  intake (GAP-CATALOG-LINKAGE) or stays advisory.
+  Mechanism SHIPPED as S12 2026-09-23 (TH Catalog Linkage Policy with
+  advisory/enforcing enforcement; hosted-proven run 35832956762,
+  593/593) — owner values (the enforcement posture) still AWAITING ANSWER.

@@ -94,7 +94,7 @@ Fact: no unenroll/withdraw/expel path; no post-conversion revocation.
   finance settles the receivable; each exit snapshots every Fees on record,
   so the consequence is referenced, never re-implemented.
 
-## GAP-CATALOG-LINKAGE → possible OD-NEW-09
+## GAP-CATALOG-LINKAGE → OD-NEW-09
 
 Fact: operations run on native programs and never consult the TH academic catalog;
 retiring a TH level changes nothing operationally.
@@ -102,7 +102,15 @@ retiring a TH level changes nothing operationally.
 - Option A — catalog governs: enrollment/billing resolve the TH level and refuse
   retired/unknown mappings.
 - Option B — catalog stays advisory: Owner maintains both planes; no enforcement.
-- Needs an owner/architecture answer on the catalog's authority before slicing.
+- SHIPPED AS S12 2026-09-23 (HOSTED-PROVEN 2026-09-23, run 35832956762):
+  both options as one effective-dated owner mechanism (TH Catalog Linkage
+  Policy with advisory/enforcing enforcement). Under enforcing,
+  enroll_in_program — the intake front door, so downstream billing, roster,
+  and attendance only ever touch grandfathered populations — resolves the
+  TH level anchored to the admission's native program and refuses retired
+  levels; advisory judges nothing. Native programs no level maps stay
+  allowed under both: the catalog governs what it maps, nothing more.
+  Fail-closed unconfigured; retire = off-switch.
 
 ## GAP-DATES / GAP-FEE-TIMING → OD-NEW-03 / OD-NEW-04
 
