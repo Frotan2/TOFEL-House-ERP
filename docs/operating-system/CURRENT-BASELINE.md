@@ -261,3 +261,10 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
   D8 stays BLOCKED, production stays REJECT. V-BRANCH superseded by
   R-VBRANCH in the register. Verdict: S1–S13 proven; production still
   blocked on owner value-setting + activation + evidence gates.
+- 2026-09-23 (closure commit re-proven) — Push `82709e6` re-executed the
+  hosted set: placement green 596/596 with zero non-pass (run 35838656234,
+  report SHA-256 independently verified), owned suite + D8 contract +
+  runner green; runtime validation and frontend review reject at the same
+  known steps (`Install and validate the pinned foundation`, `Compare
+  frozen baseline and isolated candidate`), reproducing the standing
+  SEC-DEPS-01 REJECT with fresh evidence. No outcome changed.
