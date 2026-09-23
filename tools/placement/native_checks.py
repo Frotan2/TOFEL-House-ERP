@@ -5361,7 +5361,7 @@ def main():
             rel_a=release_for('s12a','s12_pipe_a')
             rel_b=release_for('s12b','s12_pipe_b')
             def pipeline(tag,rel,prog):
-                app=as_user('officer',lambda:adm.record_applicant('s12_rec_'+tag+'_000001',rel['decision'],'SYN S12 '+tag.upper(),prog,cat['academic_year']))
+                app=as_user('officer',lambda:adm.record_applicant('s12_rec_'+tag+'_000001',rel['decision'],'SYNTHETIC S12 '+tag.upper(),prog,cat['academic_year']))
                 dec=as_user('officer',lambda:adm.create_admission('s12_cre_'+tag+'_000001',app['name'],rel['decision']))
                 as_user('admissions_reviewer',lambda:adm.review_admission('s12_rev_'+tag+'_000001',dec['name'],1))
                 as_user('approver',lambda:adm.decide_admission('s12_dec_'+tag+'_000001',dec['name'],2,'Approved','SYN S12 '+tag+' eligible'))
