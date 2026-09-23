@@ -60,6 +60,7 @@ class ContainmentHookWiringTests(unittest.TestCase):
                             "TH Enrollment Exit Policy",
                             "TH Billing Policy",
                             "TH Catalog Linkage Policy",
+                            "TH Adjustment Posting Policy",
                             "TH Configuration Operation", "TH Configuration Audit Event"}
         self.assertEqual(extra, allowed_extras,
                          "doc_events changed; update this guard deliberately — the "

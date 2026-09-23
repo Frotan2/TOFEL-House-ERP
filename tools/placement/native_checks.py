@@ -3479,6 +3479,25 @@ def main():
                     'duplicate_skill_denied':True,'fixed_assign_denied':True,
                     'officer_assign_denied':True,'outsider_assignment_read_denied':True}
         afacts=check('teaching-assignment-facts',assignment_facts)
+        from toefl_house.teaching import adjustment_posting as adjp
+        check('teaching-orphan-unconfigured-denied',lambda:unavailable(lambda:as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation('s13_nopolicy_0000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],cfx['deduction'])),'No active adjustment posting policy'))
+        def orphan_fixture():
+            # S13 (OD-NEW-08): the adjustment posting fixture. No policy
+            # exists before this point (proven by the check above); the
+            # fixture keeps the historical skip behavior for every
+            # calculation below. Skip is fixture configuration, not
+            # approved operational policy.
+            frappe.set_user('Administrator')
+            pol=as_user('course_owner',lambda:adjp.create_adjustment_posting_policy(
+                's13_postpol_create01','SYN-ADJ-POST','SYN posting rule'))
+            assert pol['version_count']==0,pol
+            v1=as_user('course_owner',lambda:adjp.set_adjustment_posting_version(
+                's13_postpol_versn001','SYN-ADJ-POST','2026-01-01',
+                'SYN fixture keeps the historical skip','skip'))
+            assert v1['governing_orphan_posting']=='skip',v1
+            frappe.db.commit()
+            return {'policy':pol['name']}
+        check('teaching-orphan-fixture',traced(orphan_fixture))
         def compensation_calculation():
             frappe.set_user('Administrator')
             slips_before=frappe.db.count('Salary Slip')
@@ -5387,6 +5406,62 @@ def main():
             frappe.db.commit()
             return {'active':enr_a['program_enrollment'],'advisory':enr_b['program_enrollment']}
         check('enrollment-s12-catalog-linkage-intake-gate',traced(s12_linkage_journey))
+        def s13_orphan_journey():
+            # S13 (GAP-ADJUST-ORPHAN / OD-NEW-08): contract adjustments
+            # due in a period with no assignments. Under skip they are
+            # reported and never posted; under post they post through
+            # the covering contract exactly once; retiring the policy is
+            # the off-switch.
+            frappe.set_user('Administrator')
+            today=str(frappe.utils.today())
+            emp=frappe.get_doc(dict(doctype='Employee',naming_series='HR-EMP-',
+                first_name='SYN Employee S13',employee_name='SYN Employee S13',
+                company=cfx['company'],status='Active',gender='Other',
+                date_of_birth='1990-01-01',date_of_joining='2026-01-01')).insert().name
+            ssa=frappe.get_doc(dict(doctype='Salary Structure Assignment',employee=emp,
+                salary_structure='SYN Teaching Structure',from_date='2026-01-01',
+                company=cfx['company'],currency=frappe.db.get_value('Company',cfx['company'],'default_currency'),base=0))
+            ssa.insert();ssa.submit()
+            ins=frappe.get_doc(dict(doctype='Instructor',instructor_name='SYN Instructor S13',
+                naming_series='EDU-INS-.YYYY.-',status='Active',employee=emp)).insert().name
+            frappe.db.commit()
+            con=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
+                's13_contract_0000001',ins,emp,'Skill-Based','SYN orphan coverage','Monthly','2026-01-01','',
+                'SYN S13 conditions',[dict(skill=SK1,unit_of_payment='SYN Session',rate=12.5,payable_quantity=40)],
+                [dict(adjustment_type='Bonus',amount=500,effective_date='2026-09-15',
+                      approver=users['finance_officer'],reason='SYN orphan bonus')]))['name']
+            adj=frappe.db.get_value('TH Contract Adjustment',{'parent':con},'name')
+            assert adj,adj
+            ads_before=frappe.db.count(ADS)
+            calc1=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                's13_calc_skip_0000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],cfx['deduction']))
+            assert calc1['skipped_orphan_adjustments']=={con:[adj]},calc1
+            assert calc1['orphans_posted']==0,calc1
+            assert frappe.db.count(ADS)==ads_before,calc1
+            off=as_user('course_owner',lambda:adjp.set_adjustment_posting_status('s13_pol_retire_00001','SYN-ADJ-POST',0))
+            assert off['status']=='Retired',off
+            assert unavailable(lambda:as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                's13_calc_off_00000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],cfx['deduction'])),'No active adjustment posting policy')
+            on=as_user('course_owner',lambda:adjp.set_adjustment_posting_status('s13_pol_react_000001','SYN-ADJ-POST',1))
+            assert on['status']=='Active',on
+            v2=as_user('course_owner',lambda:adjp.set_adjustment_posting_version('s13_pol_versn_000001','SYN-ADJ-POST',today,'SYN owner posts orphans','post'))
+            assert v2['governing_orphan_posting']=='post',v2
+            polname=frappe.db.get_value('TH Adjustment Posting Policy',{'code':'SYN-ADJ-POST'},'name')
+            assert str(frappe.db.get_value('TH Adjustment Posting Policy Version',{'parent':polname,'effective_from':'2026-01-01'},'superseded_on'))==today
+            calc2=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                's13_calc_post_0000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],cfx['deduction']))
+            assert calc2['orphans_posted']==1,calc2
+            assert calc2['skipped_orphan_adjustments']=={},calc2
+            row=frappe.db.get_value(ADS,{'ref_doctype':'TH Contract Adjustment','ref_docname':adj,
+                'payroll_date':'2026-09-30','disabled':0},['name','amount','type'],as_dict=True)
+            assert row and float(row.amount)==500.0 and row.type=='Earning',(row,)
+            calc3=as_user('finance_officer',lambda:tcomp.calculate_teaching_compensation(
+                's13_calc_rerun_0000001','2026-09-01','2026-09-30',cfx['company'],cfx['earning'],cfx['deduction']))
+            assert calc3['orphans_posted']==0 and not calc3['posted'],calc3
+            assert frappe.db.count(ADS)==ads_before+1
+            frappe.db.commit()
+            return {'contract':con,'adjustment':adj,'additional_salary':row.name}
+        check('teaching-s13-orphan-adjustment-post-skip',traced(s13_orphan_journey))
         report['status']='pass'
 
     except Exception as exc:

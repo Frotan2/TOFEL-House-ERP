@@ -74,6 +74,9 @@ KIND_AUTHORITY = {
     "create_catalog_linkage_policy": "business_policy",
     "set_catalog_linkage_version": "business_policy",
     "set_catalog_linkage_status": "business_policy",
+    "create_adjustment_posting_policy": "business_policy",
+    "set_adjustment_posting_version": "business_policy",
+    "set_adjustment_posting_status": "business_policy",
 }
 
 

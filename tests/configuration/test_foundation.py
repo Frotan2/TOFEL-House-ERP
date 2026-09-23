@@ -474,6 +474,9 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "create_catalog_linkage_policy": "business_policy",
             "set_catalog_linkage_version": "business_policy",
             "set_catalog_linkage_status": "business_policy",
+            "create_adjustment_posting_policy": "business_policy",
+            "set_adjustment_posting_version": "business_policy",
+            "set_adjustment_posting_status": "business_policy",
         })
 
     def test_audit_reuses_the_command_pattern_without_site_gates(self):

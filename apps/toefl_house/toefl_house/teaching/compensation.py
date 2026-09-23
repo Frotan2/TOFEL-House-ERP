@@ -498,16 +498,39 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
         if not currency:
             raise frappe.ValidationError(
                 f"Company {company_name} has no default currency; payroll input cannot be priced")
+        from toefl_house.teaching import adjustment_posting as posting
+        posting_terms = posting.governing_posting_terms()
+        if not posting_terms:
+            raise frappe.ValidationError(
+                "No active adjustment posting policy governs payroll; "
+                "the Course Owner must set one first")
+        orphan_mode = posting_terms["orphan_posting"]
         rows = frappe.db.sql(
             "select name, student_group, skill, instructor, contract, effective_start, effective_end "
             "from `tabTH Teaching Assignment` where effective_start <= %s "
             "and (effective_end is null or effective_end >= %s)", (end, start), as_dict=True)
         posted, skipped_fixed, skipped_existing, adjustments_posted = {}, [], 0, 0
+        orphans_posted = 0
         already_compensated = {}
         contracts = {}
         for instructor in sorted({row.instructor for row in rows}):
             contracts[instructor] = frappe.get_doc(
                 CONTRACT, _covering_contract_name(instructor, start, end))
+        orphans = posting.collect_orphan_contracts(start, end, set(contracts))
+        orphan_adjustment_names = {name for info in orphans.values()
+                                   for name in info["adjustments"]}
+        if orphan_mode == posting.POST:
+            # Orphan instructors join the covering-contract map, so the
+            # exactly-one rule and the row locks below judge them
+            # exactly like assigned instructors; the adjustment loop
+            # then posts their due adjustments through that contract.
+            for parent, info in sorted(orphans.items()):
+                contracts[info["instructor"]] = frappe.get_doc(
+                    CONTRACT, _covering_contract_name(info["instructor"], start, end))
+            skipped_orphans = {}
+        else:
+            skipped_orphans = {parent: info["adjustments"]
+                               for parent, info in sorted(orphans.items())}
         _lock_covering_contracts(contracts, start, end)
         for row in rows:
             contract = contracts[row.instructor]
@@ -577,12 +600,16 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                     {"name": salary.name, "adjustment": adjustment.adjustment_type,
                      "amount": float(adjustment.amount)})
                 adjustments_posted += 1
+                if adjustment.name in orphan_adjustment_names:
+                    orphans_posted += 1
         result = {"period": [start, end], "company": company_name,
                   "salary_component": component, "deduction_component": deduction,
                   "assignments": len(rows),
                   "posted": posted, "skipped_fixed_salary_contracts": sorted(skipped_fixed),
                   "skipped_existing": skipped_existing,
                   "adjustments_posted": adjustments_posted,
+                  "orphans_posted": orphans_posted,
+                  "skipped_orphan_adjustments": skipped_orphans,
                   "already_compensated_prior_period": already_compensated}
         return result, dict(target=digest([start, end, company_name, component]),
                             after_hash=digest(result))
