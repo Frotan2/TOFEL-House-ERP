@@ -39,7 +39,7 @@ def _assert_versions_monotone(doc):
     if len(effective) != len(set(effective)):
         frappe.throw(_("Two duration versions cannot share one effective date"))
     for row in (doc.get("durations") or []):
-        if row.get("superseded_on") and str(row["superseded_on"]) <= str(row.get("effective_from") or ""):
+        if row.get("superseded_on") and str(row.get("superseded_on")) <= str(row.get("effective_from") or ""):
             frappe.throw(_("A version's closed date must fall after its effective date"))
 
 

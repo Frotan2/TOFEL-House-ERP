@@ -53,5 +53,5 @@ def _assert_versions_sound(doc):
     if len(effective) != len(set(effective)):
         frappe.throw(_("Two roster-change policy versions cannot share one effective date"))
     for row in (doc.get("versions") or []):
-        if row.get("superseded_on") and str(row["superseded_on"]) <= str(row.get("effective_from") or ""):
+        if row.get("superseded_on") and str(row.get("superseded_on")) <= str(row.get("effective_from") or ""):
             frappe.throw(_("A version's closed date must fall after its effective date"))

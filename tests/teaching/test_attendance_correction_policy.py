@@ -92,95 +92,48 @@ class _PolicyDoc:
         return self
 
 
+class _DocumentBase:
+    """Stand-in for frappe's Document: attribute access only, like hosted."""
+
+
+class _DocRow:
+    """A faithful real-Frappe child row: attribute access plus .get().
+
+    Real child Documents are NOT subscriptable — row["field"] raises
+    TypeError on hosted Frappe (proven by the S9 qualification, the
+    first journey to supersede a policy version). Owned controller code
+    must read rows via row.get(...), never row[...].
+    """
+
+    def __init__(self, **fields):
+        self.__dict__["_fields"] = dict(fields)
+
+    def __getattr__(self, name):
+        try:
+            return self._fields[name]
+        except KeyError as exc:
+            raise AttributeError(name) from exc
+
+    def get(self, field, default=None):
+        return self._fields.get(field, default)
+
+
+def _throw(message):
+    raise _ValidationError(message)
+
+
+POLICY_CONTROLLERS = (
+    APP / "academic/doctype/th_assessment_policy/th_assessment_policy.py",
+    APP / "academic/doctype/th_program_level/th_program_level.py",
+    APP / "admission/doctype/th_returning_student_policy/th_returning_student_policy.py",
+    APP / "teaching/doctype/th_attendance_correction_policy/th_attendance_correction_policy.py",
+    APP / "teaching/doctype/th_roster_change_policy/th_roster_change_policy.py",
+)
+
+
 class AttendanceCorrectionPolicyTests(unittest.TestCase):
     def setUp(self):
-        self.policy_rows = []
-        self.policy_doc = None
-        self.execute_calls = []
-        self.today = "2026-09-22"
-        self.role_exists = True
-        previous = dict(sys.modules)
-        self.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
-        fake = self
-
-        def get_all(doctype, fields=None, filters=None, limit=None, **kwargs):
-            assert doctype == "TH Attendance Correction Policy"
-            return list(fake.policy_rows)
-
-        def get_value(doctype, name_or_filters, fieldname=None, **kwargs):
-            if doctype == "TH Attendance Correction Policy":
-                assert fake.policy_doc is not None
-                return fake.policy_doc.name
-            raise AssertionError(f"unexpected get_value {doctype}")
-
-        def get_doc(doctype, name=None, for_update=False, **kwargs):
-            if isinstance(doctype, dict):
-                payload = dict(doctype)
-                doc = _PolicyDoc(name=payload.get("code"), **payload)
-                fake.policy_doc = doc
-                return doc
-            assert doctype == "TH Attendance Correction Policy"
-            assert fake.policy_doc is not None
-            return fake.policy_doc
-
-        def exists(doctype, name):
-            if doctype == "Role":
-                return fake.role_exists
-            if doctype == "TH Attendance Correction Policy":
-                return False
-            raise AssertionError(f"unexpected exists {doctype}")
-
-        from types import SimpleNamespace
-        stub = types.ModuleType("frappe")
-        stub.PermissionError = _PermissionError
-        stub.ValidationError = _ValidationError
-        stub.whitelist = lambda **kwargs: (lambda func: func)
-        stub.utils = SimpleNamespace(
-            today=lambda: fake.today,
-            now_datetime=lambda: "2026-09-22 12:00:00")
-        stub.db = SimpleNamespace(get_all=get_all, get_value=get_value,
-                                  exists=exists)
-        stub.get_doc = get_doc
-        sys.modules["frappe"] = stub
-        sys.modules["frappe.utils"] = stub.utils
-
-        package = types.ModuleType("toefl_house")
-        package.__path__ = [str(APP)]
-        sys.modules["toefl_house"] = package
-        academic_pkg = types.ModuleType("toefl_house.academic")
-        academic_pkg.__path__ = [str(APP / "academic")]
-        sys.modules["toefl_house.academic"] = academic_pkg
-        config_pkg = types.ModuleType("toefl_house.configuration")
-        config_pkg.__path__ = [str(APP / "configuration")]
-        sys.modules["toefl_house.configuration"] = config_pkg
-        _load_real("toefl_house.configuration.rules",
-                   APP / "configuration/rules.py")
-        _load_real("toefl_house.academic.rules", APP / "academic/rules.py")
-        _load_real("toefl_house.policy", APP / "policy.py")
-        audit = types.ModuleType("toefl_house.configuration.audit")
-
-        def _execute(kind, key, payload, work):
-            fake.execute_calls.append((kind, key, dict(payload)))
-            return work(ACTOR)[0]
-
-        audit.execute = _execute
-        audit.latest_after_hash = lambda target: ""
-        sys.modules["toefl_house.configuration.audit"] = audit
-        api = types.ModuleType("toefl_house.api")
-        api._execute = _execute
-        sys.modules["toefl_house.api"] = api
-        security = types.ModuleType("toefl_house.security")
-        security.record_synthetic_flag = lambda: 1
-        sys.modules["toefl_house.security"] = security
-        teaching_pkg = types.ModuleType("toefl_house.teaching")
-        teaching_pkg.__path__ = [str(APP / "teaching")]
-        from contextlib import nullcontext
-        teaching_pkg._roster_read = nullcontext
-        sys.modules["toefl_house.teaching"] = teaching_pkg
-        self.corrections = _load_real(
-            "toefl_house.teaching.attendance_corrections",
-            APP / "teaching/attendance_corrections.py")
-
+        _install_command_harness(self)
     def _existing_policy(self, status="Active", versions=()):
         self.policy_rows = [{"name": "ATT-CORR-POL"}]
         self.policy_doc = _PolicyDoc(name="ATT-CORR-POL", code="ATT-CORR-POL",
@@ -285,6 +238,97 @@ class AttendanceCorrectionPolicyTests(unittest.TestCase):
         self.assertEqual(self.corrections.governing_correction_terms(), {})
 
 
+
+
+
+def _install_command_harness(test):
+    """Install the stub frappe plus REAL rules/command modules on test."""
+    test.policy_rows = []
+    test.policy_doc = None
+    test.execute_calls = []
+    test.today = "2026-09-22"
+    test.role_exists = True
+    previous = dict(sys.modules)
+    test.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
+    fake = test
+
+    def get_all(doctype, fields=None, filters=None, limit=None, **kwargs):
+        assert doctype == "TH Attendance Correction Policy"
+        return list(fake.policy_rows)
+
+    def get_value(doctype, name_or_filters, fieldname=None, **kwargs):
+        if doctype == "TH Attendance Correction Policy":
+            assert fake.policy_doc is not None
+            return fake.policy_doc.name
+        raise AssertionError(f"unexpected get_value {doctype}")
+
+    def get_doc(doctype, name=None, for_update=False, **kwargs):
+        if isinstance(doctype, dict):
+            payload = dict(doctype)
+            doc = _PolicyDoc(name=payload.get("code"), **payload)
+            fake.policy_doc = doc
+            return doc
+        assert doctype == "TH Attendance Correction Policy"
+        assert fake.policy_doc is not None
+        return fake.policy_doc
+
+    def exists(doctype, name):
+        if doctype == "Role":
+            return fake.role_exists
+        if doctype == "TH Attendance Correction Policy":
+            return False
+        raise AssertionError(f"unexpected exists {doctype}")
+
+    from types import SimpleNamespace
+    stub = types.ModuleType("frappe")
+    stub.PermissionError = _PermissionError
+    stub.ValidationError = _ValidationError
+    stub.whitelist = lambda **kwargs: (lambda func: func)
+    stub.utils = SimpleNamespace(
+        today=lambda: fake.today,
+        now_datetime=lambda: "2026-09-22 12:00:00")
+    stub.db = SimpleNamespace(get_all=get_all, get_value=get_value,
+                              exists=exists)
+    stub.get_doc = get_doc
+    sys.modules["frappe"] = stub
+    sys.modules["frappe.utils"] = stub.utils
+
+    package = types.ModuleType("toefl_house")
+    package.__path__ = [str(APP)]
+    sys.modules["toefl_house"] = package
+    academic_pkg = types.ModuleType("toefl_house.academic")
+    academic_pkg.__path__ = [str(APP / "academic")]
+    sys.modules["toefl_house.academic"] = academic_pkg
+    config_pkg = types.ModuleType("toefl_house.configuration")
+    config_pkg.__path__ = [str(APP / "configuration")]
+    sys.modules["toefl_house.configuration"] = config_pkg
+    _load_real("toefl_house.configuration.rules",
+               APP / "configuration/rules.py")
+    _load_real("toefl_house.academic.rules", APP / "academic/rules.py")
+    _load_real("toefl_house.policy", APP / "policy.py")
+    audit = types.ModuleType("toefl_house.configuration.audit")
+
+    def _execute(kind, key, payload, work):
+        fake.execute_calls.append((kind, key, dict(payload)))
+        return work(ACTOR)[0]
+
+    audit.execute = _execute
+    audit.latest_after_hash = lambda target: ""
+    sys.modules["toefl_house.configuration.audit"] = audit
+    api = types.ModuleType("toefl_house.api")
+    api._execute = _execute
+    sys.modules["toefl_house.api"] = api
+    security = types.ModuleType("toefl_house.security")
+    security.record_synthetic_flag = lambda: 1
+    sys.modules["toefl_house.security"] = security
+    teaching_pkg = types.ModuleType("toefl_house.teaching")
+    teaching_pkg.__path__ = [str(APP / "teaching")]
+    from contextlib import nullcontext
+    teaching_pkg._roster_read = nullcontext
+    sys.modules["toefl_house.teaching"] = teaching_pkg
+    test.corrections = _load_real(
+        "toefl_house.teaching.attendance_corrections",
+        APP / "teaching/attendance_corrections.py")
 class AttendanceCorrectionPolicyGateTests(unittest.TestCase):
     """Source-level receipt-gate parity with the S5/S7/S8 policy commands."""
 
@@ -312,6 +356,93 @@ class AttendanceCorrectionPolicyGateTests(unittest.TestCase):
                 position = source.index(f"def {node.name}")
                 self.assertIn("@frappe.whitelist", source[max(0, position - 200):position],
                               f"{node.name} must stay whitelisted")
+
+
+class ControllerChildRowSemanticsTests(unittest.TestCase):
+    """The policy CONTROLLER validates real child Documents, not dicts.
+
+    The command-layer tests above run against dict doubles, which are
+    subscriptable — so they could not see the row["superseded_on"]
+    TypeError that the S9 hosted qualification caught on the first
+    second-version append. These tests run the REAL controller
+    validate against faithful non-subscriptable rows.
+    """
+
+    CONTROLLER = APP / ("teaching/doctype/th_attendance_correction_policy/"
+                        "th_attendance_correction_policy.py")
+
+    def setUp(self):
+        _install_command_harness(self)
+        stub = sys.modules["frappe"]
+        stub.throw = _throw
+        stub._ = lambda message: message
+        sys.modules["frappe.model"] = types.ModuleType("frappe.model")
+        document_mod = types.ModuleType("frappe.model.document")
+        document_mod.Document = _DocumentBase
+        sys.modules["frappe.model.document"] = document_mod
+        self.controller = _load_real(
+            "toefl_house.teaching.doctype.th_attendance_correction_policy."
+            "th_attendance_correction_policy", self.CONTROLLER)
+        self.foundation = sys.modules["toefl_house.configuration.rules"]
+
+    def _doc(self, versions):
+        return _PolicyDoc(
+            name="ATT-CORR-POL", code="ATT-CORR-POL", title="Correction rule",
+            status="Active", versions=[_DocRow(**version) for version in versions])
+
+    def _version(self, effective, superseded=None):
+        row = {"effective_from": effective, "approver_role": "Teaching Auditor",
+               "correction_window_days": 7,
+               "reason": "Owner opens attendance corrections",
+               "set_by": ACTOR, "set_on": "2026-09-19 12:00:00"}
+        if superseded is not None:
+            row["superseded_on"] = superseded
+        return row
+
+    def test_superseded_row_validates_without_subscript(self):
+        doc = self._doc([self._version("2026-09-20", superseded="2026-09-23"),
+                         self._version("2026-09-23")])
+        with self.foundation.command_context(
+                "set_attendance_correction_policy_version"):
+            self.controller.validate(doc)
+
+    def test_closed_date_before_effective_is_still_refused(self):
+        doc = self._doc([self._version("2026-09-23", superseded="2026-09-20")])
+        with self.foundation.command_context(
+                "set_attendance_correction_policy_version"):
+            with self.assertRaises(_ValidationError) as ctx:
+                self.controller.validate(doc)
+        self.assertIn("must fall after its effective date", str(ctx.exception))
+
+    def test_validate_outside_a_command_is_refused_first(self):
+        doc = self._doc([self._version("2026-09-23")])
+        with self.assertRaises(_PermissionError):
+            self.controller.validate(doc)
+
+
+class PolicyControllerRowAccessTests(unittest.TestCase):
+    """No policy controller may subscript a child row it iterates.
+
+    before_save is the single exception: its rows come from
+    frappe.db.get_all, which returns plain dicts on every backend.
+    """
+
+    def test_version_checks_read_rows_without_subscripts(self):
+        for path in POLICY_CONTROLLERS:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.FunctionDef):
+                    continue
+                if node.name == "before_save":
+                    continue
+                for child in ast.walk(node):
+                    if (isinstance(child, ast.Subscript)
+                            and isinstance(child.value, ast.Name)
+                            and child.value.id == "row"):
+                        self.fail(
+                            f"{path.name}:{child.lineno}: child-row Documents "
+                            "are not subscriptable on real Frappe; "
+                            "use row.get(...)")
 
 
 if __name__ == "__main__":
