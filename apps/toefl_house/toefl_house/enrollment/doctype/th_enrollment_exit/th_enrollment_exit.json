@@ -1,0 +1,179 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-09-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "program_enrollment",
+  "student",
+  "column_break_1",
+  "exit_kind",
+  "exit_date",
+  "section_break_1",
+  "reason",
+  "column_break_2",
+  "requested_by",
+  "requested_on",
+  "section_break_2",
+  "pinned_effective_from",
+  "pinned_approver_role",
+  "column_break_3",
+  "status",
+  "approved_by",
+  "section_break_3",
+  "fees_snapshot",
+  "cancelled_courses",
+  "synthetic"
+ ],
+ "fields": [
+  {
+   "fieldname": "program_enrollment",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Program enrollment",
+   "options": "Program Enrollment",
+   "reqd": 1
+  },
+  {
+   "description": "Student snapshot at exit time. The enrollment row stays the identity authority; never trusted from this row.",
+   "fieldname": "student",
+   "fieldtype": "Link",
+   "label": "Student",
+   "options": "Student",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Withdrawal is student-initiated and posts at once; Dismissal is authority-initiated and awaits a decision.",
+   "fieldname": "exit_kind",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Exit kind",
+   "reqd": 1
+  },
+  {
+   "description": "Date the student left: recorded by the officer for withdrawals, the decision date for dismissals.",
+   "fieldname": "exit_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Exit date"
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Data",
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested by",
+   "options": "User"
+  },
+  {
+   "fieldname": "requested_on",
+   "fieldtype": "Datetime",
+   "label": "Requested on"
+  },
+  {
+   "fieldname": "section_break_2",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Policy value-pin: the governing version's effective date at request time. Decisions are judged against this pin, never against the current policy.",
+   "fieldname": "pinned_effective_from",
+   "fieldtype": "Date",
+   "label": "Pinned effective from",
+   "reqd": 1
+  },
+  {
+   "fieldname": "pinned_approver_role",
+   "fieldtype": "Data",
+   "label": "Pinned approver role",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "reqd": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Decided by",
+   "options": "User"
+  },
+  {
+   "fieldname": "section_break_3",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Receivable consequence by reference: every Fees on record for the enrollment at exit time, with its native status. Finance acts on the native documents, never on this snapshot.",
+   "fieldname": "fees_snapshot",
+   "fieldtype": "Small Text",
+   "label": "Fees snapshot"
+  },
+  {
+   "description": "Derived Course Enrollments deleted by this exit. The cancelled Program Enrollment keeps its own row: history shows the registration and its end.",
+   "fieldname": "cancelled_courses",
+   "fieldtype": "Small Text",
+   "label": "Cancelled courses"
+  },
+  {
+   "fieldname": "synthetic",
+   "fieldtype": "Check",
+   "label": "Synthetic"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Enrollment",
+ "name": "TH Enrollment Exit",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Enrollment Officer",
+   "select": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Enrollment Auditor",
+   "select": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

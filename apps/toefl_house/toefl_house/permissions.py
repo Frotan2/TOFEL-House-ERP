@@ -15,6 +15,7 @@ KINDS = {
     "TH Placement Course Map Revision": "course_map",
     "TH Placement Decision": "decision",
     "TH Admission Decision": "admission_decision",
+    "TH Enrollment Exit": "enrollment_exit",
     "TH Instructor Contract": "contract",
     "TH Teaching Assignment": "assignment",
     "TH Correction Policy": "correction_policy",
@@ -36,6 +37,7 @@ TABLES = {
     "course_map": "`tabTH Placement Course Map Revision`",
     "decision": "`tabTH Placement Decision`",
     "admission_decision": "`tabTH Admission Decision`",
+    "enrollment_exit": "`tabTH Enrollment Exit`",
     "contract": "`tabTH Instructor Contract`",
     "assignment": "`tabTH Teaching Assignment`",
     "correction_policy": "`tabTH Correction Policy`",
@@ -60,6 +62,7 @@ GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount R
                         "TH Assessment Policy", "TH Returning Student Policy",
                         "TH Roster Change Policy",
                         "TH Attendance Correction Policy",
+                        "TH Enrollment Exit Policy",
                         "TH Configuration Operation", "TH Configuration Audit Event"}
 
 
@@ -127,6 +130,8 @@ def query(kind, user=None):
         return "1=1" if roles & {"Finance Officer", "Finance Auditor"} else "1=0"
     if kind == "attendance_correction":
         return "1=1" if roles & {"Attendance Recorder", "Teaching Auditor"} else "1=0"
+    if kind == "enrollment_exit":
+        return "1=1" if roles & {"Enrollment Officer", "Enrollment Auditor"} else "1=0"
     if "Placement Publisher" in roles:
         return "1=1"
     if kind in ("case", "attempt", "exposure", "response") and "Placement Invigilator" in roles:
@@ -169,3 +174,4 @@ def query_assignment(user=None): return query("assignment", user)
 def query_correction_policy(user=None): return query("correction_policy", user)
 def query_correction_request(user=None): return query("correction_request", user)
 def query_attendance_correction(user=None): return query("attendance_correction", user)
+def query_enrollment_exit(user=None): return query("enrollment_exit", user)

@@ -47,11 +47,13 @@ has_permission = {
                  "TH Admission Decision", "TH Instructor Contract",
                  "TH Teaching Assignment", "TH Correction Policy",
                  "TH Correction Request", "TH Attendance Correction Request",
+                 "TH Enrollment Exit",
                  "TH Academic Program", "TH Program Level",
                  "TH Discount Rule", "TH Skill",
                  "TH Assessment Policy", "TH Returning Student Policy",
                  "TH Roster Change Policy",
                  "TH Attendance Correction Policy",
+                 "TH Enrollment Exit Policy",
                  "TH Configuration Operation", "TH Configuration Audit Event")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
@@ -62,6 +64,7 @@ has_permission["TH Assessment Policy"] = "toefl_house.permissions.configuration_
 has_permission["TH Returning Student Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Roster Change Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Attendance Correction Policy"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Enrollment Exit Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
 permission_query_conditions = {
@@ -81,7 +84,8 @@ permission_query_conditions = {
         ("TH Teaching Assignment", "assignment"),
         ("TH Correction Policy", "correction_policy"),
         ("TH Correction Request", "correction_request"),
-        ("TH Attendance Correction Request", "attendance_correction"))
+        ("TH Attendance Correction Request", "attendance_correction"),
+        ("TH Enrollment Exit", "enrollment_exit"))
 }
 # Governance configuration is queried through the non-synthetic checker.
 permission_query_conditions["TH Academic Program"] = "toefl_house.permissions.configuration_query"
@@ -92,6 +96,7 @@ permission_query_conditions["TH Assessment Policy"] = "toefl_house.permissions.c
 permission_query_conditions["TH Returning Student Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Roster Change Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Attendance Correction Policy"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Enrollment Exit Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
 override_whitelisted_methods = {
@@ -134,6 +139,9 @@ doc_events = {
     },
     "TH Attendance Correction Policy": {
         "validate": "toefl_house.teaching.doctype.th_attendance_correction_policy.th_attendance_correction_policy.validate",
+    },
+    "TH Enrollment Exit Policy": {
+        "validate": "toefl_house.enrollment.doctype.th_enrollment_exit_policy.th_enrollment_exit_policy.validate",
     },
     "TH Configuration Operation": {
         "validate": "toefl_house.operations.doctype.th_configuration_operation.th_configuration_operation.validate",

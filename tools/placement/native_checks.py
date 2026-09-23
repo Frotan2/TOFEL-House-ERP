@@ -18,6 +18,7 @@ def main():
     from toefl_house import admission as adm
     from toefl_house.admission import policies as admp
     from toefl_house import enrollment as enr
+    from toefl_house.enrollment import exits as enrx
     from toefl_house import teaching as tea
     from toefl_house.teaching import policies as teap
     from toefl_house.teaching import attendance_corrections as teac
@@ -5116,6 +5117,125 @@ def main():
             return {'request':r1['name'],'voided':att,'replacement':posted['replacement_attendance'],
                     'policy':pol['name']}
         check('teaching-s9-attendance-correction-pin-window',traced(s9_correction_journey))
+        def s10_exit_journey():
+            # S10 (GAP-EXIT / OD-NEW-07): enrollment exits. Unconfigured
+            # exits refuse; after the owner sets terms, a withdrawal ends
+            # one registration single-shot, a dismissal posts through the
+            # dual-key approval, and a denied dismissal leaves the
+            # enrollment submitted. Submitted Fees block every exit path;
+            # roster rows and attendance marks are untouched by exits.
+            frappe.set_user('Administrator')
+            approver='synthetic-exit-approver@example.test'
+            if not frappe.db.exists('User',approver):
+                frappe.get_doc(dict(doctype='User',email=approver,
+                    first_name='Synthetic exit approver',enabled=1,
+                    send_welcome_email=0,
+                    new_password=os.environ['PLACEMENT_TEST_PASSWORD'],
+                    roles=[{'role':'Enrollment Officer'},{'role':'Academic Manager'}])).insert()
+                frappe.db.commit()
+            today=str(frappe.utils.today())
+            tomorrow=str(frappe.utils.add_days(today,1))
+            s8student=frappe.db.get_value('Student',{'student_email_id':users['candidate3']},'name')
+            s6student=frappe.db.get_value('Student',{'student_email_id':users['candidate2']},'name')
+            wd_pes=frappe.db.get_all('Program Enrollment',filters={'student':s8student,'docstatus':1},pluck='name')
+            deny_pes=frappe.db.get_all('Program Enrollment',filters={'student':s6student,'docstatus':1},pluck='name')
+            assert len(wd_pes)==1 and len(deny_pes)==1,(wd_pes,deny_pes)
+            pe_wd,pe_deny=wd_pes[0],deny_pes[0]
+            pe_da=httpenrolled['program_enrollment']
+            assert len({pe_wd,pe_deny,pe_da})==3,(pe_wd,pe_deny,pe_da)
+            billed=frappe.db.get_value('Fees',{'docstatus':1},'program_enrollment')
+            assert billed and billed not in (pe_wd,pe_deny,pe_da),billed
+            roster_before=frappe.db.get_all('Student Group Student',
+                filters={'student':['in',[s8student,s6student,httpenrolled['student']]]},
+                fields=['parent','student','active'])
+            att_before=frappe.db.count('Student Attendance',
+                {'student':['in',[s8student,s6student,httpenrolled['student']]]})
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
+                's10_wd_unconf_00001',pe_wd,today,'SYN no policy yet')))
+            pol=as_user('course_owner',lambda:enrx.create_enrollment_exit_policy(
+                's10_pol_create_0001','SYN-ENROLL-EXIT','SYN exit rule'))
+            assert pol['version_count']==0 and pol['governing_approver_role']=='',pol
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
+                's10_wd_shell_000001',pe_wd,today,'SYN shell governs nothing')))
+            v1=as_user('course_owner',lambda:enrx.set_enrollment_exit_policy_version(
+                's10_pol_versn_000001','SYN-ENROLL-EXIT',today,
+                'SYN owner opens enrollment exits','Academic Manager'))
+            assert v1['governing_approver_role']=='Academic Manager',v1
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
+                's10_wd_billed_00001',billed,today,'SYN billed blocks exit')))
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.request_enrollment_dismissal(
+                's10_req_billed_0001',billed,'SYN billed blocks request')))
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
+                's10_wd_future_00001',pe_wd,tomorrow,'SYN future exit')))
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
+                's10_wd_early_000001',pe_wd,'2020-01-01','SYN before enrollment')))
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
+                's10_wd_unknown_00001','PE-NOPE',today,'SYN unknown enrollment')))
+            ce_before=frappe.db.count('Course Enrollment',{'program_enrollment':pe_wd})
+            assert ce_before>=1,ce_before
+            wd=as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
+                's10_wd0000000000001',pe_wd,today,'SYN student relocates'))
+            assert wd['status']=='Posted' and wd['exit_kind']=='Withdrawal',wd
+            assert wd['cancelled_course_enrollments']==ce_before,wd
+            assert frappe.db.get_value('Program Enrollment',pe_wd,'docstatus')==2
+            assert frappe.db.count('Course Enrollment',{'program_enrollment':pe_wd})==0
+            wdrow=frappe.db.get_value('TH Enrollment Exit',wd['name'],
+                ['exit_kind','status','exit_date','fees_snapshot','cancelled_courses',
+                 'pinned_approver_role','requested_by','synthetic'],as_dict=True)
+            assert wdrow.exit_kind=='Withdrawal' and wdrow.status=='Posted',wdrow
+            assert str(wdrow.exit_date)==today and wdrow.pinned_approver_role=='Academic Manager',wdrow
+            assert wdrow.requested_by==users['enrollment_officer'] and wdrow.synthetic==1,wdrow
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
+                's10_wd_twice_000001',pe_wd,today,'SYN exits are single-shot')))
+            d1=as_user('enrollment_officer',lambda:enrx.request_enrollment_dismissal(
+                's10_req000000000001',pe_da,'SYN broke the covenant'))
+            assert d1['status']=='Requested' and d1['exit_kind']=='Dismissal',d1
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
+                's10_wd_pending_0001',pe_da,today,'SYN pending decides first')))
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.approve_enrollment_dismissal(
+                's10_app_role_000001',d1['name'])))
+            frappe.set_user(approver)
+            posted=enrx.approve_enrollment_dismissal('s10_app0000000000001',d1['name'])
+            frappe.set_user('Administrator')
+            assert posted['status']=='Posted' and posted['exit_date']==today,posted
+            assert frappe.db.get_value('Program Enrollment',pe_da,'docstatus')==2
+            assert frappe.db.count('Course Enrollment',{'program_enrollment':pe_da})==0
+            d2=as_user('enrollment_officer',lambda:enrx.request_enrollment_dismissal(
+                's10_req000000000002',pe_deny,'SYN on reflection still no'))
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.deny_enrollment_dismissal(
+                's10_deny_role_000001',d2['name'])))
+            frappe.set_user(approver)
+            denied_outcome=enrx.deny_enrollment_dismissal('s10_deny000000000001',d2['name'])
+            frappe.set_user('Administrator')
+            assert denied_outcome['status']=='Denied',denied_outcome
+            assert frappe.db.get_value('Program Enrollment',pe_deny,'docstatus')==1
+            v2=as_user('course_owner',lambda:enrx.set_enrollment_exit_policy_version(
+                's10_pol_versn_000002','SYN-ENROLL-EXIT',tomorrow,
+                'SYN owner names the next approver','General Manager'))
+            assert v2['version_count']==2,v2
+            assert v2['governing_approver_role']=='Academic Manager',v2
+            assert str(frappe.db.get_value('TH Enrollment Exit Policy Version',
+                {'parent':pol['name'],'effective_from':today},'superseded_on'))==tomorrow
+            off=as_user('course_owner',lambda:enrx.set_enrollment_exit_policy_status(
+                's10_pol_retire_00001','SYN-ENROLL-EXIT',0))
+            assert off['status']=='Retired',off
+            assert denied(lambda:as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
+                's10_wd_off_00000001',pe_deny,today,'SYN off-switch closes exits')))
+            on=as_user('course_owner',lambda:enrx.set_enrollment_exit_policy_status(
+                's10_pol_react_000001','SYN-ENROLL-EXIT',1))
+            assert on['status']=='Active',on
+            roster_after=frappe.db.get_all('Student Group Student',
+                filters={'student':['in',[s8student,s6student,httpenrolled['student']]]},
+                fields=['parent','student','active'])
+            assert {(r.parent,r.student,int(r.active)) for r in roster_after}=={(r.parent,r.student,int(r.active)) for r in roster_before}
+            assert frappe.db.count('Student Attendance',
+                {'student':['in',[s8student,s6student,httpenrolled['student']]]})==att_before
+            assert frappe.db.get_value('Student Group Student',
+                {'parent':'SYN-GRP-S8-D','student':s8student},'active')==1
+            frappe.db.commit()
+            return {'withdrawal':wd['name'],'dismissal':posted['name'],'denied':d2['name'],
+                    'policy':pol['name']}
+        check('enrollment-s10-exit-withdraw-dismiss',traced(s10_exit_journey))
         report['status']='pass'
 
     except Exception as exc:

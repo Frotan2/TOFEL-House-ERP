@@ -44,6 +44,10 @@ KIND_ROLES = {
     "expire_admission": "Admission Officer",
     "convert_applicant": "Admission Approver",
     "enroll_in_program": "Enrollment Officer",
+    "withdraw_enrollment": "Enrollment Officer",
+    "request_enrollment_dismissal": "Enrollment Officer",
+    "approve_enrollment_dismissal": "Enrollment Officer",
+    "deny_enrollment_dismissal": "Enrollment Officer",
     "create_student_group": "Teaching Scheduler",
     "transition_class": "Teaching Scheduler",
     "schedule_session": "Teaching Scheduler",
@@ -85,6 +89,7 @@ DOCTYPES = {
     "TH Placement Response", "TH Placement Score",
     "TH Placement Course Map Revision", "TH Placement Decision",
     "TH Admission Decision",
+    "TH Enrollment Exit",
     "TH Instructor Contract", "TH Teaching Assignment",
     "TH Correction Policy", "TH Correction Request",
     "TH Attendance Correction Request",
@@ -214,9 +219,18 @@ def require_command(doctype):
     return context
 
 
+ENROLLMENT_COMMANDS = {
+    # the exit commands cancel the Program Enrollment (and delete its
+    # derived Course Enrollments) inside the guarded context
+    "enroll_in_program",
+    "withdraw_enrollment",
+    "approve_enrollment_dismissal",
+}
+
+
 def enrollment_command_active():
     context = _CONTEXT.get()
-    return bool(context and context[0] == "enroll_in_program" and context[1] == frappe.session.user)
+    return bool(context and context[0] in ENROLLMENT_COMMANDS and context[1] == frappe.session.user)
 
 
 TEACHING_COMMANDS = {

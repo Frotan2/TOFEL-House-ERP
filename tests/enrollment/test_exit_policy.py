@@ -1,13 +1,12 @@
-"""S9 regression: the attendance-correction policy mechanism (OD-NEW-06).
+"""S10 regression: the enrollment-exit policy mechanism (OD-NEW-07).
 
-The house holds exactly one attendance-correction policy; versions
-carry the effective-dated owner choice of the D3 term pair —
-``approver_role`` + ``correction_window_days``. Reads fail closed (no
-row / retired / no effective version all resolve to {}); commands
-route through the receipted Course Owner gate under their own kind.
-Loads the REAL teaching attendance-corrections module with the REAL
-academic + configuration rules against a scripted frappe stub; hosted
-CI proves the correction journey.
+The house holds exactly one enrollment-exit policy; versions carry
+the effective-dated owner choice of the dismissal approver role.
+Reads fail closed (no row / retired / no effective version all
+resolve to {}); commands route through the receipted Course Owner
+gate under their own kind. Loads the REAL enrollment exits module
+with the REAL academic + configuration rules against a scripted
+frappe stub; hosted CI proves the exit journey.
 """
 import ast
 import importlib.util
@@ -19,9 +18,9 @@ from pathlib import Path
 APP = Path(__file__).resolve().parents[2] / "apps/toefl_house/toefl_house"
 ACTOR = "course.owner@example.com"
 COMMANDS = (
-    "create_attendance_correction_policy",
-    "set_attendance_correction_policy_version",
-    "set_attendance_correction_policy_status",
+    "create_enrollment_exit_policy",
+    "set_enrollment_exit_policy_version",
+    "set_enrollment_exit_policy_status",
 )
 
 
@@ -122,124 +121,104 @@ def _throw(message):
     raise _ValidationError(message)
 
 
-POLICY_CONTROLLERS = (
-    APP / "academic/doctype/th_assessment_policy/th_assessment_policy.py",
-    APP / "academic/doctype/th_program_level/th_program_level.py",
-    APP / "admission/doctype/th_returning_student_policy/th_returning_student_policy.py",
-    APP / "teaching/doctype/th_attendance_correction_policy/th_attendance_correction_policy.py",
-    APP / "teaching/doctype/th_roster_change_policy/th_roster_change_policy.py",
-    APP / "enrollment/doctype/th_enrollment_exit_policy/th_enrollment_exit_policy.py",
-)
-
-
-class AttendanceCorrectionPolicyTests(unittest.TestCase):
+class EnrollmentExitPolicyTests(unittest.TestCase):
     def setUp(self):
         _install_command_harness(self)
+
     def _existing_policy(self, status="Active", versions=()):
-        self.policy_rows = [{"name": "ATT-CORR-POL"}]
-        self.policy_doc = _PolicyDoc(name="ATT-CORR-POL", code="ATT-CORR-POL",
-                                     title="Correction rule", status=status,
+        self.policy_rows = [{"name": "ENROLL-EXIT-POL"}]
+        self.policy_doc = _PolicyDoc(name="ENROLL-EXIT-POL", code="ENROLL-EXIT-POL",
+                                     title="Exit rule", status=status,
                                      versions=[_Row(v) for v in versions])
         return self.policy_doc
 
-    def _version(self, key, date, role="Teaching Auditor", days=7):
-        return self.corrections.set_attendance_correction_policy_version(
-            key, "ATT-CORR-POL", date,
-            "Owner opens attendance corrections", role, days)
+    def _version(self, key, date, role="Academic Manager"):
+        return self.exits.set_enrollment_exit_policy_version(
+            key, "ENROLL-EXIT-POL", date,
+            "Owner opens enrollment exits", role)
 
     def test_create_shell_carries_no_versions(self):
-        result = self.corrections.create_attendance_correction_policy(
-            "test-key-attcorr-create01", "ATT-CORR-POL", "Correction rule")
-        self.assertEqual(result["code"], "ATT-CORR-POL")
+        result = self.exits.create_enrollment_exit_policy(
+            "test-key-enrexit-create01", "ENROLL-EXIT-POL", "Exit rule")
+        self.assertEqual(result["code"], "ENROLL-EXIT-POL")
         self.assertEqual(result["status"], "Active")
         self.assertEqual(result["version_count"], 0)
         self.assertEqual(result["governing_approver_role"], "")
         kind, _key, _payload = self.execute_calls[0]
-        self.assertEqual(kind, "create_attendance_correction_policy")
+        self.assertEqual(kind, "create_enrollment_exit_policy")
 
     def test_second_policy_is_refused(self):
         self._existing_policy()
         with self.assertRaises(_ValidationError) as ctx:
-            self.corrections.create_attendance_correction_policy(
-                "test-key-attcorr-create02", "ATT-CORR-TWO", "Second rule")
+            self.exits.create_enrollment_exit_policy(
+                "test-key-enrexit-create02", "ENROLL-EXIT-TWO", "Second rule")
         self.assertIn("version it instead", str(ctx.exception))
 
     def test_version_append_governs_from_its_date(self):
         self._existing_policy()
-        result = self._version("test-key-attcorr-versn01", "2026-09-23")
+        result = self._version("test-key-enrexit-versn01", "2026-09-23")
         self.assertEqual(result["version_count"], 1)
         # Not yet effective today: the shell still governs nothing.
         self.assertEqual(result["governing_approver_role"], "")
-        self.assertEqual(self.corrections.governing_correction_terms(), {})
+        self.assertEqual(self.exits.governing_exit_terms(), {})
         self.today = "2026-09-23"
-        self.assertEqual(self.corrections.governing_correction_terms(), {
+        self.assertEqual(self.exits.governing_exit_terms(), {
             "effective_from": "2026-09-23",
-            "approver_role": "Teaching Auditor", "window_days": 7})
+            "approver_role": "Academic Manager"})
 
     def test_unknown_approver_role_is_refused(self):
         self._existing_policy()
         self.role_exists = False
         with self.assertRaises(_ValidationError) as ctx:
-            self._version("test-key-attcorr-versn02", "2026-09-23",
+            self._version("test-key-enrexit-versn02", "2026-09-23",
                           role="No Such Role")
         self.assertIn("Unknown approver role", str(ctx.exception))
 
-    def test_bad_window_is_refused(self):
-        self._existing_policy()
-        with self.assertRaises(_ValidationError) as ctx:
-            self._version("test-key-attcorr-versn03", "2026-09-23", days=-1)
-        self.assertIn("Correction window", str(ctx.exception))
-
     def test_backdated_and_same_day_versions_refused(self):
         self._existing_policy(versions=[{
-            "effective_from": "2026-09-23", "approver_role": "Teaching Auditor",
-            "correction_window_days": 7,
-            "reason": "Owner opens attendance corrections",
+            "effective_from": "2026-09-23", "approver_role": "Academic Manager",
+            "reason": "Owner opens enrollment exits",
             "set_by": ACTOR, "set_on": "2026-09-22 12:00:00"}])
         with self.assertRaises(_ValidationError):
-            self._version("test-key-attcorr-versn04", "2026-09-20")
+            self._version("test-key-enrexit-versn04", "2026-09-20")
         with self.assertRaises(_ValidationError):
-            self._version("test-key-attcorr-versn05", "2026-09-23")
+            self._version("test-key-enrexit-versn05", "2026-09-23")
 
     def test_superseded_version_is_closed_not_rewritten(self):
         self._existing_policy(versions=[{
-            "effective_from": "2026-09-23", "approver_role": "Teaching Auditor",
-            "correction_window_days": 7,
-            "reason": "Owner opens attendance corrections",
+            "effective_from": "2026-09-23", "approver_role": "Academic Manager",
+            "reason": "Owner opens enrollment exits",
             "set_by": ACTOR, "set_on": "2026-09-22 12:00:00"}])
-        self._version("test-key-attcorr-versn06", "2026-10-01",
-                      role="Academic Manager", days=14)
+        self._version("test-key-enrexit-versn06", "2026-10-01",
+                      role="General Manager")
         first, second = self.policy_doc.versions
-        self.assertEqual(first["correction_window_days"], 7)
+        self.assertEqual(first["approver_role"], "Academic Manager")
         self.assertEqual(first["superseded_on"], "2026-10-01")
-        self.assertEqual(second["approver_role"], "Academic Manager")
+        self.assertEqual(second["approver_role"], "General Manager")
         self.assertNotIn("superseded_on", second)
 
     def test_retire_is_the_off_switch(self):
         self._existing_policy(versions=[{
-            "effective_from": "2026-09-20", "approver_role": "Teaching Auditor",
-            "correction_window_days": 7,
-            "reason": "Owner opens attendance corrections",
+            "effective_from": "2026-09-20", "approver_role": "Academic Manager",
+            "reason": "Owner opens enrollment exits",
             "set_by": ACTOR, "set_on": "2026-09-19 12:00:00"}])
         self.assertEqual(
-            self.corrections.governing_correction_terms()["approver_role"],
-            "Teaching Auditor")
-        result = self.corrections.set_attendance_correction_policy_status(
-            "test-key-attcorr-status1", "ATT-CORR-POL", 0)
+            self.exits.governing_exit_terms()["approver_role"],
+            "Academic Manager")
+        result = self.exits.set_enrollment_exit_policy_status(
+            "test-key-enrexit-status1", "ENROLL-EXIT-POL", 0)
         self.assertEqual(result["status"], "Retired")
-        self.assertEqual(self.corrections.governing_correction_terms(), {})
-        self.corrections.set_attendance_correction_policy_status(
-            "test-key-attcorr-status2", "ATT-CORR-POL", 1)
+        self.assertEqual(self.exits.governing_exit_terms(), {})
+        self.exits.set_enrollment_exit_policy_status(
+            "test-key-enrexit-status2", "ENROLL-EXIT-POL", 1)
         self.assertEqual(
-            self.corrections.governing_correction_terms()["window_days"], 7)
+            self.exits.governing_exit_terms()["approver_role"],
+            "Academic Manager")
 
     def test_governing_read_fails_closed_without_policy_or_version(self):
-        self.assertEqual(self.corrections.governing_correction_terms(), {})
+        self.assertEqual(self.exits.governing_exit_terms(), {})
         self._existing_policy()
-        self.assertEqual(self.corrections.governing_correction_terms(), {})
-
-
-
+        self.assertEqual(self.exits.governing_exit_terms(), {})
 
 
 def _install_command_harness(test):
@@ -254,11 +233,11 @@ def _install_command_harness(test):
     fake = test
 
     def get_all(doctype, fields=None, filters=None, limit=None, **kwargs):
-        assert doctype == "TH Attendance Correction Policy"
+        assert doctype == "TH Enrollment Exit Policy"
         return list(fake.policy_rows)
 
     def get_value(doctype, name_or_filters, fieldname=None, **kwargs):
-        if doctype == "TH Attendance Correction Policy":
+        if doctype == "TH Enrollment Exit Policy":
             assert fake.policy_doc is not None
             return fake.policy_doc.name
         raise AssertionError(f"unexpected get_value {doctype}")
@@ -269,14 +248,14 @@ def _install_command_harness(test):
             doc = _PolicyDoc(name=payload.get("code"), **payload)
             fake.policy_doc = doc
             return doc
-        assert doctype == "TH Attendance Correction Policy"
+        assert doctype == "TH Enrollment Exit Policy"
         assert fake.policy_doc is not None
         return fake.policy_doc
 
     def exists(doctype, name):
         if doctype == "Role":
             return fake.role_exists
-        if doctype == "TH Attendance Correction Policy":
+        if doctype == "TH Enrollment Exit Policy":
             return False
         raise AssertionError(f"unexpected exists {doctype}")
 
@@ -322,19 +301,19 @@ def _install_command_harness(test):
     security = types.ModuleType("toefl_house.security")
     security.record_synthetic_flag = lambda: 1
     sys.modules["toefl_house.security"] = security
-    teaching_pkg = types.ModuleType("toefl_house.teaching")
-    teaching_pkg.__path__ = [str(APP / "teaching")]
-    from contextlib import nullcontext
-    teaching_pkg._roster_read = nullcontext
-    sys.modules["toefl_house.teaching"] = teaching_pkg
-    test.corrections = _load_real(
-        "toefl_house.teaching.attendance_corrections",
-        APP / "teaching/attendance_corrections.py")
-class AttendanceCorrectionPolicyGateTests(unittest.TestCase):
-    """Source-level receipt-gate parity with the S5/S7/S8 policy commands."""
+    enrollment_pkg = types.ModuleType("toefl_house.enrollment")
+    enrollment_pkg.__path__ = [str(APP / "enrollment")]
+    sys.modules["toefl_house.enrollment"] = enrollment_pkg
+    test.exits = _load_real(
+        "toefl_house.enrollment.exits",
+        APP / "enrollment/exits.py")
+
+
+class EnrollmentExitPolicyGateTests(unittest.TestCase):
+    """Source-level receipt-gate parity with the S5/S7/S8/S9 policy commands."""
 
     def test_commands_route_through_the_receipted_gate(self):
-        source = (APP / "teaching/attendance_corrections.py").read_text(encoding="utf-8")
+        source = (APP / "enrollment/exits.py").read_text(encoding="utf-8")
         audit_source = (APP / "configuration/audit.py").read_text(encoding="utf-8")
         audit_tree = ast.parse(audit_source)
         kinds = None
@@ -346,7 +325,8 @@ class AttendanceCorrectionPolicyGateTests(unittest.TestCase):
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name in COMMANDS:
                 calls = ast.unparse(node)
-                self.assertIn("configuration_audit.execute(", calls,
+                self.assertIn("configuration_audit.execute(",
+                              calls,
                               f"{node.name} must route through the receipted gate")
                 self.assertIn(f"'{node.name}', request_key", calls,
                               f"{node.name} must execute under its own kind")
@@ -369,8 +349,8 @@ class ControllerChildRowSemanticsTests(unittest.TestCase):
     validate against faithful non-subscriptable rows.
     """
 
-    CONTROLLER = APP / ("teaching/doctype/th_attendance_correction_policy/"
-                        "th_attendance_correction_policy.py")
+    CONTROLLER = APP / ("enrollment/doctype/th_enrollment_exit_policy/"
+                        "th_enrollment_exit_policy.py")
 
     def setUp(self):
         _install_command_harness(self)
@@ -382,19 +362,18 @@ class ControllerChildRowSemanticsTests(unittest.TestCase):
         document_mod.Document = _DocumentBase
         sys.modules["frappe.model.document"] = document_mod
         self.controller = _load_real(
-            "toefl_house.teaching.doctype.th_attendance_correction_policy."
-            "th_attendance_correction_policy", self.CONTROLLER)
+            "toefl_house.enrollment.doctype.th_enrollment_exit_policy."
+            "th_enrollment_exit_policy", self.CONTROLLER)
         self.foundation = sys.modules["toefl_house.configuration.rules"]
 
     def _doc(self, versions):
         return _PolicyDoc(
-            name="ATT-CORR-POL", code="ATT-CORR-POL", title="Correction rule",
+            name="ENROLL-EXIT-POL", code="ENROLL-EXIT-POL", title="Exit rule",
             status="Active", versions=[_DocRow(**version) for version in versions])
 
     def _version(self, effective, superseded=None):
-        row = {"effective_from": effective, "approver_role": "Teaching Auditor",
-               "correction_window_days": 7,
-               "reason": "Owner opens attendance corrections",
+        row = {"effective_from": effective, "approver_role": "Academic Manager",
+               "reason": "Owner opens enrollment exits",
                "set_by": ACTOR, "set_on": "2026-09-19 12:00:00"}
         if superseded is not None:
             row["superseded_on"] = superseded
@@ -404,13 +383,13 @@ class ControllerChildRowSemanticsTests(unittest.TestCase):
         doc = self._doc([self._version("2026-09-20", superseded="2026-09-23"),
                          self._version("2026-09-23")])
         with self.foundation.command_context(
-                "set_attendance_correction_policy_version"):
+                "set_enrollment_exit_policy_version"):
             self.controller.validate(doc)
 
     def test_closed_date_before_effective_is_still_refused(self):
         doc = self._doc([self._version("2026-09-23", superseded="2026-09-20")])
         with self.foundation.command_context(
-                "set_attendance_correction_policy_version"):
+                "set_enrollment_exit_policy_version"):
             with self.assertRaises(_ValidationError) as ctx:
                 self.controller.validate(doc)
         self.assertIn("must fall after its effective date", str(ctx.exception))
@@ -419,31 +398,6 @@ class ControllerChildRowSemanticsTests(unittest.TestCase):
         doc = self._doc([self._version("2026-09-23")])
         with self.assertRaises(_PermissionError):
             self.controller.validate(doc)
-
-
-class PolicyControllerRowAccessTests(unittest.TestCase):
-    """No policy controller may subscript a child row it iterates.
-
-    before_save is the single exception: its rows come from
-    frappe.db.get_all, which returns plain dicts on every backend.
-    """
-
-    def test_version_checks_read_rows_without_subscripts(self):
-        for path in POLICY_CONTROLLERS:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.FunctionDef):
-                    continue
-                if node.name == "before_save":
-                    continue
-                for child in ast.walk(node):
-                    if (isinstance(child, ast.Subscript)
-                            and isinstance(child.value, ast.Name)
-                            and child.value.id == "row"):
-                        self.fail(
-                            f"{path.name}:{child.lineno}: child-row Documents "
-                            "are not subscriptable on real Frappe; "
-                            "use row.get(...)")
 
 
 if __name__ == "__main__":

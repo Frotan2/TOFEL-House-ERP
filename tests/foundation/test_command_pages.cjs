@@ -150,6 +150,7 @@ const endpointFiles = {
 	api: path.join(APP, "api.py"),
 	admission: path.join(APP, "admission/__init__.py"),
 	enrollment: path.join(APP, "enrollment/__init__.py"),
+	"enrollment.exits": path.join(APP, "enrollment/exits.py"),
 	teaching: path.join(APP, "teaching/__init__.py"),
 	"teaching.compensation": path.join(APP, "teaching/compensation.py"),
 	"teaching.attendance_corrections": path.join(APP, "teaching/attendance_corrections.py"),

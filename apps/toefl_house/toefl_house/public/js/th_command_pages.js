@@ -215,9 +215,13 @@ frappe.provide("toefl_house.command_pages");
 		"th-enrollment": {
 			role: "Enrollment Officer",
 			title: "TOEFL House Enrollment",
-			description: "Submit one eligible native Program Enrollment through the guarded enrollment command. The server enforces actor separation from the admission decision.",
+				description: "Submit one eligible native Program Enrollment through the guarded enrollment command. The server enforces actor separation from the admission decision. Withdrawals and dismissal decisions end a registration through the guarded exit commands.",
 			commands: [
 				{ label: "Enroll in program", method: "toefl_house.enrollment.enroll_in_program", dispatches: ["enroll_in_program"], fields: [data("admission_decision", "Admission decision", { reqd: 1 })] },
+				{ label: "Withdraw enrollment", method: "toefl_house.enrollment.exits.withdraw_enrollment", dispatches: ["withdraw_enrollment"], fields: [data("program_enrollment", "Program enrollment", { reqd: 1 }), date("exit_date", "Exit date", { reqd: 1 }), note("reason", "Reason", { reqd: 1 })] },
+				{ label: "Request enrollment dismissal", method: "toefl_house.enrollment.exits.request_enrollment_dismissal", dispatches: ["request_enrollment_dismissal"], fields: [data("program_enrollment", "Program enrollment", { reqd: 1 }), note("reason", "Reason", { reqd: 1 })] },
+				{ label: "Approve enrollment dismissal", method: "toefl_house.enrollment.exits.approve_enrollment_dismissal", dispatches: ["approve_enrollment_dismissal"], fields: [data("exit", "Enrollment exit", { reqd: 1 })] },
+				{ label: "Deny enrollment dismissal", method: "toefl_house.enrollment.exits.deny_enrollment_dismissal", dispatches: ["deny_enrollment_dismissal"], fields: [data("exit", "Enrollment exit", { reqd: 1 })] },
 			],
 		},
 		"th-teaching-scheduling": {

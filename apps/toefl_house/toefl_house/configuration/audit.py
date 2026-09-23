@@ -65,6 +65,9 @@ KIND_AUTHORITY = {
     "create_attendance_correction_policy": "business_policy",
     "set_attendance_correction_policy_version": "business_policy",
     "set_attendance_correction_policy_status": "business_policy",
+    "create_enrollment_exit_policy": "business_policy",
+    "set_enrollment_exit_policy_version": "business_policy",
+    "set_enrollment_exit_policy_status": "business_policy",
 }
 
 

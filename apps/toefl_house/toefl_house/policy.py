@@ -544,6 +544,8 @@ def can_read(kind, roles, actor, owner, status=None):
         return bool(roles & {"Finance Officer", "Finance Auditor"})
     if kind == "attendance_correction":
         return bool(roles & {"Attendance Recorder", "Teaching Auditor"})
+    if kind == "enrollment_exit":
+        return bool(roles & {"Enrollment Officer", "Enrollment Auditor"})
     if "Placement Publisher" in roles:
         return True
     # Invigilator may operate the Digital session and read the operational
