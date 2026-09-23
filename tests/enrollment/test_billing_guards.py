@@ -156,6 +156,18 @@ class S1GuardTests(unittest.TestCase):
         admission._unexpired = lambda row, now=None: None
         sys.modules["toefl_house.admission"] = admission
 
+        # S12: enroll_in_program consults the catalog linkage gate. This
+        # harness stands in for an enforcing policy over fixtures whose
+        # programs are unmapped — allowed, exactly as production judges
+        # unmapped native programs — while recording the consultation.
+        self.linkage_calls = []
+        academic_pkg = types.ModuleType("toefl_house.academic")
+        academic_pkg.__path__ = []
+        sys.modules["toefl_house.academic"] = academic_pkg
+        linkage = types.ModuleType("toefl_house.academic.catalog_linkage")
+        linkage.check_intake_open = lambda program: fake.linkage_calls.append(program)
+        sys.modules["toefl_house.academic.catalog_linkage"] = linkage
+
         api = types.ModuleType("toefl_house.api")
         api._execute = lambda kind, key, payload, work: work(ACTOR)[0]
         sys.modules["toefl_house.api"] = api
@@ -203,6 +215,12 @@ class S1GuardTests(unittest.TestCase):
 
     def test_invoice_without_customer_ignored(self):
         self.enrollment.deny_premature_invoice(self._invoice(customer=None))
+
+    def test_enrollment_consults_catalog_linkage_before_committing(self):
+        self.invoice_reads = [[], []]
+        result = self.enrollment.enroll_in_program("test-key-enroll-000004", "ADM-1")
+        self.assertEqual(result["program_enrollment"], "PE-0001")
+        self.assertEqual(self.linkage_calls, ["TH-A1"])
 
     def test_enrollment_with_only_historical_invoices_succeeds(self):
         self.invoice_reads = [["INV-OLD"], ["INV-OLD"]]

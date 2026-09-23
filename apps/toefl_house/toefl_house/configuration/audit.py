@@ -71,6 +71,9 @@ KIND_AUTHORITY = {
     "create_billing_policy": "business_policy",
     "set_billing_policy_version": "business_policy",
     "set_billing_policy_status": "business_policy",
+    "create_catalog_linkage_policy": "business_policy",
+    "set_catalog_linkage_version": "business_policy",
+    "set_catalog_linkage_status": "business_policy",
 }
 
 

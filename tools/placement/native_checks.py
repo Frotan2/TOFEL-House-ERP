@@ -1412,6 +1412,26 @@ def main():
         check('enrollment-withdrawn-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_withdraw_key_0001',dec6['name']))))
         check('enrollment-rejected-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_reject_key_000001',dec7['name']))))
         check('enrollment-expired-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_expire_key_000001',dec8['name']))))
+        from toefl_house.academic import catalog_linkage as linkm
+        check('enrollment-linkage-unconfigured-denied',lambda:unavailable(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('s12_nopolicy_0000001',dec['name'])),'No active catalog linkage policy'))
+        def linkage_fixture():
+            # S12 (OD-NEW-09): the catalog linkage fixture. No policy
+            # exists before this point (proven by the check above); the
+            # fixture enforces linkage for every enrollment below. All
+            # journey programs below are unmapped native programs, which
+            # stay allowed under enforcing. Enforcement is fixture
+            # configuration, not approved operational policy.
+            frappe.set_user('Administrator')
+            pol=as_user('course_owner',lambda:linkm.create_catalog_linkage_policy(
+                's12_linkpol_create01','SYN-LINKAGE','SYN linkage rule'))
+            assert pol['version_count']==0,pol
+            v1=as_user('course_owner',lambda:linkm.set_catalog_linkage_version(
+                's12_linkpol_versn001','SYN-LINKAGE','2026-01-01',
+                'SYN fixture enforces catalog linkage','enforcing'))
+            assert v1['governing_enforcement']=='enforcing',v1
+            frappe.db.commit()
+            return {'policy':pol['name']}
+        check('enrollment-linkage-fixture',linkage_fixture)
         def enroll_rollback_proof():
             frappe.set_user(users['enrollment_officer']);frappe.db.savepoint('enr_atomic')
             old={dt:frappe.db.count(dt) for dt in (enr.PE,enr.CE,api.OP,api.AUDIT)}
@@ -5315,6 +5335,58 @@ def main():
             frappe.db.commit()
             return {'back_edge':b1['sales_invoice'],'fwd_edge':b2['sales_invoice'],'long_due':b3['sales_invoice'],'narrowed':b4['sales_invoice'],'reactivated':b5['sales_invoice']}
         check('finance-s11-billing-policy-bounds-timing',traced(s11_billing_journey))
+        def s12_linkage_journey():
+            # S12 (GAP-CATALOG-LINKAGE / OD-NEW-09): the catalog governs
+            # intake when enforcing. Enrollment into a mapped active
+            # level's program proceeds; into a retired level's program
+            # refuses; retiring the policy is the off-switch; advisory
+            # admits the retired program again. Unmapped native programs
+            # stay allowed throughout (every earlier enrollment in this
+            # suite is the standing proof).
+            frappe.set_user('Administrator')
+            today=str(frappe.utils.today())
+            for label in ('s12a','s12b'):
+                email='synthetic-'+label+'@example.test'
+                users[label]=email
+                if not frappe.db.exists('User',email):
+                    frappe.get_doc(dict(doctype='User',email=email,first_name='Synthetic '+label,
+                        enabled=1,send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],roles=[])).insert()
+            frappe.db.commit()
+            as_user('course_owner',lambda:acm.create_program('s12_fam_0000000001','SYN-S12','SYN S12 family'))
+            prog_a=as_user('course_owner',lambda:acm.create_level('s12_lvla_0000000001','SYN-S12','SYN-S12-A','SYN S12 Active',1,12,'Month','2026-01-01'))['native_program']
+            prog_b=as_user('course_owner',lambda:acm.create_level('s12_lvlb_0000000001','SYN-S12','SYN-S12-B','SYN S12 Gone',2,12,'Month','2026-01-01'))['native_program']
+            assert prog_a and prog_b and prog_a!=prog_b,(prog_a,prog_b)
+            ret=as_user('course_owner',lambda:acm.set_level_status('s12_retb_0000000001','SYN-S12-B',0))
+            assert ret['status']=='Retired',ret
+            rel_a=release_for('s12a','s12_pipe_a')
+            rel_b=release_for('s12b','s12_pipe_b')
+            def pipeline(tag,rel,prog):
+                app=as_user('officer',lambda:adm.record_applicant('s12_rec_'+tag+'_000001',rel['decision'],'SYN S12 '+tag.upper(),prog,cat['academic_year']))
+                dec=as_user('officer',lambda:adm.create_admission('s12_cre_'+tag+'_000001',app['name'],rel['decision']))
+                as_user('admissions_reviewer',lambda:adm.review_admission('s12_rev_'+tag+'_000001',dec['name'],1))
+                as_user('approver',lambda:adm.decide_admission('s12_dec_'+tag+'_000001',dec['name'],2,'Approved','SYN S12 '+tag+' eligible'))
+                as_user('officer',lambda:adm.accept_offer('s12_acc_'+tag+'_000001',dec['name'],3))
+                as_user('approver',lambda:adm.convert_applicant('s12_conv_'+tag+'_000001',dec['name'],4))
+                return dec['name']
+            dec_a=pipeline('a',rel_a,prog_a)
+            dec_b=pipeline('b',rel_b,prog_b)
+            enr_a=as_user('enrollment_officer',lambda:enr.enroll_in_program('s12_enr_a_00000001',dec_a))
+            assert enr_a['program']==prog_a,enr_a
+            assert unavailable(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('s12_enr_b_retired01',dec_b)),'no longer admits')
+            off=as_user('course_owner',lambda:linkm.set_catalog_linkage_status('s12_pol_retire_00001','SYN-LINKAGE',0))
+            assert off['status']=='Retired',off
+            assert unavailable(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('s12_enr_b_off_00001',dec_b)),'No active catalog linkage policy')
+            on=as_user('course_owner',lambda:linkm.set_catalog_linkage_status('s12_pol_react_000001','SYN-LINKAGE',1))
+            assert on['status']=='Active',on
+            v2=as_user('course_owner',lambda:linkm.set_catalog_linkage_version('s12_pol_versn_000001','SYN-LINKAGE',today,'SYN owner stands down to advisory','advisory'))
+            assert v2['governing_enforcement']=='advisory',v2
+            polname=frappe.db.get_value('TH Catalog Linkage Policy',{'code':'SYN-LINKAGE'},'name')
+            assert str(frappe.db.get_value('TH Catalog Linkage Policy Version',{'parent':polname,'effective_from':'2026-01-01'},'superseded_on'))==today
+            enr_b=as_user('enrollment_officer',lambda:enr.enroll_in_program('s12_enr_b_000000001',dec_b))
+            assert enr_b['program']==prog_b,enr_b
+            frappe.db.commit()
+            return {'active':enr_a['program_enrollment'],'advisory':enr_b['program_enrollment']}
+        check('enrollment-s12-catalog-linkage-intake-gate',traced(s12_linkage_journey))
         report['status']='pass'
 
     except Exception as exc:

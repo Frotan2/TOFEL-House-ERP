@@ -132,6 +132,11 @@ def enroll_in_program(request_key, admission_decision):
             raise frappe.ValidationError("Unknown program")
         if not frappe.db.exists(YEAR, row.academic_year):
             raise frappe.ValidationError("Unknown academic year")
+        from toefl_house.academic import catalog_linkage as linkage
+        try:
+            linkage.check_intake_open(row.program)
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc)) from exc
         if _existing_enrollment(student, row.program, row.academic_year, row.academic_term):
             raise frappe.ValidationError("Student is already enrolled")
         customer = linked.customer or frappe.db.get_value(STUDENT, student, "customer")
