@@ -85,7 +85,7 @@ Fact: no unenroll/withdraw/expel path; no post-conversion revocation.
 - Owner decides: exit categories, authorities, and financial consequences
   (forfeit vs prorate vs refund — amounts stay native config, but the POLICY is
   the owner's).
-- SHIPPED AS S10 2026-09-23 (HOSTED-PROVEN pending at write time): option A
+- SHIPPED AS S10 2026-09-23 (HOSTED-PROVEN 2026-09-23, run 35827688760): option A
   as withdrawals single-shot plus D3-shaped dismissal request/approve/deny
   (TH Enrollment Exit Policy with approver-role terms; exits value-pin the
   governing terms). Posting deletes the derived Course Enrollments and
