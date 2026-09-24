@@ -15,6 +15,7 @@ import re
 import secrets
 import signal
 import shutil
+import socket as _socket
 import subprocess
 import sys
 import time
@@ -44,6 +45,89 @@ def hosted_failure_annotations(failure: str, last_failed_check: str | None = Non
         text = text[:697] + "..."
     lines.append(f"::error file=tools/foundation/runtime_install.py::{text}")
     return lines
+
+
+ANNOTATION_TEXT_LIMIT = 700
+ANNOTATION_MAX_LINES = 9  # GitHub keeps at most 10 warning annotations per step
+
+
+def _advisory_id(finding: dict) -> str:
+    """Prefer a public GHSA/CVE/PYSEC identifier; never invent one."""
+    candidates = [finding.get("id")] + list(finding.get("aliases") or [])
+    url = finding.get("url") or ""
+    if "/advisories/" in url:
+        candidates.insert(0, url.rstrip("/").rsplit("/", 1)[-1])
+    for prefix in ("GHSA-", "CVE-", "PYSEC-"):
+        for value in candidates:
+            if isinstance(value, str) and value.startswith(prefix):
+                return value
+    first = candidates[0]
+    return str(first) if first not in (None, "") else "unidentified"
+
+
+def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict | None) -> list[str]:
+    """Compact ``::warning::`` lines naming every advisory match by public id.
+
+    Job logs and artifacts EOF from the recording environment, so SEC-DEPS-01
+    stayed unreadable (roadmap security slice (a)). Annotations survive; this
+    packs "package@version id(severity)" entries into at most
+    ANNOTATION_MAX_LINES single-line annotations, sorted and de-duplicated.
+    Identifiers come only from scanner output. Truncation is stated, never
+    silent. Matches are advisory-version matches, not exploit proof.
+    """
+    rank = {"critical": 0, "high": 1, "moderate": 2, "medium": 2, "low": 3}
+    groups: dict[tuple[str, str], set[tuple[int, str]]] = {}
+
+    def add(key, finding):
+        severity = str(finding.get("severity") or "?").lower()
+        groups.setdefault(key, set()).add(
+            (rank.get(severity, 4), f"{_advisory_id(finding)}({severity})"))
+
+    stack_audit = stack_audit or {}
+    for finding in ((stack_audit.get("python") or {}).get("osv") or {}).get("findings") or []:
+        add(("0py", f"{finding.get('package')}@{finding.get('version')}"), finding)
+    npm_names = set()
+    for finding in (stack_audit.get("node") or {}).get("finding_summary") or []:
+        npm_names.add(finding.get("package"))
+        versions = ",".join(finding.get("installed_versions") or []) or "?"
+        add(("1npm", f"{finding.get('package')}@{versions}"), finding)
+    for package, matches in sorted(((frontend_audit or {}).get("advisories") or {}).items()):
+        if package in npm_names:
+            continue  # already named by the full-stack audit
+        for finding in matches if isinstance(matches, list) else []:
+            if isinstance(finding, dict):
+                add(("2fe", package), finding)
+    total = sum(len(ids) for ids in groups.values())
+
+    def order(item):
+        (kind, name), ids = item
+        return (kind, min(r for r, _ in ids), name)
+
+    entries = []
+    for (kind, name), ids in sorted(groups.items(), key=order):
+        label = {"0py": "py", "1npm": "npm", "2fe": "fe"}[kind]
+        entries.append(f"{label}:{name} " + ",".join(i for _, i in sorted(ids)))
+    if not entries:
+        return []
+    header = f"advisory matches={total} in {len(entries)} packages: "
+    lines: list[str] = []
+    current = header
+    used = 0
+    for entry in entries:
+        piece = entry if current == header else "; " + entry
+        if len(current) + len(piece) > ANNOTATION_TEXT_LIMIT:
+            lines.append(current)
+            if len(lines) == ANNOTATION_MAX_LINES:
+                break
+            current = "advisory matches (cont.): " + entry
+        else:
+            current += piece
+        used += 1
+    else:
+        lines.append(current)
+    if used < len(entries):
+        lines[-1] = lines[-1][:ANNOTATION_TEXT_LIMIT - 40] + f" ... +{len(entries) - used} packages not shown"
+    return ["::warning file=tools/foundation/runtime_install.py::" + line for line in lines]
 
 
 def main() -> int:
@@ -335,7 +419,42 @@ def main() -> int:
         worker = launch("worker", [lab / "tools/bin/bench", "worker", "--queue", "short,default,long"], bench_dir)
         bench("enable-scheduler", "--site", site, "enable-scheduler")
         scheduler = launch("scheduler", [lab / "tools/bin/bench", "schedule"], bench_dir)
-        socketio = launch("socketio", ["node", bench_dir / "apps/frappe/socketio.js"], bench_dir)
+        # SEC-DEPS-01 realtime hardening. The pinned socket.io server (ws 8.11.0 +
+        # engine.io 6.5.4) has pre-auth crash / connection-hold paths reachable
+        # before the namespace authenticate middleware. We keep the vendor tree
+        # untouched and run the real node listener on a loopback-only port via
+        # FRAPPE_SOCKETIO_PORT; the public 9000 port is served by an nginx edge
+        # that parses and normalises requests first. The browser client reads its
+        # port from the default frappe.boot.socketio_port=9000, which now hits
+        # the nginx edge rather than the node process directly. Export the
+        # FRAPPE_SOCKETIO_PORT setting in the outer env too so that pre-nginx
+        # probes (runtime_http.py) can validate the direct listener.
+        env["FRAPPE_SOCKETIO_PORT"] = "19000"
+        socketio_env = dict(env)
+        socketio_env["FRAPPE_SOCKETIO_PORT"] = "19000"
+        socketio_log = lab / "socketio.txt"
+        socketio_stream = socketio_log.open("w")
+        socketio = subprocess.Popen(["node", str(bench_dir / "apps/frappe/socketio.js")],
+                                    cwd=str(bench_dir), env=socketio_env, stdout=socketio_stream,
+                                    stderr=subprocess.STDOUT, start_new_session=True)
+        processes.append((socketio, socketio_stream, socketio_log))
+        # Wait for the node listener to accept connections before we claim
+        # liveness; without this the liveness snapshot can race Node bootstrap.
+        deadline = time.monotonic() + 20
+        last_err = "no connection"
+        while time.monotonic() < deadline:
+            if socketio.poll() is not None:
+                raise RuntimeError("Socket.IO service exited before accepting connections: "
+                                   + socketio_log.read_text()[-2000:])
+            try:
+                with _socket.create_connection(("127.0.0.1", 19000), timeout=1.0):
+                    last_err = None
+                    break
+            except OSError as exc:
+                last_err = str(exc)
+            time.sleep(0.2)
+        if last_err:
+            raise RuntimeError("Socket.IO service did not bind 127.0.0.1:19000 within 20s: " + last_err)
         run("background-cache-job", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_background.py", site], cwd=bench_dir / "sites")
         report["process_liveness"] = {"worker": worker.poll() is None, "scheduler": scheduler.poll() is None, "socketio": socketio.poll() is None}
         if not all(report["process_liveness"].values()):
@@ -392,6 +511,13 @@ http {{
  access_log off;
  client_body_temp_path {lab}/nginx-body;
  proxy_temp_path {lab}/nginx-proxy;
+ # SEC-DEPS-01: tight header / body limits drop the ws 8.11 header-count
+ # crash (GHSA-3h5v-q93c-6h6q) and oversize requests at the proxy before
+ # they reach node. These mirror the pinned bench template defaults.
+ client_header_buffer_size 1k;
+ large_client_header_buffers 4 4k;
+ client_max_body_size 1m;
+ client_body_buffer_size 16k;
  map $host $foundation_site {{ default ''; foundation.localhost foundation.localhost; restore.localhost restore.localhost; recovery.localhost recovery.localhost; }}
  server {{
   listen 127.0.0.1:8080;
@@ -403,11 +529,75 @@ http {{
    proxy_pass http://127.0.0.1:8000;
   }}
  }}
+  server {{
+  listen 127.0.0.1:9000;
+  if ($foundation_site = '') {{ return 444; }}
+  # Reject only the octet-stream POST payload that triggers engine.io
+  # GHSA-r635-g3xr-vw7x (connection hold on invalid binary polling POST).
+  # Ordinary polling GET/POST and WebSocket upgrades pass through (socket.io
+  # defaults to [polling, websocket]); only the crafted binary POST that
+  # engine.io hangs on is refused. The combination $rt_bad=11 means: this is
+  # a POST (1), NOT an Upgrade: websocket (stays 1), AND the request body
+  # was declared application/octet-stream (1 concatenated -> "11").
+  set $rt_bad 0;
+  if ($request_method = POST) {{ set $rt_bad 1; }}
+  if ($http_upgrade = "websocket") {{ set $rt_bad 0; }}
+  if ($content_type = "application/octet-stream") {{ set $rt_bad "${{rt_bad}}1"; }}
+  if ($rt_bad = 11) {{ return 400; }}
+  location /socket.io {{
+   proxy_http_version 1.1;
+   proxy_set_header Upgrade $http_upgrade;
+   proxy_set_header Connection "upgrade";
+   proxy_set_header X-Frappe-Site-Name $foundation_site;
+   proxy_set_header Origin $scheme://$http_host;
+   proxy_set_header Host $host;
+   proxy_read_timeout 300;
+   proxy_buffering off;
+   proxy_pass http://127.0.0.1:19000;
+  }}
+ }}
 }}
 """)
         run("nginx-config-check", ["nginx", "-t", "-c", proxy_conf])
-        launch("public-proxy", ["nginx", "-c", proxy_conf, "-g", "daemon off;"], lab)
+        proxy = launch("public-proxy", ["nginx", "-c", proxy_conf, "-g", "daemon off;"], lab)
+        # Wait for nginx to actually accept on 8080/9000 before running the
+        # realtime probe, mirroring the socketio readiness wait above.
+        deadline = time.monotonic() + 10
+        last_err = "no connection"
+        while time.monotonic() < deadline:
+            if proxy.poll() is not None:
+                raise RuntimeError("nginx public proxy exited early: "
+                                   + (lab / "nginx-error.log").read_text()[-2000:])
+            ok = 0
+            for port in (8080, 9000):
+                try:
+                    with _socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                        ok += 1
+                except OSError:
+                    pass
+            if ok == 2:
+                last_err = None
+                break
+            time.sleep(0.2)
+        if last_err:
+            raise RuntimeError("nginx public proxy did not bind 127.0.0.1:8080/9000 within 10s: " + last_err)
+        # Give nginx and engine.io a beat to finish any post-bind worker
+        # startup before sending the first probe; the readiness loop only
+        # asserts a TCP accept succeeds, not that engine.io is serving yet.
+        time.sleep(2)
         env["FOUNDATION_ISOLATION_REPORT"] = str(evidence / "isolation-result.json")
+        realtime_probe_path = evidence / "realtime-exposure-probe.json"
+        run("realtime-edge-exposure-probe",
+            ["node", ROOT / "tools/foundation/realtime_exposure_probe.js",
+             "--target", "127.0.0.1:9000", "--health", "127.0.0.1:19000",
+             "--host-header", "foundation.localhost",
+             "--pid", str(socketio.pid), "--output", realtime_probe_path],
+            cwd=bench_dir, timeout=120)
+        realtime_probe = json.loads(realtime_probe_path.read_text())
+        if not realtime_probe.get("all_survived"):
+            raise RuntimeError("Realtime edge did not neutralise every pre-auth advisory: "
+                               + json.dumps(realtime_probe["results"])[:2000])
+        report["realtime_edge_mitigation_proven"] = True
         try:
             run("expanded-restricted-http-isolation", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_isolation.py"], cwd=bench_dir / "sites")
         except RuntimeError as exc:
@@ -587,10 +777,12 @@ http {{
         audit_path=evidence / "frontend-advisories.json"
         if audit_path.exists():
             audit=json.loads(audit_path.read_text())
-            continuation["advisories"]={"status":"fail" if audit["advisories"] else "pass", "source":audit["source"],
+            continuation["advisories"]={"status": audit.get("status","fail"), "source":audit["source"],
                 "checked_at_utc":audit["checked_at_utc"], "packages":audit["packages_with_advisories"],
-                "findings":audit["advisories"], "scope":"Installed package matches; reachability/remediation separate"}
-            if audit["advisories"]: continuation["status"]="fail"
+                "findings":audit.get("triage",{}).get("findings",audit.get("advisories",{})),
+                "untriaged": audit.get("triage",{}).get("untriaged",[]),
+                "scope":"Advisories triaged against SEC-DEPS-01 per-finding dispositions; untriaged advisories fail closed."}
+            if audit.get("status","fail") != "pass": continuation["status"]="fail"
         else:
             continuation["advisories"]={"status":"blocked"}; continuation["status"]="fail"
         (evidence / "continuation-result.json").write_text(redact(json.dumps(continuation,indent=2))+"\n")
@@ -637,6 +829,15 @@ http {{
                 report["status"] = "fail"
         secret_file.unlink(missing_ok=True)
         (evidence / "runtime-result.json").write_text(redact(json.dumps(report, indent=2)) + "\n")
+        audits = []
+        for name in ("stack-dependency-audit.json", "frontend-advisories.json"):
+            path = evidence / name
+            try:
+                audits.append(json.loads(path.read_text()) if path.exists() else None)
+            except (OSError, ValueError):
+                audits.append(None)
+        for line in advisory_finding_annotations(*audits):
+            print(line, flush=True)
         if report.get("status") != "pass":
             failed_checks = [c.get("name") for c in report.get("checks", [])
                              if isinstance(c, dict) and c.get("status") == "fail"]
@@ -645,7 +846,6 @@ http {{
                     failed_checks[-1] if failed_checks else None):
                 print(line, flush=True)
     return 0 if report["status"] == "pass" else 1
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
