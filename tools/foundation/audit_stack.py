@@ -7,10 +7,12 @@ Node dependency root, and the exact container references supplied by the
 caller. Only public package names and versions are sent to OSV/npm; it never
 sends source, site configuration, credentials, backup contents, or files.
 
-A finding is an advisory-version match, not proof of reachability, exploit,
-severity in the selected deployment, or production approval. Container and OS
-package CVEs are deliberately out of scope unless a separate approved scanner
-and image/host boundary are supplied.
+A raw finding is an advisory-version match, not proof of reachability.
+Advisories are triaged against the SEC-DEPS-01 per-finding disposition
+table; matches with an explicit closed disposition (MITIGATED / NOT_REACHABLE
+/ BUILD_ONLY / DEV_ONLY / INSTALL_ONLY / BROWSER_SELF_DENIAL) do not fail
+the audit. New, untriaged advisories exit non-zero so regressions surface
+in CI. Container and OS package CVEs remain out of scope.
 """
 from __future__ import annotations
 
@@ -24,6 +26,9 @@ import re
 import sys
 from typing import Any
 from urllib.request import Request, urlopen
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from advisory_triage import triage_npm, triage_python, overall_status  # noqa: E402
 
 from audit_frontend import inventory as installed_node_inventory
 
@@ -171,6 +176,8 @@ def report_for(args: argparse.Namespace) -> dict[str, Any]:
     npm_findings = npm_finding_summary(npm, node_packages)
     osv = osv_pypi_advisories(python_packages)
     npm_entries = len(npm_findings)
+    # Preserve the legacy keys but populate them after triage; the final
+    # status now depends on triage, not raw counts.
     report = {
         "scope": "Resolved Bench Python and supplied installed Node dependency trees plus pinned container references; advisory matches only, not exploit/reachability, full SBOM, OS packages, container CVE scan, or production approval",
         "checked_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -196,7 +203,10 @@ def report_for(args: argparse.Namespace) -> dict[str, Any]:
             "limit": "No container-image or host-package vulnerability scanner is configured by this tool.",
         },
     }
-    report["status"] = "fail" if npm_entries or osv["findings"] else "pass"
+    npm_triage = triage_npm(npm)
+    py_triage = triage_python(osv["findings"])
+    report["triage"] = {"node": npm_triage, "python": py_triage}
+    report["status"] = overall_status(npm_result=npm_triage, py_result=py_triage)
     return report
 
 

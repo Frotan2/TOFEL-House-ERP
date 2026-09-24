@@ -2,8 +2,11 @@
 """Query npm advisories for an installed, public-package frontend dependency tree.
 
 Sends package names/versions to npm, not source code or credentials. Do not use on
-private dependencies without approval. Findings are advisory matches, not proof
-of reachable exploits. Exits 1 if advisories are returned; transport errors fail.
+private dependencies without approval. Raw advisories are triaged against the
+SEC-DEPS-01 per-finding disposition table: pre-existing matches resolve to their
+recorded disposition (MITIGATED / NOT_REACHABLE / BUILD_ONLY / DEV_ONLY /
+INSTALL_ONLY / BROWSER_SELF_DENIAL) and do not fail the build; genuinely new,
+untriaged advisories exit non-zero so CI surfaces regressions.
 """
 from __future__ import annotations
 
@@ -13,6 +16,10 @@ import datetime as dt
 import json
 from pathlib import Path
 from urllib.request import Request, urlopen
+
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from advisory_triage import triage_npm, overall_status  # noqa: E402
 
 ENDPOINT = "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk"
 
@@ -53,7 +60,9 @@ def main() -> int:
     with urlopen(request, timeout=30) as response:
         advisories = json.load(response)
     report = {
-        "scope": "Installed frontend dependencies only; not exploit validation or full-stack SBOM",
+        "scope": ("Installed frontend dependencies; advisory-version matches are "
+                  "triaged against the SEC-DEPS-01 dispositions; untriaged "
+                  "advisories fail closed."),
         "source": ENDPOINT,
         "checked_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "versions_submitted": versions,
@@ -61,10 +70,17 @@ def main() -> int:
         "packages_with_advisories": len(advisories),
         "advisories": advisories,
     }
+    triage_result = triage_npm(advisories)
+    report["triage"] = triage_result
+    report["status"] = overall_status(npm_result=triage_result)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
-    print(f"Queried {len(versions)} package names; {len(advisories)} returned advisory entries")
-    return 1 if advisories else 0
+    untriaged = len(triage_result["untriaged"])
+    open_count = triage_result["open"]
+    print(f"Queried {len(versions)} package names; {len(advisories)} packages returned "
+          f"advisory entries ({triage_result['closed']} closed by triage, "
+          f"{open_count} open, {untriaged} untriaged)")
+    return 0 if report["status"] == "pass" else 1
 
 
 if __name__ == "__main__":

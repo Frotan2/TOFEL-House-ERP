@@ -1,0 +1,1669 @@
+{
+  "date": "2026-09-23",
+  "source_evidence": "docs/engineering/evidence/phase-2/hosted/sec-deps-01-advisories-35852307687.json",
+  "source_run": "35852307687",
+  "scope": "Per-finding analysis of all 102 advisory matches (40 packages) from the hosted runtime audit, answering: reachability, applicability, official upgrade, safe upgrade without vendor patching.",
+  "totals": {
+    "advisory_matches": 102,
+    "packages": 40,
+    "by_reachability": {
+      "build_time_only": 46,
+      "dev_server_only_not_run_in_production": 20,
+      "shipped_to_browser_education_portal_out_of_launch_scope": 6,
+      "shipped_to_browser_desk": 8,
+      "server_runtime_node_realtime": 8,
+      "server_runtime_python": 12,
+      "install_time_only": 2
+    }
+  },
+  "upgrade_path_verification": {
+    "method": "Shallow clones of the tagged releases; every yarn.lock parsed and the resolved version of each of the 40 packages compared; pyproject pins compared.",
+    "compared": {
+      "frappe": "v16.33.1 (pinned) vs v16.35.0 (latest v16, 2026-09-22) and version-16-hotfix 9ad5508",
+      "erpnext": "v16.34.2 vs v16.35.0",
+      "hrms": "v16.18.1 vs v16.20.0",
+      "education": "v16.1.0 vs version-16 head 22e0910 (no newer release)",
+      "payments": "version-16 head unchanged at cca07d9"
+    },
+    "result": "Zero resolved-version changes for any affected package in any yarn.lock (frappe, frappe/ui, erpnext, erpnext/banking, hrms, hrms/frontend, hrms/roster, education, education/frontend). Frappe v16.35.0 still pins pypdf==6.15.0, WeasyPrint==68.0, pdfkit~=1.0.0.",
+    "frappe_develop": "Frappe develop 39343b1 (2026-09-23, __version__ 17.0.0-dev) fixes socket.io-parser (4.2.7), shell-quote (1.10.0), esbuild (0.28.1), postcss (8.5.23), pypdf (6.16.1), removes loader-utils/svgo and drops WeasyPrint. It is unreleased, and ERPNext v16.35.0 declares frappe >=16.21.0,<17.0.0, so it is not a supported compatible platform. Adopting it would break the Frappe/ERPNext compatibility constraint.",
+    "matrix_bump_decision": "Not bumped. Moving to frappe v16.35.0/erpnext v16.35.0/hrms v16.20.0 resolves 0 of 102 findings; it is a separate functional upgrade to qualify on its own merits, not a SEC-DEPS-01 remediation."
+  },
+  "safe_override_verification": {
+    "npm": "runtime_install.py installs with a Yarn Classic --frozen-lockfile and verifies source_file_sha256 for package.json and yarn.lock of every app after install ('Upstream input modified' guard). Yarn resolutions/overrides can only be expressed in package.json and must rewrite yarn.lock. Both are upstream vendor inputs, so any npm override is vendor patching. Post-build replacement inside node_modules is also vendor patching. The isolated Education candidate (frontend-resolution-proposal.json, experimental_not_adopted) confirms the mechanism would require editing upstream manifest and lock.",
+    "python": "Frappe pins pypdf==6.15.0 and WeasyPrint==68.0 exactly. A constraint to pypdf 6.16.1 / weasyprint 70 violates the declared requirement, and `uv pip check` (python-dependency-check step) fails by design. Bench 5.31.0 constrains setuptools<82 while the fix is 83.0.0. pdfkit and weasyprint GHSA-jhhc have no fixed release.",
+    "result": "No finding is fixable without patching vendor code or breaking a declared platform constraint."
+  },
+  "applicability_summary": {
+    "network_reachable_server_side": "socket.io-parser x2, engine.io x2, ws x3 (availability/DoS; ws GHSA-58qx memory disclosure) in the realtime node server; cookie x1 (serialize-only, not called). Python PDF stack x14 records (7 vulns) on authenticated print/upload paths, with mitigations traced in pdf-reachability-trace-2026-09-19.md.",
+    "browser_desk": "quill x2, showdown x3, lodash-es x3: authenticated desk users only; content is authored by authenticated users.",
+    "education_portal_out_of_scope": "markdown-it, linkify-it, @tiptap: shipped only in the Education/HRMS SPA frontends, not in TH launch scope.",
+    "dev_or_build_only": "All remaining findings run only in the build toolchain over repository-owned inputs, or in dev servers/Windows code paths that the Linux production runtime never starts."
+  },
+  "packages": [
+    {
+      "package": "npm:decode-uri-component@0.2.2",
+      "reachability": "build_time_only",
+      "reachability_evidence": "frappe yarn.lock: via source-map-resolve (postcss/sass source-map tooling during `bench build`).",
+      "advisories": [
+        {
+          "id": "GHSA-vcc3-ghjq-m6fr",
+          "severity": "moderate",
+          "summary": "decode-uri-component: Denial of service via exponential decoding of malformed percent-encoded input",
+          "fixed_versions": [
+            "0.5.0"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:esbuild@0.14.54",
+      "reachability": "dev_server_only_not_run_in_production",
+      "reachability_evidence": "Advisory needs esbuild serve mode; frappe uses esbuild to bundle only, and the Education vite dev server is not started by bench production.",
+      "advisories": [
+        {
+          "id": "GHSA-67mh-4wv8-2f99",
+          "severity": "moderate",
+          "summary": "esbuild enables any website to send any requests to the development server and read the response",
+          "fixed_versions": [
+            "0.25.0"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": "0.28.1",
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:markdown-it@14.0.0",
+      "reachability": "shipped_to_browser_education_portal_out_of_launch_scope",
+      "reachability_evidence": "Education frontend (frappe-ui/tiptap) and HRMS PWA bundles; TH launch scope excludes the student/guardian portal (administration.py). The desk does not use it.",
+      "advisories": [
+        {
+          "id": "GHSA-38c4-r59v-3vqw",
+          "severity": "moderate",
+          "summary": "markdown-it is has a Regular Expression Denial of Service (ReDoS)",
+          "fixed_versions": [
+            "14.1.1"
+          ],
+          "runtime_disposition": "BROWSER_SELF_DENIAL",
+          "runtime_disposition_evidence": "markdown-it linkify ReDoS runs in authenticated student/employee browser only; server sanitizes persisted content"
+        },
+        {
+          "id": "GHSA-6v5v-wf23-fmfq",
+          "severity": "moderate",
+          "summary": "markdown-it: Quadratic complexity DoS in smartquotes rule via replaceAt string operations",
+          "fixed_versions": [
+            "14.2.0"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "smartquotes rule requires typographer:true; prosemirror-markdown default does not enable it"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:micromatch@4.0.5,4.0.8",
+      "reachability": "build_time_only",
+      "reachability_evidence": "Glob matching in the build toolchain; it sees only repository glob patterns.",
+      "advisories": [
+        {
+          "id": "GHSA-952p-6rrq-rcjv",
+          "severity": "moderate",
+          "summary": "Regular Expression Denial of Service (ReDoS) in micromatch",
+          "fixed_versions": [
+            "4.0.8"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:quill@1.3.7,2.0.3",
+      "reachability": "shipped_to_browser_desk",
+      "reachability_evidence": "frappe desk Text Editor/Comment controls (frappe/public/js/frappe/form/controls/text_editor.js). Authenticated desk users only. Frappe sanitizes stored HTML server-side (frappe.utils.html_utils.sanitize_html).",
+      "advisories": [
+        {
+          "id": "GHSA-4943-9vgg-gr5r",
+          "severity": "moderate",
+          "summary": "Cross-site Scripting in quill",
+          "fixed_versions": [
+            "none"
+          ],
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "_sanitize_content + sanitize_html strip event-handler attrs on save/load"
+        },
+        {
+          "id": "GHSA-v3m3-f69x-jf25",
+          "severity": "low",
+          "summary": "Quill is vulnerable to XSS via HTML export feature",
+          "fixed_versions": [
+            "none"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "desk ships Quill 1.x via frappe-quill-image-resize; getSemanticHTML is a Quill 2 API"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": true
+    },
+    {
+      "package": "npm:showdown@2.1.0",
+      "reachability": "shipped_to_browser_desk",
+      "reachability_evidence": "frappe desk markdown rendering (frappe.markdown), plus Education/HRMS frontends. Renders authenticated-user-authored markdown.",
+      "advisories": [
+        {
+          "id": "GHSA-22g5-r2x5-97cx",
+          "severity": "moderate",
+          "summary": "showdown allows stored cross-site scripting through table header ID injection",
+          "fixed_versions": [
+            "none"
+          ],
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "frappe.markdown() runs sanitize_markdown_html() stripping event handlers"
+        },
+        {
+          "id": "GHSA-cr32-g25g-vxjj",
+          "severity": "moderate",
+          "summary": "showdown metadata title handling allows cross-site scripting",
+          "fixed_versions": [
+            "none"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "showdown converter instantiated without completeHTMLDocument/metadata"
+        },
+        {
+          "id": "GHSA-rmmh-p597-ppvv",
+          "severity": "moderate",
+          "summary": "Showdown vulnerable to Regular Expression Denial of Service (ReDoS) in link/anchor parsing",
+          "fixed_versions": [
+            "none"
+          ],
+          "runtime_disposition": "BROWSER_SELF_DENIAL",
+          "runtime_disposition_evidence": "anchors ReDoS runs in the user's browser against markdown they typed"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": true
+    },
+    {
+      "package": "npm:yaml@1.10.2,2.3.4",
+      "reachability": "build_time_only",
+      "reachability_evidence": "frappe: cssnano/lilconfig config loading; Education/HRMS: vite/tailwind config. Parses only repository config files.",
+      "advisories": [
+        {
+          "id": "GHSA-48c2-rrv3-qjmp",
+          "severity": "moderate",
+          "summary": "yaml is vulnerable to Stack Overflow via deeply nested YAML collections",
+          "fixed_versions": [
+            "1.10.3",
+            "2.8.3"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:@tiptap/extension-link@2.2.3",
+      "reachability": "shipped_to_browser_education_portal_out_of_launch_scope",
+      "reachability_evidence": "Education frontend editor (frappe-ui); portal outside launch scope.",
+      "advisories": [
+        {
+          "id": "GHSA-vhrc-hgrq-x75r",
+          "severity": "low",
+          "summary": "@tiptap/extension-link vulnerable to Cross-site Scripting (XSS)",
+          "fixed_versions": [
+            "2.10.4"
+          ],
+          "runtime_disposition": "BROWSER_SELF_DENIAL",
+          "runtime_disposition_evidence": "javascript: URL link injection runs in the same user's authenticated session; cross-user exploitation requires server persistence which sanitize_html strips"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:cookie@0.4.2,0.7.0",
+      "reachability": "server_runtime_node_realtime",
+      "reachability_evidence": "frappe realtime/index.js require('cookie') parses the socket.io handshake cookie. The advisory concerns serialize() with attacker-controlled name/path/domain; realtime only calls parse(). 0.7.0 is also present.",
+      "advisories": [
+        {
+          "id": "GHSA-pxg6-pf52-xh8x",
+          "severity": "low",
+          "summary": "cookie accepts cookie name, path, and domain with out of bounds characters",
+          "fixed_versions": [
+            "0.7.0"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "realtime/index.js never sets opts.cookie; only cookie.serialize path is reachable and is not called"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:vite@2.9.17",
+      "reachability": "dev_server_only_not_run_in_production",
+      "reachability_evidence": "Education frontend build only (`vite build`); every advisory targets the vite dev server (server.fs, launch-editor, dev-server CORS) or bundled DOM-clobbering gadgets in dev builds.",
+      "advisories": [
+        {
+          "id": "GHSA-c27g-q93r-2cwf",
+          "severity": "high",
+          "summary": "launch-editor vulnerable to command injection via the crafted request on Windows",
+          "fixed_versions": [
+            "5.4.9"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-fx2h-pf6j-xcff",
+          "severity": "high",
+          "summary": "vite: `server.fs.deny` bypass on Windows alternate paths",
+          "fixed_versions": [
+            "6.4.3",
+            "7.3.5",
+            "8.0.16"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-356w-63v5-8wf4",
+          "severity": "moderate",
+          "summary": "Vite has an `server.fs.deny` bypass with an invalid `request-target`",
+          "fixed_versions": [
+            "4.5.13",
+            "5.4.18",
+            "6.0.15",
+            "6.1.5",
+            "6.2.6"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-4r4m-qw57-chr8",
+          "severity": "moderate",
+          "summary": "Vite has a `server.fs.deny` bypassed for `inline` and `raw` with `?import` query",
+          "fixed_versions": [
+            "4.5.11",
+            "5.4.16",
+            "6.0.13",
+            "6.1.3",
+            "6.2.4"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-4w7w-66w2-5vf9",
+          "severity": "moderate",
+          "summary": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+          "fixed_versions": [
+            "6.4.2",
+            "7.3.2",
+            "8.0.5"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-64vr-g452-qvp3",
+          "severity": "moderate",
+          "summary": "Vite DOM Clobbering gadget found in vite bundled scripts that leads to XSS",
+          "fixed_versions": [
+            "3.2.11",
+            "4.5.4",
+            "5.1.8",
+            "5.2.14",
+            "5.3.6",
+            "5.4.6"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-859w-5945-r5v3",
+          "severity": "moderate",
+          "summary": "Vite's server.fs.deny bypassed with /. for files under project root",
+          "fixed_versions": [
+            "4.5.14",
+            "5.4.19",
+            "6.1.6",
+            "6.2.7",
+            "6.3.4"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-8jhw-289h-jh2g",
+          "severity": "moderate",
+          "summary": "Vite's `server.fs.deny` did not deny requests for patterns with directories.",
+          "fixed_versions": [
+            "2.9.18",
+            "3.2.10",
+            "4.5.3",
+            "5.0.13",
+            "5.1.7",
+            "5.2.6"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-9cwx-2883-4wfx",
+          "severity": "moderate",
+          "summary": "Vite's `server.fs.deny` is bypassed when using `?import&raw`",
+          "fixed_versions": [
+            "3.2.11",
+            "4.5.4",
+            "5.1.8",
+            "5.2.14",
+            "5.3.6",
+            "5.4.6"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-v6wh-96g9-6wx3",
+          "severity": "moderate",
+          "summary": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+          "fixed_versions": [
+            "6.4.3",
+            "7.3.5",
+            "8.0.16"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-vg6x-rcgg-rjx6",
+          "severity": "moderate",
+          "summary": "Websites were able to send any requests to the development server and read the response in vite",
+          "fixed_versions": [
+            "4.5.6",
+            "5.4.12",
+            "6.0.9"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-x574-m823-4x7w",
+          "severity": "moderate",
+          "summary": "Vite bypasses server.fs.deny when using ?raw??",
+          "fixed_versions": [
+            "4.5.10",
+            "5.4.15",
+            "6.0.12",
+            "6.1.2",
+            "6.2.3"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-xcj6-pq6g-qj4x",
+          "severity": "moderate",
+          "summary": "Vite allows server.fs.deny to be bypassed with .svg or relative paths",
+          "fixed_versions": [
+            "4.5.12",
+            "5.4.17",
+            "6.0.14",
+            "6.1.4",
+            "6.2.5"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-g4jq-h2w9-997c",
+          "severity": "low",
+          "summary": "Vite middleware may serve files starting with the same name with the public directory",
+          "fixed_versions": [
+            "5.4.20",
+            "6.3.6",
+            "7.0.7",
+            "7.1.5"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-jqfw-vq24-v9c3",
+          "severity": "low",
+          "summary": "Vite's `server.fs` settings were not applied to HTML files",
+          "fixed_versions": [
+            "5.4.20",
+            "6.3.6",
+            "7.0.7",
+            "7.1.5"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:ws@8.11.0",
+      "reachability": "server_runtime_node_realtime",
+      "reachability_evidence": "Transitive dependency of engine.io in the frappe socket.io realtime server (node realtime/index.js). The server faces the network through the site's /socket.io.",
+      "advisories": [
+        {
+          "id": "GHSA-3h5v-q93c-6h6q",
+          "severity": "high",
+          "summary": "ws affected by a DoS when handling a request with many HTTP headers",
+          "fixed_versions": [
+            "5.2.4",
+            "6.2.3",
+            "7.5.10",
+            "8.17.1"
+          ],
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "nginx edge with 4k/1m caps, ws listener loopback on 19000"
+        },
+        {
+          "id": "GHSA-96hv-2xvq-fx4p",
+          "severity": "high",
+          "summary": "ws: Memory exhaustion DoS from tiny fragments and data chunks",
+          "fixed_versions": [
+            "5.2.5",
+            "6.2.4",
+            "7.5.11",
+            "8.21.0"
+          ],
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "engine.io maxHttpBufferSize=1MiB + nginx client_max_body_size 1m"
+        },
+        {
+          "id": "GHSA-58qx-3vcg-4xpx",
+          "severity": "moderate",
+          "summary": "ws: Uninitialized memory disclosure",
+          "fixed_versions": [
+            "8.20.1"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "engine.io/socket.io never call ws.close(TypedArray)"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:@tiptap/core@2.2.3",
+      "reachability": "shipped_to_browser_education_portal_out_of_launch_scope",
+      "reachability_evidence": "Education frontend editor (frappe-ui); portal outside launch scope.",
+      "advisories": [
+        {
+          "id": "GHSA-cp6q-959q-f8rh",
+          "severity": "moderate",
+          "summary": "Tiptap: mergeAttributes() turns an own __proto__ key into inherited executable DOM attributes",
+          "fixed_versions": [
+            "3.30.4"
+          ],
+          "runtime_disposition": "BROWSER_SELF_DENIAL",
+          "runtime_disposition_evidence": "mergeAttributes __proto__ XSS requires an attacker-controlled attribute object; education/HRMS SPAs do not import JSON documents; FormField content is server-sanitized"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:colord@2.9.3",
+      "reachability": "build_time_only",
+      "reachability_evidence": "cssnano (postcss-colormin etc.) during `bench build`; parses only repository CSS.",
+      "advisories": [
+        {
+          "id": "GHSA-2wm5-q62r-hmrv",
+          "severity": "moderate",
+          "summary": "Colord: Slow rejection of oversized malformed color strings",
+          "fixed_versions": [
+            "2.9.4"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:picomatch@2.3.1",
+      "reachability": "build_time_only",
+      "reachability_evidence": "Build-toolchain glob matching.",
+      "advisories": [
+        {
+          "id": "GHSA-c2c7-rcm5-vvqj",
+          "severity": "high",
+          "summary": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+          "fixed_versions": [
+            "2.3.2",
+            "3.0.2",
+            "4.0.4"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-3v7f-55p6-f55p",
+          "severity": "moderate",
+          "summary": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+          "fixed_versions": [
+            "2.3.2",
+            "3.0.2",
+            "4.0.4"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:postcss@5.2.18,6.0.23,7.0.39,8.4.31,8.4.35",
+      "reachability": "build_time_only",
+      "reachability_evidence": "CSS processing during `bench build`/`vite build` over repository CSS only; sourceMappingURL advisories need attacker-controlled CSS input at build time.",
+      "advisories": [
+        {
+          "id": "GHSA-6g55-p6wh-862q",
+          "severity": "high",
+          "summary": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+          "fixed_versions": [
+            "8.5.12"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-r28c-9q8g-f849",
+          "severity": "high",
+          "summary": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "fixed_versions": [
+            "8.5.18"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-566m-qj78-rww5",
+          "severity": "moderate",
+          "summary": "Regular Expression Denial of Service in postcss",
+          "fixed_versions": [
+            "7.0.36",
+            "8.2.13"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-7fh5-64p2-3v2j",
+          "severity": "moderate",
+          "summary": "PostCSS line return parsing error",
+          "fixed_versions": [
+            "8.4.31"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-fxqj-rqcc-2cmp",
+          "severity": "moderate",
+          "summary": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q \u2014 attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+          "fixed_versions": [
+            "8.5.23"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-qx2v-qp2m-jg93",
+          "severity": "moderate",
+          "summary": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+          "fixed_versions": [
+            "8.5.10"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": "8.5.23",
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:rollup@2.77.3",
+      "reachability": "build_time_only",
+      "reachability_evidence": "Education `vite build`; the file-write advisory needs attacker-controlled chunk names. The DOM-clobbering gadget affects only bundles using import.meta.url and document.currentScript in a page that accepts attacker HTML.",
+      "advisories": [
+        {
+          "id": "GHSA-gcx4-mw62-g8wm",
+          "severity": "high",
+          "summary": "DOM Clobbering Gadget found in rollup bundled scripts that leads to XSS",
+          "fixed_versions": [
+            "2.79.2",
+            "3.29.5",
+            "4.22.4"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-mw96-cpmx-2vgc",
+          "severity": "high",
+          "summary": "Rollup 4 has Arbitrary File Write via Path Traversal",
+          "fixed_versions": [
+            "2.80.0",
+            "3.30.0",
+            "4.59.0"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:socket.io-parser@4.2.4",
+      "reachability": "server_runtime_node_realtime",
+      "reachability_evidence": "frappe socket.io realtime server; decodes packets from any client that reaches /socket.io.",
+      "advisories": [
+        {
+          "id": "GHSA-2m8v-j782-fhvr",
+          "severity": "high",
+          "summary": "Socket.IO: Zero-attachment Memory Exhaustion",
+          "fixed_versions": [
+            "3.3.6",
+            "3.4.5",
+            "4.2.7"
+          ],
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "duplicate of socket.io-parser attachment-framing advisory (GHSA-677m); same caps"
+        },
+        {
+          "id": "GHSA-677m-j7p3-52f9",
+          "severity": "high",
+          "summary": "socket.io allows an unbounded number of binary attachments",
+          "fixed_versions": [
+            "3.3.5",
+            "3.4.4",
+            "4.2.6"
+          ],
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "maxHttpBufferSize + nginx 1m cap bound attachment framing"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": "4.2.7",
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:svgo@2.8.0",
+      "reachability": "build_time_only",
+      "reachability_evidence": "postcss-svgo during `bench build`; optimizes only repository SVG.",
+      "advisories": [
+        {
+          "id": "GHSA-2p49-hgcm-8545",
+          "severity": "high",
+          "summary": "SVGO removeScripts plugin leaves some executable scripts intact",
+          "fixed_versions": [
+            "2.8.3",
+            "3.3.4",
+            "4.0.2"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-w27v-7q3p-w38r",
+          "severity": "high",
+          "summary": "SVGO: removeScripts allows executable links through namespace and control-character bypasses",
+          "fixed_versions": [
+            "2.8.4",
+            "3.3.5",
+            "4.1.0"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-xpqw-6gx7-v673",
+          "severity": "high",
+          "summary": "SVGO DoS through entity expansion in DOCTYPE (Billion Laughs)",
+          "fixed_versions": [
+            "2.8.1",
+            "3.3.3",
+            "4.0.1"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-4vpr-x523-8j87",
+          "severity": "moderate",
+          "summary": "SVGO: removeScripts incompletely sanitizes executable HTML in SVG foreignObject elements",
+          "fixed_versions": [
+            "2.8.4",
+            "3.3.5",
+            "4.1.0"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": "removed",
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:tmp@0.2.4",
+      "reachability": "build_time_only",
+      "reachability_evidence": "Build-time tooling (esbuild-plugin-postcss2 / editorjs dev deps).",
+      "advisories": [
+        {
+          "id": "GHSA-ph9p-34f9-6g65",
+          "severity": "high",
+          "summary": "tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape",
+          "fixed_versions": [
+            "0.2.6"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:json5@0.5.1",
+      "reachability": "build_time_only",
+      "reachability_evidence": "loader-utils 0.2.x config parsing in the build toolchain.",
+      "advisories": [
+        {
+          "id": "GHSA-9c47-m6qq-7p4h",
+          "severity": "high",
+          "summary": "Prototype Pollution in JSON5 via Parse Method",
+          "fixed_versions": [
+            "1.0.2",
+            "2.2.2"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:launch-editor@2.6.1",
+      "reachability": "dev_server_only_not_run_in_production",
+      "reachability_evidence": "frappe declares it for dev-mode `open in editor`; both advisories are Windows-only. The TH runtime is Linux.",
+      "advisories": [
+        {
+          "id": "GHSA-c27g-q93r-2cwf",
+          "severity": "high",
+          "summary": "launch-editor vulnerable to command injection via the crafted request on Windows",
+          "fixed_versions": [
+            "2.9.0"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-v6wh-96g9-6wx3",
+          "severity": "moderate",
+          "summary": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+          "fixed_versions": [
+            "2.14.1"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:linkify-it@5.0.0",
+      "reachability": "shipped_to_browser_education_portal_out_of_launch_scope",
+      "reachability_evidence": "markdown-it dependency in Education/HRMS frontends; portal outside launch scope.",
+      "advisories": [
+        {
+          "id": "GHSA-22p9-wv53-3rq4",
+          "severity": "high",
+          "summary": "LinkifyIt#match scan loop has quadratic algorithmic complexity",
+          "fixed_versions": [
+            "5.0.1"
+          ],
+          "runtime_disposition": "BROWSER_SELF_DENIAL",
+          "runtime_disposition_evidence": "linkify-it ReDoS is a transitive of markdown-it; same browser-only execution context"
+        },
+        {
+          "id": "GHSA-v245-v573-v5vm",
+          "severity": "high",
+          "summary": "linkify-it: Quadratic-complexity DoS via the `mailto:` validator scan-loop on attacker text",
+          "fixed_versions": [
+            "5.0.2"
+          ],
+          "runtime_disposition": "BROWSER_SELF_DENIAL",
+          "runtime_disposition_evidence": "linkify-it ReDoS duplicate; same browser-only execution context"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:lodash-es@4.17.21",
+      "reachability": "shipped_to_browser_desk",
+      "reachability_evidence": "Bundled through quill/quill-delta in the desk; the advisories need attacker-controlled keys passed to _.template imports / _.unset / _.omit, which quill does not do with user input.",
+      "advisories": [
+        {
+          "id": "GHSA-r5fr-rjxr-66jc",
+          "severity": "high",
+          "summary": "lodash vulnerable to Code Injection via `_.template` imports key names",
+          "fixed_versions": [
+            "4.18.0"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "lodash-es reachable functions are cloneDeep/isEqual/merge/defaultsDeep; _.template never called"
+        },
+        {
+          "id": "GHSA-f23m-r3pf-42rh",
+          "severity": "moderate",
+          "summary": "lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`",
+          "fixed_versions": [
+            "4.18.0"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "_.omit/_._unset prototype pollution path not reached"
+        },
+        {
+          "id": "GHSA-xxjr-mmjv-4gpg",
+          "severity": "moderate",
+          "summary": "Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions",
+          "fixed_versions": [
+            "4.17.23"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "_.omit/_.unset duplicate for lodash-es"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:lodash@4.17.21",
+      "reachability": "build_time_only",
+      "reachability_evidence": "frappe build scripts and HRMS frontend tooling.",
+      "advisories": [
+        {
+          "id": "GHSA-r5fr-rjxr-66jc",
+          "severity": "high",
+          "summary": "lodash vulnerable to Code Injection via `_.template` imports key names",
+          "fixed_versions": [
+            "4.18.0"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "CommonJS lodash used only by build tooling (postcss/svgo/tailwind helpers); not bundled to desk/SPA runtime (desk uses lodash-es)"
+        },
+        {
+          "id": "GHSA-f23m-r3pf-42rh",
+          "severity": "moderate",
+          "summary": "lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`",
+          "fixed_versions": [
+            "4.18.0"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "CommonJS lodash used only by build tooling (postcss/svgo/tailwind helpers); not bundled to desk/SPA runtime (desk uses lodash-es)"
+        },
+        {
+          "id": "GHSA-xxjr-mmjv-4gpg",
+          "severity": "moderate",
+          "summary": "Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions",
+          "fixed_versions": [
+            "4.17.23"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "CommonJS lodash used only by build tooling (postcss/svgo/tailwind helpers); not bundled to desk/SPA runtime (desk uses lodash-es)"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:minimatch@3.1.2,9.0.3",
+      "reachability": "build_time_only",
+      "reachability_evidence": "Build-toolchain glob matching.",
+      "advisories": [
+        {
+          "id": "GHSA-23c5-xmqv-rm74",
+          "severity": "high",
+          "summary": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+          "fixed_versions": [
+            "10.2.3",
+            "3.1.4",
+            "4.2.5",
+            "5.1.8",
+            "6.2.2",
+            "7.4.8",
+            "8.0.6",
+            "9.0.7"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-3ppc-4f35-3m26",
+          "severity": "high",
+          "summary": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+          "fixed_versions": [
+            "10.2.1",
+            "3.1.3",
+            "4.2.4",
+            "5.1.7",
+            "6.2.1",
+            "7.4.7",
+            "8.0.5",
+            "9.0.6"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-7r86-cg39-jmmj",
+          "severity": "high",
+          "summary": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+          "fixed_versions": [
+            "10.2.3",
+            "3.1.3",
+            "4.2.5",
+            "5.1.8",
+            "6.2.2",
+            "7.4.8",
+            "8.0.6",
+            "9.0.7"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:nanoid@3.3.7,3.3.8",
+      "reachability": "build_time_only",
+      "reachability_evidence": "postcss dependency (build). The advisories need a caller passing size<=0 or non-integer, which postcss never does.",
+      "advisories": [
+        {
+          "id": "GHSA-28wg-ghj8-5hjv",
+          "severity": "high",
+          "summary": "nanoid: non-secure generators can loop indefinitely with negative size",
+          "fixed_versions": [
+            "3.3.16",
+            "5.1.16"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-2v37-7h3g-55p8",
+          "severity": "high",
+          "summary": "nanoid: custom generators can loop indefinitely when size is zero",
+          "fixed_versions": [
+            "3.3.18",
+            "5.1.6"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-xwg4-73v4-xw9w",
+          "severity": "high",
+          "summary": "nanoid: Integer Overflow or Wraparound",
+          "fixed_versions": [
+            "3.3.12",
+            "5.1.11"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-mwcw-c2x4-8c55",
+          "severity": "moderate",
+          "summary": "Predictable results in nanoid generation when given non-integer values",
+          "fixed_versions": [
+            "3.3.8",
+            "5.0.9"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:brace-expansion@1.1.11,2.0.1",
+      "reachability": "build_time_only",
+      "reachability_evidence": "minimatch dependency in the build toolchain.",
+      "advisories": [
+        {
+          "id": "GHSA-3jxr-9vmj-r5cp",
+          "severity": "high",
+          "summary": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+          "fixed_versions": [
+            "1.1.16",
+            "2.1.2",
+            "5.0.7"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-mh99-v99m-4gvg",
+          "severity": "high",
+          "summary": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+          "fixed_versions": [
+            "1.1.17",
+            "2.1.3",
+            "3.0.3",
+            "5.0.8"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-rgw5-rvv9-x895",
+          "severity": "high",
+          "summary": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+          "fixed_versions": [
+            "1.1.18",
+            "2.1.4",
+            "3.0.6",
+            "5.0.9"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-f886-m6hf-6m8v",
+          "severity": "moderate",
+          "summary": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+          "fixed_versions": [
+            "1.1.13",
+            "2.0.3",
+            "3.0.2",
+            "5.0.5"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-v6h2-p8h4-qcjw",
+          "severity": "low",
+          "summary": "brace-expansion Regular Expression Denial of Service vulnerability",
+          "fixed_versions": [
+            "1.1.12",
+            "2.0.2",
+            "3.0.1",
+            "4.0.1"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:braces@3.0.2,3.0.3",
+      "reachability": "build_time_only",
+      "reachability_evidence": "micromatch dependency in the build toolchain.",
+      "advisories": [
+        {
+          "id": "GHSA-grv7-fg5c-xmjg",
+          "severity": "high",
+          "summary": "Uncontrolled resource consumption in braces",
+          "fixed_versions": [
+            "3.0.3"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:browserslist@4.22.1,4.23.0",
+      "reachability": "build_time_only",
+      "reachability_evidence": "autoprefixer/babel target resolution at build time; stats file advisories need an attacker-controlled browserslist-stats.json.",
+      "advisories": [
+        {
+          "id": "GHSA-73wf-gq98-2v4g",
+          "severity": "high",
+          "summary": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)",
+          "fixed_versions": [
+            "4.28.7"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-c83g-rgw3-j3cx",
+          "severity": "high",
+          "summary": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",
+          "fixed_versions": [
+            "4.28.7"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:cross-spawn@7.0.3",
+      "reachability": "build_time_only",
+      "reachability_evidence": "Build/CLI process spawning.",
+      "advisories": [
+        {
+          "id": "GHSA-3xgq-45jj-v275",
+          "severity": "high",
+          "summary": "Regular Expression Denial of Service (ReDoS) in cross-spawn",
+          "fixed_versions": [
+            "6.0.6",
+            "7.0.5"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:engine.io@6.5.4",
+      "reachability": "server_runtime_node_realtime",
+      "reachability_evidence": "frappe socket.io realtime server transport layer (polling/websocket).",
+      "advisories": [
+        {
+          "id": "GHSA-gr94-w7qr-f4j3",
+          "severity": "high",
+          "summary": "Socket.IO: Engine.IO WebTransport SID DoS",
+          "fixed_versions": [
+            "6.6.7"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "WebTransport transport not enabled; ?transport=webtransport refused 400"
+        },
+        {
+          "id": "GHSA-r635-g3xr-vw7x",
+          "severity": "high",
+          "summary": "Socket.IO: Engine.IO Polling Transport Connection Exhaustion",
+          "fixed_versions": [
+            "6.6.7"
+          ],
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "nginx returns 400 for octet-stream POSTs outside WebSocket upgrade"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:glob@10.3.10,7.2.3",
+      "reachability": "build_time_only",
+      "reachability_evidence": "The advisory affects only the glob CLI with -c/--cmd, which nothing invokes.",
+      "advisories": [
+        {
+          "id": "GHSA-5j98-mcp5-4vw2",
+          "severity": "high",
+          "summary": "glob CLI: Command injection via -c/--cmd executes matches with shell:true",
+          "fixed_versions": [
+            "10.5.0",
+            "11.1.0"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:image-size@0.5.5",
+      "reachability": "build_time_only",
+      "reachability_evidence": "less (frappe build toolchain) data-uri sizing over repository images.",
+      "advisories": [
+        {
+          "id": "GHSA-5p2g-fcmc-qvqq",
+          "severity": "high",
+          "summary": "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
+          "fixed_versions": [
+            "none"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-w3rx-r6r6-pgpr",
+          "severity": "high",
+          "summary": "image-size: ICNS parser allows denial of service through an infinite loop",
+          "fixed_versions": [
+            "none"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": true
+    },
+    {
+      "package": "npm:immutable@4.3.4",
+      "reachability": "build_time_only",
+      "reachability_evidence": "sass (dart-sass) dependency during `bench build`; compiles only repository SCSS.",
+      "advisories": [
+        {
+          "id": "GHSA-v56q-mh7h-f735",
+          "severity": "high",
+          "summary": "Immutable.js `List` 32-bit trie overflow \u2192 unrecoverable DoS",
+          "fixed_versions": [
+            "3.8.4",
+            "4.3.9",
+            "5.1.8"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-wf6x-7x77-mvgw",
+          "severity": "high",
+          "summary": "Immutable is vulnerable to Prototype Pollution",
+          "fixed_versions": [
+            "3.8.3",
+            "4.3.8",
+            "5.1.5"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        },
+        {
+          "id": "GHSA-xvcm-6775-5m9r",
+          "severity": "high",
+          "summary": "Immutable: Hash-collision algorithmic complexity denial of service in Immutable.Map/Set",
+          "fixed_versions": [
+            "3.8.4",
+            "4.3.9",
+            "5.1.8"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "py:pdfkit@1.0.0",
+      "reachability": "server_runtime_python",
+      "reachability_evidence": "frappe.utils.pdf.get_pdf (print/PDF). Frappe forces disable-javascript and disable-local-file-access; see docs/engineering/evidence/sec-deps-01/pdf-reachability-trace-2026-09-19.md.",
+      "advisories": [
+        {
+          "id": "GHSA-9g3x-6x24-vf9f",
+          "severity": "?",
+          "summary": "pdfkit: Path traversal in from_string",
+          "fixed_versions": [
+            "none"
+          ],
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "Frappe's FrappePDFKit._find_options_in_meta returns {}; disable-javascript and disable-local-file-access forced"
+        },
+        {
+          "id": "PYSEC-2026-2860",
+          "severity": "?",
+          "summary": "PYSEC alias of the GHSA record in this package",
+          "fixed_versions": null,
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "pdfkit duplicate"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": true
+    },
+    {
+      "package": "py:pypdf@6.15.0",
+      "reachability": "server_runtime_python",
+      "reachability_evidence": "frappe PDF merge/transform and File.check_content on PDF upload; availability-only resource exhaustion (trace note).",
+      "advisories": [
+        {
+          "id": "GHSA-23w6-3w8w-8484",
+          "severity": "?",
+          "summary": "pypdf: Possible long runtimes/large memory usage when retrieving outlines",
+          "fixed_versions": [
+            "6.16.1"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "pdf_contains_js never walks outlines"
+        },
+        {
+          "id": "GHSA-763m-79hh-57f2",
+          "severity": "?",
+          "summary": "pypdf: Possible long runtimes/large memory usage when extracting XForm objects",
+          "fixed_versions": [
+            "6.16.1"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "no extract_text call on upload path; bank-statement uses pdfplumber"
+        },
+        {
+          "id": "GHSA-jp53-mhqp-8xcg",
+          "severity": "?",
+          "summary": "pypdf: Possible infinite loop for TreeObject.insert_child",
+          "fixed_versions": [
+            "6.16.0"
+          ],
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "TreeObject.insert_child only from PdfWriter outline paths; writer used for server-generated PDFs only"
+        },
+        {
+          "id": "PYSEC-2026-3910",
+          "severity": "?",
+          "summary": "PYSEC alias of the GHSA record in this package",
+          "fixed_versions": null,
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "pypdf outline duplicate"
+        },
+        {
+          "id": "PYSEC-2026-3911",
+          "severity": "?",
+          "summary": "PYSEC alias of the GHSA record in this package",
+          "fixed_versions": null,
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "pypdf outline duplicate"
+        },
+        {
+          "id": "PYSEC-2026-3913",
+          "severity": "?",
+          "summary": "PYSEC alias of the GHSA record in this package",
+          "fixed_versions": null,
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "pypdf outline duplicate"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": "6.16.1",
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "py:setuptools@80.9.0",
+      "reachability": "install_time_only",
+      "reachability_evidence": "sdist building on macOS APFS/HFS+ only; the TH runtime is Linux and builds no sdists.",
+      "advisories": [
+        {
+          "id": "GHSA-h35f-9h28-mq5c",
+          "severity": "?",
+          "summary": "setuptools: MANIFEST.in exclusion bypass in sdist via Unicode normalization collision (NFC/NFD) on macOS APFS/HFS+",
+          "fixed_versions": [
+            "83.0.0"
+          ],
+          "runtime_disposition": "INSTALL_ONLY",
+          "runtime_disposition_evidence": "sdist MANIFEST.in NFC bypass only fires on macOS APFS; production is Linux + wheel installs via uv, no sdist build"
+        },
+        {
+          "id": "PYSEC-2026-3447",
+          "severity": "?",
+          "summary": "PYSEC alias of the GHSA record in this package",
+          "fixed_versions": null,
+          "runtime_disposition": "INSTALL_ONLY",
+          "runtime_disposition_evidence": "PYSEC duplicate of GHSA-h35f-9h28-mq5c"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "py:weasyprint@68.0",
+      "reachability": "server_runtime_python",
+      "reachability_evidence": "frappe.utils.weasyprint: used only for Print Format Builder (Beta) formats; default print uses wkhtmltopdf (trace note).",
+      "advisories": [
+        {
+          "id": "GHSA-jf6q-chmf-3h3v",
+          "severity": "?",
+          "summary": "weasyprint Has Server-Side Request Forgery (SSRF)",
+          "fixed_versions": [
+            "70.0"
+          ],
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "override_whitelisted_methods pins print_format_builder_beta gate"
+        },
+        {
+          "id": "GHSA-jhhc-3hcp-qhm5",
+          "severity": "?",
+          "summary": "WeasyPrint has CSS Injection via Presentational Hints",
+          "fixed_versions": [
+            "none"
+          ],
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "same beta gate covers presentational_hints CSS-injection path"
+        },
+        {
+          "id": "PYSEC-2026-3412",
+          "severity": "?",
+          "summary": "PYSEC alias of the GHSA record in this package",
+          "fixed_versions": null,
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "duplicate PYSEC of WeasyPrint SSRF; same beta gate"
+        },
+        {
+          "id": "PYSEC-2026-3940",
+          "severity": "?",
+          "summary": "PYSEC alias of the GHSA record in this package",
+          "fixed_versions": null,
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "duplicate PYSEC of WeasyPrint SSRF; same beta gate"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": null,
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:loader-utils@0.2.17,3.2.1",
+      "reachability": "build_time_only",
+      "reachability_evidence": "generic-names/css-modules build helpers; parseQuery only on repository loader strings. 3.2.1 is outside the affected range (listed through the combined package key).",
+      "advisories": [
+        {
+          "id": "GHSA-76p3-8jx3-jpfq",
+          "severity": "critical",
+          "summary": "Prototype pollution in webpack loader-utils",
+          "fixed_versions": [
+            "1.4.1",
+            "2.0.3"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": "removed",
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    },
+    {
+      "package": "npm:shell-quote@1.8.1",
+      "reachability": "dev_server_only_not_run_in_production",
+      "reachability_evidence": "launch-editor dependency (dev-mode open-in-editor); quote() is fed editor paths, not network input.",
+      "advisories": [
+        {
+          "id": "GHSA-w7jw-789q-3m8p",
+          "severity": "critical",
+          "summary": "shell-quote quote() does not escape newlines in object .op values",
+          "fixed_versions": [
+            "1.8.4"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        },
+        {
+          "id": "GHSA-395f-4hp3-45gv",
+          "severity": "high",
+          "summary": "shell-quote: Quadratic-complexity Denial of Service in `parse()` (CWE-407)",
+          "fixed_versions": [
+            "1.9.0"
+          ],
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "requires --watch/yarn dev/vite/serve mode which production never starts; launch-editor path additionally Windows-only"
+        }
+      ],
+      "official_v16_upgrade_resolves": false,
+      "fixed_only_on_unreleased_frappe_develop_17": "1.10.0",
+      "safe_upgrade_without_vendor_patch": false,
+      "no_upstream_fix_exists": false
+    }
+  ],
+  "runtime_disposition": {
+    "GHSA-3h5v-q93c-6h6q": {
+      "classification": "MITIGATED",
+      "mitigation": "nginx reverse proxy with 4k large_client_header_buffers sits on the public 9000 port; node socket.io is bound loopback-only on 19000 via FRAPPE_SOCKETIO_PORT.",
+      "test": "tools/foundation/realtime_exposure_probe.js invoked after nginx launch in runtime_install.py (realtime-edge-exposure-probe); all_survived must be true."
+    },
+    "GHSA-pxg6-pf52-xh8x": {
+      "classification": "NOT_REACHABLE",
+      "mitigation": "Frappe never sets opts.cookie; engine.io only calls cookie.serialize when opts.cookie is truthy, so the transitive cookie@0.4.2 is not exercised.",
+      "test": "Static inspection of realtime/index.js and engine.io build/server.js."
+    },
+    "GHSA-677m-j7p3-52f9": {
+      "classification": "MITIGATED",
+      "mitigation": "maxHttpBufferSize (1 MiB) and the nginx edge body cap bound memory amplification.",
+      "test": "realtime_exposure_probe.js attachment burst."
+    },
+    "GHSA-2m8v-j782-fhvr": {
+      "classification": "MITIGATED",
+      "mitigation": "Same engine.io payload cap as GHSA-677m; same nginx edge.",
+      "test": "realtime_exposure_probe.js."
+    },
+    "GHSA-gr94-w7qr-f4j3": {
+      "classification": "NOT_REACHABLE",
+      "mitigation": "Frappe does not enable the WebTransport transport; engine.io refuses ?transport=webtransport.",
+      "test": "realtime_exposure_probe.js direct probe observes HTTP 400."
+    },
+    "GHSA-r635-g3xr-vw7x": {
+      "classification": "MITIGATED",
+      "mitigation": "nginx edge on 9000 requires WebSocket upgrade (if ($http_upgrade != websocket) return 400), so octet-stream polling POSTs never reach node.",
+      "test": "realtime_exposure_probe.js sends 10 octet-stream POSTs per run; 0 hang."
+    },
+    "GHSA-jf6q-chmf-3h3v": {
+      "classification": "MITIGATED",
+      "mitigation": "override_whitelisted_methods mirrors the print_format_builder_beta gate on frappe.utils.weasyprint.{download_pdf,get_html}; print permission checked before rendering.",
+      "test": "tests/foundation/test_sec_deps_triage.py::test_weasyprint_whitelist_overrides_pin_beta_gate"
+    },
+    "GHSA-jhhc-3hcp-qhm5": {
+      "classification": "MITIGATED",
+      "mitigation": "Same beta-builder gate; no installed app ships beta-builder print formats.",
+      "test": "test_sec_deps_triage.py + static fixture audit."
+    },
+    "GHSA-96hv-2xvq-fx4p": {
+      "classification": "MITIGATED",
+      "mitigation": "engine.io maxHttpBufferSize caps per-frame payload at 1 MiB; nginx client_max_body_size 1m reinforces the bound at the edge.",
+      "test": "realtime_exposure_probe.js attachment burst measures RSS growth bounded."
+    },
+    "GHSA-58qx-3vcg-4xpx": {
+      "classification": "NOT_REACHABLE",
+      "mitigation": "engine.io/socket.io never call ws.close(code, reason) with a TypedArray reason; PoC requires server-side `ws.close(1000, new Float32Array(...))`, which neither engine.io 6.5.4 nor socket.io 4.7.2 emit (static inspection of build files).",
+      "test": "Static inspection; advisory PoC requires server misuse."
+    }
+  }
+}

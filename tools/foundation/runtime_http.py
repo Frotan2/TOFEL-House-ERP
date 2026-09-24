@@ -53,13 +53,20 @@ def main():
         output.write_text(json.dumps(report, indent=2) + "\n")
         return 1
     report["startup_readiness_polls"] = attempt + 1
+    # SEC-DEPS-01: before nginx is installed, the Engine.IO listener binds to
+    # FRAPPE_SOCKETIO_PORT (loopback 19000) rather than the legacy public 9000.
+    # The post-nginx realtime-edge-exposure-probe exercises the public edge at
+    # 9000; this pre-proxy check validates the direct node listener so that
+    # the isolation test still pins websocket upgrade availability before the
+    # proxy is configured.
+    socketio_port = int(os.environ.get("FRAPPE_SOCKETIO_PORT", "9000"))
     def realtime_handshake():
-        response = requests.get("http://127.0.0.1:9000/socket.io/", params={"EIO": "4", "transport": "polling"},
+        response = requests.get(f"http://127.0.0.1:{socketio_port}/socket.io/", params={"EIO": "4", "transport": "polling"},
                                 headers={"Host": "foundation.localhost", "Origin": "http://foundation.localhost:8000"}, timeout=30)
         assert response.status_code == 200 and response.text.startswith("0{"), f"Engine.IO handshake HTTP {response.status_code}"
         packet = json.loads(response.text[1:])
         assert packet.get("sid") and "websocket" in packet.get("upgrades", [])
-        return {"protocol": "Engine.IO 4", "handshake": True, "event_authorization_validated": False}
+        return {"protocol": "Engine.IO 4", "handshake": True, "event_authorization_validated": False, "direct_port": socketio_port}
     check("realtime-transport-handshake", realtime_handshake)
     sessions = {}
     for site in ("foundation.localhost", "restore.localhost"):

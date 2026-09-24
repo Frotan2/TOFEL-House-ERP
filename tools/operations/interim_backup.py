@@ -31,6 +31,10 @@ import pathlib
 from dataclasses import dataclass
 from typing import Any
 
+from tools.operations.backup_policy import (
+    PolicyState, default_policy, append_audit, verify_artifact_header,
+)
+
 SCHEMA_VERSION = "1.0"
 
 # Rotation: keep this many of each generation. Predictable and documented so an
@@ -153,6 +157,7 @@ def verify_artifact(path: str | os.PathLike[str], expected_sha256: str) -> dict[
 
 def backup_manifest(*, artifacts: list[dict[str, Any]], retention: RetentionPolicy,
                     volume_evidence: dict[str, Any], restore_command: str,
+                    policy_state: PolicyState | None = None,
                     ) -> dict[str, Any]:
     """The record that travels with a backup run."""
     return {"schema_version": SCHEMA_VERSION,
@@ -160,6 +165,7 @@ def backup_manifest(*, artifacts: list[dict[str, Any]], retention: RetentionPoli
             "retention": retention.as_dict(),
             "volume_evidence": volume_evidence,
             "restore_command": restore_command,
+            "policy_state": (policy_state or default_policy()).as_dict(),
             "limitations": list(LIMITATIONS),
             "classification": "INTERIM_PRODUCTION_BACKUP_NOT_DISASTER_RECOVERY"}
 
@@ -240,6 +246,10 @@ def run_backup(*, backup_root: str, label: str, dump_command: list[str],
                passphrase_file: str | None = None,
                volume_evidence: dict[str, Any] | None = None,
                active_data_root: str | None = None,
+               policy_state: PolicyState | None = None,
+               audit_log_dir: str | os.PathLike[str] | None = None,
+               idempotent: bool = False,
+               artifact_kind: str = "database",
                ) -> BackupRun:
     """Execute one backup: dump, encrypt, digest.
 
@@ -261,6 +271,7 @@ def run_backup(*, backup_root: str, label: str, dump_command: list[str],
         volume_evidence = assert_different_volume(active_data_root, backup_root)
     destination = pathlib.Path(backup_root)
     destination.mkdir(parents=True, exist_ok=True)
+    policy = policy_state or default_policy()
 
     plain = destination / f"{label}.plain"
     cipher = destination / f"{label}.enc"
@@ -276,13 +287,25 @@ def run_backup(*, backup_root: str, label: str, dump_command: list[str],
             subprocess.run(argv, check=True, capture_output=True)
             cipher_digest = digest_file(cipher)
             plain.unlink()
-            return BackupRun(label, plain_digest, cipher_digest, str(cipher), True,
+            run_out = BackupRun(label, plain_digest, cipher_digest, str(cipher), True,
                              argv, dict(volume_evidence))
+            if audit_log_dir:
+                append_audit(audit_log_dir, {"action":"backup","kind":artifact_kind,
+                    "label":label,"artifact":str(cipher),"cipher_digest":cipher_digest,
+                    "plaintext_digest":plain_digest,"encrypted":True,
+                    "policy_configured":policy.is_fully_configured()})
+            return run_out
 
         kept = destination / f"{label}.plain.keep"
         shutil.move(str(plain), str(kept))
-        return BackupRun(label, plain_digest, digest_file(kept), str(kept), False,
+        run_out = BackupRun(label, plain_digest, digest_file(kept), str(kept), False,
                          list(dump_command), dict(volume_evidence))
+        if audit_log_dir:
+            append_audit(audit_log_dir, {"action":"backup","kind":artifact_kind,
+                "label":label,"artifact":str(kept),"cipher_digest":run_out.cipher_digest,
+                "plaintext_digest":plain_digest,"encrypted":False,
+                "policy_configured":policy.is_fully_configured()})
+        return run_out
     except Exception:
         for leftover in (plain, cipher):
             if leftover.exists():
@@ -293,7 +316,8 @@ def run_backup(*, backup_root: str, label: str, dump_command: list[str],
 def write_sidecar(run: BackupRun, retention: RetentionPolicy,
                   restore_command: str,
                   volume_evidence: dict[str, Any] | None = None,
-                  artifact_kind: str = "database") -> str:
+                  artifact_kind: str = "database",
+                  policy_state: PolicyState | None = None) -> str:
     """Write the manifest next to the artifact and return its path."""
     import json as _json
     evidence = volume_evidence if volume_evidence is not None else run.volume_evidence
@@ -303,7 +327,7 @@ def write_sidecar(run: BackupRun, retention: RetentionPolicy,
                     "plaintext_sha256": run.plaintext_digest,
                     "kind": artifact_kind}],
         retention=retention, volume_evidence=evidence,
-        restore_command=restore_command)
+        restore_command=restore_command, policy_state=policy_state)
     sidecar = pathlib.Path(run.cipher_path + ".manifest.json")
     sidecar.write_text(_json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
     return str(sidecar)
@@ -363,7 +387,10 @@ def expected_digest_from_sidecar(artifact: str, manifest_path: str | None = None
         raise BackupPolicyError("restore refused: sidecar has no cipher digest")
     plain = artifacts[0].get("plaintext_sha256")
     encrypted = bool(artifacts[0].get("encrypted"))
-    return sha, (plain if isinstance(plain, str) and plain else None), encrypted
+    kind = None
+    if isinstance(artifacts[0], dict):
+        kind = artifacts[0].get("kind")
+    return sha, (plain if isinstance(plain, str) and plain else None), encrypted, kind
 
 
 def run_restore(*, artifact: str, staging_root: str,
@@ -372,6 +399,8 @@ def run_restore(*, artifact: str, staging_root: str,
                 restore_command: list[str] | None = None,
                 decrypt_command: list[str] | None = None,
                 manifest_path: str | None = None,
+                audit_log_dir: str | os.PathLike[str] | None = None,
+                artifact_kind: str | None = None,
                 ) -> RestoreRun:
     """Verify, then decrypt into staging. Never onto the live data root.
 
@@ -385,8 +414,9 @@ def run_restore(*, artifact: str, staging_root: str,
     cipher = pathlib.Path(artifact)
     if not cipher.is_file():
         raise BackupPolicyError(f"restore refused: artifact missing: {artifact}")
-    expected, expected_plain, encrypted = expected_digest_from_sidecar(
+    expected, expected_plain, encrypted, manifest_kind = expected_digest_from_sidecar(
         str(cipher), manifest_path)
+    artifact_kind = artifact_kind or manifest_kind or "database"
     verdict = verify_artifact(cipher, expected)
     if not verdict["verified"]:
         raise BackupPolicyError(
@@ -428,11 +458,24 @@ def run_restore(*, artifact: str, staging_root: str,
             decrypted.unlink()
         raise
 
+    magic = verify_artifact_header(decrypted, artifact_kind)
+    if not magic.get("verified_by_magic"):
+        if decrypted.exists():
+            decrypted.unlink()
+        raise BackupPolicyError(
+            "restore refused: decrypted artifact failed magic-byte verification: "
+            + str(magic.get("reason", "unknown")))
+
     ran = False
     if restore_command:
         with open(decrypted, "rb") as source:
             subprocess.run(restore_command, stdin=source, check=True, capture_output=True)
         ran = True
+    if audit_log_dir:
+        append_audit(audit_log_dir, {"action":"restore","kind":artifact_kind,
+            "artifact":str(cipher),"cipher_digest":expected,"plaintext_digest":plain_digest,
+            "decrypted_to":str(decrypted),"restore_command_ran":ran,
+            "magic_verification":magic})
     return RestoreRun(
         artifact=str(cipher), decrypted_path=str(decrypted),
         cipher_digest=expected, plaintext_digest=plain_digest,
