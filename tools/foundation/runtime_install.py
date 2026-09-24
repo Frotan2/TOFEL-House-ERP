@@ -713,7 +713,7 @@ http {{
                 diagnostic_failures.append(str(exc))
         # Independent remaining gates: failures must not suppress other evidence.
         env.update(FOUNDATION_BENCH_PYTHON=str(bench_dir / "env/bin/python"), FOUNDATION_SITES_DIR=str(bench_dir / "sites"),
-                   FOUNDATION_REALTIME_TASK=str(lab / "realtime-task.json"), FOUNDATION_FRONTEND_ROOT=str(bench_dir / "apps/education/frontend"), FOUNDATION_GRAPH_BUILD=str(lab / "graph-assets"), FOUNDATION_AUDIT_REPORT=str(evidence / "frontend-advisories.json"), FOUNDATION_EVENT_HELPER=str(ROOT / "tools/foundation/runtime_publish_event.py"), FOUNDATION_LAB=str(lab),
+                   FOUNDATION_REALTIME_TASK=str(lab / "realtime-task.json"), FOUNDATION_FRONTEND_ROOT=str(bench_dir / "apps/education/frontend"), FOUNDATION_GRAPH_BUILD=str(lab / "graph-assets"), FOUNDATION_AUDIT_REPORT=str(evidence / "frontend-advisories.json"), FOUNDATION_EVENT_HELPER=str(ROOT / "tools/foundation/runtime_publish_event.py"), FOUNDATION_LAB=str(lab), FOUNDATION_REALTIME_BOOT_LOG=str(evidence / "realtime-boot.log"),
                    FOUNDATION_ROOT_PASSWORD=root_password, FOUNDATION_UPGRADE_PASSWORD=upgrade_password)
         for label in ("readiness", "realtime", "upgrade", "guardian_browser", "frontend_graph", "restart"):
             env["FOUNDATION_" + label.upper() + "_REPORT"] = str(evidence / (label + "-result.json"))
