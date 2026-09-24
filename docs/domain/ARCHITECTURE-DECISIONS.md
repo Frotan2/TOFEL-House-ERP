@@ -10,7 +10,7 @@
 > it conflicts. No implementation authorization or production approval is granted.
 
 
-Date: 2026-09-16 · Active branch: `arena/01a0c987-tofel-house-erp`. Scope: architecture and business-boundary reconciliation only. **No production approval is granted; production acceptance remains REJECT.** The canonical business input is the [owner-decision record](../engineering/canonical-owner-decision-record.json); engineering mechanism choices remain implementation work, not invented owner policy.
+Date: 2026-09-16 · Active branch: `arena/01a0cd90-tofel-house-erp`. Scope: architecture and business-boundary reconciliation only. **No production approval is granted; production acceptance remains REJECT.** The canonical business input is the [owner-decision record](../engineering/canonical-owner-decision-record.json); engineering mechanism choices remain implementation work, not invented owner policy.
 
 ## Authority, status and business invariant
 

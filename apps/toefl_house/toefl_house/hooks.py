@@ -110,6 +110,11 @@ permission_query_conditions["TH Configuration Operation"] = "toefl_house.permiss
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
 override_whitelisted_methods = {
     "education.education.api.enroll_student": "toefl_house.admission.deny_enroll_student",
+    # WeasyPrint download_pdf/get_html are gated through a safe wrapper in
+    # toefl_house.printing so only beta-builder Print Formats with print
+    # permission can invoke them (GHSA-qr67/4wpm/xphm bucket).
+    "frappe.utils.weasyprint.download_pdf": "toefl_house.printing.download_pdf",
+    "frappe.utils.weasyprint.get_html": "toefl_house.printing.get_html",
 }
 # Containment seam coverage (A13): in pinned frappe (988e54f3c4c2,
 # frappe/model/document.py run_before_save_methods), the "validate"

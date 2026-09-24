@@ -1,14 +1,37 @@
 # Branch and evidence reconciliation
 
-Date: 2026-09-16 UTC · Rotation record: 2026-09-22 UTC (five rotations)
+Date: 2026-09-16 UTC · Rotation record: 2026-09-24 UTC (six rotations)
 
 ## Active engineering branch
 
 The Arena session branch for current engineering work and hosted qualification is
-`arena/01a0c987-tofel-house-erp`. The executable branch boundary is defined once
+`arena/01a0cd90-tofel-house-erp`. The executable branch boundary is defined once
 in `tools/session_branch.py`; workflow filters, hosted guards, and their tests
 must remain aligned with it. `tests/foundation/test_branch_boundary.py` now
 enforces that mechanically instead of leaving it to review.
+
+
+### Rotation of 2026-09-24 (sixth): `arena/01a0c987-tofel-house-erp` → historical provenance
+
+The Arena session branch changed again — workflow branch filters had been pinned to
+`arena/01a0c987-tofel-house-erp` while Arena assigned `arena/01a0cd90-tofel-house-erp` as the working
+branch for this session, which prevented new push-triggered runs from reaching the
+runtime workflow. The canonical value in `tools/session_branch.py`, all eleven workflow
+branch filters and their `github.ref` guards, the current-status document headers, the
+D8 matrix/template/ledger and the qualification tests were updated in the same change.
+`arena/01a0c987-tofel-house-erp` moved from **active** to **historical provenance** with
+its genuine execution intact (Foundation runtime run `35984767187`, `fail_reject`, SEC-DEPS-01
+triaging harness fixed in the same change); `arena/01a0ba0d-tofel-house-erp` moved to
+`earlier_active_branch_provenance`; older entries shifted one slot down. Every run,
+check, commit and SHA-256 identity in those blocks is unchanged — a rotation moves the
+boundary, never the evidence.
+
+At rotation time no hosted workflow has run on `arena/01a0cd90-tofel-house-erp` yet, so
+`hosted_execution_state` is recorded as the explicit, fail-closed
+`NOT_EXECUTED_ON_THIS_BRANCH` state carrying **no** run, check, commit or report
+identifier, and `session_branch.ACTIVE_RUNTIME_RUN` is None. Pushing the rotation
+commit will genuinely execute the hosted workflows here; only that observed execution
+may close the absence.
 
 ### Rotation of 2026-09-22 (fifth): `arena/01a0ba0d-tofel-house-erp` → historical provenance
 

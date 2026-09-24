@@ -5,19 +5,19 @@ The GitHub repository name remains `TOFEL-House-ERP`.
 
 ## Current status
 
-Active engineering branch: `arena/01a0c987-tofel-house-erp`. Historical hosted
+Active engineering branch: `arena/01a0cd90-tofel-house-erp`. Historical hosted
 runs retain their original branch provenance; see
 [branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
 
-**Engineering rotation (2026-09-22):**
-The session boundary was rotated to `arena/01a0c987-tofel-house-erp` on
-2026-09-22 (fifth rotation; intentional continuation of the previous session
-branch). At rotation time no hosted workflow had run on this branch yet, so
-`active_branch_hosted_execution` is the explicit, fail-closed
-`NOT_EXECUTED_ON_THIS_BRANCH` carrying no run, check, commit or report
-identity. The previous active branch `arena/01a0ba0d-tofel-house-erp` moved to
-historical provenance with its genuine execution intact (Foundation runtime
-`35451785714` — failure on SEC-DEPS-01). Re-executing the named hosted
+**Engineering rotation (2026-09-24):**
+The session boundary was rotated to `arena/01a0cd90-tofel-house-erp` on
+2026-09-24 (sixth rotation). At rotation time the workflow branch filters were
+rewired to target the new branch, so `active_branch_hosted_execution` is the
+explicit, fail-closed `NOT_EXECUTED_ON_THIS_BRANCH` carrying no run, check,
+commit or report identity until the first post-rotation push executes the
+runtime on this branch. The previous active branch `arena/01a0c987-tofel-house-erp`
+moved to historical provenance with its genuine execution intact (Foundation
+runtime `35984767187` — failure on SEC-DEPS-01). Re-executing the named hosted
 workflows on this branch by push trigger will replace the absence with
 observed results; until then no execution is claimed. Production remains
 **REJECT** and D8 remains **BLOCKED**.
