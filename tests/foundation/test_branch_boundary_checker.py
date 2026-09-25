@@ -25,7 +25,10 @@ from branch_boundary import (branch_filters, check_tree, mismatch,  # noqa: E402
 from session_branch import ACTIVE_BRANCH, ACTIVE_REF  # noqa: E402
 
 NEW = "arena/01a0cd90-tofel-house-erp"
-OLD = "arena/01a0c987-tofel-house-erp"
+# Fixture text only: the previous active branch, named here solely to build
+# the mismatch cases below. It carries no authority, and the boundary policy
+# requires the provenance label on the same line as the literal.
+OLD = "arena/01a0c987-tofel-house-erp"  # previous branch, historical provenance
 
 
 def workflow(branch, ref):

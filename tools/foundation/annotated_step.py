@@ -32,11 +32,25 @@ from __future__ import annotations
 import subprocess
 import sys
 
-# GitHub caps a check-run annotation message; keep well inside it and keep
-# the most recent lines, which is where a traceback or assertion lands.
-MAX_ANNOTATION_LINES = 40
+# GitHub keeps at most ten annotations per step, and when a step emits more it
+# keeps an arbitrary subset. Replaying the whole tail therefore loses the very
+# lines that matter: on a unittest failure the forty trailing lines were mostly
+# "... ok" and the FAILED summary was dropped. Emit few lines, chosen for
+# being diagnostic rather than merely recent, and emit them best-first so the
+# cap discards the least useful.
+MAX_ANNOTATION_LINES = 8
 MAX_LINE_CHARS = 480
-MAX_TOTAL_CHARS = 32000
+
+# Ordered most specific first. A failing test names itself with FAIL:/ERROR:,
+# states the assertion, and finishes with a FAILED (...) or Ran N tests line.
+DIAGNOSTIC_PATTERNS = (
+    r"^\s*(FAIL|ERROR):\s",
+    r"^\s*E\s+\S",
+    r"^\s*\w*(Error|Exception|Failure):",
+    r"^\s*(FAILED|OK)\b",
+    r"^\s*Ran \d+ tests?",
+    r"\bAssertionError\b",
+)
 
 
 def escape(value: str) -> str:
@@ -76,17 +90,28 @@ def redact(output: str) -> str:
 WORKFLOW_COMMAND_PREFIXES = ("::error", "::warning", "::notice", "::debug", "::group::", "::endgroup::")
 
 
-def truncate(output: str) -> str:
-    """Keep the tail, which is where failures are reported."""
+def select_diagnostic_lines(output: str, limit: int = MAX_ANNOTATION_LINES) -> list[str]:
+    """Choose the lines that explain the failure, best first.
+
+    A passing unittest run prints thousands of "... ok" lines; the tail of a
+    failed run is mostly those too. Blindly replaying the tail therefore
+    annotates noise and, once the ten-annotation cap drops some, can omit the
+    failure entirely. Lines that name a failure are chosen over lines that
+    merely precede it.
+    """
+    import re
+
     lines = output.splitlines()
-    if len(lines) > MAX_ANNOTATION_LINES:
-        lines = lines[-MAX_ANNOTATION_LINES:]
-        lines.insert(0, "... (earlier output retained in the job log)")
-    clipped = [line[:MAX_LINE_CHARS] for line in lines]
-    text = "\n".join(clipped)
-    if len(text) > MAX_TOTAL_CHARS:
-        text = text[-MAX_TOTAL_CHARS:]
-    return text
+    chosen: list[str] = []
+    for pattern in DIAGNOSTIC_PATTERNS:
+        for line in lines:
+            if re.search(pattern, line) and line not in chosen:
+                chosen.append(line)
+    if not chosen:
+        # Nothing looked like a failure report; the end of the output is then
+        # the only signal available.
+        chosen = lines[-limit:]
+    return [line[:MAX_LINE_CHARS] for line in chosen[:limit]]
 
 
 def run(argv: list[str]) -> int:
@@ -132,10 +157,13 @@ def run(argv: list[str]) -> int:
         return 0
 
     combined = redact("".join(chunks))
-    body = truncate(combined)
     title = escape(label)
-    lines = [line for line in body.splitlines()
+    lines = [line for line in select_diagnostic_lines(combined)
              if not line.startswith(WORKFLOW_COMMAND_PREFIXES)]
+    # The summary goes first: when the ten-annotation cap discards something,
+    # it must be a detail rather than the fact of the failure.
+    print(f"::error title={title}::{escape(f'step failed with exit code {returncode}')}",
+          flush=True)
     if not lines:
         # Nothing plain to replay. Say so plainly rather than emitting an
         # empty annotation, which would look like a tooling error.
@@ -143,8 +171,6 @@ def run(argv: list[str]) -> int:
                  "emitted annotations of its own, they are recorded above)"]
     for line in lines:
         print(f"::error title={title}::{escape(line)}", flush=True)
-    print(f"::error title={title}::{escape(f'step failed with exit code {returncode}')}",
-          flush=True)
     return returncode
 
 

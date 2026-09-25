@@ -21,7 +21,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
-from session_branch import ACTIVE_BRANCH, ACTIVE_REF, HISTORICAL_BRANCHES  # noqa: E402
+from session_branch import ACTIVE_BRANCH, ACTIVE_REF, HISTORICAL_BRANCHES, PRIOR_ACTIVE_BRANCH  # noqa: E402
 
 BRANCH_PATTERN = re.compile(r"arena/[0-9a-f]{8}-tofel-house-erp")
 PROVENANCE_MARKERS = ("historical", "provenance", "previous", "prior", "earlier", "rotated")
@@ -53,9 +53,19 @@ EVIDENCE_ROOTS = ("docs/engineering/evidence/",)
 
 
 def tracked_files():
-    result = subprocess.run(["git", "ls-files"], cwd=ROOT, text=True,
-                            capture_output=True, check=True)
-    return [line for line in result.stdout.splitlines() if line]
+    """Tracked files plus untracked ones that are not gitignored.
+
+    Tracked files alone are not enough to make a local run mean anything. A
+    newly written file is untracked until it is committed, so scanning only
+    the index lets a brand new file carry an unlabelled historical branch
+    past a local run and fail in CI instead -- which is precisely what
+    happened when tests/foundation/test_branch_boundary_checker.py was added.
+    `--exclude-standard` keeps ignored build output out of the scan.
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=ROOT, text=True, capture_output=True, check=True)
+    return sorted({line for line in result.stdout.splitlines() if line})
 
 
 class BranchBoundaryTests(unittest.TestCase):
@@ -64,6 +74,23 @@ class BranchBoundaryTests(unittest.TestCase):
         cls.files = tracked_files()
         cls.sources = {path: (ROOT / path).read_text(encoding="utf-8")
                        for path in cls.files if path.endswith((".py", ".yml", ".md", ".json", ".js", ".cjs", ".mjs"))}
+
+    def test_the_scan_sees_a_file_that_has_not_been_committed_yet(self):
+        """A local run must mean the same thing as a hosted one.
+
+        Scanning only the index would let a newly written file carry an
+        unlabelled historical branch past a local run and fail in CI
+        instead, which is what happened when
+        tests/foundation/test_branch_boundary_checker.py was first added.
+        """
+        probe = ROOT / "tests" / "foundation" / "_boundary_scan_probe.py"
+        self.assertFalse(probe.exists())
+        probe.write_text(
+            "# provenance marker on the same line keeps the fixture valid\n"
+            f'PRIOR = "{PRIOR_ACTIVE_BRANCH}"  # previous branch, provenance\n',
+            encoding="utf-8")
+        self.addCleanup(probe.unlink)
+        self.assertIn("tests/foundation/_boundary_scan_probe.py", tracked_files())
 
     def test_checkout_matches_the_canonical_pin(self):
         result = subprocess.run(["git", "branch", "--show-current"], cwd=ROOT,

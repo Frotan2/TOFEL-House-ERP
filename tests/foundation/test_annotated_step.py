@@ -158,10 +158,16 @@ class RedactionTests(unittest.TestCase):
     """A value the step masked must never be republished in a check run."""
 
     def test_a_masked_value_is_not_annotated(self):
-        script = ("import sys;"
-                  "print('::add-mask::supersecret');"
-                  "print('key is supersecret');"
-                  "sys.exit(1)")
+        script = "\n".join([
+            "import sys",
+            "print('::add-mask::supersecret')",
+            "for index in range(200):",
+            "    print('test_%d ... ok' % index)",
+            "print('FAIL: test_the_gate (tests.x.Y)')",
+            "print('AssertionError: expected supersecret but got other')",
+            "print('FAILED (failures=1)')",
+            "sys.exit(1)",
+        ])
         completed = run_tool("failing", "--", sys.executable, "-c", script)
         annotations = completed.stdout[completed.stdout.index("::error"):]
         self.assertNotIn("supersecret", annotations)
@@ -181,23 +187,59 @@ class RedactionTests(unittest.TestCase):
         self.assertEqual(annotated_step.masked_values("::add-mask::value\n"), ["value"])
 
 
-class TruncationTests(unittest.TestCase):
-    def test_only_the_tail_is_annotated(self):
-        """The end of the output is where the failure is reported."""
-        long_output = "\n".join(f"line {i}" for i in range(500))
-        body = annotated_step.truncate(long_output)
-        self.assertIn("line 499", body)
-        self.assertNotIn("line 0\n", body)
-        self.assertLess(len(body), annotated_step.MAX_TOTAL_CHARS + 1000)
+class DiagnosticSelectionTests(unittest.TestCase):
+    """GitHub keeps at most ten annotations per step and discards the rest
+    arbitrarily, so a blind replay of the tail loses the failure itself:
+    a unittest run ends in hundreds of "... ok" lines. The lines that name a
+    failure must be chosen over the lines that merely precede it."""
 
-    def test_truncation_is_declared_rather_than_silent(self):
-        long_output = "\n".join(f"line {i}" for i in range(500))
-        self.assertIn("earlier output retained", annotated_step.truncate(long_output))
+    def test_a_failure_is_chosen_over_surrounding_passing_noise(self):
+        output = "\n".join(
+            [f"test_{i} ... ok" for i in range(300)]
+            + ["FAIL: test_the_gate (tests.x.Y)",
+               "AssertionError: expected 1 but got 2",
+               "FAILED (failures=1)"])
+        chosen = annotated_step.select_diagnostic_lines(output)
+        self.assertIn("FAIL: test_the_gate (tests.x.Y)", chosen)
+        self.assertIn("AssertionError: expected 1 but got 2", chosen)
+        self.assertIn("FAILED (failures=1)", chosen)
+        self.assertTrue(all("... ok" not in line for line in chosen))
+
+    def test_the_annotation_count_stays_inside_the_github_cap(self):
+        output = "\n".join([f"FAIL: test_{i}" for i in range(100)])
+        self.assertLessEqual(len(annotated_step.select_diagnostic_lines(output)),
+                             annotated_step.MAX_ANNOTATION_LINES)
+        self.assertLessEqual(annotated_step.MAX_ANNOTATION_LINES, 10)
+
+    def test_without_a_recognised_failure_the_tail_is_used(self):
+        output = "\n".join(f"line {i}" for i in range(500))
+        chosen = annotated_step.select_diagnostic_lines(output)
+        self.assertIn("line 499", chosen)
+        self.assertNotIn("line 0", chosen)
 
     def test_overlong_lines_are_clipped(self):
-        body = annotated_step.truncate("x" * 5000)
-        self.assertLessEqual(max(len(line) for line in body.splitlines()),
+        chosen = annotated_step.select_diagnostic_lines("x" * 5000)
+        self.assertLessEqual(max(len(line) for line in chosen),
                              annotated_step.MAX_LINE_CHARS)
+
+    def test_the_end_to_end_annotation_names_the_failed_test(self):
+        script = "\n".join([
+            "import sys",
+            "for index in range(200):",
+            "    print('test_%d ... ok' % index)",
+            "print('FAIL: test_the_gate (tests.x.Y)')",
+            "print('AssertionError: expected 1 but got 2')",
+            "print('FAILED (failures=1)')",
+            "sys.exit(1)",
+        ])
+        completed = run_tool("suite", "--", sys.executable, "-c", script)
+        annotations = completed.stdout[completed.stdout.index("::error"):]
+        self.assertIn("FAIL: test_the_gate", annotations)
+        self.assertIn("FAILED (failures=1)", annotations)
+        self.assertIn("AssertionError: expected 1 but got 2", annotations)
+        self.assertNotIn("... ok", annotations)
+        # Inside the cap, so nothing important can be discarded.
+        self.assertLessEqual(annotations.count("::error"), 10)
 
 
 class WiringTests(unittest.TestCase):
