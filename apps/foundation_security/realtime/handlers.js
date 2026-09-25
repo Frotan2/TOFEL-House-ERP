@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('fs');
 const LOG = process.env.FOUNDATION_REALTIME_BOOT_LOG;
+const GUARDED = Symbol.for('foundation.resource.broadcast.guard');
 function lg(msg){ try{if(LOG){fs.appendFileSync(LOG,'[rt-guard '+new Date().toISOString()+'] '+String(msg).slice(0,600)+'\n');}}catch(e){} }
 function resource(room) {
     if(typeof room!=='string'||room.length>1024)return null;
@@ -26,18 +27,58 @@ async function allowed(socket,room) {
         return ok;
     }catch(e){lg('allowed error room='+room+': '+String(e&&e.message||e).slice(0,200));return false;}
 }
+function wrapAdapter(nsp) {
+    if(!nsp || !nsp.adapter || nsp.adapter[GUARDED]) return;
+    nsp.adapter[GUARDED] = true;
+    const broadcast = nsp.adapter.broadcast.bind(nsp.adapter);
+    nsp.adapter.broadcast = function(packet,opts) {
+        try {
+            // Never guess which resource an unscoped or multi-room payload
+            // belongs to. Only a single resource room proceeds.
+            if(!opts || !opts.rooms || opts.rooms.size !== 1) return;
+            let room = null;
+            for(const r of opts.rooms){ room=r; break; }
+            const args = resource(room);
+            if(!args) return; // not a guarded room shape (e.g. user:<sid>, all, website)
+            // Resource room: re-authorize every subscribed socket.
+            const candidates = [];
+            if(nsp.sockets instanceof Map) {
+                nsp.sockets.forEach(function(s){
+                    if(s && s.connected && s.rooms && s.rooms.has(room)) candidates.push(s);
+                });
+            }
+            if(opts.except && opts.except.size) {
+                for(let i=candidates.length-1;i>=0;i--){
+                    if(opts.except.has(candidates[i].id)) candidates.splice(i,1);
+                }
+            }
+            Promise.all(candidates.map(function(s){
+                return s.__foundationAuthorized ? s.__foundationAuthorized(room).then(function(ok){return ok?s:null;}) : Promise.resolve(null);
+            })).then(function(authorized){
+                const ids = new Set();
+                authorized.forEach(function(s){ if(s && s.connected) ids.add(s.id); });
+                lg('broadcast room='+room+' candidates='+candidates.length+' authorized='+ids.size);
+                if(ids.size) {
+                    const newOpts = Object.assign({}, opts);
+                    newOpts.rooms = ids;
+                    newOpts.except = new Set();
+                    broadcast(packet, newOpts);
+                }
+            }).catch(function(e){lg('broadcast auth err: '+e);});
+        } catch(e) { lg('broadcast wrapper err: '+e); }
+    };
+}
 module.exports=function(socket) {
     socket.foundationResourceGuard=true;
-    // Expose per-socket authorizer for the adapter wrapper.
     socket.__foundationAuthorized = function(room){ return allowed(socket,room); };
-    lg('guard attached socket='+socket.id+' nsp='+socket.nsp.name+' user='+socket.user);
-    // Drop any rooms the socket is sitting in that were joined before the guard
-    // was installed (i.e. the default frappe auth-time user:<sid> room stays).
+    lg('guard attached socket='+socket.id+' nsp='+(socket.nsp&&socket.nsp.name)+' user='+socket.user);
+    wrapAdapter(socket.nsp);
+    // Drop any rooms the socket joined before the guard ran (keep only socket id
+    // and personal user:<sid>).
     for(const room of [...socket.rooms]) if(room!==socket.id && room!=='user:'+socket.user){
         lg('leaking pre-guard room '+room+' for socket '+socket.id);
         socket.leave(room);
     }
-    // Remove native unchecked subscribe handlers and replace with checked ones.
     for(const event of ['doctype_subscribe','task_subscribe','progress_subscribe','doc_subscribe','doc_open','open_in_editor']) socket.removeAllListeners(event);
     function subscribe(event,roomFor) {
         socket.on(event,async function(...args){
@@ -53,3 +94,5 @@ module.exports=function(socket) {
     subscribe('progress_subscribe',function(id){return 'task_progress:'+id;});
 };
 module.exports.resource=resource;
+module.exports.wrapAdapter=wrapAdapter;
+
