@@ -121,9 +121,46 @@ name resolution; only the realtime path does.
   returned status 0) — never when the endpoint returned a real authorization
   decision, so a 403 cannot be laundered into a success.
 
-## Status of the gate
+## Status of the gate: PASSING
 
-Not yet re-run. The GitHub connection for this session returned
-`HTTP 401 Bad credentials` before the fix could be pushed, so hosted
-validation of this hypothesis is **pending**. Local validation is complete:
-1376 Python tests pass (up from 1369, +7 new) and all four Node suites pass.
+Hosted validation: run **`36109476567`**, job `runtime`, **conclusion
+`success` in 19m18s** with the only annotations being the pre-existing
+informational `advisory matches` warnings. The two failure annotations that
+had been present on every prior run —
+
+```
+X Restricted policy regressions failed: actual-realtime-authorization: exit 1
+X last failed check: actual-realtime-authorization
+```
+
+— are gone.
+
+What the green result actually proves. `runtime_realtime.mjs` runs four
+checks and exits non-zero if any fails:
+
+1. `authenticated-student-sockets` — both sockets connect with a real
+   Frappe session (this is the check that was failing: `connect_error`).
+2. `document-room-cross-student-isolation`
+3. `unrelated-task-progress-subscription-denied`
+4. `live-session-revocation-stops-document-and-task-delivery`
+
+Checks 2 and 4 are *both* a positive and a negative assertion: alpha must
+receive its own `doc:Student/<own>` event, and beta must **not** receive it.
+A guard that had been bypassed, or that had simply stopped filtering, would
+fail on the beta side. So the passing gate is evidence that
+`apps/foundation_security/realtime/handlers.js` is loading, wrapping
+`socket.join`, and re-authorizing every `doc:`/`task_progress:` delivery at
+broadcast time — not merely that the plumbing is now connected.
+
+Local validation: 1377 Python tests pass and all four Node suites pass.
+
+### Caveat on evidence retrieval
+
+Artifact and log-zip downloads from this sandbox fail against
+`productionresultssa*.blob.core.windows.net` and
+`results-receiver.actions.githubusercontent.com` (repeated `EOF`), so the
+per-check `realtime-result.json` could not be read directly. The `success`
+conclusion plus the absence of the two failure annotations is the evidence
+recorded here. The `surface_gate_failure()` diagnostics added in the same
+change mean the next failure of any of these gates will be readable from the
+job log without needing the artifact.
