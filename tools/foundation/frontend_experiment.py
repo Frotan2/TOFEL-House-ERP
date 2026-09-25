@@ -17,6 +17,29 @@ sys.path.insert(0, str(ROOT / "tools"))
 from session_branch import ACTIVE_REF
 EVIDENCE = ROOT / '.foundation/frontend-experiment-evidence'
 
+# Job logs and artifact zips EOF from the review environment, and the only
+# record of a failure used to be result.json inside an undownloadable
+# artifact. Annotations survive, so every check and the failure itself are
+# written to the log as they happen.
+ANNOTATION_TEXT_LIMIT = 700
+
+
+def log(message):
+    print(message, flush=True)
+
+
+def failure_annotations(failure, last_failed_check):
+    """Single-line ``::error::`` commands; multi-line dumps cannot annotate."""
+    lines = []
+    if last_failed_check:
+        lines.append("::error file=tools/foundation/frontend_experiment.py::"
+                     f"last failed check: {last_failed_check}")
+    text = " ".join((failure or "frontend experiment failed without a recorded exception").split())
+    if len(text) > ANNOTATION_TEXT_LIMIT:
+        text = text[:ANNOTATION_TEXT_LIMIT - 3] + "..."
+    lines.append(f"::error file=tools/foundation/frontend_experiment.py::{text}")
+    return lines
+
 
 def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -48,11 +71,20 @@ def main():
     report = {'run_id':os.environ['GITHUB_RUN_ID'], 'commit':os.environ['GITHUB_SHA'], 'status':'running',
               'scope':'Isolated Education frontend candidate; not native ERPNext/Education or production compatibility approval',
               'production_pins_changed':False, 'production_gate_passed':False, 'profiles':{}, 'checks':[]}
+    progress = {'last_failed_check': None}
     def run(name, command, cwd=ROOT, env=None, allowed=(0,)):
         result = subprocess.run([str(x) for x in command], cwd=cwd, env=env, text=True, capture_output=True, timeout=600)
         (EVIDENCE / (name+'.txt')).write_text(result.stdout+result.stderr)
         report['checks'].append({'name':name,'exit_code':result.returncode,'status':'pass' if result.returncode==0 else 'fail'})
-        if result.returncode not in allowed: raise RuntimeError(name+' failed: '+str(result.returncode))
+        if result.returncode not in allowed:
+            progress['last_failed_check'] = name
+            # The full output stays in the artifact; the log gets the tail so
+            # the reason is readable without downloading anything.
+            log(f'[check:{name}] exit={result.returncode} allowed={allowed}')
+            for line in (result.stdout + result.stderr).strip().splitlines()[-15:]:
+                log(f'[check:{name}] {line[:400]}')
+            raise RuntimeError(name+' failed: '+str(result.returncode))
+        log(f'[check:{name}] exit={result.returncode}')
         return result.stdout.strip()
     try:
         report['node']=run('node-version',['node','--version'])
@@ -115,6 +147,17 @@ def main():
         report.update(status='fail',failure=type(exc).__name__+': '+str(exc))
     finally:
         (EVIDENCE/'result.json').write_text(json.dumps(report,indent=2)+'\n')
+    if report['status'] != 'pass':
+        if 'failure' not in report:
+            # No exception: the gate failed on its own verdict (advisories or
+            # dependency constraints), which is a different cause and must be
+            # distinguishable in the log from a crashed check.
+            report['failure'] = 'comparison gate rejected the candidate: ' + ', '.join(
+                f"{name}: advisories={p.get('advisory_entries')} "
+                f"constraint_issues={len((p.get('dependency_constraints') or {}).get('issues') or [])}"
+                for name, p in sorted(report['profiles'].items()))
+        for line in failure_annotations(report['failure'], progress['last_failed_check']):
+            log(line)
     return 0 if report['status']=='pass' else 1
 
 

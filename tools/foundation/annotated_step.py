@@ -68,6 +68,14 @@ def redact(output: str) -> str:
     return output
 
 
+# Lines that are already workflow commands. Several hosted tools emit their
+# own ``::error::`` lines (see runtime_install.hosted_failure_annotations),
+# because that convention predates this wrapper. Replaying one inside a
+# ::error message would nest two commands on a line and produce a garbled
+# annotation, so such lines are left to stand on their own.
+WORKFLOW_COMMAND_PREFIXES = ("::error", "::warning", "::notice", "::debug", "::group::", "::endgroup::")
+
+
 def truncate(output: str) -> str:
     """Keep the tail, which is where failures are reported."""
     lines = output.splitlines()
@@ -124,9 +132,16 @@ def run(argv: list[str]) -> int:
         return 0
 
     combined = redact("".join(chunks))
-    body = truncate(combined) or "(the step produced no output before failing)"
+    body = truncate(combined)
     title = escape(label)
-    for line in body.splitlines():
+    lines = [line for line in body.splitlines()
+             if not line.startswith(WORKFLOW_COMMAND_PREFIXES)]
+    if not lines:
+        # Nothing plain to replay. Say so plainly rather than emitting an
+        # empty annotation, which would look like a tooling error.
+        lines = ["(the step produced no plain output before failing; if it "
+                 "emitted annotations of its own, they are recorded above)"]
+    for line in lines:
         print(f"::error title={title}::{escape(line)}", flush=True)
     print(f"::error title={title}::{escape(f'step failed with exit code {returncode}')}",
           flush=True)

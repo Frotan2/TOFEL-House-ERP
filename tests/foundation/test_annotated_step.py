@@ -72,7 +72,7 @@ class AnnotationContentTests(unittest.TestCase):
 
     def test_empty_failure_output_is_stated_not_silently_dropped(self):
         completed = run_tool("failing", "--", sys.executable, "-c", "import sys;sys.exit(1)")
-        self.assertIn("no output before failing", completed.stdout)
+        self.assertIn("no plain output before failing", completed.stdout)
 
     def test_the_label_appears_in_every_annotation(self):
         completed = run_tool("durability guards", "--", sys.executable, "-c",
@@ -132,6 +132,26 @@ class StreamingTests(unittest.TestCase):
         completed = run_tool("merging", "--", sys.executable, "-c",
                              "import sys;sys.stderr.write('on stderr\\n');sys.exit(1)")
         self.assertIn("on stderr", completed.stdout)
+
+
+class ExistingAnnotationTests(unittest.TestCase):
+    """Some tools emit their own ::error:: lines; that convention predates
+    this wrapper. Replaying one inside a ::error message would nest two
+    commands on a line and produce a garbled annotation."""
+
+    def test_lines_that_are_already_annotations_are_not_replayed(self):
+        script = ("print('::error file=x.py::last failed check: clone')\n"
+                  "print('plain context line')\n"
+                  "sys.exit(1)\n")
+        completed = run_tool("nesting", "--", sys.executable, "-c",
+                             "import sys;" + script)
+        self.assertIn("plain context line", completed.stdout)
+        self.assertNotIn("::error title=nesting::::error", completed.stdout)
+
+    def test_a_step_whose_only_output_was_annotations_still_says_so(self):
+        completed = run_tool("only-annotations", "--", sys.executable, "-c",
+                             "import sys;print('::error file=x.py::boom');sys.exit(1)")
+        self.assertIn("no plain output", completed.stdout)
 
 
 class RedactionTests(unittest.TestCase):
