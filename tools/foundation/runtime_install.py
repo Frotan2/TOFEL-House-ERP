@@ -618,7 +618,7 @@ http {{
             ["node", ROOT / "tools/foundation/realtime_exposure_probe.js",
              "--target", "127.0.0.1:9000", "--health", "127.0.0.1:19000",
              "--host-header", "foundation.localhost",
-             "--pid", str(socketio.pid), "--output", realtime_probe_path],
+             "--pid", str(socketio_secured.pid), "--output", realtime_probe_path],
             cwd=bench_dir, timeout=120)
         realtime_probe = json.loads(realtime_probe_path.read_text())
         if not realtime_probe.get("all_survived"):

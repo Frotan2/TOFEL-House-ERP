@@ -1,9 +1,13 @@
-// Frappe's app realtime entry point. No upstream files or identity store modified.
-// Qualification is pinned to the native in-process Socket.IO adapter contract.
+ 'use strict';
 const fs = require('fs');
 const guarded = Symbol.for('foundation.resource.broadcast.guard');
 const LOG = process.env.FOUNDATION_REALTIME_BOOT_LOG;
-function lg(msg){ try{if(LOG)fs.appendFileSync(LOG,`[rt-guard ${new Date().toISOString()}] ${msg}\n`);}catch{} }
+function lg(msg){ try{if(LOG){fs.appendFileSync(LOG,'[rt-guard '+new Date().toISOString()+'] '+String(msg).slice(0,600)+'\n');}}catch(e){} }
+function safeStringify(o){try{return JSON.stringify(o,(k,v)=>{
+   if(v instanceof Set)return [...v];
+   if(v instanceof Error)return {message:v.message};
+   return v;
+ },2);}catch(e){return String(o);}}
 function resource(room) {
  if(typeof room!=='string'||room.length>1024)return null;
  if(room.startsWith('user:'))return {kind:'user',resource:room.slice(5)};
