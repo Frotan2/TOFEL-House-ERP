@@ -100,7 +100,7 @@
     },
     {
       "acceptance_test": "Owner-recorded numeric objective; only then can measurement be scheduled.",
-      "current_state": "No numeric objective selected; only descriptive timings exist.",
+      "current_state": "No numeric objective selected; only descriptive timings exist. Objective carrier mechanism shipped 2026-09-25 (decision-classification track 3): TH Capacity Objective (+ TH Capacity Objective Version) with guarded create/status/version/validate commands, effective-dated monotone versions holding the four owner numbers (concurrent users, document scale, read share percent, availability target percent), hash-chained configuration audit, fail-closed governing resolver and readiness on the configuration desk. The release gate reads no business settings (pin-tested). No number selected anywhere.",
       "dependency": "Owner capacity/availability decision (D8-CAPACITY-AVAILABILITY: NOT SELECTED).",
       "disposition": "OWNER DECISION REQUIRED",
       "id": "gate-capacity-availability",
@@ -108,7 +108,10 @@
       "reason": "Measuring against an invented number would be evidence theater.",
       "requirement": "Capacity/availability objective + measurement (D8 capacity-availability gate).",
       "responsible": "Owner (objective) then engineering (measurement).",
-      "source": "d8-production-operations-decision-matrix.json (capacity-availability: BLOCKED)"
+      "source": "d8-production-operations-decision-matrix.json (capacity-availability: BLOCKED)",
+      "evidence_links": [
+        "docs/engineering/evidence/category-b-track-3-capacity-objective-2026-09-25.md"
+      ]
     },
     {
       "acceptance_test": "Power-loss/volume-loss/restart-downtime evidence on the selected host; RPO/RTO measured.",

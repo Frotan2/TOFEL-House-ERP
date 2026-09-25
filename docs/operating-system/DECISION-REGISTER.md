@@ -310,6 +310,17 @@ owner reopens it.)
 - Authority: owner. Status: OWNER DECISION REQUIRED (only unresolved numeric
   business objective; D8-CAPACITY-AVAILABILITY NOT_SELECTED).
 - Source: canonical record; gap map. Affected: capacity/availability evidence.
+- **Mechanism SHIPPED 2026-09-25 (decision-classification track 3):**
+  `TH Capacity Objective`(+Version) with four guarded Course Owner
+  commands (create / set version / set status / validate), effective-
+  dated monotone versions holding exactly the four numbers (concurrent
+  users, document scale, read share, availability target percent),
+  hash-chained configuration audit, fail-closed
+  `governing_capacity_objective` resolver, readiness on the
+  configuration desk. The release gate stays code-only: it reads no
+  business settings (pin-tested). No number chosen anywhere — owner
+  values still AWAITING ANSWER. Evidence:
+  `docs/engineering/evidence/category-b-track-3-capacity-objective-2026-09-25.md`.
 
 ### O-GO — Production authorization + synthetic-only lift
 - Domain: production. Statement: (a) GO for the local/Tailscale target after

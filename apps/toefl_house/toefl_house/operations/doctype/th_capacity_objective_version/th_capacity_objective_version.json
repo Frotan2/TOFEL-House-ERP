@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "creation": "2026-09-25 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "effective_from",
+  "column_break_1",
+  "concurrent_users_target",
+  "document_scale_target",
+  "read_share_percent",
+  "availability_target_percent",
+  "section_break_1",
+  "reason",
+  "column_break_2",
+  "set_by",
+  "set_on",
+  "superseded_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "effective_from",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Effective from",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Expected concurrent users during peak business operation. Owner objective; engineering invents none.",
+   "fieldname": "concurrent_users_target",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Concurrent users target",
+   "reqd": 1
+  },
+  {
+   "description": "Expected data scale: the number of business documents this deployment is sized for. Owner objective; engineering invents none.",
+   "fieldname": "document_scale_target",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Document scale target",
+   "reqd": 1
+  },
+  {
+   "description": "Workload mix as the read share in percent of application operations. Owner objective; engineering invents none.",
+   "fieldname": "read_share_percent",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Read share percent",
+   "reqd": 1
+  },
+  {
+   "description": "Availability objective in percent (up to 100). Owner objective; engineering invents none. Measurement against this objective is a real-host engineering proof.",
+   "fieldname": "availability_target_percent",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Availability target percent",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Why this version was set. Mandatory on every version write.",
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "set_by",
+   "fieldtype": "Link",
+   "label": "Set by",
+   "options": "User"
+  },
+  {
+   "fieldname": "set_on",
+   "fieldtype": "Datetime",
+   "label": "Set on"
+  },
+  {
+   "description": "Closed date: the day this version stopped governing new activity. Written once when a newer version supersedes it; the row itself is never rewritten.",
+   "fieldname": "superseded_on",
+   "fieldtype": "Date",
+   "label": "Superseded on"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Operations",
+ "name": "TH Capacity Objective Version",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

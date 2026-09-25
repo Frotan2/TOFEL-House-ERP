@@ -491,6 +491,14 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "set_alerting_policy_version": "business_policy",
             "set_alerting_policy_status": "business_policy",
             "validate_alerting_policy": "business_policy",
+            # Track 3 capacity/availability (decision classification,
+            # 2026-09-25): O-D8N numeric objectives are owner numbers;
+            # engineering binds the kinds, picks none, and the release
+            # gate never reads these settings.
+            "create_capacity_objective": "business_policy",
+            "set_capacity_objective_version": "business_policy",
+            "set_capacity_objective_status": "business_policy",
+            "validate_capacity_objective": "business_policy",
         })
 
     def test_audit_reuses_the_command_pattern_without_site_gates(self):

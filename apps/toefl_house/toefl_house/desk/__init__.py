@@ -369,6 +369,18 @@ PROJECTION_FIELDS = {
         "escalate_after_minutes", "retention_days", "reason", "set_by",
         "set_on", "superseded_on",
     ],
+    # Capacity objective (track 3): the owner-entered numbers are projected
+    # — they are business intent, not secrets; the desk names them only
+    # when a version governs, never synthesizing any number.
+    ("configuration", "TH Capacity Objective"): [
+        "name", "code", "title", "status", "description", "modified",
+    ],
+    ("configuration", "TH Capacity Objective Version"): [
+        "name", "parent", "parenttype", "effective_from",
+        "concurrent_users_target", "document_scale_target",
+        "read_share_percent", "availability_target_percent", "reason",
+        "set_by", "set_on", "superseded_on",
+    ],
     # Teacher desk (Instructor): the teacher's own classes only, resolved
     # through session User -> Employee.user_id -> Instructor.employee ->
     # TH Teaching Assignment. Identity + window + recorded facts only: no

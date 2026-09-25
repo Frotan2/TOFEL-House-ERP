@@ -1232,6 +1232,25 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                  "set_by": "owner@example.com", "set_on": "2026-01-01",
                  "superseded_on": None},
             ],
+            # Capacity/availability objective carrier (track 3, 2026-09-25):
+            # the owner's numbers appear in the Operations domain section.
+            "TH Capacity Objective": [
+                {"name": "CAP-OBJ", "code": "CAP-OBJ",
+                 "title": "Capacity objective", "status": "Active",
+                 "description": "", "modified": "2026-09-01 10:00:00"},
+            ],
+            "TH Capacity Objective Version": [
+                {"name": "CVER-1", "parent": "CAP-OBJ",
+                 "parenttype": "TH Capacity Objective",
+                 "effective_from": "2026-01-01",
+                 "concurrent_users_target": 40,
+                 "document_scale_target": 50000,
+                 "read_share_percent": 70,
+                 "availability_target_percent": 99.5,
+                 "reason": "first",
+                 "set_by": "owner@example.com", "set_on": "2026-01-01",
+                 "superseded_on": None},
+            ],
         }
         if ambiguous:
             world["TH Assessment Policy Version"].append({
@@ -1268,7 +1287,8 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         return next(sect for sect in payload["sections"] if sect["id"] == sid)
 
     def test_nine_sections_with_computed_readiness(self):
-        payload = self._run(validated=("ASM-EFF", "MET-STEW", "ALERT-POL"))
+        payload = self._run(validated=("ASM-EFF", "MET-STEW", "ALERT-POL",
+                                       "CAP-OBJ"))
         self.assertEqual(len(payload["sections"]), 9)
         academic = self._section(payload, "academic")
         self.assertEqual(academic["kind"], "links")
@@ -1290,11 +1310,16 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                       operations["facts"][0]["definition"])
         self.assertIn("retained 30 day(s), escalating after 60 minute(s)",
                       operations["facts"][0]["definition"])
-        # The capacity objective stays pending, rendered as an explicit
-        # fact of exactly the future-domain kind — never a dead link.
+        # The capacity objective is real too: the owner's numbers appear
+        # only from a governing version, with the fail-closed and
+        # gate-never-reads-settings language.
         capacity_fact = operations["facts"][-1]
-        self.assertEqual(capacity_fact["value"], "Not implemented")
-        self.assertIn("arrive in a later phase",
+        self.assertEqual(capacity_fact["value"], "Effective")
+        self.assertIn("Governing since 2026-01-01: 40 concurrent user(s), "
+                      "50000 document(s), 70% read share, 99.5% "
+                      "availability objective.",
+                      capacity_fact["definition"])
+        self.assertIn("the release gate never reads these settings",
                       capacity_fact["definition"])
         items = {item["id"]: item
                  for item in self._section(payload, "system-readiness")["items"]}
@@ -1309,6 +1334,9 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertEqual(items["ALERT-POL"]["status"], "Effective")
         self.assertIn("channel: Email", items["ALERT-POL"]["detail"])
         self.assertEqual(items["ALERT-POL"]["stage"], "Operations")
+        self.assertEqual(items["CAP-OBJ"]["status"], "Effective")
+        self.assertIn("40 concurrent user(s)", items["CAP-OBJ"]["detail"])
+        self.assertEqual(items["CAP-OBJ"]["stage"], "Operations")
         self.assertEqual(items["finance"]["status"], "Not implemented")
         self.assertNotIn("action", items["finance"],
                          "future domains offer no dead buttons")
@@ -1323,6 +1351,10 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                       items["ALERT-POL"]["stage_definition"])
         self.assertIn("never decided here",
                       items["ALERT-POL"]["stage_definition"])
+        self.assertIn("the release gate reads no business settings",
+                      items["CAP-OBJ"]["stage_definition"])
+        self.assertIn("never decided here",
+                      items["CAP-OBJ"]["stage_definition"])
 
     def test_unvalidated_policy_stays_configured(self):
         payload = self._run()
@@ -1331,10 +1363,12 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertEqual(items["ASM-EFF"]["status"], "Configured")
         self.assertEqual(items["MET-STEW"]["status"], "Configured")
         self.assertEqual(items["ALERT-POL"]["status"], "Configured")
+        self.assertEqual(items["CAP-OBJ"]["status"], "Configured")
         metrics = self._section(payload, "reporting-metrics")
         self.assertEqual(metrics["facts"][0]["value"], "Configured")
         operations = self._section(payload, "operations")
         self.assertEqual(operations["facts"][0]["value"], "Configured")
+        self.assertEqual(operations["facts"][-1]["value"], "Configured")
 
     def test_ambiguous_history_surfaces_as_fault_not_state(self):
         payload = self._run(validated=("ASM-EFF",), ambiguous=True)

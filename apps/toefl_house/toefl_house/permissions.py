@@ -68,6 +68,7 @@ GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount R
                         "TH Adjustment Posting Policy",
                         "TH Metric Stewardship Policy",
                         "TH Alerting Policy",
+                        "TH Capacity Objective",
                         "TH Configuration Operation", "TH Configuration Audit Event"}
 
 

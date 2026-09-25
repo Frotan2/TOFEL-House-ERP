@@ -85,6 +85,10 @@ KIND_AUTHORITY = {
     "set_alerting_policy_version": "business_policy",
     "set_alerting_policy_status": "business_policy",
     "validate_alerting_policy": "business_policy",
+    "create_capacity_objective": "business_policy",
+    "set_capacity_objective_version": "business_policy",
+    "set_capacity_objective_status": "business_policy",
+    "validate_capacity_objective": "business_policy",
 }
 
 

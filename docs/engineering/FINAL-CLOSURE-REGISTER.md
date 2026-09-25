@@ -13,7 +13,7 @@ Date: 2026-09-19 · Active branch: `arena/01a0cd90-tofel-house-erp` @ `62b3c58`
 ### `gate-capacity-availability` — Capacity/availability objective + measurement (D8 capacity-availability gate).
 
 - **source:** d8-production-operations-decision-matrix.json (capacity-availability: BLOCKED)
-- **current_state:** No numeric objective selected; only descriptive timings exist.
+- **current_state:** No numeric objective selected; only descriptive timings exist. Objective carrier mechanism shipped 2026-09-25 (decision-classification track 3): TH Capacity Objective (+ TH Capacity Objective Version) with guarded create/status/version/validate commands, effective-dated monotone versions holding the four owner numbers (concurrent users, document scale, read share percent, availability target percent), hash-chained configuration audit, fail-closed governing resolver and readiness on the configuration desk. The release gate reads no business settings (pin-tested). No number selected anywhere.
 - **reason:** Measuring against an invented number would be evidence theater.
 - **dependency:** Owner capacity/availability decision (D8-CAPACITY-AVAILABILITY: NOT SELECTED).
 - **responsible:** Owner (objective) then engineering (measurement).
