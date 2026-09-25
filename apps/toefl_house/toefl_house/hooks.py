@@ -58,6 +58,7 @@ has_permission = {
                  "TH Catalog Linkage Policy",
                  "TH Adjustment Posting Policy",
                  "TH Metric Stewardship Policy",
+                 "TH Alerting Policy",
                  "TH Configuration Operation", "TH Configuration Audit Event")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
@@ -73,6 +74,7 @@ has_permission["TH Billing Policy"] = "toefl_house.permissions.configuration_has
 has_permission["TH Catalog Linkage Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Adjustment Posting Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Metric Stewardship Policy"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Alerting Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
 permission_query_conditions = {
@@ -109,6 +111,7 @@ permission_query_conditions["TH Billing Policy"] = "toefl_house.permissions.conf
 permission_query_conditions["TH Catalog Linkage Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Adjustment Posting Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Metric Stewardship Policy"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Alerting Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
 override_whitelisted_methods = {
@@ -171,6 +174,9 @@ doc_events = {
     },
     "TH Metric Stewardship Policy": {
         "validate": "toefl_house.operations.doctype.th_metric_stewardship_policy.th_metric_stewardship_policy.validate",
+    },
+    "TH Alerting Policy": {
+        "validate": "toefl_house.operations.doctype.th_alerting_policy.th_alerting_policy.validate",
     },
     "TH Configuration Operation": {
         "validate": "toefl_house.operations.doctype.th_configuration_operation.th_configuration_operation.validate",

@@ -379,6 +379,18 @@ owner reopens it.)
   rotation/archival, deployed fail-closed behavior, incident response.
 - Status: EVIDENCE REQUIRED. Source: readiness report; gap map.
 - Affected: D8 observability gate.
+- **Policy mechanism SHIPPED 2026-09-25 (decision-classification track 2):**
+  `TH Alerting Policy`(+Version) with four guarded Course Owner commands
+  (create / set version / set status / validate). A version records the
+  owner-selected channel kind (natively qualifiable mechanisms only:
+  Email / Webhook / Dashboard), the receiver destination, retention days
+  (required) and optional escalation minutes; effective-dated monotone
+  versions, hash-chained configuration audit, fail-closed
+  `governing_alerting_policy` resolver, readiness on the configuration
+  desk. No receiver selected, nothing delivered, no delivery path built;
+  delivery, retention operation and incident runbook remain real-
+  environment evidence. Evidence:
+  `docs/engineering/evidence/category-b-track-2-alerting-receiver-policy-2026-09-25.md`.
 
 ### V-CUST — Real trust-boundary key custody
 - Domain: custody. Statement: KMS/HSM/owner-provisioned secret store with

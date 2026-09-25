@@ -157,7 +157,7 @@ Date: 2026-09-19 · Active branch: `arena/01a0cd90-tofel-house-erp` @ `62b3c58`
 ### `obs-deployed-operation` — Deployed monitoring operation with fail-closed alerting (D8 observability gate).
 
 - **source:** d8-production-operations-decision-matrix.json (observability: BLOCKED)
-- **current_state:** No receiver, no delivery path, no retention operation, no incident runbook.
+- **current_state:** No receiver, no delivery path, no retention operation, no incident runbook. Receiver POLICY mechanism shipped 2026-09-25 (decision-classification track 2): TH Alerting Policy (+ TH Alerting Policy Version) with guarded create/status/version/validate commands, effective-dated monotone versions (channel kind Email/Webhook/Dashboard, receiver reference, required retention days, optional escalation minutes), hash-chained configuration audit, fail-closed governing resolver and readiness on the configuration desk. No receiver selected; nothing delivered.
 - **reason:** Alerting without a receiver is simulation; deployed behavior needs the deployment.
 - **dependency:** Owner-selected receiver/infrastructure; deployed environment.
 - **responsible:** Owner (receiver) + engineering (qualification).

@@ -81,6 +81,10 @@ KIND_AUTHORITY = {
     "set_metric_stewardship_policy_version": "business_policy",
     "set_metric_stewardship_policy_status": "business_policy",
     "validate_metric_stewardship_policy": "business_policy",
+    "create_alerting_policy": "business_policy",
+    "set_alerting_policy_version": "business_policy",
+    "set_alerting_policy_status": "business_policy",
+    "validate_alerting_policy": "business_policy",
 }
 
 

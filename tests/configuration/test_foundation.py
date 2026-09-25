@@ -484,6 +484,13 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "set_metric_stewardship_policy_version": "business_policy",
             "set_metric_stewardship_policy_status": "business_policy",
             "validate_metric_stewardship_policy": "business_policy",
+            # Track 2 alerting/receiver (decision classification, 2026-09-25):
+            # receiver selection plus retention/escalation are owner policy;
+            # engineering binds the kinds, picks none.
+            "create_alerting_policy": "business_policy",
+            "set_alerting_policy_version": "business_policy",
+            "set_alerting_policy_status": "business_policy",
+            "validate_alerting_policy": "business_policy",
         })
 
     def test_audit_reuses_the_command_pattern_without_site_gates(self):

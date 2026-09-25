@@ -31,6 +31,8 @@ ASSESSMENT_POLICY = "TH Assessment Policy"
 ASSESSMENT_VERSION = "TH Assessment Policy Version"
 STEWARDSHIP_POLICY = "TH Metric Stewardship Policy"
 STEWARDSHIP_VERSION = "TH Metric Stewardship Policy Version"
+ALERTING_POLICY = "TH Alerting Policy"
+ALERTING_VERSION = "TH Alerting Policy Version"
 CONFIG_AUDIT = "TH Configuration Audit Event"
 
 POLICY_FIELDS = ["name", "family", "code", "title", "status", "description",
@@ -45,11 +47,20 @@ STEWARDSHIP_FIELDS = ["name", "code", "title", "status", "description",
 STEWARDSHIP_VERSION_FIELDS = ["name", "parent", "parenttype",
                               "effective_from", "steward_role", "reason",
                               "set_by", "set_on", "superseded_on"]
+ALERTING_FIELDS = STEWARDSHIP_FIELDS
+ALERTING_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
+                           "channel_kind", "escalate_after_minutes",
+                           "retention_days", "reason", "set_by", "set_on",
+                           "superseded_on"]
 
 # Domains with no configuration surface yet. Each renders as an
 # explicit "not implemented" fact — never a dead link, never a guessing
 # readiness badge. (Reporting & Metrics left this list when the D7
-# metric-stewardship carrier shipped on 2026-09-25.)
+# metric-stewardship carrier shipped on 2026-09-25; the Operations entry
+# left it the same day, when the alerting receiver-policy carrier became
+# a real Operations section below. The capacity objective stays pending
+# — rendered as an explicit fact inside that section, identical in kind
+# to the not-implemented facts below.)
 FUTURE_DOMAINS = (
     ("finance", "Finance",
      "Correction terms live on the Finance desk; tax readiness arrives "
@@ -58,8 +69,6 @@ FUTURE_DOMAINS = (
      "Delegation and guardianship rules arrive in a later phase."),
     ("enrollment-lifecycle", "Enrollment & Lifecycle",
      "Calendar and lifecycle rules arrive in a later phase."),
-    ("operations", "Operations",
-     "Capacity objectives arrive in a later phase."),
     ("backup-recovery", "Backup & Recovery",
      "Offsite destination records arrive in a later phase."),
     ("security", "Security",
@@ -103,7 +112,20 @@ def work():
     stewardship_readiness, stewardship_faults = _domain_readiness(
         stewardship, stewardship_by_policy, today, "metric-stewardship policy",
         "validate_metric_stewardship_policy", _current_validation)
-    all_faults = faults + stewardship_faults
+    alerting = project_rows("configuration", ALERTING_POLICY,
+                            ALERTING_FIELDS, order_by="code asc",
+                            limit=LIMIT_QUEUES)
+    alerting_versions = project_rows(
+        "configuration", ALERTING_VERSION, ALERTING_VERSION_FIELDS,
+        filters={"parenttype": ALERTING_POLICY},
+        order_by="effective_from asc", limit=LIMIT_QUEUES * 4)
+    alerting_by_policy = {}
+    for row in alerting_versions:
+        alerting_by_policy.setdefault(row.get("parent"), []).append(row)
+    alerting_readiness, alerting_faults = _domain_readiness(
+        alerting, alerting_by_policy, today, "alerting policy",
+        "validate_alerting_policy", _current_validation)
+    all_faults = faults + stewardship_faults + alerting_faults
 
     sections = [
         section("academic", "Academic", "links",
@@ -130,12 +152,21 @@ def work():
                 empty_body="Derived metrics stay refused (fail-closed) until "
                            "the Course Owner enters the steward and "
                            "disclosure policy."))
+    sections.append(
+        section("operations", "Operations", "facts",
+                facts=_alerting_facts(alerting, alerting_readiness,
+                                      alerting_by_policy, today),
+                empty_title="No alerting policy exists",
+                empty_body="Alert delivery stays refused (fail-closed) until "
+                           "the Course Owner selects a receiver and its "
+                           "retention terms."))
     sections.append(section("system-readiness", "System Readiness", "queue",
                             items=_readiness_items(
                                 policies, versions_by_policy,
                                 readiness_by_policy, all_faults, today,
                                 stewardship, stewardship_by_policy,
-                                stewardship_readiness),
+                                stewardship_readiness, alerting,
+                                alerting_by_policy, alerting_readiness),
                             empty_title="Nothing configured yet",
                             empty_body="No assessment policy exists; the "
                                        "Academic domain is incomplete."))
@@ -221,9 +252,56 @@ def _stewardship_facts(policies, readiness_by_policy, versions_by_policy,
     return facts
 
 
+def _alerting_facts(policies, readiness_by_policy, versions_by_policy,
+                    today):
+    """The Operations domain facts for the configuration map.
+
+    The alerting carrier records WHICH receiver the owner selected and
+    the retention/escalation terms around it; it never delivers. The desk
+    names the governing channel kind and terms only when the engine
+    computes a governing version — alert delivery stays refused
+    (fail-closed) while nothing governs.
+    """
+    facts = []
+    for policy in policies:
+        readiness = readiness_by_policy.get(policy["name"])
+        if not readiness:
+            continue
+        rows = versions_by_policy.get(policy["name"], [])
+        governing = foundation.resolve_governing(rows, today)
+        channel = (governing.get("channel_kind") or "") if governing else ""
+        retention = governing.get("retention_days") if governing else None
+        escalation = (governing.get("escalate_after_minutes")
+                      if governing else None)
+        facts.append({
+            "value": readiness.capitalize(),
+            "label": f"{policy['code']} configuration readiness",
+            "definition": (
+                "The alerting policy records the selected alert receiver "
+                "and its retention terms; nothing is delivered from this "
+                "desk. "
+                + (f"Governing since {governing.get('effective_from')} "
+                   f"on channel {channel}, retained {retention} day(s)"
+                   + (f", escalating after {escalation} minute(s)."
+                      if escalation else "."))
+                if governing else
+                ("Versions exist but none governs today."
+                 if rows else
+                 "No versions; alert delivery stays refused "
+                 "(fail-closed)."))})
+    facts.append({
+        "value": "Not implemented",
+        "label": "Capacity objective",
+        "definition": ("Capacity and availability numeric objectives "
+                       "arrive in a later phase."),
+    })
+    return facts
+
+
 def _readiness_items(policies, versions_by_policy, readiness_by_policy,
                      faults, today, stewardship=(), stewardship_by_policy=None,
-                     stewardship_readiness=None):
+                     stewardship_readiness=None, alerting=(),
+                     alerting_by_policy=None, alerting_readiness=None):
     items = []
     for fault in faults:
         items.append({
@@ -300,6 +378,40 @@ def _readiness_items(policies, versions_by_policy, readiness_by_policy,
             "next": _readiness_next(policy, readiness, governing, rows,
                                     "through the guarded "
                                     "metric-stewardship commands"),
+            "next_role": "Course Owner",
+            "waiting_since": None,
+        })
+    for policy in (alerting or []):
+        name = policy["name"]
+        readiness = (alerting_readiness or {}).get(name)
+        if not readiness:
+            continue
+        rows = (alerting_by_policy or {}).get(name, [])
+        governing = foundation.resolve_governing(rows, today)
+        detail = f"{len(rows)} version(s)"
+        if governing:
+            detail += f"; governing since {governing.get('effective_from')}"
+            channel = governing.get("channel_kind") or ""
+            detail += (f"; channel: {channel}" if channel
+                       else "; no channel selected")
+        elif rows:
+            detail += "; nothing effective yet"
+        else:
+            detail += "; no versions"
+        items.append({
+            "id": policy["code"],
+            "person": policy["title"],
+            "detail": detail,
+            "status": readiness.capitalize(),
+            "stage": "Operations",
+            "stage_definition": ("Computed configuration readiness for the "
+                                 "alerting receiver policy. Alert delivery "
+                                 "stays refused until a version governs. "
+                                 "Production readiness is separate and is "
+                                 "never decided here."),
+            "next": _readiness_next(policy, readiness, governing, rows,
+                                    "through the guarded "
+                                    "alerting commands"),
             "next_role": "Course Owner",
             "waiting_since": None,
         })

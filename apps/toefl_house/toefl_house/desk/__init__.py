@@ -358,6 +358,17 @@ PROJECTION_FIELDS = {
         "name", "parent", "parenttype", "effective_from", "steward_role",
         "reason", "set_by", "set_on", "superseded_on",
     ],
+    # Alerting/receiver policy (track 2): same projection discipline — the
+    # owner-provided receiver_reference destination stays on the document;
+    # the desk names the channel kind, the ownership terms and the dates.
+    ("configuration", "TH Alerting Policy"): [
+        "name", "code", "title", "status", "description", "modified",
+    ],
+    ("configuration", "TH Alerting Policy Version"): [
+        "name", "parent", "parenttype", "effective_from", "channel_kind",
+        "escalate_after_minutes", "retention_days", "reason", "set_by",
+        "set_on", "superseded_on",
+    ],
     # Teacher desk (Instructor): the teacher's own classes only, resolved
     # through session User -> Employee.user_id -> Instructor.employee ->
     # TH Teaching Assignment. Identity + window + recorded facts only: no

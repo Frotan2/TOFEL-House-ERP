@@ -73,7 +73,7 @@
     },
     {
       "acceptance_test": "Receiver configured on the deployment; delivery + fail-closed-on-outage demonstrated; retention operated.",
-      "current_state": "No receiver, no delivery path, no retention operation, no incident runbook.",
+      "current_state": "No receiver, no delivery path, no retention operation, no incident runbook. Receiver POLICY mechanism shipped 2026-09-25 (decision-classification track 2): TH Alerting Policy (+ TH Alerting Policy Version) with guarded create/status/version/validate commands, effective-dated monotone versions (channel kind Email/Webhook/Dashboard, receiver reference, required retention days, optional escalation minutes), hash-chained configuration audit, fail-closed governing resolver and readiness on the configuration desk. No receiver selected; nothing delivered.",
       "dependency": "Owner-selected receiver/infrastructure; deployed environment.",
       "disposition": "REAL-ENVIRONMENT EVIDENCE REQUIRED",
       "id": "obs-deployed-operation",
@@ -81,7 +81,10 @@
       "reason": "Alerting without a receiver is simulation; deployed behavior needs the deployment.",
       "requirement": "Deployed monitoring operation with fail-closed alerting (D8 observability gate).",
       "responsible": "Owner (receiver) + engineering (qualification).",
-      "source": "d8-production-operations-decision-matrix.json (observability: BLOCKED)"
+      "source": "d8-production-operations-decision-matrix.json (observability: BLOCKED)",
+      "evidence_links": [
+        "docs/engineering/evidence/category-b-track-2-alerting-receiver-policy-2026-09-25.md"
+      ]
     },
     {
       "acceptance_test": "Independent TLS/session/cookie/CSRF evidence captured on the Tailscale URL at a recorded SHA.",

@@ -1213,6 +1213,25 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                  "set_by": "owner@example.com", "set_on": "2026-01-01",
                  "superseded_on": None},
             ],
+            # Alerting/receiver carrier (track 2, 2026-09-25): the
+            # Operations domain section is real and reports the computed
+            # readiness plus the governing channel and retention terms.
+            "TH Alerting Policy": [
+                {"name": "ALERT-POL", "code": "ALERT-POL",
+                 "title": "Alert receiver policy", "status": "Active",
+                 "description": "", "modified": "2026-09-01 10:00:00"},
+            ],
+            "TH Alerting Policy Version": [
+                {"name": "AVER-1", "parent": "ALERT-POL",
+                 "parenttype": "TH Alerting Policy",
+                 "effective_from": "2026-01-01",
+                 "channel_kind": "Email",
+                 "escalate_after_minutes": 60,
+                 "retention_days": 30,
+                 "reason": "first",
+                 "set_by": "owner@example.com", "set_on": "2026-01-01",
+                 "superseded_on": None},
+            ],
         }
         if ambiguous:
             world["TH Assessment Policy Version"].append({
@@ -1249,7 +1268,7 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         return next(sect for sect in payload["sections"] if sect["id"] == sid)
 
     def test_nine_sections_with_computed_readiness(self):
-        payload = self._run(validated=("ASM-EFF", "MET-STEW"))
+        payload = self._run(validated=("ASM-EFF", "MET-STEW", "ALERT-POL"))
         self.assertEqual(len(payload["sections"]), 9)
         academic = self._section(payload, "academic")
         self.assertEqual(academic["kind"], "links")
@@ -1261,6 +1280,22 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertEqual(metrics["facts"][0]["value"], "Effective")
         self.assertIn("Governing since 2026-01-01 with steward role",
                       metrics["facts"][0]["definition"])
+        # The alerting carrier made the Operations section real the same
+        # way: computed readiness plus channel + retention, and the
+        # receiver destination never leaks onto the desk.
+        operations = self._section(payload, "operations")
+        self.assertEqual(operations["kind"], "facts")
+        self.assertEqual(operations["facts"][0]["value"], "Effective")
+        self.assertIn("Governing since 2026-01-01 on channel Email",
+                      operations["facts"][0]["definition"])
+        self.assertIn("retained 30 day(s), escalating after 60 minute(s)",
+                      operations["facts"][0]["definition"])
+        # The capacity objective stays pending, rendered as an explicit
+        # fact of exactly the future-domain kind — never a dead link.
+        capacity_fact = operations["facts"][-1]
+        self.assertEqual(capacity_fact["value"], "Not implemented")
+        self.assertIn("arrive in a later phase",
+                      capacity_fact["definition"])
         items = {item["id"]: item
                  for item in self._section(payload, "system-readiness")["items"]}
         self.assertEqual(items["ASM-EFF"]["status"], "Effective")
@@ -1271,6 +1306,9 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertIn("steward role: General Manager",
                       items["MET-STEW"]["detail"])
         self.assertEqual(items["MET-STEW"]["stage"], "Reporting & Metrics")
+        self.assertEqual(items["ALERT-POL"]["status"], "Effective")
+        self.assertIn("channel: Email", items["ALERT-POL"]["detail"])
+        self.assertEqual(items["ALERT-POL"]["stage"], "Operations")
         self.assertEqual(items["finance"]["status"], "Not implemented")
         self.assertNotIn("action", items["finance"],
                          "future domains offer no dead buttons")
@@ -1281,6 +1319,10 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                       items["ASM-EFF"]["stage_definition"])
         self.assertIn("never decided here",
                       items["MET-STEW"]["stage_definition"])
+        self.assertIn("Alert delivery stays refused",
+                      items["ALERT-POL"]["stage_definition"])
+        self.assertIn("never decided here",
+                      items["ALERT-POL"]["stage_definition"])
 
     def test_unvalidated_policy_stays_configured(self):
         payload = self._run()
@@ -1288,8 +1330,11 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                  for item in self._section(payload, "system-readiness")["items"]}
         self.assertEqual(items["ASM-EFF"]["status"], "Configured")
         self.assertEqual(items["MET-STEW"]["status"], "Configured")
+        self.assertEqual(items["ALERT-POL"]["status"], "Configured")
         metrics = self._section(payload, "reporting-metrics")
         self.assertEqual(metrics["facts"][0]["value"], "Configured")
+        operations = self._section(payload, "operations")
+        self.assertEqual(operations["facts"][0]["value"], "Configured")
 
     def test_ambiguous_history_surfaces_as_fault_not_state(self):
         payload = self._run(validated=("ASM-EFF",), ambiguous=True)
