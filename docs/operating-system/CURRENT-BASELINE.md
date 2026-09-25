@@ -21,7 +21,7 @@ milestone (slice completion, gate change, authorization change).
 
 | Check | Result |
 |---|---|
-| `python3 -m unittest discover -s tests -t .` | **1552 pass, 0 fail** (4 deliberately skipped), local, post-cleanup |
+| `python3 -m unittest discover -s tests -t .` | **1554 pass, 0 fail** (4 deliberately skipped), local, post-cleanup (1552 + the realtime non-emission pin) |
 | `ruff check .` | clean (project `select` rules: `E9` + `F`) |
 | `node --test tests/foundation/*.cjs` | **4 pass, 0 fail** |
 | `tools/foundation/d8_validate.py` | exit 0 — all contract checks PASS; the named-workflow active-branch block records the explicit absence of a qualifying runtime execution, pending the release-contract owner's runtime-state criterion decision (`docs/engineering/evidence/active-runtime-state-2026-09-25.md`); posture unchanged |
@@ -340,3 +340,10 @@ No domain slice may start without its recorded owner decision.
   schedule was weakened; no business policy was invented; the pinned
   ratification/education chains (placement → closure, domain constitution,
   release anchors) were preserved.
+- 2026-09-25 (realtime non-emission pinned) — The SEC-RT-TASK-01 product-side
+  invariant (zero realtime emit sites in owned code, UPSTREAM-TRACKING §1) is
+  now mechanically pinned by `tests/security/test_realtime_non_emission.py`
+  across both apps (five emit tokens, fail-closed, mutation-checked: a planted
+  token fails the suite, removal restores green). Desk module ↔ SLUG ↔ page ↔
+  hooks wiring verified consistent (8 desks; `desk/lifecycle.py` confirmed the
+  shared stage machine, not an orphan).

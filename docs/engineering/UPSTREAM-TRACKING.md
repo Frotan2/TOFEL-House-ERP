@@ -33,6 +33,10 @@ $ grep -rn "publish_realtime\|realtime_subscribe\|frappe.realtime\|socketio" \
   (SEC-RT-TASK-01) has **no product-side exposure path**; the upstream
   fix remains tracked out-of-repo. Patching upstream in-repo would
   create a fork and is prohibited.
+- **Pinned mechanically (2026-09-25):** the zero-emit invariant above is no
+  longer a one-off grep — `tests/security/test_realtime_non_emission.py`
+  re-runs it on every suite execution across both apps (fail-closed;
+  mutation-checked). Any future emit site fails the Owned suite.
 
 ## 2. Dependency advisory triage (SEC-DEPS-01)
 
