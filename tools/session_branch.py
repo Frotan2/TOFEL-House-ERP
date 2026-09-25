@@ -22,6 +22,33 @@ ACTIVE_REF = "refs/heads/" + ACTIVE_BRANCH
 # any relabelling of older runs as executions on this branch.
 ACTIVE_RUNTIME_STATE = "NOT_EXECUTED_ON_THIS_BRANCH"
 ACTIVE_RUNTIME_RUN = None
+#
+# 2026-09-25 observation — the pin is unchanged, and the reason matters.
+#
+# The first push-triggered Foundation runtime run on this branch completed:
+# run 36114770663 at commit 8918403, conclusion success. Its evidence report
+# records status "pass" with security_gate_passed False (runtime_install.py
+# sets that flag unconditionally: broader roles, advisories and the remaining
+# security gates are still required). The stack dependency audit in the same
+# report lists real OSV findings and reports its own status "pass", meaning
+# the audit completed; the advisory verdict is carried by security_gate_passed
+# and the frontend advisory block, both of which remain failing.
+#
+# The 2026-09-24 note above says the state holds "until the first
+# post-rotation push runs the runtime to completion". Read literally that
+# condition is now met, but it is not the operative one. The enforced rule is
+# d8_validate.validate_active_branch_qualification, which requires the pinned
+# run's status to be exactly "fail_reject" as well as the run id to match.
+# Advancing the pin on completion alone would make that check raise
+# "acceptance ledger latest runtime evidence drifted".
+#
+# No tool writes "fail_reject"; it is a classification recorded by hand from
+# an observed rejection, as it was for the two prior branches. Since the
+# advisory-triage work the runtime reports "pass" while keeping
+# security_gate_passed False, so the observed outcome no longer has the shape
+# the rule expects. That is a decision for the release-contract owner, not a
+# bookkeeping correction: see
+# docs/engineering/evidence/active-runtime-state-2026-09-25.md.
 
 # Historical provenance pins: the last two Arena session branches that produced
 # a recorded Foundation runtime REJECT. These are evidence identity, never
