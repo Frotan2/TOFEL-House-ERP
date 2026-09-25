@@ -13,6 +13,11 @@ are not relaxed by selecting business requirements.
 See [PLACEMENT-CLOSURE.md](PLACEMENT-CLOSURE.md). Hosted run `34932512626`
 (commit `4571e6c`, **332/332** native checks, **86/86** runner steps,
 `production: REJECT`). Do not start another Placement increment. Do not deploy.
+The domain's ratified canon behind the shipped code:
+[PLACEMENT-ASSESSMENT-MODEL.md](PLACEMENT-ASSESSMENT-MODEL.md) (assessment
+design) and [PLACEMENT-FINAL-APPROVAL.md](PLACEMENT-FINAL-APPROVAL.md) (the
+approved M01–M05 business-policy set); the dated gate and proposal records they
+superseded remain in this directory as immutable audit history.
 
 ## ERP capability map (reuse vs custom)
 

@@ -22,8 +22,9 @@ is invented anywhere in this plan.**
   so `hosted_execution_state` was recorded as the explicit, validated absence
   `NOT_EXECUTED_ON_THIS_BRANCH` carrying no run/check/commit/report identity, and
   `tools/foundation/d8_validate.py` failed closed if any was attached — so an
-  older branch's run could not be re-labelled as an execution here. Full findings:
-  [ENGINEERING-REVIEW-2026-09-17.md](ENGINEERING-REVIEW-2026-09-17.md).
+  older branch's run could not be re-labelled as an execution here. The dated
+  2026-09-17 review record that backed this rotation is superseded by the current
+  ratified gates and was retired in the 2026-09-25 repository cleanup.
 - **The active branch has since been executed, and it rejected (2026-09-17).** All
   five named hosted workflows were genuinely re-executed at commit
   `e8da889b22589a5d64f7843ecaf5d11d9260424c`, so `hosted_execution_state` is now

@@ -14,8 +14,8 @@ extend-exclude = [
 # style opinions. The 2026-09-17 review enabled them after fixing every finding;
 # F821 in particular caught a latent NameError in the evidence-recovery path that
 # no test could reach. Wider rule families (bugbear, bandit, comprehensions)
-# still report findings and are tracked as staged follow-ups in
-# docs/engineering/ENGINEERING-REVIEW-2026-09-17.md rather than being suppressed.
+# may be adopted only after their findings are fixed in the same change, never
+# by suppression.
 select = [
   "E9",  # syntax errors and undefined-at-runtime constructs
   "F",   # pyflakes: undefined names, unused imports/variables, redefinitions

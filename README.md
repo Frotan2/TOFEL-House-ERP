@@ -9,92 +9,35 @@ Active engineering branch: `arena/01a0cd90-tofel-house-erp`. Historical hosted
 runs retain their original branch provenance; see
 [branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
 
-**Engineering rotation (2026-09-24):**
-The session boundary was rotated to `arena/01a0cd90-tofel-house-erp` on
-2026-09-24 (sixth rotation). At rotation time the workflow branch filters were
-rewired to target the new branch, so `active_branch_hosted_execution` is the
-explicit, fail-closed `NOT_EXECUTED_ON_THIS_BRANCH` carrying no run, check,
-commit or report identity until the first post-rotation push executes the
-runtime on this branch. The previous active branch `arena/01a0c987-tofel-house-erp`
-moved to historical provenance with its genuine execution intact (Foundation
-runtime `35984767187` — failure on SEC-DEPS-01). Re-executing the named hosted
-workflows on this branch by push trigger will replace the absence with
-observed results; until then no execution is claimed. Production remains
-**REJECT** and D8 remains **BLOCKED**.
-
-**Engineering execution (2026-09-19):**
-The rotation absence below was closed by genuine push-triggered execution on
-`arena/01a0ba0d-tofel-house-erp`, so `active_branch_hosted_execution` is now
-`EXECUTED` with `ACTIVE_RUNTIME_RUN` pinned to `35451785714`. All ten hosted
-workflows ran on this branch across four commits (path-filtered triggers; every
-workflow recorded its own head SHA): eight succeed at their newest run (owned
-suite `35452794488` at `523fe5e`, placement `35451785695` at `1ba0ecf`, D8
-contract `35450528401` at `83c82de`, runner `35449025428`, operational
-boundaries `35449025427`, datastore durability `35449025405`, external key
-custody `35449025377`, independent-system recovery `35449025449`,
-the last five at `b9be4d1`) and two reject: **Foundation runtime `35451785714`
-— failure** at `Install and validate the pinned foundation` (SEC-DEPS-01:
-`hosted-full-stack-dependency-audit` and `hosted-frontend-advisory-audit` exit
-1), and frontend candidate review `35449025381` — failure at `Compare frozen
-baseline and isolated candidate` (NOT ADOPTED). No run was re-labelled from any
-earlier branch. Production remains **REJECT** and D8 remains **BLOCKED**.
-
-**Engineering rotation (2026-09-19):**
-The session boundary was rotated to `arena/01a0ba0d-tofel-house-erp` on
-2026-09-19 (fourth rotation). At rotation time no hosted workflow had run on
-this branch yet, so `active_branch_hosted_execution` was the explicit,
-fail-closed `NOT_EXECUTED_ON_THIS_BRANCH` carrying no run, check, commit or
-report identity (closed by the execution recorded above). The previous active branch `arena/01a0b5c4-tofel-house-erp` moved to
-historical provenance with its genuine execution intact (Foundation runtime
-`35384078097` — failure on SEC-DEPS-01 at commit `e96de8a`). Re-executing the
-named hosted workflows on this branch by push trigger will replace the absence
-with observed results; until then no execution is claimed. Production remains
-**REJECT** and D8 remains **BLOCKED**.
-
-**Engineering review (2026-09-18):**
-Continuing ERP semantic reconciliation work on this session branch.
-The session boundary was rotated to `arena/01a0b5c4-tofel-house-erp` on
-2026-09-18, and ten hosted workflows were then genuinely executed on this branch
-at commit `e96de8a` by push trigger, so `active_branch_hosted_execution` is
-`EXECUTED` with `ACTIVE_RUNTIME_RUN` pinned to `35384078097`. Eight gates
-succeeded (owned suite `35384078106`, D8 contract `35384077993`, runner
-`35384077956`, placement `35384078001`, operational boundaries `35384078024`,
-datastore durability `35384078002`, external key custody `35384077977`,
-independent-system recovery `35384078072`) and two rejected: **Foundation
-runtime `35384078097` — failure** at `Install and validate the pinned
-foundation`, and frontend candidate review `35384077998` — failure at
-`Compare frozen baseline and isolated candidate`. That rotation also **corrected a stale claim**: the
-previous active branch `arena/01a0b3a7-tofel-house-erp` was recorded as having
-no hosted execution, but `Foundation runtime validation` genuinely ran there and
-rejected — run `35361065542` at commit `82275fd`, conclusion `failure`, failing
-at the step `Install and validate the pinned foundation`, with a second run
-`35356041559` at `53aae30` failing identically. See
-[branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md).
-**Foundation runtime rejects on SEC-DEPS-01 exactly as predicted. Production
-remains REJECT and D8 remains BLOCKED.** Re-executing the named hosted workflows
-on this branch will replace the absence with observed results; until then no
-execution is claimed. Runs cited further below that belong to earlier session
-branches are historical provenance and are labelled as such.
-
-The two commits previously reported as local-only on an earlier session
-(`b6d78e5` and `8638c77`) are recorded as **LOST / NON-EXISTENT**. They are
-absent from every reachable object in this repository's full history, and the
-GitHub commits API returns HTTP 422 "No commit found for SHA" for both. They are
-not cited as history anywhere in this repository and must not be reconstructed
-or assumed.
-
-**Production-like execution pass (2026-09-16, commit `d7df9ca`):** the readiness
-harness was re-executed on a genuine Docker-capable runner (ubuntu-24.04, Docker
-28.0.4, Compose 2.38.2) — runner qualification `35122242676` passed 18/18 with
-real MariaDB health and Redis probes, placement `35122242728` passed 542/542
-native checks with a real backup → separate-database restore → integrity
-verification, and Foundation runtime `35122242581` **failed** again on
-SEC-DEPS-01 (114/116 restricted checks). The requesting sandbox has no Docker
-Engine and is recorded **ENVIRONMENT-BLOCKED**; no preflight or bounded result
-was promoted to execution evidence. Probe-by-probe classification:
+All six session-branch rotations and their hosted-execution provenance are
+recorded canonically in
+[branch and evidence reconciliation](docs/engineering/BRANCH-RECONCILIATION.md);
+every run, check, commit and SHA-256 identity lives there and in the
 [execution ledger](docs/engineering/evidence/production-like-execution/execution-ledger.json)
-and [final readiness report §8](docs/engineering/FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md).
-**No D8 gate flipped to PASS. Production remains REJECT.**
+with its [final readiness report](docs/engineering/FINAL-RELEASE-READINESS-EVIDENCE-REPORT.md).
+Two commits once reported as local-only (`b6d78e5`, `8638c77`) are recorded as
+LOST / NON-EXISTENT and must not be reconstructed or assumed. The gate summary
+that matters now:
+
+- Owned suite, D8 contract, runner, placement content, operational boundaries,
+  datastore durability, external key custody and independent-system recovery
+  are **green** at their newest recorded runs.
+- **Foundation runtime rejects on SEC-DEPS-01** (`Install and validate the
+  pinned foundation` step) and the **frontend candidate review rejects at
+  `Compare frozen baseline and isolated candidate`** (candidate NOT ADOPTED) —
+  both fail by design until an official upstream release clears the pins
+  (delta re-verified 2026-09-25,
+  [feed delta](docs/engineering/evidence/sec-deps-01/feed-delta-reverification-2026-09-25.md)).
+- On this branch the named-workflow runtime block records the explicit,
+  fail-closed absence of a qualifying run pending the release-contract owner's
+  runtime-state criterion decision
+  ([record](docs/engineering/evidence/active-runtime-state-2026-09-25.md)).
+- Four owner-value carriers shipped 2026-09-25 and hosted-validated on
+  `88f5311` (metric stewardship, alerting, capacity objective, guardian
+  lifecycle — values NOT CONFIGURED, consumers fail closed).
+
+**Production remains REJECT and D8 remains BLOCKED.**
+
 
 **Placement is CLOSED / QUALIFIED** for the bounded synthetic isolated build
 (historical qualifying branch `arena/01a0a13b-tofel-house-erp`). Hosted run `34932512626`

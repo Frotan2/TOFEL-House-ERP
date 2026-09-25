@@ -12,13 +12,24 @@ milestone (slice completion, gate change, authorization change).
 
 | Fact | Value |
 |---|---|
-| Working branch | `arena/01a0c987-tofel-house-erp` |
-| HEAD commit | `2f8b681928169f2372144c36a0b9749d5ab5b4c6` |
-| HEAD subject | D3: append-only effective-dated correction policy versions with request pinning |
-| HEAD date | 2026-09-20 |
-| Parent | `05a3e35eef97bcd9e9f8167d262844354b20ff98` — "D1: owner-configurable assessment policy facets (configuration plane)", 2026-09-20 (verified from the HEAD commit object; the parent itself records parent `12087cba…`, so history is deeper than two commits). `9eccff9` ("Initial commit") is the tip of `main` in this clone, not HEAD's parent. Clone is shallow: ancestry beyond the fetched parent is not traversable locally. |
-| Working tree | CLEAN at baseline capture (before operating-system docs are added) |
-| Canonical `active_branch` in governance files | `arena/01a0c987-tofel-house-erp` (fifth rotation completed 2026-09-22 in `e82936f`; previous session branch `arena/01a0ba0d-tofel-house-erp` is now historical provenance — see update log) |
+| Working branch | `arena/01a0cd90-tofel-house-erp` (sixth rotation, 2026-09-24 — `tools/session_branch.py` is the pin; `arena/01a0c987-tofel-house-erp` and `arena/01a0ba0d-tofel-house-erp` are recorded historical provenance, never execution authority) |
+| HEAD commit at this capture | `a4991f1` — "sec-deps-01: re-verify advisory feed delta vs 2026-09-23 triage (0 new applicable advisories)", 2026-09-25 (cleanup commit follows in the same push cycle) |
+| Working tree | CLEAN at capture |
+| Canonical `active_branch` in governance files | `arena/01a0cd90-tofel-house-erp` |
+
+## Last validated baseline (2026-09-25)
+
+| Check | Result |
+|---|---|
+| `python3 -m unittest discover -s tests -t .` | **1552 pass, 0 fail** (4 deliberately skipped), local, post-cleanup |
+| `ruff check .` | clean (project `select` rules: `E9` + `F`) |
+| `node --test tests/foundation/*.cjs` | **4 pass, 0 fail** |
+| `tools/foundation/d8_validate.py` | exit 0 — all contract checks PASS; the named-workflow active-branch block records the explicit absence of a qualifying runtime execution, pending the release-contract owner's runtime-state criterion decision (`docs/engineering/evidence/active-runtime-state-2026-09-25.md`); posture unchanged |
+| Hosted Owned suite on push | green on the exact pushed commit (`88f5311` run `36151148191`; docs-only `a4991f1` run `36154330154`) |
+| Hosted Placement synthetic content qualification | green on `88f5311` (run `36151148183`, 12m10s); docs-only pushes do not re-trigger it by path filter design |
+
+That is a snapshot for this document's refresh; the older capture blocks below
+stay intact as history (they are labelled with their own HEADs and branches).
 
 ## Last validated baseline
 
@@ -63,37 +74,64 @@ milestone (slice completion, gate change, authorization change).
 - Lifecycle arc S1–S13 (audited bugs + owner-policy mechanisms for
   OD-NEW-01..09): latest `89b393e`, run `35834461078`, 596/596, report
   `51169d6e…590b`, production REJECT (per-slice proofs in the update log).
+- Role-desk plane + reference frames (2026-09-24): seven role desks behind one
+  contract harness (`tests/desk/test_desk_contract.py`), reference-frame
+  baseline pruning (D13) — owners from `tests/desk/pinned_schema.py`; suite at
+  that point 1519.
+- Category-B owner-value carriers, tracks 1–4 (2026-09-25): TH Metric
+  Stewardship Policy, TH Alerting Policy, TH Capacity Objective, TH Guardian
+  Lifecycle Policy — versioned/effective-dated/immutable, guarded Course-Owner
+  commands, hash-chained configuration audit, explicit readiness, fail-closed
+  NOT CONFIGURED values; hosted green on `88f5311` (suite `36151148191`,
+  placement content qualification `36151148183`); suite 1552.
+- SEC-DEPS-01 advisory feed delta re-verification (2026-09-25): zero new
+  applicable advisories against the 2026-09-23 triage; no newer Frappe v16 or
+  Bench release exists; disposition unchanged
+  (`docs/engineering/evidence/sec-deps-01/feed-delta-reverification-2026-09-25.md`,
+  pushed `a4991f1`, hosted suite green).
 
 ## Current next slice
 
-**S1–S13 are hosted-proven; no further implementation slice is authorized
-without new owner answers.** The owner-policy mechanisms for OD-NEW-01..09
-are shipped and fail closed; the owner's VALUES for each are still awaited
-(see `DECISION-REGISTER.md`), as are the D1/D3-remainder/D4/D5/D6a/D7/D8N
-answers. The next actions available without new owner decisions are:
+**Autonomous engineering is exhausted; only external-authority inputs remain.**
+Repository-wide forensic cleanup completed 2026-09-25 (see update log). What
+stands between here and any production posture is not code:
 
-1. Owner value-setting in Owner Settings for the shipped OD-NEW mechanisms
-   (values only — no engineering).
-2. Readable dependency-audit output from a log-capable environment (SEC-DEPS-01
-   evidence, no waiver).
-3. Real-server restore rehearsal record + TLS/session evidence on the Tailscale
-   URL (owner-operated, recorded).
+1. **Owner values** — set the shipped carrier values (OD-NEW-01..09 mechanisms,
+   plus the four 2026-09-25 carriers) and answer the open register items
+   (D1 values, D3 partials, D5, D6a, D7/D8 numerics, synthetic-only lift,
+   offsite destination, backup policy values). See `DECISION-REGISTER.md` and
+   the current-state section of `docs/engineering/OWNER-DECISIONS.md`.
+2. **Real-environment evidence** — owner-operated, recorded: backup-restore
+   rehearsal, TLS/session evidence on the Tailscale URL, durability/change-
+   control/observability/launch-rehearsal records (8 register items).
+3. **Upstream releases** — the first official Frappe v16 / Bench release that
+   clears the SEC-DEPS-01 pin set (delta re-verified 2026-09-25; re-check on
+   every new release or advisory).
+4. **Release-contract owner decision** — the runtime-state criterion recorded
+   in `docs/engineering/evidence/active-runtime-state-2026-09-25.md`.
+5. **Production authorization (O-GO)** — untouched; REJECT stands.
 
-Any domain slice (D1 values, D3 partials, D4, D5, D6a, D7, payroll posting)
-requires its recorded owner decision first — see `DECISION-REGISTER.md`.
+No domain slice may start without its recorded owner decision.
 
 ## Known blockers
 
-1. Branch rotation for this session branch COMPLETE (`e82936f`; pins green;
-   ledger active block EXECUTED with genuine runs — see update log).
-2. SEC-DEPS-01 REJECT (upstream-blocked; standing owner REJECT; reproduced
-   on this branch by run `35826357964`, not waived).
-3. Synthetic-only REQUIRED (owner lift decision pending).
-4. Backup-restore rehearsal unrecorded; off-site hardware unbuilt.
-5. TLS/session evidence on the Tailscale URL missing.
-6. Owner-value gates: OD-NEW-01..09 values; D1 values, D3 partials, D4, D5,
-   D6a, D7, D8 numerics.
-7. Production authorization absent (REJECT enforced by five `d8_validate.py` guards).
+1. SEC-DEPS-01 REJECT / UPSTREAM-BLOCKED (standing owner REJECT; delta
+   re-verified 2026-09-25 — zero new applicable advisories, no newer official
+   release; reproduced on this branch by run `35826357964`-lineage gates, not waived).
+2. Synthetic-only REQUIRED (owner lift decision pending).
+3. Backup-restore rehearsal unrecorded; off-site hardware unbuilt; backup
+   policy values NOT CONFIGURED (B12/D14-class).
+4. TLS/session evidence on the Tailscale URL missing.
+5. Owner-value gates: OD-NEW-01..09 values; D1 values, D3 partials, D5, D6a,
+   D7/D8 numerics; values for the four 2026-09-25 carriers (metric
+   stewardship, alerting, capacity objective, guardian lifecycle).
+6. Real-environment evidence gates: recovery, restore, upgrade-rollback,
+   deployed observability, topology edge session, durability, change control,
+   launch rehearsal (8 register items).
+7. Runtime-state criterion decision (release-contract owner):
+   `docs/engineering/evidence/active-runtime-state-2026-09-25.md`.
+8. Production authorization absent (REJECT enforced by the `d8_validate.py`
+   guards).
 
 ## Known architectural risks
 
@@ -122,6 +160,7 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
 | D8 overall | **BLOCKED** |
 | SEC-DEPS-01 | **REJECT / UPSTREAM-BLOCKED** |
 | Synthetic-only | **REQUIRED** |
+| Runtime-state criterion | **DECISION PENDING** (release-contract owner; see evidence doc) |
 | Local launch readiness | **NOT YET READY** |
 | Launch-critical satisfied | domain-qualification, authorization-isolation, ownership |
 | Launch-critical unsatisfied | backup-restore, dependency-security, durability, observability (audit-trail subset), topology-edge-session, production-authorization |
@@ -268,3 +307,36 @@ requires its recorded owner decision first — see `DECISION-REGISTER.md`.
   known steps (`Install and validate the pinned foundation`, `Compare
   frozen baseline and isolated candidate`), reproducing the standing
   SEC-DEPS-01 REJECT with fresh evidence. No outcome changed.
+- 2026-09-24 (sixth branch rotation + role-desk plane) — Active session branch
+  rotated to `arena/01a0cd90-tofel-house-erp` (`tools/session_branch.py` pin;
+  `arena/01a0c987`/`arena/01a0ba0d` recorded as historical provenance with their
+  runtime runs `35984767187`/`35451785714`). The newest Foundation runtime on the
+  new branch does not reproduce the old `fail_reject` shape, so the active block
+  keeps the explicit absence and the criterion choice is escalated to the
+  release-contract owner (see `docs/engineering/evidence/active-runtime-state-2026-09-25.md`).
+  Role-desk plane shipped: seven desks under one contract harness,
+  `tests/desk/pinned_schema.py` owns the pinned schema, D13 reference-frame
+  baseline pruning applied. Suite 1519, ruff clean.
+- 2026-09-25 (Category-B tracks 1–4 hosted-proven) — Four owner-value carriers
+  shipped and hosted-validated on `88f5311`: metric stewardship (`f2663b6`),
+  alerting receiver policy, capacity objective (`43922f0`), guardian lifecycle
+  (`4b9d251`); plus owner-facing command surfaces consolidated into
+  `docs/engineering/OWNER-DECISIONS.md` (packet content merged; dated packet
+  retired in cleanup). Hosted: owned suite `36151148191` success, placement
+  synthetic content qualification `36151148183` success (12m10s). Suite 1552,
+  ruff clean, node 4/4. All carrier values remain NOT CONFIGURED; consumers
+  fail closed.
+- 2026-09-25 (SEC-DEPS-01 delta + forensic cleanup) — Advisory feed
+  re-verification against the 2026-09-23 triage: 357 feed rows across the
+  pinned surface, zero new applicable advisories, no newer Frappe v16/Bench
+  release; disposition unchanged (pushed `a4991f1`, hosted suite `36154330154`
+  success). Repository-wide forensic cleanup: retired pure-narrative increments
+  (`PLACEMENT-INCREMENT-2..7`), the all-shipped `S4-DESIGN-BRIEF.md`, the
+  superseded `foundation-production-readiness.md`, the dated
+  `ENGINEERING-REVIEW-2026-09-17.md` (pyproject rationale retained inline;
+  RELEASE-GAP-MAP reference updated), and the dated owner packet (merged into
+  `OWNER-DECISIONS.md`); rewrote the `sec-deps-01` README stub as the current
+  evidence index; refreshed this baseline. No gate, guard, assertion, or
+  schedule was weakened; no business policy was invented; the pinned
+  ratification/education chains (placement → closure, domain constitution,
+  release anchors) were preserved.

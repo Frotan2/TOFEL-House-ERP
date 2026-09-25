@@ -14,6 +14,42 @@ evidence gates and SEC-DEPS-01 remain independent.
 
 ---
 
+## Current state of the owner-value planes (2026-09-25)
+
+The per-gate records below are the canonical decision narrative. This section
+records where each plane stands **now**, so the document stays truthful as
+engineering ships configuration machinery around the unanswered values.
+
+- **Versioned owner-value mechanisms shipped and hosted-validated** (synthetic
+  content qualification run `36151148183`, owned suite `36151148191`, commit
+  `88f5311`, 2026-09-25): TH Metric Stewardship Policy, TH Alerting Policy,
+  TH Capacity Objective, TH Guardian Lifecycle Policy. Each is a versioned,
+  effective-dated, immutable carrier with guarded Course-Owner commands,
+  hash-chained configuration audit, explicit readiness, and fail-closed
+  consumers — every business value still reads **NOT CONFIGURED** until the
+  owner sets it. Command surfaces: `toefl_house.operations.metric_stewardship`,
+  `.alerting`, `.capacity_objective`, `.guardian_lifecycle` (`create`,
+  `set_version`, `set_status`, `validate_*`); evidence in
+  `evidence/category-b-track-{1,2,3,4}-*-2026-09-25.md`.
+- **Still awaited from the Owner** (nothing invented): the values for those
+  four carriers plus every open item in
+  `docs/operating-system/DECISION-REGISTER.md` (OD-NEW-01..09 values, D1
+  values, D3 partials, D4/D5/D6a/D7 numerics, D8 numerics, synthetic-only
+  lift, offsite destination, backup retention/windows).
+- **External-authority boundaries engineering cannot cross**: production
+  authorization (O-GO — any production posture change), real secret/key custody
+  (V-CUST — machine-readable handoff from a designated custodian), the
+  PINNED-UPSTREAM releases (only a new official Frappe/Bench release can clear
+  SEC-DEPS-01; no pin override will ever be invented), and the runtime-state
+  criterion decision recorded in
+  `evidence/active-runtime-state-2026-09-25.md` (authored-runtime pin vs
+  latest-execution ledger block — release-contract owner call).
+- **SEC-DEPS-01** remains `EXTERNAL/UPSTREAM BLOCKED`; advisory delta
+  re-verified 2026-09-25 with zero new applicable advisories
+  (`evidence/sec-deps-01/feed-delta-reverification-2026-09-25.md`).
+
+---
+
 ## D1 — Academic assessment & progression (B04/B05 → A06)
 **Decide:** level vocabulary (e.g. how many bands/levels exist),
 sections/components per level, rubrics/units/cutoffs, course mapping;
