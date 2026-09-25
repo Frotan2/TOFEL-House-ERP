@@ -28,12 +28,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Verify controlled runner downloads and services
-        run: python3 tools/foundation/runner_probe.py
+        run: python3 tools/foundation/annotated_step.py "Verify controlled runner downloads and services" -- python3 tools/foundation/runner_probe.py
       - name: Publish sanitized machine-readable evidence
         if: always() && hashFiles('.foundation/runner-evidence/runner-result.json') != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 tools/foundation/publish_evidence.py .foundation/runner-evidence/runner-result.json
+        run: python3 tools/foundation/annotated_step.py "Publish sanitized machine-readable evidence" -- python3 tools/foundation/publish_evidence.py .foundation/runner-evidence/runner-result.json
       - name: Retain explicit probe evidence, including failures
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

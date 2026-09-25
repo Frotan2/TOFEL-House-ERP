@@ -28,14 +28,14 @@ jobs:
         with:
           persist-credentials: false
       - name: Test durability contract guards
-        run: python3 -m unittest tests.foundation.test_durability_contract -q
+        run: python3 tools/foundation/annotated_step.py "Test durability contract guards" -- python3 -m unittest tests.foundation.test_durability_contract -q
       - name: Prove real MariaDB and Redis restart, crash and volume durability
-        run: python3 tools/foundation/runtime_durability.py
+        run: python3 tools/foundation/annotated_step.py "Prove real MariaDB and Redis restart, crash and volume durability" -- python3 tools/foundation/runtime_durability.py
       - name: Publish sanitized durability evidence
         if: always() && hashFiles('.foundation/durability-evidence/durability-result.json') != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 tools/foundation/publish_evidence.py .foundation/durability-evidence/durability-result.json --name 'Foundation datastore durability evidence'
+        run: python3 tools/foundation/annotated_step.py "Publish sanitized durability evidence" -- python3 tools/foundation/publish_evidence.py .foundation/durability-evidence/durability-result.json --name 'Foundation datastore durability evidence'
       - name: Retain durability evidence, including failures
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

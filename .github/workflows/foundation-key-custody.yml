@@ -60,14 +60,15 @@ jobs:
         with:
           persist-credentials: false
       - name: Test key custody contract guards
-        run: python3 -m unittest tests.foundation.test_key_custody_contract -q
+        run: python3 tools/foundation/annotated_step.py "Test key custody contract guards" -- python3 -m unittest tests.foundation.test_key_custody_contract -q
       - name: Issue key material on this custodian system
-        run: python3 tools/foundation/runtime_key_custody_custodian.py
+        run: python3 tools/foundation/annotated_step.py "Issue key material on this custodian system" -- python3 tools/foundation/runtime_key_custody_custodian.py
       - name: Publish sanitized custodian evidence
         if: always() && hashFiles('.foundation/key-custody-evidence/custodian-result.json') != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
+          python3 tools/foundation/annotated_step.py "Publish sanitized custodian evidence" --
           python3 tools/foundation/publish_evidence.py
           .foundation/key-custody-evidence/custodian-result.json
           --name 'Foundation key custody - separate custodian system'
@@ -121,7 +122,7 @@ jobs:
       - name: Install pinned Yarn CLI
         run: npm install --global yarn@1.22.22
       - name: Establish fresh compatible Python and services
-        run: python3 tools/foundation/runner_probe.py
+        run: python3 tools/foundation/annotated_step.py "Establish fresh compatible Python and services" -- python3 tools/foundation/runner_probe.py
       - name: Confirm GPG is available for encrypted backups
         run: |
           command -v gpg >/dev/null || sudo apt-get update
@@ -143,12 +144,13 @@ jobs:
           name: key-custody-manifest-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody/manifest/
       - name: Run a real site on custodian-issued keys, back it up encrypted, then destroy it
-        run: python3 tools/foundation/runtime_key_custody_operator.py
+        run: python3 tools/foundation/annotated_step.py "Run a real site on custodian-issued keys, back it up encrypted, then destroy it" -- python3 tools/foundation/runtime_key_custody_operator.py
       - name: Publish sanitized operator evidence
         if: always() && hashFiles('.foundation/key-custody-operator-evidence/operator-result.json') != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
+          python3 tools/foundation/annotated_step.py "Publish sanitized operator evidence" --
           python3 tools/foundation/publish_evidence.py
           .foundation/key-custody-operator-evidence/operator-result.json
           --name 'Foundation key custody - operating system'
@@ -186,7 +188,7 @@ jobs:
       - name: Install pinned Yarn CLI
         run: npm install --global yarn@1.22.22
       - name: Establish fresh compatible Python and services
-        run: python3 tools/foundation/runner_probe.py
+        run: python3 tools/foundation/annotated_step.py "Establish fresh compatible Python and services" -- python3 tools/foundation/runner_probe.py
       - name: Confirm GPG is available to decrypt the backup
         run: |
           command -v gpg >/dev/null || sudo apt-get update
@@ -213,12 +215,13 @@ jobs:
           name: key-custody-payload-${{ github.run_id }}-${{ github.run_attempt }}
           path: .foundation/key-custody-operator/payload/
       - name: Retrieve the keys, prove retrieval is required, restore, decrypt, and rotate
-        run: python3 tools/foundation/runtime_key_custody_recovery.py
+        run: python3 tools/foundation/annotated_step.py "Retrieve the keys, prove retrieval is required, restore, decrypt, and rotate" -- python3 tools/foundation/runtime_key_custody_recovery.py
       - name: Publish sanitized recovery evidence
         if: always() && hashFiles('.foundation/key-custody-recovery-evidence/recovery-result.json') != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
+          python3 tools/foundation/annotated_step.py "Publish sanitized recovery evidence" --
           python3 tools/foundation/publish_evidence.py
           .foundation/key-custody-recovery-evidence/recovery-result.json
           --name 'Foundation key custody - recovery system'

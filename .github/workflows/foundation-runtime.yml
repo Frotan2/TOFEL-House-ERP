@@ -44,8 +44,8 @@ jobs:
           package-manager-cache: false
       - name: Test owned qualification policies
         run: |
-          python3 -m unittest discover -s tests/foundation -q
-          node tests/foundation/test_realtime_guard.cjs
+          python3 tools/foundation/annotated_step.py "foundation contract tests" -- python3 -m unittest discover -s tests/foundation -q
+          python3 tools/foundation/annotated_step.py "realtime guard" -- node tests/foundation/test_realtime_guard.cjs
       - name: Install pinned Yarn CLI
         run: npm install --global yarn@1.22.22
       - name: Establish fresh compatible Python and services

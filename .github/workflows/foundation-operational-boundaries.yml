@@ -65,20 +65,21 @@ jobs:
       - name: Install pinned Yarn CLI
         run: npm install --global yarn@1.22.22
       - name: Establish fresh compatible Python and services
-        run: python3 tools/foundation/runner_probe.py
+        run: python3 tools/foundation/annotated_step.py "Establish fresh compatible Python and services" -- python3 tools/foundation/runner_probe.py
       - name: Confirm OpenSSL can issue certificates and negotiate TLS 1.3
         run: |
           openssl version
           openssl ciphers -v | grep -c TLSv1.3
       - name: Test the TLS edge contract guards
-        run: python3 -m unittest tests.foundation.test_tls_edge_contract -q
+        run: python3 tools/foundation/annotated_step.py "Test the TLS edge contract guards" -- python3 -m unittest tests.foundation.test_tls_edge_contract -q
       - name: Issue certificates, start the TLS edge, and verify it as a real client
-        run: python3 tools/foundation/runtime_tls_edge.py
+        run: python3 tools/foundation/annotated_step.py "Issue certificates, start the TLS edge, and verify it as a real client" -- python3 tools/foundation/runtime_tls_edge.py
       - name: Publish sanitized TLS edge evidence
         if: always() && hashFiles('.foundation/tls-edge-evidence/tls-edge-result.json') != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
+          python3 tools/foundation/annotated_step.py "Publish sanitized TLS edge evidence" --
           python3 tools/foundation/publish_evidence.py
           .foundation/tls-edge-evidence/tls-edge-result.json
           --name 'Foundation operational boundaries - TLS edge'

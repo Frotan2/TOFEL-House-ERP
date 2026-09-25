@@ -36,12 +36,12 @@ jobs:
           npm install --global yarn@1.22.22
           npm install --prefix "$FOUNDATION_REVIEW_TOOLS" --ignore-scripts --no-audit --no-fund semver@7.7.3
       - name: Compare frozen baseline and isolated candidate
-        run: python3 tools/foundation/frontend_experiment.py
+        run: python3 tools/foundation/annotated_step.py "Compare frozen baseline and isolated candidate" -- python3 tools/foundation/frontend_experiment.py
       - name: Publish complete comparison including failed advisory gate
         if: always() && hashFiles('.foundation/frontend-experiment-evidence/result.json') != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 tools/foundation/publish_evidence.py .foundation/frontend-experiment-evidence/result.json --name 'Foundation frontend candidate evidence'
+        run: python3 tools/foundation/annotated_step.py "Publish complete comparison including failed advisory gate" -- python3 tools/foundation/publish_evidence.py .foundation/frontend-experiment-evidence/result.json --name 'Foundation frontend candidate evidence'
       - name: Retain comparison logs and reports
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
