@@ -1,6 +1,6 @@
 # `actual-realtime-authorization` root cause: unreachable realtime callback URL
 
-Date: 2026-09-25 · Branch `arena/01a0cd90-tofel-house-erp`
+Date: 2026-09-25 · the active validation branch
 Scope: the `actual-realtime-authorization` gate in
 `.github/workflows/foundation-runtime.yml`, which had failed identically on
 every attempt regardless of the changes made to
