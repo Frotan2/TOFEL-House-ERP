@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
 from session_branch import ACTIVE_BRANCH, ACTIVE_REF, HISTORICAL_BRANCHES, PRIOR_ACTIVE_BRANCH  # noqa: E402
+sys.path.insert(0, str(ROOT / "tools" / "foundation"))
+from branch_boundary import mismatch  # noqa: E402
 
 BRANCH_PATTERN = re.compile(r"arena/[0-9a-f]{8}-tofel-house-erp")
 PROVENANCE_MARKERS = ("historical", "provenance", "previous", "prior", "earlier", "rotated")
@@ -108,9 +110,11 @@ class BranchBoundaryTests(unittest.TestCase):
         self.assertTrue(workflows, "no workflows found")
         for path in workflows:
             for found in set(BRANCH_PATTERN.findall(self.sources[path])):
-                self.assertEqual(found, ACTIVE_BRANCH,
-                                 f"{path} filters on {found}; a stale branch in an active "
-                                 "workflow filter is release-control drift")
+                self.assertEqual(
+                    found, ACTIVE_BRANCH,
+                    f"{path} filters on {found}; a stale branch in an active "
+                    "workflow filter is release-control drift. "
+                    + (mismatch(self.sources[path], ACTIVE_BRANCH, ACTIVE_REF) or ""))
 
     def test_tools_and_tests_classify_every_non_active_branch_as_provenance(self):
         offenders = []
