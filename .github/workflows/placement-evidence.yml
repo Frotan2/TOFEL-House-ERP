@@ -27,10 +27,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
           SOURCE_RUN: ${{ inputs.source_run || '34850654470' }}
-        run: python3 tools/placement/recover_evidence.py
+        run: python3 tools/foundation/annotated_step.py "Recover original sanitized evidence" -- python3 tools/placement/recover_evidence.py
       - name: Retain the earlier HMAC harness failure completely
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
           SOURCE_RUN: '34848508030'
-        run: python3 tools/placement/recover_evidence.py
+        run: python3 tools/foundation/annotated_step.py "Retain the earlier HMAC harness failure" -- python3 tools/placement/recover_evidence.py

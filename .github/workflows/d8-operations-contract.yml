@@ -31,6 +31,6 @@ jobs:
         with:
           persist-credentials: false
       - name: Validate D8 contract and fail-closed release invariants
-        run: python3 tools/foundation/d8_validate.py --contract docs/engineering/d8-operational-contract.template.json
+        run: python3 tools/foundation/annotated_step.py "Validate D8 contract and fail-closed release invariants" -- python3 tools/foundation/d8_validate.py --contract docs/engineering/d8-operational-contract.template.json
       - name: Run D8 contract tests
-        run: python3 -m unittest tests.d8.test_contract -v
+        run: python3 tools/foundation/annotated_step.py "Run D8 contract tests" -- python3 -m unittest tests.d8.test_contract -v

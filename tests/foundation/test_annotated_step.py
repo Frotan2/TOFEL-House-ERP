@@ -245,20 +245,40 @@ class DiagnosticSelectionTests(unittest.TestCase):
 class WiringTests(unittest.TestCase):
     """Every hosted step that can fail must be wrapped, or the wrapper is inert."""
 
-    # The D8 evidence workflows plus the runtime qualification suite. Every
-    # python step in them can fail and take its only copy of the explanation
-    # with it into an unretrievable job log, so each one is wrapped.
+    # Every workflow whose python steps can fail and take their only copy of
+    # the explanation into an unretrievable job log.
     #
-    # placement-content is deliberately not in this list: every suite in it is
-    # already piped through `tee` into retained evidence under
-    # .foundation/placement-evidence/ under `set -o pipefail`, so a failure
-    # there is already readable from the artifact. The same is true of
-    # runtime_install.py's own gates, which surface through
-    # `surface_gate_failure()`.
+    # Steps piped into `tee` are exempt: their output is retained as evidence
+    # under .foundation/, so a failure is already readable from the artifact.
+    # That exemption was once claimed for all of placement-content, but only
+    # its unit-test block is tee'd; its runner_probe, run_native and publish
+    # steps were not, and are now wrapped. The exemption is therefore matched
+    # on the `tee` itself rather than on the workflow, so it cannot be claimed
+    # for a step that does not have one.
     WORKFLOWS = ("foundation-durability", "foundation-key-custody",
                  "foundation-independent-recovery", "foundation-operational-boundaries",
                  "foundation-frontend-review", "foundation-runner",
-                 "foundation-runtime", "owned-suite")
+                 "foundation-runtime", "owned-suite", "placement-content",
+                 "d8-operations-contract", "placement-evidence")
+
+    def test_no_workflow_with_python_steps_is_silently_dropped(self):
+        """The list above is the coverage boundary, so dropping an entry from
+        it would silently disable the check for that whole workflow.
+
+        There is deliberately no exemption mechanism. Two exemptions were
+        claimed in this file at earlier points and both were false: the
+        placement-content claim ("every suite is tee'd") covered only its
+        unit-test block, and the d8-operations-contract claim ("steps call
+        runtime_install.py") named a script it never runs. A workflow that
+        runs python is wrapped, or the list is changed in a reviewable diff.
+        """
+        python_workflows = {
+            path.stem for path in (ROOT / ".github" / "workflows").glob("*.yml")
+            if "python3" in path.read_text(encoding="utf-8")
+        }
+        self.assertEqual(sorted(python_workflows - set(self.WORKFLOWS)), [],
+                         "a workflow runs python but is not in the wrapped "
+                         "list: " + ", ".join(sorted(python_workflows - set(self.WORKFLOWS))))
 
     def test_every_hosted_python_step_is_wrapped(self):
         unwrapped = []
@@ -295,8 +315,15 @@ class WiringTests(unittest.TestCase):
                 # Its assertions already name the offending value, and
                 # wrapping it would risk the heredoc reaching the wrong
                 # process, so it is a documented exception.
-                if "<<" not in stripped:
-                    unwrapped.append(f"{name}: {stripped[:90]}")
+                if "<<" in stripped:
+                    index += 1
+                    continue
+                # Output retained by `tee` is readable from the artifact even
+                # when the job log is not, so the wrapper adds nothing.
+                if "| tee" in stripped or "|tee" in stripped:
+                    index += 1
+                    continue
+                unwrapped.append(f"{name}: {stripped[:90]}")
                 index += 1
                 continue
                 index += 1
