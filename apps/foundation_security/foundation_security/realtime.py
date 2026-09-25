@@ -13,8 +13,6 @@ def authorize(kind: str, resource: str, name: str = "") -> bool:
         return resource == user
     if kind == "document" and resource and name:
         return bool(frappe.has_permission(resource, doc=name, ptype="read"))
-    if kind == "doctype" and resource:
-        return bool(frappe.has_permission(resource, ptype="read"))
     if kind == "task" and resource:
         from rq.job import Job
         from rq.exceptions import NoSuchJobError

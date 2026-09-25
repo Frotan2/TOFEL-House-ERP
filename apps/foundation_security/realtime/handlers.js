@@ -8,7 +8,12 @@ function resource(room) {
     if(typeof room!=='string'||room.length>1024)return null;
     if(room.startsWith('user:'))return {kind:'user',resource:room.slice(5)};
     if(room.startsWith('task_progress:'))return {kind:'task',resource:room.slice(14)};
-    if(room.startsWith('doctype:'))return {kind:'doctype',resource:room.slice(8)};
+    // doctype:* rooms are NOT re-authorized: DocType-level broadcasts carry
+    // aggregate list-view events without a per-record authorization contract,
+    // so the adapter wrapper drops them outright (single non-resource room
+    // -> early return). They are recognized so pre-guard eviction can strip
+    // any stale membership.
+    if(room.startsWith('doctype:'))return null;
     for(const prefix of ['doc:','open_doc:']) if(room.startsWith(prefix)) {
         const key=room.slice(prefix.length), slash=key.indexOf('/');
         if(slash<1)return null;
@@ -150,14 +155,12 @@ module.exports=function(socket) {
     subscribe('doc_open',function(dt,name){return 'open_doc:'+dt+'/'+name;});
     subscribe('task_subscribe',function(id){return 'task_progress:'+id;});
     subscribe('progress_subscribe',function(id){return 'task_progress:'+id;});
-    // Core v16/v15 also registers doctype_subscribe (no name) — the resource
-    // parser in resource() rejects doctype:* rooms (no slash), which means
-    // doctype-level broadcasts are dropped by the adapter wrapper; we still
-    // install a guarded handler so that permission is re-checked.
-    origOn('doctype_subscribe',async function(doctype){
-        const ok = await allowed(socket,'open_doc:'+String(doctype)+'/__doctype__');
-        lg('subscribe event=doctype_subscribe doctype='+doctype+' user='+socket.user+' ok='+ok);
-        if(ok) socket.join('doctype:'+doctype);
+    // Core v16/v15 also registers doctype_subscribe (no name). The adapter
+    // wrapper drops doctype:* broadcasts because there is no per-record
+    // authorization contract, so this handler simply forbids the join to
+    // ensure the socket never ends up in a doctype room.
+    origOn('doctype_subscribe',function(){
+        lg('reject doctype_subscribe from user='+socket.user);
     });
 };
 module.exports.resource=resource;
