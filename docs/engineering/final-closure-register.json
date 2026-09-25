@@ -13,7 +13,7 @@
   "items": [
     {
       "acceptance_test": "A newer official release clears the pins; disposable-bench audits exit 0; native qualification + regressions green; adopted only then.",
-      "current_state": "Finding set readable and triaged (register + reachability trace, 2026-09-19). Newest Frappe v16.34.0 still pins pypdf==6.15.0, WeasyPrint==68.0, pdfkit~=1.0.0; Bench v5.31.0 still caps setuptools<82.0.0; pdfkit/weasyprint-CSS advisories list no patched version. Hosted audits fail closed (runs 35451785714, 35450528487).",
+      "current_state": "Finding set readable and triaged (register + reachability trace, 2026-09-19). Newest Frappe v16.34.0 still pins pypdf==6.15.0, WeasyPrint==68.0, pdfkit~=1.0.0; Bench v5.31.0 still caps setuptools<82.0.0; pdfkit/weasyprint-CSS advisories list no patched version. Hosted audits fail closed (runs 35451785714, 35450528487). Feed delta re-verified 2026-09-25 (GitHub Advisory API, 357 rows across all pinned packages, every range-matching advisory aliased to a triaged id; 0 new applicable advisories; no newer official Frappe v16 (v16.35.0 stands) or Bench (5.31.0) release since the triage). Evidence: docs/engineering/evidence/sec-deps-01/feed-delta-reverification-2026-09-25.md. Disposition unchanged: EXTERNAL/UPSTREAM BLOCKED.",
       "dependency": "Upstream releases (Frappe, Bench, pdfkit/weasyprint maintainers).",
       "disposition": "EXTERNAL/UPSTREAM BLOCKED",
       "id": "sec-deps-01",
@@ -65,11 +65,11 @@
       "dependency": "None (in-repo).",
       "disposition": "CLOSED",
       "id": "obs-engineering-layer",
-      "implementation_or_evidence_required": "None; preserve. Evidence: hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173\u2026fb0a); GM + owner health cells in role-desk-hosted-qualification + role-desk-observability-hosted; desk-contract health worlds + test_rq_fallback green.",
+      "implementation_or_evidence_required": "None; preserve. Evidence: hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173…fb0a); GM + owner health cells in role-desk-hosted-qualification + role-desk-observability-hosted; desk-contract health worlds + test_rq_fallback green.",
       "reason": "Operational visibility shipped with evidence; deployed alerting remains with obs-deployed-operation (needs a real environment).",
-      "requirement": "Actionable operational visibility inside the product (mission \u00a77, engineering layer).",
+      "requirement": "Actionable operational visibility inside the product (mission §7, engineering layer).",
       "responsible": "Engineering.",
-      "source": "FINAL-COMPLETION mission \u00a77; gap map 1.6 Monitoring row"
+      "source": "FINAL-COMPLETION mission §7; gap map 1.6 Monitoring row"
     },
     {
       "acceptance_test": "Receiver configured on the deployment; delivery + fail-closed-on-outage demonstrated; retention operated.",
@@ -167,7 +167,7 @@
       "dependency": "Owner academic policy.",
       "disposition": "OWNER DECISION REQUIRED",
       "id": "D1",
-      "implementation_or_evidence_required": "Closure packet delivered in this mission (\u00a714); implementation only after owner values.",
+      "implementation_or_evidence_required": "Closure packet delivered in this mission (§14); implementation only after owner values.",
       "reason": "Grading/progression values are business policy, not engineering derivable.",
       "requirement": "Academic assessment/progression policy (D1).",
       "responsible": "Owner (Academic).",
@@ -238,7 +238,7 @@
     },
     {
       "acceptance_test": "Owner selects off-site hardware destination + verifies physical separation.",
-      "current_state": "D14 decided (owner-controlled off-site hardware, separate location, no third-party cloud) but no specific device/site selected \u2014 deliberately left to the owner.",
+      "current_state": "D14 decided (owner-controlled off-site hardware, separate location, no third-party cloud) but no specific device/site selected — deliberately left to the owner.",
       "dependency": "Owner hardware/location selection.",
       "disposition": "OWNER DECISION REQUIRED",
       "id": "offsite-destination",
@@ -270,7 +270,7 @@
       "reason": "Activation on any other machine would be evidence theater.",
       "requirement": "D16 activation rehearsal on the selected deployment (D15 scope).",
       "responsible": "Owner (runs) + engineering (runbook).",
-      "source": "docs/engineering/LAUNCH-RUNBOOK.md \u00a79"
+      "source": "docs/engineering/LAUNCH-RUNBOOK.md §9"
     },
     {
       "acceptance_test": "MET 2026-09-19: hosted placement-content run green with the S9 matrix over Desk/REST/RPC/list/report/export/print/file surfaces.",
@@ -278,11 +278,11 @@
       "dependency": "None (hosted suite runs on push).",
       "disposition": "CLOSED",
       "id": "broad-isolation-proofs",
-      "implementation_or_evidence_required": "None; preserve. Evidence: hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173\u2026fb0a); desk-broad-isolation-matrix pass with branch_groups [SYN-GRP-ISOL-A, SYN-GRP-ISOL-B] observation.",
+      "implementation_or_evidence_required": "None; preserve. Evidence: hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173…fb0a); desk-broad-isolation-matrix pass with branch_groups [SYN-GRP-ISOL-A, SYN-GRP-ISOL-B] observation.",
       "reason": "Isolation proven by execution across surfaces, not asserted from source.",
-      "requirement": "Broad branch/role isolation proofs across product surfaces (mission \u00a79).",
+      "requirement": "Broad branch/role isolation proofs across product surfaces (mission §9).",
       "responsible": "Engineering.",
-      "source": "FINAL-COMPLETION mission \u00a79; RELEASE-GAP-MAP.md 1.5"
+      "source": "FINAL-COMPLETION mission §9; RELEASE-GAP-MAP.md 1.5"
     },
     {
       "acceptance_test": "MET 2026-09-19: assigned-only classes, today/next-action clarity, empty/closed/unavailable states, non-authoritative finance facts; no unrelated data reachable; wrong-role refusal tested.",
@@ -290,11 +290,11 @@
       "dependency": "None (native identity chain; no new policy).",
       "disposition": "CLOSED",
       "id": "teacher-daily-use",
-      "implementation_or_evidence_required": "None; preserve. Evidence: role-desk-teacher-hosted + teacher cells in role-desk-hosted-qualification green in hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173\u2026fb0a); TeacherDeskWorldTests green.",
+      "implementation_or_evidence_required": "None; preserve. Evidence: role-desk-teacher-hosted + teacher cells in role-desk-hosted-qualification green in hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173…fb0a); TeacherDeskWorldTests green.",
       "reason": "Daily-use completeness for the teacher role; fail-closed on native identity.",
-      "requirement": "Teacher daily-use path (mission \u00a710).",
+      "requirement": "Teacher daily-use path (mission §10).",
       "responsible": "Engineering.",
-      "source": "FINAL-COMPLETION mission \u00a710; STAFF-JOURNEY-AUDIT gap 4"
+      "source": "FINAL-COMPLETION mission §10; STAFF-JOURNEY-AUDIT gap 4"
     },
     {
       "acceptance_test": "MET 2026-09-19: outstanding/next-action/correction-status/blocked-reason/duplicate/config-guidance/invoice-state/native-ref from facts only; no settlement logic added.",
@@ -302,11 +302,11 @@
       "dependency": "None (in-repo).",
       "disposition": "CLOSED",
       "id": "finance-polish",
-      "implementation_or_evidence_required": "None; preserve. Evidence: FinanceOutstandingWorldTests (3000.00 USD pin, mutation-verified) + finance cells in role-desk-hosted-qualification, hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173\u2026fb0a).",
+      "implementation_or_evidence_required": "None; preserve. Evidence: FinanceOutstandingWorldTests (3000.00 USD pin, mutation-verified) + finance cells in role-desk-hosted-qualification, hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173…fb0a).",
       "reason": "Daily-use completeness without touching native finance authority.",
-      "requirement": "Finance final operational polish (mission \u00a712).",
+      "requirement": "Finance final operational polish (mission §12).",
       "responsible": "Engineering.",
-      "source": "FINAL-COMPLETION mission \u00a712"
+      "source": "FINAL-COMPLETION mission §12"
     },
     {
       "acceptance_test": "MET 2026-09-19: configuration health/programs/levels/progression/fee plans/discounts/years from configuration records; D1 answers stay fail-closed placeholders.",
@@ -314,11 +314,11 @@
       "dependency": "None (in-repo). D1 grading stays out.",
       "disposition": "CLOSED",
       "id": "academic-setup-finalization",
-      "implementation_or_evidence_required": "None; preserve. Evidence: SetupDeskWorldTests (years/duration/grading/discounts) + setup cells in role-desk-hosted-qualification, hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173\u2026fb0a).",
+      "implementation_or_evidence_required": "None; preserve. Evidence: SetupDeskWorldTests (years/duration/grading/discounts) + setup cells in role-desk-hosted-qualification, hosted placement run 35466677597 @62b3c58 (574/574 pass, report 5bbf9173…fb0a).",
       "reason": "Setup transparency for daily operation.",
-      "requirement": "Academic Setup finalization (mission \u00a713).",
+      "requirement": "Academic Setup finalization (mission §13).",
       "responsible": "Engineering.",
-      "source": "FINAL-COMPLETION mission \u00a713"
+      "source": "FINAL-COMPLETION mission §13"
     },
     {
       "acceptance_test": "MET 2026-09-19 for the audit half: 18 steps x 7 facets traced; click-through pending deployment (see launch-rehearsal).",
@@ -328,9 +328,9 @@
       "id": "lifecycle-journey-audit",
       "implementation_or_evidence_required": "Audit half done; the hosted click-through on a live deployment is future work owned by launch-rehearsal (no deployment exists to click through).",
       "reason": "End-to-end usability proof for the RC journey.",
-      "requirement": "Reception \u2192 Academic \u2192 Finance lifecycle audit (mission \u00a711).",
+      "requirement": "Reception → Academic → Finance lifecycle audit (mission §11).",
       "responsible": "Engineering (audit) + owner (live click-through).",
-      "source": "FINAL-COMPLETION mission \u00a711"
+      "source": "FINAL-COMPLETION mission §11"
     },
     {
       "acceptance_test": "No portal code, routes, or roles introduced; register + dossier keep the deferral explicit.",
@@ -342,7 +342,7 @@
       "reason": "Candidate/guardian/student portals need identity policy first.",
       "requirement": "Portals / student self-service.",
       "responsible": "Owner (future).",
-      "source": "RELEASE-GAP-MAP.md 1.7; mission \u00a715"
+      "source": "RELEASE-GAP-MAP.md 1.7; mission §15"
     },
     {
       "acceptance_test": "No gateway code or credentials; D6b NO-GATEWAY decision stands.",
@@ -366,7 +366,7 @@
       "reason": "Public edge explicitly out of authorized scope.",
       "requirement": "Public internet edge.",
       "responsible": "Owner (future).",
-      "source": "OWNER-DECISIONS.md (D15); mission \u00a715"
+      "source": "OWNER-DECISIONS.md (D15); mission §15"
     },
     {
       "acceptance_test": "No TOEFL/CEFR/BI/derived-metric code; R2 registers stay raw facts.",
@@ -378,7 +378,7 @@
       "reason": "External certification and derived metrics need owner stewards first.",
       "requirement": "Official TOEFL engine / CEFR certification / BI scoring.",
       "responsible": "Owner (future).",
-      "source": "RELEASE-GAP-MAP.md 1.7; mission \u00a715"
+      "source": "RELEASE-GAP-MAP.md 1.7; mission §15"
     },
     {
       "acceptance_test": "No waitlist/transfer/freeze invented engines; transfer/withdrawal use native semantics until D5.",
@@ -390,7 +390,7 @@
       "reason": "Lifecycle engines need D5 semantics first.",
       "requirement": "Waitlist/transfer/freeze engines.",
       "responsible": "Owner (future).",
-      "source": "mission \u00a715; canonical-owner-decision-record.json (D5)"
+      "source": "mission §15; canonical-owner-decision-record.json (D5)"
     },
     {
       "acceptance_test": "Retained: D16 validators + 23 activation tests + runbook; REFUSED default proven.",
@@ -438,7 +438,7 @@
       "reason": "Decided and, where applicable, implemented + qualified.",
       "requirement": "D2/D6b/D9/D10/D11/D12 dispositions.",
       "responsible": "Owner + engineering.",
-      "source": "canonical-owner-decision-record.json; RELEASE-GAP-MAP.md \u00a72"
+      "source": "canonical-owner-decision-record.json; RELEASE-GAP-MAP.md §2"
     },
     {
       "acceptance_test": "Retained: readable register + enrichment + reachability trace, and the register still changes no gate. The gate mechanism named here when this item was closed is no longer accurate and is corrected below: audit_stack.py grades on per-finding triage disposition rather than raw advisory counts, and fails closed on any untriaged or open finding, asserted by tests/security/test_advisory_triage.py.",

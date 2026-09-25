@@ -115,7 +115,7 @@ Date: 2026-09-19 · Active branch: `arena/01a0cd90-tofel-house-erp` @ `62b3c58`
 ### `sec-deps-01` — Resolved dependency trees must carry no advisory match (D8-SECURITY-DEPENDENCY).
 
 - **source:** d8-production-operations-decision-matrix.json (dependency-security: REJECT)
-- **current_state:** Finding set readable and triaged (register + reachability trace, 2026-09-19). Newest Frappe v16.34.0 still pins pypdf==6.15.0, WeasyPrint==68.0, pdfkit~=1.0.0; Bench v5.31.0 still caps setuptools<82.0.0; pdfkit/weasyprint-CSS advisories list no patched version. Hosted audits fail closed (runs 35451785714, 35450528487).
+- **current_state:** Finding set readable and triaged (register + reachability trace, 2026-09-19). Newest Frappe v16.34.0 still pins pypdf==6.15.0, WeasyPrint==68.0, pdfkit~=1.0.0; Bench v5.31.0 still caps setuptools<82.0.0; pdfkit/weasyprint-CSS advisories list no patched version. Hosted audits fail closed (runs 35451785714, 35450528487). Feed delta re-verified 2026-09-25 (GitHub Advisory API, 357 rows across all pinned packages, every range-matching advisory aliased to a triaged id; 0 new applicable advisories; no newer official Frappe v16 (v16.35.0 stands) or Bench (5.31.0) release since the triage). Evidence: docs/engineering/evidence/sec-deps-01/feed-delta-reverification-2026-09-25.md. Disposition unchanged: EXTERNAL/UPSTREAM BLOCKED.
 - **reason:** No officially released compatible bundle clears the finding set; fixes exist on PyPI but are unreachable through reviewed Frappe/Bench inputs, and two advisories list no fix at all.
 - **dependency:** Upstream releases (Frappe, Bench, pdfkit/weasyprint maintainers).
 - **responsible:** Upstream maintainers; engineering re-verifies.
