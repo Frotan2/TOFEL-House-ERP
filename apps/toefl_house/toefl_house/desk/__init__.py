@@ -381,6 +381,18 @@ PROJECTION_FIELDS = {
         "read_share_percent", "availability_target_percent", "reason",
         "set_by", "set_on", "superseded_on",
     ],
+    # Guardian lifecycle policy (track 4): policy enumerations and the
+    # window/expiry numbers are projected; the owner-authored records/
+    # recording rights text stays document-only (projection discipline).
+    ("configuration", "TH Guardian Lifecycle Policy"): [
+        "name", "code", "title", "status", "description", "modified",
+    ],
+    ("configuration", "TH Guardian Lifecycle Policy Version"): [
+        "name", "parent", "parenttype", "effective_from",
+        "delegation_window_days", "pre_admission_proxy",
+        "consent_evidence", "consent_expiry_days", "reason", "set_by",
+        "set_on", "superseded_on",
+    ],
     # Teacher desk (Instructor): the teacher's own classes only, resolved
     # through session User -> Employee.user_id -> Instructor.employee ->
     # TH Teaching Assignment. Identity + window + recorded facts only: no

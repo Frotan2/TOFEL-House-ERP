@@ -275,6 +275,18 @@ owner reopens it.)
 - Authority: owner. Status: OWNER DECISION REQUIRED (advanced; narrow remedy stands).
 - Source: OWNER-DECISIONS (D4: Defer advanced); A02/A03 CONDITIONAL.
 - Affected: portals (future), SEC-GUARDIAN-01 closure, admission conversion.
+- **Mechanism SHIPPED 2026-09-25 (decision-classification track 4):**
+  `TH Guardian Lifecycle Policy`(+Version) with four guarded Course Owner
+  commands (create / set version / set status / validate), effective-
+  dated monotone versions holding delegation window days, pre-admission
+  proxy posture (Allowed/Refused — no default), consent evidence mode
+  (Link/Attachment/Both — no default) with consent expiry days, and the
+  records/recording-rights text; hash-chained configuration audit,
+  fail-closed `governing_guardian_lifecycle` resolver, readiness on the
+  configuration desk. The narrow remedy (SEC-GUARDIAN-01 containment)
+  stands untouched and reads no owner policy (pin-tested); the carrier
+  grants no access by itself. Owner choices still AWAITING ANSWER.
+  Evidence: `docs/engineering/evidence/category-b-track-4-guardian-lifecycle-2026-09-25.md`.
 
 ### O-D5 — Calendar/repeat/transfer/withdrawal (B03 → A05/A11)
 - Domain: enrollment lifecycle. Statement: real intake calendars; same-term

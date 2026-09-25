@@ -1251,6 +1251,26 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                  "set_by": "owner@example.com", "set_on": "2026-01-01",
                  "superseded_on": None},
             ],
+            # Guardian lifecycle carrier (track 4, 2026-09-25): the
+            # Student & Guardian domain section reports computed readiness;
+            # behavior itself still means the SEC-GUARDIAN-01 containment.
+            "TH Guardian Lifecycle Policy": [
+                {"name": "GRD-POL", "code": "GRD-POL",
+                 "title": "Guardian lifecycle policy", "status": "Active",
+                 "description": "", "modified": "2026-09-01 10:00:00"},
+            ],
+            "TH Guardian Lifecycle Policy Version": [
+                {"name": "GVER-1", "parent": "GRD-POL",
+                 "parenttype": "TH Guardian Lifecycle Policy",
+                 "effective_from": "2026-01-01",
+                 "delegation_window_days": 90,
+                 "pre_admission_proxy": "Allowed",
+                 "consent_evidence": "Both",
+                 "consent_expiry_days": 365,
+                 "reason": "first",
+                 "set_by": "owner@example.com", "set_on": "2026-01-01",
+                 "superseded_on": None},
+            ],
         }
         if ambiguous:
             world["TH Assessment Policy Version"].append({
@@ -1288,7 +1308,7 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
 
     def test_nine_sections_with_computed_readiness(self):
         payload = self._run(validated=("ASM-EFF", "MET-STEW", "ALERT-POL",
-                                       "CAP-OBJ"))
+                                       "CAP-OBJ", "GRD-POL"))
         self.assertEqual(len(payload["sections"]), 9)
         academic = self._section(payload, "academic")
         self.assertEqual(academic["kind"], "links")
@@ -1321,6 +1341,17 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                       capacity_fact["definition"])
         self.assertIn("the release gate never reads these settings",
                       capacity_fact["definition"])
+        # The guardian lifecycle policy is real too: computed readiness
+        # plus the containment-still-applies statement on its face.
+        guardian_section = self._section(payload, "student-guardian")
+        self.assertEqual(guardian_section["kind"], "facts")
+        self.assertEqual(guardian_section["facts"][0]["value"], "Effective")
+        self.assertIn(
+            "Governing since 2026-01-01 with a delegation window of 90 "
+            "day(s).",
+            guardian_section["facts"][0]["definition"])
+        self.assertIn("SEC-GUARDIAN-01 containment enforces",
+                      guardian_section["facts"][0]["definition"])
         items = {item["id"]: item
                  for item in self._section(payload, "system-readiness")["items"]}
         self.assertEqual(items["ASM-EFF"]["status"], "Effective")
@@ -1337,6 +1368,10 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertEqual(items["CAP-OBJ"]["status"], "Effective")
         self.assertIn("40 concurrent user(s)", items["CAP-OBJ"]["detail"])
         self.assertEqual(items["CAP-OBJ"]["stage"], "Operations")
+        self.assertEqual(items["GRD-POL"]["status"], "Effective")
+        self.assertIn("delegation window: 90 day(s)",
+                      items["GRD-POL"]["detail"])
+        self.assertEqual(items["GRD-POL"]["stage"], "Student & Guardian")
         self.assertEqual(items["finance"]["status"], "Not implemented")
         self.assertNotIn("action", items["finance"],
                          "future domains offer no dead buttons")
@@ -1355,6 +1390,10 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                       items["CAP-OBJ"]["stage_definition"])
         self.assertIn("never decided here",
                       items["CAP-OBJ"]["stage_definition"])
+        self.assertIn("SEC-GUARDIAN-01 containment enforces",
+                      items["GRD-POL"]["stage_definition"])
+        self.assertIn("never decided here",
+                      items["GRD-POL"]["stage_definition"])
 
     def test_unvalidated_policy_stays_configured(self):
         payload = self._run()
@@ -1364,11 +1403,14 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertEqual(items["MET-STEW"]["status"], "Configured")
         self.assertEqual(items["ALERT-POL"]["status"], "Configured")
         self.assertEqual(items["CAP-OBJ"]["status"], "Configured")
+        self.assertEqual(items["GRD-POL"]["status"], "Configured")
         metrics = self._section(payload, "reporting-metrics")
         self.assertEqual(metrics["facts"][0]["value"], "Configured")
         operations = self._section(payload, "operations")
         self.assertEqual(operations["facts"][0]["value"], "Configured")
         self.assertEqual(operations["facts"][-1]["value"], "Configured")
+        guardian_section = self._section(payload, "student-guardian")
+        self.assertEqual(guardian_section["facts"][0]["value"], "Configured")
 
     def test_ambiguous_history_surfaces_as_fault_not_state(self):
         payload = self._run(validated=("ASM-EFF",), ambiguous=True)

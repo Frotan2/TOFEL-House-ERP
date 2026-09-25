@@ -35,6 +35,8 @@ ALERTING_POLICY = "TH Alerting Policy"
 ALERTING_VERSION = "TH Alerting Policy Version"
 CAPACITY_POLICY = "TH Capacity Objective"
 CAPACITY_VERSION = "TH Capacity Objective Version"
+GUARDIAN_POLICY = "TH Guardian Lifecycle Policy"
+GUARDIAN_VERSION = "TH Guardian Lifecycle Policy Version"
 CONFIG_AUDIT = "TH Configuration Audit Event"
 
 POLICY_FIELDS = ["name", "family", "code", "title", "status", "description",
@@ -58,6 +60,10 @@ CAPACITY_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
                            "concurrent_users_target", "document_scale_target",
                            "read_share_percent", "availability_target_percent",
                            "reason", "set_by", "set_on", "superseded_on"]
+GUARDIAN_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
+                           "delegation_window_days", "pre_admission_proxy",
+                           "consent_evidence", "consent_expiry_days",
+                           "reason", "set_by", "set_on", "superseded_on"]
 
 # Domains with no configuration surface yet. Each renders as an
 # explicit "not implemented" fact — never a dead link, never a guessing
@@ -65,13 +71,13 @@ CAPACITY_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
 # metric-stewardship carrier shipped on 2026-09-25; the Operations entry
 # left it the same day, when the alerting receiver-policy carrier became
 # a real Operations section below; the capacity objective joined it
-# later the same day (O-D8N numbers-only carrier).)
+# later the same day (O-D8N numbers-only carrier); Student & Guardian
+# left it when the O-D4 guardian lifecycle carrier shipped later that
+# day.)
 FUTURE_DOMAINS = (
     ("finance", "Finance",
      "Correction terms live on the Finance desk; tax readiness arrives "
      "in a later phase."),
-    ("student-guardian", "Student & Guardian",
-     "Delegation and guardianship rules arrive in a later phase."),
     ("enrollment-lifecycle", "Enrollment & Lifecycle",
      "Calendar and lifecycle rules arrive in a later phase."),
     ("backup-recovery", "Backup & Recovery",
@@ -143,8 +149,21 @@ def work():
     capacity_readiness, capacity_faults = _domain_readiness(
         capacity, capacity_by_policy, today, "capacity objective",
         "validate_capacity_objective", _current_validation)
+    guardian = project_rows("configuration", GUARDIAN_POLICY,
+                            ALERTING_FIELDS, order_by="code asc",
+                            limit=LIMIT_QUEUES)
+    guardian_versions = project_rows(
+        "configuration", GUARDIAN_VERSION, GUARDIAN_VERSION_FIELDS,
+        filters={"parenttype": GUARDIAN_POLICY},
+        order_by="effective_from asc", limit=LIMIT_QUEUES * 4)
+    guardian_by_policy = {}
+    for row in guardian_versions:
+        guardian_by_policy.setdefault(row.get("parent"), []).append(row)
+    guardian_readiness, guardian_faults = _domain_readiness(
+        guardian, guardian_by_policy, today, "guardian lifecycle policy",
+        "validate_guardian_lifecycle_policy", _current_validation)
     all_faults = faults + stewardship_faults + alerting_faults \
-        + capacity_faults
+        + capacity_faults + guardian_faults
 
     sections = [
         section("academic", "Academic", "links",
@@ -163,6 +182,16 @@ def work():
                                 }],
                                 empty_title=f"{title} is not implemented",
                                 empty_body=body))
+    sections.append(
+        section("student-guardian", "Student & Guardian", "facts",
+                facts=_guardian_facts(guardian, guardian_readiness,
+                                      guardian_by_policy, today),
+                empty_title="No guardian lifecycle policy exists",
+                empty_body="Advanced guardian features stay refused "
+                           "(fail-closed) until the Course Owner enters the "
+                           "guardian lifecycle terms; identity and guardian "
+                           "access remain exactly as the SEC-GUARDIAN-01 "
+                           "containment enforces."))
     sections.append(
         section("reporting-metrics", "Reporting & Metrics", "facts",
                 facts=_stewardship_facts(stewardship, stewardship_readiness,
@@ -189,7 +218,8 @@ def work():
                                 stewardship_readiness, alerting,
                                 alerting_by_policy, alerting_readiness,
                                 capacity, capacity_by_policy,
-                                capacity_readiness),
+                                capacity_readiness, guardian,
+                                guardian_by_policy, guardian_readiness),
                             empty_title="Nothing configured yet",
                             empty_body="No assessment policy exists; the "
                                        "Academic domain is incomplete."))
@@ -358,12 +388,52 @@ def _capacity_facts(policies, readiness_by_policy, versions_by_policy,
     return facts
 
 
+def _guardian_facts(policies, readiness_by_policy, versions_by_policy,
+                    today):
+    """The Student & Guardian domain facts for the configuration map.
+
+    The O-D4 carrier records the lifecycle TERMS only; identity and
+    guardian access stay exactly as SEC-GUARDIAN-01 enforces until the
+    policy governs — the desk says that on the face of every fact.
+    Fail-closed language is deliberate: advanced guardian features
+    refuse while nothing governs.
+    """
+    facts = []
+    for policy in policies:
+        readiness = readiness_by_policy.get(policy["name"])
+        if not readiness:
+            continue
+        rows = versions_by_policy.get(policy["name"], [])
+        governing = foundation.resolve_governing(rows, today)
+        window = (governing.get("delegation_window_days")
+                  if governing else None)
+        facts.append({
+            "value": readiness.capitalize(),
+            "label": f"{policy['code']} configuration readiness",
+            "definition": (
+                "The guardian lifecycle policy records the owner's "
+                "delegation, proxy, consent and records-rights terms; "
+                "identity and guardian access stay exactly as the "
+                "SEC-GUARDIAN-01 containment enforces while no policy "
+                "governs. "
+                + (f"Governing since {governing.get('effective_from')} "
+                   f"with a delegation window of {window} day(s).")
+                if governing else
+                ("Versions exist but none governs today; advanced guardian "
+                 "features stay refused (fail-closed)."
+                 if rows else
+                 "No versions; advanced guardian features stay refused "
+                 "(fail-closed)."))})
+    return facts
+
+
 def _readiness_items(policies, versions_by_policy, readiness_by_policy,
                      faults, today, stewardship=(), stewardship_by_policy=None,
                      stewardship_readiness=None, alerting=(),
                      alerting_by_policy=None, alerting_readiness=None,
                      capacity=(), capacity_by_policy=None,
-                     capacity_readiness=None):
+                     capacity_readiness=None, guardian=(),
+                     guardian_by_policy=None, guardian_readiness=None):
     items = []
     for fault in faults:
         items.append({
@@ -510,6 +580,43 @@ def _readiness_items(policies, versions_by_policy, readiness_by_policy,
             "next": _readiness_next(policy, readiness, governing, rows,
                                     "through the guarded "
                                     "capacity-objective commands"),
+            "next_role": "Course Owner",
+            "waiting_since": None,
+        })
+    for policy in (guardian or []):
+        name = policy["name"]
+        readiness = (guardian_readiness or {}).get(name)
+        if not readiness:
+            continue
+        rows = (guardian_by_policy or {}).get(name, [])
+        governing = foundation.resolve_governing(rows, today)
+        detail = f"{len(rows)} version(s)"
+        if governing:
+            detail += f"; governing since {governing.get('effective_from')}"
+            window = governing.get("delegation_window_days")
+            detail += (f"; delegation window: {window} day(s)" if window
+                       else "; no terms set")
+        elif rows:
+            detail += "; nothing effective yet"
+        else:
+            detail += "; no versions"
+        items.append({
+            "id": policy["code"],
+            "person": policy["title"],
+            "detail": detail,
+            "status": readiness.capitalize(),
+            "stage": "Student & Guardian",
+            "stage_definition": ("Computed configuration readiness for the "
+                                 "guardian lifecycle policy. Advanced "
+                                 "guardian features stay refused until a "
+                                 "version governs; identity and guardian "
+                                 "access remain exactly as the "
+                                 "SEC-GUARDIAN-01 containment enforces. "
+                                 "Production readiness is separate and is "
+                                 "never decided here."),
+            "next": _readiness_next(policy, readiness, governing, rows,
+                                    "through the guarded "
+                                    "guardian-lifecycle commands"),
             "next_role": "Course Owner",
             "waiting_since": None,
         })

@@ -53,7 +53,7 @@ Date: 2026-09-19 · Active branch: `arena/01a0cd90-tofel-house-erp` @ `62b3c58`
 ### `D4` — Identity/guardian lifecycle policy (D4).
 
 - **source:** canonical-owner-decision-record.json (D4: DEFER ADVANCED POLICY)
-- **current_state:** Advanced policy deferred; narrow explicit-User-Permissions remedy passes hosted (SEC-GUARDIAN-01 contained).
+- **current_state:** Advanced policy deferred; narrow explicit-User-Permissions remedy passes hosted (SEC-GUARDIAN-01 contained). Policy carrier mechanism shipped 2026-09-25 (decision-classification track 4): TH Guardian Lifecycle Policy (+ TH Guardian Lifecycle Policy Version) with guarded create/status/version/validate commands, effective-dated monotone versions (delegation window days, pre-admission proxy Allowed/Refused, consent evidence Link/Attachment/Both, consent expiry days, records/recording-rights text), hash-chained configuration audit, fail-closed governing resolver and readiness on the configuration desk. The containment stands untouched and reads no owner policy (pin-tested). No owner choice entered anywhere.
 - **reason:** Identity/merge/guardian rules determine who may act for a learner.
 - **dependency:** Owner identity policy.
 - **responsible:** Owner.

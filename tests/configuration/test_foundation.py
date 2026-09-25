@@ -499,6 +499,14 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "set_capacity_objective_version": "business_policy",
             "set_capacity_objective_status": "business_policy",
             "validate_capacity_objective": "business_policy",
+            # Track 4 guardian lifecycle (decision classification,
+            # 2026-09-25): O-D4 lifecycle terms are owner policy; the
+            # SEC-GUARDIAN-01 containment stands untouched and is never
+            # configured from these kinds.
+            "create_guardian_lifecycle_policy": "business_policy",
+            "set_guardian_lifecycle_policy_version": "business_policy",
+            "set_guardian_lifecycle_policy_status": "business_policy",
+            "validate_guardian_lifecycle_policy": "business_policy",
         })
 
     def test_audit_reuses_the_command_pattern_without_site_gates(self):

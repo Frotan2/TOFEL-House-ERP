@@ -89,6 +89,10 @@ KIND_AUTHORITY = {
     "set_capacity_objective_version": "business_policy",
     "set_capacity_objective_status": "business_policy",
     "validate_capacity_objective": "business_policy",
+    "create_guardian_lifecycle_policy": "business_policy",
+    "set_guardian_lifecycle_policy_version": "business_policy",
+    "set_guardian_lifecycle_policy_status": "business_policy",
+    "validate_guardian_lifecycle_policy": "business_policy",
 }
 
 

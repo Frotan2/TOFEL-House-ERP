@@ -60,6 +60,7 @@ has_permission = {
                  "TH Metric Stewardship Policy",
                  "TH Alerting Policy",
                  "TH Capacity Objective",
+                 "TH Guardian Lifecycle Policy",
                  "TH Configuration Operation", "TH Configuration Audit Event")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
@@ -77,6 +78,7 @@ has_permission["TH Adjustment Posting Policy"] = "toefl_house.permissions.config
 has_permission["TH Metric Stewardship Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Alerting Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Capacity Objective"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Guardian Lifecycle Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
 permission_query_conditions = {
@@ -115,6 +117,7 @@ permission_query_conditions["TH Adjustment Posting Policy"] = "toefl_house.permi
 permission_query_conditions["TH Metric Stewardship Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Alerting Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Capacity Objective"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Guardian Lifecycle Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
 override_whitelisted_methods = {
@@ -183,6 +186,9 @@ doc_events = {
     },
     "TH Capacity Objective": {
         "validate": "toefl_house.operations.doctype.th_capacity_objective.th_capacity_objective.validate",
+    },
+    "TH Guardian Lifecycle Policy": {
+        "validate": "toefl_house.operations.doctype.th_guardian_lifecycle_policy.th_guardian_lifecycle_policy.validate",
     },
     "TH Configuration Operation": {
         "validate": "toefl_house.operations.doctype.th_configuration_operation.th_configuration_operation.validate",

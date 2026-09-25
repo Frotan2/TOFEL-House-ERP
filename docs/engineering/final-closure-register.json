@@ -187,7 +187,7 @@
     },
     {
       "acceptance_test": "Owner supplies identity/merge/guardian-delegation rules; advanced lifecycle after.",
-      "current_state": "Advanced policy deferred; narrow explicit-User-Permissions remedy passes hosted (SEC-GUARDIAN-01 contained).",
+      "current_state": "Advanced policy deferred; narrow explicit-User-Permissions remedy passes hosted (SEC-GUARDIAN-01 contained). Policy carrier mechanism shipped 2026-09-25 (decision-classification track 4): TH Guardian Lifecycle Policy (+ TH Guardian Lifecycle Policy Version) with guarded create/status/version/validate commands, effective-dated monotone versions (delegation window days, pre-admission proxy Allowed/Refused, consent evidence Link/Attachment/Both, consent expiry days, records/recording-rights text), hash-chained configuration audit, fail-closed governing resolver and readiness on the configuration desk. The containment stands untouched and reads no owner policy (pin-tested). No owner choice entered anywhere.",
       "dependency": "Owner identity policy.",
       "disposition": "OWNER DECISION REQUIRED",
       "id": "D4",
@@ -195,7 +195,10 @@
       "reason": "Identity/merge/guardian rules determine who may act for a learner.",
       "requirement": "Identity/guardian lifecycle policy (D4).",
       "responsible": "Owner.",
-      "source": "canonical-owner-decision-record.json (D4: DEFER ADVANCED POLICY)"
+      "source": "canonical-owner-decision-record.json (D4: DEFER ADVANCED POLICY)",
+      "evidence_links": [
+        "docs/engineering/evidence/category-b-track-4-guardian-lifecycle-2026-09-25.md"
+      ]
     },
     {
       "acceptance_test": "Owner supplies calendars/repeat/transfer/withdrawal semantics; advanced lifecycle after.",
