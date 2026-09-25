@@ -357,3 +357,16 @@ No domain slice may start without its recorded owner decision.
   enrollment, finance, teaching, operations) with command modules and the
   shared invariants; stale count claims in `desk/lifecycle.py` corrected.
   Validation: suite 1554/1554, ruff clean.
+- 2026-09-25 (forensic cleanup pass 2) — Full-graph re-audit (685 files):
+  app module import graph (zero dead modules — allocation.py consumed by
+  api.py/native_checks, desk/lifecycle.py by four desks), hooks/page/asset/
+  fixture integrity (24/24 roles referenced, page_js + CSS loaders wired).
+  Stale current claims corrected: OWNER-DECISIONS D1/D3/D4/D7 "Current state"
+  lines now state shipped carriers with NOT-CONFIGURED values (the 2026-09-25
+  classification review's keep-as-history note predated today's explicit
+  no-stale-current-claims mission); DOMAIN-ROADMAP role-fixture count 23→24,
+  desk count seven→eight, header reconciliation note added (four carriers
+  shipped POSTURE-UNCHANGED). Also reconciled the checkout to the branch tip
+  after a sandbox re-init had left HEAD at fork-base 9c21961 with workspace
+  files ahead (`git fetch` + `reset --hard f9b0241`; no content loss — all
+  work was already pushed). Suite 1554/1554, ruff clean, node 4/4.

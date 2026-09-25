@@ -1,9 +1,19 @@
 # TOEFL House ERP — Domain Roadmap
 
-Date: 2026-09-22 · Location: `docs/operating-system/DOMAIN-ROADMAP.md`
+Date: 2026-09-22 · Reconciled 2026-09-25 · Location: `docs/operating-system/DOMAIN-ROADMAP.md`
 Status: **authoritative evidence-based roadmap**. No dates or business
 priorities are manufactured; ordering follows proven dependencies and recorded
 decisions only.
+
+Reconciliation note (2026-09-25): rows describing identity/guardian (D4),
+reporting/metrics (D7) and numeric capacity objectives record mechanism state
+as it stood on 2026-09-22. Since then the four owner-value carriers were
+shipped and hosted-validated (metric stewardship `f2663b6`, alerting, capacity
+objective `43922f0`, guardian lifecycle `4b9d251`; suite `36151148191`,
+placement content qualification `36151148183`): every mechanism is shipped
+fail-closed with values NOT CONFIGURED, so the OWNER DECISION REQUIRED
+postures below stand unchanged — the pending input is the owner's VALUES, not
+the mechanism. Role fixtures are now 24.
 
 Status vocabulary (only these): COMPLETE · READY · IN PROGRESS · BLOCKED ·
 OWNER DECISION REQUIRED · EVIDENCE REQUIRED · DEFERRED · REJECTED.
@@ -22,7 +32,7 @@ Production posture: **REJECT**; D8 **BLOCKED** (see `CURRENT-BASELINE.md`).
   v16.34.2 `4048fb70` / Education v16.1.0 `93bc7075` / HRMS v16.18.1
   (`docs/engineering/foundation-version-matrix.json`); owned app assembly
   (15 placement doctypes + admission decision + receipt/audit ledger + config
-  carriers + 23 role fixtures + 2 Custom Fields + command-only guards on three
+  carriers + 24 role fixtures + 2 Custom Fields + command-only guards on three
   lifecycle seams); owned suite gate on push + PR; `ruff` E9+F zero-suppression.
 - **Blockers**: none for baseline use; production use blocked by §Security /
   §Backup / §Production rows below.
@@ -277,7 +287,7 @@ Production posture: **REJECT**; D8 **BLOCKED** (see `CURRENT-BASELINE.md`).
 - **Dependencies**: all closed slices + config plane.
 - **Completed evidence**: 13 native command Pages (T3), run `35073376790` @
   `3587700`, 542/542 (`release-command-pages-*`); R1 workspaces @ `69a8a95`;
-  seven role desks (`docs/product/ROLE-DESKS.md`; `tests/desk` + client suites).
+  eight role desks (`docs/product/ROLE-DESKS.md`; `tests/desk` + client suites).
 - **Blockers**: none for shipped surfaces.
 - **Owner decisions required**: none (D10 (ii) executed; D9 (d) closed).
 - **Implementation slices**: none — new desks/Pages only with new authorized

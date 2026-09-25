@@ -56,9 +56,12 @@ sections/components per level, rubrics/units/cutoffs, course mapping;
 grading scale and progression rules.
 **Why owner-only:** grading policy is academic business policy; no
 native Frappe/Education default may be assumed as TOEFL House policy.
-**Current state:** zero implementation started (by design — starting
-would invent rules). Native Program/Course Enrollment lifecycle is
-closed and available as the carrier (run 34946981784).
+**Current state:** the TH Assessment Policy carrier is shipped
+(versioned/effective-dated terms, guarded commands, values NOT CONFIGURED —
+setting rules still waits for this decision); grading/progression rules
+remain undefined and every grading surface is an explicit placeholder.
+Native Program/Course Enrollment lifecycle is closed and available as the
+carrier (run 34946981784).
 **Unblocks:** A06 assessment slice.
 
 ## D2 — Payroll input path (B08 → A09)
@@ -71,18 +74,23 @@ payroll slice implemented. **Unblocks:** A09.
 
 ## D3 — Refund / cancellation / credit-note terms
 **Decide:** who approves refunds, windows, partial-refund policy.
-**Why owner-only:** financial terms. **Current state:** Finance domain
-closed without a refund surface (run 34999987969); native Credit Note
-exists but its issuance policy is undefined. **Unblocks:** finance
-correction command surface.
+**Why owner-only:** financial terms. **Current state:** the D3 framework
+is shipped — TH Correction Policy (versioned, effective-dated) with
+full-amount-only refund commands (Fees correction + native cancellation
+reversal, approvals dual-keyed; terms NOT CONFIGURED). Partial-refund and
+credit-note issuance terms remain undecided. **Unblocks:** any
+partial-refund or credit-note surface.
 
 ## D4 — Identity & guardian lifecycle (B01/B02 → A02/A03)
 **Decide:** identity merge/activation policy; guardian delegation and
 pre-admission proxy rules.
 **Why owner-only:** defines who may act for a student. **Current
 state:** narrow explicit-User-Permissions guardian remedy passes
-hosted; full fail-closed isolation (SEC-GUARDIAN-01) awaits this
-policy. **Unblocks:** A02/A03 + SEC-GUARDIAN-01 closure.
+hosted; the TH Guardian Lifecycle Policy carrier is shipped (versioned,
+effective-dated, merge/activation/delegation terms NOT CONFIGURED,
+consumers fail closed, SEC-GUARDIAN-01 containment unchanged). Full
+fail-closed isolation closure still awaits the owner values.
+**Unblocks:** A02/A03 + SEC-GUARDIAN-01 closure.
 
 ## D5 — Calendar / repeat / transfer / withdrawal (B03 → A05/A11)
 **Decide:** real intake calendars, whether same-term repeats are
@@ -103,8 +111,10 @@ gateway approval. **Unblocks:** tax setup, online payments.
 retention rules for any derived metric.
 **Why owner-only:** metrics encode management policy. **Current
 state:** R2 registers ship **raw facts only** (hosted-proven, run
-35049742120); no derived metric exists anywhere. **Unblocks:**
-reporting metrics layer above the registers.
+35049742120); the TH Metric Stewardship Policy carrier is shipped
+(steward/denominator/disclosure/retention terms NOT CONFIGURED,
+derived metrics stay refused — fail closed). No derived metric exists
+anywhere. **Unblocks:** the reporting metrics layer above the registers.
 
 ## D8 — Production-operation inputs
 **Authoritative decision:** the owner requirements are recorded in the
