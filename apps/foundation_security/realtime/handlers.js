@@ -160,18 +160,8 @@ function wrapAdapter(nsp) {
 module.exports=function(socket) {
     socket.foundationResourceGuard=true;
     socket.__foundationAuthorized = function(room){ return allowed(socket,room); };
-    lg('guard attached socket='+socket.id+' nsp='+(socket.nsp&&socket.nsp.name)+' user='+socket.user);
+    lg('guard attached socket='+socket.id+' nsp='+(socket.nsp&&socket.nsp.name)+' user='+socket.user+' user_type='+socket.user_type);
     wrapAdapter(socket.nsp);
-    // Evict any guarded resource rooms (doc:*, open_doc:*, task_progress:*,
-    // doctype:*) the socket may have been auto-joined into before our
-    // guard ran. Keep identity (socket.id), per-user room (user:<sid>),
-    // and default broadcast rooms (all/website/...) which frappe core
-    // joins before/around app handlers and which carry no per-record data.
-    function isGuardedRoom(r){
-        if(typeof r!=='string') return false;
-        const s = stripSitePrefix(r).suffix;
-        return s.startsWith('doc:')||s.startsWith('open_doc:')||s.startsWith('task_progress:')||s.startsWith('doctype:');
-    }
     // Rooms are bare names like 'doc:Student/a' when the socket is in a
     // per-site namespace (v15+) or '<site>:doc:Student/a' when the socket
     // is in the root io (legacy v14 single-io mode). Detect namespaces by
@@ -184,6 +174,13 @@ module.exports=function(socket) {
         return '';
     }
     const SP = sitePrefix();
+    function isGuardedRoom(r){
+        if(typeof r!=='string') return false;
+        const s = stripSitePrefix(r).suffix;
+        return s.startsWith('doc:')||s.startsWith('open_doc:')||s.startsWith('task_progress:')||s.startsWith('doctype:');
+    }
+    // Evict any guarded resource rooms the socket may have been
+    // auto-joined into before our guard ran.
     for(const room of [...socket.rooms]) if(isGuardedRoom(room) && room!==socket.id){
         lg('evicting pre-guard resource room '+room+' for socket '+socket.id);
         socket.leave(room);
@@ -210,13 +207,20 @@ module.exports=function(socket) {
         if(okRooms.length===0) return socket;
         return origJoin(okRooms.length===1?okRooms[0]:okRooms, ...rest);
     };
+    const origOn = socket.on.bind(socket);
+    // Register the heartbeat listener and default broadcast rooms before
+    // wrapping socket.on (which only suppresses the known subscribe
+    // events; other events still pass through).
+    origOn('ping',function(){ socket.emit('pong'); });
+    origJoin(SP + 'user:' + socket.user);
+    origJoin(SP + 'website');
+    if(socket.user_type === 'System User') origJoin(SP + 'all');
     // Suppress frappe core's own subscribe listeners (added after our
     // handler by v16 realtime/handlers.js and which would otherwise join
     // rooms based only on an HTTP has_permission call that we do not
     // trust to re-run against the current session). Replace them with
     // guarded handlers that use our wrapped join.
     const GUARDED_EVENTS = new Set(['doctype_subscribe','task_subscribe','progress_subscribe','doc_subscribe','doc_open','open_in_editor']);
-    const origOn = socket.on.bind(socket);
     socket.on = function(event, handler) {
         if(GUARDED_EVENTS.has(event)) {
             lg('suppress insecure handler registration for event='+event+' socket='+socket.id);
