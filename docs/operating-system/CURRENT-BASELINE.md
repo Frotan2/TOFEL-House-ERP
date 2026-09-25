@@ -347,3 +347,13 @@ No domain slice may start without its recorded owner decision.
   token fails the suite, removal restores green). Desk module ↔ SLUG ↔ page ↔
   hooks wiring verified consistent (8 desks; `desk/lifecycle.py` confirmed the
   shared stage machine, not an orphan).
+- 2026-09-25 (product-doc currency sweep) — `docs/product/ROLE-DESKS.md`
+  documented seven desk audiences and omitted the TH Configuration desk; now
+  eight with the `th-configuration` row (Course Owner,
+  `toefl_house.desk.configuration.work`) and a fact-checked section for its
+  configuration map (six real sections + four explicitly-absent future
+  domains). `docs/product/CONFIGURATION-PLANE.md` gains a §0 current
+  inventory of every shipped owner-configurable carrier (academic, admission,
+  enrollment, finance, teaching, operations) with command modules and the
+  shared invariants; stale count claims in `desk/lifecycle.py` corrected.
+  Validation: suite 1554/1554, ruff clean.

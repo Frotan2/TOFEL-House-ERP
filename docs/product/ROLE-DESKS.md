@@ -3,7 +3,7 @@
 Date: 2026-09-19 · Active branch: `arena/01a0ba0d-tofel-house-erp`
 
 This document specifies the role product layer built on top of the qualified
-command slices. It is the contract between the seven desk audiences and the
+command slices. It is the contract between the eight desk audiences and the
 server projections that serve them. Every section states its data source, its
 definition, its empty state and its failure state. Nothing here creates a
 parallel master, ledger, accounting model, permission model or workflow engine.
@@ -78,6 +78,7 @@ Rules that are binding for every desk:
 | `th-owner-cockpit` | Course Owner | Operations | `toefl_house.desk.owner.cockpit` |
 | `th-academic-setup` | Course Owner | Operations | `toefl_house.desk.setup.work` |
 | `th-teacher-desk` | Instructor | Operations | `toefl_house.desk.teacher.work` |
+| `th-configuration` | Course Owner | Operations | `toefl_house.desk.configuration.work` |
 
 `toefl_house.desk.available` tells any desk (and the command-centre
 landing page) which desks the *server* believes this viewer holds — the client
@@ -198,6 +199,32 @@ Everything the GM desk shows, plus:
 - **Definitions** — every tile ships its definition inline, because a number
   without a definition is not evidence (mission §11).
 
+### Configuration desk — "what is configured, and is it ready?"
+
+Audience: the Course Owner. One `work()` call returns the configuration map:
+every configuration domain as a fact section whose values come from the
+projected policy rows themselves, with computed readiness on every load.
+Configuration readiness is shown here; production readiness is separate and
+is never decided here.
+
+- **Academic** — link section onto Academic Setup (programs, levels,
+  durations, progression, the D1 assessment reference).
+- **Student & Guardian** — the guardian lifecycle policy facts (track 4);
+  empty until the Owner enters the terms, with advanced guardian features
+  failing closed meanwhile and SEC-GUARDIAN-01 containment unchanged.
+- **Reporting & Metrics** — the metric-stewardship policy facts (track 1);
+  derived metrics stay refused until a steward and disclosure policy exist.
+- **Operations** — the alerting policy facts (track 2) and capacity-objective
+  facts (track 3); alert delivery and capacity projections stay refused while
+  unconfigured.
+- **System Readiness** — the readiness queue across the assessment,
+  metric-stewardship, alerting, capacity and guardian domains: each domain
+  runs the same command-side validation the guarded commands run, so the desk
+  never reports readiness a command would refuse. Faults surface, never hide.
+- **Domains not yet implemented** (finance, enrollment lifecycle,
+  backup-recovery, security) render as explicitly absent — named, never
+  silently missing.
+
 ## Guided actions (the cross-role chain, §13)
 
 A queue item's next action is rendered as a button only when the server says
@@ -228,7 +255,7 @@ Reception (find person) → record_applicant → create_admission
 - All other operational Officer roles (Placement Author, Publisher, Releaser,
   Invigilator, Admission Officer/Reviewer/Approver, Enrollment Officer,
   Teaching Scheduler, Attendance Recorder, etc.) intentionally land on **no
-  workspace**. They reach their work through the seven role desks (which embed
+  workspace**. They reach their work through the role desks (which embed
   guided actions into the existing guarded command Pages) and through the
   command Pages themselves. This is deliberate, not accidental: adding a native
   Workspace for each Officer role would widen native read scopes beyond the

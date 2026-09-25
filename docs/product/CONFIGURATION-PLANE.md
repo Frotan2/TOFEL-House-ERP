@@ -1,6 +1,6 @@
 # The Academic Control Plane — Owner-Managed Configuration
 
-Date: 2026-09-18 · Active branch: `arena/01a0b084-tofel-house-erp`
+Date: 2026-09-18 · Refreshed 2026-09-25 (inventory section below brought current).
 
 This document is the contract for the Business Configuration & Academic Control
 Plane: the layer that turns the Owner's operating rules into governed,
@@ -12,6 +12,43 @@ Governing principle: **native Frappe / ERPNext / Education / HRMS remain the
 system of record.** The control plane configures and extends them; it never
 duplicates them. There is no second Program, Student, Invoice, Ledger,
 Attendance, Payroll or permission authority anywhere in this design.
+
+---
+
+## 0. Owner-configuration surface — current inventory (2026-09-25)
+
+This document details the academic plane (slices 1–2 below). For navigation,
+the **complete** owner-configurable carrier inventory as shipped today:
+
+- **Academic:** `TH Academic Program`, `TH Program Level`, `TH Level Duration`
+  (child, effective-dated), `TH Discount Rule`, `TH Assessment Policy`
+  (+ versions), `TH Catalog Linkage Policy` (+ versions) — commands in
+  `toefl_house.academic`; surfaces: Academic Setup desk, TH Configuration desk.
+- **Admission:** `TH Returning Student Policy` (+ versions) — commands in
+  `toefl_house.admission.policies`.
+- **Enrollment:** `TH Enrollment Exit Policy` (+ versions) —
+  `toefl_house.enrollment.exits`.
+- **Finance:** `TH Billing Policy` (+ versions), `TH Correction Policy` —
+  `toefl_house.finance.policies`.
+- **Teaching:** `TH Adjustment Posting Policy` (+ versions),
+  `TH Attendance Correction Policy` (+ versions), `TH Roster Change Policy`
+  (+ versions) — `toefl_house.teaching.policies`.
+- **Operations (2026-09-25 tracks):** `TH Metric Stewardship Policy`,
+  `TH Alerting Policy`, `TH Capacity Objective`, `TH Guardian Lifecycle
+  Policy` (each + versions) — `toefl_house.operations.{metric_stewardship,
+  alerting, capacity_objective, guardian_lifecycle}`; read side: TH
+  Configuration desk (Reporting & Metrics / Operations / Student & Guardian /
+  System Readiness sections). Values remain **NOT CONFIGURED**; consumers fail
+  closed.
+
+Shared invariants for every carrier: Course-Owner-gated guarded commands,
+request-key idempotency, row locking, immutable effective-dated versions,
+hash-chained configuration audit (`TH Configuration Audit Event` /
+`TH Configuration Operation`), `NOT CONFIGURED` fail-closed behaviour, and no
+hard-coded business values (the hard-coded-policy audit in §7 scans this).
+Canonical owner-facing navigation: the current-state section of
+`docs/engineering/OWNER-DECISIONS.md`; open value decisions:
+`docs/operating-system/DECISION-REGISTER.md`.
 
 ---
 

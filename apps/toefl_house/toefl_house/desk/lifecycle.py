@@ -2,8 +2,8 @@
 
 Pure functions, no Frappe import, directly unit-tested. One definition of
 "where is this person in the funnel and what happens next" is what makes the
-five desks (and the cross-role workflow in docs/product/ROLE-DESKS.md) read as
-one system instead of five disconnected screens.
+role desks (and the cross-role workflow in docs/product/ROLE-DESKS.md) read as
+one system instead of disconnected screens.
 
 Every stage names:
 - `label`      — staff-facing stage name (never a DocType name)
