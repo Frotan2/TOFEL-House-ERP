@@ -1197,6 +1197,22 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                  "set_by": "owner@example.com", "set_on": "2026-01-01",
                  "superseded_on": None},
             ],
+            # D7 metric-stewardship carrier (shipped 2026-09-25): the same
+            # readiness discipline as assessment, on its own domain.
+            "TH Metric Stewardship Policy": [
+                {"name": "MET-STEW", "code": "MET-STEW",
+                 "title": "Stewardship policy", "status": "Active",
+                 "description": "", "modified": "2026-09-01 10:00:00"},
+            ],
+            "TH Metric Stewardship Policy Version": [
+                {"name": "MVER-1", "parent": "MET-STEW",
+                 "parenttype": "TH Metric Stewardship Policy",
+                 "effective_from": "2026-01-01",
+                 "steward_role": "General Manager",
+                 "reason": "first",
+                 "set_by": "owner@example.com", "set_on": "2026-01-01",
+                 "superseded_on": None},
+            ],
         }
         if ambiguous:
             world["TH Assessment Policy Version"].append({
@@ -1233,17 +1249,28 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         return next(sect for sect in payload["sections"] if sect["id"] == sid)
 
     def test_nine_sections_with_computed_readiness(self):
-        payload = self._run(validated=("ASM-EFF",))
+        payload = self._run(validated=("ASM-EFF", "MET-STEW"))
         self.assertEqual(len(payload["sections"]), 9)
         academic = self._section(payload, "academic")
         self.assertEqual(academic["kind"], "links")
         self.assertEqual(academic["items"][0]["slug"], "th-academic-setup")
+        # The D7 carrier left the future list: its section is real and
+        # reports the computed readiness plus the governing steward.
+        metrics = self._section(payload, "reporting-metrics")
+        self.assertEqual(metrics["kind"], "facts")
+        self.assertEqual(metrics["facts"][0]["value"], "Effective")
+        self.assertIn("Governing since 2026-01-01 with steward role",
+                      metrics["facts"][0]["definition"])
         items = {item["id"]: item
                  for item in self._section(payload, "system-readiness")["items"]}
         self.assertEqual(items["ASM-EFF"]["status"], "Effective")
         self.assertIn("governing since 2026-01-01", items["ASM-EFF"]["detail"])
         self.assertEqual(items["ASM-EMPTY"]["status"], "Incomplete")
         self.assertEqual(items["ASM-OLD"]["status"], "Retired")
+        self.assertEqual(items["MET-STEW"]["status"], "Effective")
+        self.assertIn("steward role: General Manager",
+                      items["MET-STEW"]["detail"])
+        self.assertEqual(items["MET-STEW"]["stage"], "Reporting & Metrics")
         self.assertEqual(items["finance"]["status"], "Not implemented")
         self.assertNotIn("action", items["finance"],
                          "future domains offer no dead buttons")
@@ -1252,12 +1279,17 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                              "the map desk configures nothing")
         self.assertIn("never decided here",
                       items["ASM-EFF"]["stage_definition"])
+        self.assertIn("never decided here",
+                      items["MET-STEW"]["stage_definition"])
 
     def test_unvalidated_policy_stays_configured(self):
         payload = self._run()
         items = {item["id"]: item
                  for item in self._section(payload, "system-readiness")["items"]}
         self.assertEqual(items["ASM-EFF"]["status"], "Configured")
+        self.assertEqual(items["MET-STEW"]["status"], "Configured")
+        metrics = self._section(payload, "reporting-metrics")
+        self.assertEqual(metrics["facts"][0]["value"], "Configured")
 
     def test_ambiguous_history_surfaces_as_fault_not_state(self):
         payload = self._run(validated=("ASM-EFF",), ambiguous=True)

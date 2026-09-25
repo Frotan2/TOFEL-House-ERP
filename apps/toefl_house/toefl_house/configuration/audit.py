@@ -77,6 +77,10 @@ KIND_AUTHORITY = {
     "create_adjustment_posting_policy": "business_policy",
     "set_adjustment_posting_version": "business_policy",
     "set_adjustment_posting_status": "business_policy",
+    "create_metric_stewardship_policy": "business_policy",
+    "set_metric_stewardship_policy_version": "business_policy",
+    "set_metric_stewardship_policy_status": "business_policy",
+    "validate_metric_stewardship_policy": "business_policy",
 }
 
 

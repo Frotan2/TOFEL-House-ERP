@@ -217,7 +217,7 @@
     },
     {
       "acceptance_test": "Owner names stewards + denominator/disclosure/retention rules; metrics layer after.",
-      "current_state": "R2 raw-fact registers shipped; no derived metrics, no invented denominators.",
+      "current_state": "R2 raw-fact registers shipped; no derived metrics, no invented denominators. Policy mechanism shipped 2026-09-25 (decision-classification track 1): TH Metric Stewardship Policy (+ TH Metric Stewardship Policy Version) with guarded create/status/version/validate commands, effective-dated monotone versions, hash-chained configuration audit, fail-closed governing resolver and readiness on the configuration desk. No steward named, no disclosure rules entered; owner values still awaiting answer.",
       "dependency": "Owner steward/policy decision.",
       "disposition": "OWNER DECISION REQUIRED",
       "id": "D7",
@@ -225,7 +225,7 @@
       "reason": "Derived metrics need named stewards and disclosure rules.",
       "requirement": "Metric stewards/derived-metric policy (D7).",
       "responsible": "Owner.",
-      "source": "canonical-owner-decision-record.json (D7: DEFER / RAW REPORTS NOW)"
+      "source": "canonical-owner-decision-record.json (D7: DEFER / RAW REPORTS NOW); docs/engineering/evidence/category-b-track-1-metric-stewardship-2026-09-25.md"
     },
     {
       "acceptance_test": "Owner selects off-site hardware destination + verifies physical separation.",

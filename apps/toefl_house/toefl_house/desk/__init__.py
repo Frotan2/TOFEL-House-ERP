@@ -346,6 +346,18 @@ PROJECTION_FIELDS = {
     ("configuration", "TH Configuration Audit Event"): [
         "name",
     ],
+    # D7 metric stewardship (decision-classification track 1): the policy
+    # carrier's identity/status/version facts for the readiness rollup. The
+    # owner-authored disclosure_rules text is deliberately NOT projected —
+    # the desk names the steward and the dates; the full policy text stays
+    # on the document itself (projection discipline).
+    ("configuration", "TH Metric Stewardship Policy"): [
+        "name", "code", "title", "status", "description", "modified",
+    ],
+    ("configuration", "TH Metric Stewardship Policy Version"): [
+        "name", "parent", "parenttype", "effective_from", "steward_role",
+        "reason", "set_by", "set_on", "superseded_on",
+    ],
     # Teacher desk (Instructor): the teacher's own classes only, resolved
     # through session User -> Employee.user_id -> Instructor.employee ->
     # TH Teaching Assignment. Identity + window + recorded facts only: no

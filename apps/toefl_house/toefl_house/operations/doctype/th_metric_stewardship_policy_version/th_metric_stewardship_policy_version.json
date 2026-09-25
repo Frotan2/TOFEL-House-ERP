@@ -1,0 +1,97 @@
+{
+ "actions": [],
+ "creation": "2026-09-25 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "effective_from",
+  "column_break_1",
+  "steward_role",
+  "section_break_1",
+  "disclosure_rules",
+  "section_break_2",
+  "reason",
+  "column_break_2",
+  "set_by",
+  "set_on",
+  "superseded_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "effective_from",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Effective from",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Role named by the owner as the accountable steward for derived metrics under this version. Engineering picks no steward; the owner links an existing role.",
+   "fieldname": "steward_role",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Steward role",
+   "options": "Role",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "The owner's disclosure rules for derived metrics under this version: who may see them, how they are labelled and what provenance they carry. Free policy text; engineering invents no rule.",
+   "fieldname": "disclosure_rules",
+   "fieldtype": "Small Text",
+   "label": "Disclosure rules",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_2",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Why this version was set. Mandatory on every version write.",
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "set_by",
+   "fieldtype": "Link",
+   "label": "Set by",
+   "options": "User"
+  },
+  {
+   "fieldname": "set_on",
+   "fieldtype": "Datetime",
+   "label": "Set on"
+  },
+  {
+   "description": "Closed date: the day this version stopped governing new activity. Written once when a newer version supersedes it; the row itself is never rewritten.",
+   "fieldname": "superseded_on",
+   "fieldtype": "Date",
+   "label": "Superseded on"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Operations",
+ "name": "TH Metric Stewardship Policy Version",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

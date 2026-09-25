@@ -295,6 +295,14 @@ owner reopens it.)
   retention rules for any derived metric.
 - Authority: owner (management). Status: OWNER DECISION REQUIRED.
 - Source: OWNER-DECISIONS (D7: defer; raw now). Affected: metrics layer.
+- **Mechanism SHIPPED 2026-09-25 (decision-classification track 1):**
+  `TH Metric Stewardship Policy`(+Version) with four guarded Course Owner
+  commands (create / set version / set status / validate), effective-dated
+  monotone versions, hash-chained configuration audit, fail-closed
+  `governing_stewardship` resolver, readiness on the configuration desk.
+  No steward named, no disclosure rule, no derived metric anywhere —
+  owner values (who stewards; what disclosure requires) still AWAITING
+  ANSWER. Evidence: `docs/engineering/evidence/category-b-track-1-metric-stewardship-2026-09-25.md`.
 
 ### O-D8N — Numeric capacity/availability objectives
 - Domain: operations. Statement: concurrency profile, data scale, workload

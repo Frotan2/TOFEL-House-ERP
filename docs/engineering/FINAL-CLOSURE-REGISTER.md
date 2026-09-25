@@ -82,8 +82,8 @@ Date: 2026-09-19 · Active branch: `arena/01a0cd90-tofel-house-erp` @ `62b3c58`
 
 ### `D7` — Metric stewards/derived-metric policy (D7).
 
-- **source:** canonical-owner-decision-record.json (D7: DEFER / RAW REPORTS NOW)
-- **current_state:** R2 raw-fact registers shipped; no derived metrics, no invented denominators.
+- **source:** canonical-owner-decision-record.json (D7: DEFER / RAW REPORTS NOW); docs/engineering/evidence/category-b-track-1-metric-stewardship-2026-09-25.md
+- **current_state:** R2 raw-fact registers shipped; no derived metrics, no invented denominators. Policy mechanism shipped 2026-09-25 (decision-classification track 1): TH Metric Stewardship Policy (+ TH Metric Stewardship Policy Version) with guarded create/status/version/validate commands, effective-dated monotone versions, hash-chained configuration audit, fail-closed governing resolver and readiness on the configuration desk. No steward named, no disclosure rules entered; owner values still awaiting answer.
 - **reason:** Derived metrics need named stewards and disclosure rules.
 - **dependency:** Owner steward/policy decision.
 - **responsible:** Owner.
