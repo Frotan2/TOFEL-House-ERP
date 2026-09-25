@@ -157,7 +157,7 @@
     },
     {
       "acceptance_test": "Owner supplies level vocabulary, rubrics, cutoffs, progression; A06 slice implemented after.",
-      "current_state": "DEFER recorded; no assessment slice built; no invented grades anywhere.",
+      "current_state": "DEFER recorded. The policy mechanism already shipped: TH Assessment Policy (+ TH Assessment Policy Version) with guarded create/status/version/validate commands and seven facet setters (components, weights, pass rules, rubrics, progression, retakes, mapping) under the versioned configuration engine. No owner values have been entered; no grading/execution slice is built; no invented grades anywhere.",
       "dependency": "Owner academic policy.",
       "disposition": "OWNER DECISION REQUIRED",
       "id": "D1",
@@ -165,7 +165,7 @@
       "reason": "Grading/progression values are business policy, not engineering derivable.",
       "requirement": "Academic assessment/progression policy (D1).",
       "responsible": "Owner (Academic).",
-      "source": "canonical-owner-decision-record.json (D1: DEFER)"
+      "source": "canonical-owner-decision-record.json (D1: DEFER); mechanism verified in apps/toefl_house/toefl_house/configuration/audit.py KIND_AUTHORITY + academic doctypes; decision-classification-review-2026-09-25.md"
     },
     {
       "acceptance_test": "Owner supplies approver/windows/partial terms; partials + Fees-side enabled after.",
@@ -193,7 +193,7 @@
     },
     {
       "acceptance_test": "Owner supplies calendars/repeat/transfer/withdrawal semantics; advanced lifecycle after.",
-      "current_state": "Native basic lifecycle used; advanced semantics deferred; no invented transfer/withdrawal engine.",
+      "current_state": "Native basic lifecycle used. Policy carriers already shipped for the adjustable facets: TH Enrollment Exit Policy, TH Roster Change Policy and TH Returning Student Policy (effective-dated versions, hash-chained audit). No owner values entered for advanced semantics; no invented transfer/withdrawal engine.",
       "dependency": "Owner lifecycle policy.",
       "disposition": "OWNER DECISION REQUIRED",
       "id": "D5",
@@ -201,7 +201,7 @@
       "reason": "Transfer/withdrawal semantics change learner history and billing.",
       "requirement": "Calendar/repeat/transfer/withdrawal semantics (D5).",
       "responsible": "Owner (Academic).",
-      "source": "canonical-owner-decision-record.json (D5: NATIVE BASIC LIFECYCLE / ADVANCED LATER)"
+      "source": "canonical-owner-decision-record.json (D5: NATIVE BASIC LIFECYCLE / ADVANCED LATER); carriers verified in placement/enrollment/admission doctypes; decision-classification-review-2026-09-25.md"
     },
     {
       "acceptance_test": "Owner supplies tax configuration values applied to native tax masters.",

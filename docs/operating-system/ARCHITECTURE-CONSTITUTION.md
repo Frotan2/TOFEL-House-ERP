@@ -239,3 +239,69 @@ not resolved by convenience.
 A receipt is not authorization. A projection is not a master. A mechanism is
 not a rehearsal. A rehearsal is not gate passage. A target (RPO/RTO) is not a
 measurement. Scope authorization is not production GO.
+
+## 17. Decision classification (standing rule, adopted 2026-09-25)
+
+Adopted verbatim as a permanent project architecture rule by direct owner
+instruction on 2026-09-25. It formalizes what §§3–5, 10, 12 and 14 already
+practice and what DECISION-REGISTER.md records as the OD-NEW pattern
+("Mechanism SHIPPED … owner values still AWAITING ANSWER").
+
+**Classify first.** For every decision encountered during implementation,
+classify before acting:
+
+- **A — application / technical architecture decision.** Security controls;
+  authorization boundaries; concurrency and locking; audit integrity;
+  historical data integrity; fail-closed behavior; native
+  ERPNext/Education/HRMS integration; code architecture; test strategy;
+  reliability and recovery mechanisms; technical validation and release
+  gates. These are engineering decisions: make them autonomously using this
+  constitution, the established safety rules, the native-first principle
+  (§9) and evidence. Do NOT repeatedly ask the owner for decisions that are
+  fundamentally technical.
+- **B — TOEFL House business / operational management decision.** Class
+  capacity; availability rules; enrollment/progression rules;
+  refund/correction business policy; assessment/progression business
+  policy; payroll/teacher compensation policy; tax/business policy;
+  reporting definitions; backup RPO/RTO; retention/scheduling rules; other
+  rules describing HOW TOEFL HOUSE chooses to operate.
+
+**Category B handling (binding):**
+
+- Never hard-code a Category B value as an arbitrary engineering constant.
+- Whenever technically appropriate, build the ERP-native or application
+  configuration/policy UX so an authorized business owner manages the value
+  from inside the ERP, following the existing configuration architecture
+  (§§3–5): Owner/Admin UI → versioned business configuration/policy →
+  validation/readiness → effective-dated behavior → immutable historical
+  reference → audit trail → operational consumers. The pattern is the
+  existing `TH … Policy(+Version)` carrier: guarded Course Owner commands,
+  computed readiness, mandatory change reasons, and the hash-chained
+  `TH Configuration Audit Event`, with the command-context boundary of §7.
+- Do NOT turn safety/security/release controls into ordinary business
+  settings merely because they are configurable. §§10–15 behavior (deny
+  lists, DESKs/audiences, gates, `d8_validate` guards, synthetic/prod mode)
+  stays engineering-controlled; the custody authority is **never** bound to
+  a Frappe role (§14) and production authorization never flows through
+  configuration (§12; `configuration/audit.py` enforces this in code).
+- Do NOT invent business values or defaults. If a business policy is not
+  yet configured, represent it explicitly as **NOT CONFIGURED** and make
+  the dependent operation fail safely where required (§10: deny, naming the
+  missing configuration and the owning role).
+- "Owner decision required" does NOT automatically mean "stop and ask the
+  owner." First ask: can this decision be represented as a legitimate
+  configurable business policy inside the ERP? If yes, implement the
+  configuration mechanism and UX autonomously, without inventing the
+  owner's actual value. If no — genuinely an external-authority decision,
+  legal/compliance requirement, destructive migration, production
+  authorization, secret/custody decision, or another true human-authority
+  boundary — stop at that boundary and request the specific decision with
+  exact evidence and no invented assumptions.
+- Continue autonomous engineering everywhere else.
+
+First application: the 18 standing closure-register items were re-classified
+under this rule in
+`docs/engineering/evidence/decision-classification-review-2026-09-25.md`;
+remaining Category B surface gaps (metric stewardship, service objective,
+alerting policy, guardian lifecycle policy) are ordinary build tracks, not
+decision blockers.

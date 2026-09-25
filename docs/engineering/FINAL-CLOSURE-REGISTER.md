@@ -32,8 +32,8 @@ Date: 2026-09-19 · Active branch: `arena/01a0cd90-tofel-house-erp` @ `62b3c58`
 
 ### `D1` — Academic assessment/progression policy (D1).
 
-- **source:** canonical-owner-decision-record.json (D1: DEFER)
-- **current_state:** DEFER recorded; no assessment slice built; no invented grades anywhere.
+- **source:** canonical-owner-decision-record.json (D1: DEFER); mechanism verified in apps/toefl_house/toefl_house/configuration/audit.py KIND_AUTHORITY + academic doctypes; decision-classification-review-2026-09-25.md
+- **current_state:** DEFER recorded. The policy mechanism already shipped: TH Assessment Policy (+ TH Assessment Policy Version) with guarded create/status/version/validate commands and seven facet setters (components, weights, pass rules, rubrics, progression, retakes, mapping) under the versioned configuration engine. No owner values have been entered; no grading/execution slice is built; no invented grades anywhere.
 - **reason:** Grading/progression values are business policy, not engineering derivable.
 - **dependency:** Owner academic policy.
 - **responsible:** Owner (Academic).
@@ -62,8 +62,8 @@ Date: 2026-09-19 · Active branch: `arena/01a0cd90-tofel-house-erp` @ `62b3c58`
 
 ### `D5` — Calendar/repeat/transfer/withdrawal semantics (D5).
 
-- **source:** canonical-owner-decision-record.json (D5: NATIVE BASIC LIFECYCLE / ADVANCED LATER)
-- **current_state:** Native basic lifecycle used; advanced semantics deferred; no invented transfer/withdrawal engine.
+- **source:** canonical-owner-decision-record.json (D5: NATIVE BASIC LIFECYCLE / ADVANCED LATER); carriers verified in placement/enrollment/admission doctypes; decision-classification-review-2026-09-25.md
+- **current_state:** Native basic lifecycle used. Policy carriers already shipped for the adjustable facets: TH Enrollment Exit Policy, TH Roster Change Policy and TH Returning Student Policy (effective-dated versions, hash-chained audit). No owner values entered for advanced semantics; no invented transfer/withdrawal engine.
 - **reason:** Transfer/withdrawal semantics change learner history and billing.
 - **dependency:** Owner lifecycle policy.
 - **responsible:** Owner (Academic).

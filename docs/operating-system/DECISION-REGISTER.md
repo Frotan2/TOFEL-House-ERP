@@ -222,6 +222,33 @@ owner reopens it.)
   change; any future rotation re-opens the absence by procedure), not by
   hand-editing. Affected: release.
 
+### R-CLASSIFY — Decision classification before implementation — ADOPTED 2026-09-25
+- Domain: whole project. Authority: owner instruction of 2026-09-25,
+  recorded permanently in `ARCHITECTURE-CONSTITUTION.md` §17.
+- Statement: every decision encountered during implementation is classified
+  first. (A) Application/technical architecture decisions (security,
+  authorization, concurrency, audit integrity, historical integrity,
+  fail-closed behavior, native integration, code architecture, test
+  strategy, reliability/recovery, release gates) are made autonomously by
+  engineering under the constitution. (B) TOEFL House business/operational
+  management decisions (capacity, availability rules, enrollment/
+  progression rules, refund/correction policy, assessment policy,
+  compensation policy, tax policy, reporting definitions, RPO/RTO,
+  retention/scheduling) are never hard-coded: wherever technically
+  appropriate an ERP-native, versioned, effective-dated policy UX is built
+  so the owner manages the value inside the ERP, defaulting to explicit
+  NOT CONFIGURED with fail-safe dependents. "Owner decision required" does
+  not automatically mean stop and ask — only genuine external-authority
+  boundaries (legal/compliance, destructive migration, production
+  authorization, secret/custody) still stop and request the specific
+  decision.
+- Status: RESOLVED (binding, permanent). First application recorded in
+  `docs/engineering/evidence/decision-classification-review-2026-09-25.md`
+  (all 18 standing closure items re-classified with mechanism inventory).
+- Affected: every subsequent OD-NEW/D-item; the OD-NEW pattern
+  ("mechanism shipped, owner values still awaiting answer") is the rule's
+  precedent.
+
 ---
 
 ## OWNER DECISION REQUIRED (awaiting owner answers)
