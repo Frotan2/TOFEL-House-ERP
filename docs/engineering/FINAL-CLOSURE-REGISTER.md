@@ -370,10 +370,10 @@ Date: 2026-09-19 · Active branch: `arena/01a0cd90-tofel-house-erp` @ `62b3c58`
 
 ### `sec-deps-readability` — Readable SEC-DEPS-01 findings (owner ballot sub-ask).
 
-- **source:** docs/engineering/evidence/sec-deps-01/
-- **current_state:** 7 unique Python vulns + 97 npm entries readable with severity/fix/advice; reachability traced at pinned framework; audits still exit 1 by design.
+- **source:** docs/engineering/evidence/sec-deps-01/; docs/engineering/evidence/sec-deps-01/triage-integrity-verification-2026-09-25.md
+- **current_state:** 7 unique Python vulns + 97 npm entries readable with severity/fix/advice (readable-register-2026-09-19.json: pypi_unique_vulnerabilities 7, npm_entries 97); reachability traced at pinned framework; readability is preserved and this sub-issue stays closed. Two mechanism claims recorded here are now stale and are corrected rather than left standing: audit_stack.py no longer fails on counts (its own note reads 'status now depends on triage, not raw counts') and exits 0 when every finding is triaged closed, observed in run 36119457187; audit_frontend.py still exits 1 while the frontend candidate carries advisories. The release posture is unchanged: SEC-DEPS-01 stays UPSTREAM-BLOCKED / REJECT, D8 stays BLOCKED, production stays REJECT.
 - **reason:** The evidence-limitation sub-issue is closed; the gate stays upstream-blocked.
 - **dependency:** None for readability; remediation tracked under sec-deps-01.
 - **responsible:** Engineering.
 - **implementation_or_evidence_required:** None; preserve. Readability is not remediation.
-- **acceptance_test:** Retained: readable register + enrichment + reachability trace; gate still fails closed on counts.
+- **acceptance_test:** Retained: readable register + enrichment + reachability trace, and the register still changes no gate. The gate mechanism named here when this item was closed is no longer accurate and is corrected below: audit_stack.py grades on per-finding triage disposition rather than raw advisory counts, and fails closed on any untriaged or open finding, asserted by tests/security/test_advisory_triage.py.

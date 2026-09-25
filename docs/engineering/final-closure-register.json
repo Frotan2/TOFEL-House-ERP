@@ -432,8 +432,8 @@
       "source": "canonical-owner-decision-record.json; RELEASE-GAP-MAP.md \u00a72"
     },
     {
-      "acceptance_test": "Retained: readable register + enrichment + reachability trace; gate still fails closed on counts.",
-      "current_state": "7 unique Python vulns + 97 npm entries readable with severity/fix/advice; reachability traced at pinned framework; audits still exit 1 by design.",
+      "acceptance_test": "Retained: readable register + enrichment + reachability trace, and the register still changes no gate. The gate mechanism named here when this item was closed is no longer accurate and is corrected below: audit_stack.py grades on per-finding triage disposition rather than raw advisory counts, and fails closed on any untriaged or open finding, asserted by tests/security/test_advisory_triage.py.",
+      "current_state": "7 unique Python vulns + 97 npm entries readable with severity/fix/advice (readable-register-2026-09-19.json: pypi_unique_vulnerabilities 7, npm_entries 97); reachability traced at pinned framework; readability is preserved and this sub-issue stays closed. Two mechanism claims recorded here are now stale and are corrected rather than left standing: audit_stack.py no longer fails on counts (its own note reads 'status now depends on triage, not raw counts') and exits 0 when every finding is triaged closed, observed in run 36119457187; audit_frontend.py still exits 1 while the frontend candidate carries advisories. The release posture is unchanged: SEC-DEPS-01 stays UPSTREAM-BLOCKED / REJECT, D8 stays BLOCKED, production stays REJECT.",
       "dependency": "None for readability; remediation tracked under sec-deps-01.",
       "disposition": "CLOSED",
       "id": "sec-deps-readability",
@@ -441,7 +441,7 @@
       "reason": "The evidence-limitation sub-issue is closed; the gate stays upstream-blocked.",
       "requirement": "Readable SEC-DEPS-01 findings (owner ballot sub-ask).",
       "responsible": "Engineering.",
-      "source": "docs/engineering/evidence/sec-deps-01/"
+      "source": "docs/engineering/evidence/sec-deps-01/; docs/engineering/evidence/sec-deps-01/triage-integrity-verification-2026-09-25.md"
     }
   ]
 }
