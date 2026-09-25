@@ -3,7 +3,16 @@ const fs = require('fs');
 const http = require('http');
 const LOG = process.env.FOUNDATION_REALTIME_BOOT_LOG;
 const GUARDED = Symbol.for('foundation.resource.broadcast.guard');
-function lg(msg){ try{if(LOG){fs.appendFileSync(LOG,'[rt-guard '+new Date().toISOString()+'] '+String(msg).slice(0,600)+'\n');}}catch(e){} }
+// Diagnostics go to the boot log file AND to stdout. The socket.io service
+// stdout is captured to socketio-secured.txt by the validation harness, and
+// artifact retrieval from hosted runners has proven unreliable, so stdout is
+// the only channel that reliably reaches the Actions job log.
+function lg(msg){
+    const line='[rt-guard '+new Date().toISOString()+'] '+String(msg).slice(0,600);
+    try{if(LOG){fs.appendFileSync(LOG,line+'\n');}}catch(e){}
+    try{console.log(line);}catch(e){}
+}
+lg('module loaded from '+__filename+' (node '+process.version+')');
 function stripSitePrefix(room) {
     // Frappe v14/15 sockets live in a single io (no per-site namespace), so
     // rooms are prefixed with "<site>:" e.g. "foundation.localhost:doc:Student/STUD-1".
@@ -97,7 +106,7 @@ async function allowed(socket,room) {
         // '/' to '%2F', which fails frappe's document lookup). Fall
         // back to our loopback authorizeRequest for older/v14 layouts
         // where socket.frappe_request does not exist.
-        let response;
+        let response=null;
         if(typeof socket.frappe_request === 'function'){
             const parts=[];
             for(const k of Object.keys(args||{})){
@@ -107,8 +116,16 @@ async function allowed(socket,room) {
             // socket.frappe_request(path, args, opts) signs the request
             // but we have already built a full path with query string,
             // so pass empty args.
-            response=await socket.frappe_request(path, {}, {signal:AbortSignal.timeout(5000)});
-        }else{
+            try{
+                response=await socket.frappe_request(path, {}, {signal:AbortSignal.timeout(5000)});
+            }catch(e){lg('frappe_request threw: '+String(e&&e.message||e).slice(0,200));response=null;}
+            if(response && !response.ok && response.status===0) response=null;
+        }
+        // Fall back to the loopback request only when the frappe-provided
+        // helper could not reach the site at all (transport failure), never
+        // when the endpoint answered with a real authorization decision.
+        if(!response || (!response.ok && response.status===0)){
+            lg('using loopback authorizeRequest for room='+room);
             response=await authorizeRequest(socket,args,5000);
         }
         const ok = response.ok && (await response.json()).message===true;
@@ -160,7 +177,9 @@ function wrapAdapter(nsp) {
 module.exports=function(socket) {
     socket.foundationResourceGuard=true;
     socket.__foundationAuthorized = function(room){ return allowed(socket,room); };
-    lg('guard attached socket='+socket.id+' nsp='+(socket.nsp&&socket.nsp.name)+' user='+socket.user+' user_type='+socket.user_type);
+    lg('guard attached socket='+socket.id+' nsp='+(socket.nsp&&socket.nsp.name)+' user='
+       +socket.user+' user_type='+socket.user_type+' installed_apps='
+       +JSON.stringify(socket.installed_apps||[])+' rooms='+JSON.stringify([...(socket.rooms||[])]));
     wrapAdapter(socket.nsp);
     // Rooms are bare names like 'doc:Student/a' when the socket is in a
     // per-site namespace (v15+) or '<site>:doc:Student/a' when the socket
@@ -201,7 +220,7 @@ module.exports=function(socket) {
             const args = resource(room);
             if(!args){ lg('reject join unrecognized shape '+room+' for '+socket.id); continue; }
             const ok = await allowed(socket,room);
-            lg('join room='+room+' user='+socket.user+' ok='+ok);
+            lg('join room='+room+' user='+socket.user+' ok='+ok+' roomsAfter='+JSON.stringify([...(socket.rooms||[])]));
             if(ok) okRooms.push(room);
         }
         if(okRooms.length===0) return socket;

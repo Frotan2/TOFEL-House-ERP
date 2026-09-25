@@ -22,6 +22,10 @@ async function connect(label){
    socket.once('connect_error',e=>{err=e;reject(new Error('Authenticated socket connection failed: '+String(e.message).replaceAll(cookie.slice(4),'[REDACTED]').slice(0,300)));});
  });
  socket.user=`validation-${label}@example.test`;
+ // Record every inbound event name so a failure message can distinguish
+ // "realtime plumbing delivered nothing at all" from "our guard filtered it".
+ socket.seen=[];
+ socket.onAny((name,payload)=>{ if(socket.seen.length<50) socket.seen.push({name,payload}); });
  return socket;
 }
 function publish(kind){execFileSync(process.env.FOUNDATION_BENCH_PYTHON,[process.env.FOUNDATION_EVENT_HELPER,kind],{cwd:process.env.FOUNDATION_SITES_DIR,stdio:'pipe'});}
@@ -36,7 +40,7 @@ try{
   alpha.emit('doc_subscribe','Student',records.students[0]);beta.emit('doc_subscribe','Student',records.students[0]);
   await delay(2500);publish('document');await delay(2500);
   const gotA=a.some(m=>m.marker==='owned-alpha-document'), gotB=b.some(m=>m.marker==='owned-alpha-document');
-  if(!gotA)throw new Error('Positive-control document event absent (alpha='+a.length+', beta='+b.length+'): '+dump({a,b}));
+  if(!gotA)throw new Error('Positive-control document event absent (alpha='+a.length+', beta='+b.length+'): '+dump({a,b,alphaSeen:alpha.seen,betaSeen:beta.seen}));
   if(gotB)throw new Error('Cross-student document event disclosed: '+dump({b}));
   return {own_delivery:true,other_delivery:false,a_received:a.length,b_received:b.length};
  });
@@ -46,7 +50,7 @@ try{
   alpha.emit('task_subscribe',task);beta.emit('task_subscribe',task);
   await delay(1000);publish('task');await delay(2500);
   const gotA=a.some(m=>m.marker==='owned-task-progress'), gotB=b.some(m=>m.marker==='owned-task-progress');
-  if(!gotA)throw new Error('Positive-control task event absent: a='+a.length+' b='+b.length+' '+dump({a,b}));
+  if(!gotA)throw new Error('Positive-control task event absent: a='+a.length+' b='+b.length+' '+dump({a,b,alphaSeen:alpha.seen,betaSeen:beta.seen}));
   if(gotB)throw new Error('Unrelated authenticated user received task marker when task identifier was known: '+dump({b}));
   return {other_delivery:false,a_received:a.length,b_received:b.length};
  });
@@ -54,7 +58,7 @@ try{
   if(!alpha?.connected||!beta?.connected)throw new Error('Positive socket setup unavailable');
   const messages=[];alpha.on('foundation_probe',m=>messages.push(m));
   publish('revoke');await delay(500);publish('document');publish('task');await delay(2500);
-  if(messages.length)throw new Error('Revoked session received resource data: '+dump(messages));
+  if(messages.length)throw new Error('Revoked session received resource data: '+dump({messages,alphaSeen:alpha.seen}));
   return {revoked_delivery:false};
  });
 }catch(e){report.checks.push({name:'uncaught',status:'fail',message:String(e&&e.stack||e).slice(0,600)});

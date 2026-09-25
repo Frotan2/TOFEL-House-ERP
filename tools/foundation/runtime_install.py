@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shlex
 import signal
 import shutil
 import socket as _socket
@@ -202,6 +203,40 @@ def main() -> int:
     def bench(name, *args, timeout=1200):
         return run(name, [lab / "tools/bin/bench", *args], cwd=bench_dir, timeout=timeout)
 
+    def surface_gate_failure(label):
+        """Echo gate diagnostics to the job log, not only to the artifact.
+
+        Artifact retrieval from this runner has proven unreliable, so the
+        evidence a failing gate produced must also be printed to stdout
+        where it can be read straight from the Actions log.
+        """
+        print(f"===== diagnostics for failed gate {label} =====", flush=True)
+        # Per-gate report produced by the harness itself (redacted).
+        for candidate in (evidence / (label.replace("guardian-browser-authorization", "guardian_browser")
+                                      .replace("actual-realtime-authorization", "realtime") + "-result.json"),
+                          evidence / (label + "-result.json")):
+            if candidate.exists():
+                print(f"--- {candidate.name} ---", flush=True)
+                print(redact(candidate.read_text())[-6000:], flush=True)
+                break
+        # Captured stdout/stderr of the gate process.
+        stdout_path = evidence / (label + ".txt")
+        if stdout_path.exists():
+            print(f"--- {stdout_path.name} (tail) ---", flush=True)
+            print(redact(stdout_path.read_text())[-6000:], flush=True)
+        # Realtime guard boot log (written by foundation_security handlers.js).
+        boot_log = Path(env.get("FOUNDATION_REALTIME_BOOT_LOG", ""))
+        if boot_log and boot_log.exists():
+            print("--- foundation realtime boot log (tail) ---", flush=True)
+            print(redact(boot_log.read_text())[-6000:], flush=True)
+        # socket.io service log, which carries frappe's own connection errors.
+        for name in ("socketio-secured.txt", "socketio.txt"):
+            candidate = lab / name
+            if candidate.exists():
+                print(f"--- {name} (tail) ---", flush=True)
+                print(redact(candidate.read_text())[-4000:], flush=True)
+        print(f"===== end diagnostics for {label} =====", flush=True)
+
     try:
         report["docker_version"] = run("docker-version", ["docker", "version", "--format", "{{.Client.Version}} {{.Server.Version}}"])
         report["compose_version"] = run("compose-version", ["docker", "compose", "version", "--short"])
@@ -282,6 +317,22 @@ def main() -> int:
               "--db-root-password", root_password, "--db-password", db_password, "--admin-password", admin_password,
               "--mariadb-user-host-login-scope", "%", "--set-default")
         report["created_sites"].append(site)
+        # Frappe's realtime server resolves the socket Origin hostname itself
+        # when it calls back into the site (get_user_info, has_permission, and
+        # our own authorize endpoint). A real deployment has these names in
+        # DNS; this lab must add them to /etc/hosts instead of relying on the
+        # hosted runner's resolver, which is not guaranteed to answer for
+        # *.localhost.
+        lab_hosts = ("foundation.localhost", "restore.localhost", "recovery.localhost", "upstream-tests.localhost")
+        try:
+            current_hosts = Path("/etc/hosts").read_text()
+        except OSError:
+            current_hosts = ""
+        missing_hosts = [f"127.0.0.1 {name}" for name in lab_hosts if f"127.0.0.1 {name}" not in current_hosts]
+        if missing_hosts:
+            run("lab-hosts-entries", ["sudo", "sh", "-c",
+                                      "printf '%s\\n' " + " ".join(shlex.quote(m) for m in missing_hosts) + " >> /etc/hosts"])
+        report["lab_hosts_entries"] = missing_hosts
         for name in ("erpnext", "education", "payments", "hrms"):
             bench("install-site-" + name, "--site", site, "install-app", name)
             report["installed_apps"].append(name)
@@ -576,7 +627,18 @@ http {{
    proxy_set_header Upgrade $http_upgrade;
    proxy_set_header Connection "upgrade";
    proxy_set_header X-Frappe-Site-Name $foundation_site;
-   proxy_set_header Origin $scheme://$http_host;
+   # The realtime server builds every callback URL it makes back to the site
+   # from the Origin header (frappe realtime/utils.js get_url). This lab
+   # serves the desk edge on 127.0.0.1:8080 rather than the default port, so
+   # a bare "$scheme://$http_host" Origin resolves to
+   # http://foundation.localhost:80 which nothing listens on; every
+   # frappe_request (get_user_info, has_permission, our authorize) then
+   # fails and the socket is rejected as Unauthorized. Pin the edge port
+   # here so the callback reaches the same host-whitelisted 8080 server.
+   # The value is derived entirely from server state ($host is portless and
+   # $foundation_site already rejected unknown hosts), never from the
+   # client, so this does not widen the routing trust boundary.
+   proxy_set_header Origin $scheme://$host:8080;
    proxy_set_header Host $host;
    proxy_read_timeout 300;
    proxy_buffering off;
@@ -784,7 +846,9 @@ http {{
             ("isolated-controlled-patch-upgrade", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_upgrade.py"]),
         ):
             try: run(label, command, timeout=2400)
-            except RuntimeError as exc: diagnostic_failures.append(str(exc))
+            except RuntimeError as exc:
+                diagnostic_failures.append(str(exc))
+                surface_gate_failure(label)
         continuation = {"run_id": report["run_id"], "commit": report["commit"], "status":"pass", "security_gate_passed":False, "phase2_gate_passed":False}
         for label in ("readiness", "realtime", "upgrade", "guardian_browser", "frontend_graph", "restart"):
             path=evidence / (label + "-result.json")
