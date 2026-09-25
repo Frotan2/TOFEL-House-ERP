@@ -4,16 +4,30 @@ Date: 2026-09-25. Dated finding record; no verdict was changed by this work.
 
 ## 1. What was observed
 
-The first push-triggered Foundation runtime run on the active validation
-branch ran to completion:
+Two independent push-triggered Foundation runtime runs on the active
+validation branch have now run to completion, with the same shape both times.
+This is no longer a single observation.
 
-- run `36114770663`, commit `8918403`, event `push`, conclusion `success`
-- evidence check run "Foundation runtime evidence", 123 checks, all `pass`
-- report `status: "pass"`
-- `security_gate_passed: False`, `phase2_gate_passed: False`,
-  `product_implementation_authorized: False`
-- `stack_dependency_audit.status: "pass"`, listing real OSV findings
-  (GHSA/PYSEC records against `pdfkit` 1.0.0, `pypdf` 6.15.0 and others)
+| | run `36114770663` | run `36119457187` |
+|---|---|---|
+| commit | `8918403` | `2f67140` |
+| conclusion | success | success |
+| executed checks | 123, all `pass` | 123, all `pass` |
+| report `status` | `"pass"` | `"pass"` |
+| `security_gate_passed` | `False` | `False` |
+| `phase2_gate_passed` | `False` | `False` |
+| `product_implementation_authorized` | `False` | `False` |
+| `hardened_profile_passed` | `True` | `True` |
+| `stack_dependency_audit.status` | `"pass"` | `"pass"` |
+| OSV findings listed | 14 | 14 |
+
+Both evidence reports were verified against their recorded
+`report_sha256` before being read. The stack audit in each lists real OSV
+findings (GHSA/PYSEC records against `pdfkit` 1.0.0, `pypdf` 6.15.0 and
+others); see
+[`sec-deps-01/triage-integrity-verification-2026-09-25.md`](sec-deps-01/triage-integrity-verification-2026-09-25.md)
+for why reporting `pass` alongside findings is the triage mechanism working as
+designed and not a dead gate.
 
 Nothing here is a weakening. The gate verdicts are unchanged:
 `runtime_install.py` sets `security_gate_passed = False` unconditionally, with
@@ -37,7 +51,7 @@ if runtime.get("status") != "fail_reject" or runtime.get("run") != ACTIVE_RUNTIM
     raise ContractError("acceptance ledger latest runtime evidence drifted")
 ```
 
-So the pinned run must be a `fail_reject` run. This run's status is `pass`.
+So the pinned run must be a `fail_reject` run. Both runs report `pass`.
 Advancing the pin on completion alone would make the validator raise, and
 would also require populating the acceptance ledger's
 `active_branch_qualification` block with a run whose recorded status does not
