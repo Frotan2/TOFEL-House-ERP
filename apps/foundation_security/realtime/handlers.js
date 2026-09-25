@@ -121,20 +121,40 @@ module.exports=function(socket) {
     socket.__foundationAuthorized = function(room){ return allowed(socket,room); };
     lg('guard attached socket='+socket.id+' nsp='+(socket.nsp&&socket.nsp.name)+' user='+socket.user);
     wrapAdapter(socket.nsp);
-    // Evict every room the socket may have been auto-joined into before our
-    // subscribe handlers were registered — keep only the socket identity
-    // room and its per-user room. Default rooms (all/website/doctype:* etc.)
-    // are rejoined explicitly by subscription handlers after per-user
-    // authorization.
-    for(const room of [...socket.rooms]) if(room!==socket.id && room!=='user:'+socket.user){
-        lg('evicting pre-guard room '+room+' for socket '+socket.id);
+    // Evict any guarded resource rooms (doc:*, open_doc:*, task_progress:*,
+    // doctype:*) the socket may have been auto-joined into before our
+    // guard ran. Keep identity (socket.id), per-user room (user:<sid>),
+    // and default broadcast rooms (all/website/...) which frappe core
+    // joins before/around app handlers and which carry no per-record data.
+    function isGuardedRoom(r){
+        return (typeof r==='string') &&
+            (r.startsWith('doc:')||r.startsWith('open_doc:')||r.startsWith('task_progress:')||r.startsWith('doctype:'));
+    }
+    for(const room of [...socket.rooms]) if(isGuardedRoom(room) && room!==socket.id){
+        lg('evicting pre-guard resource room '+room+' for socket '+socket.id);
         socket.leave(room);
     }
+    // Wrap socket.join so that ANY attempt to join a guarded resource room
+    // — whether from our guarded listeners, from frappe core's own
+    // subscribe handlers which run AFTER installed apps, or from any
+    // future third-party code — is re-authorized before the socket
+    // actually joins. Non-resource rooms pass through untouched.
+    const origJoin = socket.join.bind(socket);
+    socket.join = async function(room, ...rest){
+        if(!isGuardedRoom(room) || room===socket.id) return origJoin(room, ...rest);
+        const args = resource(room);
+        if(!args){ lg('reject join unrecognized shape '+room+' for '+socket.id); return socket; }
+        const ok = await allowed(socket,room);
+        lg('join room='+room+' user='+socket.user+' ok='+ok);
+        if(ok) return origJoin(room, ...rest);
+        return socket;
+    };
+    // Suppress frappe core's own subscribe listeners (added after our
+    // handler by v16 realtime/handlers.js and which would otherwise join
+    // rooms based only on an HTTP has_permission call that we do not
+    // trust to re-run against the current session). Replace them with
+    // guarded handlers that use our wrapped join.
     const GUARDED_EVENTS = new Set(['doctype_subscribe','task_subscribe','progress_subscribe','doc_subscribe','doc_open','open_in_editor']);
-    // Wrap socket.on so that any later registration of the known
-    // subscription events (including frappe's core realtime/handlers.js
-    // which runs AFTER installed apps) is replaced by our guarded
-    // authorizer. Non-subscription events pass through untouched.
     const origOn = socket.on.bind(socket);
     socket.on = function(event, handler) {
         if(GUARDED_EVENTS.has(event)) {
@@ -146,19 +166,15 @@ module.exports=function(socket) {
     function subscribe(event,roomFor) {
         origOn(event,async function(...args){
             const room=roomFor(...args);
-            const ok = await allowed(socket,room);
-            lg('subscribe event='+event+' room='+room+' user='+socket.user+' ok='+ok);
-            if(ok) socket.join(room);
+            // socket.join is now our guarded wrapper; it will re-authorize.
+            try{ await socket.join(room); }catch(e){ lg('subscribe err: '+e); }
         });
     }
     subscribe('doc_subscribe',function(dt,name){return 'doc:'+dt+'/'+name;});
     subscribe('doc_open',function(dt,name){return 'open_doc:'+dt+'/'+name;});
     subscribe('task_subscribe',function(id){return 'task_progress:'+id;});
     subscribe('progress_subscribe',function(id){return 'task_progress:'+id;});
-    // Core v16/v15 also registers doctype_subscribe (no name). The adapter
-    // wrapper drops doctype:* broadcasts because there is no per-record
-    // authorization contract, so this handler simply forbids the join to
-    // ensure the socket never ends up in a doctype room.
+    // doctype_subscribe has no per-record authorization contract; reject it.
     origOn('doctype_subscribe',function(){
         lg('reject doctype_subscribe from user='+socket.user);
     });
