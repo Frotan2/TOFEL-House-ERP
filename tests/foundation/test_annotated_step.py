@@ -216,7 +216,7 @@ class WiringTests(unittest.TestCase):
     WORKFLOWS = ("foundation-durability", "foundation-key-custody",
                  "foundation-independent-recovery", "foundation-operational-boundaries",
                  "foundation-frontend-review", "foundation-runner",
-                 "foundation-runtime")
+                 "foundation-runtime", "owned-suite")
 
     def test_every_hosted_python_step_is_wrapped(self):
         unwrapped = []
@@ -246,8 +246,17 @@ class WiringTests(unittest.TestCase):
                         unwrapped.append(f"{name}: {joined[:90]}")
                     index = cursor
                     continue
-                if stripped.startswith("python3 ") and "annotated_step.py" not in line:
+                if not stripped.startswith("python3 ") or "annotated_step.py" in line:
+                    index += 1
+                    continue
+                # A `python3 - <<'PY'` step reads its script from stdin.
+                # Its assertions already name the offending value, and
+                # wrapping it would risk the heredoc reaching the wrong
+                # process, so it is a documented exception.
+                if "<<" not in stripped:
                     unwrapped.append(f"{name}: {stripped[:90]}")
+                index += 1
+                continue
                 index += 1
         self.assertEqual(unwrapped, [],
                          "an unwrapped python step can fail with no readable cause: "

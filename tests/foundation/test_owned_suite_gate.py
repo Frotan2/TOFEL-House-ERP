@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
 from session_branch import ACTIVE_BRANCH, ACTIVE_REF  # noqa: E402
+sys.path.insert(0, str(ROOT / "tools" / "foundation"))
+from branch_boundary import mismatch  # noqa: E402
 
 WORKFLOW_PATH = ROOT / ".github/workflows/owned-suite.yml"
 WORKFLOW = WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -25,8 +27,10 @@ WORKFLOW = WORKFLOW_PATH.read_text(encoding="utf-8")
 
 class OwnedSuiteWorkflowTests(unittest.TestCase):
     def test_workflow_exists_and_is_bound_to_the_active_branch_and_pull_requests(self):
-        self.assertIn(f"branches: [{ACTIVE_BRANCH}]", WORKFLOW)
-        self.assertIn(f"github.ref == '{ACTIVE_REF}'", WORKFLOW)
+        self.assertIn(f"branches: [{ACTIVE_BRANCH}]", WORKFLOW,
+                      mismatch(WORKFLOW, ACTIVE_BRANCH, ACTIVE_REF))
+        self.assertIn(f"github.ref == '{ACTIVE_REF}'", WORKFLOW,
+                      mismatch(WORKFLOW, ACTIVE_BRANCH, ACTIVE_REF))
         self.assertIn("pull_request:", WORKFLOW,
                       "the owned suite must gate pull requests, not only pushes")
 

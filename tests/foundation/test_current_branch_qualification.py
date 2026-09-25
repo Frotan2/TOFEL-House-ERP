@@ -7,7 +7,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
-from session_branch import ACTIVE_BRANCH as BRANCH, ACTIVE_REF as REF
+from session_branch import ACTIVE_BRANCH as BRANCH, ACTIVE_REF as REF  # noqa: E402
+sys.path.insert(0, str(ROOT / "tools" / "foundation"))
+from branch_boundary import mismatch  # noqa: E402
 
 
 class CurrentBranchQualificationTests(unittest.TestCase):
@@ -29,14 +31,17 @@ class CurrentBranchQualificationTests(unittest.TestCase):
             "placement-content.yml",
         ):
             source = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
-            self.assertIn(f"branches: [{BRANCH}]", source, workflow)
-            self.assertIn(f"github.ref == '{REF}'", source, workflow)
+            self.assertIn(f"branches: [{BRANCH}]", source,
+                          f"{workflow}: {mismatch(source, BRANCH, REF)}")
+            self.assertIn(f"github.ref == '{REF}'", source,
+                          f"{workflow}: {mismatch(source, BRANCH, REF)}")
             self.assertNotIn("arena/01a09bf3-tofel-house-erp", source, workflow)
 
         recovery = (ROOT / ".github/workflows/placement-evidence.yml").read_text(encoding="utf-8")
         self.assertNotIn("    push:", recovery)
         self.assertIn("  workflow_dispatch:", recovery)
-        self.assertIn(f"github.ref == '{REF}'", recovery)
+        self.assertIn(f"github.ref == '{REF}'", recovery,
+                      mismatch(recovery, BRANCH, REF))
         self.assertNotIn("arena/01a09bf3-tofel-house-erp", recovery)
 
     def test_hosted_tools_accept_only_the_active_ref_for_current_runs(self):

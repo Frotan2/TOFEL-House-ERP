@@ -42,7 +42,7 @@ jobs:
         # PEP 668 externally managed, and the tool must not touch it anyway.
         run: |
           set -euo pipefail
-          python3 -m venv .foundation/lint-venv
+          python3 tools/foundation/annotated_step.py "Create isolated lint venv" -- python3 -m venv .foundation/lint-venv
           printf '%s\n' 'ruff==0.16.8 --hash=sha256:15e7d226246961db9235098333caa13063906d3851136b84c2900b82f5daa1df' \
             > .foundation/lint-requirements.txt
           .foundation/lint-venv/bin/python -m pip install --quiet --no-deps \
@@ -52,8 +52,15 @@ jobs:
       - name: Static analysis (pyflakes + syntax)
         run: .foundation/lint-venv/bin/ruff check .
 
+      - name: Branch boundary must agree with the canonical pin
+        # A rotation has to land the workflow branch filters and
+        # tools/session_branch.py in the same commit. Between the two commits
+        # every boundary gate is red for bookkeeping only, which is exactly
+        # what took four gates down at 2deba87 with no readable cause.
+        run: python3 tools/foundation/annotated_step.py "Branch boundary must agree with the canonical pin" -- python3 tools/foundation/branch_boundary.py
+
       - name: Owned Python test tree
-        run: python3 -m unittest discover -s tests -t . -v
+        run: python3 tools/foundation/annotated_step.py "Owned Python test tree" -- python3 -m unittest discover -s tests -t . -v
 
       - name: Owned Node suites
         run: |
@@ -64,7 +71,7 @@ jobs:
 
       - name: D8 contract validator must stay BLOCKED / REJECT
         run: |
-          python3 tools/foundation/d8_validate.py \
+          python3 tools/foundation/annotated_step.py "D8 contract validator" -- python3 tools/foundation/d8_validate.py \
             --contract docs/engineering/d8-operational-contract.template.json \
             --output .foundation/owned-suite/d8-validate.json
           python3 - <<'PY'
