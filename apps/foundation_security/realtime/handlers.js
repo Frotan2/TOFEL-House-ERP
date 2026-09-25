@@ -1,5 +1,6 @@
 'use strict';
 const fs = require('fs');
+const http = require('http');
 const LOG = process.env.FOUNDATION_REALTIME_BOOT_LOG;
 const GUARDED = Symbol.for('foundation.resource.broadcast.guard');
 function lg(msg){ try{if(LOG){fs.appendFileSync(LOG,'[rt-guard '+new Date().toISOString()+'] '+String(msg).slice(0,600)+'\n');}}catch(e){} }
@@ -7,12 +8,49 @@ function resource(room) {
     if(typeof room!=='string'||room.length>1024)return null;
     if(room.startsWith('user:'))return {kind:'user',resource:room.slice(5)};
     if(room.startsWith('task_progress:'))return {kind:'task',resource:room.slice(14)};
+    if(room.startsWith('doctype:'))return {kind:'doctype',resource:room.slice(8)};
     for(const prefix of ['doc:','open_doc:']) if(room.startsWith(prefix)) {
         const key=room.slice(prefix.length), slash=key.indexOf('/');
         if(slash<1)return null;
         return {kind:'document',resource:key.slice(0,slash),name:key.slice(slash+1)};
     }
     return null;
+}
+function getSiteName(socket) {
+    try {
+        const nsp=socket&&socket.nsp&&socket.nsp.name;
+        if(nsp&&nsp.length>1)return nsp.slice(1);
+    }catch(e){}
+    try{const h=socket.request&&socket.request.headers;const s=h&&(h['x-frappe-site-name']);if(s)return s;if(h&&h.origin){const u=new URL(h.origin);return u.hostname;}}catch(e){}
+    return 'localhost';
+}
+function authorizeRequest(socket,args,timeoutMs) {
+    // Direct loopback request to the local bench web server using the sid
+    // cookie from the authenticated socket. Avoids relying on get_url(),
+    // which points at the proxied origin (8080/9000) rather than the
+    // authoritative 127.0.0.1:8000 web server.
+    return new Promise(function(resolve){
+        try{
+            const site=getSiteName(socket);
+            const qs=new URLSearchParams(args).toString();
+            const path='/api/method/foundation_security.realtime.authorize?'+qs;
+            const headers={'Host':site,'X-Frappe-Site-Name':site};
+            if(socket.sid){headers['Cookie']='sid='+encodeURIComponent(socket.sid);}
+            else if(socket.authorization_header){headers['Authorization']=socket.authorization_header;}
+            const req=http.request({host:'127.0.0.1',port:8000,path,method:'GET',headers,timeout:timeoutMs||5000},function(res){
+                let body='';res.setEncoding('utf8');res.on('data',function(c){body+=c;});
+                res.on('end',function(){
+                    let ok=false;
+                    try{ok=res.statusCode===200&&JSON.parse(body).message===true;}catch(e){lg('authorize json parse err '+e+' body='+String(body).slice(0,200));}
+                    lg('authorize site='+site+' kind='+args.kind+' resource='+args.resource+' user='+socket.user+' http='+res.statusCode+' ok='+ok);
+                    resolve({status:res.statusCode||0,ok:!!ok,json:async()=>({message:ok})});
+                });
+            });
+            req.on('timeout',function(){try{req.destroy();}catch(e){}resolve({status:0,ok:false,json:async()=>({message:false})});});
+            req.on('error',function(e){lg('authorize request err: '+String(e&&e.message||e).slice(0,200));resolve({status:0,ok:false,json:async()=>({message:false})});});
+            req.end();
+        }catch(e){lg('authorize setup err: '+e);resolve({status:0,ok:false,json:async()=>({message:false})});}
+    });
 }
 async function allowed(socket,room) {
     const args=resource(room);
@@ -21,7 +59,12 @@ async function allowed(socket,room) {
         return false;
     }
     try {
-        const response=await socket.frappe_request('/api/method/foundation_security.realtime.authorize',args,{signal:AbortSignal.timeout(5000)});
+        let response;
+        if(typeof socket.frappe_request==='function'){
+            response=await socket.frappe_request('/api/method/foundation_security.realtime.authorize',args,{signal:AbortSignal.timeout(5000)});
+        }else{
+            response=await authorizeRequest(socket,args,5000);
+        }
         const ok = response.ok && (await response.json()).message===true;
         lg('allowed room='+room+' user='+socket.user+' -> '+ok+' (http '+response.status+')');
         return ok;
@@ -73,15 +116,30 @@ module.exports=function(socket) {
     socket.__foundationAuthorized = function(room){ return allowed(socket,room); };
     lg('guard attached socket='+socket.id+' nsp='+(socket.nsp&&socket.nsp.name)+' user='+socket.user);
     wrapAdapter(socket.nsp);
-    // Drop any rooms the socket joined before the guard ran (keep only socket id
-    // and personal user:<sid>).
+    // Evict every room the socket may have been auto-joined into before our
+    // subscribe handlers were registered — keep only the socket identity
+    // room and its per-user room. Default rooms (all/website/doctype:* etc.)
+    // are rejoined explicitly by subscription handlers after per-user
+    // authorization.
     for(const room of [...socket.rooms]) if(room!==socket.id && room!=='user:'+socket.user){
-        lg('leaking pre-guard room '+room+' for socket '+socket.id);
+        lg('evicting pre-guard room '+room+' for socket '+socket.id);
         socket.leave(room);
     }
-    for(const event of ['doctype_subscribe','task_subscribe','progress_subscribe','doc_subscribe','doc_open','open_in_editor']) socket.removeAllListeners(event);
+    const GUARDED_EVENTS = new Set(['doctype_subscribe','task_subscribe','progress_subscribe','doc_subscribe','doc_open','open_in_editor']);
+    // Wrap socket.on so that any later registration of the known
+    // subscription events (including frappe's core realtime/handlers.js
+    // which runs AFTER installed apps) is replaced by our guarded
+    // authorizer. Non-subscription events pass through untouched.
+    const origOn = socket.on.bind(socket);
+    socket.on = function(event, handler) {
+        if(GUARDED_EVENTS.has(event)) {
+            lg('suppress insecure handler registration for event='+event+' socket='+socket.id);
+            return socket;
+        }
+        return origOn(event, handler);
+    };
     function subscribe(event,roomFor) {
-        socket.on(event,async function(...args){
+        origOn(event,async function(...args){
             const room=roomFor(...args);
             const ok = await allowed(socket,room);
             lg('subscribe event='+event+' room='+room+' user='+socket.user+' ok='+ok);
@@ -92,6 +150,15 @@ module.exports=function(socket) {
     subscribe('doc_open',function(dt,name){return 'open_doc:'+dt+'/'+name;});
     subscribe('task_subscribe',function(id){return 'task_progress:'+id;});
     subscribe('progress_subscribe',function(id){return 'task_progress:'+id;});
+    // Core v16/v15 also registers doctype_subscribe (no name) — the resource
+    // parser in resource() rejects doctype:* rooms (no slash), which means
+    // doctype-level broadcasts are dropped by the adapter wrapper; we still
+    // install a guarded handler so that permission is re-checked.
+    origOn('doctype_subscribe',async function(doctype){
+        const ok = await allowed(socket,'open_doc:'+String(doctype)+'/__doctype__');
+        lg('subscribe event=doctype_subscribe doctype='+doctype+' user='+socket.user+' ok='+ok);
+        if(ok) socket.join('doctype:'+doctype);
+    });
 };
 module.exports.resource=resource;
 module.exports.wrapAdapter=wrapAdapter;
