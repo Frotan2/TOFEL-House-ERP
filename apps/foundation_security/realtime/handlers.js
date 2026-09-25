@@ -90,9 +90,24 @@ async function allowed(socket,room) {
         return false;
     }
     try {
+        // Prefer socket.frappe_request when present (v15/v16 middleware
+        // installs it with the correct X-Frappe-Socket-Secret and auth
+        // headers), but construct the query string manually so '/' in
+        // document names is preserved (URLSearchParams percent-encodes
+        // '/' to '%2F', which fails frappe's document lookup). Fall
+        // back to our loopback authorizeRequest for older/v14 layouts
+        // where socket.frappe_request does not exist.
         let response;
-        if(typeof socket.frappe_request==='function'){
-            response=await socket.frappe_request('/api/method/foundation_security.realtime.authorize',args,{signal:AbortSignal.timeout(5000)});
+        if(typeof socket.frappe_request === 'function'){
+            const parts=[];
+            for(const k of Object.keys(args||{})){
+                parts.push(encodeURIComponent(k)+'='+encodeURIComponent(String(args[k])));
+            }
+            const path='/api/method/foundation_security.realtime.authorize?'+parts.join('&');
+            // socket.frappe_request(path, args, opts) signs the request
+            // but we have already built a full path with query string,
+            // so pass empty args.
+            response=await socket.frappe_request(path, {}, {signal:AbortSignal.timeout(5000)});
         }else{
             response=await authorizeRequest(socket,args,5000);
         }
@@ -157,14 +172,14 @@ module.exports=function(socket) {
         const s = stripSitePrefix(r).suffix;
         return s.startsWith('doc:')||s.startsWith('open_doc:')||s.startsWith('task_progress:')||s.startsWith('doctype:');
     }
-    // Determine the room-name prefix for resource rooms. v14/v15 prefix
-    // rooms with "<site>:"; v16+ uses per-site namespaces and bare room
-    // names. We derive the prefix from the namespace name ("/foundation.localhost")
-    // when present, else from socket.site_name (set by v14's auth
-    // middleware), else empty.
+    // Rooms are bare names like 'doc:Student/a' when the socket is in a
+    // per-site namespace (v15+) or '<site>:doc:Student/a' when the socket
+    // is in the root io (legacy v14 single-io mode). Detect namespaces by
+    // checking nsp.name: '/' is the root namespace; anything else is a
+    // per-site child namespace that uses bare room names.
     function sitePrefix(){
         const nspName = socket.nsp && socket.nsp.name;
-        if(nspName && nspName.length>1 && nspName.startsWith('/')) return nspName.slice(1)+':';
+        if(typeof nspName === 'string' && nspName.length > 1 && nspName !== '/') return '';
         if(socket.site_name) return socket.site_name+':';
         return '';
     }

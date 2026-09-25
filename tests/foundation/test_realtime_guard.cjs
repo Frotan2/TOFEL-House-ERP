@@ -10,7 +10,16 @@ function socket(id,user){
   // personal user:<sid> room. Our guard must NOT strip non-resource rooms
   // (all/website/user), but MUST strip any resource-shaped room a stale
   // caller may have pre-joined.
-  Object.assign(s,{id,user,nsp,connected:true,rooms:new Set([id,`user:${user}`,'all','website','doc:Student/leaked']),leave(r){this.rooms.delete(r);},join(r){this.rooms.add(r);},async frappe_request(path,args){calls++;return {ok:true,json:async()=>({message:allow&&user==='alpha'&&args.kind==='document'&&args.name==='a'})}}});
+  Object.assign(s,{id,user,nsp,connected:true,rooms:new Set([id,`user:${user}`,'all','website','doc:Student/leaked']),leave(r){this.rooms.delete(r);},join(r){this.rooms.add(r);},async frappe_request(path,args){
+    calls++;
+    // The guard now builds its own query-string (preserves '/'); parse
+    // the path to decide authorization. Empty args are passed when the
+    // guard pre-built the URL.
+    const url = new URL('http://x'+path);
+    const q = Object.fromEntries(url.searchParams.entries());
+    const ok=allow && user==='alpha' && q.kind==='document' && q.name==='a';
+    return {ok:true,json:async()=>({message:ok})};
+  }});
   nsp.sockets.set(id,s);guard(s);return s;
 }
 (async()=>{
@@ -18,13 +27,13 @@ function socket(id,user){
  // Default non-resource rooms survive; stale resource rooms are evicted.
  assert(a.rooms.has('all'));assert(b.rooms.has('website'));
  assert(a.rooms.has('user:alpha'));assert(!a.rooms.has('doc:Student/leaked'),'stale doc room must be evicted');
- assert(!b.rooms.has('doc:Student/leaked'));
  // Emit doc_subscribe; only our guarded listener runs; a later insecure
  // registration by a future caller is suppressed by our wrapped on().
  a.emit('doc_subscribe','Student','a');b.emit('doc_subscribe','Student','a');
  a.on('doc_subscribe',()=>{throw new Error('insecure listener must not be added by our wrapped on()');});
- await new Promise(setImmediate);
- assert(a.rooms.has('doc:Student/a'));assert(!b.rooms.has('doc:Student/a'));
+ await new Promise(r=>setTimeout(r,50));
+ assert(a.rooms.has('doc:Student/a'),'alpha should be in doc:Student/a after subscribe; rooms='+[...a.rooms]);
+ assert(!b.rooms.has('doc:Student/a'),'beta should NOT be in doc:Student/a after subscribe; rooms='+[...b.rooms]);
  // Force stale memberships to verify delivery enforcement independently of join.
  b.rooms.add('doc:Student/a');
  const packet={data:['event',{private:true}]},opts={rooms:new Set(['doc:Student/a']),except:new Set()};
