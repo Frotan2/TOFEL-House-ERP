@@ -131,6 +131,89 @@ def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict 
     return ["::warning file=tools/foundation/runtime_install.py::" + line for line in lines]
 
 
+def build_proxy_conf(lab, bench_dir):
+    """Generate the lab reverse-proxy configuration.
+
+    The 9000 server is the public Socket.IO edge. Frappe's realtime server
+    derives every callback URL it makes back into the site from the socket
+    Origin header (frappe realtime/utils.js get_url), so this proxy must
+    forward an Origin that actually resolves to the desk edge. This lab
+    serves that edge on 127.0.0.1:8080 rather than the default port, so the
+    port is pinned explicitly; a bare "$scheme://$http_host" would resolve
+    to http://<site>:80, where nothing listens, and every authenticated
+    socket would be rejected as Unauthorized.
+
+    No part of the routing decision is taken from the client: $host is
+    portless, $foundation_site has already returned 444 for unknown hosts,
+    and X-Frappe-Site-Name is derived from that map.
+    """
+    return f"""pid {lab}/nginx.pid;
+error_log {lab}/nginx-error.log;
+events {{ worker_connections 128; }}
+http {{
+ include /etc/nginx/mime.types;
+ access_log off;
+ client_body_temp_path {lab}/nginx-body;
+ proxy_temp_path {lab}/nginx-proxy;
+ # SEC-DEPS-01: tight header / body limits drop the ws 8.11 header-count
+ # crash (GHSA-3h5v-q93c-6h6q) and oversize requests at the proxy before
+ # they reach node. These mirror the pinned bench template defaults.
+ client_header_buffer_size 1k;
+ large_client_header_buffers 4 4k;
+ client_max_body_size 1m;
+ client_body_buffer_size 16k;
+ map $host $foundation_site {{ default ''; foundation.localhost foundation.localhost; restore.localhost restore.localhost; recovery.localhost recovery.localhost; }}
+ server {{
+  listen 127.0.0.1:8080;
+  if ($foundation_site = '') {{ return 444; }}
+  location /assets/ {{ alias {bench_dir}/sites/assets/; }}
+  location / {{
+   proxy_set_header Host $http_host;
+   proxy_set_header X-Frappe-Site-Name $foundation_site;
+   proxy_pass http://127.0.0.1:8000;
+  }}
+ }}
+  server {{
+  listen 127.0.0.1:9000;
+  if ($foundation_site = '') {{ return 444; }}
+  # Reject only the octet-stream POST payload that triggers engine.io
+  # GHSA-r635-g3xr-vw7x (connection hold on invalid binary polling POST).
+  # Ordinary polling GET/POST and WebSocket upgrades pass through (socket.io
+  # defaults to [polling, websocket]); only the crafted binary POST that
+  # engine.io hangs on is refused. The combination $rt_bad=11 means: this is
+  # a POST (1), NOT an Upgrade: websocket (stays 1), AND the request body
+  # was declared application/octet-stream (1 concatenated -> "11").
+  set $rt_bad 0;
+  if ($request_method = POST) {{ set $rt_bad 1; }}
+  if ($http_upgrade = "websocket") {{ set $rt_bad 0; }}
+  if ($content_type = "application/octet-stream") {{ set $rt_bad "${{rt_bad}}1"; }}
+  if ($rt_bad = 11) {{ return 400; }}
+  location /socket.io {{
+   proxy_http_version 1.1;
+   proxy_set_header Upgrade $http_upgrade;
+   proxy_set_header Connection "upgrade";
+   proxy_set_header X-Frappe-Site-Name $foundation_site;
+   # The realtime server builds every callback URL it makes back to the site
+   # from the Origin header (frappe realtime/utils.js get_url). This lab
+   # serves the desk edge on 127.0.0.1:8080 rather than the default port, so
+   # a bare "$scheme://$http_host" Origin resolves to
+   # http://foundation.localhost:80 which nothing listens on; every
+   # frappe_request (get_user_info, has_permission, our authorize) then
+   # fails and the socket is rejected as Unauthorized. Pin the edge port
+   # here so the callback reaches the same host-whitelisted 8080 server.
+   # The value is derived entirely from server state ($host is portless and
+   # $foundation_site already rejected unknown hosts), never from the
+   # client, so this does not widen the routing trust boundary.
+   proxy_set_header Origin $scheme://$host:8080;
+   proxy_set_header Host $host;
+   proxy_read_timeout 300;
+   proxy_buffering off;
+   proxy_pass http://127.0.0.1:19000;
+  }}
+ }}
+}}"""
+
+
 def main() -> int:
     if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("GITHUB_REF") != ACTIVE_REF:
         raise SystemExit("Run only on the authorized branch in an ephemeral Actions runner")
@@ -581,72 +664,7 @@ def main() -> int:
         # routing headers are overwritten rather than trusted.
         run("nginx-install", ["sudo", "apt-get", "install", "-y", "--no-install-recommends", "nginx"])
         proxy_conf = lab / "nginx.conf"
-        proxy_conf.write_text(f"""pid {lab}/nginx.pid;
-error_log {lab}/nginx-error.log;
-events {{ worker_connections 128; }}
-http {{
- include /etc/nginx/mime.types;
- access_log off;
- client_body_temp_path {lab}/nginx-body;
- proxy_temp_path {lab}/nginx-proxy;
- # SEC-DEPS-01: tight header / body limits drop the ws 8.11 header-count
- # crash (GHSA-3h5v-q93c-6h6q) and oversize requests at the proxy before
- # they reach node. These mirror the pinned bench template defaults.
- client_header_buffer_size 1k;
- large_client_header_buffers 4 4k;
- client_max_body_size 1m;
- client_body_buffer_size 16k;
- map $host $foundation_site {{ default ''; foundation.localhost foundation.localhost; restore.localhost restore.localhost; recovery.localhost recovery.localhost; }}
- server {{
-  listen 127.0.0.1:8080;
-  if ($foundation_site = '') {{ return 444; }}
-  location /assets/ {{ alias {bench_dir}/sites/assets/; }}
-  location / {{
-   proxy_set_header Host $http_host;
-   proxy_set_header X-Frappe-Site-Name $foundation_site;
-   proxy_pass http://127.0.0.1:8000;
-  }}
- }}
-  server {{
-  listen 127.0.0.1:9000;
-  if ($foundation_site = '') {{ return 444; }}
-  # Reject only the octet-stream POST payload that triggers engine.io
-  # GHSA-r635-g3xr-vw7x (connection hold on invalid binary polling POST).
-  # Ordinary polling GET/POST and WebSocket upgrades pass through (socket.io
-  # defaults to [polling, websocket]); only the crafted binary POST that
-  # engine.io hangs on is refused. The combination $rt_bad=11 means: this is
-  # a POST (1), NOT an Upgrade: websocket (stays 1), AND the request body
-  # was declared application/octet-stream (1 concatenated -> "11").
-  set $rt_bad 0;
-  if ($request_method = POST) {{ set $rt_bad 1; }}
-  if ($http_upgrade = "websocket") {{ set $rt_bad 0; }}
-  if ($content_type = "application/octet-stream") {{ set $rt_bad "${{rt_bad}}1"; }}
-  if ($rt_bad = 11) {{ return 400; }}
-  location /socket.io {{
-   proxy_http_version 1.1;
-   proxy_set_header Upgrade $http_upgrade;
-   proxy_set_header Connection "upgrade";
-   proxy_set_header X-Frappe-Site-Name $foundation_site;
-   # The realtime server builds every callback URL it makes back to the site
-   # from the Origin header (frappe realtime/utils.js get_url). This lab
-   # serves the desk edge on 127.0.0.1:8080 rather than the default port, so
-   # a bare "$scheme://$http_host" Origin resolves to
-   # http://foundation.localhost:80 which nothing listens on; every
-   # frappe_request (get_user_info, has_permission, our authorize) then
-   # fails and the socket is rejected as Unauthorized. Pin the edge port
-   # here so the callback reaches the same host-whitelisted 8080 server.
-   # The value is derived entirely from server state ($host is portless and
-   # $foundation_site already rejected unknown hosts), never from the
-   # client, so this does not widen the routing trust boundary.
-   proxy_set_header Origin $scheme://$host:8080;
-   proxy_set_header Host $host;
-   proxy_read_timeout 300;
-   proxy_buffering off;
-   proxy_pass http://127.0.0.1:19000;
-  }}
- }}
-}}
-""")
+        proxy_conf.write_text(build_proxy_conf(lab, bench_dir))
         run("nginx-config-check", ["nginx", "-t", "-c", proxy_conf])
         proxy = launch("public-proxy", ["nginx", "-c", proxy_conf, "-g", "daemon off;"], lab)
         # Wait for nginx to actually accept on 8080/9000 before running the
