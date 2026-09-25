@@ -486,14 +486,41 @@ def main() -> int:
             bench("install-security-extension-" + secured_site, "--site", secured_site, "install-app", "foundation_security")
         # Editable installs add interpreter-startup path hooks. A Gunicorn HUP
         # forks the old interpreter and is insufficient: fully restart Python
-        # processes, retaining their separate pre-extension logs.
-        for process, _, _ in processes[:3]:
+        # processes AND the Node socketio server (which loads app realtime hooks
+        # at process start), retaining their separate pre-extension logs.
+        for process, _, _ in processes[:4]:
             if process.poll() is None:
                 os.killpg(process.pid, signal.SIGTERM)
             process.wait(timeout=30)
         launch("web-backend-secured", [bench_dir / "env/bin/gunicorn", "--bind", "127.0.0.1:8000", "--workers", "2", "frappe.app:application"], bench_dir / "sites")
         worker = launch("worker-secured", [lab / "tools/bin/bench", "worker", "--queue", "short,default,long"], bench_dir)
         scheduler = launch("scheduler-secured", [lab / "tools/bin/bench", "schedule"], bench_dir)
+        # Restart socketio with FOUNDATION_REALTIME_BOOT_LOG exported so the
+        # foundation_security realtime guard can write diagnostics.
+        secured_socketio_env = dict(env)
+        secured_socketio_env["FRAPPE_SOCKETIO_PORT"] = "19000"
+        secured_socketio_log = lab / "socketio-secured.txt"
+        secured_socketio_stream = secured_socketio_log.open("w")
+        socketio_secured = subprocess.Popen(["node", str(bench_dir / "apps/frappe/socketio.js")],
+                                            cwd=str(bench_dir), env=secured_socketio_env, stdout=secured_socketio_stream,
+                                            stderr=subprocess.STDOUT, start_new_session=True)
+        processes.append((socketio_secured, secured_socketio_stream, secured_socketio_log))
+        # Wait for secured socketio to come up before continuing.
+        deadline = time.monotonic() + 20
+        last_err = "no connection"
+        while time.monotonic() < deadline:
+            if socketio_secured.poll() is not None:
+                raise RuntimeError("Secured Socket.IO service exited before accepting connections: "
+                                   + secured_socketio_log.read_text()[-2000:])
+            try:
+                with _socket.create_connection(("127.0.0.1", 19000), timeout=1.0):
+                    last_err = None
+                    break
+            except OSError as exc:
+                last_err = str(exc)
+            time.sleep(0.2)
+        if last_err:
+            raise RuntimeError("Secured Socket.IO service did not bind 127.0.0.1:19000 within 20s: " + last_err)
         env["FOUNDATION_BACKGROUND_REPORT"] = str(evidence / "background-secured-result.json")
         run("secured-background-cache-job", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_background.py", site], cwd=bench_dir / "sites")
         env["FOUNDATION_HTTP_REPORT"] = str(evidence / "http-restricted-result.json")
