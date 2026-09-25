@@ -13,7 +13,8 @@ as the bench owner user. Replace `SITE` with the production site name
 
 ## 0. Preconditions (do not proceed unless all hold)
 
-1. The bench runs this release (branch `arena/01a0ba0d-tofel-house-erp`,
+1. The bench runs this release (the current engineering branch recorded in the
+   README — `arena/01a0cd90-tofel-house-erp` at the time of this runbook update,
    D16 activation code deployed and migrated).
 2. MariaDB is the backend (the app refuses any other backend).
 3. You hold a current encrypted backup and have rehearsed a restore.

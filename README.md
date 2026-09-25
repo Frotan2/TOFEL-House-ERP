@@ -138,6 +138,46 @@ or a verified interactive local-development setup. See the validation report for
 Do not reopen Placement. Custom finance/HR or a second student lifecycle remain
 unauthorized. Production remains **REJECT**.
 
+## Cloning and running on your own machine
+
+**Honest support statement, verified 2026-09-25.** The supported operating target
+is the authorized local Linux server described in
+[docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md) (owner
+decision D15: one controlled local machine, operator reach via Tailscale). There is
+**no native Windows support, no Windows installer, and no one-command consumer
+setup in this repository**, and no Windows, WSL or macOS run has ever been
+executed — none is claimed.
+
+- **Cloning the repository itself is verified.** Every hosted run checks out this
+  branch (`git clone -b arena/01a0cd90-tofel-house-erp
+  https://github.com/Frotan2/TOFEL-House-ERP.git`), so the code, docs and pin
+  files you receive match a state that passed its gates.
+- **The full clean-machine chain — fresh Ubuntu → Python → bench → MariaDB + Redis
+  → site creation → ERPNext/Education/HRMS install → migrations → asset build →
+  running web/worker/scheduler/realtime → browser login and portal journey — is
+  verified in a hosted environment only.** It runs on `ubuntu-24.04` via the
+  branch-scoped **Foundation runtime validation** workflow (hosted run
+  `36119829355`, 2026-09-25, **123/123 checks pass**, including native Chromium
+  login + portal journey and guardian/realtime authorization probes). Its exact,
+  self-contained implementation is
+  [tools/foundation/runtime_install.py](tools/foundation/runtime_install.py).
+- **The TOEFL House app on top of that foundation** (installing `apps/toefl_house`
+  on a fresh controlled bench, then the whole placement journey end to end
+  including backup/restore) is likewise **verified in a hosted environment only**
+  — branch-scoped **Placement synthetic content qualification** workflow (hosted
+  run `36161953566`, 2026-09-25, 596/596 native checks).
+- **Running on your own Windows, WSL2-Ubuntu or personal Linux machine is
+  documented but not executed by this engineering repository's gates.** The
+  steps and pins are fully encoded in the hosted harness above and mirror the
+  standard Frappe bench toolchain (Python per `pyproject.toml`, Node/Yarn per the
+  pinned tool versions, MariaDB, Redis), but no local interactive run — with or
+  without WSL — is packaged or certified here. Do not treat a working GitHub
+  Actions clean install as proof that a local desktop install will work; treat it
+  as a precise reference implementation you can follow.
+- **Even after a successful local install**: production remains **REJECT**; the
+  owner-value carriers (D1/D3/D4/D7) intentionally fail closed until the owner
+  supplies their values via the TH policy DocTypes.
+
 ## Validation utilities
 
 These utilities do not install a site or claim application compatibility:
