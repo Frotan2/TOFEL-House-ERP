@@ -138,45 +138,74 @@ or a verified interactive local-development setup. See the validation report for
 Do not reopen Placement. Custom finance/HR or a second student lifecycle remain
 unauthorized. Production remains **REJECT**.
 
-## Cloning and running on your own machine
+## Operator setup from a Windows desktop (supported path: WSL2 + Ubuntu 24.04)
 
-**Honest support statement, verified 2026-09-25.** The supported operating target
-is the authorized local Linux server described in
-[docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md) (owner
-decision D15: one controlled local machine, operator reach via Tailscale). There is
-**no native Windows support, no Windows installer, and no one-command consumer
-setup in this repository**, and no Windows, WSL or macOS run has ever been
-executed — none is claimed.
+One path. There is **no native Windows support and no Windows installer**; the
+supported desktop target is **Windows + WSL2 with Ubuntu 24.04** (owner-declared
+supported operator target), or plain Ubuntu 24.04. Every step below mirrors the
+commands the hosted qualification runners execute, pinned by
+[docs/engineering/foundation-version-matrix.json](docs/engineering/foundation-version-matrix.json)
+(as of 2026-09-25: uv 0.11.6, Python 3.14.7, Node 24.21.0, Yarn 1.22.22,
+frappe-bench 5.31.0, MariaDB 11.8.9, Redis 8.6.6).
 
-- **Cloning the repository itself is verified.** Every hosted run checks out this
-  branch (`git clone -b arena/01a0cd90-tofel-house-erp
-  https://github.com/Frotan2/TOFEL-House-ERP.git`), so the code, docs and pin
-  files you receive match a state that passed its gates.
-- **The full clean-machine chain — fresh Ubuntu → Python → bench → MariaDB + Redis
-  → site creation → ERPNext/Education/HRMS install → migrations → asset build →
-  running web/worker/scheduler/realtime → browser login and portal journey — is
-  verified in a hosted environment only.** It runs on `ubuntu-24.04` via the
-  branch-scoped **Foundation runtime validation** workflow (hosted run
-  `36119829355`, 2026-09-25, **123/123 checks pass**, including native Chromium
-  login + portal journey and guardian/realtime authorization probes). Its exact,
-  self-contained implementation is
-  [tools/foundation/runtime_install.py](tools/foundation/runtime_install.py).
-- **The TOEFL House app on top of that foundation** (installing `apps/toefl_house`
-  on a fresh controlled bench, then the whole placement journey end to end
-  including backup/restore) is likewise **verified in a hosted environment only**
-  — branch-scoped **Placement synthetic content qualification** workflow (hosted
-  run `36161953566`, 2026-09-25, 596/596 native checks).
-- **Running on your own Windows, WSL2-Ubuntu or personal Linux machine is
-  documented but not executed by this engineering repository's gates.** The
-  steps and pins are fully encoded in the hosted harness above and mirror the
-  standard Frappe bench toolchain (Python per `pyproject.toml`, Node/Yarn per the
-  pinned tool versions, MariaDB, Redis), but no local interactive run — with or
-  without WSL — is packaged or certified here. Do not treat a working GitHub
-  Actions clean install as proof that a local desktop install will work; treat it
-  as a precise reference implementation you can follow.
-- **Even after a successful local install**: production remains **REJECT**; the
-  owner-value carriers (D1/D3/D4/D7) intentionally fail closed until the owner
-  supplies their values via the TH policy DocTypes.
+1. **On Windows** (elevated PowerShell): `wsl --install -d Ubuntu-24.04`, reboot,
+   finish the Ubuntu first-run user setup.
+2. **Inside the Ubuntu shell** — OS packages and Docker:
+   `sudo apt-get update && sudo apt-get install -y git curl build-essential ca-certificates`
+   plus Docker Engine from docs.docker.com (or Docker Desktop with WSL2
+   integration) — required for the digest-pinned MariaDB/Redis service
+   containers; `docker version` and `docker compose version` must work.
+3. **Pinned toolchain inside WSL2**:
+   `curl -LsSf https://astral.sh/uv/0.11.6/install.sh | sh`,
+   `uv python install 3.14.7` (path from `uv python find 3.14.7`),
+   Node 24.21.0 (`https://nodejs.org/dist/v24.21.0/` tarball on PATH), then
+   `npm install --global yarn@1.22.22`.
+4. **Clone and check** — cloning is verified (every hosted run and the 2026-09-25
+   fresh-clone audit check out this exact state):
+   `git clone -b arena/01a0cd90-tofel-house-erp https://github.com/Frotan2/TOFEL-House-ERP.git`
+   then `cd TOFEL-House-ERP && python3 tools/foundation/preflight.py --method native`.
+   Preflight verifies python/node/yarn/bench/MariaDB/Redis/Docker against the
+   matrix; its bench/mariadb/redis lines are provisioned by the bootstrap below
+   (tools venv + Docker), so run preflight as the machine check and let the
+   bootstrap own service/app provisioning.
+5. **Bootstrap** (fail-closed, matrix-driven, no invented values):
+   - Plan, zero side effects: `python3 tools/foundation/operator_bootstrap.py --dry-run`
+   - Choose your own three secrets, then run:
+     `export TH_DB_ROOT_PASSWORD=… TH_DB_PASSWORD=… TH_ADMIN_PASSWORD=…` and
+     `python3 tools/foundation/operator_bootstrap.py --python "$(uv python find 3.14.7)"`
+     Any failed step aborts with a named error; the step report lands at
+     `<workdir>/bootstrap-report.json`.
+   - **What the bootstrap automates** (each phase identical in shape to hosted
+     runs 36119829355 / 36161953566 on this branch): tools venv with
+     frappe-bench/uv at pins → commit-pinned fetch + rev-parse verify of
+     frappe/erpnext/education/payments/hrms → digest-pinned MariaDB/Redis
+     containers with health gate → bench init → Redis URL config → get-app of
+     all upstream apps plus the owned `foundation_security` and `toefl_house`
+     (soft-linked exports, never mutating your clone) → `uv pip check` →
+     new-site → install-app for the full stack → migrate ×2 → native site
+     encryption-key initialize → asset build.
+   - **What it never does**: production activation (the separate authorized
+     flow in [docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md)),
+     synthetic test flags such as `toefl_house_synthetic_only`, any business
+     configuration value, any upstream patch.
+6. **Start and log in**: the bootstrap prints the four start commands (gunicorn
+   web on 127.0.0.1:8000, worker, `enable-scheduler` + scheduler, node
+   socketio) mirroring the hosted launch. Open `http://127.0.0.1:8000` in any
+   Windows browser (WSL2 forwards localhost) and log in as `Administrator`
+   with your `TH_ADMIN_PASSWORD`. If you add more sites, add their names to the
+   WSL `/etc/hosts` like the hosted lab does (`runtime_install.py` documents
+   why: realtime resolves site hostnames server-side).
+
+**Verification classes for this path:** cloning VERIFIED (2026-09-25 fresh-clone
+audit + every hosted run); every bootstrap phase VERIFIED IN HOSTED ENVIRONMENT
+ONLY (command-shape parity with runs 36119829355, 123/123, and 36161953566,
+596/596); the bootstrap's construction and `--dry-run` plan VERIFIED locally
+(unit tests + executed plan); the end-to-end WSL2 run itself is **NOT EXECUTED**
+yet — treat first-run discrepancies as defects and report them; native Windows
+BLOCKED BY DESIGN (run inside WSL2). **Production remains REJECT**, and until
+you enter real values in the TH policy DocTypes (owner decisions D1/D3/D4/D7)
+the fail-closed owner-value carriers deliberately refuse — that refusal is the
+designed behavior, not an installation defect.
 
 ## Validation utilities
 
