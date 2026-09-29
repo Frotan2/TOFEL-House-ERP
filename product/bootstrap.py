@@ -132,14 +132,14 @@ def write_credentials(site: str, admin_password: str, sites_dir: Path = SITES_DI
 def bootstrap(site: str = SITE_NAME, *, log=print) -> dict:
     started = time.monotonic()
     actions: list[str] = []
-    wait_for_endpoints()
+    wait_for_endpoints(SERVICE_ENDPOINTS)
     actions.append("services-reachable")
     for key, value in REDIS_URLS.items():
         run_bench(["set-config", "--global", key, value], cwd=BENCH_DIR)
     actions.append("redis-configured")
-    root_password = read_root_password()
+    root_password = read_root_password(SECRETS_DIR)
 
-    first_run = not site_exists(site)
+    first_run = not site_exists(site, SITES_DIR)
     if first_run:
         admin_password = secrets.token_urlsafe(24)
         run_bench(["new-site", site, "--db-type", "mariadb", "--db-host", "db", "--db-port", "3306",
@@ -152,10 +152,11 @@ def bootstrap(site: str = SITE_NAME, *, log=print) -> dict:
         actions.append("site-present")
 
     installed = parse_installed_apps(run_bench(["--site", site, "list-apps", "--format", "json"], cwd=BENCH_DIR))
-    for name in missing_apps(installed):
+    needed = missing_apps(installed)
+    for name in needed:
         run_bench(["--site", site, "install-app", name], cwd=BENCH_DIR)
         actions.append(f"installed-{name}")
-    if not missing_apps(installed):
+    if not needed:
         actions.append("apps-present")
 
     run_bench(["--site", site, "migrate"], cwd=BENCH_DIR)
@@ -169,14 +170,14 @@ def bootstrap(site: str = SITE_NAME, *, log=print) -> dict:
     run_bench(["--site", site, "execute", "frappe.utils.password.get_encryption_key"], cwd=BENCH_DIR)
     actions.append("encryption-key-initialized")
 
-    if not assets_present():
+    if not assets_present(SITES_DIR):
         run_bench(["build"], cwd=BENCH_DIR)
         actions.append("assets-built")
     else:
         actions.append("assets-present")
 
     if admin_password:
-        credentials = write_credentials(site, admin_password)
+        credentials = write_credentials(site, admin_password, SITES_DIR)
         run_bench(["--site", site, "enable-scheduler"], cwd=BENCH_DIR)
         actions.append("scheduler-enabled")
         log(f"[toefl-house-erp] first run complete. Owner credentials: {credentials}")

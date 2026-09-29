@@ -54,7 +54,7 @@ services:
         condition: service_started
       db:
         condition: service_healthy
-    command: ["/build/tools/bin/bench", "--site", "all", "worker", "--queue", "short,default,long"]
+    command: ["/build/tools/bin/bench", "worker", "--queue", "short,default,long"]
     working_dir: /home/frappe/bench
     volumes:
       - ./data/sites:/home/frappe/bench/sites
