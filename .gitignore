@@ -24,3 +24,6 @@ build/
 # Deliberately reviewed/redacted execution evidence, not live runtime logs
 !docs/engineering/evidence/phase-2/*.log
 .DS_Store
+
+# Desktop product runtime output (generated on the operator machine only)
+product/data/

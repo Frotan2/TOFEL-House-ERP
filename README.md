@@ -138,6 +138,57 @@ or a verified interactive local-development setup. See the validation report for
 Do not reopen Placement. Custom finance/HR or a second student lifecycle remain
 unauthorized. Production remains **REJECT**.
 
+## Non-technical installation — one click (Windows desktop product)
+
+For a TOEFL House owner with **no technical background**: everything happens by
+double-clicking; there is no terminal, WSL, Git, Python, Bench, service or
+database step to learn. The product layer lives in [`product/`](product) and
+wraps the very same reviewed, matrix-pinned runtime (identical service image
+digests and upstream commits; parity is enforced by
+[`tests/foundation/test_product_packaging.py`](tests/foundation/test_product_packaging.py)).
+
+**What you need:** a 64-bit Windows 10/11 PC with internet, and
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) — its own
+installer is click-through and, when needed, sets up WSL2 for you. That is the
+only technical install, done once.
+
+**To install (once):**
+
+1. Download this repository as ZIP (GitHub **Code → Download ZIP** on the
+   active branch — the clone itself is verified) and unzip anywhere, e.g.
+   the Desktop.
+2. In the unzipped folder open `product\windows` and double-click
+   **Install TOEFL House ERP.cmd**. Keep the window open. It checks and starts
+   Docker Desktop, generates a private database password on your PC, builds
+   the application from the pinned reviewed sources (20–60 minutes the first
+   time), starts the app + database + background worker + scheduler, waits
+   for the health checks, shows your Administrator login, and opens
+   TOEFL House ERP in your browser at `http://127.0.0.1:8000`.
+3. Log in as `Administrator` with the password the installer prints (also kept
+   in `data\sites\toeflhouse.localhost\private\first-run-credentials.txt`,
+   which you can move somewhere private).
+
+**Daily use:** double-click **Start TOEFL House ERP.cmd** (opens the system in
+your browser). Other shortcuts in the same folder (all double-click, zero
+typing): **Stop**, **Backup TOEFL House ERP** (full database + files into a
+folder you can copy to an external drive), **Repair TOEFL House ERP** (safe
+restart + migration rerun; never deletes data).
+
+**Verification classes, stated plainly:** the underlying runtime commands the
+image executes are VERIFIED IN HOSTED ENVIRONMENT ONLY (same shapes as hosted
+runs 36119829355/36187282428, 123/123, and 36161953566, 596/596, on this
+branch). The packaging layer itself — compose/service wiring, pin parity with
+the matrix, loopback-only exposure, secret-generation-without-literals,
+bootstrap idempotence — is VERIFIED by the shipped contract tests and static
+checks executed in this environment. The full image build and the end-to-end
+Windows run are **NOT EXECUTED** in this engineering environment (no Docker
+daemon, no Windows): treat first-run discrepancies as defects and report
+them. **Production remains REJECT; internet exposure remains tied to the
+authorized server path in
+[docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md), and
+the owner-value carriers (D1/D3/D4/D7) stay fail-closed until you enter real
+values in the TH policy DocTypes.**
+
 ## Operator setup from a Windows desktop (supported path: WSL2 + Ubuntu 24.04)
 
 One path. There is **no native Windows support and no Windows installer**; the

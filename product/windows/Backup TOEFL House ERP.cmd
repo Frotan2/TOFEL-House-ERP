@@ -1,0 +1,19 @@
+@echo off
+rem Creates a full database + files backup of TOEFL House ERP.
+rem The backup files appear next to this folder under data\sites\...
+cd /d "%~dp0.."
+title Backing up TOEFL House ERP
+docker compose exec web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
+if errorlevel 1 (
+  echo.
+  echo  Backup failed. Make sure the system is running, then try again.
+  pause
+  exit /b 1
+)
+echo.
+echo  Backup finished. Backup files are in:
+echo    %CD%\data\sites\toeflhouse.localhost\private\backups
+echo  Copy that folder to an external drive for safekeeping.
+echo  Note: restore is a guided operator step (see docs/engineering/LAUNCH-RUNBOOK.md).
+pause
+exit /b 0

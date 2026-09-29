@@ -1,0 +1,126 @@
+# TOEFL House ERP — one-click desktop product runtime.
+#
+# Service images are the reviewed, digest-pinned MariaDB/Redis from
+# docs/engineering/foundation-version-matrix.json (guarded by
+# tests/foundation/test_product_packaging.py so they can never silently drift).
+# The application image is built locally from pinned upstream commits plus the
+# owned apps (product/app.Dockerfile); nothing is pulled from an unreviewed tag.
+#
+# Desktop profile: loopback-only exposure on the Windows host (127.0.0.1), the
+# same shape as the hosted loopback lab. The hardened nginx realtime edge
+# remains the authorized-server production profile
+# (docs/engineering/LAUNCH-RUNBOOK.md) and is out of scope here, as before.
+name: toefl-house-erp
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: product/app.Dockerfile
+    image: toefl-house-erp-app:local
+    container_name: toefl-house-erp-web
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-queue:
+        condition: service_started
+      redis-cache:
+        condition: service_started
+    # First boot runs the idempotent site bootstrap (product/bootstrap.py),
+    # then starts gunicorn on 127.0.0.1-behind-loopback. Subsequent boots skip
+    # completed steps and run migrate only.
+    entrypoint: ["/product/entrypoint.sh"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data/sites:/home/frappe/bench/sites
+      - ./data/logs:/home/frappe/bench/logs
+      - ./data/secrets:/run/secrets:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 20
+      start_period: 25m
+    restart: unless-stopped
+
+  worker:
+    image: toefl-house-erp-app:local
+    container_name: toefl-house-erp-worker
+    # Starts beside web; the site may still be bootstrapping on first boot, so
+    # this service restarts itself until the site exists instead of blocking.
+    depends_on:
+      web:
+        condition: service_started
+      db:
+        condition: service_healthy
+    command: ["/build/tools/bin/bench", "--site", "all", "worker", "--queue", "short,default,long"]
+    working_dir: /home/frappe/bench
+    volumes:
+      - ./data/sites:/home/frappe/bench/sites
+      - ./data/logs:/home/frappe/bench/logs
+    restart: on-failure
+
+  scheduler:
+    image: toefl-house-erp-app:local
+    container_name: toefl-house-erp-scheduler
+    depends_on:
+      web:
+        condition: service_started
+      db:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "exec /build/tools/bin/bench --site toeflhouse.localhost schedule"]
+    working_dir: /home/frappe/bench
+    volumes:
+      - ./data/sites:/home/frappe/bench/sites
+      - ./data/logs:/home/frappe/bench/logs
+    restart: on-failure
+
+  socketio:
+    image: toefl-house-erp-app:local
+    container_name: toefl-house-erp-socketio
+    depends_on:
+      web:
+        condition: service_started
+    command: ["node", "apps/frappe/socketio.js"]
+    working_dir: /home/frappe/bench
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - ./data/sites:/home/frappe/bench/sites
+      - ./data/logs:/home/frappe/bench/logs
+    restart: on-failure
+
+  db:
+    # Digest pinned: MariaDB 11.8.9 (see foundation-version-matrix.json).
+    image: mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62
+    container_name: toefl-house-erp-db
+    env_file:
+      - ./data/secrets/db.env
+    environment:
+      MARIADB_ROOT_HOST: "%"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  redis-queue:
+    # Digest pinned: Redis 8.6.6 (see foundation-version-matrix.json).
+    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36
+    container_name: toefl-house-erp-redis-queue
+    restart: unless-stopped
+
+  redis-cache:
+    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36
+    container_name: toefl-house-erp-redis-cache
+    restart: unless-stopped
+
+volumes:
+  db-data:
