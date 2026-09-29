@@ -1,0 +1,24 @@
+{
+  "date": "2026-09-30",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "One new advisory (GitHub Advisory Database publication 2026-08-27; reviewed/updated 2026-09-29, i.e. after the 2026-09-25 feed-delta round and the 2026-09-29 delta) matching the pinned markdown-it@14.0.0 in the Education/HRMS SPA frontend dependency trees. Hosted run 36628837943 correctly failed closed (hosted-full-stack-dependency-audit + hosted-frontend-advisory-audit, exit 1 each) because no register or delta covered it. Reachability traced line-by-line in the pinned trees/artifacts (see README.md in this directory).",
+  "packages": [
+    {
+      "package": "npm:markdown-it@14.0.0",
+      "advisories": [
+        {
+          "id": "GHSA-253c-mchw-3w2r",
+          "aliases": [],
+          "severity": "moderate",
+          "published": "2026-08-27T00:00:00Z",
+          "vulnerable_range": "< 14.3.1",
+          "first_patched": "14.3.1",
+          "summary": "markdown-it linkify: true has two quadratic paths, so a few hundred KB of markdown blocks the event loop for tens of seconds",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Both vulnerable paths are gated on markdown-it option linkify:true (advisory caveat: 'linkify is off by default, so this only reaches apps that turn it on'). Markdown-it enters the pinned SPAs only transitively: education@93bc7075 frontend/yarn.lock:1228-1230 (markdown-it@^14.0.0 -> 14.0.0) is required solely by prosemirror-markdown@^1.12.0 (yarn.lock:1518-1523) via @tiptap/pm@2.2.3 (yarn.lock:376-387); hrms@a4768b44 frontend/yarn.lock:4293-4298 (markdown-it@^13.0.1 -> 13.0.1, likewise < 14.3.1) via prosemirror-markdown@^1.10.1 (yarn.lock:4782). prosemirror-markdown@1.12.0 constructs its only markdown-it instance as MarkdownIt(\"commonmark\", { html: false }) (dist/index.js:347) with no option override; the 1.10.1 line uses the same default-constructor design. markdown-it@14.0.0 ships linkify:false for every preset (dist/markdown-it.js:6339, 6375, 6417) and the vulnerable rules bail out immediately when the option is off (dist/markdown-it.js:2199 core rule, 4316 inline rule). No source in education@93bc7075 frontend/src, hrms@a4768b44 frontend/src, or frappe-ui@0.1.31 (npm artifact, src verified) instantiates MarkdownIt or sets linkify; frappe-ui's markdown utility uses showdown, not markdown-it (frappe-ui-0.1.31 src/utils/markdown.js). Impact is additionally availability-only (client event loop), and markdown-it ships only in the Education/HRMS SPA frontends which are outside TH launch scope (per-finding-remediation-analysis-2026-09-23.json).",
+          "fix_path": "Official Frappe Education/HRMS releases carrying markdown-it >= 14.3.1 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        }
+      ]
+    }
+  ]
+}

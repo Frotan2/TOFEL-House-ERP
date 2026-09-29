@@ -68,6 +68,20 @@ class AdvisoryAnnotationTests(unittest.TestCase):
             py=[{"package": "x", "version": "1", "id": None}]), None)
         self.assertIn("unidentified", lines[0])
 
+    def test_missing_severity_is_rendered_as_question_mark(self):
+        # Observed in production output of hosted run 36628837943: newly
+        # published advisories whose severity the feed has not yet populated
+        # render as "(?)", never as an empty string or a dropped finding.
+        lines = advisory_finding_annotations(stack(
+            py=[{"package": "pypdf", "version": "6.15.0", "id": "GHSA-aa11-bb22-cc33"},
+                {"package": "pypdf", "version": "6.15.0", "id": "GHSA-dd44-ee55-ff66",
+                 "severity": None}]), None)
+        text = lines[0]
+        self.assertIn("advisory matches=2 in 1 packages", text)
+        self.assertIn("GHSA-aa11-bb22-cc33(?)", text)
+        self.assertIn("GHSA-dd44-ee55-ff66(?)", text)
+        self.assertNotIn("()", text)
+
     def test_runtime_emits_annotations_from_its_own_reports(self):
         source = (Path(__file__).resolve().parents[2]
                   / "tools/foundation/runtime_install.py").read_text()

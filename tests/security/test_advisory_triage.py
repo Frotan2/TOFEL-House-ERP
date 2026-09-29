@@ -141,5 +141,56 @@ class AdvisoryDeltaTests(unittest.TestCase):
                              bad_pkg, fail_on_covered=True, source="test")
 
 
+class AdvisoryDeltaSeptember30Tests(unittest.TestCase):
+    """The 2026-09-30 delta closes the markdown-it linkify DoS surfaced by
+    hosted foundation-runtime run 36628837943 (both advisory audits exit 1)."""
+
+    DELTA = json.loads((ROOT / "docs/engineering/evidence/sec-deps-01/advisory-delta-2026-09-30"
+                        "/delta-dispositions.json").read_text())
+
+    def test_delta_register_is_loaded_and_dated(self):
+        triage = t.load_triage()
+        self.assertIn("advisory-delta-2026-09-30", triage["deltas"])
+        self.assertEqual(self.DELTA["date"], "2026-09-30")
+
+    def test_markdown_it_linkify_advisory_resolves_via_npm_triage(self):
+        triage = t.load_triage()
+        res = t.triage_npm({"markdown-it": [
+            {"id": 999999, "severity": "moderate", "title": "markdown-it linkify quadratic DoS",
+             "url": "https://github.com/advisories/GHSA-253c-mchw-3w2r"}]}, triage)
+        self.assertEqual(res["untriaged"], [])
+        self.assertEqual(res["open"], 0)
+        self.assertEqual(t.overall_status(npm_result=res), "pass")
+        finding = res["findings"][0]
+        self.assertEqual(finding["disposition"], "NOT_REACHABLE")
+        self.assertIn("linkify", finding["disposition_evidence"])
+
+    def test_delta_disposition_is_closed_and_evidence_backed(self):
+        pkg, = self.DELTA["packages"]
+        self.assertEqual(pkg["package"], "npm:markdown-it@14.0.0")
+        adv, = pkg["advisories"]
+        self.assertEqual(adv["id"], "GHSA-253c-mchw-3w2r")
+        self.assertEqual(adv["runtime_disposition"], "NOT_REACHABLE")
+        evidence = adv["runtime_disposition_evidence"]
+        for anchor in ("93bc7075", "a4768b44", "dist/index.js:347", "dist/markdown-it.js"):
+            self.assertIn(anchor, evidence)
+
+    def test_unknown_stay_regressions(self):
+        triage = t.load_triage()
+        res = t.triage_npm({"markdown-it": [
+            {"id": 1, "severity": "high",
+             "url": "https://github.com/advisories/GHSA-zzzz-zzzz-zzzz"}]}, triage)
+        self.assertEqual(len(res["untriaged"]), 1)
+        self.assertEqual(res["findings"][0]["disposition"], "REGRESSION")
+
+    def test_delta_may_not_redefine_the_2026_09_29_delta_or_register(self):
+        # markdown-it siblings registered earlier must stay defined exactly once.
+        triage = t.load_triage()
+        self.assertIn(t._norm("GHSA-6v5v-wf23-fmfq"), triage["by_id"])
+        delta_ids = {t._norm(adv["id"]) for pkg in self.DELTA["packages"] for adv in pkg["advisories"]}
+        self.assertNotIn(t._norm("GHSA-6v5v-wf23-fmfq"), delta_ids)
+        self.assertNotIn(t._norm("GHSA-38c4-r59v-3vqw"), delta_ids)
+
+
 if __name__ == "__main__":
     unittest.main()
