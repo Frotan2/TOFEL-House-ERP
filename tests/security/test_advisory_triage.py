@@ -76,5 +76,70 @@ class AdvisoryTriageTests(unittest.TestCase):
         self.assertTrue(rec.get("runtime_disposition_evidence"))
 
 
+class AdvisoryDeltaTests(unittest.TestCase):
+    """Dated, additive deltas extend the immutable 2026-09-23 register."""
+
+    DELTA = json.loads((ROOT / "docs/engineering/evidence/sec-deps-01/advisory-delta-2026-09-29"
+                        "/delta-dispositions.json").read_text())
+
+    def test_delta_register_is_loaded_and_dated(self):
+        triage = t.load_triage()
+        self.assertIn("advisory-delta-2026-09-29", triage["deltas"])
+        self.assertGreaterEqual(triage["delta_advisories"], 3)
+        self.assertEqual(self.DELTA["date"], "2026-09-29")
+
+    def test_new_2026_09_29_advisories_resolve_to_recorded_dispositions(self):
+        triage = t.load_triage()
+        findings = [{"package": {"name": "oauthlib", "ecosystem": "PyPI"}, "version": "3.3.1",
+                     "id": "GHSA-hj66-6f7g-4r5v", "aliases": []},
+                    {"package": {"name": "oauthlib", "ecosystem": "PyPI"}, "version": "3.3.1",
+                     "id": "GHSA-xpv3-w29h-x7cv", "aliases": ["CVE-2026-49265"]},
+                    {"package": {"name": "pyjwt", "ecosystem": "PyPI"}, "version": "2.13.0",
+                     "id": "GHSA-w6j9-cwv2-h6wq", "aliases": []}]
+        res = t.triage_python(findings, triage)
+        self.assertEqual(res["untriaged"], [])
+        self.assertEqual(res["open"], 0)
+        self.assertEqual(t.overall_status(py_result=res), "pass")
+        dispositions = {(f["package"], f["id"]): f["disposition"] for f in res["findings"]}
+        self.assertEqual(dispositions[("oauthlib", "GHSA-hj66-6f7g-4r5v")], "NOT_REACHABLE")
+        self.assertEqual(dispositions[("oauthlib", "GHSA-xpv3-w29h-x7cv")], "NOT_REACHABLE")
+        self.assertEqual(dispositions[("pyjwt", "GHSA-w6j9-cwv2-h6wq")], "NOT_REACHABLE")
+
+    def test_delta_dispositions_are_closed_and_evidence_backed(self):
+        for pkg in self.DELTA["packages"]:
+            self.assertTrue(pkg["package"].startswith("py:"))
+            for adv in pkg["advisories"]:
+                self.assertIn(adv["runtime_disposition"],
+                              {"MITIGATED", "NOT_REACHABLE", "BUILD_ONLY", "DEV_ONLY",
+                               "INSTALL_ONLY", "BROWSER_SELF_DENIAL"})
+                self.assertTrue(adv["runtime_disposition_evidence"])
+                self.assertIn("988e54f3", adv["runtime_disposition_evidence"])
+
+    def test_related_cve_aliases_also_resolve(self):
+        triage = t.load_triage()
+        rec = t.disposition_for_finding(triage, package="py:oauthlib@3.3.1",
+                                        advisories=["CVE-2026-49265"])
+        self.assertIsNotNone(rec)
+        self.assertEqual(rec["runtime_disposition"], "NOT_REACHABLE")
+
+    def test_unknown_stay_regressions_even_with_deltas_loaded(self):
+        triage = t.load_triage()
+        rec = t.disposition_for_finding(triage, package="py:oauthlib@3.3.1",
+                                        advisories=["GHSA-zzzz-zzzz-zzzz"])
+        self.assertIsNone(rec)
+
+    def test_no_delta_may_redefine_a_covered_advisory(self):
+        # The real delta file only adds ids; a redefinition attempt must fail loud.
+        real = t.load_triage()
+        bad_pkg = {"package": "npm:ws@8.11.0", "advisories": [
+            {"id": "GHSA-3h5v-q93c-6h6q", "runtime_disposition": "NOT_REACHABLE"}]}
+        # sanity: that id is truly covered by the existing register
+        self.assertIn(t._norm("GHSA-3h5v-q93c-6h6q"), real["by_id"])
+        import copy
+        with self.assertRaises(SystemExit):
+            t._index_package(real["by_id"], copy.deepcopy(real["by_package"]),
+                             bad_pkg, fail_on_covered=True, source="test")
+
+
 if __name__ == "__main__":
     unittest.main()

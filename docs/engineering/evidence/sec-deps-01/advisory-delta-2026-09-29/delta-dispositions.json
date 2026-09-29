@@ -1,0 +1,53 @@
+{
+  "date": "2026-09-29",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "Three new advisories published 2026-09-29 matching pinned versions; hosted run 36615251941 correctly failed closed (REGRESSION) because the immutable 2026-09-23 register could not know them. Reachability traced line-by-line in the verified pinned tree frappe@988e54f3c4c291e2077a83809663f123731abe76 (see README.md in this directory).",
+  "packages": [
+    {
+      "package": "py:oauthlib@3.3.1",
+      "advisories": [
+        {
+          "id": "GHSA-hj66-6f7g-4r5v",
+          "aliases": ["CVE-2026-49264"],
+          "severity": "moderate",
+          "published": "2026-09-29T17:53:41Z",
+          "vulnerable_range": ">= 0.6.1, <= 3.3.1",
+          "first_patched": "4.0.0",
+          "summary": "Oauthlib: unsafe JSONP callback injection in RevocationEndpoint allows arbitrary JavaScript response generation",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "frappe@988e54f3 integrations/oauth2.py:189-202: frappe.integrations.oauth2.revoke_token discards the oauthlib-generated revocation response entirely (frappe.local.response = frappe._dict({}); only http_status_code is forwarded). The injected response content that this advisory exploits can never reach a client; the endpoint is also POST-only. Pinned-tree source trace in advisory-delta-2026-09-29/README.md.",
+          "fix_path": "Official Frappe v16 release carrying oauthlib >= 4.0.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        },
+        {
+          "id": "GHSA-xpv3-w29h-x7cv",
+          "aliases": ["CVE-2026-49265"],
+          "severity": "moderate",
+          "published": "2026-09-29T17:56:31Z",
+          "vulnerable_range": ">= 3.0.0, < 4.0.0",
+          "first_patched": "4.0.0",
+          "summary": "Oauthlib: timing attack in PKCE code_verifier comparison (CWE-208)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "frappe@988e54f3 oauth.py:87-89 and 144-165: frappe implements its own PKCE storage and verification (sha256/base64url of code_verifier compared to the stored code_challenge) and never invokes oauthlib's PKCE verification path that this advisory covers. Pinned-tree source trace in advisory-delta-2026-09-29/README.md. Residual note recorded there: frappe's own compare is a plain string equality; that is a distinct, non-advisory observation, not this advisory.",
+          "fix_path": "Official Frappe v16 release carrying oauthlib >= 4.0.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        }
+      ]
+    },
+    {
+      "package": "py:pyjwt@2.13.0",
+      "advisories": [
+        {
+          "id": "GHSA-w6j9-cwv2-h6wq",
+          "aliases": ["CVE-2026-102274"],
+          "severity": "moderate",
+          "published": "2026-09-29T18:23:01Z",
+          "vulnerable_range": ">= 2.9.0, <= 2.13.0",
+          "first_patched": "2.14.0",
+          "summary": "PyJWT: malformed RSA JWK aborts parsing of an entire JWK Set",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "The vulnerable code path is PyJWKSet/JWKS parsing. Pinned frappe@988e54f3 contains no PyJWKSet/PyJWKSClient import or instantiation anywhere (repository-wide source search); every jwt use is encode/decode with explicit keys (oauth.py:304, 441, 520; utils/oauth.py:179), and jwks_uri exists solely as an unbound Social Login Key type hint (integrations/utils.py:45). No operator flow, bootstrap, product packaging, or launcher in this repository configures a JWKS-based social login. Pinned-tree source trace in advisory-delta-2026-09-29/README.md.",
+          "fix_path": "Official Frappe v16 release carrying pyjwt >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        }
+      ]
+    }
+  ]
+}

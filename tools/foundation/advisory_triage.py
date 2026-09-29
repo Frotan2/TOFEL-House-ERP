@@ -29,6 +29,14 @@ CLOSED_DISPOSITIONS = frozenset((
     "MITIGATED", "NOT_REACHABLE", "BUILD_ONLY", "DEV_ONLY",
     "INSTALL_ONLY", "BROWSER_SELF_DENIAL",
 ))
+
+# Additive, dated deltas. The 2026-09-23 register is immutable evidence and is
+# never edited. Advisories published later enter ONLY as new dated delta files
+# (advisory-delta-<YYYY-MM-DD>/delta-dispositions.json), each pointing at the
+# same reachability classes with pinned-source evidence. A delta can add new
+# advisory ids/aliases but may never redefine an id the register or an earlier
+# delta already covers — any collision fails the loader loud, never silently.
+DELTA_PATTERN = "advisory-delta-*/delta-dispositions.json"
 OPEN_DISPOSITIONS = frozenset(("OWNER_DECISION_REQUIRED", "BLOCKED"))
 
 # Advisory id shape. GHSA-xxxx-xxxx-xxxx, CVE-2024-xxxxx, PYSEC-2026-xxxx,
@@ -47,24 +55,53 @@ def _package_basename(pkg: str) -> str:
     return pkg.split("@", 1)[0].lower()
 
 
-def load_triage(path: Path | None = None) -> dict[str, Any]:
-    """Return {advisory_id: disposition record}, plus the package index."""
+def _index_package(by_id: dict, by_pkg: dict, pkg: dict, *, fail_on_covered: bool, source: str) -> int:
+    base = _package_basename(pkg["package"])
+    entries = by_pkg.setdefault(base, [])
+    merged = 0
+    for adv in pkg["advisories"]:
+        keys = [_norm(adv["id"])] + [_norm(a) for a in adv.get("aliases", []) or [] if a]
+        duplicates = [key for key in keys if key and key in by_id]
+        if duplicates and fail_on_covered:
+            raise SystemExit(f"{source} redefines advisory ids already covered elsewhere: {duplicates}")
+        record = {"package": pkg["package"], **adv}
+        if source != "register":
+            record = {**record, "source_delta": source}
+        first = keys[0]
+        by_id[first] = record
+        # Also index aliases (CVE/GHSA cross refs)
+        for key in keys[1:]:
+            if key:
+                by_id.setdefault(key, record)
+        entries.append(record)
+        merged += 1
+    return merged
+
+
+def load_triage(path: Path | None = None, *, include_deltas: bool = True) -> dict[str, Any]:
+    """Return {advisory_id: disposition record}, plus the package index.
+
+    Merges additive, dated delta registers (never modifying the immutable
+    2026-09-23 base). Deltas may only *add* advisory ids; redefinition of a
+    covered id — from any source, including two deltas — raises immediately.
+    """
     path = path or TRIAGE_JSON
     data = json.loads(path.read_text())
     by_id: dict[str, dict[str, Any]] = {}
     by_pkg: dict[str, list[dict[str, Any]]] = {}
     for pkg in data["packages"]:
-        base = _package_basename(pkg["package"])
-        entries = by_pkg.setdefault(base, [])
-        for adv in pkg["advisories"]:
-            aid_norm = _norm(adv["id"])
-            record = {"package": pkg["package"], **adv}
-            by_id[aid_norm] = record
-            # Also index aliases (CVE/GHSA cross refs)
-            for alias in adv.get("aliases", []) or []:
-                by_id.setdefault(_norm(alias), record)
-            entries.append(record)
-    return {"by_id": by_id, "by_package": by_pkg, "totals": data.get("totals", {})}
+        _index_package(by_id, by_pkg, pkg, fail_on_covered=False, source="register")
+    deltas: list[str] = []
+    merged = 0
+    if include_deltas:
+        for delta_path in sorted(path.parent.glob(DELTA_PATTERN)):
+            delta_data = json.loads(delta_path.read_text())
+            source = delta_path.parent.name
+            for pkg in delta_data["packages"]:
+                merged += _index_package(by_id, by_pkg, pkg, fail_on_covered=True, source=source)
+            deltas.append(source)
+    return {"by_id": by_id, "by_package": by_pkg, "totals": data.get("totals", {}),
+            "deltas": deltas, "delta_advisories": merged}
 
 
 def _extract_ids(text: str) -> list[str]:
