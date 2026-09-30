@@ -477,13 +477,6 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "create_adjustment_posting_policy": "business_policy",
             "set_adjustment_posting_version": "business_policy",
             "set_adjustment_posting_status": "business_policy",
-            # D7 metric stewardship (decision classification, 2026-09-25):
-            # same authority — the steward and disclosure rules are owner
-            # business values; engineering binds the kinds, picks none.
-            "create_metric_stewardship_policy": "business_policy",
-            "set_metric_stewardship_policy_version": "business_policy",
-            "set_metric_stewardship_policy_status": "business_policy",
-            "validate_metric_stewardship_policy": "business_policy",
             # Track 2 alerting/receiver (decision classification, 2026-09-25):
             # receiver selection plus retention/escalation are owner policy;
             # engineering binds the kinds, picks none.
@@ -491,14 +484,6 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "set_alerting_policy_version": "business_policy",
             "set_alerting_policy_status": "business_policy",
             "validate_alerting_policy": "business_policy",
-            # Track 3 capacity/availability (decision classification,
-            # 2026-09-25): O-D8N numeric objectives are owner numbers;
-            # engineering binds the kinds, picks none, and the release
-            # gate never reads these settings.
-            "create_capacity_objective": "business_policy",
-            "set_capacity_objective_version": "business_policy",
-            "set_capacity_objective_status": "business_policy",
-            "validate_capacity_objective": "business_policy",
             # Track 4 guardian lifecycle (decision classification,
             # 2026-09-25): O-D4 lifecycle terms are owner policy; the
             # SEC-GUARDIAN-01 containment stands untouched and is never

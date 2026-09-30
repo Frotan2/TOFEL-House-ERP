@@ -29,12 +29,8 @@ SLUG = "th-configuration"
 
 ASSESSMENT_POLICY = "TH Assessment Policy"
 ASSESSMENT_VERSION = "TH Assessment Policy Version"
-STEWARDSHIP_POLICY = "TH Metric Stewardship Policy"
-STEWARDSHIP_VERSION = "TH Metric Stewardship Policy Version"
 ALERTING_POLICY = "TH Alerting Policy"
 ALERTING_VERSION = "TH Alerting Policy Version"
-CAPACITY_POLICY = "TH Capacity Objective"
-CAPACITY_VERSION = "TH Capacity Objective Version"
 GUARDIAN_POLICY = "TH Guardian Lifecycle Policy"
 GUARDIAN_VERSION = "TH Guardian Lifecycle Policy Version"
 CONFIG_AUDIT = "TH Configuration Audit Event"
@@ -46,20 +42,12 @@ FACET_FIELDS = ["components", "weights", "pass_rules", "rubrics",
 VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
                   "grading_scale"] + FACET_FIELDS + [
                       "reason", "set_by", "set_on", "superseded_on"]
-STEWARDSHIP_FIELDS = ["name", "code", "title", "status", "description",
-                      "modified"]
-STEWARDSHIP_VERSION_FIELDS = ["name", "parent", "parenttype",
-                              "effective_from", "steward_role", "reason",
-                              "set_by", "set_on", "superseded_on"]
-ALERTING_FIELDS = STEWARDSHIP_FIELDS
+ALERTING_FIELDS = ["name", "code", "title", "status", "description",
+                   "modified"]
 ALERTING_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
                            "channel_kind", "escalate_after_minutes",
                            "retention_days", "reason", "set_by", "set_on",
                            "superseded_on"]
-CAPACITY_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
-                           "concurrent_users_target", "document_scale_target",
-                           "read_share_percent", "availability_target_percent",
-                           "reason", "set_by", "set_on", "superseded_on"]
 GUARDIAN_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
                            "delegation_window_days", "pre_admission_proxy",
                            "consent_evidence", "consent_expiry_days",
@@ -67,14 +55,11 @@ GUARDIAN_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
 
 # Domains with no configuration surface yet. Each renders as an
 # explicit "not implemented" fact — never a dead link, never a guessing
-# readiness badge. (Reporting & Metrics left this list when the D7
-# metric-stewardship carrier shipped on 2026-09-25; the Operations entry
-# left it the same day, when the alerting receiver-policy carrier became
-# a real Operations section below; the capacity objective joined it
-# later the same day (O-D8N numbers-only carrier); Student & Guardian
-# left it when the O-D4 guardian lifecycle carrier shipped later that
-# day.)
+# readiness badge.
 FUTURE_DOMAINS = (
+    ("reporting-metrics", "Reporting & Metrics",
+     "Reports use native ERPNext/Education reporting; no derived-metric "
+     "definitions are configured."),
     ("finance", "Finance",
      "Correction terms live on the Finance desk; tax readiness arrives "
      "in a later phase."),
@@ -106,23 +91,9 @@ def work():
     for row in versions:
         versions_by_policy.setdefault(row.get("parent"), []).append(row)
 
-    stewardship = project_rows("configuration", STEWARDSHIP_POLICY,
-                               STEWARDSHIP_FIELDS, order_by="code asc",
-                               limit=LIMIT_QUEUES)
-    stewardship_versions = project_rows(
-        "configuration", STEWARDSHIP_VERSION, STEWARDSHIP_VERSION_FIELDS,
-        filters={"parenttype": STEWARDSHIP_POLICY},
-        order_by="effective_from asc", limit=LIMIT_QUEUES * 4)
-    stewardship_by_policy = {}
-    for row in stewardship_versions:
-        stewardship_by_policy.setdefault(row.get("parent"), []).append(row)
-
     readiness_by_policy, faults = _domain_readiness(
         policies, versions_by_policy, today, "assessment policy",
         "validate_assessment_policy", _current_validation)
-    stewardship_readiness, stewardship_faults = _domain_readiness(
-        stewardship, stewardship_by_policy, today, "metric-stewardship policy",
-        "validate_metric_stewardship_policy", _current_validation)
     alerting = project_rows("configuration", ALERTING_POLICY,
                             ALERTING_FIELDS, order_by="code asc",
                             limit=LIMIT_QUEUES)
@@ -136,19 +107,6 @@ def work():
     alerting_readiness, alerting_faults = _domain_readiness(
         alerting, alerting_by_policy, today, "alerting policy",
         "validate_alerting_policy", _current_validation)
-    capacity = project_rows("configuration", CAPACITY_POLICY,
-                            ALERTING_FIELDS, order_by="code asc",
-                            limit=LIMIT_QUEUES)
-    capacity_versions = project_rows(
-        "configuration", CAPACITY_VERSION, CAPACITY_VERSION_FIELDS,
-        filters={"parenttype": CAPACITY_POLICY},
-        order_by="effective_from asc", limit=LIMIT_QUEUES * 4)
-    capacity_by_policy = {}
-    for row in capacity_versions:
-        capacity_by_policy.setdefault(row.get("parent"), []).append(row)
-    capacity_readiness, capacity_faults = _domain_readiness(
-        capacity, capacity_by_policy, today, "capacity objective",
-        "validate_capacity_objective", _current_validation)
     guardian = project_rows("configuration", GUARDIAN_POLICY,
                             ALERTING_FIELDS, order_by="code asc",
                             limit=LIMIT_QUEUES)
@@ -162,8 +120,7 @@ def work():
     guardian_readiness, guardian_faults = _domain_readiness(
         guardian, guardian_by_policy, today, "guardian lifecycle policy",
         "validate_guardian_lifecycle_policy", _current_validation)
-    all_faults = faults + stewardship_faults + alerting_faults \
-        + capacity_faults + guardian_faults
+    all_faults = faults + alerting_faults + guardian_faults
 
     sections = [
         section("academic", "Academic", "links",
@@ -193,19 +150,9 @@ def work():
                            "access remain exactly as the SEC-GUARDIAN-01 "
                            "containment enforces."))
     sections.append(
-        section("reporting-metrics", "Reporting & Metrics", "facts",
-                facts=_stewardship_facts(stewardship, stewardship_readiness,
-                                         stewardship_by_policy, today),
-                empty_title="No metric-stewardship policy exists",
-                empty_body="Derived metrics stay refused (fail-closed) until "
-                           "the Course Owner enters the steward and "
-                           "disclosure policy."))
-    sections.append(
         section("operations", "Operations", "facts",
                 facts=_alerting_facts(alerting, alerting_readiness,
-                                      alerting_by_policy, today)
-                + _capacity_facts(capacity, capacity_readiness,
-                                  capacity_by_policy, today),
+                                      alerting_by_policy, today),
                 empty_title="No alerting policy exists",
                 empty_body="Alert delivery stays refused (fail-closed) until "
                            "the Course Owner selects a receiver and its "
@@ -214,11 +161,9 @@ def work():
                             items=_readiness_items(
                                 policies, versions_by_policy,
                                 readiness_by_policy, all_faults, today,
-                                stewardship, stewardship_by_policy,
-                                stewardship_readiness, alerting,
+                                alerting,
                                 alerting_by_policy, alerting_readiness,
-                                capacity, capacity_by_policy,
-                                capacity_readiness, guardian,
+                                guardian,
                                 guardian_by_policy, guardian_readiness),
                             empty_title="Nothing configured yet",
                             empty_body="No assessment policy exists; the "
@@ -231,7 +176,7 @@ def work():
 
 def _domain_readiness(policies, versions_by_policy, today, what,
                       validate_action, evidence_lookup):
-    """Computed readiness per policy for one domain (assessment/stewardship).
+    """Computed readiness per policy for one domain (assessment/alerting/guardian).
 
     Same rule for both carriers: evidence is matched by count against the
     exact current snapshot, ambiguous history surfaces as an integrity
@@ -272,39 +217,6 @@ def _current_validation(policy_name, snapshot, validate_action):
     }) > 0
 
 
-def _stewardship_facts(policies, readiness_by_policy, versions_by_policy,
-                       today):
-    """The Reporting & Metrics domain facts for the configuration map.
-
-    The D7 carrier is a shell with no owner values until the Course Owner
-    versions it; the desk says exactly that, and names the governing
-    steward only when the engine computes one. Fail-closed language is
-    deliberate: derived metrics refuse while nothing governs.
-    """
-    facts = []
-    for policy in policies:
-        readiness = readiness_by_policy.get(policy["name"])
-        if not readiness:
-            continue
-        rows = versions_by_policy.get(policy["name"], [])
-        governing = foundation.resolve_governing(rows, today)
-        steward = (governing.get("steward_role") or "") if governing else ""
-        facts.append({
-            "value": readiness.capitalize(),
-            "label": f"{policy['code']} configuration readiness",
-            "definition": (
-                "Metric stewardship governs whether derived metrics may be "
-                "defined at all. "
-                + (f"Governing since {governing.get('effective_from')} "
-                   f"with steward role {steward}."
-                   if governing else
-                   ("Versions exist but none governs today."
-                    if rows else
-                    "No versions; derived metrics stay refused "
-                    "(fail-closed).")))})
-    return facts
-
-
 def _alerting_facts(policies, readiness_by_policy, versions_by_policy,
                     today):
     """The Operations domain facts for the configuration map.
@@ -341,49 +253,6 @@ def _alerting_facts(policies, readiness_by_policy, versions_by_policy,
                 ("Versions exist but none governs today."
                  if rows else
                  "No versions; alert delivery stays refused "
-                 "(fail-closed)."))})
-    return facts
-
-
-def _capacity_facts(policies, readiness_by_policy, versions_by_policy,
-                    today):
-    """The Operations capacity-objective facts for the configuration map.
-
-    The O-D8N carrier records the owner's four numbers ONLY as owner
-    intent: the desk names them only when the engine computes a
-    governing version, and says plainly that measurement is a real-host
-    engineering proof. Fail-closed language is deliberate: no number may
-    be claimed while nothing governs.
-    """
-    facts = []
-    for policy in policies:
-        readiness = readiness_by_policy.get(policy["name"])
-        if not readiness:
-            continue
-        rows = versions_by_policy.get(policy["name"], [])
-        governing = foundation.resolve_governing(rows, today)
-        users = governing.get("concurrent_users_target") if governing else None
-        documents = (governing.get("document_scale_target")
-                     if governing else None)
-        share = governing.get("read_share_percent") if governing else None
-        availability = (governing.get("availability_target_percent")
-                        if governing else None)
-        facts.append({
-            "value": readiness.capitalize(),
-            "label": f"{policy['code']} configuration readiness",
-            "definition": (
-                "The capacity objective records the owner's numeric "
-                "capacity and availability objectives; measurement against "
-                "them is a real-host engineering proof and the release "
-                "gate never reads these settings. "
-                + (f"Governing since {governing.get('effective_from')}: "
-                   f"{users} concurrent user(s), {documents} document(s), "
-                   f"{share}% read share, {availability}% availability "
-                   "objective.")
-                if governing else
-                ("Versions exist but none governs today."
-                 if rows else
-                 "No versions; no capacity objective may be claimed "
                  "(fail-closed)."))})
     return facts
 
@@ -428,11 +297,8 @@ def _guardian_facts(policies, readiness_by_policy, versions_by_policy,
 
 
 def _readiness_items(policies, versions_by_policy, readiness_by_policy,
-                     faults, today, stewardship=(), stewardship_by_policy=None,
-                     stewardship_readiness=None, alerting=(),
-                     alerting_by_policy=None, alerting_readiness=None,
-                     capacity=(), capacity_by_policy=None,
-                     capacity_readiness=None, guardian=(),
+                     faults, today, alerting=(),
+                     alerting_by_policy=None, alerting_readiness=None, guardian=(),
                      guardian_by_policy=None, guardian_readiness=None):
     items = []
     for fault in faults:
@@ -480,39 +346,6 @@ def _readiness_items(policies, versions_by_policy, readiness_by_policy,
             "next_role": "Course Owner",
             "waiting_since": None,
         })
-    for policy in (stewardship or []):
-        name = policy["name"]
-        readiness = (stewardship_readiness or {}).get(name)
-        if not readiness:
-            continue
-        rows = (stewardship_by_policy or {}).get(name, [])
-        governing = foundation.resolve_governing(rows, today)
-        detail = f"{len(rows)} version(s)"
-        if governing:
-            detail += f"; governing since {governing.get('effective_from')}"
-            steward = governing.get("steward_role") or ""
-            detail += f"; steward role: {steward}" if steward else "; no steward named"
-        elif rows:
-            detail += "; nothing effective yet"
-        else:
-            detail += "; no versions"
-        items.append({
-            "id": policy["code"],
-            "person": policy["title"],
-            "detail": detail,
-            "status": readiness.capitalize(),
-            "stage": "Reporting & Metrics",
-            "stage_definition": ("Computed configuration readiness for the "
-                                 "D7 metric-stewardship policy. Derived "
-                                 "metrics stay refused until a version "
-                                 "governs. Production readiness is separate "
-                                 "and is never decided here."),
-            "next": _readiness_next(policy, readiness, governing, rows,
-                                    "through the guarded "
-                                    "metric-stewardship commands"),
-            "next_role": "Course Owner",
-            "waiting_since": None,
-        })
     for policy in (alerting or []):
         name = policy["name"]
         readiness = (alerting_readiness or {}).get(name)
@@ -544,42 +377,6 @@ def _readiness_items(policies, versions_by_policy, readiness_by_policy,
             "next": _readiness_next(policy, readiness, governing, rows,
                                     "through the guarded "
                                     "alerting commands"),
-            "next_role": "Course Owner",
-            "waiting_since": None,
-        })
-    for policy in (capacity or []):
-        name = policy["name"]
-        readiness = (capacity_readiness or {}).get(name)
-        if not readiness:
-            continue
-        rows = (capacity_by_policy or {}).get(name, [])
-        governing = foundation.resolve_governing(rows, today)
-        detail = f"{len(rows)} version(s)"
-        if governing:
-            detail += f"; governing since {governing.get('effective_from')}"
-            users = governing.get("concurrent_users_target")
-            detail += (f"; {users} concurrent user(s)" if users
-                       else "; no numbers set")
-        elif rows:
-            detail += "; nothing effective yet"
-        else:
-            detail += "; no versions"
-        items.append({
-            "id": policy["code"],
-            "person": policy["title"],
-            "detail": detail,
-            "status": readiness.capitalize(),
-            "stage": "Operations",
-            "stage_definition": ("Computed configuration readiness for the "
-                                 "capacity/availability objective. No "
-                                 "capacity objective may be claimed until a "
-                                 "version governs; the release gate reads "
-                                 "no business settings. Production "
-                                 "readiness is separate and is never "
-                                 "decided here."),
-            "next": _readiness_next(policy, readiness, governing, rows,
-                                    "through the guarded "
-                                    "capacity-objective commands"),
             "next_role": "Course Owner",
             "waiting_since": None,
         })

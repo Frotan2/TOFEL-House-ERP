@@ -346,18 +346,6 @@ PROJECTION_FIELDS = {
     ("configuration", "TH Configuration Audit Event"): [
         "name",
     ],
-    # D7 metric stewardship (decision-classification track 1): the policy
-    # carrier's identity/status/version facts for the readiness rollup. The
-    # owner-authored disclosure_rules text is deliberately NOT projected —
-    # the desk names the steward and the dates; the full policy text stays
-    # on the document itself (projection discipline).
-    ("configuration", "TH Metric Stewardship Policy"): [
-        "name", "code", "title", "status", "description", "modified",
-    ],
-    ("configuration", "TH Metric Stewardship Policy Version"): [
-        "name", "parent", "parenttype", "effective_from", "steward_role",
-        "reason", "set_by", "set_on", "superseded_on",
-    ],
     # Alerting/receiver policy (track 2): same projection discipline — the
     # owner-provided receiver_reference destination stays on the document;
     # the desk names the channel kind, the ownership terms and the dates.
@@ -368,18 +356,6 @@ PROJECTION_FIELDS = {
         "name", "parent", "parenttype", "effective_from", "channel_kind",
         "escalate_after_minutes", "retention_days", "reason", "set_by",
         "set_on", "superseded_on",
-    ],
-    # Capacity objective (track 3): the owner-entered numbers are projected
-    # — they are business intent, not secrets; the desk names them only
-    # when a version governs, never synthesizing any number.
-    ("configuration", "TH Capacity Objective"): [
-        "name", "code", "title", "status", "description", "modified",
-    ],
-    ("configuration", "TH Capacity Objective Version"): [
-        "name", "parent", "parenttype", "effective_from",
-        "concurrent_users_target", "document_scale_target",
-        "read_share_percent", "availability_target_percent", "reason",
-        "set_by", "set_on", "superseded_on",
     ],
     # Guardian lifecycle policy (track 4): policy enumerations and the
     # window/expiry numbers are projected; the owner-authored records/
