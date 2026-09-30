@@ -98,10 +98,12 @@ One runtime: Docker Compose (`product/`). It runs `web` (gunicorn plus the
 idempotent first-run bootstrap), `worker`, `scheduler`, `socketio`, MariaDB
 and two Redis services. Images are digest-pinned. The app image is built
 locally from pinned upstream commits and is bound to `127.0.0.1` only. The
-owner uses five double-click scripts in `product/windows/`: Install, Start,
-Stop, Backup and Repair. Production activation and rollback on the
-authorized server:
-[engineering/LAUNCH-RUNBOOK.md](engineering/LAUNCH-RUNBOOK.md).
+owner uses double-click scripts in `product/windows/`: Install, Start,
+Stop, Backup and Repair for daily use, and Activate / Deactivate for the
+one-time production activation and its rollback. Activate runs
+`product/activate.py` inside the container, which executes every gate of
+[engineering/LAUNCH-RUNBOOK.md](engineering/LAUNCH-RUNBOOK.md) and restores
+the previous settings if any gate fails.
 
 ## 6. Current state and open items
 

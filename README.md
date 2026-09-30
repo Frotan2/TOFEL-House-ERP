@@ -47,8 +47,12 @@ once. Its installer is click-through.
    never deletes data.
 
 First run step by step: [product/windows/VALIDATION.md](product/windows/VALIDATION.md).
-The TOEFL House workflows become active after the one-time production
-activation described in [docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md).
+The TOEFL House workflows stay switched off until the one-time activation:
+run **Backup TOEFL House ERP.cmd**, then **Activate TOEFL House ERP.cmd** and
+type `ACTIVATE`. It refuses without a backup from the last 24 hours, checks
+every safety gate and puts the old settings back if one fails.
+**Deactivate TOEFL House ERP.cmd** undoes it. What the gates are:
+[docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md).
 
 ## Developer
 

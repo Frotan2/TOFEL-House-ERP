@@ -2,7 +2,8 @@ name: Product image
 
 # Builds the desktop application image exactly as the owner's machine does
 # (product/app.Dockerfile via product/docker-compose.yml) and validates the
-# compose file. Proves the one install path stays buildable.
+# compose file, then boots the stack and runs the Owner's Backup and one-time
+# activation/deactivation commands against the real site (product/activate.py).
 on:
   push:
     paths:
@@ -22,7 +23,7 @@ concurrency:
 jobs:
   image:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -35,7 +36,7 @@ jobs:
           printf 'MARIADB_ROOT_PASSWORD=%s\n' "$(openssl rand -hex 24)" > product/data/secrets/db.env
           docker compose -f product/docker-compose.yml config --quiet
       - name: Build application image
-        run: docker build -f product/app.Dockerfile -t toefl-house-erp-app:ci .
+        run: docker build -f product/app.Dockerfile -t toefl-house-erp-app:ci -t toefl-house-erp-app:local .
       - name: Report image footprint
         run: |
           set -euo pipefail
@@ -45,3 +46,31 @@ jobs:
           echo "::notice title=Largest layers::${layers}"
           usage=$(docker run --rm --entrypoint sh toefl-house-erp-app:ci -c 'du -sm /home/frappe/bench/env /home/frappe/bench/apps/* /build/sources /build/owned /build/tools /usr/local /usr/lib /home/frappe/.cache 2>/dev/null | sort -rn' | awk '{print $1"MB "$2}' | paste -sd'|' -)
           echo "::notice title=Disk usage in image::${usage}"
+      - name: First boot, backup and Owner activation on the real product stack
+        working-directory: product
+        run: |
+          set -euo pipefail
+          mkdir -p data/sites data/logs && chmod 777 data/sites data/logs
+          docker compose up -d --no-build
+          for i in $(seq 1 300); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 10; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
+          echo "::notice title=First boot::site answered after ~$((i*10))s"
+          act() { docker compose exec -T web /product/activate.py "$@"; }
+          act status | tee status.txt; grep -q ': REFUSED' status.txt
+          set +e; act activate --confirm toeflhouse.localhost; rc=$?; set -e
+          test "$rc" = 2  # refused: no backup yet
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
+          act activate --confirm toeflhouse.localhost | tee activate.txt
+          grep -q 'All gates passed' activate.txt
+          act status | grep -q ': PRODUCTION'
+          set +e; act fee-item --confirm toeflhouse.localhost NO-SUCH-ITEM; rc=$?; set -e
+          test "$rc" = 2  # refused: Item must already exist natively
+          act deactivate --confirm toeflhouse.localhost
+          act status | grep -q ': REFUSED'
+          echo "::notice title=Owner activation::REFUSED -> backup gate -> PRODUCTION (all gates) -> fee-item refusal -> REFUSED"
+      - name: Stack logs on failure
+        if: failure()
+        working-directory: product
+        run: |
+          docker compose ps -a || true
+          docker compose logs --tail 60 web 2>&1 | tail -60 | sed 's/^/::error::/' | head -40 || true

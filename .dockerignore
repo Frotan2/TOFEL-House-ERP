@@ -6,6 +6,7 @@
 !apps/
 !product/app.Dockerfile
 !product/bootstrap.py
+!product/activate.py
 !product/entrypoint.sh
 **/__pycache__
 **/*.pyc

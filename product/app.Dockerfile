@@ -85,8 +85,9 @@ RUN set -eux; \
     done
 
 COPY product/bootstrap.py /product/bootstrap.py
+COPY product/activate.py /product/activate.py
 COPY product/entrypoint.sh /product/entrypoint.sh
-RUN chmod +x /product/entrypoint.sh
+RUN chmod +x /product/entrypoint.sh /product/activate.py
 
 # Local bench: frappe from the pinned source (not re-resolved), then the rest.
 # Yarn Classic keeps upstream lockfiles frozen for nested installs.

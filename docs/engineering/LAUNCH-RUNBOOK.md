@@ -5,6 +5,16 @@ TOEFL House command REFUSED) to production operation, and back. Native
 ERPNext/Education/HRMS work without it. Do not activate while SEC-DEPS-01 is
 open on an internet-reachable host (see [../PRODUCT.md](../PRODUCT.md) §6).
 
+**Desktop product (Owner):** do not type any of the commands below. Run
+`Backup TOEFL House ERP.cmd`, then `Activate TOEFL House ERP.cmd` (type
+`ACTIVATE`). It runs `product/activate.py` inside the container, which performs
+steps 0–6 exactly as written here: it refuses without a database backup from
+the last 24 hours, saves the old site_config to `private/`, and verifies with
+the app's own resolver. If any gate fails it restores the saved settings. The
+same window optionally sets the step-7 fee Item, which must already exist.
+`Deactivate TOEFL House ERP.cmd` is step 8. The procedure below remains the
+reference and the path for an authorized server.
+
 Conventions: commands below are written for the bench directory. On the
 desktop product, run them inside the web container from the repository
 folder: `docker compose -f product/docker-compose.yml exec web <command>`

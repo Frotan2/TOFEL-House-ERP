@@ -176,7 +176,8 @@ class DesktopContract(unittest.TestCase):
         names = {p.name for p in SCRIPTS}
         self.assertEqual(names, {"Install TOEFL House ERP.cmd", "Start TOEFL House ERP.cmd",
                                  "Stop TOEFL House ERP.cmd", "Backup TOEFL House ERP.cmd",
-                                 "Repair TOEFL House ERP.cmd"})
+                                 "Repair TOEFL House ERP.cmd", "Activate TOEFL House ERP.cmd",
+                                 "Deactivate TOEFL House ERP.cmd"})
         for path in SCRIPTS:
             text = path.read_text()
             self.assertIn('cd /d "%~dp0.."', text, path.name)
@@ -270,7 +271,7 @@ class CmdSyntaxContract(unittest.TestCase):
       installer (its flow is fully linear: single-line IF ... GOTO);
     * `.gitattributes` pins `text eol=crlf` for *.cmd/*.bat so every
       Windows checkout materializes CRLF bytes regardless of user config;
-    * balance/goto/label invariants hold for all five scripts;
+    * balance/goto/label invariants hold for all shipped scripts;
     * secrets move via PowerShell-stdout-to-tempfile + `set /p`, never a
       FOR capture.
     """

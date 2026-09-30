@@ -125,6 +125,15 @@ you ran this. Engineering maps the ten items onto the release-gate steps and
 closes the **Desktop release gate**, which is OPEN until exactly this evidence
 set is confirmed.
 
+## Later: switching on real operation (once, not part of this checklist)
+
+Only when engineering confirms the gate, and with the PC off the public
+internet: double-click `Backup TOEFL House ERP.cmd`, then
+`Activate TOEFL House ERP.cmd`, and type ACTIVATE when asked. It refuses
+without a backup from today and puts everything back if any safety check
+fails. `Deactivate TOEFL House ERP.cmd` switches real operation off again
+without touching your data.
+
 ## If something fails
 
 1. **Exactly one retry path exists:** double-click `Repair TOEFL House ERP.cmd`
