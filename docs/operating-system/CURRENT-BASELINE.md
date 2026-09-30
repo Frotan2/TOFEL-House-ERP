@@ -13,20 +13,20 @@ milestone (slice completion, gate change, authorization change).
 | Fact | Value |
 |---|---|
 | Working branch | `arena/01a0cd90-tofel-house-erp` (sixth rotation, 2026-09-24 — `tools/session_branch.py` is the pin; `arena/01a0c987-tofel-house-erp` and `arena/01a0ba0d-tofel-house-erp` are recorded historical provenance, never execution authority) |
-| HEAD commit at this capture | `aff757c` — "fix(sec-deps): triage the 2026-09-30 markdown-it advisory delta", 2026-09-30 (the hosted-proof log commit follows in the same push cycle) |
+| HEAD commit at this capture | `ac1d5c2` — "fix(sec-deps): triage the 2026-09-30 part-2 advisory batch (13 advisories)", 2026-09-30 (the hosted-proof log commit follows in the same push cycle) |
 | Working tree | CLEAN at capture |
 | Canonical `active_branch` in governance files | `arena/01a0cd90-tofel-house-erp` |
 
-## Last validated baseline (2026-09-30, HEAD `aff757c`)
+## Last validated baseline (2026-09-30, HEAD `ac1d5c2`)
 
 | Check | Result |
 |---|---|
-| `python3 -m unittest discover -s tests -t .` | **1595 pass, 0 fail** (4 deliberately skipped), local at `aff757c` — includes the executed product lifecycle simulation (`tests/foundation/test_product_lifecycle_sim.py`, 5 tests driving the real `product/bootstrap.py` through install → restart idempotence → repair → persistence → credentials-never-rotating → fail-closed; fake-bench/loopback substitution documented in-module) |
+| `python3 -m unittest discover -s tests -t .` | **1608 pass, 0 fail** (4 deliberately skipped), local at `ac1d5c2` — includes the executed product lifecycle simulation (5 tests driving the real `product/bootstrap.py` through install → restart idempotence → repair → persistence → credentials-never-rotating → fail-closed), the owner-checklist contract tests, and the advisory-triage suites for the 2026-09-29/2026-09-30 deltas |
 | `ruff check .` | clean (ruff 0.16.8, CI-pinned version) |
-| `node --test tests/foundation/*.cjs` | **0 fail** (node v22.22.3 host binary) |
+| `node --test tests/foundation/*.cjs` | **4 pass, 0 fail** (node v22.22.3 host binary) |
 | `tools/foundation/d8_validate.py` | exit 0 — **14/14 checks PASS**; posture unchanged (BLOCKED/REJECT by design) |
-| Hosted Owned suite on push | **green** on `aff757c` (run `36633164671` — all 3 jobs: owned-suite, Foundation runtime evidence, Foundation remaining gate evidence) |
-| Hosted Foundation runtime validation | **green** on `aff757c` (run `36633164906` at `2026-09-29T21:25:28Z` — full chain incl. restricted policy regressions and both advisory audits after the 2026-09-30 delta; the previous run `36628837943` @ `714c7ce` correctly failed closed on the new `GHSA-253c-mchw-3w2r` markdown-it advisory until its `NOT_REACHABLE` disposition shipped) |
+| Hosted Owned suite on push | **green** on `ac1d5c2` (run `36670951697`) |
+| Hosted Foundation runtime validation | **green** on `ac1d5c2` (run `36670951637`, 2026-09-30T04:54:18Z→05:15:29Z — full chain incl. restricted policy regressions and both advisory audits). The fail-closed audit gate fired twice in this window and each outcome was resolved by a dated additive delta: `36628837943` @ `714c7ce` → new `GHSA-253c-mchw-3w2r` (markdown-it, NOT_REACHABLE, delta 2026-09-30); `36668343658` @ `4362fb2` → 13-advisory batch (9 pyjwt, 3 brace-expansion, 1 moment — all NOT_REACHABLE with pinned-tree traces, delta 2026-09-30-2); intermediate green `36633164906` @ `aff757c` |
 | Desktop (Windows one-click) release gate | **OPEN — NOT CLAIMED.** Real Windows + Docker Desktop E2E (Install → first boot → login → Start/Stop/Start → Backup → Repair → browser access → persistence) has not been executed: no Windows/Docker/MariaDB obtains in this environment (probed 2026-09-29; only pypi/npm/github reachable, no docker.sock). Sandbox-executable proof instead: lifecycle simulation above + hosted full chain green + packaging contract tests. The owner-side validation path is canonical and complete: `product/windows/VALIDATION.md` (ten ordered steps, one numbered evidence item each, zero end-user typing; guarded by `tests/foundation/test_product_packaging.py::OwnerValidationChecklistTests`). Single remaining action: one owner pass on a real Windows PC returning Evidence 1–10. |
 
 ## Last validated baseline (2026-09-25)
