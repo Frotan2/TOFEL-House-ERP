@@ -13,6 +13,7 @@ verified slice.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 import re
 import sys
@@ -186,60 +187,96 @@ class BootstrapLogicContract(unittest.TestCase):
 class CmdSyntaxContract(unittest.TestCase):
     """cmd.exe structure checks for the shipped .cmd scripts.
 
-    Regressions (real Windows runs of the Desktop gate, 2026-09-30):
-    1. A `for /f "usebackq" %%G in (`powershell ... ToString('N') ...`)`
-       nested in a parenthesized `if` block — cmd's quote-blind block parser
-       folded the ToString ')' into the FOR IN-clause and aborted with
-       `) was unexpected at this time.`
-    2. The same FOR line moved to top level STILL aborted the same way:
-       cmd's FOR tokenization needs '^'-escaping for `(`/`)` even inside a
-       backquoted "usebackq" command. The durable fix is to have no FOR
-       constructs in the product scripts at all: PowerShell writes the
-       secret to a temp file and CMD reads it back with `set /p` (no
-       cmd-visible parentheses anywhere in the generation path).
+    Production failures (real Windows E2E runs of the Desktop gate,
+    2026-09-30 - same diagnostic three times: `) was unexpected at this
+    time.`):
+    1. The installer carried multi-line parenthesized `if ( ... )` blocks.
+       cmd parses such blocks with an internal read-line convention built
+       on CRLF: under an LF-only checkout (possible for any clone because
+       no .gitattributes pinned worktree bytes - core.autocrlf=input is a
+       stock Git-for-Windows configuration profile) the block parser folds
+       across the boundary and aborts at the first unbalanced `)` - the
+       first such block is the Docker-missing check, which is why every
+       reproduction failed "immediately".
+    2. A FOR /F "usebackq" IN-command whose backquoted text contains
+       parentheses is misparsed by cmd's FOR tokenizer even outside
+       blocks. (Both constructs were individually fixed 2026-09-30; the
+       failure class returned via checkout-dependent CRLF.)
 
-    These tests model the parser rules that matter so the regression class
-    cannot return: no FOR commands in product scripts; the secret path is
-    the set/p-from-file handoff with hard guards; parenthesized blocks are
-    balanced per logical command; every `goto` target label exists exactly
-    once.
+    The executable ruling of record for the product scripts:
+    * no multi-line parenthesized blocks and no FOR commands in the
+      installer (its flow is fully linear: single-line IF ... GOTO);
+    * `.gitattributes` pins `text eol=crlf` for *.cmd/*.bat so every
+      Windows checkout materializes CRLF bytes regardless of user config;
+    * balance/goto/label invariants hold for all five scripts;
+    * secrets move via PowerShell-stdout-to-tempfile + `set /p`, never a
+      FOR capture.
     """
 
     FOR_RE = re.compile(r"^\s*for\b", re.IGNORECASE)
     GOTO_RE = re.compile(r"\bgoto\s+:?([A-Za-z_][\w.-]*)", re.IGNORECASE)
     LABEL_RE = re.compile(r"^:([A-Za-z_][\w.-]*)\s*$")
+    INSTALL = PRODUCT / "windows" / "Install TOEFL House ERP.cmd"
+
+    @staticmethod
+    def unquoted(raw):
+        """Text with double-quoted spans masked. cmd's block/FOR parsers are
+        quote-blind about parens, which is exactly why quoted parens inside
+        those constructs must not exist; the one surviving legitimate case
+        (a double-quoted argument of a plain top-level command) is masked."""
+        return re.sub(r'"[^"\r\n]*"', "", raw)
 
     @staticmethod
     def depth_signature(lines):
-        """Per-line parenthesis depth BEFORE the line executes, counted on
-        text outside double-quoted spans (cmd's block parser is quote-blind
-        for block boundaries, which is why FOR/paren constructs inside
-        blocks broke regardless of quoting; masking double quotes here only
-        keeps URLs/echo text sane)."""
         depth = 0
-        per_line_before = []
         for lineno, raw in enumerate(lines, start=1):
-            per_line_before.append(depth)
             if raw.lstrip().lower().startswith("rem "):
                 continue
-            unquoted = re.sub(r'"[^"\r\n]*"', "", raw)
-            depth += unquoted.count("(") - unquoted.count(")")
+            u = CmdSyntaxContract.unquoted(raw)
+            depth += u.count("(") - u.count(")")
             if depth < 0:
                 raise AssertionError(
                     f"unbalanced parenthesized block closes early at line {lineno}: {raw!r}")
         if depth != 0:
             raise AssertionError(f"unclosed parenthesized block (final depth {depth})")
-        return per_line_before
+
+    def test_installer_flow_contains_no_multiline_blocks(self):
+        # The previously failing construct class: any parenthesized IF block
+        # is forbidden in the installer (the only cmd syntax whose parsing
+        # depends on CR/LF assumptions and quote-blind paren matching in a
+        # way we cannot reproduce or gate here).
+        lines = self.INSTALL.read_text().splitlines()
+        for lineno, raw in enumerate(lines, start=1):
+            if raw.lstrip().lower().startswith("rem "):
+                continue  # rem payloads are opaque to cmd's parser
+            u = self.unquoted(raw)
+            for ch in "()":
+                self.assertNotIn(ch, u,
+                                 f"installer line {lineno} carries a parenthesis outside a "
+                                 f"double-quoted plain-command argument (parse-hazard class "
+                                 f"of the 2026-09-30 production failure): {raw.strip()!r}")
 
     def test_product_scripts_contain_no_for_commands(self):
-        # Real-cmd ruling of record (2026-09-30): FOR /F IN-commands whose
-        # backquoted text contains parentheses abort the run whether nested
-        # or at top level. The product layer needs no FOR at all.
         for path in SCRIPTS:
             for lineno, raw in enumerate(path.read_text().splitlines(), start=1):
                 self.assertIsNone(self.FOR_RE.match(raw),
                                   f"{path.name}:{lineno}: FOR command in an end-user .cmd "
                                   f"(cmd FOR-parser regression class): {raw.strip()!r}")
+
+    def test_windows_scripts_are_pinned_to_crlf_checkouts(self):
+        attrs = (PRODUCT.parent / ".gitattributes").read_text()
+        rule = [ln for ln in attrs.splitlines() if ln.strip().startswith("*.cmd")]
+        self.assertTrue(rule, ".gitattributes must pin *.cmd EOL behavior")
+        self.assertIn("text", rule[0].split("*.cmd", 1)[1].split())
+        self.assertIn("eol=crlf", rule[0].split("*.cmd", 1)[1].split())
+
+        for path in SCRIPTS:
+            rel = path.relative_to(PRODUCT.parent)
+            probe = subprocess.run(
+                ["git", "check-attr", "text", "eol", "--", str(rel)],
+                cwd=PRODUCT.parent, capture_output=True, text=True, check=True).stdout
+            self.assertIn("eol: crlf", probe,
+                          f"git must materialize CR/LF for {rel} in every worktree")
 
     def test_blocks_and_labels_are_well_formed(self):
         for path in SCRIPTS:
@@ -251,7 +288,8 @@ class CmdSyntaxContract(unittest.TestCase):
                 self.assertEqual(labels.count(label), 1,
                                  f"{path.name}: duplicate label :{label}")
             targets = {t.lower() for line in lines
-                       for t in self.GOTO_RE.findall(re.sub(r'"[^"\r\n]*"', "", line))}
+                       if not line.lstrip().lower().startswith("rem ")
+                       for t in self.GOTO_RE.findall(self.unquoted(line))}
             for target in targets:
                 if target == "eof":
                     continue

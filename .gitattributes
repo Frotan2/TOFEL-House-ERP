@@ -1,0 +1,12 @@
+# ----------------------------------------------------------------------------------
+# Windows batch files MUST materialize with CRLF line endings in every working
+# tree. cmd.exe parses multi-line constructs with CR/LF assumptions; when a
+# checkout delivers LF-only bytes (e.g. core.autocrlf=input), any parenthesized
+# IF block aborts with:
+#     ) was unexpected at this time.
+# This was reproduced three times by real Windows E2E runs of the Desktop gate
+# (2026-09-30). Attributes (not user git config) decide the worktree bytes, so
+# the pin here overrides per-machine autocrlf/input settings.
+# ----------------------------------------------------------------------------------
+*.cmd text eol=crlf
+*.bat text eol=crlf

@@ -10,34 +10,44 @@ rem    3. Builds the application image from the pinned, reviewed sources
 rem    4. Starts the app, database, background worker and scheduler
 rem    5. Opens TOEFL House ERP in your browser when it is ready
 rem  First build needs ~20-60 minutes depending on your connection.
+rem
+rem  Author note: NO multi-line parenthesized blocks and NO FOR commands are
+rem  used anywhere in this script on purpose. cmd.exe parses "( ... )" blocks
+rem  correctly only with CRLF line endings, and its block/FOR parsers are
+rem  quote-blind about "(" and ")" inside arguments. A checkout could deliver
+rem  LF endings (no .gitattributes existed), making the first multi-line
+rem  block abort with ") was unexpected at this time." on real Windows runs
+rem  (2026-09-30, three independent reproductions). Flow is therefore fully
+rem  linear: single-line IF ... GOTO with dedicated labels; the only
+rem  parentheses left are inside one double-quoted PowerShell argument of a
+rem  plain top-level call.
 rem ============================================================
 title Installing TOEFL House ERP
 cd /d "%~dp0.."
 
 where docker >nul 2>nul
-if errorlevel 1 (
-  echo.
-  echo  Docker Desktop is not installed yet.
-  echo  1. Install it from https://www.docker.com/products/docker-desktop/
-  echo  2. Restart your PC when it asks.
-  echo  3. Double-click this file again.
-  start "" "https://www.docker.com/products/docker-desktop/"
-  goto :pause
-)
+if not errorlevel 1 goto :dockerfound
+echo.
+echo  Docker Desktop is not installed yet.
+echo  1. Install it from https://www.docker.com/products/docker-desktop/
+echo  2. Restart your PC when it asks.
+echo  3. Double-click this file again.
+start "" "https://www.docker.com/products/docker-desktop/"
+goto :pause
+:dockerfound
 
 docker info >nul 2>nul
-if errorlevel 1 (
-  echo.
-  echo  Docker Desktop is installed but not running.
-  echo  Starting it now - this can take a minute...
-  start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-  :waitdaemon
-  timeout /t 5 /nobreak >nul
-  docker info >nul 2>nul && goto :daemonok
-  echo  Waiting for Docker Desktop to finish starting...
-  goto :waitdaemon
-  :daemonok
-)
+if not errorlevel 1 goto :dockerup
+echo.
+echo  Docker Desktop is installed but not running.
+echo  Starting it now - this can take a minute...
+start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+:waitdaemon
+timeout /t 5 /nobreak >nul
+docker info >nul 2>nul && goto :dockerup
+echo  Waiting for Docker Desktop to finish starting...
+goto :waitdaemon
+:dockerup
 
 if not exist data\secrets mkdir data\secrets
 rem  Secret generation: no FOR /F here. cmd's FOR parser mishandles the ')'
@@ -73,14 +83,14 @@ echo  Still preparing... site setup can take 15-40 minutes on first run.
 goto :waitready
 :ready
 
-if exist data\sites\toeflhouse.localhost\private\first-run-credentials.txt (
-  echo.
-  echo  --------------------------------------------------------------
-  echo  Your Administrator login is below. Write it down and keep it private.
-  echo  --------------------------------------------------------------
-  type data\sites\toeflhouse.localhost\private\first-run-credentials.txt
-  echo  --------------------------------------------------------------
-)
+if not exist data\sites\toeflhouse.localhost\private\first-run-credentials.txt goto :nowelcome
+echo.
+echo  --------------------------------------------------------------
+echo  Your Administrator login is below. Write it down and keep it private.
+echo  --------------------------------------------------------------
+type data\sites\toeflhouse.localhost\private\first-run-credentials.txt
+echo  --------------------------------------------------------------
+:nowelcome
 
 start "" "http://127.0.0.1:8000/"
 echo.
