@@ -47,8 +47,8 @@ READINESS_STATES = (
 # operations: technical operational configuration (unbound until a later
 # phase binds it explicitly; any use refuses fail-closed).
 # custody: real custody ceremonies. NEVER bound to a Frappe role: the
-# custodian/operator/recovery roles live outside Frappe (tools/foundation/
-# key_custody.py is stdlib-only by design), and ceremony results enter the
+# custodian/operator/recovery roles live outside Frappe by design, and
+# ceremony results enter the
 # system exclusively as signed evidence reports, never as settings.
 AUTHORITIES = {
     "business_policy": ("Course Owner",),

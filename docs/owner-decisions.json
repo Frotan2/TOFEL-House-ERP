@@ -82,19 +82,19 @@
   },
   "unresolved_business_inputs_not_reinterpreted": [
     "Future internet-hosted provider, hostname, DNS, and public-edge selection.",
-    "Deferred academic grading/progression, advanced guardian, calendar/transfer, tax, refund-term, and metrics-steward policies already recorded in OWNER-DECISIONS.md."
+    "Deferred academic grading/progression, advanced guardian, calendar/transfer, tax, refund-term, and metrics-steward policies already recorded in OWNER-DECISIONS.md (retired; see git ef14970)."
   ],
   "source_documents": [
-    "docs/engineering/PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md",
-    "docs/engineering/OWNER-DECISIONS.md",
-    "docs/engineering/D8-OPERATIONAL-INPUT-PACKET.md",
-    "docs/engineering/d8-production-operations-decision-matrix.json",
-    "docs/domain/DOMAIN-CONTRACT.md",
-    "docs/domain/ERP-CAPABILITY-MAP.md",
-    "docs/engineering/RELEASE-GAP-MAP.md",
-    "docs/engineering/RELEASE-CANDIDATE-DOSSIER.md",
-    "docs/engineering/foundation-production-acceptance-ledger.json",
-    "docs/engineering/foundation-architecture-decision.md"
+    "ef14970:docs/engineering/PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md",
+    "ef14970:docs/engineering/OWNER-DECISIONS.md",
+    "ef14970:docs/engineering/D8-OPERATIONAL-INPUT-PACKET.md",
+    "ef14970:docs/engineering/d8-production-operations-decision-matrix.json",
+    "ef14970:docs/domain/DOMAIN-CONTRACT.md",
+    "ef14970:docs/domain/ERP-CAPABILITY-MAP.md",
+    "ef14970:docs/engineering/RELEASE-GAP-MAP.md",
+    "ef14970:docs/engineering/RELEASE-CANDIDATE-DOSSIER.md",
+    "ef14970:docs/engineering/foundation-production-acceptance-ledger.json",
+    "ef14970:docs/engineering/foundation-architecture-decision.md"
   ],
   "d8_business_requirements": {
     "D8-OPS-AUTHORITY": {

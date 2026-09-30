@@ -61,7 +61,7 @@ def escape(value: str) -> str:
 def masked_values(output: str) -> list[str]:
     """Collect values the step asked GitHub to mask.
 
-    Steps such as ``runtime_key_custody_custodian.py`` print
+    Steps that handle secrets print
     ``::add-mask::<value>``.  Anything registered there must not be replayed
     into an annotation, so it is redacted before the output is republished.
     """

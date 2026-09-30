@@ -44,9 +44,8 @@ request-key idempotency, row locking, immutable effective-dated versions,
 hash-chained configuration audit (`TH Configuration Audit Event` /
 `TH Configuration Operation`), `NOT CONFIGURED` fail-closed behaviour, and no
 hard-coded business values (the hard-coded-policy audit in §7 scans this).
-Canonical owner-facing navigation: the current-state section of
-`docs/engineering/OWNER-DECISIONS.md`; open value decisions:
-`docs/operating-system/DECISION-REGISTER.md`.
+Canonical product state: [PRODUCT.md](PRODUCT.md); recorded owner decisions:
+[owner-decisions.json](owner-decisions.json).
 
 ---
 

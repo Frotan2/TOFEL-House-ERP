@@ -1,7 +1,7 @@
 app_name = "toefl_house"
 app_title = "TOEFL House Placement (Synthetic Qualification)"
 app_publisher = "TOEFL House"
-app_description = "Synthetic-only governed placement, thin admission, native Program Enrollment and native teaching operations"
+app_description = "Governed placement (fail-closed until production activation), thin admission, native Program Enrollment and native teaching operations"
 app_email = "validation@example.test"
 app_license = "MIT"
 required_apps = ["erpnext", "education", "foundation_security"]
