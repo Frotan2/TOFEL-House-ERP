@@ -274,5 +274,29 @@ class AdvisoryDeltaSeptember30Part2Tests(unittest.TestCase):
         self.assertFalse(part2_ids & {t._norm(a) for a in prior_delta_ids})
 
 
+class AdvisoryDeltaSeptember30Part3Tests(unittest.TestCase):
+    """The third 2026-09-30 delta closes the two pyjwt advisories surfaced by run 36745670524."""
+
+    DELTA = json.loads((ROOT / "docs/engineering/evidence/sec-deps-01/advisory-delta-2026-09-30-3"
+                        "/delta-dispositions.json").read_text())
+    EXPECTED = {"GHSA-jwrc-g2q2-pq5p": "NOT_REACHABLE", "GHSA-42vr-xj54-vc7v": "MITIGATED"}
+
+    def test_both_findings_close_with_their_recorded_disposition(self):
+        triage = t.load_triage()
+        self.assertIn("advisory-delta-2026-09-30-3", triage["deltas"])
+        findings = [{"package": {"name": "pyjwt", "ecosystem": "PyPI"}, "version": "2.13.0",
+                     "id": aid, "aliases": []} for aid in self.EXPECTED]
+        res = t.triage_python(findings, triage)
+        self.assertEqual(res["untriaged"], [])
+        self.assertEqual(t.overall_status(py_result=res), "pass")
+        got = {f["id"]: f["disposition"] for f in res["findings"]}
+        self.assertEqual(got, self.EXPECTED)
+
+    def test_evidence_names_the_containing_handler_and_the_key_only_regex(self):
+        by_id = {a["id"]: a for pkg in self.DELTA["packages"] for a in pkg["advisories"]}
+        self.assertIn("except Exception", by_id["GHSA-42vr-xj54-vc7v"]["runtime_disposition_evidence"])
+        self.assertIn("prepare_key", by_id["GHSA-jwrc-g2q2-pq5p"]["runtime_disposition_evidence"])
+
+
 if __name__ == "__main__":
     unittest.main()

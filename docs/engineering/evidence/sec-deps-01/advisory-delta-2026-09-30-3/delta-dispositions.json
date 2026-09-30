@@ -1,0 +1,40 @@
+{
+ "date": "2026-09-30",
+ "kind": "additive_advisory_delta_no_register_mutation",
+ "basis": "Third feed delta on 2026-09-30: 2 pyjwt advisories published to the GitHub Advisory Database 2026-09-30 (GHSA-jwrc-g2q2-pq5p 14:40Z, GHSA-42vr-xj54-vc7v 15:41Z) matching pinned pyjwt 2.13.0 (frappe pyproject PyJWT~=2.13.0), surfaced by Foundation runtime run 36745670524 which correctly failed closed (hosted-full-stack-dependency-audit exit 1; 119 matches vs 117 in run 36715665967). Traced in pinned trees frappe@988e54f3, erpnext@4048fb70, education@93bc7075, payments@cca07d9f, hrms@a4768b44, the owned apps, and pyjwt tag 2.13.0 (see README.md).",
+ "packages": [
+  {
+   "package": "py:pyjwt@2.13.0",
+   "advisories": [
+    {
+     "id": "GHSA-jwrc-g2q2-pq5p",
+     "aliases": [
+      "CVE-2026-102270"
+     ],
+     "severity": "moderate",
+     "published": "2026-09-30T14:40:25Z",
+     "vulnerable_range": "<= 2.13.0",
+     "first_patched": "2.14.0",
+     "summary": "PyJWT: ReDoS in is_pem_format",
+     "runtime_disposition": "NOT_REACHABLE",
+     "runtime_disposition_evidence": "In pyjwt 2.13.0 is_pem_format has exactly one caller, HMACAlgorithm.prepare_key(key) (jwt/algorithms.py:331); it inspects the KEY argument, never the token. Across all five pinned trees and the owned apps only frappe@988e54f3c4c291e2077a83809663f123731abe76 uses PyJWT, with keys: oauth.py:324 jwt.encode key=OAuth Client client_secret (server-generated); oauth.py:467 jwt.decode key=client_secret read from the OAuth Client record; utils/oauth.py:200 flow.client_secret (admin-configured Social Login Key) with verify_signature False. No key is ever attacker-supplied, so the pathological input cannot reach the regex.",
+     "fix_path": "Official Frappe release carrying PyJWT >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED)"
+    },
+    {
+     "id": "GHSA-42vr-xj54-vc7v",
+     "aliases": [
+      "CVE-2026-101918"
+     ],
+     "severity": "moderate",
+     "published": "2026-09-30T15:41:05Z",
+     "vulnerable_range": ">= 2.0.0a1, <= 2.14.0",
+     "first_patched": "2.15.0",
+     "summary": "PyJWT: unauthenticated RecursionError DoS in pre-verification payload parse",
+     "runtime_disposition": "MITIGATED",
+     "runtime_disposition_evidence": "Attacker-reachable pre-verification parse exists: frappe@988e54f3c4c291e2077a83809663f123731abe76 oauth.py:446 jwt.decode(id_token_hint, algorithms=['HS256'], options={'verify_signature': False}) on the client-supplied OIDC id_token_hint (validate_user_match). The call and the follow-up verified decode (oauth.py:467) sit inside 'try: ... except Exception: return False' (oauth.py:444-481); RecursionError subclasses Exception, so a deeply nested payload (and the equally unhardened 2.13.0 header path, api_jws.py:328/338 catch ValueError only) yields a failed hint match, not an escaped exception or a dead worker. The only other decode, utils/oauth.py:200, parses the id_token returned by the configured IdP token endpoint over server-to-server TLS; exploitation requires a malicious IdP and at worst fails that single social login with a handled 500. PyJWKClient (the second variant) is absent from every pinned tree (zero PyJWK/PyJWKClient references).",
+     "fix_path": "Official Frappe release carrying PyJWT >= 2.15.0 (EXTERNAL/UPSTREAM BLOCKED)"
+    }
+   ]
+  }
+ ]
+}
