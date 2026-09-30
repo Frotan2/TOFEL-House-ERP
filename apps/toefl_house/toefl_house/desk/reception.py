@@ -1,6 +1,6 @@
 """Reception desk: the front-door answer to "is this person in the system?".
 
-Read-only. Sections and data sources are specified in docs/product/ROLE-DESKS.md.
+Read-only. Sections and data sources are specified in docs/ROLE-DESKS.md.
 All reads go through toefl_house.desk.project_rows / project_count, which
 enforce the per-desk field allow-list and bounds.
 """

@@ -1,4 +1,4 @@
-"""Role-desk product layer contract (docs/product/ROLE-DESKS.md).
+"""Role-desk product layer contract (docs/ROLE-DESKS.md).
 
 The desks are separately authorized read projections. These checks pin the
 security-relevant shape of that layer offline:

@@ -1,6 +1,6 @@
 """Role desk projections: safe daily-work reads over the native authorities.
 
-This package is the product layer described in docs/product/ROLE-DESKS.md.
+This package is the product layer described in docs/ROLE-DESKS.md.
 
 Discipline (binding for every module in this package):
 
@@ -430,7 +430,7 @@ def require_desk_audience(slug):
     """Gate: the viewer must hold at least one of the desk's roles.
 
     Desks are separately authorized aggregate views (the sanctioned concept in
-    docs/domain/permission-model.md): read-only, minimal-field, role-gated. A
+    docs/ROLE-DESKS.md): read-only, minimal-field, role-gated. A
     desk read is therefore gated on the desk audience and on an enabled,
     non-guest, non-administrator user — the same viewer invariants
     toefl_house.security.authorize enforces for commands — but deliberately

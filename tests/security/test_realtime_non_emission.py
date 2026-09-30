@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Pins the realtime non-emission invariant (SEC-RT-TASK-01 product side).
 
-Evidence basis: docs/engineering/UPSTREAM-TRACKING.md §1 recorded on
+Evidence basis: docs/PRODUCT.md §4 recorded on
 2026-09-16 that owned code contains **zero** realtime emit/publish sites —
 the product never enqueues task/progress/business-payload socket events —
 while `apps/foundation_security` supplies the deny-by-default
@@ -57,7 +57,7 @@ class RealtimeNonEmissionTests(unittest.TestCase):
                     offenders.append(f"{path.relative_to(ROOT)}: {token}")
         self.assertEqual([], offenders,
                          "realtime emit sites are prohibited in owned code; "
-                         "see UPSTREAM-TRACKING.md §1 / SEC-RT-TASK-01")
+                         "see docs/PRODUCT.md §4 / SEC-RT-TASK-01")
 
     def test_the_scan_is_not_vacuous(self):
         # Guard against the scan silently covering nothing after a future

@@ -1,5 +1,5 @@
 /*
- * Contract for the role-desk product layer (docs/product/ROLE-DESKS.md).
+ * Contract for the role-desk product layer (docs/ROLE-DESKS.md).
  *
  * Pinned here, offline:
  *

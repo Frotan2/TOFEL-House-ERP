@@ -25,7 +25,7 @@ _COMMAND_PAGES = (
     "th-enrollment", "th-teaching-scheduling", "th-attendance-recording",
 )
 page_js = {name: "public/js/th_command_pages.js" for name in _COMMAND_PAGES}
-# Role desks (docs/product/ROLE-DESKS.md) use the desk client. They are
+# Role desks (docs/ROLE-DESKS.md) use the desk client. They are
 # separate native Pages, independently role-gated server-side; they share the
 # design system stylesheet with the command pages but not the command client.
 _DESK_PAGES = (

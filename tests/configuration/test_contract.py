@@ -1,4 +1,4 @@
-"""Contract for the Academic Control Plane (docs/product/CONFIGURATION-PLANE.md).
+"""Contract for the Academic Control Plane (docs/CONFIGURATION-PLANE.md).
 
 Four layers are pinned here, offline:
 

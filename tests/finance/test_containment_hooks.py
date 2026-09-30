@@ -67,7 +67,7 @@ class ContainmentHookWiringTests(unittest.TestCase):
         self.assertEqual(extra, allowed_extras,
                          "doc_events changed; update this guard deliberately — the "
                          "only sanctioned extras are the governance configuration "
-                         "integrity hooks (docs/product/CONFIGURATION-PLANE.md)")
+                         "integrity hooks (docs/CONFIGURATION-PLANE.md)")
         app_root = ROOT / "apps/toefl_house/toefl_house"
         for doctype in allowed_extras:
             for seam, target in events[doctype].items():

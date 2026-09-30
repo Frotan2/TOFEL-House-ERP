@@ -5,7 +5,7 @@ Entry) plus the owned correction queue. Native ERPNext stays the only money
 authority: this projection computes no ledger, no balance and no policy. The
 charged / paid / outstanding distinction is the native numbers themselves, and
 refund/cancel states come only from native docstatus and Sales Invoice status.
-Sections are specified in docs/product/ROLE-DESKS.md.
+Sections are specified in docs/ROLE-DESKS.md.
 """
 import frappe
 from frappe.utils import today

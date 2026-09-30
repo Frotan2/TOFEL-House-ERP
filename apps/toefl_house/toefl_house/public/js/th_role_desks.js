@@ -1,5 +1,5 @@
 /*
- * Role desk client (docs/product/ROLE-DESKS.md).
+ * Role desk client (docs/ROLE-DESKS.md).
  *
  * Eight surfaces (seven daily-work desks plus the Configuration map) over
  * one whitelisted read endpoint each. The desks

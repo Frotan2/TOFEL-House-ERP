@@ -6,7 +6,7 @@ offline (tests/configuration). The whitelisted commands in the package
 ``__init__`` are thin wrappers that apply these rules inside the guarded
 Course Owner gate.
 
-Design invariants (docs/product/CONFIGURATION-PLANE.md):
+Design invariants (docs/CONFIGURATION-PLANE.md):
 
 1. Codes are the stable identity; titles are presentation and may change.
 2. A level's native Program anchor is set once and never changed.

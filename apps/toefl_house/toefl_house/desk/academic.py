@@ -2,7 +2,7 @@
 
 Read-only aggregation over the placement, admission, enrollment and teaching
 records the qualified slices already run on. Sections and data sources are
-specified in docs/product/ROLE-DESKS.md.
+specified in docs/ROLE-DESKS.md.
 """
 import frappe
 from frappe.utils import now_datetime, today

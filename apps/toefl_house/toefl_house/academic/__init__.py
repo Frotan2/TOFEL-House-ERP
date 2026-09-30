@@ -10,7 +10,7 @@ authority is granted to anybody.
 What this deliberately is NOT:
 - not a second Program/Enrollment/Fee authority: levels ARE native ``Program``
   records; enrollments, fee structures, classes and assessments consume them
-  through native links (docs/product/CONFIGURATION-PLANE.md);
+  through native links (docs/CONFIGURATION-PLANE.md);
 - not a rule engine: structured configuration + validation + effective dating;
 - not deletable: configuration is deactivated/retired, never removed, and the
   doctype permissions carry no delete for any role.

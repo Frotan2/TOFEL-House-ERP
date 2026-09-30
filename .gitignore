@@ -7,7 +7,7 @@ common_site_config.json
 sites/
 backups/
 
-# Local foundation validation artifacts (curated evidence is tracked under docs)
+# Local CI/runner artifacts
 .foundation/
 
 # Development/runtime artifacts
@@ -21,8 +21,6 @@ coverage/
 dist/
 build/
 *.log
-# Deliberately reviewed/redacted execution evidence, not live runtime logs
-!docs/engineering/evidence/phase-2/*.log
 .DS_Store
 
 # Desktop product runtime output (generated on the operator machine only)

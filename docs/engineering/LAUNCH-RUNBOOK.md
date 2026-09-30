@@ -1,20 +1,23 @@
-# Launch runbook — local server + Tailscale (D15 scope)
+# Launch runbook — production activation
 
-Owner-run procedure for the authorized launch target only: the local server
-reached over Tailscale. No internet edge is authorized (D15); production
-stays **REJECT** until the gates close, and SEC-DEPS-01 stays a hard stop.
+Owner-run procedure that switches a site from the fail-closed default (every
+TOEFL House command REFUSED) to production operation, and back. Native
+ERPNext/Education/HRMS work without it. Do not activate while SEC-DEPS-01 is
+open on an internet-reachable host (see [../PRODUCT.md](../PRODUCT.md) §6).
 
-Conventions: run every command from the bench directory (`frappe-bench/`)
-as the bench owner user. Replace `SITE` with the production site name
-(the directory name under `sites/`, e.g. `erp.toeflhouse.tailnet`).
-`<ts>` is a timestamp like `20260919-1200`.
+Conventions: commands below are written for the bench directory. On the
+desktop product, run them inside the web container from the repository
+folder: `docker compose -f product/docker-compose.yml exec web <command>`
+(the bench directory is the container's working directory and `bench` is
+`/build/tools/bin/bench`). `SITE` is the site name (`toeflhouse.localhost` on
+the desktop product). `<ts>` is a timestamp like `20260919-1200`.
 
 ---
 
 ## 0. Preconditions (do not proceed unless all hold)
 
-1. The bench runs this release (the current engineering branch recorded in the
-   README — `arena/01a0cd90-tofel-house-erp` at the time of this runbook update,
+1. The site runs the current release (latest image built from this
+   repository,
    D16 activation code deployed and migrated).
 2. MariaDB is the backend (the app refuses any other backend).
 3. You hold a current encrypted backup and have rehearsed a restore.

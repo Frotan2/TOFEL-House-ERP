@@ -4,7 +4,7 @@ Adds the fail-closed release posture (the same reviewed static facts the
 administration control centre serves) to the operational projection. The
 Owner role is Course Owner, the system owner of record. No business metric
 without an owner-approved definition is invented here; every tile carries its
-definition inline. Sections are specified in docs/product/ROLE-DESKS.md.
+definition inline. Sections are specified in docs/ROLE-DESKS.md.
 """
 import frappe
 
@@ -37,7 +37,7 @@ GROUP = "Student Group"
 # the canonical ledger and the administration control centre state. They are
 # not computed from the database and no gate state can be derived here.
 # Deployment value is the owner's selected current deployment (local/server
-# through Tailscale) per canonical-owner-decision-record.json as of 2026-09-16.
+# through Tailscale) per docs/owner-decisions.json as of 2026-09-16.
 # The line carries the as-of date so a future ledger change cannot silently
 # stale the cockpit.
 RELEASE_POSTURE = [
@@ -51,8 +51,8 @@ RELEASE_POSTURE = [
      "definition": "All owned business commands stay confined to explicitly isolated synthetic sites until the owner authorizes activation.",
      "value": "REQUIRED", "owner": None},
     {"label": "Deployment",
-     "definition": "Current deployment decision recorded by the owner in canonical-owner-decision-record.json (as of 2026-09-16).",
-     "value": "LOCAL_SERVER_TAILSCALE (as of 2026-09-16 per canonical-owner-decision-record.json)", "owner": None},
+     "definition": "Current deployment decision recorded by the owner in docs/owner-decisions.json (as of 2026-09-16).",
+     "value": "LOCAL_SERVER_TAILSCALE (as of 2026-09-16 per docs/owner-decisions.json)", "owner": None},
 ]
 
 

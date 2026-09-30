@@ -53,7 +53,7 @@ CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager", 
 # Governance configuration (the Academic Control Plane): deliberately NOT in
 # the synthetic-guarded DOCTYPES world. These records are governance state,
 # readable by management roles, mutable only through the guarded
-# toefl_house.academic commands (docs/product/CONFIGURATION-PLANE.md).
+# toefl_house.academic commands (docs/CONFIGURATION-PLANE.md).
 # The configuration audit ledger (Operation receipts + Audit Events) is
 # governed the same way: it trails the configuration, so it shares the
 # configuration's readership (mirroring how native Version rows inherit

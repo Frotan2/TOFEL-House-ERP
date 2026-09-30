@@ -1,5 +1,5 @@
 {
- "_comment": "Frozen field ledgers of the NATIVE authorities the role desks project. Each set is the exact field list of the doctype JSON at the pinned bench revision (frappe 988e54f3c4c2, education 93bc70757533, erpnext 4048fb70). Any desk projection field, filter key or order-by column for one of these doctypes must exist here (plus the standard Frappe columns and our Custom Fields) — this is the D2-class schema-fidelity guard (docs/audit/ROLE-DESK-UX-AUDIT-2026-09-18.md).",
+ "_comment": "Frozen field ledgers of the NATIVE authorities the role desks project. Each set is the exact field list of the doctype JSON at the pinned bench revision (frappe 988e54f3c4c2, education 93bc70757533, erpnext 4048fb70). Any desk projection field, filter key or order-by column for one of these doctypes must exist here (plus the standard Frappe columns and our Custom Fields) — this is the D2-class schema-fidelity guard (docs/ROLE-DESKS.md).",
  "standard_frappe_columns": [
   "name",
   "owner",

@@ -2,7 +2,7 @@
 
 Read-only, fact-based, branch-wide. This is deliberately NOT a second Owner
 cockpit: no release posture, no governance claims — operational queues and
-exception facts only. Sections are specified in docs/product/ROLE-DESKS.md.
+exception facts only. Sections are specified in docs/ROLE-DESKS.md.
 """
 import frappe
 from frappe.utils import now_datetime

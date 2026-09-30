@@ -758,7 +758,7 @@ frappe.provide("toefl_house.command_pages");
 		});
 
 		/*
-		 * Role desks (docs/product/ROLE-DESKS.md). The registry read is
+		 * Role desks (docs/ROLE-DESKS.md). The registry read is
 		 * server-authoritative: the client never decides from session data
 		 * which desks an account holds. The landing page's own audience is
 		 * unchanged and stays pinned to the hosted qualification.
