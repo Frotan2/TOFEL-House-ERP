@@ -26,8 +26,14 @@ ARG HRMS_REPOSITORY=https://github.com/frappe/hrms
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl ca-certificates build-essential pkg-config libffi-dev libssl-dev \
-    xz-utils wkhtmltopdf mariadb-client \
+    xz-utils wkhtmltopdf mariadb-client libmariadb-dev \
     && rm -rf /var/lib/apt/lists/*
+# libmariadb-dev: mysqlclient (frappe dep) builds from source and finds the
+# client library via pkg-config ('Can not find valid pkg-config name').
+# The hosted native path proves the same build on ubuntu runners, where the
+# dev package is preinstalled; the slim base image needs it added explicitly.
+# mysqlclient links against libmariadb.so, which the dev package keeps
+# installed for runtime (same image is the runtime).
 
 # Node at the exact pinned version, from the nodejs.org release tarball
 # (the same upstream channel the hosted workflow's actions/setup-node uses).
