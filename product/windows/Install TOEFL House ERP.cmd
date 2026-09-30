@@ -40,12 +40,17 @@ if errorlevel 1 (
 )
 
 if not exist data\secrets mkdir data\secrets
-rem  Note: do not wrap the FOR /F line below in a parenthesized IF block.
-rem  cmd's block parser folds the ')' inside PowerShell's ToString('N') into
-rem  the FOR IN (...) clause and aborts with ") was unexpected at this time."
+rem  Secret generation: no FOR /F here. cmd's FOR parser mishandles the ')'
+rem  inside PowerShell's ToString('N') even at top level (proven on a real
+rem  Windows run: ") was unexpected at this time."). Instead PowerShell
+rem  writes the one-time password to a temp file and CMD reads it with
+rem  SET /P - no parentheses and no FOR constructs touch CMD's parser.
 if exist data\secrets\db.env goto :secretok
 echo  Generating a private database password for this computer...
-for /f "usebackq delims=" %%G in (`powershell -NoProfile -Command "[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N')"`) do set "DBPW=%%G"
+powershell -NoProfile -Command "[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N')" > data\secrets\.dbpw.tmp
+set /p DBPW=<data\secrets\.dbpw.tmp
+del data\secrets\.dbpw.tmp >nul 2>nul
+if not defined DBPW goto :failed
 >data\secrets\db.env echo MARIADB_ROOT_PASSWORD=%DBPW%
 :secretok
 attrib +h data\secrets >nul 2>nul
@@ -59,12 +64,12 @@ docker compose up -d
 if errorlevel 1 goto :failed
 
 echo.
-echo  First launch is finishing inside the app (site setup + data install).
+echo  First launch is finishing inside the app - site setup and data install.
 echo  You can watch progress in Docker Desktop, or simply wait for the browser.
 :waitready
 timeout /t 10 /nobreak >nul
 curl --silent http://127.0.0.1:8000/api/method/frappe.auth.get_logged_user >nul 2>nul && goto :ready
-echo  Still preparing... (site setup can take 15-40 minutes on first run)
+echo  Still preparing... site setup can take 15-40 minutes on first run.
 goto :waitready
 :ready
 

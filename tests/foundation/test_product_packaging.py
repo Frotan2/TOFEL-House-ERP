@@ -186,33 +186,36 @@ class BootstrapLogicContract(unittest.TestCase):
 class CmdSyntaxContract(unittest.TestCase):
     """cmd.exe structure checks for the shipped .cmd scripts.
 
-    Regression: the original installer nested `for /f "usebackq" %%G in
-    (`powershell ... ToString('N') ...`)` INSIDE a parenthesized `if` block.
-    cmd parses a `( ... )` block before running it, matching its closing `)`
-    with no regard for quotes inside the FOR IN-command — the ')' inside
-    ToString('N') ended the FOR clause early and the leftover ')' aborted the
-    whole run with `) was unexpected at this time.` (reporter: real Windows
-    E2E of the desktop gate, 2026-09-30). These tests model the parser rules
-    that matter for this construct so the regression cannot return:
+    Regressions (real Windows runs of the Desktop gate, 2026-09-30):
+    1. A `for /f "usebackq" %%G in (`powershell ... ToString('N') ...`)`
+       nested in a parenthesized `if` block — cmd's quote-blind block parser
+       folded the ToString ')' into the FOR IN-clause and aborted with
+       `) was unexpected at this time.`
+    2. The same FOR line moved to top level STILL aborted the same way:
+       cmd's FOR tokenization needs '^'-escaping for `(`/`)` even inside a
+       backquoted "usebackq" command. The durable fix is to have no FOR
+       constructs in the product scripts at all: PowerShell writes the
+       secret to a temp file and CMD reads it back with `set /p` (no
+       cmd-visible parentheses anywhere in the generation path).
 
-    * any `for /f ... in (BACKQUOTED ...)` whose command text contains a
-      parenthesis must live at parenthesis depth 0 (never inside a block);
-    * parenthesized blocks are balanced per logical command (depth never
-      negative; each block closes on its own `)` line);
-    * every `goto` target label exists exactly once.
+    These tests model the parser rules that matter so the regression class
+    cannot return: no FOR commands in product scripts; the secret path is
+    the set/p-from-file handoff with hard guards; parenthesized blocks are
+    balanced per logical command; every `goto` target label exists exactly
+    once.
     """
 
-    FOR_RE = re.compile(r"^\s*for\s+/f\b", re.IGNORECASE)
+    FOR_RE = re.compile(r"^\s*for\b", re.IGNORECASE)
     GOTO_RE = re.compile(r"\bgoto\s+:?([A-Za-z_][\w.-]*)", re.IGNORECASE)
     LABEL_RE = re.compile(r"^:([A-Za-z_][\w.-]*)\s*$")
 
     @staticmethod
     def depth_signature(lines):
-        """Per-line parenthesis depth BEFORE the line executes, and net delta,
-        counting parens outside double-quoted spans only. cmd's block parser
-        is quote-blind for block boundaries, which is exactly why the rule
-        above forbids parenthesized FOR commands inside blocks regardless of
-        quoting; double-quote masking here only keeps URLs/echo text sane."""
+        """Per-line parenthesis depth BEFORE the line executes, counted on
+        text outside double-quoted spans (cmd's block parser is quote-blind
+        for block boundaries, which is why FOR/paren constructs inside
+        blocks broke regardless of quoting; masking double quotes here only
+        keeps URLs/echo text sane)."""
         depth = 0
         per_line_before = []
         for lineno, raw in enumerate(lines, start=1):
@@ -228,21 +231,15 @@ class CmdSyntaxContract(unittest.TestCase):
             raise AssertionError(f"unclosed parenthesized block (final depth {depth})")
         return per_line_before
 
-    def test_parenthesized_for_in_commands_live_at_top_level(self):
+    def test_product_scripts_contain_no_for_commands(self):
+        # Real-cmd ruling of record (2026-09-30): FOR /F IN-commands whose
+        # backquoted text contains parentheses abort the run whether nested
+        # or at top level. The product layer needs no FOR at all.
         for path in SCRIPTS:
-            lines = path.read_text().splitlines()
-            depth_before = self.depth_signature(lines)
-            for lineno, raw in enumerate(lines, start=1):
-                if not self.FOR_RE.match(raw):
-                    continue
-                backtick = re.search(r"in\s+\((`[^`]*`)\)", raw, re.IGNORECASE)
-                if not backtick:
-                    continue
-                if any(ch in backtick.group(1) for ch in "()"):
-                    self.assertEqual(depth_before[lineno - 1], 0,
-                                     f"{path.name}:{lineno}: FOR /F backquoted command contains "
-                                     f"parentheses INSIDE a parenthesized block — cmd's quote-blind "
-                                     f"block parser aborts there (production regression 2026-09-30): {raw.strip()!r}")
+            for lineno, raw in enumerate(path.read_text().splitlines(), start=1):
+                self.assertIsNone(self.FOR_RE.match(raw),
+                                  f"{path.name}:{lineno}: FOR command in an end-user .cmd "
+                                  f"(cmd FOR-parser regression class): {raw.strip()!r}")
 
     def test_blocks_and_labels_are_well_formed(self):
         for path in SCRIPTS:
@@ -261,12 +258,28 @@ class CmdSyntaxContract(unittest.TestCase):
                 self.assertIn(target, labels,
                               f"{path.name}: goto target missing: :{target}")
 
-    def test_installer_secret_path_survives_the_restructure(self):
-        install = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
-        self.assertIn("if exist data\\secrets\\db.env goto :secretok", install)
-        self.assertIn("NewGuid", install)
-        self.assertIn("MARIADB_ROOT_PASSWORD=%DBPW%", install)
-        self.assertNotRegex(install, r"if not exist data\\secrets\\db\.env \(")
+    def test_installer_secret_handoff_is_setp_from_tempfile(self):
+        install_lines = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text().splitlines()
+        text = "\n".join(install_lines)
+        # PowerShell runs exactly once, as a plain top-level command whose
+        # stdout goes to the temp file (parens visible only inside its
+        # double-quoted script string; never inside a FOR or a block).
+        pwsh = [ln for ln in install_lines if "NewGuid" in ln]
+        self.assertEqual(len(pwsh), 1)
+        self.assertRegex(pwsh[0],
+                         r"^powershell -NoProfile -Command \".*NewGuid.* > data\\secrets\\\.dbpw\.tmp\s*$")
+        # CMD reads the value back with set /p (no cmd-visible parens,
+        # no FOR), treats an empty result as failure, deletes the temp file,
+        # and writes only a variable - never a literal - to db.env.
+        self.assertIn("set /p DBPW=<data\\secrets\\.dbpw.tmp", text)
+        self.assertIn("del data\\secrets\\.dbpw.tmp >nul 2>nul", text)
+        self.assertIn("if not defined DBPW goto :failed", text)
+        self.assertIn(">data\\secrets\\db.env echo MARIADB_ROOT_PASSWORD=%DBPW%", text)
+        # Idempotence: an existing db.env is never regenerated.
+        self.assertIn("if exist data\\secrets\\db.env goto :secretok", text)
+        # No reintroduction of the FOR-based capture in the whole file.
+        for raw in install_lines:
+            self.assertIsNone(self.FOR_RE.match(raw))
 
 
 class OwnerValidationChecklistTests(unittest.TestCase):
