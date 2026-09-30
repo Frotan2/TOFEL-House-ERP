@@ -57,6 +57,12 @@ if not args:
     sys.exit(2)
 cmd = args[0]
 
+# Real frappe resolves installed apps from sites/apps.txt; without it every
+# bench command fails (product-image run 36750900604, empty bind mount).
+if not (BENCH_ROOT / "sites" / "apps.txt").is_file():
+    print("sites/apps.txt missing", file=sys.stderr)
+    sys.exit(1)
+
 if cmd == "set-config" and len(args) >= 4 and args[1] == "--global":
     state.setdefault("global_config", {})[args[2]] = args[3]
     log(sys.argv[1:])
@@ -155,11 +161,16 @@ class ProductLifecycleSim(unittest.TestCase):
         (secrets_dir / "db.env").write_text("MARIADB_ROOT_PASSWORD=sim-root-password\n")
         self.state_path = self.tmp / "fakebench-state.json"
         self.state_path.write_text(json.dumps({"sites": {}, "calls": []}))
+        seed = self.tmp / "sites-seed"
+        seed.mkdir()
+        for name in ("apps.txt", "apps.json", "common_site_config.json"):
+            (seed / name).write_text("frappe\n" if name == "apps.txt" else "{}")
         self.sockets, self.ports = open_listeners(3)
         self.patches = [
             mock.patch.object(bootstrap, "BENCH_DIR", self.bench_root),
             mock.patch.object(bootstrap, "SITES_DIR", self.bench_root / "sites"),
             mock.patch.object(bootstrap, "SECRETS_DIR", secrets_dir),
+            mock.patch.object(bootstrap, "SITES_SEED", seed),
             mock.patch.object(bootstrap, "SERVICE_ENDPOINTS",
                               tuple(("127.0.0.1", port) for port in self.ports)),
             mock.patch.dict(os.environ, {"PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", "")}),
@@ -179,7 +190,7 @@ class ProductLifecycleSim(unittest.TestCase):
     def test_first_boot_installs_everything_exactly_once_in_proven_order(self):
         summary = bootstrap.bootstrap(SITE, log=lambda _: None)
         self.assertEqual(summary["actions"],
-                         ["services-reachable", "redis-configured", "site-created",
+                         ["services-reachable", "sites-seeded", "redis-configured", "site-created",
                           "installed-erpnext", "installed-education", "installed-payments",
                           "installed-hrms", "installed-foundation_security", "installed-toefl_house",
                           "migrated", "migrate-replayed", "encryption-key-initialized",
@@ -220,7 +231,7 @@ class ProductLifecycleSim(unittest.TestCase):
         before = (self.bench_root / "sites" / SITE / "private" / "first-run-credentials.txt").read_bytes()
         summary = bootstrap.bootstrap(SITE, log=lambda _: None)  # Start -> Stop -> Start
         self.assertEqual(summary["actions"],
-                         ["services-reachable", "redis-configured", "site-present", "apps-present",
+                         ["services-reachable", "sites-seeded", "redis-configured", "site-present", "apps-present",
                           "migrated", "migrate-replayed", "encryption-key-initialized", "assets-present"])
         after = (self.bench_root / "sites" / SITE / "private" / "first-run-credentials.txt").read_bytes()
         self.assertEqual(before, after, "credentials must never rotate silently")

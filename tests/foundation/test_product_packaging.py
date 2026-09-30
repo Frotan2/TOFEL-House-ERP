@@ -222,6 +222,27 @@ class BootstrapLogicContract(unittest.TestCase):
             (sites / "assets" / "js").mkdir(parents=True)
             self.assertTrue(bootstrap.assets_present(sites))
 
+    def test_empty_bind_mount_is_seeded_before_first_bench_call(self):
+        # Regression (product-image run 36750900604): the empty ./data/sites
+        # mount hid sites/apps.txt and the very first bench call failed.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            seed, sites = Path(tmp) / "seed", Path(tmp) / "sites"
+            seed.mkdir()
+            for name in ("apps.txt", "apps.json", "common_site_config.json"):
+                (seed / name).write_text(f"image {name}")
+            self.assertEqual(sorted(bootstrap.seed_sites(sites, seed)),
+                             ["apps.json", "apps.txt", "common_site_config.json"])
+            (sites / "common_site_config.json").write_text("owner runtime settings")
+            (seed / "apps.txt").write_text("updated image apps")
+            self.assertEqual(sorted(bootstrap.seed_sites(sites, seed)), ["apps.json", "apps.txt"])
+            self.assertEqual((sites / "common_site_config.json").read_text(), "owner runtime settings")
+            self.assertEqual((sites / "apps.txt").read_text(), "updated image apps")
+        text = (PRODUCT / "bootstrap.py").read_text()
+        body = text[text.index("def bootstrap("):]
+        self.assertLess(body.index("seed_sites()"), body.index("run_bench("))
+        self.assertIn("/build/sites-seed/", (PRODUCT / "app.Dockerfile").read_text())
+
     def test_credentials_written_once_with_owner_permissions(self):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:

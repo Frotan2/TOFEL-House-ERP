@@ -50,6 +50,26 @@ REDIS_URLS = {
     "redis_socketio": "redis://redis-queue:6379",
 }
 SERVICE_ENDPOINTS = (("db", 3306), ("redis-queue", 6379), ("redis-cache", 6379))
+SITES_SEED = Path(os.environ.get("SITES_SEED", "/build/sites-seed"))
+# Image-derived app registry: always refreshed so an updated image's apps are
+# visible. common_site_config.json holds runtime settings: seeded only once.
+SEED_REFRESHED = ("apps.txt", "apps.json")
+SEED_ONCE = ("common_site_config.json",)
+
+
+def seed_sites(sites_dir: Path | None = None, seed_dir: Path | None = None) -> list[str]:
+    """Restore the bench's sites/ files hidden by the empty host bind mount."""
+    sites_dir = sites_dir or SITES_DIR
+    seed_dir = seed_dir or SITES_SEED
+    sites_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+    for name in SEED_REFRESHED + SEED_ONCE:
+        target = sites_dir / name
+        if name in SEED_ONCE and target.exists():
+            continue
+        target.write_bytes((seed_dir / name).read_bytes())
+        written.append(name)
+    return written
 
 
 def run_bench(arguments: list[str], *, cwd: Path) -> str:
@@ -134,6 +154,8 @@ def bootstrap(site: str = SITE_NAME, *, log=print) -> dict:
     actions: list[str] = []
     wait_for_endpoints(SERVICE_ENDPOINTS)
     actions.append("services-reachable")
+    seed_sites()
+    actions.append("sites-seeded")
     for key, value in REDIS_URLS.items():
         run_bench(["set-config", "--global", key, value], cwd=BENCH_DIR)
     actions.append("redis-configured")

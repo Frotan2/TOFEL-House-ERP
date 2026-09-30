@@ -125,7 +125,12 @@ RUN set -eux; \
     bench get-app --skip-assets /build/owned/foundation_security; \
     bench get-app --skip-assets /build/owned/toefl_house; \
     uv pip check --python /home/frappe/bench/env/bin/python; \
+    mkdir -p /build/sites-seed; \
+    cp sites/apps.txt sites/apps.json sites/common_site_config.json /build/sites-seed/; \
     yarn cache clean; rm -rf /home/frappe/.cache
+# The compose bind mount (./data/sites) hides the bench's own sites/ files on a
+# fresh install; bootstrap.py restores them from /build/sites-seed before the
+# first bench call (bench resolves installed apps from sites/apps.txt).
 # Package-manager caches (yarn, pip, uv) are removed in the same layer that
 # created them: they are first-build-only footprint, never runtime state.
 
