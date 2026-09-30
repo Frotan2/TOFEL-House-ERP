@@ -255,11 +255,7 @@ class WiringTests(unittest.TestCase):
     # steps were not, and are now wrapped. The exemption is therefore matched
     # on the `tee` itself rather than on the workflow, so it cannot be claimed
     # for a step that does not have one.
-    WORKFLOWS = ("foundation-durability", "foundation-key-custody",
-                 "foundation-independent-recovery", "foundation-operational-boundaries",
-                 "foundation-frontend-review", "foundation-runner",
-                 "foundation-runtime", "owned-suite", "placement-content",
-                 "d8-operations-contract", "placement-evidence")
+    WORKFLOWS = ("foundation-runtime", "owned-suite", "native-lifecycle")
 
     def test_no_workflow_with_python_steps_is_silently_dropped(self):
         """The list above is the coverage boundary, so dropping an entry from

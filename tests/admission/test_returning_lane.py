@@ -6,7 +6,7 @@ no new Customer) instead of inserting a second Student — native
 Student.student_email_id is unique, so a duplicate cannot exist. The
 normal branch is unchanged. Loads the REAL admission module against a
 scripted frappe stub; the end-to-end returning journey is proven on
-hosted CI in tools/placement/native_checks.py.
+hosted CI in tools/native/native_checks.py.
 """
 import importlib.util
 import sys

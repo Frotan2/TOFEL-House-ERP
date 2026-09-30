@@ -29,7 +29,6 @@ WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
 NODE24_PINS = {
     "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09": ("actions/checkout", "v5.1.0"),
     "b7c566a772e6b6bfb58ed0dc250532a479d7789f": ("actions/upload-artifact", "v6.0.0"),
-    "37930b1c2abaa49bbe596cd826c3c89aef350131": ("actions/download-artifact", "v7.0.0"),
     "249970729cb0ef3589644e2896645e5dc5ba9c38": ("actions/setup-node", "v6.5.0"),
 }
 
@@ -58,9 +57,9 @@ def references():
 
 class ActionPinTests(unittest.TestCase):
     def test_the_workflow_directory_is_the_one_being_checked(self):
-        self.assertGreaterEqual(len(WORKFLOWS), 11, "workflow discovery found no workflows")
+        self.assertGreaterEqual(len(WORKFLOWS), 4, "workflow discovery found no workflows")
         found = list(references())
-        self.assertGreater(len(found), 40, "action-reference parsing silently found nothing")
+        self.assertGreater(len(found), 8, "action-reference parsing silently found nothing")
 
     def test_every_uses_line_is_parsed_and_none_can_vanish(self):
         """A malformed `uses:` must fail loudly, not disappear from the audit."""

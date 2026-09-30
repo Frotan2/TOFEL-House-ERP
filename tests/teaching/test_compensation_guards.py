@@ -10,7 +10,7 @@ distinct later adjustments.
 
 Loads the REAL policy/compensation modules against a scripted frappe stub.
 Hosted proof (ref convention end-to-end + concurrent-calc race) lives in
-tools/placement/native_checks.py and executes on push CI.
+tools/native/native_checks.py and executes on push CI.
 """
 import importlib.util
 import sys

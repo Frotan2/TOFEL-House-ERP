@@ -16,9 +16,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
-from session_branch import ACTIVE_BRANCH as SESSION_BRANCH
 
-NATIVE = ROOT / "tools/placement/native_checks.py"
+NATIVE = ROOT / "tools/native/native_checks.py"
 SECURITY = ROOT / "apps/toefl_house/toefl_house/security.py"
 
 AUTHOR_ONLY = frozenset({"second_author", "other"})
@@ -472,29 +471,6 @@ class Increment3ActorGuardTests(unittest.TestCase):
         self.assertNotIn("pol_name=pol['name']", self.inc3)
         self.assertIn("pol_name=cfgx['main_pol']", self.inc3)
         self.assertIn("publish_config_flow('SYN-POL-ALLOC-1',good_pol,'policy')", self.inc3)
-
-
-class SessionBranchLockTests(unittest.TestCase):
-    def test_workflow_triggers_on_this_session_branch(self):
-        yml = (ROOT / ".github/workflows/placement-content.yml").read_text(encoding="utf-8")
-        self.assertIn("branches: [%s]" % SESSION_BRANCH, yml)
-        self.assertIn("github.ref == 'refs/heads/%s'" % SESSION_BRANCH, yml)
-        self.assertNotIn("branches: [arena/01a0a055-tofel-house-erp]", yml)
-
-    def test_run_native_locked_to_this_session_branch(self):
-        src = (ROOT / "tools/placement/run_native.py").read_text(encoding="utf-8")
-        self.assertIn("from session_branch import ACTIVE_BRANCH, ACTIVE_REF", src)
-        self.assertIn("BRANCH = ACTIVE_REF", src)
-        self.assertIn("ACTIVE_BRANCH", src)
-        self.assertNotIn("arena/01a0a942-tofel-house-erp", src)
-
-    def test_probe_and_evidence_authorize_this_session_branch(self):
-        probe = (ROOT / "tools/foundation/runner_probe.py").read_text(encoding="utf-8")
-        evidence = (ROOT / "tools/foundation/publish_evidence.py").read_text(encoding="utf-8")
-        self.assertIn("from session_branch import ACTIVE_REF", probe)
-        self.assertIn("from session_branch import ACTIVE_REF", evidence)
-        self.assertNotIn("arena/01a0a942-tofel-house-erp", probe)
-        self.assertNotIn("arena/01a0a942-tofel-house-erp", evidence)
 
 
 if __name__ == "__main__":

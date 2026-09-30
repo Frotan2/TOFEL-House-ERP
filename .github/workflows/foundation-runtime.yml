@@ -1,29 +1,25 @@
-name: Foundation runtime validation
+name: Foundation runtime
 
+# Installs the pinned stack with foundation_security in the hardened profile and
+# runs the runtime smoke, permission, realtime, upgrade/restore and dependency
+# advisory (SEC-DEPS-01) checks.
 on:
   push:
-    branches: [arena/01a0cd90-tofel-house-erp]
     paths:
       - .github/workflows/foundation-runtime.yml
-      - tools/session_branch.py
-      - tools/foundation/runtime_*.py
-      - tools/foundation/runtime_*.mjs
-      - tools/foundation/runtime_*.cjs
-      - tests/foundation/**
+      - tools/foundation/**
       - apps/foundation_security/**
-      - tools/foundation/publish_evidence.py
       - docs/engineering/foundation-version-matrix.json
   workflow_dispatch:
     inputs:
       profile:
-        description: "Hardened acceptance or historical unsafe-baseline forensics"
+        description: "Hardened acceptance or unsafe-baseline forensics"
         type: choice
         options: [hardened, forensic]
         default: hardened
 
 permissions:
   contents: read
-  checks: write
 
 concurrency:
   group: foundation-runtime-${{ github.ref }}
@@ -31,7 +27,6 @@ concurrency:
 
 jobs:
   runtime:
-    if: github.ref == 'refs/heads/arena/01a0cd90-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -42,7 +37,7 @@ jobs:
         with:
           node-version: 24.21.0
           package-manager-cache: false
-      - name: Test owned qualification policies
+      - name: Foundation contract tests
         run: |
           python3 tools/foundation/annotated_step.py "foundation contract tests" -- python3 -m unittest discover -s tests/foundation -q
           python3 tools/foundation/annotated_step.py "realtime guard" -- node tests/foundation/test_realtime_guard.cjs
@@ -54,17 +49,7 @@ jobs:
         env:
           FOUNDATION_PROFILE: ${{ inputs.profile || 'hardened' }}
         run: python3 tools/foundation/runtime_install.py
-      - name: Publish sanitized runtime evidence
-        if: always() && hashFiles('.foundation/runtime-evidence/runtime-result.json') != ''
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 tools/foundation/publish_evidence.py .foundation/runtime-evidence/runtime-result.json --name 'Foundation runtime evidence'
-      - name: Publish remaining gate evidence
-        if: always() && hashFiles('.foundation/runtime-evidence/continuation-result.json') != ''
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 tools/foundation/publish_evidence.py .foundation/runtime-evidence/continuation-result.json --name 'Foundation remaining gate evidence'
-      - name: Retain qualification evidence, including failed gates
+      - name: Retain results, including failed gates
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:

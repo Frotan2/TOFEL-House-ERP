@@ -8,7 +8,7 @@ enrollment, not pre-existing customer history.
 
 Loads the REAL security/enrollment/policy modules against a scripted frappe
 stub (no hosted stack in this sandbox). Hosted proof lives in
-tools/placement/native_checks.py and executes on push CI.
+tools/native/native_checks.py and executes on push CI.
 """
 import importlib.util
 import sys

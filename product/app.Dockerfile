@@ -54,7 +54,7 @@ RUN python -m venv /build/tools \
       "frappe-bench==${BENCH_VERSION}" "uv==${UV_VERSION}"
 
 # Commit-pinned upstream source checkouts (same fetch/verify sequence as
-# tools/foundation/runtime_install.py and tools/placement/run_native.py).
+# tools/foundation/runtime_install.py and tools/native/run_native.py).
 RUN set -eux; \
     for spec in \
       "frappe ${FRAPPE_REPOSITORY} ${FRAPPE_COMMIT}" \

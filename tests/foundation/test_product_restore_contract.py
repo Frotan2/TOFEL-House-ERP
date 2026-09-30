@@ -4,8 +4,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNNER = (ROOT / "tools/placement/run_native.py").read_text(encoding="utf-8")
-HELPER = (ROOT / "tools/placement/runtime_restore.py").read_text(encoding="utf-8")
+RUNNER = (ROOT / "tools/native/run_native.py").read_text(encoding="utf-8")
+HELPER = (ROOT / "tools/native/runtime_restore.py").read_text(encoding="utf-8")
 
 
 class ProductRestoreContractTests(unittest.TestCase):

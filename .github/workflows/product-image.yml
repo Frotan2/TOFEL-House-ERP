@@ -1,0 +1,35 @@
+name: Product image
+
+# Builds the desktop application image exactly as the owner's machine does
+# (product/app.Dockerfile via product/docker-compose.yml) and validates the
+# compose file. Proves the one install path stays buildable.
+on:
+  push:
+    paths:
+      - .github/workflows/product-image.yml
+      - product/**
+      - apps/**
+      - docs/engineering/foundation-version-matrix.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Validate compose file
+        run: docker compose -f product/docker-compose.yml config --quiet
+      - name: Build application image
+        run: docker build -f product/app.Dockerfile -t toefl-house-erp-app:ci .
+      - name: Report image size
+        run: docker image ls toefl-house-erp-app:ci && docker history --no-trunc --format '{{.Size}}\t{{.CreatedBy}}' toefl-house-erp-app:ci | head -30

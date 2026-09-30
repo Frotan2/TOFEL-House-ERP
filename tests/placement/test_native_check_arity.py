@@ -23,7 +23,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-HARNESS = ROOT / "tools/placement/native_checks.py"
+HARNESS = ROOT / "tools/native/native_checks.py"
 PKG = ROOT / "apps/toefl_house" / "toefl_house"
 
 

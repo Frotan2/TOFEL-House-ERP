@@ -10,7 +10,7 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-NATIVE = ROOT / "tools/placement/native_checks.py"
+NATIVE = ROOT / "tools/native/native_checks.py"
 API = ROOT / "apps/toefl_house/toefl_house/api.py"
 ADMISSION = ROOT / "apps/toefl_house/toefl_house/admission/__init__.py"
 ENROLLMENT = ROOT / "apps/toefl_house/toefl_house/enrollment/__init__.py"

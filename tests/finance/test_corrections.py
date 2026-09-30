@@ -3,7 +3,7 @@
 Covers the policy validator and the static wiring (command roles,
 protected doctypes, read-containment kinds, hooks coverage, doctype
 JSON shape, native-only credit-note path). Hosted runtime acceptance
-lives in tools/placement/native_checks.py.
+lives in tools/native/native_checks.py.
 """
 import ast
 import json

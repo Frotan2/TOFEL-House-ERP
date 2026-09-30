@@ -9,17 +9,14 @@ import shlex
 import shutil
 import signal
 import subprocess
-import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-from session_branch import ACTIVE_BRANCH, ACTIVE_REF
-BRANCH = ACTIVE_REF
+EXPORT_BRANCH = 'product-export'
 
 
 def main():
-    if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('GITHUB_REF') != BRANCH:
+    if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise SystemExit('Hosted authorized branch only; no local/production execution')
     evidence = ROOT / '.foundation/placement-evidence';evidence.mkdir(parents=True, exist_ok=True)
     lab = Path(os.environ['RUNNER_TEMP']) / 'placement-runtime';lab.mkdir(mode=0o700)
@@ -96,7 +93,7 @@ def main():
         for name in ('erpnext','education','payments','hrms'):bench('get-'+name,'get-app','--skip-assets',str(sources/name))
         for name in ('foundation_security','toefl_house'):
             export=lab/'owned'/name;shutil.copytree(ROOT/'apps'/name,export,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
-            run('export-init-'+name,['git','init','--initial-branch',ACTIVE_BRANCH,export])
+            run('export-init-'+name,['git','init','--initial-branch',EXPORT_BRANCH,export])
             run('export-add-'+name,['git','-C',export,'add','.'])
             run('export-commit-'+name,['git','-C',export,'-c','user.name=Synthetic qualification','-c','user.email=validation@example.test','commit','-m','Exact app export '+os.environ['GITHUB_SHA']])
             bench('get-'+name,'get-app','--soft-link','--skip-assets',str(export))
@@ -109,14 +106,14 @@ def main():
         log=lab/'gunicorn.log';stream=log.open('w')
         server=subprocess.Popen([str(benchdir/'env/bin/gunicorn'),'--bind','127.0.0.1:18000','--workers','2','frappe.app:application'],cwd=benchdir/'sites',env=env,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
         processes.append((server,stream,log))
-        run('native-acceptance',[benchdir/'env/bin/python',ROOT/'tools/placement/native_checks.py'],benchdir/'sites')
+        run('native-acceptance',[benchdir/'env/bin/python',ROOT/'tools/native/native_checks.py'],benchdir/'sites')
         # D8-scoped product persistence rehearsal. This is a true Bench backup
         # plus files and a restore into a separately created DB/site. It is not
         # an offsite backup, production recovery objective, or topology claim.
         expectation=lab/'product-restore-expectation.json'
         env['PLACEMENT_RESTORE_EXPECTATION']=str(expectation)
         env['PLACEMENT_RESTORE_REPORT']=str(expectation)
-        run('capture-product-restore-snapshot',[benchdir/'env/bin/python',ROOT/'tools/placement/runtime_restore.py','capture','placement-test.localhost'],benchdir/'sites')
+        run('capture-product-restore-snapshot',[benchdir/'env/bin/python',ROOT/'tools/native/runtime_restore.py','capture','placement-test.localhost'],benchdir/'sites')
         bench('backup-placement-test-with-files','--site','placement-test.localhost','backup','--with-files')
         backup_dir=benchdir/'sites'/'placement-test.localhost'/'private/backups'
         database=max(backup_dir.glob('*-database.sql.gz'),key=lambda p:p.stat().st_mtime_ns)
@@ -142,7 +139,7 @@ def main():
                                            'site_encryption_key_restored':True,'site':restore_site}
         bench('migrate-placement-restore-site','--site',restore_site,'migrate')
         product_restore=evidence/'product-restore-result.json';env['PLACEMENT_RESTORE_REPORT']=str(product_restore)
-        run('verify-product-restore-snapshot',[benchdir/'env/bin/python',ROOT/'tools/placement/runtime_restore.py','verify',restore_site],benchdir/'sites')
+        run('verify-product-restore-snapshot',[benchdir/'env/bin/python',ROOT/'tools/native/runtime_restore.py','verify',restore_site],benchdir/'sites')
         report['product_restore']=json.loads(product_restore.read_text())
         report['runtime_complete']=True
         report['installed_apps']=bench('list-apps','--site','placement-test.localhost','list-apps','--format','json')

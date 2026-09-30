@@ -1,7 +1,7 @@
 """Pure local unit checks for the thin finance-slice policy surface.
 
 Not native Frappe qualification; hosted acceptance lives in
-tools/placement/native_checks.py on the branch-restricted runner.
+tools/native/native_checks.py on the branch-restricted runner.
 """
 import ast
 from pathlib import Path

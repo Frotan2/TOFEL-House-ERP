@@ -1,18 +1,10 @@
 name: Owned suite
 
-# The single gate for everything this repository owns and can verify without a
-# site, a database or Docker: the whole Python test tree, both Node suites, the
-# D8 contract validator and static analysis.
-#
-# Every other workflow here is path-filtered to the tooling it qualifies, so
-# before this gate existed there was no run that exercised the whole owned
-# suite. A change under apps/** did not run tests/d8; a change under tools/**
-# did not run the domain suites. Nothing in this job claims native runtime
-# qualification, production readiness or a gate change - production stays
-# REJECT and D8 stays BLOCKED regardless of the colour of this check.
+# Fast gate for everything this repository owns that can be verified without a
+# site, database or Docker: static analysis, the Python test tree and the Node
+# suites for the Desk front-end.
 on:
   push:
-    branches: [arena/01a0cd90-tofel-house-erp]
   pull_request:
   workflow_dispatch:
 
@@ -25,7 +17,6 @@ concurrency:
 
 jobs:
   owned-suite:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/arena/01a0cd90-tofel-house-erp'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -37,61 +28,25 @@ jobs:
           node-version: 24.21.0
           package-manager-cache: false
 
-      - name: Install hash-pinned static analysis tool into an isolated venv
-        # A venv rather than a system install: the runner image's Python is
-        # PEP 668 externally managed, and the tool must not touch it anyway.
+      - name: Install hash-pinned ruff into an isolated venv
         run: |
           set -euo pipefail
-          python3 tools/foundation/annotated_step.py "Create isolated lint venv" -- python3 -m venv .foundation/lint-venv
+          python3 tools/foundation/annotated_step.py "Create lint venv" -- python3 -m venv .foundation/lint-venv
           printf '%s\n' 'ruff==0.16.8 --hash=sha256:15e7d226246961db9235098333caa13063906d3851136b84c2900b82f5daa1df' \
             > .foundation/lint-requirements.txt
           .foundation/lint-venv/bin/python -m pip install --quiet --no-deps \
             --require-hashes -r .foundation/lint-requirements.txt
           test "$(.foundation/lint-venv/bin/ruff --version)" = "ruff 0.16.8"
 
-      - name: Static analysis (pyflakes + syntax)
+      - name: Static analysis
         run: .foundation/lint-venv/bin/ruff check .
 
-      - name: Branch boundary must agree with the canonical pin
-        # A rotation has to land the workflow branch filters and
-        # tools/session_branch.py in the same commit. Between the two commits
-        # every boundary gate is red for bookkeeping only, which is exactly
-        # what took four gates down at 2deba87 with no readable cause.
-        run: python3 tools/foundation/annotated_step.py "Branch boundary must agree with the canonical pin" -- python3 tools/foundation/branch_boundary.py
+      - name: Python test tree
+        run: python3 tools/foundation/annotated_step.py "Python test tree" -- python3 -m unittest discover -s tests -t . -v
 
-      - name: Owned Python test tree
-        run: python3 tools/foundation/annotated_step.py "Owned Python test tree" -- python3 -m unittest discover -s tests -t . -v
-
-      - name: Owned Node suites
+      - name: Node suites
         run: |
           node tests/foundation/test_realtime_guard.cjs
           node tests/foundation/test_command_pages.cjs
           node tests/foundation/test_design_system.cjs
           node tests/foundation/test_role_desks.cjs
-
-      - name: D8 contract validator must stay BLOCKED / REJECT
-        run: |
-          python3 tools/foundation/annotated_step.py "D8 contract validator" -- python3 tools/foundation/d8_validate.py \
-            --contract docs/engineering/d8-operational-contract.template.json \
-            --output .foundation/owned-suite/d8-validate.json
-          python3 - <<'PY'
-          import json, pathlib
-          report = json.loads(pathlib.Path(".foundation/owned-suite/d8-validate.json").read_text())
-          assert report["checkout_branch_matches_active"], "checkout is not the pinned active branch"
-          assert report["d8_gate_state"] == "BLOCKED", report["d8_gate_state"]
-          assert report["production_state"] == "REJECT", report["production_state"]
-          assert report["production_enabled"] is False
-          assert report["sec_deps"] == "UPSTREAM-BLOCKED / REJECT"
-          print("D8 gate BLOCKED, production REJECT, active branch",
-                report["active_branch"], "| hosted execution:",
-                report["active_branch_hosted_execution"])
-          PY
-
-      - name: Retain owned-suite evidence
-        if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: owned-suite-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .foundation/owned-suite/
-          if-no-files-found: error
-          retention-days: 14

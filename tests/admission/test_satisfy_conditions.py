@@ -7,7 +7,7 @@ other than the deciding approver -- plus a mandatory evidence note and
 an unexpired placement decision. Loads the REAL admission module
 against a scripted frappe stub; the end-to-end journey
 (Conditional -> accept -> satisfy -> convert -> enroll) is proven on
-hosted CI in tools/placement/native_checks.py.
+hosted CI in tools/native/native_checks.py.
 """
 import importlib.util
 import sys

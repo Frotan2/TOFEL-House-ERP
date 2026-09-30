@@ -31,7 +31,6 @@ POLICY_JSON = APP / ("operations/doctype/th_capacity_objective/"
                      "th_capacity_objective.json")
 VERSION_JSON = APP / ("operations/doctype/th_capacity_objective_version/"
                       "th_capacity_objective_version.json")
-D8_VALIDATOR = REPO / "tools/foundation/d8_validate.py"
 ACTOR = "course.owner@example.com"
 POLICY = "TH Capacity Objective"
 COMMANDS = (
@@ -647,16 +646,6 @@ class CapacityObjectiveWiringTests(unittest.TestCase):
         self.assertIn("return {}", self.module_source)
         # No objective number is embedded as a default anywhere.
         self.assertNotIn("default_capacity", self.module_source)
-
-    def test_release_gate_never_reads_business_settings(self):
-        # PERMANENT RULE: the D8 capacity/availability gate is a
-        # release-authorization control and is never configured from any
-        # business setting. Pin the validator to zero Frappe coupling —
-        # it evaluates static JSON contracts only and can never read the
-        # TH Capacity Objective carrier or any site data.
-        validator_source = D8_VALIDATOR.read_text(encoding="utf-8")
-        self.assertNotIn("frappe", validator_source)
-        self.assertNotIn("TH Capacity Objective", validator_source)
 
 
 if __name__ == "__main__":

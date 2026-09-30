@@ -1,0 +1,51 @@
+name: Native lifecycle integration
+
+# Installs the pinned Frappe/ERPNext/Education/HRMS stack plus the owned apps on
+# an ephemeral runner and executes tools/native/native_checks.py: the real-site
+# checks for Placement, Admission, Enrollment, Teaching Operations, Finance,
+# Configuration and containment guards.
+on:
+  push:
+    paths:
+      - .github/workflows/native-lifecycle.yml
+      - apps/**
+      - tools/native/**
+      - tools/foundation/runner_probe.py
+      - docs/engineering/foundation-version-matrix.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-lifecycle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Pinned runner dependencies
+        run: |
+          npm install --global yarn@1.22.22
+          python3 tools/foundation/annotated_step.py "Pinned runner dependencies" -- python3 tools/foundation/runner_probe.py
+      - name: Native lifecycle checks on a real site
+        run: python3 tools/foundation/annotated_step.py "Native lifecycle checks" -- python3 tools/native/run_native.py
+      - name: Retain results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: native-lifecycle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .foundation/placement-evidence/
+            .foundation/runner-evidence/
+          if-no-files-found: error
+          retention-days: 14

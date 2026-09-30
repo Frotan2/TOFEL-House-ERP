@@ -10,7 +10,7 @@ const SCRIPT = path.join(APP, "public/js/th_command_pages.js");
 const HOOKS = path.join(APP, "hooks.py");
 const SECURITY = path.join(APP, "security.py");
 const PYPROJECT = path.join(ROOT, "apps/toefl_house/pyproject.toml");
-const NATIVE_CHECKS = path.join(ROOT, "tools/placement/native_checks.py");
+const NATIVE_CHECKS = path.join(ROOT, "tools/native/native_checks.py");
 
 const expected = {
 	"th-administration-control-centre": { module: "Placement", roles: ["Course Owner", "General Manager"] },
@@ -69,7 +69,7 @@ for (const [name, shape] of Object.entries(expected)) {
 }
 
 /*
- * The hosted qualification in tools/placement/native_checks.py pins each Page's
+ * The hosted qualification in tools/native/native_checks.py pins each Page's
  * audience in PAGE_SPEC and asserts it against the installed Page, including a
  * negative control that audit and finance audiences receive no command page at
  * all. Nothing in this suite used to look at that file, so a Page audience could

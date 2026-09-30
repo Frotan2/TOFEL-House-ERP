@@ -1,6 +1,6 @@
 """OD-CP-1 net-billing math, and the lock that finance bills the NET amount.
 
-Hosted runs (tools/placement/native_checks.py, checks odcp-discount-*) prove
+Hosted runs (tools/native/native_checks.py, checks odcp-discount-*) prove
 the live-site arithmetic; this file pins the pure helper and the command
 shape offline. The defect this guards (fee-handoff audit, 2026-09-18): the
 pinned native Education Fees controller computes grand_total as the plain

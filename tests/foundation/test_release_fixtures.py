@@ -9,7 +9,7 @@ the role fixture, every link target is a known native or TH doctype, the
 content canvas is valid JSON whose card blocks match Card Break labels,
 modules exist in modules.txt, and the files sit at the exact paths module
 sync scans. Hosted proof of import + role visibility lives in
-tools/placement/native_checks.py (release-* checks).
+tools/native/native_checks.py (release-* checks).
 """
 import json
 from pathlib import Path
