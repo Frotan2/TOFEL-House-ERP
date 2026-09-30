@@ -108,8 +108,10 @@ class PinParityContract(unittest.TestCase):
                 if pred(ln):
                     return i
             raise AssertionError(msg)
-        useradd_i = first_logical(lambda ln: ln.startswith("RUN useradd") and "/home/frappe" in ln,
-                                  "frappe user creation missing")
+        useradd_i = first_logical(lambda ln: ln.startswith("RUN useradd")
+                                  and "/home/frappe" in ln
+                                  and "chown -R frappe:frappe /build" in ln,
+                                  "frappe user creation + /build ownership missing")
         user_frappe_i = first(lambda ln: ln == "USER frappe", "USER frappe missing")
         bench_init_i = first_logical(lambda ln: ln.startswith("RUN") and "bench init" in ln,
                                      "bench init RUN missing")

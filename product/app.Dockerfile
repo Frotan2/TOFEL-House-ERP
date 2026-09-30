@@ -95,8 +95,15 @@ RUN chmod +x /product/entrypoint.sh
 # installation path — so the frappe user exists before the FIRST bench
 # invocation and stays the image's effective user through the entrypoint
 # (bootstrap.py also drives bench: new-site, migrate, build).
-RUN useradd --create-home --home-dir /home/frappe --shell /bin/bash frappe
+RUN useradd --create-home --home-dir /home/frappe --shell /bin/bash frappe \
+    && chown -R frappe:frappe /build
 USER frappe
+# /build/sources and /build/owned hold git repositories created by root in
+# earlier layers; bench clones them locally (git clone <path> --origin
+# upstream). Git's safe.directory guard (>=2.35.2, CVE-2022-24765) refuses
+# cross-owner .git access as fatal: "detected dubious ownership in
+# repository at '<path>'". The chown above keeps every checkout owned by
+# the same user that reads it — no git-config exceptions anywhere.
 RUN printf '%s\n' '--install.frozen-lockfile true' '--install.non-interactive true' > /home/frappe/.yarnrc; \
     bench init /home/frappe/bench \
       --frappe-path /build/sources/frappe \
