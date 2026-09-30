@@ -243,6 +243,19 @@ class BootstrapLogicContract(unittest.TestCase):
         self.assertLess(body.index("seed_sites()"), body.index("run_bench("))
         self.assertIn("/build/sites-seed/", (PRODUCT / "app.Dockerfile").read_text())
 
+    def test_web_server_pins_the_product_site(self):
+        # Regression (product-image run 36758667184): frappe resolves the site
+        # from the Host header unless frappe.app._site is set; 127.0.0.1 is no
+        # site name, so every Owner request failed.
+        entry = (PRODUCT / "entrypoint.sh").read_text()
+        self.assertIn("--pythonpath /product", entry)
+        self.assertIn("wsgi:application", entry)
+        self.assertNotIn("frappe.app:application", entry)
+        wsgi = (PRODUCT / "wsgi.py").read_text()
+        self.assertIn('frappe.app._site = os.environ.get("SITE_NAME", "toeflhouse.localhost")', wsgi)
+        self.assertIn("COPY product/wsgi.py /product/wsgi.py", (PRODUCT / "app.Dockerfile").read_text())
+        self.assertIn("!product/wsgi.py", (ROOT / ".dockerignore").read_text())
+
     def test_credentials_written_once_with_owner_permissions(self):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:

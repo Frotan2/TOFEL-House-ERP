@@ -86,6 +86,7 @@ RUN set -eux; \
 
 COPY product/bootstrap.py /product/bootstrap.py
 COPY product/activate.py /product/activate.py
+COPY product/wsgi.py /product/wsgi.py
 COPY product/entrypoint.sh /product/entrypoint.sh
 RUN chmod +x /product/entrypoint.sh /product/activate.py
 
