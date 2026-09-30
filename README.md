@@ -174,6 +174,13 @@ typing): **Stop**, **Backup TOEFL House ERP** (full database + files into a
 folder you can copy to an external drive), **Repair TOEFL House ERP** (safe
 restart + migration rerun; never deletes data).
 
+**Your very first pass?** Use the exact step-by-step checklist next to the
+scripts — [product/windows/VALIDATION.md](product/windows/VALIDATION.md): ten
+steps matching the release gate (Install → first boot → login → Start → Stop →
+Start → Backup → Repair → browser access → persistence), each with what you
+should see and the screenshot to keep. The gate stays OPEN until that
+evidence exists on a real Windows PC.
+
 **Verification classes, stated plainly:** the underlying runtime commands the
 image executes are VERIFIED IN HOSTED ENVIRONMENT ONLY (same shapes as hosted
 runs 36119829355/36187282428, 123/123, and 36161953566, 596/596, on this

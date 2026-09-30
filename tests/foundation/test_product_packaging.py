@@ -183,5 +183,59 @@ class BootstrapLogicContract(unittest.TestCase):
             self.assertEqual(bootstrap.read_root_password(secrets_dir), "rootpw")
 
 
+class OwnerValidationChecklistTests(unittest.TestCase):
+    """product/windows/VALIDATION.md is the single canonical, end-user-only
+    release-gate evidence checklist: it must cover every DoD stage in order,
+    promise no end-user typing, and state the gate stays OPEN without it.
+    Assertions are structural invariants only — prose may evolve freely."""
+
+    DOC = PRODUCT / "windows" / "VALIDATION.md"
+
+    def test_checklist_exists_next_to_the_scripts(self):
+        self.assertTrue(self.DOC.is_file())
+
+    def test_every_gate_stage_present_in_order(self):
+        text = self.DOC.read_text(encoding="utf-8")
+        headers = re.findall(r"^## Step (\d+) — (.+)$", text, flags=re.MULTILINE)
+        self.assertEqual([int(n) for n, _ in headers], list(range(1, 11)),
+                         "exactly ten ordered validation steps required")
+        # DoD order pinned step-by-step: install -> first boot -> login ->
+        # (persistence probe) -> stop -> start -> backup -> repair ->
+        # browser access -> persistence.
+        expected = {1: "install", 2: "first boot", 3: "login", 5: "stop",
+                    6: "start", 7: "backup", 8: "repair",
+                    9: "browser access", 10: "persistence"}
+        titles = {int(n): title.lower() for n, title in headers}
+        for step, keyword in expected.items():
+            self.assertIn(keyword, titles[step],
+                          f"step {step} title must contain '{keyword}' (release-gate order)")
+
+    def test_end_user_requires_no_technical_tooling(self):
+        plain = self.DOC.read_text(encoding="utf-8").replace("**", "").lower()
+        # The audience contract sentence lists every excluded tool.
+        marker = plain.find("not need")
+        self.assertNotEqual(marker, -1, "checklist must carry an explicit no-need sentence")
+        window = plain[marker:marker + 300]
+        for phrase in ("powershell", "wsl", "git", "python", "bench"):
+            self.assertIn(phrase, window,
+                          f"checklist must explicitly exclude end-user need for: {phrase}")
+        self.assertNotIn("```", plain, "no code fences: the end user types nothing")
+
+    def test_every_step_carries_numbered_evidence(self):
+        text = self.DOC.read_text(encoding="utf-8")
+        for n in range(1, 11):
+            self.assertIn(f"Evidence {n}", text, f"step {n} lacks a numbered evidence item")
+
+    def test_gate_open_statement_and_single_failure_path(self):
+        text = self.DOC.read_text(encoding="utf-8")
+        self.assertIn("OPEN", text)
+        self.assertIn("If something fails", text)
+        # Exactly one end-user recovery path: the Repair script; no other .cmd
+        # fallback may be prescribed on failure.
+        tail = text[text.index("## If something fails"):]
+        self.assertIn("Repair TOEFL House ERP.cmd", tail)
+        self.assertNotIn("Install TOEFL House ERP.cmd", tail)
+
+
 if __name__ == "__main__":
     unittest.main()
