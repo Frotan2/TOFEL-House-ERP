@@ -36,5 +36,23 @@ jobs:
           docker compose -f product/docker-compose.yml config --quiet
       - name: Build application image
         run: docker build -f product/app.Dockerfile -t toefl-house-erp-app:ci .
-      - name: Report image size
-        run: docker image ls toefl-house-erp-app:ci && docker history --no-trunc --format '{{.Size}}\t{{.CreatedBy}}' toefl-house-erp-app:ci | head -30
+      - name: Report image footprint
+        run: |
+          set -euo pipefail
+          size() { docker image inspect "$1" --format '{{.Size}}' | awk '{printf "%.0f MB", $1/1000000}'; }
+          echo "::notice title=Image size::toefl-house-erp-app $(size toefl-house-erp-app:ci)"
+          layers=$(docker history --format '{{.Size}} {{.CreatedBy}}' toefl-house-erp-app:ci | grep -v '^0B' | cut -c1-90 | head -12 | paste -sd'|' -)
+          echo "::notice title=Largest layers::${layers}"
+          usage=$(docker run --rm --entrypoint sh toefl-house-erp-app:ci -c 'du -sm /home/frappe/bench/env /home/frappe/bench/apps/* /build/sources /build/owned /build/tools /usr/local /usr/lib /home/frappe/.cache 2>/dev/null | sort -rn' | awk '{print $1"MB "$2}' | paste -sd'|' -)
+          echo "::notice title=Disk usage in image::${usage}"
+      - name: One-off comparison - image without cache cleanup
+        run: |
+          set -euo pipefail
+          sed 's#yarn cache clean; rm -rf /home/frappe/.cache#true#' product/app.Dockerfile > /tmp/before.Dockerfile
+          grep -c 'yarn cache clean' /tmp/before.Dockerfile || true
+          docker build -q -f /tmp/before.Dockerfile -t toefl-house-erp-app:before . >/dev/null
+          before=$(docker image inspect toefl-house-erp-app:before --format '{{.Size}}')
+          after=$(docker image inspect toefl-house-erp-app:ci --format '{{.Size}}')
+          echo "::notice title=Cache cleanup saving::before $((before/1000000)) MB, after $((after/1000000)) MB, saved $(((before-after)/1000000)) MB"
+          ctx_all=$(du -sm --exclude=.git . | cut -f1); ctx_git=$(du -sm .git | cut -f1)
+          echo "::notice title=Build context::repo working tree ${ctx_all} MB + .git ${ctx_git} MB previously sent; now only apps/ + 3 product files ($(du -sm apps | cut -f1) MB)"
