@@ -28,7 +28,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Validate compose file
-        run: docker compose -f product/docker-compose.yml config --quiet
+        # db.env is generated per machine by the Windows installer; CI uses a
+        # throwaway value only to let compose resolve the env_file.
+        run: |
+          mkdir -p product/data/secrets
+          printf 'MARIADB_ROOT_PASSWORD=%s\n' "$(openssl rand -hex 24)" > product/data/secrets/db.env
+          docker compose -f product/docker-compose.yml config --quiet
       - name: Build application image
         run: docker build -f product/app.Dockerfile -t toefl-house-erp-app:ci .
       - name: Report image size
