@@ -40,11 +40,14 @@ if errorlevel 1 (
 )
 
 if not exist data\secrets mkdir data\secrets
-if not exist data\secrets\db.env (
-  echo  Generating a private database password for this computer...
-  for /f "usebackq delims=" %%G in (`powershell -NoProfile -Command "[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N')"`) do set "DBPW=%%G"
-  >data\secrets\db.env echo MARIADB_ROOT_PASSWORD=%DBPW%
-)
+rem  Note: do not wrap the FOR /F line below in a parenthesized IF block.
+rem  cmd's block parser folds the ')' inside PowerShell's ToString('N') into
+rem  the FOR IN (...) clause and aborts with ") was unexpected at this time."
+if exist data\secrets\db.env goto :secretok
+echo  Generating a private database password for this computer...
+for /f "usebackq delims=" %%G in (`powershell -NoProfile -Command "[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N')"`) do set "DBPW=%%G"
+>data\secrets\db.env echo MARIADB_ROOT_PASSWORD=%DBPW%
+:secretok
 attrib +h data\secrets >nul 2>nul
 
 echo.

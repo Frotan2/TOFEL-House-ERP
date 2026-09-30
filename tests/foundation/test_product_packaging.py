@@ -183,6 +183,92 @@ class BootstrapLogicContract(unittest.TestCase):
             self.assertEqual(bootstrap.read_root_password(secrets_dir), "rootpw")
 
 
+class CmdSyntaxContract(unittest.TestCase):
+    """cmd.exe structure checks for the shipped .cmd scripts.
+
+    Regression: the original installer nested `for /f "usebackq" %%G in
+    (`powershell ... ToString('N') ...`)` INSIDE a parenthesized `if` block.
+    cmd parses a `( ... )` block before running it, matching its closing `)`
+    with no regard for quotes inside the FOR IN-command — the ')' inside
+    ToString('N') ended the FOR clause early and the leftover ')' aborted the
+    whole run with `) was unexpected at this time.` (reporter: real Windows
+    E2E of the desktop gate, 2026-09-30). These tests model the parser rules
+    that matter for this construct so the regression cannot return:
+
+    * any `for /f ... in (BACKQUOTED ...)` whose command text contains a
+      parenthesis must live at parenthesis depth 0 (never inside a block);
+    * parenthesized blocks are balanced per logical command (depth never
+      negative; each block closes on its own `)` line);
+    * every `goto` target label exists exactly once.
+    """
+
+    FOR_RE = re.compile(r"^\s*for\s+/f\b", re.IGNORECASE)
+    GOTO_RE = re.compile(r"\bgoto\s+:?([A-Za-z_][\w.-]*)", re.IGNORECASE)
+    LABEL_RE = re.compile(r"^:([A-Za-z_][\w.-]*)\s*$")
+
+    @staticmethod
+    def depth_signature(lines):
+        """Per-line parenthesis depth BEFORE the line executes, and net delta,
+        counting parens outside double-quoted spans only. cmd's block parser
+        is quote-blind for block boundaries, which is exactly why the rule
+        above forbids parenthesized FOR commands inside blocks regardless of
+        quoting; double-quote masking here only keeps URLs/echo text sane."""
+        depth = 0
+        per_line_before = []
+        for lineno, raw in enumerate(lines, start=1):
+            per_line_before.append(depth)
+            if raw.lstrip().lower().startswith("rem "):
+                continue
+            unquoted = re.sub(r'"[^"\r\n]*"', "", raw)
+            depth += unquoted.count("(") - unquoted.count(")")
+            if depth < 0:
+                raise AssertionError(
+                    f"unbalanced parenthesized block closes early at line {lineno}: {raw!r}")
+        if depth != 0:
+            raise AssertionError(f"unclosed parenthesized block (final depth {depth})")
+        return per_line_before
+
+    def test_parenthesized_for_in_commands_live_at_top_level(self):
+        for path in SCRIPTS:
+            lines = path.read_text().splitlines()
+            depth_before = self.depth_signature(lines)
+            for lineno, raw in enumerate(lines, start=1):
+                if not self.FOR_RE.match(raw):
+                    continue
+                backtick = re.search(r"in\s+\((`[^`]*`)\)", raw, re.IGNORECASE)
+                if not backtick:
+                    continue
+                if any(ch in backtick.group(1) for ch in "()"):
+                    self.assertEqual(depth_before[lineno - 1], 0,
+                                     f"{path.name}:{lineno}: FOR /F backquoted command contains "
+                                     f"parentheses INSIDE a parenthesized block — cmd's quote-blind "
+                                     f"block parser aborts there (production regression 2026-09-30): {raw.strip()!r}")
+
+    def test_blocks_and_labels_are_well_formed(self):
+        for path in SCRIPTS:
+            lines = path.read_text().splitlines()
+            self.depth_signature(lines)  # raises on unbalanced blocks
+            labels = [m.group(1).lower() for line in lines
+                      if (m := self.LABEL_RE.match(line.strip()))]
+            for label in labels:
+                self.assertEqual(labels.count(label), 1,
+                                 f"{path.name}: duplicate label :{label}")
+            targets = {t.lower() for line in lines
+                       for t in self.GOTO_RE.findall(re.sub(r'"[^"\r\n]*"', "", line))}
+            for target in targets:
+                if target == "eof":
+                    continue
+                self.assertIn(target, labels,
+                              f"{path.name}: goto target missing: :{target}")
+
+    def test_installer_secret_path_survives_the_restructure(self):
+        install = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
+        self.assertIn("if exist data\\secrets\\db.env goto :secretok", install)
+        self.assertIn("NewGuid", install)
+        self.assertIn("MARIADB_ROOT_PASSWORD=%DBPW%", install)
+        self.assertNotRegex(install, r"if not exist data\\secrets\\db\.env \(")
+
+
 class OwnerValidationChecklistTests(unittest.TestCase):
     """product/windows/VALIDATION.md is the single canonical, end-user-only
     release-gate evidence checklist: it must cover every DoD stage in order,
