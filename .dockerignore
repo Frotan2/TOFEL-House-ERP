@@ -1,0 +1,11 @@
+# Build context allowlist for product/app.Dockerfile (context = repository root).
+# Only the owned apps and the product entrypoint files enter the image; this
+# keeps .git, docs, tests and above all product/data/ (live site data, backups
+# and secrets) out of the build context.
+*
+!apps/
+!product/app.Dockerfile
+!product/bootstrap.py
+!product/entrypoint.sh
+**/__pycache__
+**/*.pyc

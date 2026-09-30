@@ -110,11 +110,12 @@ USER frappe
 # cross-owner .git access as fatal: "detected dubious ownership in
 # repository at '<path>'". The chown above keeps every checkout owned by
 # the same user that reads it — no git-config exceptions anywhere.
-RUN printf '%s\n' '--install.frozen-lockfile true' '--install.non-interactive true' > /home/frappe/.yarnrc; \
+RUN set -eux; printf '%s\n' '--install.frozen-lockfile true' '--install.non-interactive true' > /home/frappe/.yarnrc; \
     bench init /home/frappe/bench \
       --frappe-path /build/sources/frappe \
       --python "$(which python)" \
-      --no-backups --skip-redis-config-generation --no-procfile --skip-assets --verbose
+      --no-backups --skip-redis-config-generation --no-procfile --skip-assets --verbose; \
+    yarn cache clean; rm -rf /home/frappe/.cache
 RUN set -eux; \
     cd /home/frappe/bench; \
     for name in erpnext education payments hrms; do \
@@ -122,7 +123,10 @@ RUN set -eux; \
     done; \
     bench get-app --skip-assets /build/owned/foundation_security; \
     bench get-app --skip-assets /build/owned/toefl_house; \
-    uv pip check --python /home/frappe/bench/env/bin/python
+    uv pip check --python /home/frappe/bench/env/bin/python; \
+    yarn cache clean; rm -rf /home/frappe/.cache
+# Package-manager caches (yarn, pip, uv) are removed in the same layer that
+# created them: they are first-build-only footprint, never runtime state.
 
 ENV BENCH_DIR=/home/frappe/bench
 WORKDIR /home/frappe/bench
