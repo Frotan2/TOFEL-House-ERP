@@ -84,7 +84,20 @@ RUN chmod +x /product/entrypoint.sh
 
 # Local bench: frappe from the pinned source (not re-resolved), then the rest.
 # Yarn Classic keeps upstream lockfiles frozen for nested installs.
-RUN printf '%s\n' '--install.frozen-lockfile true' '--install.non-interactive true' > /build/.yarnrc; \
+#
+# The bench CLI hard-refuses to run as root: bench/cli.py change_uid() logs
+# "You should not run this command as root" and sys.exit(1) when the
+# effective uid is 0 and no frappe_user exists in config.json — this was the
+# exact failure of the first ever executed image build (real Windows E2E and
+# the hosted diagnostic probe; output: single WARN line, exit 1, before any
+# setup step). The hosted-qualification parity is to keep every bench
+# operation as a non-root user, exactly like the runner user in the hosted
+# installation path — so the frappe user exists before the FIRST bench
+# invocation and stays the image's effective user through the entrypoint
+# (bootstrap.py also drives bench: new-site, migrate, build).
+RUN useradd --create-home --home-dir /home/frappe --shell /bin/bash frappe
+USER frappe
+RUN printf '%s\n' '--install.frozen-lockfile true' '--install.non-interactive true' > /home/frappe/.yarnrc; \
     bench init /home/frappe/bench \
       --frappe-path /build/sources/frappe \
       --python "$(which python)" \

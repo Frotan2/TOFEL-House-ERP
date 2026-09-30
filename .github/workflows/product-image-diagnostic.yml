@@ -11,7 +11,7 @@ name: Product image diagnostic (transient)
 
 on:
   push:
-    branches: ["arena/01a0cd90-tofel-house-erp"]
+    branches: [arena/01a0cd90-tofel-house-erp]
   workflow_dispatch:
 
 permissions:

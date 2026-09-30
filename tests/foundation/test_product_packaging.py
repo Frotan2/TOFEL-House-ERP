@@ -68,6 +68,65 @@ class PinParityContract(unittest.TestCase):
         self.assertIn("rev-parse HEAD", text)
         self.assertIn("checkout --detach FETCH_HEAD", text)
 
+    def test_bench_operations_run_as_non_root_user(self):
+        # Production failure of record (real Windows E2E + hosted diagnostic
+        # probe, 2026-09-30): bench's own guard (bench/cli.py change_uid)
+        # logs "You should not run this command as root" and sys.exit(1)
+        # whenever a bench command runs with euid 0 and no frappe_user in
+        # config — the build's `bench init` RUN died after exactly one WARN
+        # line. The image must create the frappe user BEFORE the first bench
+        # invocation and keep it as the effective user through the entrypoint
+        # (bootstrap.py also drives bench at container start).
+        text = DOCKERFILE.read_text()
+        lines = text.splitlines()
+        directives = [(i, ln.strip()) for i, ln in enumerate(lines)
+                      if ln.strip() and not ln.strip().startswith("#")]
+        def first(pred, msg):
+            for i, ln in directives:
+                if pred(ln):
+                    return i
+            raise AssertionError(msg)
+        # Join Dockerfile line continuations into logical commands.
+        logical, buf, buf_start = [], "", None
+        for i, raw in enumerate(lines):
+            if raw.strip().startswith("#"):
+                continue
+            if buf:
+                buf += raw.rstrip("\\").rstrip()
+                if not raw.rstrip().endswith("\\"):
+                    logical.append((buf_start, buf))
+                    buf = ""
+                continue
+            if not raw.strip():
+                continue
+            if raw.rstrip().endswith("\\"):
+                buf, buf_start = raw.rstrip("\\").rstrip(), i
+            else:
+                logical.append((i, raw.strip()))
+        def first_logical(pred, msg):
+            for i, ln in logical:
+                if pred(ln):
+                    return i
+            raise AssertionError(msg)
+        useradd_i = first_logical(lambda ln: ln.startswith("RUN useradd") and "/home/frappe" in ln,
+                                  "frappe user creation missing")
+        user_frappe_i = first(lambda ln: ln == "USER frappe", "USER frappe missing")
+        bench_init_i = first_logical(lambda ln: ln.startswith("RUN") and "bench init" in ln,
+                                     "bench init RUN missing")
+        self.assertLess(useradd_i, user_frappe_i)
+        self.assertLess(user_frappe_i, bench_init_i)
+        for i, ln in directives:
+            if i > bench_init_i and ln.startswith("USER "):
+                self.assertEqual("USER frappe", ln,
+                                 "bench hard-exits as root; the image must "
+                                 "stay on the frappe user for runtime")
+        # The frozen-lockfile yarn config lives in the frappe user's HOME so
+        # yarn classic honors it for every later `yarn install` bench runs
+        # (regardless of cwd) — pinned lockfile behavior tightened, never
+        # relaxed.
+        self.assertIn("> /home/frappe/.yarnrc", text)
+        self.assertNotIn("> /build/.yarnrc", text)
+
 
 class DesktopContract(unittest.TestCase):
     def test_host_exposure_is_loopback_only(self):
@@ -125,6 +184,7 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("docker compose up -d", install)
         self.assertIn("first-run-credentials.txt", install.lower())
 
+class EntrypointContract(unittest.TestCase):
     def test_entrypoint_running_sequence_is_bootstrap_then_gunicorn(self):
         text = (PRODUCT / "entrypoint.sh").read_text()
         self.assertLess(text.index("python3 /product/bootstrap.py"),
