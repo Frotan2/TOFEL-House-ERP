@@ -1,0 +1,178 @@
+{
+  "date": "2026-09-30",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "Second feed delta within 24h: 13 advisories newly published to the GitHub Advisory Database 2026-09-29 (9 pyjwt batch, 3 brace-expansion, 1 moment) matching pinned versions, surfaced by hosted run 36668343658 @4362fb2 which correctly failed closed (restricted policy regressions: hosted-full-stack-dependency-audit + hosted-frontend-advisory-audit, exit 1 each). Reachability traced line-by-line in pinned trees frappe@988e54f3c4c291e2077a83809663f123731abe76, education@93bc7075753369457919720690f80c6d2207b5f2, hrms@a4768b441cff346def505e27f2a2229ee1e05b9b (see README.md in this directory). The annotation feed had not yet populated severities for 10 rows ('(?)'); severities below are the advisory-database-reviewed values.",
+  "packages": [
+    {
+      "package": "py:pyjwt@2.13.0",
+      "advisories": [
+        {
+          "id": "GHSA-2gx3-rcp4-g85q",
+          "aliases": ["CVE-2026-101917"],
+          "severity": "moderate",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": "<= 2.13.0",
+          "first_patched": "2.14.0",
+          "summary": "PyJWT: PyJWKClient amplifies unauthenticated JWKS fetches on unknown kid values (incomplete fix of CVE-2026-48524)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "The vulnerable component is PyJWKClient/PyJWKSet JWKS fetching and caching. Pinned frappe@988e54f3 contains no PyJWK/PyJWKSet/PyJWKSClient import or instantiation anywhere (repository-wide source search, zero hits); jwks_uri is an unbound Social Login Key type hint only (integrations/utils.py:45-46). All jwt use is encode/decode with explicit keys (oauth.py:324, 446, 467; utils/oauth.py:200). Same JWKS-absence family as the accepted 2026-09-29 delta (GHSA-w6j9-cwv2-h6wq).",
+          "fix_path": "Official Frappe release carrying PyJWT >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        },
+        {
+          "id": "GHSA-9v7f-9g4p-ffgj",
+          "aliases": ["CVE-2026-102267"],
+          "severity": "high",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": "<= 2.13.0",
+          "first_patched": "2.14.0",
+          "summary": "PyJWT: PyJWKClient follows redirects when fetching JWKS (JWKS trust poisoning / header leak)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "The vulnerable component is PyJWKClient fetch_data redirect handling. Pinned frappe@988e54f3 has zero PyJWKClient/JWK-code anywhere (repository-wide search); no JWKS endpoint is ever fetched by the pinned stack (integrations/utils.py:45-46 is a type hint only). No JWKS trust anchor exists to poison.",
+          "fix_path": "Official Frappe release carrying PyJWT >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        },
+        {
+          "id": "GHSA-9j54-fg26-wv3r",
+          "aliases": ["CVE-2026-102266"],
+          "severity": "high",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": ">= 2.13.0, < 2.14.0",
+          "first_patched": "2.14.0",
+          "summary": "PyJWT: PyJWK accepts empty HMAC keys, bypassing PyJWT's empty-key validation (forgery via empty oct JWK)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Requires verifying HS256 through PyJWK/PyJWKSet holding an empty oct JWK. Pinned frappe@988e54f3 uses neither class (repository-wide search, zero hits). The only verifying decode call site (oauth.py:467-475) passes key=client_secret, a random opaque per-OAuth-client HMAC string from the site database (frappe.get_value 'OAuth Client' -> client_secret at oauth.py:453-458) - never a JWK object, never empty-capable attacker material.",
+          "fix_path": "Official Frappe release carrying PyJWT >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        },
+        {
+          "id": "GHSA-ffc3-869f-jxw9",
+          "aliases": ["CVE-2026-102268"],
+          "severity": "critical",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": "<= 2.13.0",
+          "first_patched": "2.14.0",
+          "summary": "PyJWT: whitespace/line-ending-mutated PEM public keys skip the HS/asymmetric confusion guard (universal forgery under mixed allow-list)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Both preconditions are deployment properties absent from the pinned tree: (1) mixed HMAC+asymmetric allow-list - repository-wide search shows the only jwt.decode allow-lists are algorithms=['HS256'] single-algorithm lists (oauth.py:448, 471; the advisory's own control shows a single-alg allow-list rejects forged HS* with InvalidAlgorithmError); (2) raw public PEM passed as key - the only verifying decode passes key=client_secret, an opaque per-client HMAC string (oauth.py:469, sourced at oauth.py:453-458); no asymmetric key bytes are ever supplied to jwt.decode anywhere in the tree.",
+          "fix_path": "Official Frappe release carrying PyJWT >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        },
+        {
+          "id": "GHSA-p4g4-x82p-q773",
+          "aliases": ["CVE-2026-102271"],
+          "severity": "high",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": ">= 2.4.0, < 2.14.0",
+          "first_patched": "2.14.0",
+          "summary": "PyJWT: public keys in DER form accepted as HMAC secrets (CVE-2022-29217 guard bypass via encoding)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Same two absent preconditions: mixed HS*/asymmetric allow-list (only single ['HS256'] lists exist: oauth.py:448, 471) and asymmetric key material passed as key= (only client_secret HMAC strings, oauth.py:469). The advisory explicitly notes PyJWK path users unaffected and PEM still blocked; the pinned tree supplies neither the DER bytes nor the mixed allow-list.",
+          "fix_path": "Official Frappe release carrying PyJWT >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        },
+        {
+          "id": "GHSA-r6x4-923q-g947",
+          "aliases": ["CVE-2026-102272"],
+          "severity": "high",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": "= 2.13.0",
+          "first_patched": "2.14.0",
+          "summary": "PyJWT: BOM-prefixed public JWK bypasses raw-JWK detection (algorithm confusion forgery under mixed allow-list)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Requires mixed HS*/RS* allow-list plus raw public RSA JWK passed as key. Pinned frappe@988e54f3: allow-lists are single ['HS256'] (oauth.py:448, 471); key= is only client_secret HMAC material (oauth.py:469); no JWK/JWKS JSON is ever parsed or supplied as a key (zero PyJWK/JWK code tree-wide).",
+          "fix_path": "Official Frappe release carrying PyJWT >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        },
+        {
+          "id": "GHSA-w2cx-738m-mc7w",
+          "aliases": ["CVE-2026-102273"],
+          "severity": "high",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": "= 2.13.0",
+          "first_patched": "2.14.0",
+          "summary": "PyJWT: public JWK containers (JWKS wrapper, arrays, nesting) accepted as HMAC secrets (forgery under mixed allow-list)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Same absent preconditions as the sibling encodings (single ['HS256'] allow-lists only, oauth.py:448, 471; only client_secret HMAC key material, oauth.py:469; no JWK containers anywhere in the pinned tree). Advisory itself: applications keeping symmetric/asymmetric paths separate are unaffected.",
+          "fix_path": "Official Frappe release carrying PyJWT >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        },
+        {
+          "id": "GHSA-hxm8-2xgr-2p9m",
+          "aliases": ["CVE-2026-102269"],
+          "severity": "moderate",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": "<= 2.13.0",
+          "first_patched": "2.14.0",
+          "summary": "PyJWT: non-canonical signature segments enable raw-token revocation bypass (application-composition dependent)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Impact requires the application to index revocation/logout state by the raw serialized token string. Pinned frappe@988e54f3 OAuth bearer tokens are opaque random strings stored as 'OAuth Bearer Token' documents (integrations/oauth2.py token lifecycle; tokens are not JWTs and are never re-parsed), and the only jwt.decode inputs are id_token_hint (consent user-match check, result not persisted as identity, oauth.py:446-478) and the social-login provider's own id_token (utils/oauth.py:200). No raw-JWT-as-security-identity composition exists anywhere in the tree.",
+          "fix_path": "Official Frappe release carrying PyJWT >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        },
+        {
+          "id": "GHSA-8wjv-2p76-3863",
+          "aliases": ["CVE-2026-102265"],
+          "severity": "moderate",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": ">= 2.13.0, < 2.14.0",
+          "first_patched": "2.14.0",
+          "summary": "PyJWT: uncaught RecursionError in jwt.decode() on deeply nested token header (pre-signature parse; unauthenticated 500/traceback storm)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Both decode inputs in the pinned tree are constrained and both call sites neutralize the effect. (1) The only request-driven decode (id_token_hint in the authorize path, oauth.py:446-454) sits inside try:/except Exception: return False (oauth.py:477-478): a header-JSON RecursionError is swallowed and returns False instead of the advisory's uncaught-500-plus-traceback; also id_token_hint rides the authorize request line, and the advisory itself notes ~266KB tokens exceed HTTP field limits (431 before decode). (2) The provider response decode (utils/oauth.py:200) parses the IdP's own token endpoint body (server-to-server TLS), not client-submitted bytes. Residual, recorded honestly: a nested-header attempt inside the try still costs bounded parse time (~6ms/class) before the exception is caught; no traceback, no 500, no worker state change.",
+          "fix_path": "Official Frappe release carrying PyJWT >= 2.14.0 (EXTERNAL/UPSTREAM BLOCKED, unchanged)"
+        }
+      ]
+    },
+    {
+      "package": "npm:brace-expansion@1.1.11,2.0.1",
+      "advisories": [
+        {
+          "id": "GHSA-6j4f-fj2g-mc7p",
+          "aliases": ["CVE-2026-102276"],
+          "severity": "high",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": "< 1.1.19 ; 2.0.0 - 2.1.4",
+          "first_patched": "1.1.19 ; 2.1.5",
+          "summary": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts (stack exhaustion from untrusted pattern)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Exploitation needs an untrusted string reaching expand()/minimatch in an executed Node process. Inventory of executed Node surface in the pinned stack: frappe@988e54f3 realtime server (socketio.js -> realtime/index.js + middlewares + utils + node_utils) requires exactly socket.io, node:http, fs, path, ../node_utils, ./middlewares/authenticate, ./utils, cookie, @redis/client - zero glob/minimatch/brace-expansion imports anywhere in executed files. Dependency owners are build/lint-time only: frappe stylus@^0.54.5 -> glob@^7.1.6 -> minimatch@^3.1.1 -> brace-expansion@^1.1.7; education frontend sucrase@^3.32.0 -> glob@^10.3.10 -> minimatch@^9.0.1 -> brace-expansion@^2.0.1; hrms frontend rimraf/sucrase/workbox-build/eslint/jake -> minimatch/glob. These run exclusively on the builder's machine against tool-internal patterns; no runtime endpoint, worker, or realtime code path passes user input to pattern expansion. Availability-only advisories even in their own domain.",
+          "fix_path": "Build-time refresh via official Frappe frontend dependency updates (EXTERNAL/UPSTREAM BLOCKED posture unchanged; no runtime ship-stopper)"
+        },
+        {
+          "id": "GHSA-qhr7-859c-m2p7",
+          "aliases": ["CVE-2026-102278"],
+          "severity": "high",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": "< 1.1.20 ; 2.0.0 - 2.1.5",
+          "first_patched": "1.1.20 ; 2.1.6",
+          "summary": "brace-expansion: DoS via uncontrolled recursion on nested brace groups (stack exhaustion)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Identical reachability verdict as GHSA-6j4f-fj2g-mc7p (same package, same families of entry): zero executed-file imports (realtime server require inventory), build/lint-time owners only (stylus, sucrase, workbox-build, eslint, jake, rimraf/filelist), no untrusted-pattern call site anywhere in the shipped runtime.",
+          "fix_path": "Build-time refresh via official Frappe frontend dependency updates (EXTERNAL/UPSTREAM BLOCKED posture unchanged)"
+        },
+        {
+          "id": "GHSA-q2hr-2g5m-vwhr",
+          "aliases": ["CVE-2026-102277"],
+          "severity": "moderate",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": "< 1.1.21 ; 2.0.0 - 2.1.6",
+          "first_patched": "1.1.21 ; 2.1.7",
+          "summary": "brace-expansion: quadratic-time {a},b} rewrite (event-loop CPU stall)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Identical reachability verdict as GHSA-6j4f-fj2g-mc7p: no executed Node surface imports glob/minimatch/brace-expansion; owners are build/lint tooling only; no untrusted pattern input exists in any shipped runtime path.",
+          "fix_path": "Build-time refresh via official Frappe frontend dependency updates (EXTERNAL/UPSTREAM BLOCKED posture unchanged)"
+        }
+      ]
+    },
+    {
+      "package": "npm:moment@2.29.4",
+      "advisories": [
+        {
+          "id": "GHSA-4p3w-j4w9-5jqw",
+          "aliases": ["CVE-2026-17495"],
+          "severity": "moderate",
+          "published": "2026-09-29T00:00:00Z",
+          "vulnerable_range": ">= 2.29.2, < 2.31.0",
+          "first_patched": "2.31.0",
+          "summary": "moment: path traversal via crafted non-string locale name in moment.locale()",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "The advisory is explicitly server-side-npm-only ('This affects server-side (npm) users only') and requires a non-string, attacker-influenced value passed to moment.locale(). Pinned frappe@988e54f3: moment ships only in the client-side desk bundle (package.json dependency plus vendored frappe/public/js/lib/moment.js); the executed Node realtime server requires no moment at all (require inventory of realtime/index.js, middlewares, utils, node_utils: socket.io, node:http, fs, path, ../node_utils, cookie, @redis/client, dns). Browsers have no require/fs semantics for the traversal path, and desk locale selection passes string language identifiers from the user's own settings - not attacker-influenced non-strings.",
+          "fix_path": "Official Frappe frontend refresh carrying moment >= 2.31.0 (EXTERNAL/UPSTREAM BLOCKED posture unchanged)"
+        }
+      ]
+    }
+  ]
+}

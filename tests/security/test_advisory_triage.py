@@ -192,5 +192,87 @@ class AdvisoryDeltaSeptember30Tests(unittest.TestCase):
         self.assertNotIn(t._norm("GHSA-38c4-r59v-3vqw"), delta_ids)
 
 
+class AdvisoryDeltaSeptember30Part2Tests(unittest.TestCase):
+    """The second 2026-09-30 delta closes the 13-advisory batch surfaced by
+    hosted run 36668343658 (9 pyjwt, 3 brace-expansion, 1 moment)."""
+
+    DELTA = json.loads((ROOT / "docs/engineering/evidence/sec-deps-01/advisory-delta-2026-09-30-2"
+                        "/delta-dispositions.json").read_text())
+
+    PYJWT_IDS = ["GHSA-2gx3-rcp4-g85q", "GHSA-8wjv-2p76-3863", "GHSA-9j54-fg26-wv3r",
+                 "GHSA-9v7f-9g4p-ffgj", "GHSA-ffc3-869f-jxw9", "GHSA-hxm8-2xgr-2p9m",
+                 "GHSA-p4g4-x82p-q773", "GHSA-r6x4-923q-g947", "GHSA-w2cx-738m-mc7w"]
+    NPM_IDS = ["GHSA-6j4f-fj2g-mc7p", "GHSA-q2hr-2g5m-vwhr", "GHSA-qhr7-859c-m2p7",
+               "GHSA-4p3w-j4w9-5jqw"]
+
+    def test_delta_register_is_loaded_and_complete(self):
+        triage = t.load_triage()
+        self.assertIn("advisory-delta-2026-09-30-2", triage["deltas"])
+        recorded = {adv["id"] for pkg in self.DELTA["packages"] for adv in pkg["advisories"]}
+        self.assertEqual(recorded, set(self.PYJWT_IDS) | set(self.NPM_IDS))
+        self.assertEqual(self.DELTA["date"], "2026-09-30")
+
+    def test_all_nine_pyjwt_advisories_close_not_reachable(self):
+        triage = t.load_triage()
+        findings = [{"package": {"name": "pyjwt", "ecosystem": "PyPI"}, "version": "2.13.0",
+                     "id": aid, "aliases": []} for aid in self.PYJWT_IDS]
+        res = t.triage_python(findings, triage)
+        self.assertEqual(res["untriaged"], [])
+        self.assertEqual(res["open"], 0)
+        self.assertEqual(t.overall_status(py_result=res), "pass")
+        for finding in res["findings"]:
+            self.assertEqual(finding["disposition"], "NOT_REACHABLE")
+            self.assertTrue(finding["disposition_evidence"])
+
+    def test_all_four_npm_advisories_close_not_reachable(self):
+        triage = t.load_triage()
+        advisories = {}
+        for aid in self.NPM_IDS[:3]:
+            advisories.setdefault("brace-expansion", []).append(
+                {"id": 1, "severity": "high", "url": f"https://github.com/advisories/{aid}"})
+        advisories["moment"] = [{"id": 2, "severity": "moderate",
+                                 "url": f"https://github.com/advisories/{self.NPM_IDS[3]}"}]
+        res = t.triage_npm(advisories, triage)
+        self.assertEqual(res["untriaged"], [])
+        self.assertEqual(res["open"], 0)
+        self.assertEqual(t.overall_status(npm_result=res), "pass")
+        for finding in res["findings"]:
+            self.assertEqual(finding["disposition"], "NOT_REACHABLE")
+
+    def test_delta_dispositions_are_closed_and_evidence_backed(self):
+        for pkg in self.DELTA["packages"]:
+            for adv in pkg["advisories"]:
+                self.assertEqual(adv["runtime_disposition"], "NOT_REACHABLE")
+                evidence = adv["runtime_disposition_evidence"]
+                self.assertTrue(evidence)
+        mixed_alg = [adv for pkg in self.DELTA["packages"] for adv in pkg["advisories"]
+                     if adv["id"] in {"GHSA-ffc3-869f-jxw9", "GHSA-p4g4-x82p-q773",
+                                      "GHSA-r6x4-923q-g947", "GHSA-w2cx-738m-mc7w"}]
+        for adv in mixed_alg:
+            self.assertIn("HS256", adv["runtime_disposition_evidence"])
+
+    def test_unknown_stay_regressions(self):
+        triage = t.load_triage()
+        res = t.triage_python([{"package": {"name": "pyjwt", "ecosystem": "PyPI"},
+                                "version": "2.13.0", "id": "GHSA-zzzz-zzzz-zzzz",
+                                "aliases": []}], triage)
+        self.assertEqual(len(res["untriaged"]), 1)
+        self.assertEqual(res["findings"][0]["disposition"], "REGRESSION")
+
+    def test_cve_aliases_also_resolve(self):
+        triage = t.load_triage()
+        for aid, cve in (("GHSA-2gx3-rcp4-g85q", "CVE-2026-101917"),
+                         ("GHSA-4p3w-j4w9-5jqw", "CVE-2026-17495")):
+            self.assertIn(t._norm(aid), triage["by_id"])
+            aliases = {t._norm(a) for a in (triage["by_id"][t._norm(aid)].get("aliases") or [])}
+            self.assertIn(t._norm(cve), aliases)
+
+    def test_no_overlap_with_prior_deltas_or_register(self):
+        part2_ids = {t._norm(adv["id"]) for pkg in self.DELTA["packages"] for adv in pkg["advisories"]}
+        prior_delta_ids = {"GHSA-hj66-6f7g-4r5v", "GHSA-xpv3-w29h-x7cv", "GHSA-w6j9-cwv2-h6wq",
+                           "GHSA-253c-mchw-3w2r"}
+        self.assertFalse(part2_ids & {t._norm(a) for a in prior_delta_ids})
+
+
 if __name__ == "__main__":
     unittest.main()

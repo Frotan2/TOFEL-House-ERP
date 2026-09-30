@@ -82,6 +82,19 @@ class AdvisoryAnnotationTests(unittest.TestCase):
         self.assertIn("GHSA-dd44-ee55-ff66(?)", text)
         self.assertNotIn("()", text)
 
+    def test_multiple_installed_versions_render_as_comma_list(self):
+        # Observed in production output of hosted run 36668343658:
+        # npm:brace-expansion@1.1.11,2.0.1 — one package row, both resolved
+        # versions, comma-joined in declaration order, advisory ids attached.
+        lines = advisory_finding_annotations(stack(npm=[
+            {"package": "brace-expansion", "installed_versions": ["1.1.11", "2.0.1"],
+             "id": "GHSA-6j4f-fj2g-mc7p", "severity": "high"},
+            {"package": "brace-expansion", "installed_versions": ["1.1.11", "2.0.1"],
+             "id": "GHSA-q2hr-2g5m-vwhr", "severity": "moderate"}]), None)
+        text = lines[0]
+        self.assertIn("npm:brace-expansion@1.1.11,2.0.1 "
+                      "GHSA-6j4f-fj2g-mc7p(high),GHSA-q2hr-2g5m-vwhr(moderate)", text)
+
     def test_runtime_emits_annotations_from_its_own_reports(self):
         source = (Path(__file__).resolve().parents[2]
                   / "tools/foundation/runtime_install.py").read_text()
