@@ -25,7 +25,9 @@ from __future__ import annotations
 import json
 import os
 import statistics
+import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -36,18 +38,30 @@ BASE = "http://127.0.0.1:8000"
 DESK_ENDPOINT = "toefl_house.desk.reception.work"
 
 
-def timed_call(path: str, *, data=None, session=None):
-    """One timed request. Returns (ms, response_text, new_sid_or_None)."""
+def timed_call(path: str, *, data=None, session=None, csrf=None):
+    """One timed request. Returns (ms, response_text, new_sid_or_None).
+
+    Non-2xx responses are captured, not raised: the baseline records a
+    non-ok surface with the server's body instead of dying mid-run (an
+    unexpected refusal is a measurement result, and the per-surface 'ok'
+    flag is what reports it).
+    """
     url = BASE + path
     body = urllib.parse.urlencode(data).encode() if data is not None else None
     headers = {}
     if session:
         headers["Cookie"] = "sid=" + session
+    if csrf:
+        headers["X-Frappe-CSRF-Token"] = csrf
     request = urllib.request.Request(url, data=body, headers=headers)
     start = time.perf_counter()
-    with urllib.request.urlopen(request, timeout=60) as response:
-        text = response.read().decode()
-        cookies = response.headers.get_all("Set-Cookie") or []
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            text = response.read().decode()
+            cookies = response.headers.get_all("Set-Cookie") or []
+    except urllib.error.HTTPError as error:
+        text = error.read().decode()
+        cookies = []
     elapsed_ms = (time.perf_counter() - start) * 1000.0
     # The Set-Cookie header is "sid=<value>; attrs..."; the cookie VALUE is
     # what a Cookie header must carry ("sid=<value>"). Keeping the "sid="
@@ -55,6 +69,25 @@ def timed_call(path: str, *, data=None, session=None):
     # (guest fallback) and would time the wrong (denied) path.
     sid = next((c.split(";", 1)[0].split("=", 1)[1] for c in cookies if c.startswith("sid=")), None)
     return elapsed_ms, text, sid
+
+
+def fetch_csrf_token(session: str) -> str:
+    """One-time, unmeasured desk load for the session CSRF token.
+
+    Frappe mints a per-session CSRF token at session creation; the desk
+    page carries it in its HTML, and unsafe (POST) requests on a session
+    that carries a token must send it back. A browser does exactly this
+    dance before its first form post - so does this baseline, otherwise
+    the authenticated read would time the CSRF wall instead of the read.
+    """
+    request = urllib.request.Request(BASE + "/desk", headers={"Cookie": "sid=" + session})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            html = response.read().decode()
+    except urllib.error.HTTPError:
+        return ""
+    m = re.search(r'frappe\.csrf_token = "([^"]+)"', html)
+    return m.group(1) if m else ""
 
 
 def surface(name: str, call) -> dict:
@@ -103,10 +136,15 @@ def main() -> int:
     if admin_sid is None:
         raise SystemExit("login did not return a session")
 
+    # The authenticated read is a POST, so it must carry the session CSRF
+    # token a browser would (see fetch_csrf_token).
+    admin_csrf = fetch_csrf_token(admin_sid)
+
     surfaces["authenticated-read"] = surface(
         "authenticated-read",
         lambda: timed_call(
-            "/api/method/frappe.client.get_count", data={"doctype": "Student"}, session=admin_sid
+            "/api/method/frappe.client.get_count",
+            data={"doctype": "Student"}, session=admin_sid, csrf=admin_csrf,
         ),
     )
 
