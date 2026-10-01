@@ -4739,10 +4739,14 @@ def main():
             # submitted enrollment in a dedicated intake year -> the
             # branch's class through the teaching command (Student Group
             # writes are command-only; a direct insert is refused).
+            # Each iteration re-sets Administrator first: the previous
+            # iteration's last journey step runs as its acting role, and
+            # the Academic Year insert below is a direct write.
             sd=frappe.utils.today(); ed=frappe.utils.add_days(sd,14)
             for tail,b,year,cand in (('A',BR_A,'SYN-AY-2027','branch_candidate_a'),
                                      ('B',BR_B,'SYN-AY-2028','branch_candidate_b')):
                 t=tail.lower()
+                frappe.set_user('Administrator')
                 if not frappe.db.exists('Academic Year',year):
                     frappe.get_doc(dict(doctype='Academic Year',academic_year_name=year,
                         year_start_date=year[:4]+'-01-01',
@@ -4770,6 +4774,9 @@ def main():
                 assert g['name']=='SYN-BR-CLASS-'+tail and g['students']==1,g
                 grp[tail]=g['name']; stu[tail]=conv['native_student']; dec[tail]=d0['name']
             frappe.db.commit()
+            # Direct User Permission write: run it as Administrator (the
+            # loop above ended with the teaching role of branch B's journey).
+            frappe.set_user('Administrator')
             for label,b in (('branch_a_staff',BR_A),('branch_b_staff',BR_B)):
                 if not frappe.db.exists('User Permission',
                         {'user':users[label],'allow':'Branch','for_value':b}):
