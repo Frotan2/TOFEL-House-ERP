@@ -138,7 +138,12 @@ def main():
                          'teaching_scheduler':['Teaching Scheduler'],
                          'attendance_recorder':['Attendance Recorder'],
                          'teaching_auditor':['Teaching Auditor'],
-                         'finance_officer':['Finance Officer','Accounts User'],
+                         # Dual-role like academic_scheduler: the production
+                         # onboarding pattern for desk users who also act -
+                         # the Finance Manager desk audience plus the
+                         # Finance Officer acting role, so the desk's guided
+                         # compensation actions are server-embeddable.
+                         'finance_officer':['Finance Officer','Accounts User','Finance Manager'],
                          'finance_auditor':['Finance Auditor'],
                          # A13 web-seam containment probe: native Accounts
                          # User only; never revoked, so the REST probes below
@@ -4370,7 +4375,42 @@ def main():
             aca=desk_get('academic_manager','academic.work')
             assert aca['desk']=='th-academic-desk' and {'classes','sessions','admissions'}<=desk_sections(aca)
             fin=desk_get('finance_manager','finance.work')
-            assert fin['desk']=='th-finance-desk' and {'billing','corrections','outstanding'}<=desk_sections(fin)
+            assert fin['desk']=='th-finance-desk' and {'billing','corrections','outstanding','compensation'}<=desk_sections(fin)
+            # P1-6 compensation operational readiness, over the real HTTP
+            # pipeline: the Finance Officer (dual-role: desk audience +
+            # acting role) sees the readiness queue WITH its guided actions;
+            # the audience-only Finance Manager sees the SAME queue with no
+            # actions. The queue reads native contract/instructor authorities
+            # and projects identity+window only - no rate, term or amount.
+            finoff=desk_get('finance_officer','finance.work')
+            comp_off=next(s for s in finoff['sections'] if s['id']=='compensation')
+            comp_man=next(s for s in fin['sections'] if s['id']=='compensation')
+            assert len(comp_off['items'])==len(comp_man['items']),('officer and manager must see the same readiness queue',len(comp_off['items']),len(comp_man['items']))
+            byid={item['id']:item for item in comp_off['items']}
+            period=byid.get('payroll-period')
+            assert period and period.get('action'),('the payroll-period row must offer the calculation to the acting viewer',sorted(byid))
+            assert period['action']['endpoint']=='toefl_house.teaching.compensation.calculate_teaching_compensation',period
+            for item in comp_off['items']:
+                if item['status']=='No payroll record':
+                    assert 'action' not in item,('unlinked instructor must fail closed',item)
+                else:
+                    assert item.get('action'),('every other readiness row must carry its guided action for the acting viewer',item['id'],item['status'])
+                    assert item['action']['role']=='Finance Officer',item
+            for item in comp_man['items']:
+                assert 'action' not in item,('audience-only viewer must see no actions',item['id'])
+                assert item.get('next_role'),('the queue must still name who acts next',item['id'])
+            # the officer's revise prefill points at a real ACTIVE contract
+            revise=[item for item in comp_off['items']
+                    if item.get('action') and item['action']['endpoint']=='toefl_house.teaching.compensation.revise_teaching_contract']
+            assert revise,'no active contract offers the revise action'
+            for item in revise:
+                cname=item['action']['args']['contract']
+                assert frappe.db.get_value('TH Instructor Contract',cname,'status')=='Active',(cname,frappe.db.get_value('TH Instructor Contract',cname,'status'))
+            # read containment rides the desk: no pay figure in either payload
+            for name,payload in (('compensation-officer',comp_off),('compensation-manager',comp_man)):
+                text=json.dumps(payload)
+                for word in ('rate','amount','currency','skill_terms','adjustments'):
+                    assert word not in text.lower(),(name,word)
             ops=desk_get('general_manager','operations.work')
             assert ops['desk']=='th-operations-desk' and {'funnel','exceptions','staffing','desks'}<=desk_sections(ops)
             own=desk_get('course_owner','owner.cockpit')
@@ -4409,6 +4449,7 @@ def main():
             assert 'No instructor link on this login' in json.dumps(unl)
             # plain-language promise (U5): no raw doctype plumbing in payloads
             for name,payload in (('reception',rec),('academic',aca),('finance',fin),
+                                 ('finance-officer',finoff),
                                  ('operations',ops),('owner',own),('setup',setu),('teacher',tea)):
                 text=json.dumps(payload)
                 for word in BANNED_PLUMBING:

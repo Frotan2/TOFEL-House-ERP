@@ -158,6 +158,17 @@ Sections:
   only (instructor, skill, class, dates). Pay is native payroll, one-off per
   assignment (D12). The desk does not calculate pay and does not project
   rates or Additional Salary rows.
+- **Teaching compensation** — the compensation readiness queue over the
+  native `TH Instructor Contract` and `Instructor` authorities (identity and
+  window only; no rate, term or amount leaves the desk). One row per active
+  contract, one row per active instructor who has a payroll employee but no
+  active contract, one fail-closed row per active instructor with no payroll
+  employee linked (the HR gap is named; the Course Owner owns that step), and
+  — while any active contract exists — the recurring payroll-period row.
+  Each row carries the Finance Officer's guided action (record / revise /
+  calculate) only when the viewer also holds that role; the dialogs open the
+  existing guarded commands, and every other viewer still sees the queue with
+  the acting role named.
 
 ### General Manager desk (operations, not a second Owner cockpit)
 

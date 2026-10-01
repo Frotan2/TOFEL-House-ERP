@@ -40,7 +40,7 @@ DESKS = {
     },
     "th-finance-desk": {
         "title": "TOEFL House Finance Desk",
-        "description": "Today's collections, outstanding receivables, enrollments awaiting billing, teaching assignments for native payroll, and the correction queue.",
+        "description": "Today's collections, outstanding receivables, enrollments awaiting billing, teaching assignments for native payroll, teaching contracts and compensation, and the correction queue.",
         "roles": ["Finance Manager"],
         "module": "Operations",
     },
@@ -202,6 +202,16 @@ PROJECTION_FIELDS = {
     ("finance", "TH Teaching Assignment"): [
         "name", "student_group", "skill", "instructor", "contract",
         "course_schedule", "effective_start", "effective_end",
+    ],
+    # Compensation readiness (P1-6): identity + window only. No rate, term
+    # or amount is projected — the desk points at the guarded command, it
+    # never calculates pay (D12).
+    ("finance", "TH Instructor Contract"): [
+        "name", "instructor", "employee", "compensation_model",
+        "effective_start", "effective_end",
+    ],
+    ("finance", "Instructor"): [
+        "name", "instructor_name", "employee", "status",
     ],
     # Owner cockpit counts enabled Students; the projection carries the key
     # only — no student detail leaves the store through the cockpit.

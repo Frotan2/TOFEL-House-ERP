@@ -48,6 +48,21 @@ VALIDATE_ENDPOINT = "toefl_house.finance.corrections.validate_correction_policy"
 STATUS_ENDPOINT = "toefl_house.finance.corrections.set_correction_policy_status"
 ASSIGNMENT_FIELDS = ["name", "student_group", "skill", "instructor", "contract",
                      "course_schedule", "effective_start", "effective_end"]
+CONTRACT = "TH Instructor Contract"
+INSTRUCTOR = "Instructor"
+# Identity and window only: no rate, term or amount leaves the desk
+# (D12 read containment — the same rule as the assignments section).
+CONTRACT_FIELDS = ["name", "instructor", "employee", "compensation_model",
+                   "effective_start", "effective_end"]
+INSTRUCTOR_FIELDS = ["name", "instructor_name", "employee", "status"]
+CREATE_CONTRACT_ENDPOINT = ("toefl_house.teaching.compensation."
+                            "create_teaching_contract")
+REVISE_CONTRACT_ENDPOINT = ("toefl_house.teaching.compensation."
+                            "revise_teaching_contract")
+CALCULATE_COMPENSATION_ENDPOINT = ("toefl_house.teaching.compensation."
+                                   "calculate_teaching_compensation")
+CONTRACT_STAGE_DEFINITION = ("One instructor's active compensation terms; "
+                             "a revision supersedes, never rewrites.")
 PLAN_ROW_FIELDS = ["name", "parent", "parenttype", "fees_category", "amount", "idx"]
 
 
@@ -289,6 +304,114 @@ def _latest_policy_next(row, readiness, ordered, day):
                 "Record new version", {}))
 
 
+def _compensation_items(contracts, instructors):
+    """The compensation readiness queue (P1-6 operational readiness).
+
+    The three guarded compensation commands are Finance Officer commands, but
+    a viewer without the acting role must still be able to SEE what is
+    waiting and who acts next. This section projects the readiness facts and
+    — only when the viewer also holds the acting role — embeds the guided
+    action (server decides, client renders):
+
+    - one row per ACTIVE teaching contract (identity + window only), offering
+      the revise command;
+    - one row per active instructor who has a payroll employee but no active
+      contract, offering the create command (the employee is prefilled from
+      the native Instructor.employee link so the dialog opens ready);
+    - one row per active instructor with NO payroll employee link, failing
+      closed (a contract cannot be recorded until the HR record is complete);
+    - a recurring payroll-period row offering the calculation command, present
+      while at least one active contract exists.
+
+    No rate, term, amount or statutory figure is projected — the desk never
+    calculates pay (D12); it only points at the guarded command that does.
+    """
+    display = {row["name"]: (row.get("instructor_name") or row["name"])
+               for row in instructors}
+    contracted = {row.get("instructor") for row in contracts}
+    items = []
+    for row in contracts:
+        window = "from " + str(row.get("effective_start"))
+        if row.get("effective_end"):
+            window += " to " + str(row.get("effective_end"))
+        item = {
+            "id": row["name"],
+            "person": display.get(row.get("instructor")) or row.get("instructor") or "",
+            "detail": "{}; effective {}".format(
+                row.get("compensation_model") or "Teaching contract", window),
+            "status": "Active contract",
+            "stage": "Teaching contract",
+            "stage_definition": CONTRACT_STAGE_DEFINITION,
+            "next": "Revise the contract when the terms change; the revision "
+                    "supersedes and never rewrites.",
+            "next_role": "Finance Officer",
+            "waiting_since": row.get("effective_start"),
+        }
+        action = guided_action("Finance Officer", REVISE_CONTRACT_ENDPOINT,
+                               "Revise teaching contract", {"contract": row["name"]})
+        if action:
+            item["action"] = action
+        items.append(item)
+    for row in instructors:
+        if row.get("employee") and row["name"] not in contracted:
+            item = {
+                "id": row["name"],
+                "person": display.get(row["name"]),
+                "detail": "Payroll employee " + str(row.get("employee")),
+                "status": "No active contract",
+                "stage": "Teaching contract",
+                "stage_definition": CONTRACT_STAGE_DEFINITION,
+                "next": "Record the teaching contract before this instructor's "
+                        "work is compensated.",
+                "next_role": "Finance Officer",
+                "waiting_since": None,
+            }
+            action = guided_action(
+                "Finance Officer", CREATE_CONTRACT_ENDPOINT,
+                "Record teaching contract",
+                {"instructor": row["name"], "employee": row.get("employee")})
+            if action:
+                item["action"] = action
+            items.append(item)
+        elif not row.get("employee"):
+            items.append({
+                "id": row["name"],
+                "person": display.get(row["name"]),
+                "detail": "No payroll employee linked",
+                "status": "No payroll record",
+                "stage": "Teaching contract",
+                "stage_definition": CONTRACT_STAGE_DEFINITION,
+                "next": "Link the payroll employee on this instructor's HR "
+                        "record first; a contract needs it to pay the right "
+                        "person.",
+                "next_role": "Course Owner",
+                "waiting_since": None,
+            })
+    if contracts:
+        items.append({
+            "id": "payroll-period",
+            "person": "Payroll period",
+            "detail": "Compensation posts once per period, from the active "
+                      "contracts and the recorded teaching facts.",
+            "status": "Periodic",
+            "stage": "Compensation period",
+            "stage_definition": ("One payroll-period calculation into native "
+                                 "payroll inputs; fixed-salary instructors "
+                                 "stay on their native salary structure."),
+            "next": "Run the calculation when the period closes.",
+            "next_role": "Finance Officer",
+            "waiting_since": None,
+        })
+        action = guided_action(
+            "Finance Officer", CALCULATE_COMPENSATION_ENDPOINT,
+            "Calculate compensation",
+            {"period_start": "", "period_end": "", "company": "",
+             "salary_component": "", "deduction_component": ""})
+        if action:
+            items[-1]["action"] = action
+    return items
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def work():
     """Finance desk payload: today, outstanding, awaiting billing, corrections."""
@@ -362,6 +485,13 @@ def work():
 
     assignments = project_rows("finance", ASSIGNMENT, ASSIGNMENT_FIELDS,
                                order_by="effective_start asc", limit=LIMIT_QUEUES)
+    contracts = project_rows("finance", CONTRACT, CONTRACT_FIELDS,
+                             filters={"status": "Active"},
+                             order_by="effective_start desc, name desc",
+                             limit=LIMIT_QUEUES)
+    instructors = project_rows("finance", INSTRUCTOR, INSTRUCTOR_FIELDS,
+                               filters={"status": "Active"},
+                               order_by="name asc", limit=LIMIT_QUEUES)
 
     money_facts = [
         {"label": "Collected today",
@@ -542,6 +672,10 @@ def work():
                     items=assignment_items,
                     empty_title="No teaching assignments",
                     empty_body="No instructor skill assignment is on file. Assignments appear here from teaching scheduling; pay stays on native payroll."),
+            section("compensation", "Teaching compensation", "queue",
+                    items=_compensation_items(contracts, instructors),
+                    empty_title="No teaching compensation work yet",
+                    empty_body="No active teaching contract or instructor on file; the queue appears as soon as contracts are recorded or payroll instructors exist."),
         ],
     }
 

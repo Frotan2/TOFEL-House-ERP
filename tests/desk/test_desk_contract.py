@@ -893,6 +893,23 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                   ["request_key", "student_group", "schedule_date",
                                                    "from_time", "to_time", "instructor", "room",
                                                    "course"]),
+        "toefl_house.teaching.compensation.create_teaching_contract": ("teaching/compensation.py",
+                                                                       ["request_key", "instructor", "employee",
+                                                                        "compensation_model", "assignment_basis",
+                                                                        "payment_frequency", "effective_start",
+                                                                        "effective_end", "conditions",
+                                                                        "skill_terms", "adjustments"]),
+        "toefl_house.teaching.compensation.revise_teaching_contract": ("teaching/compensation.py",
+                                                                       ["request_key", "contract",
+                                                                        "compensation_model", "assignment_basis",
+                                                                        "payment_frequency", "effective_start",
+                                                                        "effective_end", "conditions",
+                                                                        "skill_terms", "adjustments"]),
+        "toefl_house.teaching.compensation.calculate_teaching_compensation": ("teaching/compensation.py",
+                                                                              ["request_key", "period_start",
+                                                                               "period_end", "company",
+                                                                               "salary_component",
+                                                                               "deduction_component"]),
         "toefl_house.academic.create_assessment_policy": ("academic/__init__.py",
                                                          ["request_key", "family", "code",
                                                           "title", "description"]),
@@ -1697,6 +1714,121 @@ class FinanceAssignmentFactsTests(unittest.TestCase):
         self.assertEqual(tile["value"], 1)
         self.assertIn("does not calculate pay", tile["definition"])
 
+
+class FinanceCompensationReadinessTests(unittest.TestCase):
+    """P1-6: the finance desk's teaching compensation readiness queue.
+
+    The three guarded compensation commands are Finance Officer commands.
+    The section projects what is waiting for every audience member and
+    embeds the guided action only when the viewer ALSO holds the acting
+    role. It projects identity and window — never a rate, term or amount
+    (D12 read containment carries over from the assignments section).
+    """
+
+    OFFICER = {"Finance Manager", "Finance Officer"}
+    MANAGER_ONLY = {"Finance Manager"}
+    CREATE = "toefl_house.teaching.compensation.create_teaching_contract"
+    REVISE = "toefl_house.teaching.compensation.revise_teaching_contract"
+    CALCULATE = "toefl_house.teaching.compensation.calculate_teaching_compensation"
+
+    @staticmethod
+    def _world():
+        return {
+            "TH Instructor Contract": [
+                {"name": "CON-ACTIVE", "instructor": "INS-1", "employee": "EMP-1",
+                 "compensation_model": "Skill-Based", "effective_start": "2026-01-01",
+                 "effective_end": None, "status": "Active"},
+                {"name": "CON-SUPERSEDED", "instructor": "INS-2", "employee": "EMP-2",
+                 "compensation_model": "Fixed Salary", "effective_start": "2026-01-01",
+                 "effective_end": "2026-08-31", "status": "Superseded"},
+            ],
+            "Instructor": [
+                {"name": "INS-1", "instructor_name": "Instructor One",
+                 "employee": "EMP-1", "status": "Active"},
+                {"name": "INS-2", "instructor_name": "Instructor Two",
+                 "employee": "EMP-2", "status": "Active"},
+                {"name": "INS-3", "instructor_name": "Instructor Three",
+                 "employee": "EMP-3", "status": "Active"},
+                {"name": "INS-4", "instructor_name": "Instructor Four",
+                 "employee": None, "status": "Active"},
+                {"name": "INS-5", "instructor_name": "Instructor Retired",
+                 "employee": "EMP-5", "status": "Retired"},
+            ],
+        }
+
+    @classmethod
+    def _payload(cls, roles, world=None):
+        world_get_all = desk_world_get_all(
+            "compensation world", world if world is not None else cls._world())
+        module = _import_desk("finance", roles=roles)
+        module.frappe.get_all = world_get_all
+        module.frappe.db.get_all = world_get_all
+        return module.work()
+
+    def _items(self, roles, world=None):
+        payload = self._payload(roles, world=world)
+        section = next(sect for sect in payload["sections"]
+                       if sect["id"] == "compensation")
+        return {item["id"]: item for item in section["items"]}
+
+    def test_active_contract_offers_the_revise_action(self):
+        item = self._items(self.OFFICER)["CON-ACTIVE"]
+        self.assertEqual(item["action"]["endpoint"], self.REVISE)
+        self.assertEqual(item["action"]["args"]["contract"], "CON-ACTIVE")
+        self.assertEqual(item["person"], "Instructor One")
+        self.assertIn("Revise", item["next"])
+
+    def test_superseded_contract_is_not_offered_its_instructor_needs_a_new_one(self):
+        items = self._items(self.OFFICER)
+        self.assertNotIn("CON-SUPERSEDED", items)
+        self.assertEqual(items["INS-2"]["action"]["endpoint"], self.CREATE)
+
+    def test_uncontracted_payroll_instructor_offers_record_with_prefill(self):
+        item = self._items(self.OFFICER)["INS-3"]
+        self.assertEqual(item["action"]["endpoint"], self.CREATE)
+        self.assertEqual(item["action"]["args"]["instructor"], "INS-3")
+        self.assertEqual(item["action"]["args"]["employee"], "EMP-3")
+
+    def test_missing_payroll_employee_fails_closed_without_an_action(self):
+        item = self._items(self.OFFICER)["INS-4"]
+        self.assertNotIn("action", item)
+        self.assertEqual(item["status"], "No payroll record")
+        self.assertIn("payroll employee", item["next"])
+
+    def test_retired_instructor_is_absent(self):
+        self.assertNotIn("INS-5", self._items(self.OFFICER))
+
+    def test_payroll_period_offers_the_calculation(self):
+        item = self._items(self.OFFICER)["payroll-period"]
+        self.assertEqual(item["action"]["endpoint"], self.CALCULATE)
+        for value in item["action"]["args"].values():
+            self.assertEqual(value, "")
+
+    def test_audience_only_viewer_sees_the_queue_without_actions(self):
+        items = self._items(self.MANAGER_ONLY)
+        self.assertIn("CON-ACTIVE", items)
+        self.assertIn("payroll-period", items)
+        for item in items.values():
+            self.assertNotIn("action", item)
+            if item["status"] == "No payroll record":
+                # the HR gap is owned by the configuration authority
+                self.assertEqual(item["next_role"], "Course Owner")
+            else:
+                self.assertEqual(item["next_role"], "Finance Officer",
+                                 "the queue must still name who acts next")
+
+    def test_empty_world_is_silent_with_an_empty_state(self):
+        payload = self._payload(self.OFFICER, world={})
+        section = next(sect for sect in payload["sections"]
+                       if sect["id"] == "compensation")
+        self.assertEqual(section["items"], [])
+        self.assertTrue(section["empty"]["title"])
+
+    def test_the_section_projects_no_money(self):
+        for item in self._items(self.OFFICER).values():
+            text = json.dumps(item).lower()
+            for word in ("amount", "rate", "currency"):
+                self.assertNotIn(word, text, f"{item['id']} projects money")
 
 
 class RecordedActionsWorldTests(unittest.TestCase):

@@ -490,6 +490,43 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "room", label: "Room", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "course", label: "Course", fieldtype: "Data", reqd: 1 },
 		],
+		/* The Finance Officer's compensation commands (P1-6): the finance
+		 * desk's Teaching compensation section prefills these dialogs from
+		 * the native contract/instructor facts. The dialogs mirror the
+		 * reviewed command signatures; the server validates everything.
+		 * Skill terms and adjustments are structured owner-entered JSON
+		 * (max 10 rows each); the default empty list is what a Fixed Salary
+		 * contract records. */
+		"toefl_house.teaching.compensation.create_teaching_contract": [
+			{ fieldname: "instructor", label: "Instructor", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "employee", label: "Employee (payroll record)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "compensation_model", label: "Compensation model", fieldtype: "Select", options: "Fixed Salary\nSkill-Based\nHybrid", reqd: 1 },
+			{ fieldname: "assignment_basis", label: "Assignment basis", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "payment_frequency", label: "Payment frequency", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "effective_start", label: "Effective start", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "effective_end", label: "Effective end (blank = open)", fieldtype: "Date" },
+			{ fieldname: "conditions", label: "Conditions", fieldtype: "Small Text" },
+			{ fieldname: "skill_terms", label: "Skill terms (JSON list: skill, unit_of_payment, rate, payable_quantity, optional minimum_amount/maximum_amount; required for Skill-Based and Hybrid, empty list for Fixed Salary)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "adjustments", label: "Adjustments (JSON list: adjustment_type Bonus or Deduction, amount, effective_date, approver, reason)", fieldtype: "Small Text", default: "[]" },
+		],
+		"toefl_house.teaching.compensation.revise_teaching_contract": [
+			{ fieldname: "contract", label: "Instructor contract", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "compensation_model", label: "Compensation model", fieldtype: "Select", options: "Fixed Salary\nSkill-Based\nHybrid", reqd: 1 },
+			{ fieldname: "assignment_basis", label: "Assignment basis", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "payment_frequency", label: "Payment frequency", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "effective_start", label: "Effective start (must start after the replaced contract)", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "effective_end", label: "Effective end (blank = open)", fieldtype: "Date" },
+			{ fieldname: "conditions", label: "Conditions", fieldtype: "Small Text" },
+			{ fieldname: "skill_terms", label: "Skill terms (JSON list: skill, unit_of_payment, rate, payable_quantity, optional minimum_amount/maximum_amount; required for Skill-Based and Hybrid, empty list for Fixed Salary)", fieldtype: "Small Text", default: "[]" },
+			{ fieldname: "adjustments", label: "Adjustments (JSON list: adjustment_type Bonus or Deduction, amount, effective_date, approver, reason)", fieldtype: "Small Text", default: "[]" },
+		],
+		"toefl_house.teaching.compensation.calculate_teaching_compensation": [
+			{ fieldname: "period_start", label: "Period start", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "period_end", label: "Period end", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "company", label: "Company", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "salary_component", label: "Salary component (earning)", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "deduction_component", label: "Deduction component (optional)", fieldtype: "Data" },
+		],
 	});
 
 	/* Client-side courtesy guards for rules the server enforces anyway
