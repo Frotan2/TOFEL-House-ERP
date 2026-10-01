@@ -124,16 +124,13 @@ jobs:
         working-directory: product
         run: |
           set -euo pipefail
-          # Test setup on this disposable CI site: one staff user with a
-          # daily role (native User/Role — the product's identity authority).
-          # The web container's WORKDIR is /home/frappe/bench and its default
-          # PATH does not include the bench venv, so the inline interpreter
-          # must be the venv python by absolute path (frappe is only
-          # importable there), and the sites directory must be named
-          # absolutely. exec needs -i to forward the heredoc script on
-          # stdin (without it the script silently never runs); the printed
-          # marker is asserted so that regression can never pass silently.
-          staff_out=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          # Every stage appends to tailnet-progress.txt (truncated at step
+          # start); the on-failure step prints it, so the last stage
+          # reached — and any failing command's output — always survives
+          # the capped annotation view.
+          > tailnet-progress.txt
+          echo "stage: staff-user exec start" >> tailnet-progress.txt
+          if ! staff_out=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
           import sys
           import traceback
           def _ci_excepthook(typ, value, tb):
@@ -157,7 +154,13 @@ jobs:
           frappe.db.commit()
           print("staff user ready")
           EOF
-          )
+          ); then
+            echo "stage: staff-user exec FAILED rc=$?" >> tailnet-progress.txt
+            printf 'exec output:\n%s\n' "$staff_out" >> tailnet-progress.txt
+            exit 1
+          fi
+          echo "stage: staff-user exec OK" >> tailnet-progress.txt
+          printf 'exec output:\n%s\n' "$staff_out" >> tailnet-progress.txt
           echo "$staff_out" | grep -q "staff user ready"
           python3 - <<'EOF'
           import json
@@ -175,6 +178,7 @@ jobs:
               traceback.print_exception(typ, value, tb)
               print("::error::tailnet contract failed at line %s: %s" % (lineno, value))
           sys.excepthook = _ci_excepthook
+          open("tailnet-progress.txt", "a").write("stage: python contract start\n")
 
           BASE = "http://127.0.0.1:8000"
 
@@ -218,8 +222,9 @@ jobs:
               assert sids, ("login returned no sid cookie", status, text[:300], cookies)
               return sids[0].split(";", 1)[0]
 
-          open("tailnet-progress.txt", "w").close()
+          progress("credentials file read start")
           admin_file = open("data/sites/toeflhouse.localhost/private/first-run-credentials.txt").read()
+          progress("credentials file read OK")
           admin_pw = next(l.split("Password:", 1)[1].strip() for l in admin_file.splitlines() if "Password:" in l)
           staff_pw = "staff-a-ci-123"
           progress("staff login start")
@@ -503,10 +508,10 @@ jobs:
           # last tailnet stage reached, which later step (if any) started,
           # and the tail of the web container log.
           if [ -f tailnet-progress.txt ]; then
-            echo "::error::tailnet stages reached:"
-            tail -6 tailnet-progress.txt | sed 's/^/::error::  /'
+            echo "::error::tailnet progress (full):"
+            tail -20 tailnet-progress.txt | sed 's/^/::error::  /'
           else
-            echo "::error::tailnet not reached (no progress file)"
+            echo "::error::tailnet step did not start (no progress file)"
           fi
           for f in rehearse-activate.txt perf-baseline.json; do
             if [ -f "$f" ]; then echo "::error::stage marker present: $f"; else echo "::error::stage marker absent: $f"; fi
