@@ -126,9 +126,11 @@ jobs:
           set -euo pipefail
           # Test setup on this disposable CI site: one staff user with a
           # daily role (native User/Role — the product's identity authority).
+          # The web container's WORKDIR is /home/frappe/bench, so the inline
+          # interpreter must name the sites directory absolutely.
           docker compose exec -T web python3 - <<'EOF'
           import frappe
-          frappe.init(site="toeflhouse.localhost", sites_path=".")
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
           frappe.connect()
           user = "staff-a@example.test"
           if not frappe.db.exists("User", user):
@@ -236,7 +238,7 @@ jobs:
           # (4) Restart persistence: a marker record, a full restart, every
           # service back (worker/scheduler/socketio included), data intact.
           subprocess.run(["docker", "compose", "exec", "-T", "web", "python3", "-c",
-                          "import frappe; frappe.init(site='toeflhouse.localhost', sites_path='.'); "
+                          "import frappe; frappe.init(site='toeflhouse.localhost', sites_path='/home/frappe/bench/sites'); "
                           "frappe.connect(); "
                           "if not frappe.db.exists('Student', {'first_name': 'Tailnet', 'last_name': 'Marker'}): "
                           "frappe.get_doc({'doctype': 'Student', 'first_name': 'Tailnet', 'last_name': 'Marker'}).insert(ignore_permissions=True); "

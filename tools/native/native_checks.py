@@ -57,6 +57,8 @@ def main():
            'containment_probe':'synthetic-containment-probe@example.test',
            'course_owner':'synthetic-course-owner@example.test',
            'receptionist':'synthetic-receptionist@example.test',
+           'branch_a_staff':'synthetic-branch-a-staff@example.test',
+           'branch_b_staff':'synthetic-branch-b-staff@example.test',
            'academic_manager':'synthetic-academic-manager@example.test',
            'finance_manager':'synthetic-finance-manager@example.test',
            'general_manager':'synthetic-general-manager@example.test',
