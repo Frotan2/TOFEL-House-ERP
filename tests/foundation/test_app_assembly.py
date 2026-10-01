@@ -292,6 +292,7 @@ class BranchIsolationContract(unittest.TestCase):
         from types import ModuleType, SimpleNamespace
         import importlib.util
         self.up_rows = []            # Branch User Permission rows for the user
+        self.up_filters = []         # every User Permission filter the module issued
         self.roster = {}             # student -> [branch, ...] active roster branches
         self.group_branches = {}     # student group name -> branch
         self.applicant_branches = {} # applicant name -> branch
@@ -328,7 +329,7 @@ class BranchIsolationContract(unittest.TestCase):
 
         def get_all(doctype, filters=None, pluck=None, limit_page_length=None, **kwargs):
             if doctype == "User Permission":
-                assert filters == {"user": "staff@toeflhouse.test", "allow": "Branch", "block": 0}
+                self.up_filters.append(dict(filters or {}))
                 return list(self.up_rows)
             raise AssertionError(f"unexpected get_all {doctype}")
 
@@ -416,6 +417,24 @@ class BranchIsolationContract(unittest.TestCase):
         self.assertTrue(condition.startswith("("), "base condition must be preserved")
         # A kind without a branch path is untouched.
         self.assertEqual(self.perm.query("attempt"), self.perm._query_role("attempt"))
+
+    def test_user_permission_filters_use_pinned_columns_only(self):
+        # D2-class guard: the scripted world answers any filter key, which is
+        # exactly what let a nonexistent column (User Permission.block at
+        # pinned frappe 988e54f) reach a real MariaDB. Every filter key the
+        # module issues against User Permission must exist on the pinned
+        # schema ledger.
+        self.up_rows = ["Branch Alpha"]
+        self.perm.branch_query_student()
+        self.perm.branch_has_permission(SimpleNamespace_doctype("Student", "STU-A"))
+        self.assertTrue(self.up_filters, "the branch rule must read User Permission")
+        ledger = json.loads(
+            (ROOT / "tests" / "desk" / "pinned_schema.json").read_text(encoding="utf-8"))
+        real = set(ledger["doctypes"]["User Permission"]["fields"])
+        for filters in self.up_filters:
+            bad = sorted(set(filters) - real)
+            self.assertEqual(bad, [],
+                             f"User Permission filter references unpinned columns: {bad}")
 
 
 def SimpleNamespace_doctype(doctype, name, **extra):

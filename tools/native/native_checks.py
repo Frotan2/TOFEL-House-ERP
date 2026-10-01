@@ -4726,11 +4726,19 @@ def main():
                 if not frappe.db.exists('Branch',b):
                     frappe.get_doc(dict(doctype='Branch',branch=b)).insert()
             grp,stu,app,dec={}, {}, {}, {}
+            # The admission decision's required placement_decision Link:
+            # reuse the released result the placement phase already proved.
+            pd=frappe.db.get_value('TH Placement Decision', {'status': 'Released'}, 'name')
+            assert pd,('a released placement decision must exist from the placement phase')
+            sd=frappe.utils.today(); ed=frappe.utils.add_days(sd,14)
             for tail,b in (('A',BR_A),('B',BR_B)):
                 g=frappe.get_doc(dict(doctype='Student Group',
-                    student_group_name='SYN BR'+tail, program=cat['program'],
+                    student_group_name='SYN BR'+tail, group_based_on='Batch',
+                    program=cat['program'],
                     academic_year='SYN-AY-2027', th_branch=b,
-                    th_class_status='Active', disabled=0))
+                    th_class_start_date=sd, th_class_end_date=ed,
+                    th_delivery_mode='On-site', th_class_status='Active',
+                    disabled=0))
                 g.insert(); grp[tail]=g.name
                 s=frappe.get_doc(dict(doctype='Student',
                     naming_series='EDU-STU-.YYYY.-',
@@ -4738,19 +4746,24 @@ def main():
                     student_name='SYN BR'+tail+' Student',
                     student_email_id='syn-br-'+tail.lower()+'@example.test'))
                 s.insert(); stu[tail]=s.name
-                s2=frappe.get_doc('Student',s.name)
-                s2.append('students',dict(student=s.name,
+                # The roster row (Student Group Student, active) links the
+                # student to the group's branch; the child table lives on the
+                # Student Group, not the Student.
+                g2=frappe.get_doc('Student Group',grp[tail])
+                g2.append('students',dict(student=s.name,
                     student_name='SYN BR'+tail+' Student', active=1))
-                s2.save(ignore_permissions=True)
+                g2.save(ignore_permissions=True)
                 a=frappe.get_doc(dict(doctype='Student Applicant',
                     naming_series='EDU-APP-.YYYY.-', first_name='SYN BR'+tail,
                     last_name='Applicant',
                     student_email_id='syn-br-app-'+tail.lower()+'@example.test',
-                    program=cat['program'], academic_year='SYN-AY-2027', th_branch=b))
+                    program=cat['program'], academic_year='SYN-AY-2027', th_branch=b,
+                    application_status='Applied'))
                 a.insert(); app[tail]=a.name
                 d=frappe.get_doc(dict(doctype=adm.DECISION_DT,
                     student_applicant=app[tail], program=cat['program'],
-                    academic_year='SYN-AY-2027', status='Draft', synthetic=1))
+                    academic_year='SYN-AY-2027', placement_decision=pd,
+                    drafted_by=users['officer'], status='Draft', synthetic=1))
                 d.insert(); dec[tail]=d.name
             frappe.db.commit()
             for label,b in (('branch_a_staff',BR_A),('branch_b_staff',BR_B)):

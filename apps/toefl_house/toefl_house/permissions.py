@@ -109,9 +109,12 @@ def _user_branches(user):
     """
     if user == "Administrator":
         return None
+    # The pinned frappe User Permission has no block column (988e54f);
+    # a permission restricts only the users who hold it, so an empty
+    # result IS the unrestricted case.
     rows = frappe.get_all(
         "User Permission",
-        filters={"user": user, "allow": "Branch", "block": 0},
+        filters={"user": user, "allow": "Branch"},
         pluck="for_value",
         limit_page_length=100,
     )
