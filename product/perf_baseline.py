@@ -49,7 +49,11 @@ def timed_call(path: str, *, data=None, session=None):
         text = response.read().decode()
         cookies = response.headers.get_all("Set-Cookie") or []
     elapsed_ms = (time.perf_counter() - start) * 1000.0
-    sid = next((c.split(";", 1)[0] for c in cookies if c.startswith("sid=")), None)
+    # The Set-Cookie header is "sid=<value>; attrs..."; the cookie VALUE is
+    # what a Cookie header must carry ("sid=<value>"). Keeping the "sid="
+    # prefix doubled it to "sid=sid=<value>", which resolves to no session
+    # (guest fallback) and would time the wrong (denied) path.
+    sid = next((c.split(";", 1)[0].split("=", 1)[1] for c in cookies if c.startswith("sid=")), None)
     return elapsed_ms, text, sid
 
 

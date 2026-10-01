@@ -241,7 +241,11 @@ jobs:
               assert sids, ("login returned no sid cookie", status, text[:300], cookies)
               LOGIN_DIAG.append((username, status, text[:300],
                                  [c[:40] for c in cookies]))
-              return sids[0].split(";", 1)[0]
+              # The Set-Cookie header is "sid=<value>; attrs..."; the cookie
+              # VALUE is what a Cookie header must carry ("sid=<value>").
+              # Keeping the "sid=" prefix doubled it to "sid=sid=<value>",
+              # which resolves to no session (guest fallback).
+              return sids[0].split(";", 1)[0].split("=", 1)[1]
 
           def session_diag(sid):
               # The staff session is resolved by the web worker from the
