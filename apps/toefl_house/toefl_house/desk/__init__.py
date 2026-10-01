@@ -422,10 +422,6 @@ LIMIT_LOOKUP = 10
 BOUNCE_WINDOW = 400
 
 
-def desk_audience(slug):
-    return list(DESKS[slug]["roles"])
-
-
 def require_desk_audience(slug):
     """Gate: the viewer must hold at least one of the desk's roles.
 

@@ -33,13 +33,6 @@ READINESS_CONFIGURED = "configured"
 READINESS_VALIDATED = "validated"
 READINESS_EFFECTIVE = "effective"
 READINESS_RETIRED = "retired"
-READINESS_STATES = (
-    READINESS_INCOMPLETE,
-    READINESS_CONFIGURED,
-    READINESS_VALIDATED,
-    READINESS_EFFECTIVE,
-    READINESS_RETIRED,
-)
 
 # --- Authorities -----------------------------------------------------------
 # business_policy: the Course Owner's business values (the only authority

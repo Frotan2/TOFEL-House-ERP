@@ -14,7 +14,6 @@ from toefl_house.policy import digest
 
 SCORER_VERSION = "objective-v1"
 SUPPORTED_KINDS = ("Single Choice", "True False")
-OUTCOMES = ("correct", "incorrect", "missing")
 
 
 class ScoringUnavailable(ValueError):

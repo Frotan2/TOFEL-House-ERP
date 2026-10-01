@@ -37,7 +37,6 @@ CLOSED_DISPOSITIONS = frozenset((
 # advisory ids/aliases but may never redefine an id the register or an earlier
 # delta already covers — any collision fails the loader loud, never silently.
 DELTA_PATTERN = "advisory-delta-*/delta-dispositions.json"
-OPEN_DISPOSITIONS = frozenset(("OWNER_DECISION_REQUIRED", "BLOCKED"))
 
 # Advisory id shape. GHSA-xxxx-xxxx-xxxx, CVE-2024-xxxxx, PYSEC-2026-xxxx,
 # and arbitrary npm numeric advisory ids.

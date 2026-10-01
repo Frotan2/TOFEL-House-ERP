@@ -20,15 +20,6 @@ around it) is an owner decision; delivery against a real receiver is a
 real-environment proof that does not exist yet. Any code that delivers a
 condition to a human must live outside this module and cite that decision.
 """
-from datetime import datetime
-
-# Native RQ Job statuses that mean "needs a human look", from rq_job.json.
-FAILED_JOB_STATUSES = ("failed",)
-
-# Native Scheduled Job Log statuses that mean "needs a human look".
-FAILED_SCHEDULED_STATUSES = ("Failed",)
-
-
 def summarize_snapshot(rows):
     """Count a desk-projected snapshot into plain facts. No thresholds.
 
@@ -94,10 +85,3 @@ def evaluate_alert_conditions(summary, *, ping_ok):
         add("failed_scheduled_runs",
             f"{count} scheduled run(s) ended in native Failed status.")
     return conditions
-
-
-def snapshot_timestamp(value=None):
-    """Echo a snapshot time for display; never invents one."""
-    if isinstance(value, datetime):
-        return value.isoformat(sep=" ", timespec="seconds")
-    return value or ""

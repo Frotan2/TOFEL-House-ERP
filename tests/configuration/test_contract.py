@@ -401,11 +401,15 @@ class CommandContractTests(unittest.TestCase):
         import ast as _ast
 
         source = _module_source("__init__.py")
-        self.assertIn('"Course Owner" not in set(frappe.get_roles(user))', source)
         self.assertNotIn("require_synthetic", source,
                          "configuration is a governance surface, not a synthetic command")
         self.assertNotIn("ignore_permissions=True) if False", source)
         audit_source = (APP / "configuration/audit.py").read_text(encoding="utf-8")
+        # The live gate: bound-role holder, never Guest/Administrator, enabled.
+        self.assertIn("foundation.require_bound_authority(authority)", audit_source)
+        self.assertIn('user in (None, "Guest", "Administrator")', audit_source)
+        self.assertIn('not set(roles) & set(frappe.get_roles(user))', audit_source)
+        self.assertIn('frappe.db.get_value("User", user, "enabled")', audit_source)
         audit_tree = _ast.parse(audit_source)
         kinds = None
         for node in _ast.walk(audit_tree):

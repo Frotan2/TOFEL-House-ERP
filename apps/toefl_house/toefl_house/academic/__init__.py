@@ -42,24 +42,6 @@ FEE_STRUCTURE = "Fee Structure"
 DISCOUNT_RULE = "TH Discount Rule"
 
 
-def _require_course_owner():
-    user = frappe.session.user
-    if user in (None, "Guest", "Administrator") or "Course Owner" not in set(frappe.get_roles(user)):
-        raise frappe.PermissionError(
-            "The Course Owner configures the academic control plane; "
-            "ask the Course Owner for this change")
-    # S3: a disabled login holds no authority even with the role still
-    # attached (same rule the desk audience gate enforces).
-    if not frappe.db.get_value("User", user, "enabled"):
-        raise frappe.PermissionError("This account has been disabled.")
-    return user
-
-
-def _context():
-    return (frappe.utils.now_datetime().isoformat(timespec="seconds"),
-            frappe.utils.today())
-
-
 def _family_doc(code, for_update=False):
     name = frappe.db.get_value(PROGRAM, {"code": code}, "name")
     if not name:

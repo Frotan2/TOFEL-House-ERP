@@ -326,12 +326,6 @@ ATTEMPT_TRANSITIONS = {
     ("Review", "Finalized"),
 }
 
-ADMISSION_STATUSES = (
-    "Draft", "Review", "Approved", "Conditional", "Deferred", "Rejected",
-    "Withdrawn", "Revoked", "Expired",
-)
-ADMISSION_ACTIVE = ("Draft", "Review", "Approved", "Conditional")
-ADMISSION_TERMINAL = ("Deferred", "Rejected", "Withdrawn", "Revoked", "Expired")
 ADMISSION_TRANSITIONS = {
     ("Draft", "Review"),
     ("Draft", "Withdrawn"),
@@ -500,11 +494,7 @@ def enrollment_is_eligible(status, accepted, native_student, existing_student=""
         raise ValueError("Conditional admission is not permission to enroll")
     return True
 
-CONFIG_VALIDATORS = {"blueprint": validate_blueprint, "policy": validate_policy,
-                     "course_map": validate_course_map}
-
 # Draft -> Reviewed -> Published -> Retired. Retired is terminal.
-CONFIG_STATUSES = ("Draft", "Reviewed", "Published", "Retired")
 CONFIG_TRANSITIONS = {
     ("Draft", "Reviewed"),
     ("Reviewed", "Published"),
@@ -586,7 +576,6 @@ def can_read(kind, roles, actor, owner, status=None):
 # default value.
 COMPENSATION_MODELS = ("Fixed Salary", "Skill-Based", "Hybrid")
 ADJUSTMENT_TYPES = ("Bonus", "Deduction")
-CONTRACT_STATUSES = ("Active", "Superseded")
 DELIVERY_MODES = ("On-site", "Online", "Hybrid")
 CLASS_STATUSES = ("Planned", "Active", "Completed", "Cancelled")
 CLASS_TRANSITIONS = {
