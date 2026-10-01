@@ -126,9 +126,11 @@ jobs:
           set -euo pipefail
           # Test setup on this disposable CI site: one staff user with a
           # daily role (native User/Role — the product's identity authority).
-          # The web container's WORKDIR is /home/frappe/bench, so the inline
-          # interpreter must name the sites directory absolutely.
-          docker compose exec -T web python3 - <<'EOF'
+          # The web container's WORKDIR is /home/frappe/bench and its default
+          # PATH does not include the bench venv, so the inline interpreter
+          # must be the venv python by absolute path (frappe is only importable
+          # there), and the sites directory must be named absolutely.
+          docker compose exec -T web /home/frappe/bench/env/bin/python3 - <<'EOF'
           import frappe
           frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
           frappe.connect()
@@ -237,11 +239,12 @@ jobs:
 
           # (4) Restart persistence: a marker record, a full restart, every
           # service back (worker/scheduler/socketio included), data intact.
-          subprocess.run(["docker", "compose", "exec", "-T", "web", "python3", "-c",
+          subprocess.run(["docker", "compose", "exec", "-T", "web",
+                          "/home/frappe/bench/env/bin/python3", "-c",
                           "import frappe; frappe.init(site='toeflhouse.localhost', sites_path='/home/frappe/bench/sites'); "
                           "frappe.connect(); "
                           "if not frappe.db.exists('Student', {'first_name': 'Tailnet', 'last_name': 'Marker'}): "
-                          "frappe.get_doc({'doctype': 'Student', 'first_name': 'Tailnet', 'last_name': 'Marker'}).insert(ignore_permissions=True); "
+                          "frappe.get_doc({'doctype': 'Student', 'first_name': 'Tailnet', 'last_name': 'Marker', 'student_email_id': 'tailnet-marker@example.test'}).insert(ignore_permissions=True); "
                           "frappe.db.commit()"], check=True)
           subprocess.run(["docker", "compose", "restart"], check=True)
           import time
@@ -259,12 +262,23 @@ jobs:
           running = {item["Name"] for item in states if item.get("State") == "running"}
           missing = set(names) - running
           assert not missing, "services not running after restart: %s" % missing
-          admin2 = login("Administrator", admin_pw)
+          # After a full restart the web can answer before the database is
+          # back; the logins (which query the DB) therefore retry briefly.
+          def login_retry(username, password, tries=12):
+              last = None
+              for _ in range(tries):
+                  try:
+                      return login(username, password)
+                  except AssertionError as exc:
+                      last = exc
+                      time.sleep(5)
+              raise last
+          admin2 = login_retry("Administrator", admin_pw)
           status, text, _ = call("/api/method/frappe.client.get_count",
                                  data={"doctype": "Student"}, session=admin2)
           payload = json.loads(text)
           assert int(payload.get("count", 0)) >= 1, payload
-          staff2 = login("staff-a@example.test", staff_pw)
+          staff2 = login_retry("staff-a@example.test", staff_pw)
           status, text, _ = call("/api/method/toefl_house.desk.reception.work", session=staff2)
           assert status == 200 and "exc_info" not in json.loads(text), text[:300]
           print("restart persistence: %d services running, data and access intact" % len(names))
