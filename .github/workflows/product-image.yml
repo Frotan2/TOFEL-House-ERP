@@ -128,9 +128,19 @@ jobs:
           # daily role (native User/Role — the product's identity authority).
           # The web container's WORKDIR is /home/frappe/bench and its default
           # PATH does not include the bench venv, so the inline interpreter
-          # must be the venv python by absolute path (frappe is only importable
-          # there), and the sites directory must be named absolutely.
-          docker compose exec -T web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          # must be the venv python by absolute path (frappe is only
+          # importable there), and the sites directory must be named
+          # absolutely. exec needs -i to forward the heredoc script on
+          # stdin (without it the script silently never runs); the printed
+          # marker is asserted so that regression can never pass silently.
+          staff_out=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          import sys
+          import traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::tailnet staff-user setup failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
           import frappe
           frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
           frappe.connect()
@@ -147,6 +157,8 @@ jobs:
           frappe.db.commit()
           print("staff user ready")
           EOF
+          )
+          echo "$staff_out" | grep -q "staff user ready"
           python3 - <<'EOF'
           import json
           import subprocess
@@ -268,8 +280,12 @@ jobs:
                   time.sleep(5)
           else:
               raise AssertionError("site did not answer after restart")
-          states = json.loads(subprocess.check_output(
-              ["docker", "compose", "ps", "--format", "json"], text=True))
+          # compose v2 emits either a JSON array or one object per line
+          # (NDJSON) depending on the version; accept both.
+          raw = subprocess.check_output(
+              ["docker", "compose", "ps", "--format", "json"], text=True).strip()
+          states = json.loads(raw) if raw.startswith("[") else [
+              json.loads(line) for line in raw.splitlines() if line.strip()]
           names = sorted(item["Name"] for item in states)
           running = {item["Name"] for item in states if item.get("State") == "running"}
           missing = set(names) - running
@@ -352,8 +368,9 @@ jobs:
 
           # (4) VERIFY: pre-backup data and the production activation
           # survived the redeploy; then a post-backup record that the
-          # restore must roll back.
-          docker compose exec -T web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          # restore must roll back. (exec -i + marker assertion: a
+          # script that never ran must never count as verified.)
+          verify1=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
           import sys
           import traceback
           def _ci_excepthook(typ, value, tb):
@@ -374,6 +391,8 @@ jobs:
           assert frappe.db.exists("Student", {"student_email_id": email})
           print("verify#1: pre-backup data intact; post-backup probe record created")
           EOF
+          )
+          echo "$verify1" | grep -q "verify#1: pre-backup data intact"
           act status | grep -q ': PRODUCTION'
           echo "::notice title=Rehearsal verify 1::data and production activation intact after redeploy + migrate"
 
@@ -398,8 +417,9 @@ jobs:
 
           # (6) VERIFY: the data is exactly at the backup point - the
           # pre-backup record is present, the post-backup record is gone -
-          # and the site is healthy in production mode.
-          docker compose exec -T web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          # and the site is healthy in production mode. (exec -i + marker
+          # assertion, as in verify#1.)
+          verify2=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
           import sys
           import traceback
           def _ci_excepthook(typ, value, tb):
@@ -416,6 +436,8 @@ jobs:
               "post-backup probe record survived the restore"
           print("verify#2: data rolled back to the backup point")
           EOF
+          )
+          echo "$verify2" | grep -q "verify#2: data rolled back to the backup point"
           act status | grep -q ': PRODUCTION'
           echo "::notice title=Upgrade/rollback rehearsal::backup -> rebuild -> migrate -> verify -> restore -> verify"
       - name: Performance baseline (measured, not policy)
