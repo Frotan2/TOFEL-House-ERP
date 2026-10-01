@@ -6,8 +6,8 @@ price values remain owner-supplied configuration data, never code constants.
 Academic assessment (B04/B05) and payroll (A09) remain GATED. Production
 remains REJECT.**
 
-This records the business owner's decisions, collected 2026-09-15 on branch
-`arena/01a0a496-tofel-house-erp`, which unblock the Finance domain
+This records the business owner's decisions, collected 2026-09-15 (preserved in this
+repository's Git history), which unblock the Finance domain
 (P3.6, A08 canonical billing route already DECIDED). Prior gate text:
 R05 (Git history).
 
