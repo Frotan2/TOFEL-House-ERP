@@ -337,7 +337,18 @@ jobs:
                        for p in (service.get("ports") or [])]
           assert published, "compose declares no published ports"
           for entry in published:
-              assert entry["hostIP"] in ("127.0.0.1", "localhost"), entry
+              # compose v2 "config --format json" emits the compose-spec long
+              # form ({"host_ip": ..., "published": ...}); older docker
+              # compose emits {"hostIP": ..., "publishedPort": ...}; a
+              # shorthand string is "host:host:container". An absent bind
+              # address means 0.0.0.0 (every interface) - never allowed.
+              if isinstance(entry, str):
+                  host = entry.split(":", 1)[0] if ":" in entry else "0.0.0.0"
+              elif "hostIP" in entry:
+                  host = entry["hostIP"]
+              else:
+                  host = entry.get("host_ip") or "0.0.0.0"
+              assert host in ("127.0.0.1", "localhost"), entry
           # ss -ltn columns: Netid State Recv-Q Send-Q Local Address:Port Peer
           # (the local address is the fifth field; the fourth is Send-Q).
           listeners = subprocess.check_output(
