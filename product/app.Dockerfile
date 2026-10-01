@@ -101,6 +101,9 @@ COPY product/bootstrap.py /product/bootstrap.py
 COPY product/activate.py /product/activate.py
 COPY product/wsgi.py /product/wsgi.py
 COPY product/entrypoint.sh /product/entrypoint.sh
+# The performance baseline (finding 9) runs inside the deployed image:
+# the CI perf step execs it by this exact path.
+COPY product/perf_baseline.py /product/perf_baseline.py
 RUN chmod +x /product/entrypoint.sh /product/activate.py
 
 # Local bench: frappe from the pinned source (not re-resolved), then the rest.

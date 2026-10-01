@@ -68,6 +68,23 @@ class PinParityContract(unittest.TestCase):
         self.assertIn("rev-parse HEAD", text)
         self.assertIn("checkout --detach FETCH_HEAD", text)
 
+    def test_every_script_the_ci_execs_in_image_is_copied_into_the_image(self):
+        # Regression guard: the CI product-image steps exec scripts by exact
+        # /product/... path inside the deployed image. A script the workflow
+        # references but the Dockerfile never COPYs is absent from the image,
+        # and the step dies with a bare "can't open file" (python exit 2) -
+        # exactly how the perf-baseline step failed for several consecutive
+        # runs before the gap was found.
+        workflow = ROOT / ".github" / "workflows" / "product-image.yml"
+        text = DOCKERFILE.read_text()
+        referenced = set(re.findall(r"/product/([A-Za-z0-9_.]+\.(?:py|sh))", workflow.read_text()))
+        self.assertTrue(referenced, "expected /product/ script references in the workflow")
+        missing = [name for name in sorted(referenced)
+                   if not re.search(rf"^COPY product/{re.escape(name)} /product/{re.escape(name)}$",
+                                    text, flags=re.M)]
+        self.assertEqual(missing, [],
+                         f"workflow execs in-image scripts the Dockerfile never ships: {missing}")
+
     def test_bench_operations_run_as_non_root_user(self):
         # Production failure of record (real Windows E2E + hosted diagnostic
         # probe, 2026-09-30): bench's own guard (bench/cli.py change_uid)
