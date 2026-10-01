@@ -26,9 +26,6 @@ def main():
     from toefl_house.finance import policies as billp
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
-    # Placement-fee invoices are stamped by ERPNext with the posting date of the day they are created
-    # (set_posting_time=0), so these fixtures are relative to today, never fixed calendar dates.
-    pf_post=frappe.utils.today();pf_due=frappe.utils.add_days(pf_post,29);pf_due_http=frappe.utils.add_days(pf_post,30)
     report={'scope':'Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
             'note':'Thin admission, native Program Enrollment and native teaching operations (Student Group / Course Schedule / Student Attendance); no TH Enrollment ledger, grading, fees or payroll'}
@@ -167,6 +164,9 @@ def main():
                 return {'site':site,'users':len(users),'apps':frappe.get_installed_apps()}
             check('native-fixtures-'+site,setup);frappe.destroy()
         connect('placement-test.localhost')
+        # Placement-fee invoices are stamped by ERPNext with the posting date of the day they are created
+        # (set_posting_time=0), so these fixtures are relative to today, never fixed calendar dates.
+        pf_post=frappe.utils.today();pf_due=frappe.utils.add_days(pf_post,29);pf_due_http=frappe.utils.add_days(pf_post,30)
         before_counts={dt:frappe.db.count(dt) for dt in ['Student','Student Applicant','Program Enrollment','Course Enrollment','Assessment Result','Sales Invoice','GL Entry','Salary Slip','Student Group','Course Schedule','Student Attendance','Employee','Attendance','Timesheet','Additional Salary','Fees']}
         check('administrator-not-an-implicit-business-actor',lambda:denied(lambda:api.create_draft('admin_attempt_001',family(users['author'],'ADMIN'),1,content())))
         def disabled():
