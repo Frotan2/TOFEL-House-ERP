@@ -26,6 +26,9 @@ def main():
     from toefl_house.finance import policies as billp
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
+    # Placement-fee invoices are stamped by ERPNext with the posting date of the day they are created
+    # (set_posting_time=0), so these fixtures are relative to today, never fixed calendar dates.
+    pf_post=frappe.utils.today();pf_due=frappe.utils.add_days(pf_post,29);pf_due_http=frappe.utils.add_days(pf_post,30)
     report={'scope':'Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
             'note':'Thin admission, native Program Enrollment and native teaching operations (Student Group / Course Schedule / Student Attendance); no TH Enrollment ledger, grading, fees or payroll'}
@@ -2663,19 +2666,19 @@ def main():
             assert {dt:frappe.db.count(dt) for dt in old}==old
             return {'real_database_rollback':True,'injected_boundary':'finance audit'}
         check('finance-tuition-atomic-rollback',tuition_rollback_proof)
-        check('finance-placement-unknown-case-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_bad_case_00000001','NO-SUCH-CASE',fin['payer'],'2026-09-01','2026-09-30'))))
-        check('finance-placement-unknown-customer-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_bad_cust_0000001',CASE9,'NO-SUCH-CUSTOMER','2026-09-01','2026-09-30'))))
-        check('finance-placement-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:fin_m.issue_placement_fee('fin_out_place_0000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))))
+        check('finance-placement-unknown-case-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_bad_case_00000001','NO-SUCH-CASE',fin['payer'],pf_post,pf_due))))
+        check('finance-placement-unknown-customer-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_bad_cust_0000001',CASE9,'NO-SUCH-CUSTOMER',pf_post,pf_due))))
+        check('finance-placement-outsider-denied',lambda:denied(lambda:as_user('outsider',lambda:fin_m.issue_placement_fee('fin_out_place_0000001',CASE9,fin['payer'],pf_post,pf_due))))
         def zero_rate_not_billable():
             # Owner policy: free-vs-charged is configuration, never code.
             frappe.set_user('Administrator')
             frappe.db.set_value('Item Price',{'item_code':'SYN-PLACEMENT-FEE','price_list':'TOEFL House Standard'},'price_list_rate',0)
-            return denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_zero_000001',CASE9,fin['payer'],'2026-09-01','2026-09-30')))
+            return denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_zero_000001',CASE9,fin['payer'],pf_post,pf_due)))
         check('finance-placement-zero-rate-not-billable',zero_rate_not_billable)
         def placement_positive():
             frappe.set_user('Administrator')
             frappe.db.set_value('Item Price',{'item_code':'SYN-PLACEMENT-FEE','price_list':'TOEFL House Standard'},'price_list_rate',4000)
-            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_a_00000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))
+            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_a_00000001',CASE9,fin['payer'],pf_post,pf_due))
             assert value['configured_rate']==4000.0 and value['grand_total']==4000.0 and value['currency']=='AFN',value
             row=frappe.db.get_value('Sales Invoice',value['sales_invoice'],['docstatus','customer','th_placement_case','company'],as_dict=True)
             assert row.docstatus==1 and row.customer==fin['payer'] and row.th_placement_case==CASE9 and row.company=='TOEFL House',(row,value)
@@ -2684,15 +2687,15 @@ def main():
         inv1=check('finance-placement-happy-path',traced(placement_positive))
         def placement_replay():
             count=frappe.db.count(api.AUDIT);si_count=frappe.db.count('Sales Invoice')
-            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_a_00000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))
+            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_a_00000001',CASE9,fin['payer'],pf_post,pf_due))
             assert value==inv1 and frappe.db.count(api.AUDIT)==count and frappe.db.count('Sales Invoice')==si_count
             return {'same_result':True,'no_new_invoice':True}
         check('finance-placement-idempotent-replay',placement_replay)
-        check('finance-placement-duplicate-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_dup_000001',CASE9,fin['payer'],'2026-09-01','2026-09-30'))))
+        check('finance-placement-duplicate-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_dup_000001',CASE9,fin['payer'],pf_post,pf_due))))
         def placement_direct_denied():
             frappe.set_user('Administrator')
             return denied(lambda:frappe.get_doc(dict(doctype='Sales Invoice',customer=fin['payer'],
-                company='TOEFL House',posting_date='2026-09-01',due_date='2026-09-30',
+                company='TOEFL House',posting_date=pf_post,due_date=pf_due,
                 th_placement_case=CASE9,
                 items=[dict(item_code='SYN-PLACEMENT-FEE',qty=1)])).insert(ignore_permissions=True))
         check('finance-placement-direct-write-denied',placement_direct_denied)
@@ -2707,7 +2710,7 @@ def main():
                 price_or_product_discount='Price',selling=1,
                 applicable_for='Customer',customer=fin['payer_waiver'],
                 company='TOEFL House')).insert()
-            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_waiver_01',case_of('candidate6'),fin['payer_waiver'],'2026-09-01','2026-09-30'))
+            value=as_user('finance_officer',lambda:fin_m.issue_placement_fee('fin_place_waiver_01',case_of('candidate6'),fin['payer_waiver'],pf_post,pf_due))
             line_disc=frappe.db.get_value('Sales Invoice Item',{'parent':value['sales_invoice']},'discount_amount')
             assert value['configured_rate']==4000.0 and float(line_disc)==4000.0,(value,line_disc)
             assert value['net_total']==0.0 and value['grand_total']==0.0,value
@@ -2779,7 +2782,7 @@ def main():
             keys=('http_fin_prace_a_00001','http_fin_prace_b_00001')
             def request(key):
                 s=requests.Session();s.headers.update(sessions['finance_officer'].headers);s.cookies.update(sessions['finance_officer'].cookies)
-                return key,s.post(base+'/api/method/toefl_house.finance.issue_placement_fee',json=dict(request_key=key,case=case,customer=fin['payer'],posting_date='2026-09-02',due_date='2026-10-02'),timeout=40)
+                return key,s.post(base+'/api/method/toefl_house.finance.issue_placement_fee',json=dict(request_key=key,case=case,customer=fin['payer'],posting_date=pf_post,due_date=pf_due_http),timeout=40)
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:rs=list(pool.map(request,keys))
             def _exc(r):
                 try:return r.json().get('exc_type')
