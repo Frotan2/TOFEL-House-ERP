@@ -4960,17 +4960,19 @@ def main():
         # frappe 988e54f reportview._export_query: same DatabaseQuery layer
         # as list, then can_export); print gates on print permission; reports
         # gate on the report role table. Three honest boundaries fall out and
-        # are asserted, not hidden: the desk path rides the same native list
-        # conditions as the list itself, so an elevated projection is
-        # branch-scoped exactly like the list, and the assignment join (itself
-        # branch-scoped through its own row condition) scopes the audience on
-        # top; the Student master has no branch field, so the branch rule
-        # resolves through the active roster chain — a branch-scoped teacher
-        # sees exactly the own-branch rostered learners while a
-        # branch-unscoped teacher stays role-wide; and the native non-strict
-        # user-permission shape is pinned at the document level, where the
-        # app's strict list hook cannot reach, so the exact-scoping cell runs
-        # between two populated branches.
+        # are asserted, not hidden: the native list and the desk projection
+        # arrive at the same own-branch rows by different paths — the list
+        # through the native conditions (role + non-strict user-permissions
+        # + this app's strict branch hook, ANDed), the desk through its own
+        # elevated scope filters (the viewer's Branch User Permission field
+        # filter plus the branch-chain name filters, on top of a raw read
+        # that ignores the native conditions); the Student master has no
+        # branch field, so the branch rule resolves through the active roster
+        # chain — a branch-scoped teacher sees exactly the own-branch
+        # rostered learners while a branch-unscoped teacher stays role-wide;
+        # and the native non-strict user-permission shape is pinned at the
+        # document level, where the app's strict list hook cannot reach, so
+        # the exact-scoping cell runs between two populated branches.
         def desk_isolation_matrix():
             frappe.set_user('Administrator')
             for br in ('SYN-ISOL-A','SYN-ISOL-B'):
@@ -5038,13 +5040,18 @@ def main():
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
                 assert listed=={IA},('branch user-permission did not scope the native class list',sorted(listed))
-                # ELEVATED PROJECTION: project_rows rides the same native list
-                # conditions as get_list — the branch rule scopes the desk
-                # read too; the assignment join scopes the audience on top.
-                unscoped={r['name'] for r in as_user('teacher_two',lambda:frappe.get_all(
-                    'Student Group',fields=['name'],limit_page_length=100))}
+                # ELEVATED PROJECTION: the desk seam (project_rows) is an
+                # elevated raw read — frappe.get_all ignores the role,
+                # user-permission and hook conditions that scope the native
+                # list — and re-applies branch scope itself through the
+                # viewer's Branch User Permission field filter (scope
+                # filters) and the branch-chain name filters. Probed here
+                # through the seam itself, not through a bare get_all.
+                proj=frappe.get_attr('toefl_house.desk.project_rows')
+                unscoped={r['name'] for r in as_user('teacher_two',lambda:proj(
+                    'teacher','Student Group',['name'],limit=100))}
                 frappe.set_user('Administrator')
-                assert unscoped=={IA},('the elevated projection escaped the branch rule',sorted(unscoped))
+                assert unscoped=={IA},('the desk projection seam escaped the branch rule',sorted(unscoped))
                 # DESK: the teacher's only standing assignment is the far-
                 # branch class; an own-branch assignment is added so the cell
                 # proves both halves — the desk shows the own-branch class
