@@ -26,8 +26,11 @@ ARG HRMS_REPOSITORY=https://github.com/frappe/hrms
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl ca-certificates build-essential pkg-config libffi-dev libssl-dev \
-    xz-utils wkhtmltopdf mariadb-client libmariadb-dev \
+    xz-utils wkhtmltopdf mariadb-client libmariadb-dev file \
     && rm -rf /var/lib/apt/lists/*
+# file: the foundation's bench restore (frappe 16) identifies the backup dump
+# with the `file` utility and refuses to run without it; the slim base does
+# not ship it, so the runbook's restore procedure would fail on this image.
 # libmariadb-dev: mysqlclient (frappe dep) builds from source and finds the
 # client library via pkg-config ('Can not find valid pkg-config name').
 # The hosted native path proves the same build on ubuntu runners, where the

@@ -270,16 +270,24 @@ The `Backup TOEFL House ERP.cmd` script writes a full backup triplet
 `data\sites\toeflhouse.localhost\private\backups`. Restoring one of them is a
 guided operator step, not a double-click (a restore overwrites data):
 
-1. Stop the ERP (`Stop TOEFL House ERP.cmd`).
-2. Copy the chosen triplet from `private\backups` into
-   `data\sites\toeflhouse.localhost\private\`.
-3. Operator step in a terminal inside the product folder:
+1. Keep the ERP running (start it first if it is stopped). The restore runs
+   inside the web container, so the stack must be up — `Stop TOEFL House
+   ERP.cmd` runs `docker compose down`, which removes the container the
+   restore executes in. Choose a moment when nobody is mid-command; the
+   restore takes a few seconds.
+2. Copy the chosen triplet (from the external drive) into
+   `data\sites\toeflhouse.localhost\private\backups` — its original
+   location; no other copy is needed.
+3. Operator step in a terminal inside the product folder (the paths are
+   relative to the bench directory inside the web container, which is where
+   bench resolves them from):
 
    ```
-   docker compose exec web /build/tools/bin/bench --site toeflhouse.localhost restore "<triple name>-database.sql.gz" --with-public-files "<triple name>-files.tar" --with-private-files "<triple name>-private-files.tar" --db-root-password <password from data\secrets\db.env> --admin-password <administrator password>
+   docker compose exec web /build/tools/bin/bench --site toeflhouse.localhost restore "sites/toeflhouse.localhost/private/backups/<triple name>-database.sql.gz" --with-public-files "sites/toeflhouse.localhost/private/backups/<triple name>-files.tar" --with-private-files "sites/toeflhouse.localhost/private/backups/<triple name>-private-files.tar" --db-root-password <password from data\secrets\db.env> --admin-password <Administrator password from data\sites\toeflhouse.localhost\private\first-run-credentials.txt>
    ```
 
-4. Start the ERP and log in; confirm the expected records are present.
+4. `docker compose restart web` (a terminal step, same folder), then log in;
+   confirm the expected records are present.
 5. Record the rehearsal: date, triple name, elapsed time, outcome.
 
 Activation is site config, not database data (steps 3 and 8 above): a
