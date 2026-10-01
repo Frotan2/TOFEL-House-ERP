@@ -187,6 +187,51 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("docker compose up -d", install)
         self.assertIn("first-run-credentials.txt", install.lower())
 
+class RecoveryContract(unittest.TestCase):
+    def test_every_service_recovers_after_a_daemon_restart(self):
+        # The desktop product must come back whole after a Docker Desktop
+        # (daemon) restart: services with `on-failure` that were cleanly
+        # stopped by the daemon shutdown do not restart, while
+        # `unless-stopped` services do. A mixed state (web up, worker/scheduler
+        # /socketio down) is a half-dead product. `compose down` (the Stop
+        # script) is an explicit stop, which unless-stopped still honors.
+        import re as _re
+        text = COMPOSE.read_text()
+        services = _re.findall(r"^  (\S+):\n", text, flags=_re.M)
+        service_blocks = dict(_re.findall(r"^  (\S+):\n((?:    .*\n|\n)+?)(?=^  \S|\Z)", text, flags=_re.M))
+        for name in services:
+            block = service_blocks.get(name, "")
+            if "image:" not in block and "build:" not in block:
+                continue  # top-level volumes section
+            self.assertIn("restart: unless-stopped", block,
+                          f"service {name} must use unless-stopped so a Docker "
+                          "Desktop restart recovers it")
+            self.assertNotIn("restart: on-failure", block, name)
+
+    def test_failure_paths_show_a_human_readable_diagnosis(self):
+        # When Start/Repair cannot finish, the window shows which service is
+        # not up (compose ps) and the last application log lines, plus what
+        # each state usually means — the operator must not need Docker
+        # knowledge to report the problem.
+        for name in ("Start", "Repair"):
+            text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
+            failed = text[text.index(":failed"):]
+            self.assertIn("docker compose ps", failed, name)
+            self.assertIn("docker compose logs --tail 5 web", failed, name)
+            self.assertIn("database is not ready", failed, name)
+
+    def test_runbook_documents_the_tailnet_multi_user_contract(self):
+        # The owner deployment (D13/D15) is central server + Tailscale; the
+        # runbook is the single place that states the exact supported setup,
+        # and the product stays loopback-only underneath it.
+        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text()
+        self.assertIn("Multi-user access (central server + Tailscale)", runbook)
+        self.assertIn("tailscale serve --bg 8000", runbook)
+        self.assertIn("Funnel", runbook)  # the document must warn it stays off
+        self.assertIn("no public port", runbook.lower())
+        self.assertIn("Restore from backup (operator)", runbook)
+
+
 class EntrypointContract(unittest.TestCase):
     def test_entrypoint_running_sequence_is_bootstrap_then_gunicorn(self):
         text = (PRODUCT / "entrypoint.sh").read_text()

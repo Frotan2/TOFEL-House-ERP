@@ -46,6 +46,13 @@ once. Its installer is click-through.
    an external drive. **Repair TOEFL House ERP.cmd** does a safe restart and
    never deletes data.
 
+**Other authorized computers:** the ERP always listens only on the central
+PC (nothing is opened on the public internet). Staff PCs in your Tailscale
+network reach it over that private network — Tailscale installed on each PC
+plus one `tailscale serve` command on the central PC
+(docs/engineering/LAUNCH-RUNBOOK.md, "Multi-user access (central server +
+Tailscale)"). Each person logs in with their own user.
+
 First run step by step: [product/windows/VALIDATION.md](product/windows/VALIDATION.md).
 The TOEFL House workflows stay switched off until the one-time activation:
 run **Backup TOEFL House ERP.cmd**, then **Activate TOEFL House ERP.cmd** and

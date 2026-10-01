@@ -118,6 +118,31 @@ class ActivationFlow(unittest.TestCase):
         self.act.deactivate(SITE, log=lambda *_: None)
         self.assertEqual(self.fake_probe(SITE)["mode"], "REFUSED")
 
+    def test_failed_deactivation_verification_restores_previous_settings(self):
+        # Deactivation must be as safe as activation: if the post-verification
+        # read fails or resolves anything but REFUSED, the previous settings
+        # are restored and the site deterministically stays ACTIVE — never an
+        # ambiguous half-deactivated state.
+        self.fresh_backup()
+        self.act.activate(SITE, log=lambda *_: None)
+        before = self.config()
+        self.assertIn(self.act.ACTIVE_KEY, before)
+
+        def stale_probe(site, *extra):
+            # After the deactivation write the config no longer carries the
+            # active key, but the site still resolves PRODUCTION (stale read).
+            if self.act.ACTIVE_KEY not in self.config():
+                return {"mode": "PRODUCTION"}
+            return self.fake_probe(site, *extra)
+
+        with patch.object(self.act, "probe", side_effect=stale_probe):
+            with self.assertRaises(self.act.Refused):
+                self.act.deactivate(SITE, log=lambda *_: None)
+        self.assertEqual(self.config(), before,
+                         "failed deactivation verification must restore the "
+                         "previous settings (site stays ACTIVE)")
+        self.assertEqual(self.fake_probe(SITE)["mode"], "PRODUCTION")
+
     def test_fee_item_requires_activation_existing_item_and_no_fixture(self):
         with self.assertRaises(self.act.Refused):
             self.act.set_fee_item(SITE, "PLACEMENT-FEE", log=lambda *_: None)

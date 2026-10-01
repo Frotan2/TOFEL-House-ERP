@@ -214,7 +214,79 @@ bench --site SITE execute toefl_house.security.site_mode
 Expected: `REFUSED`. No data migration is involved in either direction:
 activation only changes which site mode the guards resolve.
 
-## 9. Record the rehearsal
+## 9. Multi-user access (central server + Tailscale)
+
+The current deployment (owner decisions D13/D15) is one central computer
+running the product, with authorized staff computers accessing it through the
+owner's Tailscale tailnet. The product does not change for this: it keeps
+listening on `127.0.0.1` only, and the tailnet reach comes from **Tailscale
+Serve**, which is external to the product and stays under the owner's
+Tailscale account (identity, ACLs, device list).
+
+Setup (once per central PC; every staff PC only needs Tailscale joined to
+the tailnet):
+
+1. Start the ERP on the central PC (`Start TOEFL House ERP.cmd`).
+2. Operator step on the central PC (a terminal is fine; it is not part of
+   the double-click flow):
+
+   ```
+   tailscale serve --bg 8000
+   ```
+
+   This publishes the ERP to the tailnet as HTTPS on the central PC's
+   Tailscale hostname. It opens no public port: without Funnel (never
+   enable it for this product), only tailnet members can reach it.
+3. On each staff PC, open
+   `https://<central-PC-name>.<your-tailnet-name>.ts.net/` in the browser.
+   The Tailscale certificate is trusted on all tailnet machines (MagicDNS is
+   on by default).
+4. Each staff member logs in with their own native User (User and Role are
+   the identity authority; branch-scoped staff additionally carry a native
+   User Permission for their Branch — `docs/ROLE-DESKS.md`, "Branch
+   scope").
+
+Properties and limits:
+
+- Access control is Tailscale identity plus the ERP's own users and roles;
+  no public address, no firewall rule, no open host port is involved.
+- The product resolves its single site independently of the hostname in the
+  URL (`product/wsgi.py` pins the site), so the tailnet hostname needs no
+  site configuration.
+- Live (realtime) desk refresh over the tailnet is not available today: the
+  realtime socket listens on a second local port that the tailnet does not
+  carry. Every desk and command works fully over the normal request path,
+  and the central PC's own browser has exactly the same behavior. If
+  realtime over the tailnet becomes a requirement, publishing the socketio
+  port through the tailnet must be qualified as a change first.
+- Removing the tailnet exposure at any time: run
+  `tailscale serve --delete` on the central PC. The ERP remains
+  loopback-only; nothing else is affected.
+
+## 10. Restore from backup (operator)
+
+The `Backup TOEFL House ERP.cmd` script writes a full backup triplet
+(`*-database.sql.gz`, `*-files.tar`, `*-private-files.tar`) into
+`data\sites\toeflhouse.localhost\private\backups`. Restoring one of them is a
+guided operator step, not a double-click (a restore overwrites data):
+
+1. Stop the ERP (`Stop TOEFL House ERP.cmd`).
+2. Copy the chosen triplet from `private\backups` into
+   `data\sites\toeflhouse.localhost\private\`.
+3. Operator step in a terminal inside the product folder:
+
+   ```
+   docker compose exec web /build/tools/bin/bench --site toeflhouse.localhost restore "<triple name>-database.sql.gz" --with-public-files "<triple name>-files.tar" --with-private-files "<triple name>-private-files.tar" --db-root-password <password from data\secrets\db.env> --admin-password <administrator password>
+   ```
+
+4. Start the ERP and log in; confirm the expected records are present.
+5. Record the rehearsal: date, triple name, elapsed time, outcome.
+
+Activation is site config, not database data (steps 3 and 8 above): a
+restore returns the data to the backup point while the site keeps whatever
+activation state `site_config.json` currently carries.
+
+## 11. Record the rehearsal
 
 The Owner runs this runbook on the local server and records each run:
 
@@ -222,6 +294,9 @@ The Owner runs this runbook on the local server and records each run:
 | ---- | ---- | ---------------- | ------------- | ------------ | ------- | ------- |
 |      |      |                  |               |              |         |         |
 
-Activation is a mechanism, not a GO decision: it does not close SEC-DEPS-01,
-the backup-restore rehearsal, TLS/session evidence, or any durability or
-observability gate. Production stays **REJECT** until those close.
+Activation is a mechanism, not a GO decision. SEC-DEPS-01 (known upstream
+advisories in the pinned stack) gates **internet exposure** of the product;
+it is not a stop for the selected loopback / local-Tailscale deployment
+(owner decisions D13/D15). The current evidence state of the acceptance
+items (backup, branch isolation, rollback, monitoring, capacity) is recorded
+in `docs/engineering/ACCEPTANCE.md`.

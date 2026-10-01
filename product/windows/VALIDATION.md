@@ -99,6 +99,11 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
 - **Action:** double-click `Repair TOEFL House ERP.cmd`, wait (a few minutes).
 - **Expected:** it restarts services, waits, then opens the browser and says
   "Repair complete". It never deletes data.
+- **Also true after a PC or Docker Desktop restart:** the ERP comes back by
+  itself the next time Docker Desktop runs; if anything still misbehaves after
+  a restart, this same Repair script is the one recovery path. If it cannot
+  finish, it now shows which service is not up (a short service list plus the
+  last log lines) so the problem can be reported without guessing.
 - **Evidence 8:** screenshot of the Repair window's "Repair complete" message
   (take it before pressing a key to close).
 
@@ -133,6 +138,18 @@ internet: double-click `Backup TOEFL House ERP.cmd`, then
 without a backup from today and puts everything back if any safety check
 fails. `Deactivate TOEFL House ERP.cmd` switches real operation off again
 without touching your data.
+
+## Later: letting authorized staff access it from their computers
+
+The ERP always listens only on the central PC (nothing is opened on the
+public internet). Authorized staff PCs that are in your Tailscale network
+reach it over that private network: Tailscale is installed on the central PC
+and the staff PCs, and one command on the central PC
+(`tailscale serve`, written out in the launch runbook section "Multi-user
+access (central server + Tailscale)") makes the ERP available to the tailnet
+as `https://<central-PC-name>.<your-tailnet>.ts.net/`. Access is limited to
+your Tailscale network members only; no firewall rule or public address is
+involved.
 
 ## If something fails
 

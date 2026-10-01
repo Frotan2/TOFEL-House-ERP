@@ -25,7 +25,20 @@ start "" "http://127.0.0.1:8000/"
 pause
 exit /b 0
 :failed
-echo  Automatic repair could not finish. Contact TOEFL House support with the
-echo  contents of the data\logs folder.
+echo.
+echo  Automatic repair could not finish. Current service state:
+echo.
+docker compose ps
+echo.
+echo  Last lines of the application log:
+docker compose logs --tail 5 web 2>&1
+echo.
+echo  What the state above usually means:
+echo    no rows, or rows "not running"     the ERP services are not up.
+echo    db "unhealthy" or "restarting"      the database is not ready yet.
+echo    web "Restarting" or exiting          the app stops right after starting.
+echo.
+echo  Try this Repair script once more. If it repeats, contact TOEFL House
+echo  support with a photo of this window plus the contents of the data\logs folder.
 pause
 exit /b 1

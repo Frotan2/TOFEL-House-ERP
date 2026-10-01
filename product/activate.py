@@ -211,10 +211,19 @@ def activate(site: str, log=print) -> None:
 def deactivate(site: str, log=print) -> None:
     saved = backup_config(site)
     log(f"Saved current settings to {saved.name}")
-    write_config(site, without_activation(read_config(site)))
-    mode = probe(site)["mode"]
-    if mode != "REFUSED":
-        raise Refused(f"after deactivation the site resolved {mode}, expected REFUSED")
+    try:
+        write_config(site, without_activation(read_config(site)))
+        mode = probe(site)["mode"]
+        if mode != "REFUSED":
+            raise Refused(f"after deactivation the site resolved {mode}, expected REFUSED")
+    except Exception:
+        # Same contract as activation: a failed verification must not leave
+        # the site in an ambiguous state. Restore the saved settings, so the
+        # site deterministically returns to the state it had before this
+        # attempt (still ACTIVE) and the owner can inspect and retry.
+        shutil.copy2(saved, config_path(site))
+        log("Deactivation FAILED verification; previous settings restored (site stays ACTIVE).")
+        raise
     log("Deactivated: site mode REFUSED.")
 
 

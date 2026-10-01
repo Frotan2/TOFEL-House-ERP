@@ -96,14 +96,31 @@ Specification: [CONFIGURATION-PLANE.md](CONFIGURATION-PLANE.md).
 
 One runtime: Docker Compose (`product/`). It runs `web` (gunicorn plus the
 idempotent first-run bootstrap), `worker`, `scheduler`, `socketio`, MariaDB
-and two Redis services. Images are digest-pinned. The app image is built
-locally from pinned upstream commits and is bound to `127.0.0.1` only. The
-owner uses double-click scripts in `product/windows/`: Install, Start,
+and two Redis services. The MariaDB and Redis service images are
+digest-pinned; the application image is built locally from pinned upstream
+commits (the exact pin set and what is locked are recorded in
+[engineering/foundation-version-matrix.json](engineering/foundation-version-matrix.json)).
+All six services use the `unless-stopped` restart policy, so a Docker
+Desktop restart recovers the whole stack; the Stop script's `compose down`
+is an explicit stop and still wins.
+
+The product is bound to `127.0.0.1` only — no interface is opened for the
+LAN or the internet. The selected multi-user deployment (owner decision
+D13) reaches the ERP from authorized staff PCs through the owner's
+Tailscale tailnet: Tailscale Serve on the central PC terminates TLS and
+proxies to `127.0.0.1:8000`, tailnet-only (no Funnel, no public exposure).
+The exact setup is in
+[engineering/LAUNCH-RUNBOOK.md](engineering/LAUNCH-RUNBOOK.md), section
+"Multi-user access (central server + Tailscale)".
+
+The owner uses double-click scripts in `product/windows/`: Install, Start,
 Stop, Backup and Repair for daily use, and Activate / Deactivate for the
 one-time production activation and its rollback. Activate runs
 `product/activate.py` inside the container, which executes every gate of
 [engineering/LAUNCH-RUNBOOK.md](engineering/LAUNCH-RUNBOOK.md) and restores
-the previous settings if any gate fails.
+the previous settings if any gate fails; a failed deactivation verification
+restores the previous settings the same way (the site stays ACTIVE rather
+than half-deactivated).
 
 ## 6. Current state and open items
 

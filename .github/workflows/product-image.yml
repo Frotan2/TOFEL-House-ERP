@@ -68,6 +68,163 @@ jobs:
           act deactivate --confirm toeflhouse.localhost
           act status | grep -q ': REFUSED'
           echo "::notice title=Owner activation::REFUSED -> backup gate -> PRODUCTION (all gates) -> fee-item refusal -> REFUSED"
+      - name: Multi-user tailnet contract (second client, no public exposure, restart persistence)
+        # The owner deployment (D13/D15) is one central PC plus authorized
+        # staff PCs over a Tailscale tailnet (runbook section 9). Tailscale
+        # itself is external to the product, so this step proves the product
+        # contract that makes the tailnet setup work:
+        #   * a second, non-administrator client authenticates and uses the ERP
+        #   * a tailnet-style proxy (foreign Host + X-Forwarded-Proto) serves
+        #     the same site — the hostname the tailnet presents is arbitrary
+        #   * nothing is published outside the host loopback
+        #   * a full restart recovers every service and the data
+        working-directory: product
+        run: |
+          set -euo pipefail
+          # Test setup on this disposable CI site: one staff user with a
+          # daily role (native User/Role — the product's identity authority).
+          docker compose exec -T web python3 - <<'EOF'
+          import frappe
+          frappe.init(site="toeflhouse.localhost", sites_path=".")
+          frappe.connect()
+          user = "staff-a@example.test"
+          if not frappe.db.exists("User", user):
+              doc = frappe.new_doc("User")
+              doc.email = user
+              doc.first_name = "Staff"
+              doc.last_name = "A"
+              doc.send_welcome_email = 0
+              doc.new_password = "staff-a-ci-123"
+              doc.add_roles("Reception")
+              doc.save(ignore_permissions=True)
+          frappe.db.commit()
+          print("staff user ready")
+          EOF
+          python3 - <<'EOF'
+          import json
+          import subprocess
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          BASE = "http://127.0.0.1:8000"
+
+          def call(path, *, data=None, headers=None, host=None, session=None):
+              url = BASE + path
+              body = None
+              hdrs = dict(headers or {})
+              if host:
+                  hdrs["Host"] = host
+              if session:
+                  hdrs["Cookie"] = "sid=" + session
+              if data is not None:
+                  body = urllib.parse.urlencode(data).encode()
+              request = urllib.request.Request(url, data=body, headers=hdrs)
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      text = response.read().decode()
+                      cookies = response.headers.get_all("Set-Cookie") or []
+                      return response.status, text, cookies
+              except urllib.error.HTTPError as error:
+                  return error.code, error.read().decode(), []
+
+          def login(username, password, host=None):
+              status, text, cookies = call("/api/method/login",
+                                           data={"usr": username, "pwd": password}, host=host)
+              assert status == 200, (status, text[:200])
+              payload = json.loads(text)
+              assert "exc_info" not in payload, payload
+              sid = next(c.split(";", 1)[0] for c in cookies if c.startswith("sid="))
+              return sid
+
+          admin_file = open("data/sites/toeflhouse.localhost/private/first-run-credentials.txt").read()
+          admin_pw = next(l.split("Password:", 1)[1].strip() for l in admin_file.splitlines() if "Password:" in l)
+          staff_pw = "staff-a-ci-123"
+          staff = login("staff-a@example.test", staff_pw)
+
+          # (1) The second client authenticates and uses the ERP.
+          status, text, _ = call("/api/method/toefl_house.desk.reception.work", session=staff)
+          assert status == 200 and "exc_info" not in json.loads(text), text[:300]
+          # Session isolation: the staff session cannot reach an admin-only surface.
+          status, text, _ = call("/api/method/toefl_house.administration.get_control_center_snapshot",
+                                 data={}, session=staff)
+          payload = json.loads(text)
+          assert "PermissionError" in text or status != 200, "staff session reached an admin-only endpoint"
+          print("second client: authenticated desk access OK; admin surface denied OK")
+
+          # (2) Tailnet proxy contract: a foreign Host with forwarded-https
+          # must serve the same site (wsgi.py pins the site, so the hostname
+          # the tailnet presents is irrelevant to the product).
+          tailnet = "erp.toeflhouse.example"
+          status, text, _ = call("/login", host=tailnet,
+                                 headers={"X-Forwarded-Proto": "https"})
+          assert status == 200 and "Password" in text, (status, text[:200])
+          tailnet_sid = login("staff-a@example.test", staff_pw, host=tailnet)
+          status, text, _ = call("/api/method/toefl_house.desk.reception.work",
+                                 session=tailnet_sid, host=tailnet,
+                                 headers={"X-Forwarded-Proto": "https"})
+          assert status == 200 and "exc_info" not in json.loads(text), text[:300]
+          print("tailnet proxy: foreign-host login and desk OK")
+
+          # (3) No public exposure: compose publishes loopback only and the
+          # host listens on loopback only.
+          compose = json.loads(subprocess.check_output(
+              ["docker", "compose", "config", "--format", "json"], text=True))
+          published = [p for service in compose["services"].values()
+                       for p in (service.get("ports") or [])]
+          assert published, "compose declares no published ports"
+          for entry in published:
+              assert entry["hostIP"] in ("127.0.0.1", "localhost"), entry
+          listeners = subprocess.check_output(
+              ["ss", "-ltn"], text=True).splitlines()
+          for line in listeners:
+              if any((":" + port) in line for port in ("8000", "9000")):
+                  assert line.split()[3].startswith("127.0.0.1"), line
+          external = subprocess.check_output(["hostname", "-i"], text=True).split()[0]
+          try:
+              urllib.request.urlopen("http://%s:8000/" % external, timeout=5)
+              raise AssertionError("port 8000 answers on the non-loopback interface")
+          except urllib.error.HTTPError:
+              raise AssertionError("port 8000 answers on the non-loopback interface")
+          except (urllib.error.URLError, ConnectionRefusedError, OSError):
+              pass  # connection refused: exactly what loopback-only means
+          print("no public exposure: loopback-only publish and listen OK")
+
+          # (4) Restart persistence: a marker record, a full restart, every
+          # service back (worker/scheduler/socketio included), data intact.
+          subprocess.run(["docker", "compose", "exec", "-T", "web", "python3", "-c",
+                          "import frappe; frappe.init(site='toeflhouse.localhost', sites_path='.'); "
+                          "frappe.connect(); "
+                          "if not frappe.db.exists('Student', {'first_name': 'Tailnet', 'last_name': 'Marker'}): "
+                          "frappe.get_doc({'doctype': 'Student', 'first_name': 'Tailnet', 'last_name': 'Marker'}).insert(ignore_permissions=True); "
+                          "frappe.db.commit()"], check=True)
+          subprocess.run(["docker", "compose", "restart"], check=True)
+          import time
+          for _ in range(120):
+              try:
+                  urllib.request.urlopen(BASE + "/", timeout=5)
+                  break
+              except Exception:
+                  time.sleep(5)
+          else:
+              raise AssertionError("site did not answer after restart")
+          states = json.loads(subprocess.check_output(
+              ["docker", "compose", "ps", "--format", "json"], text=True))
+          names = sorted(item["Name"] for item in states)
+          running = {item["Name"] for item in states if item.get("State") == "running"}
+          missing = set(names) - running
+          assert not missing, "services not running after restart: %s" % missing
+          admin2 = login("Administrator", admin_pw)
+          status, text, _ = call("/api/method/frappe.client.get_count",
+                                 data={"doctype": "Student"}, session=admin2)
+          payload = json.loads(text)
+          assert int(payload.get("count", 0)) >= 1, payload
+          staff2 = login("staff-a@example.test", staff_pw)
+          status, text, _ = call("/api/method/toefl_house.desk.reception.work", session=staff2)
+          assert status == 200 and "exc_info" not in json.loads(text), text[:300]
+          print("restart persistence: %d services running, data and access intact" % len(names))
+          EOF
+          echo "::notice title=Multi-user tailnet contract::second client + tailnet proxy + loopback-only exposure + restart persistence"
       - name: Stack logs on failure
         if: failure()
         working-directory: product

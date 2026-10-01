@@ -255,7 +255,11 @@ class WiringTests(unittest.TestCase):
     # steps were not, and are now wrapped. The exemption is therefore matched
     # on the `tee` itself rather than on the workflow, so it cannot be claimed
     # for a step that does not have one.
-    WORKFLOWS = ("foundation-runtime", "owned-suite", "native-lifecycle")
+    #
+    # product-image joined this list when its multi-user tailnet contract
+    # step gained a stdin-heredoc python block (the documented exception):
+    # its asserts name the offending value on failure.
+    WORKFLOWS = ("foundation-runtime", "owned-suite", "native-lifecycle", "product-image")
 
     def test_no_workflow_with_python_steps_is_silently_dropped(self):
         """The list above is the coverage boundary, so dropping an entry from

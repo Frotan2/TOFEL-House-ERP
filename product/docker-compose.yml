@@ -6,10 +6,13 @@
 # The application image is built locally from pinned upstream commits plus the
 # owned apps (product/app.Dockerfile); nothing is pulled from an unreviewed tag.
 #
-# Desktop profile: loopback-only exposure on the Windows host (127.0.0.1), the
-# same shape as the hosted loopback lab. The hardened nginx realtime edge
-# remains the authorized-server production profile
-# (docs/engineering/LAUNCH-RUNBOOK.md) and is out of scope here, as before.
+# Desktop profile: loopback-only exposure on the Windows host (127.0.0.1).
+# Multi-user access (owner decision D13: central server + Tailscale) does not
+# open any other interface: authorized staff PCs reach the ERP through their
+# Tailscale tailnet, where Tailscale Serve on the central PC terminates TLS
+# and proxies to 127.0.0.1:8000 (tailnet-only; no Funnel, no public
+# exposure). Exact setup: docs/engineering/LAUNCH-RUNBOOK.md, section
+# "Multi-user access (central server + Tailscale)".
 name: toefl-house-erp
 
 services:
@@ -59,7 +62,7 @@ services:
     volumes:
       - ./data/sites:/home/frappe/bench/sites
       - ./data/logs:/home/frappe/bench/logs
-    restart: on-failure
+    restart: unless-stopped
 
   scheduler:
     image: toefl-house-erp-app:local
@@ -74,7 +77,7 @@ services:
     volumes:
       - ./data/sites:/home/frappe/bench/sites
       - ./data/logs:/home/frappe/bench/logs
-    restart: on-failure
+    restart: unless-stopped
 
   socketio:
     image: toefl-house-erp-app:local
@@ -89,7 +92,7 @@ services:
     volumes:
       - ./data/sites:/home/frappe/bench/sites
       - ./data/logs:/home/frappe/bench/logs
-    restart: on-failure
+    restart: unless-stopped
 
   db:
     # Digest pinned: MariaDB 11.8.9 (see foundation-version-matrix.json).
