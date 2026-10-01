@@ -22,7 +22,7 @@ if errorlevel 1 (
 echo  Waiting until TOEFL House ERP answers...
 :waitready
 timeout /t 8 /nobreak >nul
-curl --silent http://127.0.0.1:8000/ >nul 2>nul && goto :ready
+curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul && goto :ready
 goto :waitready
 :ready
 start "" "http://127.0.0.1:8000/"

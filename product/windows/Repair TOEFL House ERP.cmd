@@ -16,7 +16,7 @@ if errorlevel 1 goto :failed
 echo  Waiting until TOEFL House ERP answers after repair...
 :waitready
 timeout /t 10 /nobreak >nul
-curl --silent http://127.0.0.1:8000/ >nul 2>nul && goto :ready
+curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul && goto :ready
 echo  Still preparing...
 goto :waitready
 :ready

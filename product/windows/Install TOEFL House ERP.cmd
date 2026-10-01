@@ -78,7 +78,7 @@ echo  First launch is finishing inside the app - site setup and data install.
 echo  You can watch progress in Docker Desktop, or simply wait for the browser.
 :waitready
 timeout /t 10 /nobreak >nul
-curl --silent http://127.0.0.1:8000/api/method/frappe.auth.get_logged_user >nul 2>nul && goto :ready
+curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul && goto :ready
 echo  Still preparing... site setup can take 15-40 minutes on first run.
 goto :waitready
 :ready

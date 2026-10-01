@@ -243,6 +243,16 @@ class BootstrapLogicContract(unittest.TestCase):
         self.assertLess(body.index("seed_sites()"), body.index("run_bench("))
         self.assertIn("/build/sites-seed/", (PRODUCT / "app.Dockerfile").read_text())
 
+    def test_readiness_waits_require_a_successful_page(self):
+        # An HTTP error page must never count as "ready": the 127.0.0.1 site
+        # bug (run 36758667184) answered errors that plain curl accepted.
+        for name in ("Install", "Start", "Repair"):
+            text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
+            probes = [line for line in text.splitlines() if "curl " in line]
+            self.assertTrue(probes, name)
+            for line in probes:
+                self.assertIn("curl --fail --silent http://127.0.0.1:8000/ ", line, name)
+
     def test_web_server_pins_the_product_site(self):
         # Regression (product-image run 36758667184): frappe resolves the site
         # from the Host header unless frappe.app._site is set; 127.0.0.1 is no
