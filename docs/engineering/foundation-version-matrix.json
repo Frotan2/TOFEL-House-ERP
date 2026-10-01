@@ -147,7 +147,7 @@
       "image_digest": null,
       "selection_reason": "Newest v24 release observed; satisfies Frappe >=24 and stays on v24 instead of moving to v26.",
       "upstream_support_evidence": "Published release/tag plus inspected upstream manifests or deployment recipe; no SLA or lifecycle guarantee asserted.",
-      "tarball_sha256": "",
+      "tarball_sha256": "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6",
       "npm_distribution_integrity": "sha512-GquwdXTr1CyRzrHsP+GVYnKj/yxIX7kUpyGMKu30fKJa9Hqtp9GP/Zu4BXY3gLIQVc/H5eWdMQmBgMBx5veCbw=="
     },
     {

@@ -23,7 +23,7 @@ services:
       # Node tarball integrity (docs/engineering/foundation-version-matrix.json,
       # node.tarball_sha256): the build verifies the download's sha256.
       args:
-        NODE_TARBALL_SHA256: ""
+        NODE_TARBALL_SHA256: "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6"
     image: toefl-house-erp-app:local
     container_name: toefl-house-erp-web
     depends_on:
