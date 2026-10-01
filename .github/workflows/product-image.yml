@@ -175,7 +175,10 @@ jobs:
           # so the host runner user cannot read it directly. Read it
           # in-container as root — the product's own permission model —
           # and keep the value in a shell variable that is never echoed.
-          admin_cred=$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt)
+          # The file is a multi-line banner; extract the Password value
+          # (the whole file as a password is a wrong-password, which after
+          # three attempts locks the account for 60 seconds).
+          admin_cred=$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt | awk '/^Password: /{print $2}')
           test -n "$admin_cred"
           echo "stage: admin credentials read (in-container root)" >> tailnet-progress.txt
           TAILNET_ADMIN_PW="$admin_cred" python3 - <<'EOF'
