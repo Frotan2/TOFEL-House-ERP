@@ -349,13 +349,13 @@ jobs:
               else:
                   host = entry.get("host_ip") or "0.0.0.0"
               assert host in ("127.0.0.1", "localhost"), entry
-          # ss -ltn columns: Netid State Recv-Q Send-Q Local Address:Port Peer
-          # (the local address is the fifth field; the fourth is Send-Q).
+          # ss -ltn columns: State Recv-Q Send-Q Local Address:Port Peer
+          # (the local address is the fourth field, index 3).
           listeners = subprocess.check_output(
               ["ss", "-ltn"], text=True).splitlines()
           for line in listeners:
               if any((":" + port) in line for port in ("8000", "9000")):
-                  assert line.split()[4].startswith("127.0.0.1"), line
+                  assert line.split()[3].startswith("127.0.0.1"), line
           external = subprocess.check_output(["hostname", "-i"], text=True).split()[0]
           try:
               urllib.request.urlopen("http://%s:8000/" % external, timeout=5)
