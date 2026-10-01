@@ -184,6 +184,7 @@ jobs:
           TAILNET_ADMIN_PW="$admin_cred" python3 - <<'EOF'
           import json
           import os
+          import re
           import subprocess
           import urllib.error
           import urllib.parse
@@ -229,6 +230,20 @@ jobs:
               except urllib.error.HTTPError as error:
                   return error.code, error.read().decode(), []
 
+          def desk_token(session):
+              # Browser-equivalent CSRF: a real client loads the desk page
+              # after login; that page carries the session's CSRF token
+              # (frappe generates it there when absent). Unsafe methods
+              # (POST) on a session that carries a token require the
+              # X-Frappe-CSRF-Token header - send it exactly like the desk
+              # does, so every authenticated POST in this contract is
+              # indistinguishable from the owner's browser.
+              status, text, _ = call("/desk", session=session)
+              assert status == 200, ("/desk did not load", status, text[:200])
+              m = re.search(r'frappe\.csrf_token = "([^"]+)"', text)
+              assert m, "desk page carries no CSRF token: " + text[:200]
+              return m.group(1)
+
           LOGIN_DIAG = []
 
           def login(username, password, host=None):
@@ -266,8 +281,16 @@ jobs:
                       "frappe.init(site='toeflhouse.localhost', sites_path='/home/frappe/bench/sites')\n"
                       "frappe.connect()\n"
                       "sid = os.environ.get('PROBE_SID', 'MISSING')\n"
-                      "rows = frappe.db.sql('select sid,user,status,lastupdate from `tabSessions` order by lastupdate desc limit 5', as_dict=True)\n"
+                      "rows = frappe.db.sql('select sid,user,status,lastupdate,sessiondata from `tabSessions` order by lastupdate desc limit 5', as_dict=True)\n"
                       "out = {'probe_sid': sid[:8] + '...len=' + str(len(sid)), 'db_sessions': rows}\n"
+                      "sd = []\n"
+                      "for r in rows:\n"
+                      "    try:\n"
+                      "        d = json.loads(r['sessiondata'] or '{}')\n"
+                      "        sd.append({'user': r['user'], 'keys': sorted(d.keys()), 'has_csrf': 'csrf_token' in d})\n"
+                      "    except Exception:\n"
+                      "        sd.append({'user': r['user'], 'keys': 'unparseable'})\n"
+                      "out['sessiondata_summary'] = sd\n"
                       "out['conf'] = {k: frappe.conf.get(k) for k in ('redis_cache','redis_queue','use_redis_for_cache','use_redis_for_sessions','db_name','db_host','db_port')}\n"
                       "out['db'] = frappe.db.sql('select database() as db')[0][0]\n"
                       "out['session_expiry'] = frappe.db.get_single_value('System Settings', 'session_expiry')\n"
@@ -309,10 +332,15 @@ jobs:
           assert status == 200 and "exc_info" not in json.loads(text), (
               "staff desk call refused", status, text[:400],
               "logins=%r" % LOGIN_DIAG)
-          # Session isolation: the staff session cannot reach an admin-only surface.
+          # Session isolation: the staff session cannot reach an admin-only
+          # surface. The POST carries the staff session's CSRF token (like a
+          # browser), so a denial here is a permission decision - assert it
+          # is one.
           status, text, _ = call("/api/method/toefl_house.administration.get_control_center_snapshot",
-                                 data={}, session=staff)
+                                 data={}, session=staff,
+                                 headers={"X-Frappe-CSRF-Token": desk_token(staff)})
           payload = json.loads(text)
+          assert "CSRFTokenError" not in text, "admin-surface denial masked by the CSRF wall: " + text[:200]
           assert "PermissionError" in text or status != 200, "staff session reached an admin-only endpoint"
           progress("second client: desk OK, admin surface denied")
           print("second client: authenticated desk access OK; admin surface denied OK")
@@ -453,9 +481,13 @@ jobs:
           progress("admin login start")
           admin2 = login_retry("Administrator", admin_pw)
           progress("admin login OK")
+          # Browser-equivalent: the desk page carries the session CSRF
+          # token; the POST must send it (see desk_token).
           status, text, _ = call("/api/method/frappe.client.get_count",
-                                 data={"doctype": "Student"}, session=admin2)
+                                 data={"doctype": "Student"}, session=admin2,
+                                 headers={"X-Frappe-CSRF-Token": desk_token(admin2)})
           payload = json.loads(text)
+          assert "CSRFTokenError" not in text, "authenticated read masked by the CSRF wall: " + text[:200]
           assert int(payload.get("count", 0)) >= 1, payload
           progress("student count OK: %s" % payload.get("count"))
           staff2 = login_retry("staff-a@example.test", staff_pw)
