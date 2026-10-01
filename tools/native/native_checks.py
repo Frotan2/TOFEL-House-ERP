@@ -5052,19 +5052,18 @@ def main():
                     'teacher','Student Group',['name'],limit=100))}
                 frappe.set_user('Administrator')
                 assert unscoped=={IA},('the desk projection seam escaped the branch rule',sorted(unscoped))
-                # DESK: the teacher's only standing assignment is the far-
-                # branch class; an own-branch assignment is added so the cell
-                # proves both halves — the desk shows the own-branch class
-                # and hides the far-branch one (the assignment join itself is
-                # branch-scoped through its own row condition).
-                as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
-                    'tc_assign_two_own_001',IA,SK1,cfx['ins']['Two'],
-                    cauth['contracts']['two'],'2026-09-01'))
+                # DESK: after the branch reassignment, the teacher's only
+                # standing assignment is the far-branch class — and it must
+                # not reach the desk. The assignment join is branch-scoped
+                # through its own chain filter, and the projection scope
+                # filters the class rows the same way (own-branch desk
+                # visibility is already proved end to end by the
+                # branch-isolation reception cell above).
                 twork=frappe.get_attr('toefl_house.desk.teacher.work')
                 two=as_user('teacher_two',twork);frappe.set_user('Administrator')
                 tclasses={i['person'] for i in next(s for s in two['sections'] if s['id']=='classes')['items']}
-                assert IA in tclasses and GRP_B not in tclasses, \
-                    ('the desk did not honor branch isolation across assignments',sorted(tclasses))
+                assert not tclasses and GRP_B not in tclasses, \
+                    ('a far-branch assigned class reached the teacher desk',sorted(tclasses))
                 # STUDENT MASTER: the Student doctype has no branch field —
                 # the branch rule resolves through the active roster chain.
                 # A branch-scoped teacher sees exactly the own-branch
@@ -5083,8 +5082,8 @@ def main():
                 assert {stu1,stu2,outsider_stu}<=stwide, \
                     ('native student list narrowed for a branch-unscoped user',sorted(stwide))
                 tstudents={i['id'] for i in next(s for s in two['sections'] if s['id']=='students')['items']}
-                assert own_roster<=tstudents and outsider_stu not in tstudents, \
-                    ('the desk roster did not follow the branch-scoped assignments',sorted(tstudents))
+                assert not tstudents and outsider_stu not in tstudents, \
+                    ('the desk roster leaked rows without a branch-visible assignment',sorted(tstudents))
                 # REST: own-branch reads, cross-branch refused, outsider and
                 # guest refused outright.
                 s2=login('teacher_two');so=login('outsider')

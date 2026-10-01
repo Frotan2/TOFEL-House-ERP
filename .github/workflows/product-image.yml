@@ -270,11 +270,11 @@ jobs:
                       "    out['cache_error'] = repr(e)\n"
                       "print('SESSIONS-DIAG ' + json.dumps(out, default=str))\n",
                       text=True, env={**os.environ, "PROBE_SID": sid}, timeout=120)
-                  print("T-SITE " + probe.strip()[:2500], flush=True)
+                  print("::error::" + probe.strip()[:2500], flush=True)
                   with open("tailnet-progress.txt", "a") as fh:
                       fh.write("SESSIONS-DIAG " + probe.strip()[:2500] + "\n")
               except Exception as e:
-                  print("T-SITE session probe failed: %r" % e, flush=True)
+                  print("::error::session probe failed: %r" % e, flush=True)
                   with open("tailnet-progress.txt", "a") as fh:
                       fh.write("session probe failed: %r\n" % e)
 
@@ -574,19 +574,11 @@ jobs:
         if: failure()
         working-directory: product
         run: |
-          # CI annotations retain only the last ~19 lines of the job log,
-          # so the evidence is ordered least to most important and kept
-          # compact: web log tail, service states, later-stage markers,
-          # and finally the last tailnet stages and the session probe,
-          # which must land inside the window (as the last lines).
-          docker compose logs --tail 4 web 2>&1 | tail -4 | sed 's/^/::error::web::/' || true
-          docker compose ps -a 2>/dev/null | awk 'NR>1 {print $1, $3}' | tail -3 | sed 's/^/::error::ps::/' || true
+          # CI annotations cap the whole run at ~19 lines, and the
+          # session probe already annotates from the failed tailnet step
+          # itself; keep this step to the minimum context: which later
+          # stage started, and the tail of the web container log.
           for f in rehearse-activate.txt perf-baseline.json; do
             if [ -f "$f" ]; then echo "::error::marker present: $f"; else echo "::error::marker absent: $f"; fi
           done
-          if [ -f tailnet-progress.txt ]; then
-            tail -4 tailnet-progress.txt | sed 's/^/::error::stage::/'
-            grep '^SESSIONS-DIAG' tailnet-progress.txt | tail -1 | sed 's/^/::error::/'
-          else
-            echo "::error::tailnet step did not start (no progress file)"
-          fi
+          docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
