@@ -4960,12 +4960,16 @@ def main():
         # frappe 988e54f reportview._export_query: same DatabaseQuery layer
         # as list, then can_export); print gates on print permission; reports
         # gate on the report role table. Three honest boundaries fall out and
-        # are asserted, not hidden: the desk path (get_all) does not honor
-        # branch user-permissions — desk scope is assignment/audience; the
-        # Student master has no branch dimension, so per-student isolation
-        # is desk-level (assigned rosters) while the native list stays
-        # role-wide for Instructor; and native non-strict user-permissions
-        # keep branchless classes visible, so the exact-scoping cell runs
+        # are asserted, not hidden: the desk path rides the same native list
+        # conditions as the list itself, so an elevated projection is
+        # branch-scoped exactly like the list, and the assignment join (itself
+        # branch-scoped through its own row condition) scopes the audience on
+        # top; the Student master has no branch field, so the branch rule
+        # resolves through the active roster chain — a branch-scoped teacher
+        # sees exactly the own-branch rostered learners while a
+        # branch-unscoped teacher stays role-wide; and the native non-strict
+        # user-permission shape is pinned at the document level, where the
+        # app's strict list hook cannot reach, so the exact-scoping cell runs
         # between two populated branches.
         def desk_isolation_matrix():
             frappe.set_user('Administrator')
@@ -4991,35 +4995,38 @@ def main():
                 allow='Branch',for_value='SYN-ISOL-A')).insert()
             frappe.db.commit()
             try:
-                # Native non-strict boundary, proven not hidden (pinned
-                # frappe 988e54f permissions.has_user_permission: empty link
-                # values skip the user-permission check unless
-                # apply_strict_user_permissions). The five branchless
-                # fixture classes stay visible under the branch rule while
-                # the far-branch class is already excluded.
+                # LIST shape for a branch-scoped viewer: the native list
+                # conditions are ANDed — the native non-strict
+                # user-permission condition (ifnull(th_branch,'')='' or
+                # th_branch in own) and this app's own
+                # permission_query_conditions hook (strict th_branch in
+                # own). The hook dominates the intersection, so the class
+                # list is exactly the own-branch classes: branchless
+                # classes are management/HQ content, hidden here.
                 pre={r['name'] for r in as_user('teacher_two',lambda:frappe.get_list(
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
-                # ISOL DIAG: the non-strict shape failure must be self-
-                # explaining — the group rows, the strict flag, the viewer's
-                # User Permission rows, and the raw non-strict SQL result.
-                isoldiag=[]
-                isoldiag.append(('strict',frappe.db.get_single_value(
-                    'System Settings','apply_strict_user_permissions')))
-                isoldiag.append(('groups',frappe.db.sql(
-                    "select name,th_branch,disabled,ifnull(th_class_status,'') st "
-                    "from `tabStudent Group` order by name limit 30",as_dict=True)))
-                isoldiag.append(('ups',frappe.get_all('User Permission',
-                    filters={'user':users['teacher_two']},
-                    fields=['allow','for_value','applicable_for'],limit=10)))
-                isoldiag.append(('raw_nonstrict',[r[0] for r in frappe.db.sql(
-                    "select name from `tabStudent Group` "
-                    "where ifnull(th_branch,'')='' or th_branch in ('SYN-ISOL-A') "
-                    "order by name")]))
-                isoldiag.append(('pre',sorted(pre)))
-                print('ISOL-DIAG '+repr(isoldiag),flush=True)
-                assert {GRP_A,GRP_B,GRP_C,GRP_D,GRP_HTTP,IA}<=pre and IB not in pre, \
-                    ('native non-strict user-permission shape changed',sorted(pre),isoldiag)
+                own_group={r['name'] for r in frappe.get_all('Student Group',
+                    filters={'th_branch':'SYN-ISOL-A'},fields=['name'],
+                    limit_page_length=100)}
+                assert pre==own_group=={IA}, \
+                    ('branch-scoped class list is not exactly the own-branch classes',
+                     sorted(pre),sorted(own_group))
+                # The native non-strict user-permission shape, pinned at the
+                # native layer where the app hook cannot reach — the
+                # document-level native check (pinned frappe 988e54f
+                # permissions.has_user_permission: an empty link value skips
+                # the user-permission check unless
+                # apply_strict_user_permissions).
+                assert not frappe.db.get_single_value(
+                    'System Settings','apply_strict_user_permissions'), \
+                    'the production-default non-strict mode changed'
+                assert frappe.permissions.has_user_permission(
+                    frappe.get_doc('Student Group',GRP_A),user=users['teacher_two']), \
+                    'native non-strict shape changed: a branchless class is hidden at the document level'
+                assert not frappe.permissions.has_user_permission(
+                    frappe.get_doc('Student Group',IB),user=users['teacher_two']), \
+                    'a far-branch class is visible at the document level'
                 # The branchless fixtures then take the far branch, so the
                 # scoping cell below proves exact isolation between two
                 # populated branches on the production-default mode.
@@ -5031,24 +5038,46 @@ def main():
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
                 assert listed=={IA},('branch user-permission did not scope the native class list',sorted(listed))
-                # DESK PATH: the elevated projection ignores user permissions;
-                # scope comes from the assignment join instead (corollary below).
+                # ELEVATED PROJECTION: project_rows rides the same native list
+                # conditions as get_list — the branch rule scopes the desk
+                # read too; the assignment join scopes the audience on top.
                 unscoped={r['name'] for r in as_user('teacher_two',lambda:frappe.get_all(
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
-                assert {GRP_A,GRP_B,IA,IB}<=unscoped,('the desk-path read lost rows',sorted(unscoped))
+                assert unscoped=={IA},('the elevated projection escaped the branch rule',sorted(unscoped))
+                # DESK: the teacher's only standing assignment is the far-
+                # branch class; an own-branch assignment is added so the cell
+                # proves both halves — the desk shows the own-branch class
+                # and hides the far-branch one (the assignment join itself is
+                # branch-scoped through its own row condition).
+                as_user('teaching_scheduler',lambda:tcomp.assign_teaching_skill(
+                    'tc_assign_two_own_001',IA,SK1,cfx['ins']['Two'],
+                    cauth['contracts']['two'],'2026-09-01'))
                 twork=frappe.get_attr('toefl_house.desk.teacher.work')
                 two=as_user('teacher_two',twork);frappe.set_user('Administrator')
                 tclasses={i['person'] for i in next(s for s in two['sections'] if s['id']=='classes')['items']}
-                assert GRP_B in tclasses,('a branch user-permission must not move the assignment-scoped desk',sorted(tclasses))
-                # STUDENT MASTER: no branch dimension — the native list stays
-                # role-wide while the desk stays roster-scoped.
+                assert IA in tclasses and GRP_B not in tclasses, \
+                    ('the desk did not honor branch isolation across assignments',sorted(tclasses))
+                # STUDENT MASTER: the Student doctype has no branch field —
+                # the branch rule resolves through the active roster chain.
+                # A branch-scoped teacher sees exactly the own-branch
+                # rostered learners; a teacher without a Branch User
+                # Permission stays role-wide.
+                own_roster={r['student'] for r in frappe.get_all(
+                    'Student Group Student',filters={'parent':IA,'active':1},fields=['student'])}
                 stlisted={r['name'] for r in as_user('teacher_two',lambda:frappe.get_list(
                     'Student',fields=['name'],limit_page_length=200))}
                 frappe.set_user('Administrator')
-                assert {stu1,stu2,outsider_stu}<=stlisted,('native student list narrowed unexpectedly',sorted(stlisted))
+                assert own_roster and own_roster<=stlisted and outsider_stu not in stlisted, \
+                    ('roster-chain student scope wrong',sorted(own_roster),sorted(stlisted))
+                stwide={r['name'] for r in as_user('teacher_one',lambda:frappe.get_list(
+                    'Student',fields=['name'],limit_page_length=200))}
+                frappe.set_user('Administrator')
+                assert {stu1,stu2,outsider_stu}<=stwide, \
+                    ('native student list narrowed for a branch-unscoped user',sorted(stwide))
                 tstudents={i['id'] for i in next(s for s in two['sections'] if s['id']=='students')['items']}
-                assert outsider_stu not in tstudents,'an off-roster learner leaked onto the teacher desk'
+                assert own_roster<=tstudents and outsider_stu not in tstudents, \
+                    ('the desk roster did not follow the branch-scoped assignments',sorted(tstudents))
                 # REST: own-branch reads, cross-branch refused, outsider and
                 # guest refused outright.
                 s2=login('teacher_two');so=login('outsider')
@@ -5105,8 +5134,9 @@ def main():
                             assert r.status_code==200,(method,label,r.status_code,r.text[:200]);cells+=1
                         else:http_denied(r)
                 return {'branch_groups':[IA,IB],'native_list_scoped_to_branch':sorted(listed),
-                        'desk_path_ignores_branch_user_permission':sorted(tclasses),
-                        'student_master_role_wide':sorted(stlisted),
+                        'desk_path_branch_scoped':sorted(tclasses),
+                        'student_master_roster_chained':sorted(stlisted),
+                        'student_master_role_wide_unscoped':sorted(stwide),
                         'off_roster_excluded_from_desk':outsider_stu,
                         'rest_allow_deny':True,'export_allow_read_and_deny':True,
                         'print_denied':True,'report_allow_deny':True,

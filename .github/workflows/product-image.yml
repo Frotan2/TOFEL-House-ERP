@@ -226,6 +226,8 @@ jobs:
               except urllib.error.HTTPError as error:
                   return error.code, error.read().decode(), []
 
+          LOGIN_DIAG = []
+
           def login(username, password, host=None):
               status, text, cookies = call("/api/method/login",
                                            data={"usr": username, "pwd": password}, host=host)
@@ -237,18 +239,57 @@ jobs:
               # of dying in next() with a bare StopIteration.
               sids = [c for c in cookies if c.startswith("sid=")]
               assert sids, ("login returned no sid cookie", status, text[:300], cookies)
+              LOGIN_DIAG.append((username, status, text[:300],
+                                 [c[:40] for c in cookies]))
               return sids[0].split(";", 1)[0]
+
+          def session_diag(sid):
+              # The staff session is resolved by the web worker from the
+              # tabSessions table / redis session cache; probe both from
+              # inside the container so a guest-fallback failure is
+              # self-explaining (row present? cache entry? which user?).
+              try:
+                  probe = subprocess.check_output(
+                      ["docker", "compose", "exec", "-T", "-i", "-u", "root",
+                       "-e", "PROBE_SID", "web",
+                       "/home/frappe/bench/env/bin/python3", "-"],
+                      input="import os, json\n"
+                      "os.chdir('/home/frappe/bench/sites')\n"
+                      "import frappe\n"
+                      "frappe.init(site='toeflhouse.localhost', sites_path='/home/frappe/bench/sites')\n"
+                      "frappe.connect()\n"
+                      "sid = os.environ.get('PROBE_SID', 'MISSING')\n"
+                      "rows = frappe.db.sql('select sid,user,status,lastupdate from `tabSessions` order by lastupdate desc limit 8', as_dict=True)\n"
+                      "out = {'probe_sid': sid[:8] + '...len=' + str(len(sid)), 'db_sessions': rows}\n"
+                      "try:\n"
+                      "    cached = frappe.cache.hget('session', sid)\n"
+                      "    out['cache_hit'] = bool(cached)\n"
+                      "    out['cache_user'] = (cached or {}).get('data', {}).get('user')\n"
+                      "except Exception as e:\n"
+                      "    out['cache_error'] = repr(e)\n"
+                      "print('SESSIONS-DIAG ' + json.dumps(out, default=str))\n",
+                      text=True, env={**os.environ, "PROBE_SID": sid}, timeout=120)
+                  print("T-SITE " + probe.strip()[-1500:], flush=True)
+                  with open("tailnet-progress.txt", "a") as fh:
+                      fh.write("SESSIONS-DIAG " + probe.strip()[-1500:] + "\n")
+              except Exception as e:
+                  print("T-SITE session probe failed: %r" % e, flush=True)
+                  with open("tailnet-progress.txt", "a") as fh:
+                      fh.write("session probe failed: %r\n" % e)
 
           progress("admin password present: %s" % ("yes" if os.environ.get("TAILNET_ADMIN_PW") else "no"))
           admin_pw = os.environ["TAILNET_ADMIN_PW"]
           staff_pw = "staff-a-ci-123"
           progress("staff login start")
           staff = login("staff-a@example.test", staff_pw)
-          progress("staff login OK")
+          progress("staff login OK: " + repr(LOGIN_DIAG[-1][2])[:220])
+          session_diag(staff)
 
           # (1) The second client authenticates and uses the ERP.
           status, text, _ = call("/api/method/toefl_house.desk.reception.work", session=staff)
-          assert status == 200 and "exc_info" not in json.loads(text), text[:300]
+          assert status == 200 and "exc_info" not in json.loads(text), (
+              "staff desk call refused", status, text[:400],
+              "logins=%r" % LOGIN_DIAG)
           # Session isolation: the staff session cannot reach an admin-only surface.
           status, text, _ = call("/api/method/toefl_house.administration.get_control_center_snapshot",
                                  data={}, session=staff)
