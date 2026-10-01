@@ -49,6 +49,8 @@ def main():
            'enrollment_officer':'synthetic-enrollment-officer@example.test',
            'enrollment_auditor':'synthetic-enrollment-auditor@example.test',
            'candidate9':'synthetic-candidate9@example.test',
+           'branch_candidate_a':'synthetic-branch-candidate-a@example.test',
+           'branch_candidate_b':'synthetic-branch-candidate-b@example.test',
            'teaching_scheduler':'synthetic-teaching-scheduler@example.test',
            'attendance_recorder':'synthetic-attendance-recorder@example.test',
            'teaching_auditor':'synthetic-teaching-auditor@example.test',
@@ -135,6 +137,7 @@ def main():
                          'enrollment_officer':['Enrollment Officer'],
                          'enrollment_auditor':['Enrollment Auditor'],
                          'candidate9':[],
+                         'branch_candidate_a':[],'branch_candidate_b':[],
                          'teaching_scheduler':['Teaching Scheduler'],
                          'attendance_recorder':['Attendance Recorder'],
                          'teaching_auditor':['Teaching Auditor'],
@@ -4730,45 +4733,42 @@ def main():
                 if not frappe.db.exists('Branch',b):
                     frappe.get_doc(dict(doctype='Branch',branch=b)).insert()
             grp,stu,app,dec={}, {}, {}, {}
-            # The admission decision's required placement_decision Link:
-            # reuse the released result the placement phase already proved.
-            pd=frappe.db.get_value('TH Placement Decision', {'status': 'Released'}, 'name')
-            assert pd,('a released placement decision must exist from the placement phase')
+            # One full native journey per branch — every write through its
+            # sanctioned command: released result -> branch-recorded
+            # applicant -> approved, accepted, converted admission ->
+            # submitted enrollment in a dedicated intake year -> the
+            # branch's class through the teaching command (Student Group
+            # writes are command-only; a direct insert is refused).
             sd=frappe.utils.today(); ed=frappe.utils.add_days(sd,14)
-            for tail,b in (('A',BR_A),('B',BR_B)):
-                g=frappe.get_doc(dict(doctype='Student Group',
-                    student_group_name='SYN BR'+tail, group_based_on='Batch',
-                    program=cat['program'],
-                    academic_year='SYN-AY-2027', th_branch=b,
-                    th_class_start_date=sd, th_class_end_date=ed,
-                    th_delivery_mode='On-site', th_class_status='Active',
-                    disabled=0))
-                g.insert(); grp[tail]=g.name
-                s=frappe.get_doc(dict(doctype='Student',
-                    naming_series='EDU-STU-.YYYY.-',
-                    first_name='SYN BR'+tail, last_name='Student',
-                    student_name='SYN BR'+tail+' Student',
-                    student_email_id='syn-br-'+tail.lower()+'@example.test'))
-                s.insert(); stu[tail]=s.name
-                # The roster row (Student Group Student, active) links the
-                # student to the group's branch; the child table lives on the
-                # Student Group, not the Student.
-                g2=frappe.get_doc('Student Group',grp[tail])
-                g2.append('students',dict(student=s.name,
-                    student_name='SYN BR'+tail+' Student', active=1))
-                g2.save(ignore_permissions=True)
-                a=frappe.get_doc(dict(doctype='Student Applicant',
-                    naming_series='EDU-APP-.YYYY.-', first_name='SYN BR'+tail,
-                    last_name='Applicant',
-                    student_email_id='syn-br-app-'+tail.lower()+'@example.test',
-                    program=cat['program'], academic_year='SYN-AY-2027', th_branch=b,
-                    application_status='Applied'))
-                a.insert(); app[tail]=a.name
-                d=frappe.get_doc(dict(doctype=adm.DECISION_DT,
-                    student_applicant=app[tail], program=cat['program'],
-                    academic_year='SYN-AY-2027', placement_decision=pd,
-                    drafted_by=users['officer'], status='Draft', synthetic=1))
-                d.insert(); dec[tail]=d.name
+            for tail,b,year,cand in (('A',BR_A,'SYN-AY-2027','branch_candidate_a'),
+                                     ('B',BR_B,'SYN-AY-2028','branch_candidate_b')):
+                t=tail.lower()
+                if not frappe.db.exists('Academic Year',year):
+                    frappe.get_doc(dict(doctype='Academic Year',academic_year_name=year,
+                        year_start_date=year[:4]+'-01-01',
+                        year_end_date=year[:4]+'-12-31')).insert()
+                rel=release_for(cand,'br_pipe_'+t)
+                app[tail]=as_user('officer',lambda:adm.record_applicant(
+                    'br_app_'+t+'_000000001',rel['decision'],
+                    'SYNTHETIC Branch '+tail,cat['program'],year,b))['name']
+                d0=as_user('officer',lambda:adm.create_admission(
+                    'br_adm_'+t+'_0000000001',app[tail],rel['decision']))
+                as_user('admissions_reviewer',lambda:adm.review_admission(
+                    'br_rev_'+t+'_0000000001',d0['name'],1))
+                as_user('approver',lambda:adm.decide_admission(
+                    'br_dec_'+t+'_0000000001',d0['name'],2,'Approved',REASON))
+                as_user('officer',lambda:adm.accept_offer(
+                    'br_acc_'+t+'_0000000001',d0['name'],3))
+                conv=as_user('approver',lambda:adm.convert_applicant(
+                    'br_conv_'+t+'_0000000001',d0['name'],4))
+                assert conv['native_student'],conv
+                as_user('enrollment_officer',lambda:enr.enroll_in_program(
+                    'br_enr_'+t+'_0000000001',d0['name']))
+                g=as_user('teaching_scheduler',lambda:tea.create_student_group(
+                    'br_grp_'+t+'_0000000001','SYN-BR-CLASS-'+tail,
+                    cat['program'],year,'',1,sd,ed,'On-site',b))
+                assert g['name']=='SYN-BR-CLASS-'+tail and g['students']==1,g
+                grp[tail]=g['name']; stu[tail]=conv['native_student']; dec[tail]=d0['name']
             frappe.db.commit()
             for label,b in (('branch_a_staff',BR_A),('branch_b_staff',BR_B)):
                 if not frappe.db.exists('User Permission',

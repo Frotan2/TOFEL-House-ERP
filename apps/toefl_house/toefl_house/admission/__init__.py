@@ -248,6 +248,9 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             academic_year=year_name,
             th_branch=branch_name or None,
             naming_series="EDU-APP-.YYYY.-",
+            # Recorded intake is Applied until the Student conversion sets
+            # Admitted — the reception funnel filters on exactly this state.
+            application_status="Applied",
             paid=0,
         ))
         applicant.insert(ignore_permissions=True)
