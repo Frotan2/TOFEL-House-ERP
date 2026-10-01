@@ -9,5 +9,6 @@
 !product/activate.py
 !product/wsgi.py
 !product/entrypoint.sh
+!product/perf_baseline.py
 **/__pycache__
 **/*.pyc

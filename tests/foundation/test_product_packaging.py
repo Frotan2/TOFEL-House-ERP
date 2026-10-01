@@ -77,13 +77,21 @@ class PinParityContract(unittest.TestCase):
         # runs before the gap was found.
         workflow = ROOT / ".github" / "workflows" / "product-image.yml"
         text = DOCKERFILE.read_text()
+        # The build context is a .dockerignore ALLOWLIST: a script the
+        # Dockerfile COPYs must also be un-ignored, or the COPY has no
+        # source file and the build fails before any layer is made.
+        ignore = (ROOT / ".dockerignore").read_text()
         referenced = set(re.findall(r"/product/([A-Za-z0-9_.]+\.(?:py|sh))", workflow.read_text()))
         self.assertTrue(referenced, "expected /product/ script references in the workflow")
-        missing = [name for name in sorted(referenced)
-                   if not re.search(rf"^COPY product/{re.escape(name)} /product/{re.escape(name)}$",
-                                    text, flags=re.M)]
-        self.assertEqual(missing, [],
-                         f"workflow execs in-image scripts the Dockerfile never ships: {missing}")
+        missing_copy = [name for name in sorted(referenced)
+                        if not re.search(rf"^COPY product/{re.escape(name)} /product/{re.escape(name)}$",
+                                         text, flags=re.M)]
+        self.assertEqual(missing_copy, [],
+                         f"workflow execs in-image scripts the Dockerfile never ships: {missing_copy}")
+        missing_allow = [name for name in sorted(referenced)
+                         if f"!product/{name}" not in ignore.splitlines()]
+        self.assertEqual(missing_allow, [],
+                         f"workflow execs in-image scripts the .dockerignore allowlist excludes: {missing_allow}")
 
     def test_bench_operations_run_as_non_root_user(self):
         # Production failure of record (real Windows E2E + hosted diagnostic
