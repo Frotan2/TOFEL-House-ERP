@@ -4732,21 +4732,28 @@ def main():
             for b in (BR_A,BR_B):
                 if not frappe.db.exists('Branch',b):
                     frappe.get_doc(dict(doctype='Branch',branch=b)).insert()
-            grp,stu,app,dec={}, {}, {}, {}
+            grp,stu,app,dec,d0={}, {}, {}, {}, {}
             # One full native journey per branch — every write through its
             # sanctioned command: released result -> branch-recorded
             # applicant -> approved, accepted, converted admission ->
             # submitted enrollment in a dedicated intake year -> the
             # branch's class through the teaching command (Student Group
             # writes are command-only; a direct insert is refused).
-            # Each iteration re-sets Administrator first: the previous
-            # iteration's last journey step runs as its acting role, and
-            # the Academic Year insert below is a direct write. The two
-            # intake years are dedicated: no other fixture enrolls in them,
-            # so each branch's class roster is exactly its one student.
+            # The journey runs in two phases: the native Student insert
+            # that conversion performs sets the applicant 'Admitted',
+            # moving it OUT of the reception funnel (which filters on
+            # 'Applied'), so the funnel's branch-scoped desk surface is
+            # proved while the applicant is still in the funnel — after
+            # offer acceptance, before conversion. Each iteration re-sets
+            # Administrator first: the previous iteration's last journey
+            # step runs as its acting role, and the Academic Year insert
+            # below is a direct write. The two intake years are dedicated:
+            # no other fixture enrolls in them, so each branch's class
+            # roster is exactly its one student.
             sd=frappe.utils.today(); ed=frappe.utils.add_days(sd,14)
-            for tail,b,year,cand in (('A',BR_A,'SYN-AY-2031','branch_candidate_a'),
-                                     ('B',BR_B,'SYN-AY-2032','branch_candidate_b')):
+            plan=(('A',BR_A,'SYN-AY-2031','branch_candidate_a'),
+                  ('B',BR_B,'SYN-AY-2032','branch_candidate_b'))
+            for tail,b,year,cand in plan:
                 t=tail.lower()
                 frappe.set_user('Administrator')
                 if not frappe.db.exists('Academic Year',year):
@@ -4758,27 +4765,18 @@ def main():
                 app[tail]=as_user('officer',lambda:adm.record_applicant(
                     'br_app_'+t+'_000000001',rel['decision'],
                     'SYNTHETIC Branch '+tail,cat['program'],year,b))['name']
-                d0=as_user('officer',lambda:adm.create_admission(
+                d0[tail]=as_user('officer',lambda:adm.create_admission(
                     'br_adm_'+t+'_0000000001',app[tail],rel['decision']))
                 as_user('admissions_reviewer',lambda:adm.review_admission(
-                    'br_rev_'+t+'_0000000001',d0['name'],1))
+                    'br_rev_'+t+'_0000000001',d0[tail]['name'],1))
                 as_user('approver',lambda:adm.decide_admission(
-                    'br_dec_'+t+'_0000000001',d0['name'],2,'Approved',REASON))
+                    'br_dec_'+t+'_0000000001',d0[tail]['name'],2,'Approved',REASON))
                 as_user('officer',lambda:adm.accept_offer(
-                    'br_acc_'+t+'_0000000001',d0['name'],3))
-                conv=as_user('approver',lambda:adm.convert_applicant(
-                    'br_conv_'+t+'_0000000001',d0['name'],4))
-                assert conv['native_student'],conv
-                as_user('enrollment_officer',lambda:enr.enroll_in_program(
-                    'br_enr_'+t+'_0000000001',d0['name']))
-                g=as_user('teaching_scheduler',lambda:tea.create_student_group(
-                    'br_grp_'+t+'_0000000001','SYN-BR-CLASS-'+tail,
-                    cat['program'],year,'',1,sd,ed,'On-site',b))
-                assert g['name']=='SYN-BR-CLASS-'+tail and g['students']==1,g
-                grp[tail]=g['name']; stu[tail]=conv['native_student']; dec[tail]=d0['name']
+                    'br_acc_'+t+'_0000000001',d0[tail]['name'],3))
             frappe.db.commit()
             # Direct User Permission write: run it as Administrator (the
-            # loop above ended with the teaching role of branch B's journey).
+            # phase-1 loop above ended with the officer role of branch B's
+            # offer acceptance).
             frappe.set_user('Administrator')
             for label,b in (('branch_a_staff',BR_A),('branch_b_staff',BR_B)):
                 if not frappe.db.exists('User Permission',
@@ -4786,35 +4784,11 @@ def main():
                     frappe.get_doc(dict(doctype='User Permission',
                         user=users[label], allow='Branch', for_value=b)).insert()
             frappe.db.commit(); frappe.clear_cache()
-            # 1) Document gate on the real rows (controller hook semantics,
-            #    including the roster join). Scoped staff see their own
-            #    branch only; the unscoped control sees both.
-            for label,own,other in (('branch_a_staff','A','B'),('branch_b_staff','B','A')):
-                u=users[label]
-                assert perm.branch_has_permission(frappe.get_doc('Student',stu[own]),'read',user=u)
-                assert not perm.branch_has_permission(frappe.get_doc('Student',stu[other]),'read',user=u)
-                assert perm.branch_has_permission(frappe.get_doc('Student Group',grp[own]),'read',user=u)
-                assert not perm.branch_has_permission(frappe.get_doc('Student Group',grp[other]),'read',user=u)
-                assert perm.branch_has_permission(frappe.get_doc('Student Applicant',app[own]),'read',user=u)
-                assert not perm.branch_has_permission(frappe.get_doc('Student Applicant',app[other]),'read',user=u)
-                # The guarded kind composes the role rule AND the branch rule.
-                assert perm.has_permission(frappe.get_doc(adm.DECISION_DT,dec[own]),'read',user=u)
-                assert not perm.has_permission(frappe.get_doc(adm.DECISION_DT,dec[other]),'read',user=u)
-            u=users['officer']
-            assert perm.branch_has_permission(frappe.get_doc('Student',stu['A']),'read',user=u)
-            assert perm.branch_has_permission(frappe.get_doc('Student',stu['B']),'read',user=u)
-            assert perm.branch_query_student(user=u)=='1=1'
-            # 2) List conditions against the real tables.
-            q=perm.branch_query_student(user=users['branch_a_staff'])
-            assert "'SYN-BR-A'" in q and "'SYN-BR-B'" not in q
-            rows=[r[0] for r in frappe.db.sql("select name from `tabStudent` where "+q,as_list=True)]
-            assert stu['A'] in rows and stu['B'] not in rows,(rows)
-            qd=perm.query('admission_decision',user=users['branch_a_staff'])
-            assert "'SYN-BR-A'" in qd and "'SYN-BR-B'" not in qd
-            names=[r[0] for r in frappe.db.sql("select name from `tabTH Admission Decision` where "+qd,as_list=True)]
-            assert dec['A'] in names and dec['B'] not in names,(names)
-            # 3) Desk surface over HTTP: the scoped receptionist sees only
-            #    their branch's people; the unscoped one sees both.
+            # 0) Funnel surface over HTTP — while the applicants are still
+            #    'Applied' (conversion sets 'Admitted' and leaves the
+            #    funnel, which filters on 'Applied'): the scoped
+            #    receptionist sees only their branch's people; the
+            #    unscoped control sees both.
             sessA=login('branch_a_staff');sessB=login('branch_b_staff');sessHQ=login('receptionist')
             # BRISO DIAG: capture the exact state so a failure is self-
             # explaining (rows, in-process reads as the scoped user, and the
@@ -4865,6 +4839,49 @@ def main():
             assert app['A'] in pa and app['B'] not in pa,(pa,pb,phq,diag)
             assert app['B'] in pb and app['A'] not in pb,(pa,pb)
             assert app['A'] in phq and app['B'] in phq,phq
+            # Phase 2: complete the journeys — conversion (the native
+            # Student insert sets the applicant 'Admitted'), enrollment,
+            # and the branch's class through the teaching command.
+            for tail,b,year,cand in plan:
+                t=tail.lower()
+                conv=as_user('approver',lambda:adm.convert_applicant(
+                    'br_conv_'+t+'_0000000001',d0[tail]['name'],4))
+                assert conv['native_student'],conv
+                as_user('enrollment_officer',lambda:enr.enroll_in_program(
+                    'br_enr_'+t+'_0000000001',d0[tail]['name']))
+                g=as_user('teaching_scheduler',lambda:tea.create_student_group(
+                    'br_grp_'+t+'_0000000001','SYN-BR-CLASS-'+tail,
+                    cat['program'],year,'',1,sd,ed,'On-site',b))
+                assert g['name']=='SYN-BR-CLASS-'+tail and g['students']==1,g
+                grp[tail]=g['name']; stu[tail]=conv['native_student']; dec[tail]=d0[tail]['name']
+            frappe.db.commit()
+            # 1) Document gate on the real rows (controller hook semantics,
+            #    including the roster join). Scoped staff see their own
+            #    branch only; the unscoped control sees both.
+            for label,own,other in (('branch_a_staff','A','B'),('branch_b_staff','B','A')):
+                u=users[label]
+                assert perm.branch_has_permission(frappe.get_doc('Student',stu[own]),'read',user=u)
+                assert not perm.branch_has_permission(frappe.get_doc('Student',stu[other]),'read',user=u)
+                assert perm.branch_has_permission(frappe.get_doc('Student Group',grp[own]),'read',user=u)
+                assert not perm.branch_has_permission(frappe.get_doc('Student Group',grp[other]),'read',user=u)
+                assert perm.branch_has_permission(frappe.get_doc('Student Applicant',app[own]),'read',user=u)
+                assert not perm.branch_has_permission(frappe.get_doc('Student Applicant',app[other]),'read',user=u)
+                # The guarded kind composes the role rule AND the branch rule.
+                assert perm.has_permission(frappe.get_doc(adm.DECISION_DT,dec[own]),'read',user=u)
+                assert not perm.has_permission(frappe.get_doc(adm.DECISION_DT,dec[other]),'read',user=u)
+            u=users['officer']
+            assert perm.branch_has_permission(frappe.get_doc('Student',stu['A']),'read',user=u)
+            assert perm.branch_has_permission(frappe.get_doc('Student',stu['B']),'read',user=u)
+            assert perm.branch_query_student(user=u)=='1=1'
+            # 2) List conditions against the real tables.
+            q=perm.branch_query_student(user=users['branch_a_staff'])
+            assert "'SYN-BR-A'" in q and "'SYN-BR-B'" not in q
+            rows=[r[0] for r in frappe.db.sql("select name from `tabStudent` where "+q,as_list=True)]
+            assert stu['A'] in rows and stu['B'] not in rows,(rows)
+            qd=perm.query('admission_decision',user=users['branch_a_staff'])
+            assert "'SYN-BR-A'" in qd and "'SYN-BR-B'" not in qd
+            names=[r[0] for r in frappe.db.sql("select name from `tabTH Admission Decision` where "+qd,as_list=True)]
+            assert dec['A'] in names and dec['B'] not in names,(names)
             return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3}
         check('branch-isolation-multi-branch-operating-rule',traced(branch_isolation))
         # --- S6 obs-engineering-layer: the health surface, in process ---
