@@ -370,14 +370,34 @@ jobs:
           # (4) Restart persistence: a marker record, a full restart, every
           # service back (worker/scheduler/socketio included), data intact.
           progress("marker record insert start")
-          subprocess.run(["docker", "compose", "exec", "-T", "web",
-                          "/home/frappe/bench/env/bin/python3", "-c",
-                          "import os; os.chdir('/home/frappe/bench/sites'); "
-                          "import frappe; frappe.init(site='toeflhouse.localhost', sites_path='/home/frappe/bench/sites'); "
-                          "frappe.connect(); "
-                          "if not frappe.db.exists('Student', {'first_name': 'Tailnet', 'last_name': 'Marker'}): "
-                          "frappe.get_doc({'doctype': 'Student', 'first_name': 'Tailnet', 'last_name': 'Marker', 'student_email_id': 'tailnet-marker@example.test'}).insert(ignore_permissions=True); "
-                          "frappe.db.commit()"], check=True)
+          # A stdin script, not "python -c": the insert is an if-statement,
+          # and a compound statement cannot follow a semicolon on one
+          # logical line (-c would die with SyntaxError before the DB).
+          marker_out = subprocess.run(["docker", "compose", "exec", "-T", "-i", "web",
+                                       "/home/frappe/bench/env/bin/python3", "-"],
+                                      input="import sys, traceback\n"
+                                            "def _ci_excepthook(typ, value, tb):\n"
+                                            "    traceback.print_exception(typ, value, tb)\n"
+                                            "    print('::error::marker insert failed: %s' % value)\n"
+                                            "sys.excepthook = _ci_excepthook\n"
+                                            "import os\n"
+                                            "os.chdir('/home/frappe/bench/sites')\n"
+                                            "import frappe\n"
+                                            "frappe.init(site='toeflhouse.localhost', sites_path='/home/frappe/bench/sites')\n"
+                                            "frappe.connect()\n"
+                                            "if not frappe.db.exists('Student', {'first_name': 'Tailnet', 'last_name': 'Marker'}):\n"
+                                            "    frappe.get_doc({'doctype': 'Student', 'first_name': 'Tailnet', 'last_name': 'Marker', 'student_email_id': 'tailnet-marker@example.test'}).insert(ignore_permissions=True)\n"
+                                            "    frappe.db.commit()\n"
+                                            "print('marker record ready')\n",
+                                      capture_output=True, text=True)
+          if marker_out.returncode != 0:
+              open("tailnet-progress.txt", "a").write(
+                  "stage: marker insert FAILED rc=%s\n%s\n%s\n"
+                  % (marker_out.returncode, marker_out.stdout, marker_out.stderr))
+              print("::error::marker insert failed rc=%s: %s"
+                    % (marker_out.returncode, (marker_out.stderr or marker_out.stdout)[-800:]), flush=True)
+              sys.exit(1)
+          print(marker_out.stdout.strip(), flush=True)
           progress("marker record inserted")
           progress("full restart start")
           subprocess.run(["docker", "compose", "restart"], check=True)
