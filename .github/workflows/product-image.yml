@@ -154,6 +154,16 @@ jobs:
           import urllib.parse
           import urllib.request
 
+          # CI log lines are only reachable as run annotations; make any
+          # uncaught failure carry its line number into the annotation set.
+          import sys
+          import traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::tailnet contract failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
+
           BASE = "http://127.0.0.1:8000"
 
           def call(path, *, data=None, headers=None, host=None, session=None):
@@ -222,11 +232,13 @@ jobs:
           assert published, "compose declares no published ports"
           for entry in published:
               assert entry["hostIP"] in ("127.0.0.1", "localhost"), entry
+          # ss -ltn columns: Netid State Recv-Q Send-Q Local Address:Port Peer
+          # (the local address is the fifth field; the fourth is Send-Q).
           listeners = subprocess.check_output(
               ["ss", "-ltn"], text=True).splitlines()
           for line in listeners:
               if any((":" + port) in line for port in ("8000", "9000")):
-                  assert line.split()[3].startswith("127.0.0.1"), line
+                  assert line.split()[4].startswith("127.0.0.1"), line
           external = subprocess.check_output(["hostname", "-i"], text=True).split()[0]
           try:
               urllib.request.urlopen("http://%s:8000/" % external, timeout=5)
