@@ -13,8 +13,11 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+# Only the tools/foundation directory is needed: annotated_step imports no
+# siblings. Adding tools/ itself would put tools/operations ahead of
+# tests/operations on sys.path and shadow the operations test package
+# during discovery.
 sys.path.insert(0, str(ROOT / "tools" / "foundation"))
-sys.path.insert(0, str(ROOT / "tools"))
 
 import annotated_step  # noqa: E402
 
