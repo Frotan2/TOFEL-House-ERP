@@ -298,5 +298,30 @@ class AdvisoryDeltaSeptember30Part3Tests(unittest.TestCase):
         self.assertIn("prepare_key", by_id["GHSA-jwrc-g2q2-pq5p"]["runtime_disposition_evidence"])
 
 
+class AdvisoryDeltaOctober01Tests(unittest.TestCase):
+    """The 2026-10-01 delta closes the PyJWT options-reuse advisory surfaced by run 36809316528."""
+
+    DELTA = json.loads((ROOT / "docs/engineering/evidence/sec-deps-01/advisory-delta-2026-10-01"
+                        "/delta-dispositions.json").read_text())
+
+    def test_the_finding_closes_as_not_reachable(self):
+        triage = t.load_triage()
+        self.assertIn("advisory-delta-2026-10-01", triage["deltas"])
+        findings = [{"package": {"name": "pyjwt", "ecosystem": "PyPI"}, "version": "2.13.0",
+                     "id": "GHSA-gvp8-978c-rx2q", "aliases": []}]
+        res = t.triage_python(findings, triage)
+        self.assertEqual(res["untriaged"], [])
+        self.assertEqual(t.overall_status(py_result=res), "pass")
+        self.assertEqual({f["id"]: f["disposition"] for f in res["findings"]},
+                         {"GHSA-gvp8-978c-rx2q": "NOT_REACHABLE"})
+
+    def test_evidence_names_the_inline_per_call_options_and_the_call_sites(self):
+        adv = self.DELTA["packages"][0]["advisories"][0]
+        evidence = adv["runtime_disposition_evidence"]
+        for needle in ("inline literal", "oauth.py:446-454", "oauth.py:467-475", "utils/oauth.py:200"):
+            self.assertIn(needle, evidence)
+        self.assertIsNone(adv["first_patched"])
+
+
 if __name__ == "__main__":
     unittest.main()
