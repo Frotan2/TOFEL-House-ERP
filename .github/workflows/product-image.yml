@@ -130,7 +130,7 @@ jobs:
           # the capped annotation view.
           > tailnet-progress.txt
           echo "stage: staff-user exec start" >> tailnet-progress.txt
-          if ! staff_out=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          staff_out=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
           import sys
           import traceback
           def _ci_excepthook(typ, value, tb):
@@ -138,6 +138,13 @@ jobs:
               traceback.print_exception(typ, value, tb)
               print("::error::tailnet staff-user setup failed at line %s: %s" % (lineno, value))
           sys.excepthook = _ci_excepthook
+          # Frappe's database logger opens the CWD-relative "../logs/<name>.log"
+          # (frappe.utils.logger.create_handler). Gunicorn runs from
+          # bench/sites so that resolves to bench/logs; an exec inherits the
+          # container WORKDIR (bench) and would open ../logs outside the
+          # mounted logs directory. Run from sites, like every bench command.
+          import os
+          os.chdir("/home/frappe/bench/sites")
           import frappe
           frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
           frappe.connect()
@@ -154,8 +161,9 @@ jobs:
           frappe.db.commit()
           print("staff user ready")
           EOF
-          ); then
-            echo "stage: staff-user exec FAILED rc=$?" >> tailnet-progress.txt
+          ) && staff_rc=0 || staff_rc=$?
+          if [ "$staff_rc" -ne 0 ]; then
+            echo "stage: staff-user exec FAILED rc=$staff_rc" >> tailnet-progress.txt
             printf 'exec output:\n%s\n' "$staff_out" >> tailnet-progress.txt
             exit 1
           fi
@@ -289,6 +297,7 @@ jobs:
           progress("marker record insert start")
           subprocess.run(["docker", "compose", "exec", "-T", "web",
                           "/home/frappe/bench/env/bin/python3", "-c",
+                          "import os; os.chdir('/home/frappe/bench/sites'); "
                           "import frappe; frappe.init(site='toeflhouse.localhost', sites_path='/home/frappe/bench/sites'); "
                           "frappe.connect(); "
                           "if not frappe.db.exists('Student', {'first_name': 'Tailnet', 'last_name': 'Marker'}): "
@@ -413,6 +422,11 @@ jobs:
               traceback.print_exception(typ, value, tb)
               print("::error::rehearsal verify#1 failed at line %s: %s" % (lineno, value))
           sys.excepthook = _ci_excepthook
+          # Run from bench/sites: frappe's database logger opens the
+          # CWD-relative ../logs/<name>.log (see the tailnet staff-user
+          # setup above); an exec inherits the container WORKDIR (bench).
+          import os
+          os.chdir("/home/frappe/bench/sites")
           import frappe
           frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
           frappe.connect()
@@ -462,6 +476,11 @@ jobs:
               traceback.print_exception(typ, value, tb)
               print("::error::rehearsal verify#2 failed at line %s: %s" % (lineno, value))
           sys.excepthook = _ci_excepthook
+          # Run from bench/sites: frappe's database logger opens the
+          # CWD-relative ../logs/<name>.log (see the tailnet staff-user
+          # setup above); an exec inherits the container WORKDIR (bench).
+          import os
+          os.chdir("/home/frappe/bench/sites")
           import frappe
           frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
           frappe.connect()
