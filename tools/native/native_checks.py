@@ -4423,8 +4423,12 @@ def main():
             assert own['desk']=='th-owner-cockpit' and 'posture' in desk_sections(own)
             setu=desk_get('course_owner','setup.work')
             assert setu['desk']=='th-academic-setup' and {'health','fees'}<=desk_sections(setu)
-            # the release posture stays honestly fail-closed on a real bench
-            assert 'REJECT' in json.dumps(own)
+            # the release posture states the bench's own resolved mode,
+            # never a stored claim: the qualification sites resolve
+            # SYNTHETIC, so PRODUCTION can never be stated here.
+            posture={f['label']:f['value'] for f in
+                     next(s for s in own['sections'] if s['id']=='posture')['facts']}
+            assert posture['Production']=='SYNTHETIC',('the qualification bench must state its own resolved mode',posture)
             # S6 obs-engineering-layer: native health facts ride the GM desk
             # and the owner cockpit as counts-and-identities, never traces.
             assert {'health','health-facts'}<=desk_sections(ops)
