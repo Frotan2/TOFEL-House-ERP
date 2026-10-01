@@ -4741,16 +4741,19 @@ def main():
             # writes are command-only; a direct insert is refused).
             # Each iteration re-sets Administrator first: the previous
             # iteration's last journey step runs as its acting role, and
-            # the Academic Year insert below is a direct write.
+            # the Academic Year insert below is a direct write. The two
+            # intake years are dedicated: no other fixture enrolls in them,
+            # so each branch's class roster is exactly its one student.
             sd=frappe.utils.today(); ed=frappe.utils.add_days(sd,14)
-            for tail,b,year,cand in (('A',BR_A,'SYN-AY-2027','branch_candidate_a'),
-                                     ('B',BR_B,'SYN-AY-2028','branch_candidate_b')):
+            for tail,b,year,cand in (('A',BR_A,'SYN-AY-2031','branch_candidate_a'),
+                                     ('B',BR_B,'SYN-AY-2032','branch_candidate_b')):
                 t=tail.lower()
                 frappe.set_user('Administrator')
                 if not frappe.db.exists('Academic Year',year):
+                    y=year.split('-')[-1]
                     frappe.get_doc(dict(doctype='Academic Year',academic_year_name=year,
-                        year_start_date=year[:4]+'-01-01',
-                        year_end_date=year[:4]+'-12-31')).insert()
+                        year_start_date=y+'-01-01',
+                        year_end_date=y+'-12-31')).insert()
                 rel=release_for(cand,'br_pipe_'+t)
                 app[tail]=as_user('officer',lambda:adm.record_applicant(
                     'br_app_'+t+'_000000001',rel['decision'],
