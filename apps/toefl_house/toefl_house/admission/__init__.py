@@ -9,6 +9,7 @@ from toefl_house.security import is_production, record_synthetic_flag
 
 DECISION_DT = "TH Admission Decision"
 APPLICANT = "Student Applicant"
+BRANCH = "Branch"
 STUDENT = "Student"
 PROGRAM = "Program"
 YEAR = "Academic Year"
@@ -161,7 +162,7 @@ def deny_enroll_student(source_name=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def record_applicant(request_key, placement_decision, first_name, program, academic_year):
+def record_applicant(request_key, placement_decision, first_name, program, academic_year, branch=""):
     def work(actor):
         row = _placement_row(placement_decision)
         _unexpired(row)
@@ -180,6 +181,20 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             raise frappe.ValidationError("Unknown program")
         if not frappe.db.exists(YEAR, year_name):
             raise frappe.ValidationError("Unknown academic year")
+        # Branch of record (branch isolation): an explicit valid branch, or
+        # the actor's own — the machine-readable fact is the actor's native
+        # User Permission on Branch; a multi-branch actor must state it. An
+        # actor with no Branch permission (HQ intake) leaves the applicant
+        # unbranched (visible to management only).
+        branch_name = _name(branch, "Branch") if branch else ""
+        if not branch_name:
+            ups = frappe.get_all("User Permission",
+                                  filters={"user": actor, "allow": "Branch"},
+                                  pluck="for_value", limit_page_length=5)
+            if len(ups) == 1:
+                branch_name = ups[0]
+        if branch_name and not frappe.db.exists(BRANCH, branch_name):
+            raise frappe.ValidationError(f"Unknown branch: {branch_name}")
         # BUG-ADM-01: serialize concurrent intake on the placement case row.
         # The subject is unique per case, so same-subject contenders always
         # share this row even across different decisions; the locking probe
@@ -219,6 +234,7 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
                 "application_status": applicant.application_status or "Applied",
                 "paid": int(applicant.paid or 0),
                 "placement_decision": row.name,
+                "branch": getattr(applicant, "th_branch", None) or None,
                 "reused": True,
             }
             return result, dict(target=applicant.name,
@@ -230,6 +246,7 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             student_email_id=subject,
             program=program_name,
             academic_year=year_name,
+            th_branch=branch_name or None,
             naming_series="EDU-APP-.YYYY.-",
             paid=0,
         ))
@@ -246,13 +263,15 @@ def record_applicant(request_key, placement_decision, first_name, program, acade
             "application_status": applicant.application_status or "Applied",
             "paid": int(applicant.paid or 0),
             "placement_decision": row.name,
+            "branch": branch_name or None,
             "reused": False,
         }
         return result, dict(target=applicant.name, after_hash=digest([applicant.name, subject, program_name]))
 
     return _execute("record_applicant", request_key,
                     {"placement_decision": placement_decision, "first_name": first_name,
-                     "program": program, "academic_year": academic_year}, work)
+                     "program": program, "academic_year": academic_year,
+                     "branch": branch}, work)
 
 
 @frappe.whitelist(methods=["POST"])

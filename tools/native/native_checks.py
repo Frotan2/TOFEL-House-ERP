@@ -147,6 +147,11 @@ def main():
                          'course_owner':['Course Owner'],
                         # Role-desk audiences for the Phase-2 desk qualification.
                         'receptionist':['Reception'],
+                        # Branch isolation proof: two branch-scoped staff plus
+                        # the existing 'officer' / 'receptionist' as the
+                        # unscoped (HQ) controls.
+                        'branch_a_staff':['Reception','Admission Officer'],
+                        'branch_b_staff':['Reception','Admission Officer'],
                         'academic_manager':['Academic Manager'],
                         'finance_manager':['Finance Manager'],
                         'general_manager':['General Manager'],
@@ -4656,6 +4661,94 @@ def main():
             frappe.db.commit()
             return observed
         check('role-desk-hosted-qualification',traced(desk_qualification))
+        # ---- Branch isolation: the multi-branch operating rule (P1). ----
+        # A staff user who carries a native User Permission on Branch is
+        # scoped to that branch on every surface: the desk projection, the
+        # document gate (controller hook), the list condition, and the
+        # guarded-kind query. A user WITHOUT a Branch User Permission (HQ)
+        # is unrestricted — the native User Permission semantics. Records
+        # whose branch cannot be resolved are invisible to a scoped user
+        # (fail closed). Administrator is never scoped.
+        def branch_isolation():
+            frappe.set_user('Administrator')
+            import toefl_house.permissions as perm
+            BR_A,BR_B='SYN-BR-A','SYN-BR-B'
+            for b in (BR_A,BR_B):
+                if not frappe.db.exists('Branch',b):
+                    frappe.get_doc(dict(doctype='Branch',branch=b)).insert()
+            grp,stu,app,dec={}, {}, {}, {}
+            for tail,b in (('A',BR_A),('B',BR_B)):
+                g=frappe.get_doc(dict(doctype='Student Group',
+                    student_group_name='SYN BR'+tail, program=cat['program'],
+                    academic_year='SYN-AY-2027', th_branch=b,
+                    th_class_status='Active', disabled=0))
+                g.insert(); grp[tail]=g.name
+                s=frappe.get_doc(dict(doctype='Student',
+                    naming_series='EDU-STU-.YYYY.-',
+                    first_name='SYN BR'+tail, last_name='Student',
+                    student_name='SYN BR'+tail+' Student',
+                    student_email_id='syn-br-'+tail.lower()+'@example.test'))
+                s.insert(); stu[tail]=s.name
+                s2=frappe.get_doc('Student',s.name)
+                s2.append('students',dict(student=s.name,
+                    student_name='SYN BR'+tail+' Student', active=1))
+                s2.save(ignore_permissions=True)
+                a=frappe.get_doc(dict(doctype='Student Applicant',
+                    naming_series='EDU-APP-.YYYY.-', first_name='SYN BR'+tail,
+                    last_name='Applicant',
+                    student_email_id='syn-br-app-'+tail.lower()+'@example.test',
+                    program=cat['program'], academic_year='SYN-AY-2027', th_branch=b))
+                a.insert(); app[tail]=a.name
+                d=frappe.get_doc(dict(doctype=adm.DECISION_DT,
+                    student_applicant=app[tail], program=cat['program'],
+                    academic_year='SYN-AY-2027', status='Draft', synthetic=1))
+                d.insert(); dec[tail]=d.name
+            frappe.db.commit()
+            for label,b in (('branch_a_staff',BR_A),('branch_b_staff',BR_B)):
+                if not frappe.db.exists('User Permission',
+                        {'user':users[label],'allow':'Branch','for_value':b}):
+                    frappe.get_doc(dict(doctype='User Permission',
+                        user=users[label], allow='Branch', for_value=b)).insert()
+            frappe.db.commit(); frappe.clear_cache()
+            # 1) Document gate on the real rows (controller hook semantics,
+            #    including the roster join). Scoped staff see their own
+            #    branch only; the unscoped control sees both.
+            for label,own,other in (('branch_a_staff','A','B'),('branch_b_staff','B','A')):
+                u=users[label]
+                assert perm.branch_has_permission(frappe.get_doc('Student',stu[own]),'read',user=u)
+                assert not perm.branch_has_permission(frappe.get_doc('Student',stu[other]),'read',user=u)
+                assert perm.branch_has_permission(frappe.get_doc('Student Group',grp[own]),'read',user=u)
+                assert not perm.branch_has_permission(frappe.get_doc('Student Group',grp[other]),'read',user=u)
+                assert perm.branch_has_permission(frappe.get_doc('Student Applicant',app[own]),'read',user=u)
+                assert not perm.branch_has_permission(frappe.get_doc('Student Applicant',app[other]),'read',user=u)
+                # The guarded kind composes the role rule AND the branch rule.
+                assert perm.has_permission(frappe.get_doc(adm.DECISION_DT,dec[own]),'read',user=u)
+                assert not perm.has_permission(frappe.get_doc(adm.DECISION_DT,dec[other]),'read',user=u)
+            u=users['officer']
+            assert perm.branch_has_permission(frappe.get_doc('Student',stu['A']),'read',user=u)
+            assert perm.branch_has_permission(frappe.get_doc('Student',stu['B']),'read',user=u)
+            assert perm.branch_query_student(user=u)=='1=1'
+            # 2) List conditions against the real tables.
+            q=perm.branch_query_student(user=users['branch_a_staff'])
+            assert "'SYN-BR-A'" in q and "'SYN-BR-B'" not in q
+            rows=[r[0] for r in frappe.db.sql("select name from `tabStudent` where "+q,as_list=True)]
+            assert stu['A'] in rows and stu['B'] not in rows,(rows)
+            qd=perm.query('admission_decision',user=users['branch_a_staff'])
+            assert "'SYN-BR-A'" in qd and "'SYN-BR-B'" not in qd
+            names=[r[0] for r in frappe.db.sql("select name from `tabTH Admission Decision` where "+qd,as_list=True)]
+            assert dec['A'] in names and dec['B'] not in names,(names)
+            # 3) Desk surface over HTTP: the scoped receptionist sees only
+            #    their branch's people; the unscoped one sees both.
+            sessA=login('branch_a_staff');sessB=login('branch_b_staff');sessHQ=login('receptionist')
+            def people(sess):
+                p=sess.get(base+'/api/method/toefl_house.desk.reception.work',timeout=30).json()['message']
+                return {i['id'] for i in next(s for s in p['sections'] if s['id']=='people')['items']}
+            pa,pb,phq=people(sessA),people(sessB),people(sessHQ)
+            assert app['A'] in pa and app['B'] not in pa,(pa,pb)
+            assert app['B'] in pb and app['A'] not in pb,(pa,pb)
+            assert app['A'] in phq and app['B'] in phq,phq
+            return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3}
+        check('branch-isolation-multi-branch-operating-rule',traced(branch_isolation))
         # --- S6 obs-engineering-layer: the health surface, in process ---
         # The GM desk and owner cockpit project native scheduler facts. This
         # pins the audience gate (including the Administrator refusal), the

@@ -105,6 +105,8 @@ def desk_world_get_all(label, world):
                 kept.append(dict(row))
         if limit_page_length is not None:
             kept = kept[int(limit_start or 0):int(limit_start or 0) + int(limit_page_length)]
+        if kwargs.get("pluck"):
+            return [row[kwargs["pluck"]] for row in kept]
         return kept
 
     return world_get_all
@@ -861,7 +863,8 @@ class GuidedEndpointRegistryTests(unittest.TestCase):
                                                    ["request_key", "student_applicant", "placement_decision", "existing_student",
                                                     "program", "academic_year", "academic_term"]),
         "toefl_house.admission.record_applicant": ("admission/__init__.py",
-                                                   ["request_key", "placement_decision", "first_name", "program", "academic_year"]),
+                                                   ["request_key", "placement_decision", "first_name", "program", "academic_year",
+                                                    "branch"]),
         "toefl_house.enrollment.enroll_in_program": ("enrollment/__init__.py",
                                                      ["request_key", "admission_decision"]),
         "toefl_house.api.release_decision": ("api.py",
@@ -2105,12 +2108,18 @@ class TeacherDeskWorldTests(unittest.TestCase):
     def test_branch_rule_narrows_what_is_seen_never_who_is_seen(self):
         # Identity resolution is scope-exempt: a Branch user-permission
         # for SYN-ISOL-A must not unlink a teacher whose employee row
-        # sits in HQ. Data reads stay scoped by default (P1).
+        # sits in HQ. Data reads stay scoped by default (P1) — including
+        # through the branch chain: an assignment is visible only when its
+        # class sits in the viewer's branch.
         world = self._world()
         world["Employee"] = [dict(row, branch="HQ") for row in world["Employee"]]
         world["User Permission"] = [
             {"name": "UP-1", "user": "desk-user@example.com",
              "allow": "Branch", "for_value": "SYN-ISOL-A"},
+        ]
+        world["Student Group"] = [
+            dict(row, th_branch="SYN-ISOL-A" if row["name"] == "CLASS-A" else "SYN-ISOL-B")
+            for row in world["Student Group"]
         ]
         payload = self._payload(world=world)
         items = {item["id"]: item

@@ -296,6 +296,7 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "first_name", label: "First name", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "program", label: "Program", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "academic_year", label: "Academic year", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "branch", label: "Branch", fieldtype: "Data", description: "Blank: the recording officer's own branch." },
 		],
 		"toefl_house.enrollment.enroll_in_program": [
 			{ fieldname: "admission_decision", label: "Admission decision", fieldtype: "Data", reqd: 1 },

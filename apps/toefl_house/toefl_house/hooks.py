@@ -35,7 +35,7 @@ _DESK_PAGES = (
 )
 page_js.update({name: "public/js/th_role_desks.js" for name in _DESK_PAGES})
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception", "Instructor"]]]},
-            {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Student Group"]]]}]
+            {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Student Group", "Student Applicant"]]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"
     for name in ("TH Placement Item Revision", "TH Placement Key Revision", "TH Placement Audit Event",
@@ -77,6 +77,13 @@ has_permission["TH Alerting Policy"] = "toefl_house.permissions.configuration_ha
 has_permission["TH Guardian Lifecycle Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
+# Branch isolation (the multi-branch operating rule): the four native
+# doctypes that are not synthetic-gated gain their own branch hooks. See
+# toefl_house.permissions.BRANCH_KINDS / BRANCH_NATIVE_DOCTYPES.
+has_permission["Student"] = "toefl_house.permissions.branch_has_permission"
+has_permission["Student Group"] = "toefl_house.permissions.branch_has_permission"
+has_permission["Student Applicant"] = "toefl_house.permissions.branch_has_permission"
+has_permission["Program Enrollment"] = "toefl_house.permissions.branch_has_permission"
 permission_query_conditions = {
     name: "toefl_house.permissions.query_" + suffix
     for name, suffix in (
@@ -114,6 +121,12 @@ permission_query_conditions["TH Alerting Policy"] = "toefl_house.permissions.con
 permission_query_conditions["TH Guardian Lifecycle Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
+# Branch isolation: the four native doctypes' row conditions (see
+# toefl_house.permissions.branch_query_*).
+permission_query_conditions["Student"] = "toefl_house.permissions.branch_query_student"
+permission_query_conditions["Student Group"] = "toefl_house.permissions.branch_query_student_group"
+permission_query_conditions["Student Applicant"] = "toefl_house.permissions.branch_query_student_applicant"
+permission_query_conditions["Program Enrollment"] = "toefl_house.permissions.branch_query_program_enrollment"
 override_whitelisted_methods = {
     "education.education.api.enroll_student": "toefl_house.admission.deny_enroll_student",
     # WeasyPrint download_pdf/get_html are gated through a safe wrapper in

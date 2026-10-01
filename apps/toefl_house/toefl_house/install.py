@@ -87,6 +87,9 @@ def after_migrate():
                           ("th_class_start_date", "th_sg_start_date")):
         if frappe.db.has_column("Student Group", column):
             frappe.db.add_index("Student Group", [column], index)
+    # Branch isolation lookups on applicants (branch-scoped admission funnel).
+    if frappe.db.has_column("Student Applicant", "th_branch"):
+        frappe.db.add_index("Student Applicant", ["th_branch"], "th_sa_branch")
     # D2 compensation locking reads (BUG-PAY-01): the one-off existence probes
     # lock matching Additional Salary rows; the covering index keeps the lock
     # footprint to the referenced rows instead of a table scan.

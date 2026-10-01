@@ -56,6 +56,8 @@ class IntakeGuardTests(unittest.TestCase):
         self.open_journeys = []
         self.prior_status = "Admitted"
         self.prior_paid = 0
+        self.branch_ups = []          # the actor's native User Permissions on Branch
+        self.created = []             # applicant docs created through the command
         previous = dict(sys.modules)
         self.addCleanup(lambda: (sys.modules.clear(), sys.modules.update(previous)))
         fake = self
@@ -99,13 +101,25 @@ class IntakeGuardTests(unittest.TestCase):
         def exists(doctype, name):
             if doctype == "Student Applicant":
                 return bool(fake.applicant_probe)
+            if doctype == "Branch":
+                return name != "NOPE"
             return True
 
         stub.db = SimpleNamespace(get_value=get_value, sql=sql, exists=exists)
 
+        def get_all(doctype, filters=None, pluck=None, limit_page_length=None, **kwargs):
+            if doctype == "User Permission":
+                assert filters == {"user": ACTOR, "allow": "Branch"}
+                return list(fake.branch_ups)
+            raise AssertionError(f"unexpected get_all {doctype}")
+
+        stub.get_all = get_all
+
         def get_doc(doctype, name=None, **kwargs):
             if isinstance(doctype, dict):
-                return _Doc(doctype["doctype"], doctype)
+                doc = _Doc(doctype["doctype"], doctype)
+                fake.created.append(doc)
+                return doc
             if doctype == "Student Applicant":
                 return SimpleNamespace(name=name, program="TH-PROG",
                                        academic_year="2026-27",
@@ -206,3 +220,34 @@ class IntakeGuardTests(unittest.TestCase):
         self.case_name = ""
         with self.assertRaises(_ValidationError):
             self._record()
+
+    # --- Branch of record (branch isolation) ---------------------------
+    def test_applicant_takes_the_actor_branch_from_native_user_permission(self):
+        self.branch_ups = ["Branch Alpha"]
+        result = self._record()
+        self.assertEqual(result["branch"], "Branch Alpha")
+        self.assertEqual(self.created[0]._payload["th_branch"], "Branch Alpha")
+
+    def test_hq_actor_without_branch_permission_leaves_applicant_unbranched(self):
+        self.branch_ups = []
+        result = self._record()
+        self.assertIsNone(result["branch"])
+        self.assertIsNone(self.created[0]._payload["th_branch"])
+
+    def test_multi_branch_actor_must_state_the_branch_explicitly(self):
+        self.branch_ups = ["Branch Alpha", "Branch Beta"]
+        result = self._record()
+        self.assertIsNone(result["branch"])
+        self.assertIsNone(self.created[0]._payload["th_branch"])
+        result = self.admission.record_applicant(
+            "test-key-record-00000099", "PD-1", "SYNTHETIC Probe",
+            "TH-PROG", "2026-27", branch="Branch Beta")
+        self.assertEqual(result["branch"], "Branch Beta")
+
+    def test_explicit_unknown_branch_is_refused(self):
+        self.branch_ups = []
+        with self.assertRaises(_ValidationError) as ctx:
+            self.admission.record_applicant(
+                "test-key-record-00000098", "PD-1", "SYNTHETIC Probe",
+                "TH-PROG", "2026-27", branch="NOPE")
+        self.assertIn("Unknown branch", str(ctx.exception))

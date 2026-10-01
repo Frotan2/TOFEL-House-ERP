@@ -25,7 +25,8 @@ Role Desk Page (native Page, Page Has-Role gated)
   └─ one whitelisted read: toefl_house.desk.<role>.work()
        ├─ role gate      (explicit desk audience, fail closed)
        ├─ scope          (native User Permission on Company/Branch honoured;
-       │                  company-scoped where the record carries `company`)
+       │                  company-scoped where the record carries `company`,
+       │                  branch-scoped as described in "Branch scope" below)
        ├─ minimal fields (declared per desk in desk/__init__.py PROJECTION_FIELDS)
        ├─ bounded reads  (every query carries an explicit limit)
        └─ sections       (facts / queues; every item carries stage + next action)
@@ -66,6 +67,37 @@ Rules that are binding for every desk:
    `tests/foundation/test_role_desks.cjs`).
 7. **One round trip per desk.** A desk load is a single `work()` call with a
    bounded, budgeted query set (see the per-desk query budget below).
+
+## Branch scope
+
+The multi-branch operating rule, enforced with the native User Permission on
+`Branch` and nothing else:
+
+- **Scoped users.** A user who carries a native User Permission for one or
+  more Branches sees only that branch's records. The branch fact lives in
+  the records the product already maintains: `Student Group.th_branch`
+  (class → branch), `Student Applicant.th_branch` (applicant → branch, set
+  from the recording officer's own branch when not stated explicitly), and
+  the class roster (`Student Group Student`, active rows), which ties a
+  Student to a class. Records whose branch cannot be resolved are invisible
+  to a scoped user (fail closed).
+- **Unscoped users.** A user with no Branch User Permission (HQ roles,
+  Administrator) is unrestricted — the native semantics: a User Permission
+  restricts only the users who hold it. The GM desk's branch-wide funnel is
+  this case, not a separate mechanism.
+- **Surfaces.** Desks scope their projections (direct `th_branch` field
+  where the doctype carries one; the class/roster/applicant chain
+  otherwise, resolved on the server before the projection query). Native
+  lists and forms carry the same rule through
+  `toefl_house.permissions` (row conditions plus the document gate for
+  `Student`, `Student Group`, `Student Applicant`, `Program Enrollment`, and
+  the guarded kinds that reference a branch). Placement content,
+  configuration, system records and identity resolution are branch-wide by
+  design.
+- **Onboarding.** When a staff user is created, the administrator assigns
+  their Branch as a native User Permission (`List → User Permission`);
+  nothing in the app needs to change. A multi-branch user must state the
+  branch explicitly in commands that record branch facts.
 
 ## The desks
 

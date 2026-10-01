@@ -457,9 +457,11 @@ def viewer_roles():
 def scope_filters(desk):
     """Native scope: the viewer's User Permission on Company/Branch, applied
     only to fields the projected doctypes really carry. Returns a dict of
-    {fieldname: allowed_values} that callers merge into their filters."""
+    {fieldname: allowed_values} that callers merge into their filters.
+    Branch matches the native `branch` field where present and this app's
+    `th_branch` field (Student Group, Student Applicant) otherwise."""
     scopes = {}
-    for allow, fieldname in (("Company", "company"), ("Branch", "branch")):
+    for allow, fieldnames in (("Company", ("company",)), ("Branch", ("branch", "th_branch"))):
         allowed = frappe.get_all(
             "User Permission",
             filters={"user": frappe.session.user, "allow": allow},
@@ -467,8 +469,107 @@ def scope_filters(desk):
             limit_page_length=100,
         )
         if allowed:
-            scopes[fieldname] = allowed
+            for fieldname in fieldnames:
+                scopes[fieldname] = allowed
     return scopes
+
+
+# Projected doctypes whose branch fact is not a direct field, resolved
+# through records the product already maintains: the class roster
+# (Student Group Student, active rows), the class branch
+# (Student Group.th_branch) and the applicant branch
+# (Student Applicant.th_branch). Each doctype's allowed document names are
+# resolved through the same sanctioned get_all seam every desk read uses
+# (no raw SQL), and the filter is applied on `name`, so an empty result set
+# matches nothing (fail closed). Doctypes without an entry (placement
+# content, configuration, system records, identity) are intentionally
+# branch-wide.
+BRANCH_CHAIN_FILTERS = ("Student", "Student Group Student", "Student Attendance",
+                        "Course Schedule", "Program Enrollment", "Fees",
+                        "TH Enrollment Exit", "TH Teaching Assignment",
+                        "TH Correction Request", "TH Admission Decision")
+_CHAIN_LIMIT = 10000  # bounded scope resolution; truncation is fail-closed
+
+
+def _branch_allowed_names(doctype, branches):
+    """Document names a branch-scoped viewer may see, resolved through the
+    class -> branch and roster -> student chains."""
+    groups = [row["name"] for row in frappe.get_all(
+        "Student Group", filters={"th_branch": ("in", branches)},
+        fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+    if doctype == "Student Group Student":
+        if not groups:
+            return []
+        return [row["name"] for row in frappe.get_all(
+            doctype, filters={"parent": ("in", groups), "active": 1},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+    if doctype in ("Student Attendance", "Course Schedule", "TH Teaching Assignment"):
+        if not groups:
+            return []
+        return [row["name"] for row in frappe.get_all(
+            doctype, filters={"student_group": ("in", groups)},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+    roster = [row["student"] for row in frappe.get_all(
+        "Student Group Student", filters={"parent": ("in", groups), "active": 1},
+        fields=["student"], limit_page_length=_CHAIN_LIMIT)] if groups else []
+    if doctype == "Student":
+        return roster
+    if doctype in ("Program Enrollment", "Fees", "TH Enrollment Exit"):
+        if not roster:
+            return []
+        return [row["name"] for row in frappe.get_all(
+            doctype, filters={"student": ("in", roster)},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+    if doctype == "TH Correction Request":
+        if not roster:
+            return []
+        fee_names = [row["name"] for row in frappe.get_all(
+            "Fees", filters={"student": ("in", roster)},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+        if not fee_names:
+            return []
+        return [row["name"] for row in frappe.get_all(
+            doctype, filters={"fees": ("in", fee_names)},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+    if doctype == "TH Admission Decision":
+        applicants = [row["name"] for row in frappe.get_all(
+            "Student Applicant", filters={"th_branch": ("in", branches)},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+        names = set()
+        for field, values in (("student_applicant", applicants),
+                              ("existing_student", roster),
+                              ("native_student", roster)):
+            if values:
+                names |= {row["name"] for row in frappe.get_all(
+                    doctype, filters={field: ("in", values)},
+                    fields=["name"], limit_page_length=_CHAIN_LIMIT)}
+        return sorted(names)
+    return []
+
+
+def _branch_name_filter(desk, doctype):
+    """The ``(name, in, allowed_names)`` filter for branch-scoped viewers,
+    or None when no branch filter applies: the doctype is branch-wide by
+    design, or the viewer carries no Branch User Permission (HQ). A viewer
+    scoped to no branch gets an empty set, which matches nothing."""
+    if doctype not in BRANCH_CHAIN_FILTERS:
+        return None
+    rows = frappe.get_all(
+        "User Permission",
+        filters={"user": frappe.session.user, "allow": "Branch"},
+        pluck="for_value",
+        limit_page_length=100,
+    )
+    if not rows:
+        return None
+    seen, branches = set(), []
+    for value in rows:
+        if value and value not in seen:
+            seen.add(value)
+            branches.append(value)
+    if not branches:
+        return ("in", [])
+    return ("in", _branch_allowed_names(doctype, branches))
 
 
 def _apply_scope(desk, doctype, filters):
@@ -476,6 +577,9 @@ def _apply_scope(desk, doctype, filters):
         meta_field = fieldname if frappe.get_meta(doctype).has_field(fieldname) else None
         if meta_field and meta_field not in filters:
             filters[meta_field] = ("in", allowed)
+    branch_filter = _branch_name_filter(desk, doctype)
+    if branch_filter is not None and "name" not in filters:
+        filters["name"] = branch_filter
     return filters
 
 
