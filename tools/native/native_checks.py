@@ -5000,8 +5000,26 @@ def main():
                 pre={r['name'] for r in as_user('teacher_two',lambda:frappe.get_list(
                     'Student Group',fields=['name'],limit_page_length=100))}
                 frappe.set_user('Administrator')
+                # ISOL DIAG: the non-strict shape failure must be self-
+                # explaining — the group rows, the strict flag, the viewer's
+                # User Permission rows, and the raw non-strict SQL result.
+                isoldiag=[]
+                isoldiag.append(('strict',frappe.db.get_single_value(
+                    'System Settings','apply_strict_user_permissions')))
+                isoldiag.append(('groups',frappe.db.sql(
+                    "select name,th_branch,disabled,ifnull(th_class_status,'') st "
+                    "from `tabStudent Group` order by name limit 30",as_dict=True)))
+                isoldiag.append(('ups',frappe.get_all('User Permission',
+                    filters={'user':users['teacher_two']},
+                    fields=['allow','for_value','applicable_for','block'],limit=10)))
+                isoldiag.append(('raw_nonstrict',[r[0] for r in frappe.db.sql(
+                    "select name from `tabStudent Group` "
+                    "where ifnull(th_branch,'')='' or th_branch in ('SYN-ISOL-A') "
+                    "order by name")]))
+                isoldiag.append(('pre',sorted(pre)))
+                print('ISOL-DIAG '+repr(isoldiag),flush=True)
                 assert {GRP_A,GRP_B,GRP_C,GRP_D,GRP_HTTP,IA}<=pre and IB not in pre, \
-                    ('native non-strict user-permission shape changed',sorted(pre))
+                    ('native non-strict user-permission shape changed',sorted(pre),isoldiag)
                 # The branchless fixtures then take the far branch, so the
                 # scoping cell below proves exact isolation between two
                 # populated branches on the production-default mode.
