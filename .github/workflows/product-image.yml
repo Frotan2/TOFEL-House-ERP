@@ -488,8 +488,10 @@ jobs:
                                  headers={"X-Frappe-CSRF-Token": desk_token(admin2)})
           payload = json.loads(text)
           assert "CSRFTokenError" not in text, "authenticated read masked by the CSRF wall: " + text[:200]
-          assert int(payload.get("count", 0)) >= 1, payload
-          progress("student count OK: %s" % payload.get("count"))
+          # frappe's whitelist envelope carries the return value in "message".
+          count = payload.get("count", payload.get("message", 0))
+          assert int(count) >= 1, payload
+          progress("student count OK: %s" % count)
           staff2 = login_retry("staff-a@example.test", staff_pw)
           status, text, _ = call("/api/method/toefl_house.desk.reception.work", session=staff2)
           assert status == 200 and "exc_info" not in json.loads(text), text[:300]
