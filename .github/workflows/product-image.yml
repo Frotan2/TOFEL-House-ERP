@@ -414,16 +414,27 @@ jobs:
           progress("site answered after restart")
           # compose v2 emits either a JSON array or one object per line
           # (NDJSON) depending on the version; accept both.
-          raw = subprocess.check_output(
-              ["docker", "compose", "ps", "--format", "json"], text=True).strip()
-          print("T-SITE compose ps raw: " + raw[:400].replace("\n", " | "), flush=True)
-          states = json.loads(raw) if raw.startswith("[") else [
-              json.loads(line) for line in raw.splitlines() if line.strip()]
-          names = sorted(item["Name"] for item in states)
-          running = {item["Name"] for item in states if item.get("State") == "running"}
-          missing = set(names) - running
-          progress("ps parsed: %d services, missing=%s" % (len(names), sorted(missing)))
-          assert not missing, "services not running after restart: %s" % missing
+          def stack_states():
+              raw = subprocess.check_output(
+                  ["docker", "compose", "ps", "--format", "json"], text=True).strip()
+              return json.loads(raw) if raw.startswith("[") else [
+                  json.loads(line) for line in raw.splitlines() if line.strip()]
+          # The web can answer before the slower services (socketio's node
+          # process, worker) have settled - poll for the full stack instead
+          # of asserting on the first sample.
+          states = missing = None
+          for attempt in range(36):  # up to ~6 minutes
+              states = stack_states()
+              names = sorted(item["Name"] for item in states)
+              running = {item["Name"] for item in states if item.get("State") == "running"}
+              missing = set(names) - running
+              if not missing:
+                  break
+              progress("ps retry %d: waiting for %s" % (attempt + 1, sorted(missing)))
+              time.sleep(10)
+          progress("ps settled: %d services, missing=%s" % (len(states), sorted(missing or set())))
+          print("T-SITE compose ps raw: " + repr(states)[:400], flush=True)
+          assert not missing, "services not running after restart: %s" % sorted(missing)
           # After a full restart the web can answer before the database is
           # back; the logins (which query the DB) therefore retry briefly.
           def login_retry(username, password, tries=12):
