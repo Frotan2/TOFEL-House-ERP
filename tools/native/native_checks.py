@@ -4816,11 +4816,53 @@ def main():
             # 3) Desk surface over HTTP: the scoped receptionist sees only
             #    their branch's people; the unscoped one sees both.
             sessA=login('branch_a_staff');sessB=login('branch_b_staff');sessHQ=login('receptionist')
-            def people(sess):
-                p=sess.get(base+'/api/method/toefl_house.desk.reception.work',timeout=30).json()['message']
-                return {i['id'] for i in next(s for s in p['sections'] if s['id']=='people')['items']}
-            pa,pb,phq=people(sessA),people(sessB),people(sessHQ)
-            assert app['A'] in pa and app['B'] not in pa,(pa,pb)
+            # BRISO DIAG: capture the exact state so a failure is self-
+            # explaining (rows, in-process reads as the scoped user, and the
+            # raw HTTP payloads) instead of another empty-set mystery.
+            diag=[]
+            diag.append(('site',getattr(frappe.local,'site',None)))
+            diag.append(('base',base))
+            diag.append(('applied_rows',frappe.db.sql(
+                "select name,application_status,th_branch from `tabStudent Applicant` "
+                "where application_status='Applied' order by creation limit 12",as_dict=True)))
+            diag.append(('appA_row',frappe.db.get_value(
+                'Student Applicant',app['A'],['application_status','th_branch'],as_dict=True)))
+            diag.append(('appB_row',frappe.db.get_value(
+                'Student Applicant',app['B'],['application_status','th_branch'],as_dict=True)))
+            frappe.set_user(users['branch_a_staff'])
+            try:
+                diag.append(('inproc_scoped',frappe.get_all(
+                    'Student Applicant',
+                    filters={'application_status':'Applied','th_branch':('in',[BR_A])},
+                    fields=['name','application_status','th_branch'])))
+            except Exception as e:
+                diag.append(('inproc_scoped_error',repr(e)))
+            try:
+                diag.append(('inproc_unscoped',frappe.get_all(
+                    'Student Applicant',filters={'application_status':'Applied'},
+                    fields=['name','th_branch'])))
+            except Exception as e:
+                diag.append(('inproc_unscoped_error',repr(e)))
+            frappe.set_user('Administrator')
+            def people(sess,cap=None):
+                r=sess.get(base+'/api/method/toefl_house.desk.reception.work',timeout=30)
+                if cap is not None:
+                    cap.append(('status',r.status_code))
+                    cap.append(('keys',sorted(r.json().keys())))
+                p=r.json()['message']
+                if isinstance(p,str):
+                    if cap is not None:
+                        cap.append(('message_text',p[:500]))
+                    return set()
+                items=next(s for s in p['sections'] if s['id']=='people')['items']
+                if cap is not None:
+                    cap.append(('items',items[:6]))
+                return {i['id'] for i in items}
+            capA=[];capB=[];capHQ=[]
+            pa=people(sessA,capA);pb=people(sessB,capB);phq=people(sessHQ,capHQ)
+            diag.append(('httpA',capA));diag.append(('httpB',capB));diag.append(('httpHQ',capHQ))
+            print('BRISO-DIAG '+repr(diag),flush=True)
+            assert app['A'] in pa and app['B'] not in pa,(pa,pb,phq,diag)
             assert app['B'] in pb and app['A'] not in pb,(pa,pb)
             assert app['A'] in phq and app['B'] in phq,phq
             return {'branches':2,'scoped_staff':2,'hq_controls':2,'surfaces_proved':3}
