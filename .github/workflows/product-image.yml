@@ -170,8 +170,17 @@ jobs:
           echo "stage: staff-user exec OK" >> tailnet-progress.txt
           printf 'exec output:\n%s\n' "$staff_out" >> tailnet-progress.txt
           echo "$staff_out" | grep -q "staff user ready"
-          python3 - <<'EOF'
+          # The first-run credentials file is 0600 and owned by the
+          # container's service user (bootstrap writes it for the owner),
+          # so the host runner user cannot read it directly. Read it
+          # in-container as root — the product's own permission model —
+          # and keep the value in a shell variable that is never echoed.
+          admin_cred=$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt)
+          test -n "$admin_cred"
+          echo "stage: admin credentials read (in-container root)" >> tailnet-progress.txt
+          TAILNET_ADMIN_PW="$admin_cred" python3 - <<'EOF'
           import json
+          import os
           import subprocess
           import urllib.error
           import urllib.parse
@@ -230,10 +239,8 @@ jobs:
               assert sids, ("login returned no sid cookie", status, text[:300], cookies)
               return sids[0].split(";", 1)[0]
 
-          progress("credentials file read start")
-          admin_file = open("data/sites/toeflhouse.localhost/private/first-run-credentials.txt").read()
-          progress("credentials file read OK")
-          admin_pw = next(l.split("Password:", 1)[1].strip() for l in admin_file.splitlines() if "Password:" in l)
+          progress("admin password present: %s" % ("yes" if os.environ.get("TAILNET_ADMIN_PW") else "no"))
+          admin_pw = os.environ["TAILNET_ADMIN_PW"]
           staff_pw = "staff-a-ci-123"
           progress("staff login start")
           staff = login("staff-a@example.test", staff_pw)
@@ -450,7 +457,10 @@ jobs:
           # down: exec needs the container, and CI has no concurrent
           # writers); paths are relative to the bench directory inside the
           # container, which is where bench resolves them from.
-          admin_pw=$(awk '/^Password: /{print $2}' "$site/private/first-run-credentials.txt")
+          # The credentials file is 0600 and owned by the container's
+          # service user; read it in-container as root (see the tailnet
+          # step). db.env is host-generated and host-readable.
+          admin_pw=$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt | awk '/^Password: /{print $2}')
           db_root_pw=$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)
           test -n "$admin_pw"
           test -n "$db_root_pw"

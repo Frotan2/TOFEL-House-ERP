@@ -5011,7 +5011,7 @@ def main():
                     "from `tabStudent Group` order by name limit 30",as_dict=True)))
                 isoldiag.append(('ups',frappe.get_all('User Permission',
                     filters={'user':users['teacher_two']},
-                    fields=['allow','for_value','applicable_for','block'],limit=10)))
+                    fields=['allow','for_value','applicable_for'],limit=10)))
                 isoldiag.append(('raw_nonstrict',[r[0] for r in frappe.db.sql(
                     "select name from `tabStudent Group` "
                     "where ifnull(th_branch,'')='' or th_branch in ('SYN-ISOL-A') "
