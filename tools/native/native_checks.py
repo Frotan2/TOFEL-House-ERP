@@ -2992,8 +2992,10 @@ def main():
                 'enrollment_officer':['Enrollment Officer'],
                 'teaching_scheduler':['Teaching Scheduler'],
                 'attendance_recorder':['Attendance Recorder'],
-                # The Finance workspace keeps its existing upstream module anchor.
-                'finance_officer':['Finance Officer','Accounts User'],
+                # The Finance workspace keeps its existing upstream module
+                # anchor. Mirrors the fixture mapping (dual-role desk user,
+                # see setup above).
+                'finance_officer':['Finance Officer','Accounts User','Finance Manager'],
             }
             for label,roles in grants.items():
                 u=frappe.get_doc('User',users[label])
@@ -3656,8 +3658,12 @@ def main():
             # their HTTP session (later direct calls pass on the runner's
             # warm role cache). HTTP needs the real thing: restore the
             # fixture roles and take a fresh login before racing.
+            # Restore the FULL fixture role set (dual-role desk user: the
+            # Finance Manager desk audience plus the Finance Officer acting
+            # role), so the later role-desk qualification sees the designed
+            # memberships, not a partial restore.
             restored=frappe.get_doc('User',users['finance_officer'])
-            restored.set('roles',[{'role':r} for r in ('Finance Officer','Accounts User')])
+            restored.set('roles',[{'role':r} for r in ('Finance Officer','Accounts User','Finance Manager')])
             restored.save();frappe.db.commit()
             sessions['finance_officer']=login('finance_officer')
             ctemp=as_user('finance_officer',lambda:tcomp.create_teaching_contract(
