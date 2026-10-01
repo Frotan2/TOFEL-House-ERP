@@ -35,8 +35,51 @@ jobs:
           mkdir -p product/data/secrets
           printf 'MARIADB_ROOT_PASSWORD=%s\n' "$(openssl rand -hex 24)" > product/data/secrets/db.env
           docker compose -f product/docker-compose.yml config --quiet
+      - name: Node tarball integrity (official nodejs.org SHASUMS256)
+        # Resolves the published sha256 of the exact Node tarball the Dockerfile
+        # downloads. If the matrix carries a pin, any upstream drift fails the
+        # build here, before anything is compiled; the live value is what the
+        # build verifies.
+        run: |
+          set -euo pipefail
+          node_version=$(python3 -c "
+          import json
+          matrix = json.load(open('docs/engineering/foundation-version-matrix.json'))
+          print(next(c['selected_version'] for c in matrix['components'] if c['name'] == 'node'))
+          ")
+          curl -fsSL "https://nodejs.org/dist/v${node_version}/SHASUMS256.txt" -o /tmp/node-shasums.txt
+          live=$(grep -E " node-v${node_version}-linux-x64\.tar\.xz\$" /tmp/node-shasums.txt | awk '{print $1}')
+          test -n "$live"
+          pinned=$(python3 -c "
+          import json
+          matrix = json.load(open('docs/engineering/foundation-version-matrix.json'))
+          print(next(c.get('tarball_sha256', '') for c in matrix['components'] if c['name'] == 'node'))
+          ")
+          if [ -n "$pinned" ] && [ "$pinned" != "$live" ]; then
+            echo "::error::Node tarball sha256 drift: matrix pins ${pinned}, nodejs.org publishes ${live}"
+            exit 1
+          fi
+          echo "NODE_TARBALL_SHA256=${live}" >> "$GITHUB_ENV"
+          if [ -n "$pinned" ]; then
+            echo "::notice title=Node tarball::v${node_version} linux-x64 sha256 ${live} (matrix pin verified)"
+          else
+            echo "::notice title=Node tarball::v${node_version} linux-x64 sha256 ${live} (recorded; matrix pin pending)"
+          fi
+      - name: Record base image resolved digest
+        # The Python base image is pinned by exact patch tag; the registry's
+        # resolved digest for that tag is recorded per build so the pin's
+        # actual content is traceable (the tag is immutable once published).
+        run: |
+          set -euo pipefail
+          base=$(python3 -c "
+          import json
+          matrix = json.load(open('docs/engineering/foundation-version-matrix.json'))
+          print('python:' + next(c['selected_version'] for c in matrix['components'] if c['name'] == 'python') + '-slim-bookworm')
+          ")
+          digest=$(docker buildx imagetools inspect "$base" 2>/dev/null | grep -m1 -oE 'sha256:[0-9a-f]{64}' || true)
+          echo "::notice title=Base image digest::${base} -> ${digest:-not resolvable from this runner}"
       - name: Build application image
-        run: docker build -f product/app.Dockerfile -t toefl-house-erp-app:ci -t toefl-house-erp-app:local .
+        run: docker build --build-arg NODE_TARBALL_SHA256="${NODE_TARBALL_SHA256}" -f product/app.Dockerfile -t toefl-house-erp-app:ci -t toefl-house-erp-app:local .
       - name: Report image footprint
         run: |
           set -euo pipefail

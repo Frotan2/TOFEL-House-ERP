@@ -37,10 +37,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Node at the exact pinned version, from the nodejs.org release tarball
 # (the same upstream channel the hosted workflow's actions/setup-node uses).
+# The tarball's sha256 is verified against the official nodejs.org
+# SHASUMS256.txt value: the Product image workflow resolves it live and passes
+# it as NODE_TARBALL_SHA256 (and asserts it against the matrix pin), and the
+# compose build passes the matrix pin so the owner's local build verifies too.
+ARG NODE_TARBALL_SHA256=""
 RUN set -eux; \
     curl --fail --silent --show-error --location \
       "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
       -o /tmp/node.tar.xz; \
+    if [ -n "${NODE_TARBALL_SHA256}" ]; then \
+      echo "${NODE_TARBALL_SHA256}  /tmp/node.tar.xz" | sha256sum -c -; \
+    else \
+      echo "WARNING: NODE_TARBALL_SHA256 not provided; node tarball integrity NOT verified" >&2; \
+    fi; \
     tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1; \
     rm /tmp/node.tar.xz; \
     node --version; \

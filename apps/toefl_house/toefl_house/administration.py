@@ -7,6 +7,7 @@ student, payroll, monitoring, or audit authority.
 import json
 
 import frappe
+from toefl_house import security
 from toefl_house.policy import validate_request_key
 
 CONTROL_ROLES = {"Course Owner", "General Manager"}
@@ -40,19 +41,19 @@ def get_control_center_snapshot():
     return {
         "viewer_roles": sorted(roles.intersection(CONTROL_ROLES)),
         "managed_roles": sorted(MANAGED_ROLES),
-        "production_state": "REJECT",
-        "synthetic_only_guard": "REQUIRED",
+        "production_state": security.site_mode(),
+        "synthetic_only_guard": "ENFORCED",
         "deployment_phase": "LOCAL_SERVER_TAILSCALE",
         "operational_attention": [
             {
                 "id": "dependency-security",
-                "state": "UPSTREAM-BLOCKED / REJECT",
-                "detail": "SEC-DEPS-01 remains a hard production stop.",
+                "state": "OPEN (gates internet exposure)",
+                "detail": "The pinned stack carries known upstream advisories (SEC-DEPS-01). The gate binds to internet exposure; the selected deployment (D13/D15) is loopback-only with private-Tailscale access and opens none.",
             },
             {
                 "id": "d8-evidence",
-                "state": "BLOCKED",
-                "detail": "Selected deployment, backup/recovery, branch-isolation, monitoring, capacity, and rollback evidence is not yet proven.",
+                "state": "IN PROGRESS",
+                "detail": "Remaining evidence (backup/restore rehearsal, branch isolation, upgrade/rollback rehearsal, monitoring, capacity baseline) is being recorded in docs/engineering/ACCEPTANCE.md as each acceptance round proves it in CI.",
             },
             {
                 "id": "future-hosting",

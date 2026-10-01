@@ -73,7 +73,7 @@ def main() -> int:
                                  "pkg-config", "libmariadb-dev", "libffi-dev", "libssl-dev",
                                  "libjpeg-dev", "zlib1g-dev", "liblcms2-dev", "libpango-1.0-0",
                                  "libharfbuzz0b", "libpangoft2-1.0-0", "libcups2-dev"], timeout=600)
-        runtime = components["python"]["runtime_artifact_candidate"]
+        runtime = components["python"]["runtime_artifact"]
         archive = temp / "python.tar.gz"
         url = ("https://github.com/astral-sh/python-build-standalone/releases/download/"
                + runtime["release"] + "/" + runtime["name"].replace("+", "%2B"))
@@ -89,9 +89,11 @@ def main() -> int:
             raise RuntimeError("Python runtime version mismatch")
         run("python-ssl", [str(temp / "python/bin/python3"), "-c", "import ssl; print(ssl.OPENSSL_VERSION)"])
         report["image_digests"] = {}
-        for name, tag in [("mariadb", components["mariadb"]["selected_version"]),
-                          ("redis", components["redis"]["selected_version"] + "-alpine")]:
-            image = f"{name}:{tag}"
+        # Probe exactly the images the product runs (matrix digests), not tag
+        # assumptions: product/docker-compose.yml pins these digests, so the
+        # probe and the product can never diverge on which image they mean.
+        for name in ("mariadb", "redis"):
+            image = components[name]["image_digest"]
             run(name + "-pull", ["docker", "pull", image], timeout=600)
             digests = run(name + "-digests", ["docker", "image", "inspect", image, "--format", "{{json .RepoDigests}}"])
             report["image_digests"][name] = json.loads(digests)
@@ -133,8 +135,8 @@ DROP DATABASE foundation_probe;
             raise RuntimeError("MariaDB version/rollback result mismatch")
         if lines[1] != "utf8mb4\tutf8mb4_unicode_ci":
             raise RuntimeError("MariaDB character set/collation mismatch")
-        image = "redis:" + components["redis"]["selected_version"] + "-alpine"
-        run("redis-start", ["docker", "run", "--detach", "--name", "foundation-probe-redis", image])
+        run("redis-start", ["docker", "run", "--detach", "--name", "foundation-probe-redis",
+                             components["redis"]["image_digest"]])
         pong = run("redis-ping", ["docker", "exec", "foundation-probe-redis", "redis-cli", "PING"])
         if pong != "PONG":
             raise RuntimeError("Redis did not return PONG")

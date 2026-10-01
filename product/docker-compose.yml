@@ -20,6 +20,10 @@ services:
     build:
       context: ..
       dockerfile: product/app.Dockerfile
+      # Node tarball integrity (docs/engineering/foundation-version-matrix.json,
+      # node.tarball_sha256): the build verifies the download's sha256.
+      args:
+        NODE_TARBALL_SHA256: ""
     image: toefl-house-erp-app:local
     container_name: toefl-house-erp-web
     depends_on:

@@ -81,12 +81,15 @@ class FakeFrappe(types.ModuleType):
 def load_administration(fake_frappe):
     policy = types.ModuleType("toefl_house.policy")
     policy.validate_request_key = lambda key: None
+    security = types.ModuleType("toefl_house.security")
+    security.site_mode = lambda: "REFUSED"  # the fail-closed reading
     package = types.ModuleType("toefl_house")
     package.__path__ = []
     with patch.dict(sys.modules, {
         "frappe": fake_frappe,
         "toefl_house": package,
         "toefl_house.policy": policy,
+        "toefl_house.security": security,
     }):
         spec = importlib.util.spec_from_file_location("toefl_house.administration", ADMIN_PATH)
         module = importlib.util.module_from_spec(spec)

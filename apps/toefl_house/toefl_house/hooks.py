@@ -1,8 +1,8 @@
 app_name = "toefl_house"
-app_title = "TOEFL House Placement (Synthetic Qualification)"
+app_title = "TOEFL House ERP"
 app_publisher = "TOEFL House"
-app_description = "Governed placement (fail-closed until production activation), thin admission, native Program Enrollment and native teaching operations"
-app_email = "validation@example.test"
+app_description = "TOEFL House institute operations on the native ERP stack: placement testing, admission, enrollment, classes, attendance, tuition and teacher compensation"
+app_email = "toeflhouse@toeflhouse.localhost"
 app_license = "MIT"
 required_apps = ["erpnext", "education", "foundation_security"]
 after_install = "toefl_house.install.after_install"

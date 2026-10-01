@@ -1,8 +1,8 @@
 app_name = "foundation_security"
 app_title = "Foundation Security"
-app_publisher = "Foundation validation maintainers"
-app_description = "Generic session and native permission safeguards; no domain schema"
-app_email = "validation@example.test"
+app_publisher = "TOEFL House"
+app_description = "Deny-by-default session and native permission safeguards; no domain schema"
+app_email = "toeflhouse@toeflhouse.localhost"
 app_license = "MIT"
 required_apps = ["education"]
 on_session_creation = "foundation_security.guards.on_session_creation"

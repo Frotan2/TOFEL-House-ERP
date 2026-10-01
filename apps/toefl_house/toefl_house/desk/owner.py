@@ -33,27 +33,45 @@ DECISION = "TH Placement Decision"
 STUDENT = "Student"
 GROUP = "Student Group"
 
-# The release posture facts are static, reviewed constants — the same records
-# the canonical ledger and the administration control centre state. They are
-# not computed from the database and no gate state can be derived here.
-# Deployment value is the owner's selected current deployment (local/server
-# through Tailscale) per docs/owner-decisions.json as of 2026-09-16.
-# The line carries the as-of date so a future ledger change cannot silently
-# stale the cockpit.
+# Release posture lines. All are the same records the administration control
+# centre serves, so the cockpit and the control centre cannot disagree.
+#
+# The production line is the only dynamic one: it states the site's own
+# resolved production mode (toefl_house.security.site_mode — the same
+# resolver the LAUNCH-RUNBOOK verification uses), not a stored claim. If the
+# site settings are unreadable it fails closed to REFUSED.
+#
+# The dependency-security line states what SEC-DEPS-01 is today: known
+# upstream advisories on the pinned stack. It gates internet exposure; the
+# selected deployment (owner decision D13/D15) is loopback-only with
+# private-Tailscale access and does not open internet exposure.
+#
+# Deployment value is the owner's selected current deployment per
+# docs/owner-decisions.json; the line carries the as-of date so a future
+# ledger change cannot silently stale the cockpit.
 RELEASE_POSTURE = [
     {"label": "Production",
-     "definition": "Production acceptance state from the acceptance ledger.",
-     "value": "REJECT", "owner": None},
+     "definition": "Production mode resolved by the site's own guard (LAUNCH-RUNBOOK verification): REFUSED or PRODUCTION.",
+     "value": None, "owner": None},  # value filled by _production_mode()
     {"label": "Dependency security (SEC-DEPS-01)",
-     "definition": "Upstream dependency-audit failure; a hard production stop.",
-     "value": "UPSTREAM-BLOCKED / REJECT", "owner": None},
+     "definition": "The pinned stack carries known upstream advisories. The gate binds to internet exposure; the selected deployment (D13/D15) is loopback-only with private-Tailscale access and opens none.",
+     "value": "OPEN (gates internet exposure)", "owner": None},
     {"label": "Synthetic-only activation",
-     "definition": "All owned business commands stay confined to explicitly isolated synthetic sites until the owner authorizes activation.",
-     "value": "REQUIRED", "owner": None},
+     "definition": "All owned business commands stay confined to explicitly isolated synthetic sites until the owner authorizes activation; every command REFUSES otherwise.",
+     "value": "ENFORCED", "owner": None},
     {"label": "Deployment",
      "definition": "Current deployment decision recorded by the owner in docs/owner-decisions.json (as of 2026-09-16).",
      "value": "LOCAL_SERVER_TAILSCALE (as of 2026-09-16 per docs/owner-decisions.json)", "owner": None},
 ]
+
+
+def _production_mode():
+    """The site's own production mode; REFUSED when settings are unreadable."""
+    try:
+        from toefl_house import security
+        return security.site_mode()
+    except Exception:
+        return "REFUSED"
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -145,7 +163,8 @@ def cockpit():
                     empty_title="No recorded actions yet",
                     empty_body="When staff complete an important action, the record appears here. The full trail stays with auditor roles."),
             section("posture", "Release posture (fail-closed facts)", "facts",
-                    facts=RELEASE_POSTURE,
+                    facts=[dict(row, value=_production_mode() if row["value"] is None else row["value"])
+                           for row in RELEASE_POSTURE],
                     empty_title="Release posture is always stated",
                     empty_body="These facts come from the reviewed acceptance ledger, not from a live computation."),
             section("health", "System health counts", "facts", facts=health_facts,

@@ -130,6 +130,62 @@ class PinParityContract(unittest.TestCase):
         self.assertNotIn("> /build/.yarnrc", text)
 
 
+class DependencyPinContract(unittest.TestCase):
+    """P0-3: the matrix is the single canonical pin source and every build /
+    CI path binds to it — no candidate-era fields with contradictory facts."""
+
+    MATRIX = ROOT / "docs/engineering" / "foundation-version-matrix.json"
+
+    def test_matrix_is_the_canonical_pin_source(self):
+        matrix = json.loads(self.MATRIX.read_text())
+        # Candidate-era keys are gone: each was a second (often contradictory)
+        # record of the same fact.
+        for key in ("kind", "phase2_gate_passed", "approved_runtime_bundle",
+                    "baseline_commit", "review_date", "canonical_language",
+                    "host_observed", "hosted_runner_probe",
+                    "hosted_installation_proof", "unresolved_pins",
+                    "owned_security_extension_candidate"):
+            self.assertNotIn(key, matrix, f"stale top-level key {key}")
+        self.assertIn("lock_status", matrix)
+        for part in matrix_parts().values():
+            for key in ("status", "source_version", "runtime_imported_version", "risk"):
+                self.assertNotIn(key, part, f"stale field {key}")
+
+    def test_upstream_contradictions_are_recorded_not_hidden(self):
+        parts = matrix_parts()
+        # education: the tag v16.1.0 vs source 16.0.1 mismatch is an upstream
+        # fact. The matrix states the runtime truth and records the mismatch
+        # instead of pretending the tag and the source agree.
+        self.assertEqual(parts["education"]["selected_version"], "16.0.1")
+        self.assertEqual(parts["education"]["tag"], "v16.1.0")
+        self.assertIn("mismatch", parts["education"]["note"].lower())
+
+    def test_node_tarball_integrity_is_verified_end_to_end(self):
+        # The Dockerfile verifies the nodejs.org tarball sha256 at build time;
+        # the workflow resolves the official SHASUMS256 and asserts it against
+        # the matrix pin before building; compose passes the matrix pin so the
+        # owner's local build verifies too.
+        text = DOCKERFILE.read_text()
+        self.assertIn("ARG NODE_TARBALL_SHA256", text)
+        self.assertIn("sha256sum -c", text)
+        compose = COMPOSE.read_text()
+        arg_value = re.search(r'NODE_TARBALL_SHA256:\s*"([^"]*)"', compose).group(1)
+        pinned = next(c.get("tarball_sha256", "") for c in json.loads(self.MATRIX.read_text())["components"]
+                      if c["name"] == "node")
+        self.assertEqual(arg_value, pinned, "compose build arg must equal the matrix pin")
+        workflow = (ROOT / ".github/workflows" / "product-image.yml").read_text()
+        self.assertIn("SHASUMS256.txt", workflow)
+        self.assertIn("--build-arg NODE_TARBALL_SHA256", workflow)
+
+    def test_runner_probe_probes_the_pinned_images(self):
+        # The probe pulls the exact digest-pinned images the product runs —
+        # not tag guesses — so probe and product cannot diverge on which
+        # image they mean.
+        probe = (ROOT / "tools/foundation" / "runner_probe.py").read_text()
+        self.assertIn('components["redis"]["image_digest"]', probe)
+        self.assertNotIn("alpine", probe)
+
+
 class DesktopContract(unittest.TestCase):
     def test_host_exposure_is_loopback_only(self):
         text = COMPOSE.read_text()
