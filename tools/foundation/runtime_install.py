@@ -130,6 +130,44 @@ def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict 
     return ["::warning file=tools/foundation/runtime_install.py::" + line for line in lines]
 
 
+def untriaged_advisory_annotations(stack_audit: dict | None) -> list[str]:
+    """``::error::`` lines naming the untriaged findings only.
+
+    The match warnings above are truncated by the annotation budget, and job
+    logs/artifacts EOF from the recording environment, so the actionable set
+    of a SEC-DEPS-01 regression must be readable from annotations alone. The
+    audit report already carries the triage verdict per finding; this is that
+    verdict, compact (package id pairs only), empty on a green run.
+    """
+    items = []
+    triage = (stack_audit or {}).get("triage") or {}
+    for finding in (triage.get("python") or {}).get("untriaged") or []:
+        items.append(f"py:{finding.get('package')}@{finding.get('version')} {finding.get('id')}")
+    for finding in (triage.get("node") or {}).get("untriaged") or []:
+        items.append(f"npm:{finding.get('package')} {finding.get('id')}")
+    if not items:
+        return []
+    lines: list[str] = []
+    current = "STACK-ADVISORY-UNTRIAGED (the set the gate failed on): "
+    used = 0
+    capped = False
+    for item in items:
+        piece = item if used == 0 else "," + item
+        if len(current) + len(piece) > ANNOTATION_TEXT_LIMIT:
+            lines.append(current)
+            if len(lines) >= 3:
+                capped = True
+                break
+            current = "STACK-ADVISORY-UNTRIAGED (cont.): "
+        current += piece
+        used += 1
+    if capped:
+        lines[-1] = lines[-1][:ANNOTATION_TEXT_LIMIT - 40] + f" ... +{len(items) - used} untriaged not shown"
+    elif used:
+        lines.append(current)
+    return ["::error file=tools/foundation/runtime_install.py::" + line for line in lines]
+
+
 def build_proxy_conf(lab, bench_dir):
     """Generate the lab reverse-proxy configuration.
 
@@ -931,6 +969,8 @@ def main() -> int:
             except (OSError, ValueError):
                 audits.append(None)
         for line in advisory_finding_annotations(*audits):
+            print(line, flush=True)
+        for line in untriaged_advisory_annotations(audits[0] if audits else None):
             print(line, flush=True)
         if report.get("status") != "pass":
             failed_checks = [c.get("name") for c in report.get("checks", [])
