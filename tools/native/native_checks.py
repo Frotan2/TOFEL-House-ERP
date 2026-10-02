@@ -4835,7 +4835,6 @@ def main():
             capA=[];capB=[];capHQ=[]
             pa=people(sessA,capA);pb=people(sessB,capB);phq=people(sessHQ,capHQ)
             diag.append(('httpA',capA));diag.append(('httpB',capB));diag.append(('httpHQ',capHQ))
-            print('BRISO-DIAG '+repr(diag),flush=True)
             assert app['A'] in pa and app['B'] not in pa,(pa,pb,phq,diag)
             assert app['B'] in pb and app['A'] not in pb,(pa,pb)
             assert app['A'] in phq and app['B'] in phq,phq
