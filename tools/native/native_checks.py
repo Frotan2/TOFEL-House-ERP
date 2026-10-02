@@ -181,7 +181,10 @@ def main():
         connect('placement-test.localhost')
         # Placement-fee invoices are stamped by ERPNext with the posting date of the day they are created
         # (set_posting_time=0), so these fixtures are relative to today, never fixed calendar dates.
+        # Tuition fees take an explicit posting date (command argument); relative dates keep the
+        # 30-day correction window (policy fixture) open on every run date.
         pf_post=frappe.utils.today();pf_due=frappe.utils.add_days(pf_post,29);pf_due_http=frappe.utils.add_days(pf_post,30)
+        tf_post=frappe.utils.today();tf_due=frappe.utils.add_days(tf_post,29)
         before_counts={dt:frappe.db.count(dt) for dt in ['Student','Student Applicant','Program Enrollment','Course Enrollment','Assessment Result','Sales Invoice','GL Entry','Salary Slip','Student Group','Course Schedule','Student Attendance','Employee','Attendance','Timesheet','Additional Salary','Fees']}
         check('administrator-not-an-implicit-business-actor',lambda:denied(lambda:api.create_draft('admin_attempt_001',family(users['author'],'ADMIN'),1,content())))
         def disabled():
@@ -2643,7 +2646,7 @@ def main():
         check('finance-tuition-enrollment-officer-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:fin_m.issue_tuition_fees('fin_enr_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
         check('finance-tuition-scheduler-denied',lambda:denied(lambda:as_user('teaching_scheduler',lambda:fin_m.issue_tuition_fees('fin_sch_tuition_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))))
         def tuition_positive():
-            value=as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_a_000001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))
+            value=as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_a_000001',second['program_enrollment'],fin['fee_structure'],tf_post,tf_due))
             assert value['grand_total']==25000.0 and value['outstanding_amount']==25000.0 and value['currency']=='AFN',value
             row=frappe.db.get_value('Fees',value['fees'],['docstatus','program_enrollment','fee_structure'],as_dict=True)
             assert row.docstatus==1 and row.program_enrollment==second['program_enrollment'] and row.fee_structure==fin['fee_structure'],(row,value)
@@ -2652,7 +2655,7 @@ def main():
         fees1=check('finance-tuition-happy-path',traced(tuition_positive))
         def tuition_replay():
             count=frappe.db.count(api.AUDIT);fees_count=frappe.db.count('Fees')
-            value=as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_a_000001',second['program_enrollment'],fin['fee_structure'],'2026-09-01','2026-09-30'))
+            value=as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_tuition_a_000001',second['program_enrollment'],fin['fee_structure'],tf_post,tf_due))
             assert value==fees1 and frappe.db.count(api.AUDIT)==count and frappe.db.count('Fees')==fees_count
             return {'same_result':True,'no_new_fees':True}
         check('finance-tuition-idempotent-replay',tuition_replay)
@@ -2752,7 +2755,7 @@ def main():
             return {'receipt_ledger_auditor_only':True,'auditor_no_fees':True}
         check('finance-role-and-list-parity',fin_reads)
         def fpost(label,method,payload):return sessions[label].post(base+'/api/method/toefl_house.finance.'+method,json=payload,timeout=40)
-        http_fin_payload=dict(request_key='http_fin_tuition_00001',program_enrollment=enrolled['program_enrollment'],fee_structure=fin['fee_structure'],posting_date='2026-09-02',due_date='2026-10-02')
+        http_fin_payload=dict(request_key='http_fin_tuition_00001',program_enrollment=enrolled['program_enrollment'],fee_structure=fin['fee_structure'],posting_date=tf_post,due_date=tf_due)
         http_tuition_winner={'key':None}
         def http_tuition():
             # First-writer-wins: two distinct keys against the same unbilled
