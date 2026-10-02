@@ -1,0 +1,108 @@
+{
+  "date": "2026-10-02",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "Hosted Foundation runtime run 36958570357 (check-run 110686941886) @4c0664a on main, 2026-10-02, correctly failed closed (Restricted policy regressions: hosted-full-stack-dependency-audit, exit 1) after a batch of new pypdf advisories published since the 2026-10-01 green baseline. The GitHub Advisory and OSV APIs were unreachable from the triage environment at round time (401/egress-blocked), so the live match set was re-derived independently: every package@version of a fresh local resolution of the pinned dependency union (frappe@988e54f3c4c291e2077a83809663f123731abe76, erpnext@4048fb70e14d1843956fcdabb7c3cca75a1cbcdd, education@93bc7075753369457919720690f80c6d2207b5f2, hrms@a4768b441cff346def505e27f2a2229ee1e05b9b, payments@cca07d9f9392e2ea0e521c5975151db9e4b6c321; 159-distribution venv, mysqlclient==2.2.7 added at its pinned exact version) was queried against the PyPI JSON API (OSV-backed 'vulnerabilities' feed), and triaged with the repository's own advisory_triage.disposition_for_finding against the 2026-09-23 register and every earlier delta. That left exactly this one package, py:pypdf@6.15.0, with 16 uncovered records: 8 GHSA ids (CVE-2026-102993..103000) plus their 8 PYSEC mirrors (PYSEC-2026-4153..4160). The run's remaining pypdf matches (GHSA-23w6-3w8w-8484, GHSA-763m-79hh-57f2, GHSA-jp53-mhqp-8xcg and PYSEC-2026-3910/3911/3913) are covered by the 2026-09-23 register, and the run's pyjwt/oauthlib PYSEC-4xxx mirrors are covered through their GHSA/CVE aliases. The npm side was checked against the npm bulk advisory endpoint for the run's visible package list: all entries closed, no regressions. Reachability was traced in the pinned source trees listed in the per-finding evidence, plus the owned apps.",
+  "packages": [
+    {
+      "package": "py:pypdf@6.15.0",
+      "advisories": [
+        {
+          "id": "GHSA-qv6h-rv94-w285",
+          "aliases": ["CVE-2026-102993", "PYSEC-2026-4158"],
+          "severity": "unrecorded at triage time (advisory text: availability-only, large memory consumption)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "< 6.17.0",
+          "first_patched": "6.17.0",
+          "summary": "pypdf: large memory consumption when accessing the page labels of a document with large Roman numerals",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "The Roman-numeral label conversion (number2uppercase_roman_numeral in pypdf/_page_labels.py) is reachable only through the page-labels API (PdfReader.page_labels, pypdf/_doc_common.py:1114; get_label_from_nums in pypdf/_page_labels.py:127). No code in any pinned tree calls the labels API; the only page-index use in the frappe PDF utilities is PageObject.page_number (pypdf/_page.py:1742), a list index over the page tree that performs no label parsing. The complete pypdf surface in the pinned stack is frappe@988e54f (utils/pdf.py, utils/pdf_generator/page.py, utils/pdf_generator/pdf_merge.py, utils/print_format.py, utils/print_utils.py) and erpnext@4048fb7 (bank_statement_import_log.py, irs_1099.py); education@93bc707, hrms@a4768b4, payments@cca07d9, toefl_house and foundation_security contain zero pypdf imports.",
+          "fix_path": "Official Frappe release carrying pypdf >= 6.17.0. Pinned frappe@988e54f pins pypdf==6.15.0 and the 2026-09-23 register verified Frappe v16.35.0 still pins pypdf==6.15.0 - EXTERNAL/UPSTREAM BLOCKED, unchanged posture."
+        },
+        {
+          "id": "GHSA-w23x-9jrw-r45c",
+          "aliases": ["CVE-2026-103000", "PYSEC-2026-4160"],
+          "severity": "unrecorded at triage time (advisory text: availability-only, large memory consumption)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "< 6.19.0",
+          "first_patched": "6.19.0",
+          "summary": "pypdf: large memory consumption when accessing the page labels of a document with large alphabetical labels",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Same labels-API trace as GHSA-qv6h-rv94-w285: the alphabetical label conversion (number2uppercase_letter/number2lowercase_letter in pypdf/_page_labels.py) is only reachable through the page-labels API, which no pinned-tree code calls. frappe's PDF merge uses PageObject.page_number (list index, pypdf/_page.py:1742) on server-generated header/footer PDFs only.",
+          "fix_path": "Official Frappe release carrying pypdf >= 6.19.0. Pinned frappe@988e54f pins pypdf==6.15.0 - EXTERNAL/UPSTREAM BLOCKED, unchanged posture."
+        },
+        {
+          "id": "GHSA-5jq2-8x83-x246",
+          "aliases": ["CVE-2026-102994", "PYSEC-2026-4153"],
+          "severity": "unrecorded at triage time (advisory text: availability-only, long runtimes)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "< 6.18.0",
+          "first_patched": "6.18.0",
+          "summary": "pypdf: long runtimes reading a PDF with long indirect object headers not terminated by whitespace",
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "Reached whenever the reader resolves indirect objects (read_object_header, pypdf/_reader.py:614): pdf_contains_js does so at reader construction and again while walking the whole object tree for /JS keys. The only pinned paths that construct a reader over attacker-controlled bytes are File.check_content -> pdf_contains_js (frappe/core/doctype/file/file.py:477-478; frappe/utils/pdf.py:449-461) on any uploaded PDF, and the System-Manager-only bank-statement import (erpnext bank_statement_import_log.py:964-975; that doctype's sole permission role is System Manager per its fixture, which no product staff role carries). Uploads are body-capped at the WSGI layer before any parsing: frappe/app.py:234-238 sets request.max_content_length = get_max_file_size() (System Settings max_file_size, else frappe's 25 MB default; the product does not override), bounding the parse cost. The surface requires an authenticated user and the deployment is tailnet-only (D13/D15; no internet exposure). Impact is availability-only (bounded long runtimes on one worker request); no data exposure or privilege escalation.",
+          "fix_path": "Official Frappe release carrying pypdf >= 6.18.0. Pinned frappe@988e54f pins pypdf==6.15.0 - EXTERNAL/UPSTREAM BLOCKED, unchanged posture."
+        },
+        {
+          "id": "GHSA-fp3h-c4fm-7vvf",
+          "aliases": ["CVE-2026-102995", "PYSEC-2026-4154"],
+          "severity": "unrecorded at triage time (advisory text: availability-only, large memory consumption)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "< 6.18.1",
+          "first_patched": "6.18.1",
+          "summary": "pypdf: large memory consumption parsing a font /ToUnicode entry with unusually large values, e.g. during text extraction",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Requires pypdf text extraction; no extract_text/extract_words call exists in any pinned tree (repository-wide grep; the only get_contents hit is an education curriculum topic object, not pypdf). The bank-statement upload path delegates all text/table extraction to pdfplumber (bank_statement_import_log.py:983), not pypdf, so the ToUnicode parse path is never exercised on uploaded bytes.",
+          "fix_path": "Official Frappe release carrying pypdf >= 6.18.1. Pinned frappe@988e54f pins pypdf==6.15.0 - EXTERNAL/UPSTREAM BLOCKED, unchanged posture."
+        },
+        {
+          "id": "GHSA-g9cg-prrw-2r8q",
+          "aliases": ["CVE-2026-102996", "PYSEC-2026-4155"],
+          "severity": "unrecorded at triage time (advisory text: availability-only, large memory consumption)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "< 6.18.1",
+          "first_patched": "6.18.1",
+          "summary": "pypdf: large memory consumption parsing a /Widths entry of TrueType/Type1 fonts with unusually large values, e.g. during text extraction",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Same text-extraction trace as GHSA-fp3h-c4fm-7vvf: the /Widths parse runs during text extraction, and no pinned-tree code performs pypdf text extraction; uploaded PDFs are handed to pdfplumber instead (bank_statement_import_log.py:983).",
+          "fix_path": "Official Frappe release carrying pypdf >= 6.18.1. Pinned frappe@988e54f pins pypdf==6.15.0 - EXTERNAL/UPSTREAM BLOCKED, unchanged posture."
+        },
+        {
+          "id": "GHSA-jw7q-gvrg-4vj3",
+          "aliases": ["CVE-2026-102997", "PYSEC-2026-4156"],
+          "severity": "unrecorded at triage time (advisory text: availability-only, long runtimes)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "< 6.18.1",
+          "first_patched": "6.18.1",
+          "summary": "pypdf: long runtimes on a partially malformed /FlateDecode stream where byte-by-byte decompression is used",
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "Stream decompression over attacker-controlled bytes occurs during PdfReader construction (xref-stream parsing, plus object-stream batch parsing) on the same upload surfaces as GHSA-5jq2-8x83-x246: File.check_content -> pdf_contains_js (frappe/core/doctype/file/file.py:477-478; frappe/utils/pdf.py:461) on any uploaded PDF and the System-Manager-only bank-statement import (erpnext bank_statement_import_log.py:964). Those uploads are body-capped at the WSGI layer by request.max_content_length (frappe/app.py:234-238; System Settings max_file_size, else frappe's 25 MB default, unset by the product), authenticated-only, tailnet-only deployment. Every other pinned pypdf stream read operates on server-generated (trusted) PDFs: wkhtmltopdf output (frappe/utils/pdf.py:124-126), the pdf_generator process stream (frappe/utils/pdf_generator/page.py:379-380), and on_print_pdf hook output (frappe/utils/print_utils.py:96-99). Availability-only; no data exposure or privilege escalation.",
+          "fix_path": "Official Frappe release carrying pypdf >= 6.18.1. Pinned frappe@988e54f pins pypdf==6.15.0 - EXTERNAL/UPSTREAM BLOCKED, unchanged posture."
+        },
+        {
+          "id": "GHSA-php9-fj8v-98fj",
+          "aliases": ["CVE-2026-102998", "PYSEC-2026-4157"],
+          "severity": "unrecorded at triage time (advisory text: availability-only, long runtimes)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "< 6.19.0",
+          "first_patched": "6.19.0",
+          "summary": "pypdf: long runtimes updating form field values with flattening enabled (appearance stream generation)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Requires form-field value updates with auto-regenerate/appearance generation; no update_page_form_field_values or form-field update call exists in any pinned tree (repository-wide grep). pypdf's writer side in the pinned stack is used only to merge server-generated output (frappe/utils/pdf_generator/pdf_merge.py, frappe/utils/print_format.py, erpnext irs_1099.py).",
+          "fix_path": "Official Frappe release carrying pypdf >= 6.19.0. Pinned frappe@988e54f pins pypdf==6.15.0 - EXTERNAL/UPSTREAM BLOCKED, unchanged posture."
+        },
+        {
+          "id": "GHSA-v247-6f48-mgcj",
+          "aliases": ["CVE-2026-102999", "PYSEC-2026-4159"],
+          "severity": "unrecorded at triage time (advisory text: availability-only, long runtimes)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "< 6.19.0",
+          "first_patched": "6.19.0",
+          "summary": "pypdf: long runtimes accessing embedded files through the dictionary-based API",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Requires the reader's embedded-files dictionary API; no reader.attachments/embedded-files call exists in any pinned tree. The frappe 'attachments' identifiers in the codebase are doctype fields (email queue, form load, email receive), not pypdf embedded-file access.",
+          "fix_path": "Official Frappe release carrying pypdf >= 6.19.0. Pinned frappe@988e54f pins pypdf==6.15.0 - EXTERNAL/UPSTREAM BLOCKED, unchanged posture."
+        }
+      ]
+    }
+  ]
+}
