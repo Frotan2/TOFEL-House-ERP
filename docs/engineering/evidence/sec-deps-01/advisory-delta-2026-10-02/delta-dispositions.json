@@ -1,14 +1,17 @@
 {
   "date": "2026-10-02",
   "kind": "additive_advisory_delta_no_register_mutation",
-  "basis": "Hosted Foundation runtime run 36958570357 (check-run 110686941886) @4c0664a on main, 2026-10-02, correctly failed closed (Restricted policy regressions: hosted-full-stack-dependency-audit, exit 1) after a batch of new pypdf advisories published since the 2026-10-01 green baseline. The GitHub Advisory and OSV APIs were unreachable from the triage environment at round time (401/egress-blocked), so the live match set was re-derived independently: every package@version of a fresh local resolution of the pinned dependency union (frappe@988e54f3c4c291e2077a83809663f123731abe76, erpnext@4048fb70e14d1843956fcdabb7c3cca75a1cbcdd, education@93bc7075753369457919720690f80c6d2207b5f2, hrms@a4768b441cff346def505e27f2a2229ee1e05b9b, payments@cca07d9f9392e2ea0e521c5975151db9e4b6c321; 159-distribution venv, mysqlclient==2.2.7 added at its pinned exact version) was queried against the PyPI JSON API (OSV-backed 'vulnerabilities' feed), and triaged with the repository's own advisory_triage.disposition_for_finding against the 2026-09-23 register and every earlier delta. That left exactly this one package, py:pypdf@6.15.0, with 16 uncovered records: 8 GHSA ids (CVE-2026-102993..103000) plus their 8 PYSEC mirrors (PYSEC-2026-4153..4160). The run's remaining pypdf matches (GHSA-23w6-3w8w-8484, GHSA-763m-79hh-57f2, GHSA-jp53-mhqp-8xcg and PYSEC-2026-3910/3911/3913) are covered by the 2026-09-23 register, and the run's pyjwt/oauthlib PYSEC-4xxx mirrors are covered through their GHSA/CVE aliases. The npm side was checked against the npm bulk advisory endpoint for the run's visible package list: all entries closed, no regressions. Reachability was traced in the pinned source trees listed in the per-finding evidence, plus the owned apps.",
+  "basis": "Hosted Foundation runtime run 36958570357 (check-run 110686941886) @4c0664a on main, 2026-10-02, correctly failed closed (Restricted policy regressions: hosted-full-stack-dependency-audit, exit 1) after a batch of new pypdf advisories published since the 2026-10-01 green baseline. The GitHub Advisory and OSV APIs were unreachable from the triage environment at round time (401/egress-blocked), so the live match set was re-derived independently: every package@version of a fresh local resolution of the pinned dependency union (frappe@988e54f3c4c291e2077a83809663f123731abe76, erpnext@4048fb70e14d1843956fcdabb7c3cca75a1cbcdd, education@93bc7075753369457919720690f80c6d2207b5f2, hrms@a4768b441cff346def505e27f2a2229ee1e05b9b, payments@cca07d9f9392e2ea0e521c5975151db9e4b6c321; 159-distribution venv, mysqlclient==2.2.7 added at its pinned exact version) was queried against the PyPI JSON API (OSV-backed 'vulnerabilities' feed), and triaged with the repository's own advisory_triage.disposition_for_finding against the 2026-09-23 register and every earlier delta. That left exactly this one package, py:pypdf@6.15.0, with 16 uncovered records: 8 GHSA ids (CVE-2026-102993..103000) plus their 8 PYSEC mirrors (PYSEC-2026-4153..4160). The run's remaining pypdf matches (GHSA-23w6-3w8w-8484, GHSA-763m-79hh-57f2, GHSA-jp53-mhqp-8xcg and PYSEC-2026-3910/3911/3913) are covered by the 2026-09-23 register, and the run's pyjwt/oauthlib PYSEC-4xxx mirrors are covered through their GHSA/CVE aliases. The npm side was checked against the npm bulk advisory endpoint for the run's visible package list: all entries closed, no regressions. Reachability was traced in the pinned source trees listed in the per-finding evidence, plus the owned apps.. The first round (pypdf) was verified in CI: the run's STACK-ADVISORY-UNTRIAGED diagnostic annotations (added in d1b4e3f) then showed the remaining failure set was 15 further records - PYSEC-2026-4113/4114 (py:oauthlib@3.3.1) and PYSEC-2026-4140..4152 (py:pyjwt@2.13.0) - PyPA mirror records of 15 GHSA advisories already triaged in the 2026-09-29, 2026-09-30-2, 2026-09-30-3 and 2026-10-01 deltas. The OSV feed carries these PyPA records without the GHSA cross-reference the PyPI feed shows (the PyPI feed confirms the pairing, e.g. PYSEC-2026-4114 = GHSA-xpv3-w29h-x7cv / CVE-2026-49265; PYSEC-2026-4113 pairs with GHSA-hj66-6f7g-4r5v / CVE-2026-49264 by the 1:1 package-batch correspondence in the same run), so they triaged as untriaged despite the identical underlying vulnerabilities being dispositioned. Each entry below carries the same disposition as its mirrored GHSA with the prior analysis cited. Their CVE aliases are all already covered, so no alias is re-listed (the loader fails closed on redefinition).",
   "packages": [
     {
       "package": "py:pypdf@6.15.0",
       "advisories": [
         {
           "id": "GHSA-qv6h-rv94-w285",
-          "aliases": ["CVE-2026-102993", "PYSEC-2026-4158"],
+          "aliases": [
+            "CVE-2026-102993",
+            "PYSEC-2026-4158"
+          ],
           "severity": "unrecorded at triage time (advisory text: availability-only, large memory consumption)",
           "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
           "vulnerable_range": "< 6.17.0",
@@ -20,7 +23,10 @@
         },
         {
           "id": "GHSA-w23x-9jrw-r45c",
-          "aliases": ["CVE-2026-103000", "PYSEC-2026-4160"],
+          "aliases": [
+            "CVE-2026-103000",
+            "PYSEC-2026-4160"
+          ],
           "severity": "unrecorded at triage time (advisory text: availability-only, large memory consumption)",
           "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
           "vulnerable_range": "< 6.19.0",
@@ -32,7 +38,10 @@
         },
         {
           "id": "GHSA-5jq2-8x83-x246",
-          "aliases": ["CVE-2026-102994", "PYSEC-2026-4153"],
+          "aliases": [
+            "CVE-2026-102994",
+            "PYSEC-2026-4153"
+          ],
           "severity": "unrecorded at triage time (advisory text: availability-only, long runtimes)",
           "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
           "vulnerable_range": "< 6.18.0",
@@ -44,7 +53,10 @@
         },
         {
           "id": "GHSA-fp3h-c4fm-7vvf",
-          "aliases": ["CVE-2026-102995", "PYSEC-2026-4154"],
+          "aliases": [
+            "CVE-2026-102995",
+            "PYSEC-2026-4154"
+          ],
           "severity": "unrecorded at triage time (advisory text: availability-only, large memory consumption)",
           "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
           "vulnerable_range": "< 6.18.1",
@@ -56,7 +68,10 @@
         },
         {
           "id": "GHSA-g9cg-prrw-2r8q",
-          "aliases": ["CVE-2026-102996", "PYSEC-2026-4155"],
+          "aliases": [
+            "CVE-2026-102996",
+            "PYSEC-2026-4155"
+          ],
           "severity": "unrecorded at triage time (advisory text: availability-only, large memory consumption)",
           "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
           "vulnerable_range": "< 6.18.1",
@@ -68,7 +83,10 @@
         },
         {
           "id": "GHSA-jw7q-gvrg-4vj3",
-          "aliases": ["CVE-2026-102997", "PYSEC-2026-4156"],
+          "aliases": [
+            "CVE-2026-102997",
+            "PYSEC-2026-4156"
+          ],
           "severity": "unrecorded at triage time (advisory text: availability-only, long runtimes)",
           "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
           "vulnerable_range": "< 6.18.1",
@@ -80,7 +98,10 @@
         },
         {
           "id": "GHSA-php9-fj8v-98fj",
-          "aliases": ["CVE-2026-102998", "PYSEC-2026-4157"],
+          "aliases": [
+            "CVE-2026-102998",
+            "PYSEC-2026-4157"
+          ],
           "severity": "unrecorded at triage time (advisory text: availability-only, long runtimes)",
           "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
           "vulnerable_range": "< 6.19.0",
@@ -92,7 +113,10 @@
         },
         {
           "id": "GHSA-v247-6f48-mgcj",
-          "aliases": ["CVE-2026-102999", "PYSEC-2026-4159"],
+          "aliases": [
+            "CVE-2026-102999",
+            "PYSEC-2026-4159"
+          ],
           "severity": "unrecorded at triage time (advisory text: availability-only, long runtimes)",
           "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
           "vulnerable_range": "< 6.19.0",
@@ -101,6 +125,196 @@
           "runtime_disposition": "NOT_REACHABLE",
           "runtime_disposition_evidence": "Requires the reader's embedded-files dictionary API; no reader.attachments/embedded-files call exists in any pinned tree. The frappe 'attachments' identifiers in the codebase are doctype fields (email queue, form load, email receive), not pypdf embedded-file access.",
           "fix_path": "Official Frappe release carrying pypdf >= 6.19.0. Pinned frappe@988e54f pins pypdf==6.15.0 - EXTERNAL/UPSTREAM BLOCKED, unchanged posture."
+        }
+      ]
+    },
+    {
+      "package": "py:oauthlib@3.3.1",
+      "advisories": [
+        {
+          "id": "PYSEC-2026-4113",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-hj66-6f7g-4r5v; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": null,
+          "summary": "PyPA mirror of GHSA-hj66-6f7g-4r5v: Oauthlib: unsafe JSONP callback injection in RevocationEndpoint allows arbitrary JavaScript response generation",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-hj66-6f7g-4r5v; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-hj66-6f7g-4r5v in advisory-delta-2026-09-29 applies unchanged: frappe@988e54f3 integrations/oauth2.py:189-202: frappe.integrations.oauth2.revoke_token discards the oauthlib-generated revocation response entirely (frappe.local.response = frappe._dict({}); only http_status_code is forwarded). The injected response content that this advisory exploits can never reach a client; the endpoint is also POST-only. Pinned-tree source trace in advisory-delta-2026-09-29/README.md.",
+          "fix_path": "Same as GHSA-hj66-6f7g-4r5v: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4114",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-xpv3-w29h-x7cv; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "4.0.0",
+          "summary": "PyPA mirror of GHSA-xpv3-w29h-x7cv: Oauthlib: timing attack in PKCE code_verifier comparison (CWE-208)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-xpv3-w29h-x7cv; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-xpv3-w29h-x7cv in advisory-delta-2026-09-29 applies unchanged: frappe@988e54f3 oauth.py:87-89 and 144-165: frappe implements its own PKCE storage and verification (sha256/base64url of code_verifier compared to the stored code_challenge) and never invokes oauthlib's PKCE verification path that this advisory covers. Pinned-tree source trace in advisory-delta-2026-09-29/README.md. Residual note recorded there: frappe's own compare is a plain string equality; that is a distinct, non-advisory observation, not this advisory.",
+          "fix_path": "Same as GHSA-xpv3-w29h-x7cv: official upstream release carrying the fixed version; no product-side override attempted."
+        }
+      ]
+    },
+    {
+      "package": "py:pyjwt@2.13.0",
+      "advisories": [
+        {
+          "id": "PYSEC-2026-4140",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-2gx3-rcp4-g85q; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-2gx3-rcp4-g85q: PyJWT: PyJWKClient amplifies unauthenticated JWKS fetches on unknown kid values (incomplete fix of CVE-2026-48524)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-2gx3-rcp4-g85q; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-2gx3-rcp4-g85q in advisory-delta-2026-09-30-2 applies unchanged: The vulnerable component is PyJWKClient/PyJWKSet JWKS fetching and caching. Pinned frappe@988e54f3 contains no PyJWK/PyJWKSet/PyJWKSClient import or instantiation anywhere (repository-wide source search, zero hits); jwks_uri is an unbound Social Login Key type hint only (integrations/utils.py:45-46). All jwt use is encode/decode with explicit keys (oauth.py:324, 446, 467; utils/oauth.py:200). Same JWKS-absence family as the accepted 2026-09-29 delta (GHSA-w6j9-cwv2-h6wq).",
+          "fix_path": "Same as GHSA-2gx3-rcp4-g85q: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4141",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-42vr-xj54-vc7v; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.15.0",
+          "summary": "PyPA mirror of GHSA-42vr-xj54-vc7v: PyJWT: unauthenticated RecursionError DoS in pre-verification payload parse",
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-42vr-xj54-vc7v; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-42vr-xj54-vc7v in advisory-delta-2026-09-30-3 applies unchanged: Attacker-reachable pre-verification parse exists: frappe@988e54f3c4c291e2077a83809663f123731abe76 oauth.py:446 jwt.decode(id_token_hint, algorithms=['HS256'], options={'verify_signature': False}) on the client-supplied OIDC id_token_hint (validate_user_match). The call and the follow-up verified decode (oauth.py:467) sit inside 'try: ... except Exception: return False' (oauth.py:444-481); RecursionError subclasses Exception, so a deeply nested payload (and the equally unhardened 2.13.0 header path, api_jws.py:328/338 catch ValueError only) yields a failed hint match, not an escaped exception or a dead worker. The only other decode, utils/oauth.py:200, parses the id_token returned by the configured IdP token endpoint over server-to-server TLS; exploitation requires a malicious IdP and at worst fails that single social login with a handled 500. PyJWKClient (the second variant) is absent from every pinned tree (zero PyJWK/PyJWKClient references).",
+          "fix_path": "Same as GHSA-42vr-xj54-vc7v: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4142",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-8wjv-2p76-3863; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-8wjv-2p76-3863: PyJWT: uncaught RecursionError in jwt.decode() on deeply nested token header (pre-signature parse; unauthenticated 500/traceback storm)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-8wjv-2p76-3863; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-8wjv-2p76-3863 in advisory-delta-2026-09-30-2 applies unchanged: Both decode inputs in the pinned tree are constrained and both call sites neutralize the effect. (1) The only request-driven decode (id_token_hint in the authorize path, oauth.py:446-454) sits inside try:/except Exception: return False (oauth.py:477-478): a header-JSON RecursionError is swallowed and returns False instead of the advisory's uncaught-500-plus-traceback; also id_token_hint rides the authorize request line, and the advisory itself notes ~266KB tokens exceed HTTP field limits (431 before decode). (2) The provider response decode (utils/oauth.py:200) parses the IdP's own token endpoint body (server-to-server TLS), not client-submitted bytes. Residual, recorded honestly: a nested-header attempt inside the try still costs bounded parse time (~6ms/class) before the exception is caught; no traceback, no 500, no worker state change.",
+          "fix_path": "Same as GHSA-8wjv-2p76-3863: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4143",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-9j54-fg26-wv3r; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-9j54-fg26-wv3r: PyJWT: PyJWK accepts empty HMAC keys, bypassing PyJWT's empty-key validation (forgery via empty oct JWK)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-9j54-fg26-wv3r; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-9j54-fg26-wv3r in advisory-delta-2026-09-30-2 applies unchanged: Requires verifying HS256 through PyJWK/PyJWKSet holding an empty oct JWK. Pinned frappe@988e54f3 uses neither class (repository-wide search, zero hits). The only verifying decode call site (oauth.py:467-475) passes key=client_secret, a random opaque per-OAuth-client HMAC string from the site database (frappe.get_value 'OAuth Client' -> client_secret at oauth.py:453-458) - never a JWK object, never empty-capable attacker material.",
+          "fix_path": "Same as GHSA-9j54-fg26-wv3r: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4144",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-9v7f-9g4p-ffgj; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-9v7f-9g4p-ffgj: PyJWT: PyJWKClient follows redirects when fetching JWKS (JWKS trust poisoning / header leak)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-9v7f-9g4p-ffgj; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-9v7f-9g4p-ffgj in advisory-delta-2026-09-30-2 applies unchanged: The vulnerable component is PyJWKClient fetch_data redirect handling. Pinned frappe@988e54f3 has zero PyJWKClient/JWK-code anywhere (repository-wide search); no JWKS endpoint is ever fetched by the pinned stack (integrations/utils.py:45-46 is a type hint only). No JWKS trust anchor exists to poison.",
+          "fix_path": "Same as GHSA-9v7f-9g4p-ffgj: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4145",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-ffc3-869f-jxw9; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-ffc3-869f-jxw9: PyJWT: whitespace/line-ending-mutated PEM public keys skip the HS/asymmetric confusion guard (universal forgery under mixed allow-list)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-ffc3-869f-jxw9; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-ffc3-869f-jxw9 in advisory-delta-2026-09-30-2 applies unchanged: Both preconditions are deployment properties absent from the pinned tree: (1) mixed HMAC+asymmetric allow-list - repository-wide search shows the only jwt.decode allow-lists are algorithms=['HS256'] single-algorithm lists (oauth.py:448, 471; the advisory's own control shows a single-alg allow-list rejects forged HS* with InvalidAlgorithmError); (2) raw public PEM passed as key - the only verifying decode passes key=client_secret, an opaque per-client HMAC string (oauth.py:469, sourced at oauth.py:453-458); no asymmetric key bytes are ever supplied to jwt.decode anywhere in the tree.",
+          "fix_path": "Same as GHSA-ffc3-869f-jxw9: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4146",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-gvp8-978c-rx2q; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": null,
+          "summary": "PyPA mirror of GHSA-gvp8-978c-rx2q: PyJWT.decode() reintroduces options-dict mutation, enabling silent claim-verification bypass on dict reuse",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-gvp8-978c-rx2q; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-gvp8-978c-rx2q in advisory-delta-2026-10-01 applies unchanged: The defect mutates a caller-supplied options mapping when verify_signature is falsy, so it only matters when application code reuses ONE options object across two or more jwt.decode()/decode_complete() calls (the advisory states calls that build a fresh options dict per call are unaffected; signature verification itself is unaffected). Repository-wide search of all five pinned upstream trees and the owned apps finds the complete jwt surface in frappe@988e54f3 only: frappe/oauth.py:324 jwt.encode (no options); frappe/oauth.py:446-454 jwt.decode with an inline literal options={verify_signature: False, verify_aud: False}; frappe/oauth.py:467-475 jwt.decode with a separate inline literal options={verify_exp: False}; frappe/utils/oauth.py:200 jwt.decode with an inline literal options={verify_signature: False}. Every call constructs its own dict at the call site; there is no module-level, class-level, instance-level or shared options object, so the mutated dict of the unverified-parse call is discarded and can never reach a verifying call (the second oauth.py decode already disables verify_exp explicitly and uses a different dict object). erpnext, education, payments, hrms and the owned apps (toefl_house, foundation_security) contain zero jwt imports or calls. PyJWT is a frappe dependency only (frappe/pyproject.toml: PyJWT~=2.13.0).",
+          "fix_path": "Same as GHSA-gvp8-978c-rx2q: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4147",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-hxm8-2xgr-2p9m; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-hxm8-2xgr-2p9m: PyJWT: non-canonical signature segments enable raw-token revocation bypass (application-composition dependent)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-hxm8-2xgr-2p9m; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-hxm8-2xgr-2p9m in advisory-delta-2026-09-30-2 applies unchanged: Impact requires the application to index revocation/logout state by the raw serialized token string. Pinned frappe@988e54f3 OAuth bearer tokens are opaque random strings stored as 'OAuth Bearer Token' documents (integrations/oauth2.py token lifecycle; tokens are not JWTs and are never re-parsed), and the only jwt.decode inputs are id_token_hint (consent user-match check, result not persisted as identity, oauth.py:446-478) and the social-login provider's own id_token (utils/oauth.py:200). No raw-JWT-as-security-identity composition exists anywhere in the tree.",
+          "fix_path": "Same as GHSA-hxm8-2xgr-2p9m: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4148",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-jwrc-g2q2-pq5p; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-jwrc-g2q2-pq5p: PyJWT: ReDoS in is_pem_format",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-jwrc-g2q2-pq5p; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-jwrc-g2q2-pq5p in advisory-delta-2026-09-30-3 applies unchanged: In pyjwt 2.13.0 is_pem_format has exactly one caller, HMACAlgorithm.prepare_key(key) (jwt/algorithms.py:331); it inspects the KEY argument, never the token. Across all five pinned trees and the owned apps only frappe@988e54f3c4c291e2077a83809663f123731abe76 uses PyJWT, with keys: oauth.py:324 jwt.encode key=OAuth Client client_secret (server-generated); oauth.py:467 jwt.decode key=client_secret read from the OAuth Client record; utils/oauth.py:200 flow.client_secret (admin-configured Social Login Key) with verify_signature False. No key is ever attacker-supplied, so the pathological input cannot reach the regex.",
+          "fix_path": "Same as GHSA-jwrc-g2q2-pq5p: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4149",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-p4g4-x82p-q773; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-p4g4-x82p-q773: PyJWT: public keys in DER form accepted as HMAC secrets (CVE-2022-29217 guard bypass via encoding)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-p4g4-x82p-q773; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-p4g4-x82p-q773 in advisory-delta-2026-09-30-2 applies unchanged: Same two absent preconditions: mixed HS*/asymmetric allow-list (only single ['HS256'] lists exist: oauth.py:448, 471) and asymmetric key material passed as key= (only client_secret HMAC strings, oauth.py:469). The advisory explicitly notes PyJWK path users unaffected and PEM still blocked; the pinned tree supplies neither the DER bytes nor the mixed allow-list.",
+          "fix_path": "Same as GHSA-p4g4-x82p-q773: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4150",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-r6x4-923q-g947; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-r6x4-923q-g947: PyJWT: BOM-prefixed public JWK bypasses raw-JWK detection (algorithm confusion forgery under mixed allow-list)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-r6x4-923q-g947; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-r6x4-923q-g947 in advisory-delta-2026-09-30-2 applies unchanged: Requires mixed HS*/RS* allow-list plus raw public RSA JWK passed as key. Pinned frappe@988e54f3: allow-lists are single ['HS256'] (oauth.py:448, 471); key= is only client_secret HMAC material (oauth.py:469); no JWK/JWKS JSON is ever parsed or supplied as a key (zero PyJWK/JWK code tree-wide).",
+          "fix_path": "Same as GHSA-r6x4-923q-g947: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4151",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-w2cx-738m-mc7w; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-w2cx-738m-mc7w: PyJWT: public JWK containers (JWKS wrapper, arrays, nesting) accepted as HMAC secrets (forgery under mixed allow-list)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-w2cx-738m-mc7w; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-w2cx-738m-mc7w in advisory-delta-2026-09-30-2 applies unchanged: Same absent preconditions as the sibling encodings (single ['HS256'] allow-lists only, oauth.py:448, 471; only client_secret HMAC key material, oauth.py:469; no JWK containers anywhere in the pinned tree). Advisory itself: applications keeping symmetric/asymmetric paths separate are unaffected.",
+          "fix_path": "Same as GHSA-w2cx-738m-mc7w: official upstream release carrying the fixed version; no product-side override attempted."
+        },
+        {
+          "id": "PYSEC-2026-4152",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-w6j9-cwv2-h6wq; same impact as the mirrored advisory)",
+          "published": "unrecorded at triage time; surfaced in the 2026-10-02 audit after the 2026-10-01 green baseline",
+          "vulnerable_range": "the same vulnerable range as the mirrored GHSA advisory",
+          "first_patched": "2.14.0",
+          "summary": "PyPA mirror of GHSA-w6j9-cwv2-h6wq: PyJWT: malformed RSA JWK aborts parsing of an entire JWK Set",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-w6j9-cwv2-h6wq; the OSV-backed feed record for this PyPA id carries no cross-reference to the already-triaged GHSA id (the PyPI feed does), so it surfaces as a separate untriaged match although it describes the same vulnerable code path. The per-finding reachability analysis for GHSA-w6j9-cwv2-h6wq in advisory-delta-2026-09-29 applies unchanged: The vulnerable code path is PyJWKSet/JWKS parsing. Pinned frappe@988e54f3 contains no PyJWKSet/PyJWKSClient import or instantiation anywhere (repository-wide source search); every jwt use is encode/decode with explicit keys (oauth.py:304, 441, 520; utils/oauth.py:179), and jwks_uri exists solely as an unbound Social Login Key type hint (integrations/utils.py:45). No operator flow, bootstrap, product packaging, or launcher in this repository configures a JWKS-based social login. Pinned-tree source trace in advisory-delta-2026-09-29/README.md.",
+          "fix_path": "Same as GHSA-w6j9-cwv2-h6wq: official upstream release carrying the fixed version; no product-side override attempted."
         }
       ]
     }
