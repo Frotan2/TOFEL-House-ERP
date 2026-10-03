@@ -846,12 +846,13 @@ class D3LifecycleTests(unittest.TestCase):
             self.assertEqual(v2["status"], "Active")
 
     def test_pins_hold_across_a_supersession(self):
-        from datetime import date, timedelta
+        # Scenario dates are relative to the stubbed site clock
+        # (2026-09-17), the same clock the window checks judge against.
         for _academic, fake in _load_module(self.ROLES):
             corrections = _load_corrections()
             self._seed_roles(fake)
-            stale = (date.today() - timedelta(days=5)).isoformat()
-            fresh = date.today().isoformat()
+            stale = "2026-09-12"
+            fresh = "2026-09-17"
             fee_old = self._fee(fake, "FEE-OLD", 200.0, stale)
             fee_new = self._fee(fake, "FEE-NEW", 300.0, fresh)
             v1 = corrections.configure_correction_policy(

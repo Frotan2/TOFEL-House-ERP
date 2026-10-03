@@ -300,7 +300,7 @@ def _refuse_prior_exit(pe_name):
 
 
 def _check_exit_date(clean_exit, enrollment_date):
-    today = date.today()
+    today = date.fromisoformat(frappe.utils.today())  # site clock
     if clean_exit > today:
         raise frappe.ValidationError("Exit date cannot be in the future")
     enrolled = date.fromisoformat(str(enrollment_date))
@@ -508,7 +508,7 @@ def approve_enrollment_dismissal(request_key, exit):
                 "The program enrollment is no longer submitted; this "
                 "dismissal can no longer be approved")
         _refuse_live_fees(req.program_enrollment)
-        clean_exit = date.today()
+        clean_exit = date.fromisoformat(frappe.utils.today())  # site clock
         _check_exit_date(clean_exit, facts.enrollment_date)
         cancelled = _cancel_enrollment(req.program_enrollment)
         req.flags.ignore_permissions = True

@@ -327,7 +327,7 @@ def request_invoice_correction(request_key, sales_invoice, reason, requested_amo
                 "v1 corrects the full invoice amount")
         limit = date.fromisoformat(str(si.posting_date)) + timedelta(
             days=int(governing["correction_window_days"]))
-        if date.today() > limit:
+        if date.fromisoformat(frappe.utils.today()) > limit:  # site clock, as the policy resolution above
             raise frappe.ValidationError("Correction window for this invoice has closed")
         if frappe.db.exists(REQUEST, {"sales_invoice": si_name,
                                       "status": ("in", ("Requested", "Posted"))}):
@@ -399,7 +399,7 @@ def approve_invoice_correction(request_key, request):
                 "the full invoice amount, so raise a new request for the current total")
         limit = date.fromisoformat(str(si.posting_date)) + timedelta(
             days=int(terms.correction_window_days))
-        if date.today() > limit:
+        if date.fromisoformat(frappe.utils.today()) > limit:  # site clock, as the policy resolution above
             raise frappe.ValidationError("Correction window for this invoice has closed")
         if frappe.db.exists(INVOICE, {"return_against": req.sales_invoice,
                                       "docstatus": ("!=", 2)}):
@@ -485,7 +485,7 @@ def request_fees_correction(request_key, fees, reason, requested_amount):
                 "v1 corrects the full fee amount")
         limit = date.fromisoformat(str(fee_row.posting_date)) + timedelta(
             days=int(governing["correction_window_days"]))
-        if date.today() > limit:
+        if date.fromisoformat(frappe.utils.today()) > limit:  # site clock, as the policy resolution above
             raise frappe.ValidationError("Correction window for this fee has closed")
         if frappe.db.exists(REQUEST, {"fees": fee_name,
                                       "status": ("in", ("Requested", "Posted"))}):
@@ -551,7 +551,7 @@ def approve_fees_correction(request_key, request):
                 "amount, so raise a new request for the current total")
         limit = date.fromisoformat(str(fee_row.posting_date)) + timedelta(
             days=int(terms.correction_window_days))
-        if date.today() > limit:
+        if date.fromisoformat(frappe.utils.today()) > limit:  # site clock, as the policy resolution above
             raise frappe.ValidationError("Correction window for this fee has closed")
         fee_doc = frappe.get_doc(FEES, req.fees)
         fee_doc.flags.ignore_permissions = True

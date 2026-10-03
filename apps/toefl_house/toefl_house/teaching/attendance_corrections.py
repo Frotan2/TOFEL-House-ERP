@@ -368,7 +368,7 @@ def approve_attendance_correction(request_key, request):
                                            "schedule_date")
         limit = date.fromisoformat(str(session_date)) + timedelta(
             days=int(req.pinned_window_days))
-        if date.today() > limit:
+        if date.fromisoformat(frappe.utils.today()) > limit:  # site clock, as the term resolution above
             raise frappe.ValidationError(
                 "Correction window for this session has closed")
         original = frappe.get_doc(ATTENDANCE, req.attendance)
