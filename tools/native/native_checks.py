@@ -3998,7 +3998,7 @@ def main():
                     company='TOEFL House',
                     currency=frappe.get_cached_value('Company', 'TOEFL House',
                                                      'default_currency'),
-                    posting_date='2026-09-02', due_date='2026-10-02',
+                    posting_date=pf_post, due_date=pf_due,
                     set_posting_time=0, is_pos=0,
                     th_placement_case=case_of('candidate5'),
                     selling_price_list='TOEFL House Standard',
@@ -4023,7 +4023,7 @@ def main():
                 {'th_placement_case': case, 'docstatus': ('!=', 2)}), \
                 'candidate5 case already billed; S1 probe inventory changed'
             inv = as_user('finance_officer', lambda: fin_m.issue_placement_fee(
-                's1_conv_bill_0000001', case, customer, '2026-09-02', '2026-10-02'))
+                's1_conv_bill_0000001', case, customer, pf_post, pf_due))
             assert inv['customer'] == customer and inv['case'] == case, inv
             assert float(inv['grand_total']) == 4000.0 and inv['currency'] == 'AFN', inv
             frappe.db.commit()
@@ -4085,7 +4085,7 @@ def main():
             assert customer, 'fourth intake conversion produced no customer'
             inv = as_user('finance_officer', lambda: fin_m.issue_placement_fee(
                 's1_hist_bill_0000001', case4['name'], customer,
-                '2026-09-02', '2026-10-02'))
+                pf_post, pf_due))
             gt = float(frappe.db.get_value('Sales Invoice', inv['sales_invoice'], 'grand_total'))
             creq = as_user('finance_officer', lambda: corr.request_invoice_correction(
                 's1_hist_req_00000001', inv['sales_invoice'],

@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-03",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "Hosted Foundation runtime run (check-run 111240105269) @300ab36 on main, 2026-10-03, failed closed on exactly one untriaged finding, named by the STACK-ADVISORY-UNTRIAGED diagnostic: npm:braces 1240992 (npm bulk advisory 1240992 -> GHSA-vfj7-8cjw-p6xm / CVE-2026-93687, stack-exhaustion DoS in braces' recursive AST walkers, high, published 2026-09-18 on the GitHub advisory database but present in the npm bulk feed only between the green 300ab36 branch run and this main run). The Python side of that run reported zero untriaged findings. Because the npm advisory feed had demonstrably moved within hours (the braces record), a full local replay of the current feed was performed before this delta was written: the npm bulk endpoint against a fresh resolution of the pinned frontend trees (frappe@988e54f3c4c291e2077a83809663f123731abe76, erpnext@4048fb70e14d1843956fcdabb7c3cca75a1cbcdd, education@93bc7075753369457919720690f80c6d2207b5f2, hrms@a4768b441cff346def505e27f2a2229ee1e05b9b, payments@cca07d9f9392e2ea0e521c5975151db9e4b6c321 package manifests; 673 resolved packages, unioned with the run-era observed versions) and the PyPI JSON (OSV-backed 'vulnerabilities') feed against the pinned dependency union (99 pinned packages, top-level pins from the five pyproject manifests plus mysqlclient at its pinned exact version). That replay surfaced three further npm records that had entered the feed after the main run - echarts 1122144 (GHSA-fgmj-fm8m-jvvx / CVE-2026-45249), vite 1109134 (GHSA-93m4-6634-74q7 / CVE-2025-62522), vue-template-compiler 1111772 (GHSA-g3ch-rx76-35fx / CVE-2024-6783) - all triaged here so the next run starts from a fully covered set. After this delta: npm 107/107 findings closed, 0 untriaged; Python 58/58 findings closed, 0 untriaged (the PyPI feed is the stricter superset test: it carries the GHSA cross-references the OSV feed sometimes lacks, so a PyPI-clean replay is conservative for the OSV query CI performs). Reachability was re-traced in the pinned sources: the complete education frontend source tree at 93bc7075, the frappe-ui@0.1.278 published tarball, and the frappe@988e54f3 tree (v16.33.1).",
+  "packages": [
+    {
+      "package": "npm:braces@3.0.2,3.0.3",
+      "advisories": [
+        {
+          "id": "GHSA-vfj7-8cjw-p6xm",
+          "aliases": ["CVE-2026-93687"],
+          "severity": "high",
+          "published": "2026-09-18T18:31:41Z (GitHub Advisory Database); present in the npm bulk feed only between the green 2026-10-02 run and the failing 2026-10-03 main run",
+          "vulnerable_range": "<= 3.0.3",
+          "first_patched": "none published as of triage time",
+          "summary": "braces: stack-exhaustion denial of service through deeply nested brace patterns (recursive AST walkers without depth guards; uncaught RangeError terminates the Node process)",
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "Same reachability class as the registered sibling advisory on this exact package and version set, GHSA-grv7-fg5c-xmjg (2026-09-23 register: 'micromatch dependency in the build toolchain ... consumed by one-shot esbuild/vite production bundle over repository-owned source; no runtime import path'). The stack-exhaustion impact requires an untrusted pattern string to reach braces.expand() in an executed Node process; the require-inventory trace of the executed Node surface established for the same family in the 2026-09-30-2 delta (GHSA-6j4f-fj2g-mc7p, brace-expansion) covers it: the frappe@988e54f3 realtime server and every shipped runtime Node file import zero of glob/minimatch/braces/brace-expansion/micromatch, and the owners (frappe stylus->glob@7->minimatch@3->braces@3.0.2; education frontend sucrase->glob@10->minimatch@9->braces@3.0.3; hrms rimraf/workbox-build/eslint/jake) run exclusively at build/lint time on the builder's machine against tool-internal patterns. Availability-only, and absent from the runtime surface even within its own domain.",
+          "fix_path": "No patched version exists (advisory covers through 3.0.3; no upstream fix published as of triage time). A build-time refresh via official Frappe frontend dependency updates will carry it when one ships; EXTERNAL/UPSTREAM BLOCKED posture unchanged, not a runtime ship-stopper."
+        }
+      ]
+    },
+    {
+      "package": "npm:vite@2.9.17,2.9.18",
+      "advisories": [
+        {
+          "id": "GHSA-93m4-6634-74q7",
+          "aliases": ["CVE-2025-62522"],
+          "severity": "medium",
+          "published": "2025-10-20T19:54:28Z",
+          "vulnerable_range": ">= 2.9.18, < 3.0.0 (npm feed entry 1109134; the 2.9.x line as resolved by the pinned frontend ranges)",
+          "first_patched": "5.4.21 (per the advisory's range mapping; the 2.9.x line has no in-line patch)",
+          "summary": "vite: server.fs.deny bypass via trailing backslash on Windows (fs.readFile('/foo.png/') loads '/foo.png')",
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "Same class as the fifteen registered vite advisories in the 2026-09-23 register (all DEV_ONLY: 'requires --watch/yarn dev/vite/serve mode which production never starts'). The advisory's own scope statement adds two conditions on top of dev mode: the Vite dev server must be explicitly exposed to the network (--host / server.host) and running on Windows. The education@93bc7075 frontend is built with vite in build mode only (one-shot production bundle at image build time); no dev server is started at product runtime and no --host/server.host configuration exists in the build or serve paths. The product runtime serves the built assets, never a Vite dev server.",
+          "fix_path": "vite >= 5.4.21 per the advisory's range mapping; the pinned frontend resolves vite 2.9.x through the education@93bc7075 dependency range and moves only via an official Frappe frontend dependency refresh - EXTERNAL/UPSTREAM BLOCKED posture unchanged."
+        }
+      ]
+    },
+    {
+      "package": "npm:echarts@5.6.0",
+      "advisories": [
+        {
+          "id": "GHSA-fgmj-fm8m-jvvx",
+          "aliases": ["CVE-2026-45249"],
+          "severity": "medium",
+          "published": "2026-05-26T13:30:40Z (GitHub Advisory Database); entered the npm bulk feed after the 2026-10-03 main run",
+          "vulnerable_range": "< 6.1.0",
+          "first_patched": "6.1.0",
+          "summary": "echarts: XSS in Lines series tooltip rendering - with Lines series + tooltip and no user-specified tooltip.formatter, a raw-HTML series.data[i].name reaches an innerHTML sink in tooltip content",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "The sink requires a rendered echarts chart, and the only code path into echarts in the owning library is a single component: frappe-ui@0.1.278 (the package that pulls echarts ^5.6.0) imports echarts only in src/components/Charts/ECharts.vue - the sole echarts import in the entire published frappe-ui@0.1.278 tarball. The education@93bc7075 frontend is the audit tree's only consumer of frappe-ui; its complete source (all 37 frontend source files at the pinned SHA) imports 15 frappe-ui symbols (Toasts, Button, FeatherIcon, Popover, FormControl, Dialog, createResource, ErrorMessage, Avatar, Tooltip, Dropdown) and includes no Charts/ECharts component, and contains zero references to 'echarts' anywhere. The vite ESM build therefore excludes ECharts.vue and, with it, echarts from the shipped bundle; no chart rendering of any series type exists in the deployed artifact.",
+          "fix_path": "echarts >= 6.1.0 via the frappe-ui / official Frappe frontend dependency refresh; EXTERNAL/UPSTREAM BLOCKED posture unchanged. The vulnerable component is not bundled, so the finding is unreachable in the shipped product either way."
+        }
+      ]
+    },
+    {
+      "package": "npm:vue-template-compiler@2.7.16",
+      "advisories": [
+        {
+          "id": "GHSA-g3ch-rx76-35fx",
+          "aliases": ["CVE-2024-6783"],
+          "severity": "medium",
+          "published": "2024-07-23T15:31:09Z (GitHub Advisory Database); entered the npm bulk feed after the 2026-10-03 main run",
+          "vulnerable_range": ">= 2.0.0, < 3.0.0",
+          "first_patched": "none in the 2.x line (Vue 2 is end-of-life; the advisory notes the fix exists only in Vue 3)",
+          "summary": "vue-template-compiler: client-side XSS via prototype pollution (attacker-controlled template input can rewrite Object.prototype.staticClass/staticStyle)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Exploitation requires executing the Vue 2 template compiler on attacker-influenced template input. In the pinned stack the compiler is reachable only through @vue/component-compiler (its sole consumer, which requires vue-template-compiler@*); pinned frappe@988e54f3 (v16.33.1) declares @vue/component-compiler ^4.2.4 in package.json but contains zero references to it in any source file (full tree grep of the pinned SHA), so the compiler never runs at build time or runtime and no input path to it exists. The compiler is not part of any shipped bundle and is not invoked by any build, lint, or test step in the pinned trees.",
+          "fix_path": "No fix exists in the vue-template-compiler 2.x line (Vue 2 EOL); the package is unreachable in the pinned tree, and an official Frappe frontend refresh dropping the unused declaration removes it from the inventory - EXTERNAL/UPSTREAM BLOCKED posture unchanged."
+        }
+      ]
+    }
+  ]
+}
