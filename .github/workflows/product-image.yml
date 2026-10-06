@@ -166,6 +166,18 @@ jobs:
           cred_password="$(printf '%s\n' "$cred" | awk '/^Password: /{print $2}')"
           test -n "$cred_user" && test -n "$cred_password"
           test "$cred_user" = "Administrator"
+          # Container-side ground truth about the asset pipeline (annotated
+          # so it is readable even when the job log is unreachable):
+          bootstrap_line="$(docker compose logs --no-color web 2>&1 | grep -a '"actions"' | tail -1)"
+          echo "::notice title=bootstrap summary::${bootstrap_line:-no bootstrap line found}"
+          build_log="$(docker compose logs --no-color web 2>&1 | grep -aiE "build|webpack|vite|asset" | tail -8)"
+          echo "::notice title=web build log tail::$(printf "%s" "$build_log" | tr "\n" "|")"
+          edu_assets="$(docker compose exec -T web sh -c 'find /home/frappe/bench/sites/assets/education -name "*bundle*" 2>/dev/null | head -8; echo ---; ls /home/frappe/bench/sites/assets 2>/dev/null | tr "\n" " "')"
+          echo "::notice title=sites/assets education::$(printf "%s" "$edu_assets" | tr "\n" "|")"
+          edu_app="$(docker compose exec -T web sh -c 'find /home/frappe/bench/apps/education/public -maxdepth 3 -name "*bundle*" 2>/dev/null | head -8; echo ---; find /home/frappe/bench/apps/education/public -maxdepth 2 -type d 2>/dev/null | head -10')"
+          echo "::notice title=education app public::$(printf "%s" "$edu_app" | tr "\n" "|")"
+          hashrefs="$(docker compose exec -T web sh -c 'grep -rl NS2O3ZWO /home/frappe/bench/sites/common_site_config.json /home/frappe/bench/sites/toeflhouse.localhost/site_config.json /home/frappe/bench/apps/education/education /home/frappe/bench/apps/education/public 2>/dev/null | head -5')"
+          echo "::notice title=hash NS2O3ZWO file refs::${hashrefs:-none found in probed files}"
           # Asset probes: the login page is server-rendered, but its web client
           # (the frappe global the inlined login handler needs) is a built
           # bundle. Show exactly which assets the served page references and
@@ -185,6 +197,8 @@ jobs:
               fi
               test "$code" = "200"
           done
+          tagline="$(printf "%s" "$login_html" | tr "\n" " " | grep -oE "<(script|link)[^>]*education[^>]*>" | head -3)"
+          echo "::notice title=education tags in served HTML::${tagline:-no education tags}"
           cat > browser_ui_check.py <<'PYEOF'
           import os, pathlib, sys, traceback
           def _ci_excepthook(typ, value, tb):
