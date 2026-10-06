@@ -637,6 +637,30 @@ class BootstrapLogicContract(unittest.TestCase):
         self.assertIn("COPY product/wsgi.py /product/wsgi.py", (PRODUCT / "app.Dockerfile").read_text())
         self.assertIn("!product/wsgi.py", (ROOT / ".dockerignore").read_text())
 
+    def test_wsgi_wraps_the_static_middlewares_like_frappe_serve(self):
+        # Regression (product-image run 37507203811): frappe.app.application
+        # is the bare request handler; the /assets and /files middlewares are
+        # only wrapped on the `bench serve` path. Our gunicorn app served it
+        # unwrapped, so every asset 404d even though the files existed under
+        # sites/assets (the login client bundle included, so login silently
+        # did nothing). wsgi.py must apply the same two middlewares, in the
+        # same order frappe's application_with_statics uses.
+        wsgi = (PRODUCT / "wsgi.py").read_text()
+        self.assertIn("SharedDataMiddleware", wsgi)
+        self.assertIn("StaticDataMiddleware", wsgi)
+        self.assertIn('frappe.app.application', wsgi)
+        assets = wsgi.index("SharedDataMiddleware(application")
+        files = wsgi.index("StaticDataMiddleware(application")
+        self.assertLess(assets, files)
+        self.assertIn('"/assets": os.path.join(sites_path, "assets")', wsgi)
+        self.assertIn('"/files": sites_path', wsgi)
+        # the sites path must resolve the way the entrypoint expects
+        # (gunicorn runs with cwd = the sites directory)
+        self.assertIn('os.environ.get("SITES_PATH", ".")', wsgi)
+        entry = (PRODUCT / "entrypoint.sh").read_text()
+        self.assertLess(entry.index("cd /home/frappe/bench/sites"),
+                        entry.index("exec /home/frappe/bench/env/bin/gunicorn"))
+
     def test_credentials_written_once_with_owner_permissions(self):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
