@@ -77,7 +77,8 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
 
 ## Step 6 — Start
 
-- **Action:** double-click `Start TOEFL House ERP.cmd`, wait (usually 1–5 min).
+- **Action:** double-click `Start TOEFL House ERP.cmd`, wait (usually 1–5
+  min; it first checks a few seconds whether the app has been updated).
 - **Expected:** it waits, then opens the browser at `http://127.0.0.1:8000`
   and closes its window by itself.
 - **Evidence 6:** login as in Step 3; screenshot of the desk **and** of

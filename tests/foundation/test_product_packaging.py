@@ -294,6 +294,118 @@ class LineEndingContract(unittest.TestCase):
             cwd=ROOT, capture_output=True, check=True).stdout
         self.assertNotIn(b"\r", blob, "entrypoint.sh blob must be LF-only")
 
+    def test_build_context_allowlist_stays_lf(self):
+        # .dockerignore defines the build context (it keeps product/data/ -
+        # live site data, backups, secrets - OUT of the image). A trailing
+        # CR on a pattern line makes that pattern match nothing, so the
+        # file must be LF in every worktree, pinned like *.sh.
+        self.assertNotIn(b"\r", (ROOT / ".dockerignore").read_bytes(),
+                         ".dockerignore must be LF-only")
+        self.assertIn(".dockerignore text eol=lf",
+                      (ROOT / ".gitattributes").read_text())
+
+
+class CmdParserSafetyContract(unittest.TestCase):
+    # 2026-09-30: three independent real Windows runs aborted with
+    # ") was unexpected at this time" because the delivered .cmd bytes
+    # broke cmd's multi-line parenthesized-block parser. Two permanent
+    # guards: .gitattributes pins eol=crlf for *.cmd (Git delivery), and
+    # every script uses the proven linear flow - no multi-line
+    # parenthesized blocks, no FOR commands - so the scripts also parse
+    # correctly when delivered as a GitHub ZIP (blob bytes, i.e. LF).
+    # Paren text inside top-level `echo`/`rem` lines is legal (it only
+    # breaks blocks, and blocks are forbidden), so the checks target the
+    # block-opening command words.
+    BLOCK_OPENERS = ("if", "for", "call", "choose")
+
+    @staticmethod
+    def _unquoted_paren_balance(line: str) -> int:
+        balance, in_quote = 0, False
+        for ch in line:
+            if ch == '"':
+                in_quote = not in_quote
+            elif not in_quote:
+                balance += 1 if ch == "(" else -1 if ch == ")" else 0
+        return balance
+
+    def test_all_cmd_files_use_uniform_crlf_in_the_worktree(self):
+        for cmd in SCRIPTS:
+            raw = cmd.read_bytes()
+            self.assertTrue(raw.endswith(b"\r\n"), f"{cmd.name} must end with CRLF")
+            lines = raw.split(b"\n")
+            self.assertTrue(all(line.endswith(b"\r") for line in lines[:-1]),
+                            f"{cmd.name}: mixed line endings")
+
+    def test_no_multiline_parenthesized_blocks_and_no_for(self):
+        for cmd in SCRIPTS:
+            text = cmd.read_text().replace("\r\n", "\n")
+            for lineno, line in enumerate(text.split("\n"), 1):
+                stripped = line.strip()
+                word = stripped.split(" ", 1)[0].lower()
+                if word == "for":
+                    self.fail(f"{cmd.name}:{lineno}: FOR commands are "
+                              f"forbidden (cmd's FOR parser is quote-blind): {stripped[:60]}")
+                if word in self.BLOCK_OPENERS:
+                    self.assertEqual(self._unquoted_paren_balance(line), 0,
+                                     f"{cmd.name}:{lineno}: multi-line "
+                                     f"parenthesized block: {stripped[:60]}")
+
+    def test_every_goto_target_exists(self):
+        for cmd in SCRIPTS:
+            text = cmd.read_text().replace("\r\n", "\n")
+            lines = text.split("\n")
+            labels = set()
+            for line in lines:
+                m = re.match(r"\s*:([A-Za-z_][A-Za-z0-9_]*)", line)
+                if m:
+                    labels.add(m.group(1))
+            for lineno, line in enumerate(lines, 1):
+                for target in re.findall(r"(?i)goto\s+:([A-Za-z_][A-Za-z0-9_]*)", line):
+                    self.assertIn(target, labels,
+                                  f"{cmd.name}:{lineno}: goto :{target} has no label")
+
+
+class ImageRecreationContract(unittest.TestCase):
+    def test_app_services_share_a_stable_image_tag(self):
+        # A source update must reach the running product: compose builds
+        # one stable tag, and `up -d` then recreates exactly the
+        # containers whose image changed. The digest-pinned db/redis
+        # images never change, and none of this touches the db-data volume.
+        text = COMPOSE.read_text()
+        self.assertIn("name: toefl-house-erp", text)
+        for svc in ("web", "worker", "scheduler", "socketio"):
+            block = re.search(rf"^  {svc}:\n((?:    .*\n|\n)+?)(?=^  \S|\Z)",
+                              text, flags=re.M).group(1)
+            self.assertIn("image: toefl-house-erp-app:local", block, svc)
+
+    def test_daily_launcher_rebuilds_before_redeploy(self):
+        start = (PRODUCT / "windows" / "Start TOEFL House ERP.cmd").read_text()
+        self.assertLess(start.index("docker compose build"),
+                        start.index("docker compose up -d"),
+                        "Start must rebuild the image before up -d so a "
+                        "changed image is reliably recreated")
+
+    def test_missing_db_env_has_a_guided_path(self):
+        # If data\secrets\db.env is missing, every compose command fails
+        # with an incomprehensible env_file error. The launcher and the
+        # recovery path must detect it and tell the operator exactly what
+        # is safe to do (running the installer with an EXISTING database
+        # would write a password that does not match the volume).
+        for name in ("Start", "Repair"):
+            text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
+            self.assertIn("db.env", text, name)
+            self.assertIn(":nosecret", text, name)
+            self.assertIn(":nosecretfresh", text, name)
+            self.assertIn("toefl-house-erp_db-data", text, name)
+
+    def test_db_is_not_published_to_the_host(self):
+        text = COMPOSE.read_text()
+        db_block = re.search(r"^  db:\n((?:    .*\n|\n)+?)(?=^  \S|\Z)",
+                             text, flags=re.M).group(1)
+        self.assertNotIn("ports:", db_block, "the database must stay "
+                                             "inside the compose network")
+        self.assertIn("db-data:/var/lib/mysql", db_block)
+
     def test_startup_waits_are_bounded_and_fail_fast(self):
         # A crash-looping web service must not make the launcher wait
         # forever: every wait loop must terminate into the :failed
@@ -306,7 +418,7 @@ class LineEndingContract(unittest.TestCase):
             self.assertIn("goto :failed", loop, f"{name}: bounded wait must fail fast")
         start = (PRODUCT / "windows" / "Start TOEFL House ERP.cmd").read_text()
         start = start.replace("\r\n", "\n")
-        daemon = re.search(r"(?ms)^\s*:waitdaemon$(.*?)^\)$", start).group(1)
+        daemon = re.search(r"(?ms)^\s*:waitdaemon$(.*?)^:up$", start).group(1)
         self.assertIn("DAEMON_TRIES", daemon, "Start: daemon wait must be bounded")
         self.assertIn("goto :failed", daemon, "Start: daemon wait must fail fast")
 

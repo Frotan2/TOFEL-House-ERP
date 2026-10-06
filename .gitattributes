@@ -22,3 +22,9 @@
 # worktree to LF on all platforms and overrides the user autocrlf
 # heuristic the same way eol=crlf does for *.cmd.
 *.sh text eol=lf
+#
+# The build context is defined by .dockerignore patterns (it keeps
+# product/data/ - live site data, backups, secrets - OUT of the image).
+# A trailing CR on a pattern line would make that pattern match nothing,
+# so pin the file to LF in every worktree for the same reason as *.sh.
+.dockerignore text eol=lf

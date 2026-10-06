@@ -1,21 +1,32 @@
 @echo off
-rem Daily launcher: double-click. Starts the app and opens it in your browser.
+rem Daily launcher: double-click. Checks for app updates, starts the app and
+rem opens it in your browser. Never deletes data.
+rem Style rule (proven on real Windows runs, 2026-09-30): fully linear flow -
+rem single-line IF ... GOTO with dedicated labels, no multi-line
+rem parenthesized blocks and no FOR commands, so the script parses
+rem identically with LF or CRLF line endings regardless of how this folder
+rem was delivered (Git checkout or GitHub ZIP).
 cd /d "%~dp0.."
 title Starting TOEFL House ERP
 docker info >nul 2>nul
-if errorlevel 1 (
-  echo  Starting Docker Desktop - this can take a minute...
-  start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-  set DAEMON_TRIES=60
-  :waitdaemon
-  timeout /t 5 /nobreak >nul
-  docker info >nul 2>nul && goto :up
-  set /a DAEMON_TRIES-=1
-  if DAEMON_TRIES GTR 0 goto :waitdaemon
-  echo  Docker Desktop did not finish starting within 5 minutes.
-  goto :failed
-)
+if errorlevel 1 goto :startdaemon
+goto :up
+:startdaemon
+echo  Starting Docker Desktop - this can take a minute...
+start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+set DAEMON_TRIES=60
+:waitdaemon
+timeout /t 5 /nobreak >nul
+docker info >nul 2>nul && goto :up
+set /a DAEMON_TRIES-=1
+if DAEMON_TRIES GTR 0 goto :waitdaemon
+echo  Docker Desktop did not finish starting within 5 minutes.
+goto :failed
 :up
+if not exist data\secrets\db.env goto :nosecret
+echo  Checking for app updates...
+docker compose build
+if errorlevel 1 goto :failed
 docker compose up -d
 if errorlevel 1 goto :failed
 echo  Waiting until TOEFL House ERP answers...
@@ -32,6 +43,22 @@ start "" "http://127.0.0.1:8000/"
 echo  TOEFL House ERP is open in your browser. You may close this window.
 timeout /t 6 >nul
 exit /b 0
+:nosecret
+docker volume inspect toefl-house-erp_db-data >nul 2>nul
+if errorlevel 1 goto :nosecretfresh
+echo  The database password file is missing, but a database already exists
+echo  on this PC.
+echo  Do NOT run the installer: it would write a new password that does not
+echo  match the existing database. Contact TOEFL House support, or restore
+echo  from your last backup.
+pause
+exit /b 1
+:nosecretfresh
+echo  The database password file is missing.
+echo  Double-click "Install TOEFL House ERP.cmd" to create it. No database
+echo  exists yet, so the installer only creates the missing file.
+pause
+exit /b 1
 :failed
 echo.
 echo  TOEFL House ERP could not start. Current service state:

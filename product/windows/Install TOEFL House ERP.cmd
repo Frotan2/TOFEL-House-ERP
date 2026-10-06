@@ -42,11 +42,14 @@ echo.
 echo  Docker Desktop is installed but not running.
 echo  Starting it now - this can take a minute...
 start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+set DAEMON_TRIES=60
 :waitdaemon
 timeout /t 5 /nobreak >nul
 docker info >nul 2>nul && goto :dockerup
-echo  Waiting for Docker Desktop to finish starting...
-goto :waitdaemon
+set /a DAEMON_TRIES-=1
+if DAEMON_TRIES GTR 0 goto :waitdaemon
+echo  Docker Desktop did not finish starting within 5 minutes.
+goto :failed
 :dockerup
 
 if not exist data\secrets mkdir data\secrets
@@ -76,11 +79,15 @@ if errorlevel 1 goto :failed
 echo.
 echo  First launch is finishing inside the app - site setup and data install.
 echo  You can watch progress in Docker Desktop, or simply wait for the browser.
+set READY_TRIES=300
 :waitready
 timeout /t 10 /nobreak >nul
 curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul && goto :ready
 echo  Still preparing... site setup can take 15-40 minutes on first run.
-goto :waitready
+set /a READY_TRIES-=1
+if READY_TRIES GTR 0 goto :waitready
+echo  The first run did not finish within 50 minutes.
+goto :failed
 :ready
 
 if not exist data\sites\toeflhouse.localhost\private\first-run-credentials.txt goto :nowelcome
@@ -101,8 +108,15 @@ exit /b 0
 :failed
 echo.
 echo  ------------------------------------------------------------------
-echo  Something went wrong. Double-click "Repair TOEFL House ERP.cmd";
-echo  it restarts the system and reruns migrations safely.
+echo  Something went wrong. Current service state:
+docker compose ps
+echo  Last lines of the application log:
+docker compose logs --tail 5 web 2>&1
+echo.
+echo  Double-click "Repair TOEFL House ERP.cmd"; it restarts the system
+echo  and finishes the unfinished setup safely. If it repeats, send a
+echo  photo of this window plus the data\logs folder to TOEFL House
+echo  support.
 echo  ------------------------------------------------------------------
 :pause
 pause

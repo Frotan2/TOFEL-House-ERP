@@ -78,8 +78,38 @@ jobs:
           ")
           digest=$(docker buildx imagetools inspect "$base" 2>/dev/null | grep -m1 -oE 'sha256:[0-9a-f]{64}' || true)
           echo "::notice title=Base image digest::${base} -> ${digest:-not resolvable from this runner}"
-      - name: Build application image
-        run: docker build --build-arg NODE_TARBALL_SHA256="${NODE_TARBALL_SHA256}" -f product/app.Dockerfile -t toefl-house-erp-app:ci -t toefl-house-erp-app:local .
+      - name: Build application image (from a simulated Windows worktree)
+        # The 2026-10-06 defect was born from the owner's checkout bytes:
+        # core.autocrlf=true materialized product/entrypoint.sh as CRLF and
+        # the build baked "#!/bin/sh\r" into the image (the kernel then
+        # looks for an interpreter named /bin/sh\r: "no such file or
+        # directory" at boot). CI therefore builds from a worktree checked
+        # out exactly like a Windows machine (core.autocrlf=true) and
+        # asserts both sides of the line-ending contract on those exact
+        # bytes - before the build and inside the built image.
+        run: |
+          set -euo pipefail
+          git clone -q --no-checkout "file://$GITHUB_WORKSPACE" /tmp/win-worktree
+          git -C /tmp/win-worktree config core.autocrlf true
+          git -C /tmp/win-worktree checkout -q "$GITHUB_SHA"
+          cd /tmp/win-worktree
+          # Side 1 (Linux): the kernel-executed entrypoint and the build
+          # context allowlist must be LF in every worktree.
+          first_line=$(head -c 10 product/entrypoint.sh | od -An -tx1 | tr -d ' \n')
+          test "$first_line" = "23212f62696e2f73680a"   # exactly "#!/bin/sh\n"
+          ! grep -q $'\r' product/entrypoint.sh
+          ! grep -q $'\r' .dockerignore
+          # Side 2 (Windows): the operator's .cmd scripts must materialize
+          # CRLF (cmd.exe's parsing contract) in the same worktree.
+          for f in product/windows/*.cmd; do
+            head -1 "$f" | grep -q $'\r$'
+          done
+          echo "::notice title=Windows worktree contract::autocrlf=true bytes: entrypoint.sh + .dockerignore LF, all .cmd CRLF"
+          docker build --build-arg NODE_TARBALL_SHA256="${NODE_TARBALL_SHA256}" -f product/app.Dockerfile -t toefl-house-erp-app:ci -t toefl-house-erp-app:local /tmp/win-worktree
+          # The kernel-visible shebang inside the built image, byte for byte.
+          in_image=$(docker run --rm --entrypoint sh toefl-house-erp-app:ci -c 'head -c 10 /product/entrypoint.sh | od -An -tx1 | tr -d " \n"')
+          test "$in_image" = "23212f62696e2f73680a"
+          echo "::notice title=Image entrypoint::shebang bytes in the image are exactly #!/bin/sh + LF (owner-checkout bytes)"
       - name: Report image footprint
         run: |
           set -euo pipefail
@@ -111,6 +141,63 @@ jobs:
           act deactivate --confirm toeflhouse.localhost
           act status | grep -q ': REFUSED'
           echo "::notice title=Owner activation::REFUSED -> backup gate -> PRODUCTION (all gates) -> fee-item refusal -> REFUSED"
+      - name: Browser UI acceptance (real headless Chromium, real login flow)
+        # Container health, API calls and unit tests cannot prove the
+        # operator actually sees a working UI. This drives a real headless
+        # Chromium to the live site: the login page must render, the real
+        # login (Administrator, from the first-run credentials file) must
+        # complete through the login form, and the operator's desk must
+        # actually render. The desk screenshot is uploaded as run evidence.
+        working-directory: product
+        run: |
+          set -euo pipefail
+          python3 - <<'PYEOF'
+          import pathlib, re, subprocess, sys, traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::browser UI acceptance failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
+          # A single stdin-heredoc step (the documented exception in
+          # tests/foundation/test_annotated_step.py): dependency install and
+          # the UI flow share one process, and the hook above annotates
+          # failures with the offending line.
+          subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "playwright"], check=True)
+          subprocess.run([sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"], check=True)
+          import playwright.sync_api as pw
+
+          cred = pathlib.Path("data/sites/toeflhouse.localhost/private/first-run-credentials.txt").read_text()
+          user = re.search(r"Username:\s*(\S+)", cred).group(1)
+          password = re.search(r"Password:\s*(\S+)", cred).group(1)
+          assert user == "Administrator", cred.splitlines()[:2]
+
+          shot = pathlib.Path("browser-ui-evidence.png")
+          with pw.sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              page = browser.new_page(viewport={"width": 1440, "height": 900})
+              page.goto("http://127.0.0.1:8000/", wait_until="networkidle", timeout=120_000)
+              page.wait_for_selector("input[name=usr]", timeout=60_000)   # real login form, not an error page
+              page.wait_for_selector("input[name=pwd]", timeout=60_000)
+              page.fill("input[name=usr]", user)
+              page.fill("input[name=pwd]", password)
+              page.screenshot(path=str(shot))
+              page.click("button[type=submit]")
+              page.wait_for_url("**/app**", timeout=180_000)   # session must land on the desk
+              page.wait_for_timeout(5_000)                      # let the desk shell render
+              assert page.url.startswith("http://127.0.0.1:8000/app"), page.url
+              assert page.query_selector("input[name=pwd]") is None, "login form still present after login"
+              assert len(page.inner_text("body").strip()) > 200, "desk rendered no content"
+              page.screenshot(path=str(shot))
+              browser.close()
+          print("::notice title=Browser UI::real Chromium: login page -> real login -> desk rendered (screenshot kept)")
+          PYEOF
+      - name: Keep browser UI evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: browser-ui-evidence
+          path: product/browser-ui-evidence.png
+          if-no-files-found: ignore
       - name: Multi-user tailnet contract (second client, no public exposure, restart persistence)
         # The owner deployment (D13/D15) is one central PC plus authorized
         # staff PCs over a Tailscale tailnet (runbook section 9). Tailscale
@@ -540,12 +627,17 @@ jobs:
 
           # (2) REBUILD: rebuild the application image (cached: same source)
           # and redeploy every container; the data volumes are untouched -
-          # exactly what a software update does on the owner's machine.
+          # exactly what a software update does on the owner's machine. The
+          # db-data volume identity is asserted explicitly across the
+          # rebuild (content survival is proven by the marker data below).
+          vol_before=$(docker volume inspect toefl-house-erp_db-data --format '{{.Name}}|{{.Driver}}')
           docker compose build
           docker compose up -d --force-recreate
           for i in $(seq 1 180); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 5; done
           curl --fail --silent http://127.0.0.1:8000/ >/dev/null
-          echo "::notice title=Rehearsal rebuild::stack redeployed after ~$((i*5))s"
+          vol_after=$(docker volume inspect toefl-house-erp_db-data --format '{{.Name}}|{{.Driver}}')
+          test "$vol_before" = "$vol_after"
+          echo "::notice title=Rehearsal rebuild::stack redeployed after ~$((i*5))s; db-data volume identity unchanged"
 
           # (3) MIGRATE: the upgrade's migration phase (the boot entrypoint
           # already ran one; the explicit run is the command the owner's
