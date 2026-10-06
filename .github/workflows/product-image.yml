@@ -157,8 +157,17 @@ jobs:
         working-directory: product
         run: |
           set -euo pipefail
+          # The credentials file is 0600 and owned by the container's
+          # service user (the product's security model), so - as in the
+          # rehearsal step - it is read in-container as root and the
+          # values are passed to the check via the environment.
+          cred="$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt)"
+          cred_user="$(printf '%s\n' "$cred" | awk '/^Username: /{print $2}')"
+          cred_password="$(printf '%s\n' "$cred" | awk '/^Password: /{print $2}')"
+          test -n "$cred_user" && test -n "$cred_password"
+          test "$cred_user" = "Administrator"
           cat > browser_ui_check.py <<'PYEOF'
-          import pathlib, re, sys, traceback
+          import os, pathlib, sys, traceback
           def _ci_excepthook(typ, value, tb):
               lineno = tb.tb_lineno if tb else -1
               traceback.print_exception(typ, value, tb)
@@ -166,10 +175,9 @@ jobs:
           sys.excepthook = _ci_excepthook
           import playwright.sync_api as pw
 
-          cred = pathlib.Path("data/sites/toeflhouse.localhost/private/first-run-credentials.txt").read_text()
-          user = re.search(r"Username:\s*(\S+)", cred).group(1)
-          password = re.search(r"Password:\s*(\S+)", cred).group(1)
-          assert user == "Administrator", cred.splitlines()[:2]
+          user = os.environ["BROWSER_UI_USER"]
+          password = os.environ["BROWSER_UI_PASSWORD"]
+          assert user == "Administrator"
 
           shot = pathlib.Path("browser-ui-evidence.png")
           with pw.sync_playwright() as p:
@@ -199,7 +207,8 @@ jobs:
           python3 ../tools/foundation/annotated_step.py "Browser UI: hermetic venv" -- python3 -m venv /tmp/browser-ui-venv
           python3 ../tools/foundation/annotated_step.py "Browser UI: playwright install" -- /tmp/browser-ui-venv/bin/python -m pip install --quiet playwright
           python3 ../tools/foundation/annotated_step.py "Browser UI: chromium install" -- /tmp/browser-ui-venv/bin/python -m playwright install --with-deps chromium
-          python3 ../tools/foundation/annotated_step.py "Browser UI: live check" -- /tmp/browser-ui-venv/bin/python browser_ui_check.py
+          BROWSER_UI_USER="$cred_user" BROWSER_UI_PASSWORD="$cred_password" \
+            python3 ../tools/foundation/annotated_step.py "Browser UI: live check" -- /tmp/browser-ui-venv/bin/python browser_ui_check.py
       - name: Keep browser UI evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
