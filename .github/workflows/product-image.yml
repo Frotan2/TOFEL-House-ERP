@@ -184,16 +184,19 @@ jobs:
               browser = p.chromium.launch(headless=True)
               page = browser.new_page(viewport={"width": 1440, "height": 900})
               page.goto("http://127.0.0.1:8000/", wait_until="domcontentloaded", timeout=120_000)
-              page.wait_for_selector("input[name=usr]", timeout=60_000)   # real login form, not an error page
-              page.wait_for_selector("input[name=pwd]", timeout=60_000)
-              page.fill("input[name=usr]", user)
-              page.fill("input[name=pwd]", password)
+              # Frappe v16 login form fields (frappe/www/login.html at the
+              # pinned commit): id=login_email / id=login_password, submit
+              # button .btn-login[type=submit].
+              page.wait_for_selector("#login_email", timeout=60_000)   # real login form, not an error page
+              page.wait_for_selector("#login_password", timeout=60_000)
+              page.fill("#login_email", user)
+              page.fill("#login_password", password)
               page.screenshot(path=str(shot))
-              page.keyboard.press("Enter")   # submits Frappe's login form
+              page.click("button.btn-login[type=submit]")
               page.wait_for_url("**/app**", timeout=180_000)   # session must land on the desk
               page.wait_for_timeout(5_000)                      # let the desk shell render
               assert page.url.startswith("http://127.0.0.1:8000/app"), page.url
-              assert page.query_selector("input[name=pwd]") is None, "login form still present after login"
+              assert page.query_selector("#login_password") is None, "login form still present after login"
               assert len(page.inner_text("body").strip()) > 200, "desk rendered no content"
               page.screenshot(path=str(shot))
               browser.close()
