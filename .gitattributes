@@ -10,3 +10,15 @@
 # ----------------------------------------------------------------------------------
 *.cmd text eol=crlf
 *.bat text eol=crlf
+#
+# The Linux side of the same bug class (2026-10-06):
+# product/entrypoint.sh is exec'd directly by the container kernel
+# (Dockerfile ENTRYPOINT), so its shebang must reach the kernel as
+# "#!/bin/sh" + LF. A Windows checkout (core.autocrlf=true) materialized
+# "#!/bin/sh\r" in the worktree, the owner's docker compose build baked it
+# into the image, and the container died at boot with
+# `exec /product/entrypoint.sh: no such file or directory` (the kernel
+# looks for an interpreter named `/bin/sh\r`). eol=lf pins every *.sh
+# worktree to LF on all platforms and overrides the user autocrlf
+# heuristic the same way eol=crlf does for *.cmd.
+*.sh text eol=lf

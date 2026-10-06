@@ -268,6 +268,49 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("docker compose up -d", install)
         self.assertIn("first-run-credentials.txt", install.lower())
 
+class LineEndingContract(unittest.TestCase):
+    # Both sides of the 2026-09-30 Windows bug class, pinned in git so no
+    # checkout platform can break either one: *.cmd must materialize CRLF
+    # (cmd.exe parses multi-line blocks with CRLF assumptions), and *.sh
+    # must materialize LF. The image entrypoint is exec'd directly by the
+    # kernel, so a CRLF worktree bakes `#!/bin/sh\r` into the image and the
+    # container dies at boot with `exec /product/entrypoint.sh: no such
+    # file or directory` (the kernel looks for an interpreter named
+    # `/bin/sh\r`; observed on a Windows checkout, 2026-10-06).
+    def test_gitattributes_pins_both_sides(self):
+        text = (ROOT / ".gitattributes").read_text()
+        self.assertIn("*.sh text eol=lf", text)
+        self.assertIn("*.cmd text eol=crlf", text)
+        self.assertIn("*.bat text eol=crlf", text)
+
+    def test_no_shell_script_contains_cr_bytes(self):
+        # The docker build consumes the worktree, so the worktree bytes are
+        # the build input; and the committed blob is what a fresh Windows
+        # checkout (core.autocrlf=true) fetches. Both must be LF-only.
+        for sh in sorted(ROOT.rglob("*.sh")):
+            self.assertNotIn(b"\r", sh.read_bytes(), f"{sh} must be LF-only")
+        blob = subprocess.run(
+            ["git", "show", "HEAD:product/entrypoint.sh"],
+            cwd=ROOT, capture_output=True, check=True).stdout
+        self.assertNotIn(b"\r", blob, "entrypoint.sh blob must be LF-only")
+
+    def test_startup_waits_are_bounded_and_fail_fast(self):
+        # A crash-looping web service must not make the launcher wait
+        # forever: every wait loop must terminate into the :failed
+        # diagnosis after a bounded number of tries.
+        for name in ("Start", "Repair"):
+            text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
+            text = text.replace("\r\n", "\n")  # parse endings-insensitively
+            loop = re.search(r"(?ms)^:waitready$(.*?)^:ready$", text).group(1)
+            self.assertIn("READY_TRIES", loop, f"{name}: ready wait must be bounded")
+            self.assertIn("goto :failed", loop, f"{name}: bounded wait must fail fast")
+        start = (PRODUCT / "windows" / "Start TOEFL House ERP.cmd").read_text()
+        start = start.replace("\r\n", "\n")
+        daemon = re.search(r"(?ms)^\s*:waitdaemon$(.*?)^\)$", start).group(1)
+        self.assertIn("DAEMON_TRIES", daemon, "Start: daemon wait must be bounded")
+        self.assertIn("goto :failed", daemon, "Start: daemon wait must fail fast")
+
+
 class RecoveryContract(unittest.TestCase):
     def test_every_service_recovers_after_a_daemon_restart(self):
         # The desktop product must come back whole after a Docker Desktop
