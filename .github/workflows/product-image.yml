@@ -178,6 +178,14 @@ jobs:
           echo "::notice title=education app public::$(printf "%s" "$edu_app" | tr "\n" "|")"
           hashrefs="$(docker compose exec -T web sh -c 'grep -rl NS2O3ZWO /home/frappe/bench/sites/common_site_config.json /home/frappe/bench/sites/toeflhouse.localhost/site_config.json /home/frappe/bench/apps/education/education /home/frappe/bench/apps/education/public 2>/dev/null | head -5')"
           echo "::notice title=hash NS2O3ZWO file refs::${hashrefs:-none found in probed files}"
+          # Direct evidence for the sync mystery: same code, live in the container,
+          # run BEFORE the page fetch so a working sync also unblocks the probe loop.
+          benchdir="$(docker compose exec -T web sh -c 'echo BENCH_DIR=${BENCH_DIR:-unset}; grep -c sync_built_assets /product/bootstrap.py' 2>&1)"
+          echo "::notice title=container benchdir + bootstrap code::$(printf "%s" "$benchdir" | tr "\n" "|")"
+          assetsdetail="$(docker compose exec -T web sh -c 'ls -la /home/frappe/bench/sites/assets/education/ 2>&1 | head -12; echo ---; ls -la /home/frappe/bench/sites/assets/education/dist/js/ 2>&1 | head -5; echo ---; ls -la /home/frappe/bench/apps/education/ 2>&1 | head -10; echo ---; ls -la /home/frappe/bench/apps/education/education/public/ 2>&1 | head -8' 2>&1)"
+          echo "::notice title=assets directories live::$(printf "%s" "$assetsdetail" | tr "\n" "|")"
+          livesync="$(docker compose exec -T web /home/frappe/bench/env/bin/python3 -c 'import sys; sys.path.insert(0, "/product"); import bootstrap; m = bootstrap.public_assets_missing(); print("missing-before:", len(m), m[:5]); s = bootstrap.sync_built_assets(); print("synced:", s); m2 = bootstrap.public_assets_missing(); print("missing-after:", len(m2), m2[:5])' 2>&1)"
+          echo "::notice title=live sync in container::$(printf "%s" "$livesync" | tr "\n" "|")"
           # Asset probes: the login page is server-rendered, but its web client
           # (the frappe global the inlined login handler needs) is a built
           # bundle. Show exactly which assets the served page references and
