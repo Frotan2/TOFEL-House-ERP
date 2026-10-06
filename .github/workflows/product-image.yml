@@ -157,19 +157,13 @@ jobs:
         working-directory: product
         run: |
           set -euo pipefail
-          python3 - <<'PYEOF'
-          import pathlib, re, subprocess, sys, traceback
+          cat > browser_ui_check.py <<'PYEOF'
+          import pathlib, re, sys, traceback
           def _ci_excepthook(typ, value, tb):
               lineno = tb.tb_lineno if tb else -1
               traceback.print_exception(typ, value, tb)
               print("::error::browser UI acceptance failed at line %s: %s" % (lineno, value))
           sys.excepthook = _ci_excepthook
-          # A single stdin-heredoc step (the documented exception in
-          # tests/foundation/test_annotated_step.py): dependency install and
-          # the UI flow share one process, and the hook above annotates
-          # failures with the offending line.
-          subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "playwright"], check=True)
-          subprocess.run([sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"], check=True)
           import playwright.sync_api as pw
 
           cred = pathlib.Path("data/sites/toeflhouse.localhost/private/first-run-credentials.txt").read_text()
@@ -181,13 +175,13 @@ jobs:
           with pw.sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
               page = browser.new_page(viewport={"width": 1440, "height": 900})
-              page.goto("http://127.0.0.1:8000/", wait_until="networkidle", timeout=120_000)
+              page.goto("http://127.0.0.1:8000/", wait_until="domcontentloaded", timeout=120_000)
               page.wait_for_selector("input[name=usr]", timeout=60_000)   # real login form, not an error page
               page.wait_for_selector("input[name=pwd]", timeout=60_000)
               page.fill("input[name=usr]", user)
               page.fill("input[name=pwd]", password)
               page.screenshot(path=str(shot))
-              page.click("button[type=submit]")
+              page.keyboard.press("Enter")   # submits Frappe's login form
               page.wait_for_url("**/app**", timeout=180_000)   # session must land on the desk
               page.wait_for_timeout(5_000)                      # let the desk shell render
               assert page.url.startswith("http://127.0.0.1:8000/app"), page.url
@@ -197,6 +191,15 @@ jobs:
               browser.close()
           print("::notice title=Browser UI::real Chromium: login page -> real login -> desk rendered (screenshot kept)")
           PYEOF
+          # A dedicated venv keeps the browser tooling hermetic: the
+          # runner's system python is externally managed, and a plain
+          # `pip install` there does not reliably land on the running
+          # interpreter's import path (observed: pip exit 0, then
+          # "No module named 'playwright'", 2026-10-06).
+          python3 ../tools/foundation/annotated_step.py "Browser UI: hermetic venv" -- python3 -m venv /tmp/browser-ui-venv
+          python3 ../tools/foundation/annotated_step.py "Browser UI: playwright install" -- /tmp/browser-ui-venv/bin/python -m pip install --quiet playwright
+          python3 ../tools/foundation/annotated_step.py "Browser UI: chromium install" -- /tmp/browser-ui-venv/bin/python -m playwright install --with-deps chromium
+          python3 ../tools/foundation/annotated_step.py "Browser UI: live check" -- /tmp/browser-ui-venv/bin/python browser_ui_check.py
       - name: Keep browser UI evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
