@@ -534,6 +534,12 @@ class BootstrapLogicContract(unittest.TestCase):
             (edu / "dist" / "js" / "education.bundle.NS2O3ZWO.js").write_text("built")
             (edu / "js").mkdir(parents=True)
             (edu / "js" / "education.bundle.js").write_text("plain")
+            # the education app's own Vite build creates a top-level
+            # apps/education/public/ (outDir ../education/public/frontend);
+            # it must not shadow the real nested package public (run 37503724237)
+            shadow = apps / "education" / "public" / "frontend"
+            shadow.mkdir(parents=True)
+            (shadow / "vite-artifact.js").write_text("vite")
             frappe = apps / "frappe" / "frappe" / "public"
             (frappe / "js").mkdir(parents=True)
             (frappe / "js" / "frappe.bundle.js").write_text("core")
@@ -545,15 +551,18 @@ class BootstrapLogicContract(unittest.TestCase):
             (sites / "assets" / "js").mkdir(parents=True)
             (sites / "assets" / "assets.json").write_text("{}")
             (sites / "assets" / "education").mkdir(parents=True)
-            self.assertEqual(bootstrap.public_assets_missing(sites, apps),
-                             ["education/dist/js/education.bundle.NS2O3ZWO.js",
-                              "education/js/education.bundle.js",
-                              "frappe/js/frappe.bundle.js",
-                              "toefl_house/site.css"])
+            self.assertEqual(sorted(bootstrap.public_assets_missing(sites, apps)),
+                             sorted(["education/dist/js/education.bundle.NS2O3ZWO.js",
+                                     "education/js/education.bundle.js",
+                                     "frappe/js/frappe.bundle.js",
+                                     "toefl_house/site.css"]))
             self.assertEqual(sorted(bootstrap.sync_built_assets(sites, apps)),
                              ["education", "frappe", "toefl_house"])
             self.assertEqual((sites / "assets" / "education" / "dist" / "js"
                               / "education.bundle.NS2O3ZWO.js").read_text(), "built")
+            self.assertFalse((sites / "assets" / "education" / "frontend"
+                              / "vite-artifact.js").exists(),
+                             "the shadow top-level public must not be the sync source")
             self.assertEqual((sites / "assets" / "assets.json").read_text(), "{}")
             self.assertEqual(bootstrap.public_assets_missing(sites, apps), [])
             # idempotent: a complete volume copies nothing

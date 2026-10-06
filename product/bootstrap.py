@@ -141,10 +141,16 @@ def assets_present(sites_dir: Path = SITES_DIR) -> bool:
 
 
 def _app_public(app_root: Path) -> Path | None:
-    """The app package's public/ tree: apps/<name>/public, the standard
-    apps/<name>/<name>/public (every bundled app), or the single inner
-    package that carries a public/ dir. None when the app ships no assets."""
-    for candidate in (app_root / "public", app_root / app_root.name / "public"):
+    """The app package's public/ tree: the frappe bench convention is the
+    nested package, apps/<name>/<name>/public (every bundled app). Only then
+    a top-level apps/<name>/public, or the single inner package carrying a
+    public/ dir. None when the app ships no assets.
+
+    Order matters (run 37503724237): the education app's own Vite build
+    writes into apps/education/public/frontend/, creating a top-level
+    public/ that shadows the real nested one — syncing that instead of the
+    package's left the hashed dist bundles out of the static root again."""
+    for candidate in (app_root / app_root.name / "public", app_root / "public"):
         if candidate.is_dir():
             return candidate
     inner = [p for p in app_root.iterdir() if p.is_dir() and (p / "public").is_dir()]
