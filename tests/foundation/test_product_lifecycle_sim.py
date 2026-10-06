@@ -194,7 +194,7 @@ class ProductLifecycleSim(unittest.TestCase):
                           "installed-erpnext", "installed-education", "installed-payments",
                           "installed-hrms", "installed-foundation_security", "installed-toefl_house",
                           "migrated", "migrate-replayed", "encryption-key-initialized",
-                          "assets-built", "scheduler-enabled"])
+                          "assets-built", "assets-complete", "scheduler-enabled"])
         state = self.state()
         site_state = state["sites"][SITE]
         self.assertEqual(site_state["apps"],
@@ -232,7 +232,8 @@ class ProductLifecycleSim(unittest.TestCase):
         summary = bootstrap.bootstrap(SITE, log=lambda _: None)  # Start -> Stop -> Start
         self.assertEqual(summary["actions"],
                          ["services-reachable", "sites-seeded", "redis-configured", "site-present", "apps-present",
-                          "migrated", "migrate-replayed", "encryption-key-initialized", "assets-present"])
+                          "migrated", "migrate-replayed", "encryption-key-initialized",
+                          "assets-present", "assets-complete"])
         after = (self.bench_root / "sites" / SITE / "private" / "first-run-credentials.txt").read_bytes()
         self.assertEqual(before, after, "credentials must never rotate silently")
         state = self.state()

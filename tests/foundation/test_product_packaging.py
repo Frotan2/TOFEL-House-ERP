@@ -518,6 +518,72 @@ class BootstrapLogicContract(unittest.TestCase):
             (sites / "assets" / "js").mkdir(parents=True)
             self.assertTrue(bootstrap.assets_present(sites))
 
+    def test_built_assets_are_merged_into_the_static_root(self):
+        # Regression (product-image run 37497135855): `bench build` left
+        # education's hashed bundle in apps/education/education/public/dist/js/
+        # while sites/assets/assets.json referenced it, so the login page 404d
+        # /assets/education/dist/js/education.bundle.NS2O3ZWO.js and the frappe
+        # global never loaded — login silently did nothing.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            apps = root / "apps"
+            # standard nested layout apps/<name>/<name>/public (every bundled app)
+            edu = apps / "education" / "education" / "public"
+            (edu / "dist" / "js").mkdir(parents=True)
+            (edu / "dist" / "js" / "education.bundle.NS2O3ZWO.js").write_text("built")
+            (edu / "js").mkdir(parents=True)
+            (edu / "js" / "education.bundle.js").write_text("plain")
+            frappe = apps / "frappe" / "frappe" / "public"
+            (frappe / "js").mkdir(parents=True)
+            (frappe / "js" / "frappe.bundle.js").write_text("core")
+            # a top-level layout must work too
+            top = apps / "toefl_house" / "public"
+            top.mkdir(parents=True)
+            (top / "site.css").write_text("css")
+            sites = root / "sites"
+            (sites / "assets" / "js").mkdir(parents=True)
+            (sites / "assets" / "assets.json").write_text("{}")
+            (sites / "assets" / "education").mkdir(parents=True)
+            self.assertEqual(bootstrap.public_assets_missing(sites, apps),
+                             ["education/dist/js/education.bundle.NS2O3ZWO.js",
+                              "education/js/education.bundle.js",
+                              "frappe/js/frappe.bundle.js",
+                              "toefl_house/site.css"])
+            self.assertEqual(sorted(bootstrap.sync_built_assets(sites, apps)),
+                             ["education", "frappe", "toefl_house"])
+            self.assertEqual((sites / "assets" / "education" / "dist" / "js"
+                              / "education.bundle.NS2O3ZWO.js").read_text(), "built")
+            self.assertEqual((sites / "assets" / "assets.json").read_text(), "{}")
+            self.assertEqual(bootstrap.public_assets_missing(sites, apps), [])
+            # idempotent: a complete volume copies nothing
+            self.assertEqual(bootstrap.sync_built_assets(sites, apps), [])
+
+    def test_partial_asset_volume_is_repaired_on_next_boot(self):
+        # A volume that crashed mid-build keeps sites/assets half-populated;
+        # the next boot must detect and heal it, never ask the owner to wipe
+        # persistent data.
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            apps = root / "apps"
+            edu = apps / "education" / "education" / "public"
+            (edu / "dist" / "js").mkdir(parents=True)
+            (edu / "dist" / "js" / "education.bundle.NS2O3ZWO.js").write_text("built")
+            sites = root / "sites"
+            (sites / "assets" / "js").mkdir(parents=True)
+            (sites / "assets" / "education").mkdir(parents=True)
+            self.assertEqual(bootstrap.sync_built_assets(sites, apps), ["education"])
+            (sites / "assets" / "education" / "dist" / "js" / "education.bundle.NS2O3ZWO.js").unlink()
+            self.assertEqual(bootstrap.public_assets_missing(sites, apps),
+                             ["education/dist/js/education.bundle.NS2O3ZWO.js"])
+            self.assertEqual(bootstrap.sync_built_assets(sites, apps), ["education"])
+            self.assertEqual(bootstrap.public_assets_missing(sites, apps), [])
+        body = (PRODUCT / "bootstrap.py").read_text()[
+            (PRODUCT / "bootstrap.py").read_text().index("def bootstrap("):]
+        self.assertLess(body.index("sync_built_assets(SITES_DIR)"),
+                        body.index("public_assets_missing(SITES_DIR)"))
+
     def test_empty_bind_mount_is_seeded_before_first_bench_call(self):
         # Regression (product-image run 36750900604): the empty ./data/sites
         # mount hid sites/apps.txt and the very first bench call failed.

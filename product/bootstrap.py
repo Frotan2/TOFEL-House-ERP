@@ -18,7 +18,13 @@ Steps, in order (mirrors the operator/hosted sequence):
 6. Initialize the native site encryption key (the same lazy native mechanism
    the app's own after_install hook uses) so every later backup carries it.
 7. Build assets when the sites/assets tree is absent (first boot only; the
-   build context bakes no sites tree, the bind-mounted host dir starts empty).
+   build context bakes no sites tree, the bind-mounted host dir starts empty),
+   then merge every app's public/ tree into sites/assets/<app>/ whenever
+   anything from a build is missing (first boot, crashed mid-build volume, or
+   a recreated container from an updated image). `bench build` leaves the
+   built per-app bundles in the app's public/dist/ while the
+   sites/assets/assets.json manifest already references them — without this
+   sync the static root 404s on the hashed bundles and login silently breaks.
 8. On first run only: rotate nothing, but create the Administrator password
    ONCE, write it to ./data/sites/<site>/private/first-run-credentials.txt
    (0600) for the owner, and print a single completion banner.
@@ -34,6 +40,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import socket
 import stat
 import subprocess
@@ -133,6 +140,71 @@ def assets_present(sites_dir: Path = SITES_DIR) -> bool:
     return (sites_dir / "assets" / "js").exists() or (sites_dir / "assets" / "css").exists()
 
 
+def _app_public(app_root: Path) -> Path | None:
+    """The app package's public/ tree: apps/<name>/public, the standard
+    apps/<name>/<name>/public (every bundled app), or the single inner
+    package that carries a public/ dir. None when the app ships no assets."""
+    for candidate in (app_root / "public", app_root / app_root.name / "public"):
+        if candidate.is_dir():
+            return candidate
+    inner = [p for p in app_root.iterdir() if p.is_dir() and (p / "public").is_dir()]
+    return inner[0] / "public" if len(inner) == 1 else None
+
+
+def sync_built_assets(sites_dir: Path = SITES_DIR, apps_dir: Path | None = None) -> list[str]:
+    """Merge each app's public/ tree into sites/assets/<app>/ where missing.
+
+    The static root is served verbatim (SharedDataMiddleware, no manifest
+    resolution at serve time), while page rendering resolves bundle names
+    through sites/assets/assets.json — so every file a manifest can point at
+    must physically exist under sites/assets/<app>/. `bench build` does not
+    reliably place its own per-app output there (observed 2026-10-06:
+    education's public/dist/js/education.bundle.<hash>.js present in the app,
+    absent from sites/assets/education, login page 404ing it). The merge is
+    additive plus same-name overwrite: it never deletes, it is idempotent,
+    and its cost on a complete volume is a stat walk (skips the copy).
+    """
+    apps_dir = apps_dir or (BENCH_DIR / "apps")
+    assets = sites_dir / "assets"
+    if not apps_dir.is_dir():
+        return []
+    synced = []
+    for app_root in sorted(p for p in apps_dir.iterdir() if p.is_dir()):
+        public = _app_public(app_root)
+        if public is None:
+            continue
+        dest = assets / app_root.name
+        missing = [
+            file
+            for file in public.rglob("*")
+            if file.is_file() and not (dest / file.relative_to(public)).is_file()
+        ]
+        if not missing:
+            continue
+        shutil.copytree(public, dest, dirs_exist_ok=True)
+        synced.append(app_root.name)
+    return synced
+
+
+def public_assets_missing(sites_dir: Path = SITES_DIR, apps_dir: Path | None = None) -> list[str]:
+    """Re-walk after the sync: every app public/ file must exist under
+    sites/assets/<app>/, because that is the verbatim static root. Returns
+    the missing paths (empty = the served page cannot 404 on a built asset)."""
+    apps_dir = apps_dir or (BENCH_DIR / "apps")
+    missing = []
+    if not apps_dir.is_dir():
+        return missing
+    for app_root in sorted(p for p in apps_dir.iterdir() if p.is_dir()):
+        public = _app_public(app_root)
+        if public is None:
+            continue
+        dest = sites_dir / "assets" / app_root.name
+        for file in public.rglob("*"):
+            if file.is_file() and not (dest / file.relative_to(public)).is_file():
+                missing.append(f"{app_root.name}/{file.relative_to(public)}")
+    return missing
+
+
 def write_credentials(site: str, admin_password: str, sites_dir: Path = SITES_DIR) -> Path:
     credentials = sites_dir / site / "private" / "first-run-credentials.txt"
     credentials.parent.mkdir(parents=True, exist_ok=True)
@@ -197,6 +269,21 @@ def bootstrap(site: str = SITE_NAME, *, log=print) -> dict:
         actions.append("assets-built")
     else:
         actions.append("assets-present")
+
+    # `bench build` leaves the built per-app bundles in the app's public/ tree
+    # while sites/assets/assets.json already references them; make the static
+    # root physically complete, then prove it: every manifest entry must
+    # resolve to an existing file, or this boot fails fast with the names.
+    synced = sync_built_assets(SITES_DIR)
+    if synced:
+        actions.append(f"assets-synced:{len(synced)}")
+    missing_assets = public_assets_missing(SITES_DIR)
+    if missing_assets:
+        raise RuntimeError(
+            "served-asset 404s would occur (built app assets missing from the "
+            f"static root): {missing_assets[:8]}{' ...' if len(missing_assets) > 8 else ''}"
+        )
+    actions.append("assets-complete")
 
     if admin_password:
         credentials = write_credentials(site, admin_password, SITES_DIR)
