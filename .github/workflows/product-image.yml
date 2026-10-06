@@ -186,6 +186,17 @@ jobs:
           echo "::notice title=assets directories live::$(printf "%s" "$assetsdetail" | tr "\n" "|")"
           livesync="$(docker compose exec -T web /home/frappe/bench/env/bin/python3 -c 'import sys; sys.path.insert(0, "/product"); import bootstrap; m = bootstrap.public_assets_missing(); print("missing-before:", len(m), m[:5]); s = bootstrap.sync_built_assets(); print("synced:", s); m2 = bootstrap.public_assets_missing(); print("missing-after:", len(m2), m2[:5])' 2>&1)"
           echo "::notice title=live sync in container::$(printf "%s" "$livesync" | tr "\n" "|")"
+          # The bundle EXISTS on the served path and still 404s: identify the handler.
+          edu404="http://127.0.0.1:8000/assets/education/dist/js/education.bundle.NS2O3ZWO.js"
+          resp_headers="$(curl -sS -D - -o /dev/null "$edu404" 2>&1 | head -12)"
+          echo "::notice title=404 response headers::$(printf "%s" "$resp_headers" | tr "\n" "|")"
+          resp_body="$(curl -sS "$edu404" 2>&1 | head -c 400 | tr "\n" "|")"
+          echo "::notice title=404 response body::${resp_body:-empty}"
+          plain_code="$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/assets/education/js/education.bundle.js 2>&1)"
+          bogus_code="$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/assets/education/dist/js/does-not-exist.js 2>&1)"
+          echo "::notice title=control codes::plain bundle: ${plain_code} | bogus: ${bogus_code}"
+          manifest_head="$(head -c 1200 /home/frappe/bench/sites/assets/assets.json 2>&1 | tr "\n" "|")"
+          echo "::notice title=assets.json head::${manifest_head:-unreadable}"
           # Asset probes: the login page is server-rendered, but its web client
           # (the frappe global the inlined login handler needs) is a built
           # bundle. Show exactly which assets the served page references and
