@@ -166,6 +166,18 @@ jobs:
           cred_password="$(printf '%s\n' "$cred" | awk '/^Password: /{print $2}')"
           test -n "$cred_user" && test -n "$cred_password"
           test "$cred_user" = "Administrator"
+          # Asset probes: the login page is server-rendered, but its web client
+          # (the frappe global the inlined login handler needs) is a built
+          # bundle. Show exactly which assets the served page references and
+          # whether each answers, so a missing bundle is visible plainly.
+          login_html="$(curl --fail --silent http://127.0.0.1:8000/)"
+          asset_list="$(printf "%s" "$login_html" | tr '"' ' ' | grep -E '^/assets/[a-zA-Z0-9_./-]+\.(js|css)' | sort -u)"
+          test -n "$asset_list"
+          printf "%s\n" "$asset_list" | while IFS= read -r asset; do
+              code="$(curl --silent -o /dev/null -w "%{http_code}" "http://127.0.0.1:8000$asset")"
+              echo "asset ${code} ${asset}"
+              test "$code" = "200"
+          done
           cat > browser_ui_check.py <<'PYEOF'
           import os, pathlib, sys, traceback
           def _ci_excepthook(typ, value, tb):
@@ -196,12 +208,15 @@ jobs:
               page.fill("#login_email", user)
               page.fill("#login_password", password)
               page.screenshot(path=str(shot))
-              # The inlined login handler needs the frappe web client; if the
-              # bundle failed to load, fail here with a clear message instead of a
-              # mysterious navigation timeout.
-              page.wait_for_function(
-                  "typeof frappe !== 'undefined' && typeof frappe.call === 'function'",
-                  timeout=30_000)
+              # The inlined login handler needs the frappe web client (the built
+              # bundle); if it never loads, fail here with a screenshot.
+              try:
+                  page.wait_for_function(
+                      "typeof frappe !== 'undefined' && typeof frappe.call === 'function'",
+                      timeout=30_000)
+              except Exception:
+                  page.screenshot(path=str(shot))
+                  raise
               page.click("button.btn-login[type=submit]")
               try:
                   page.wait_for_url("**/app**", timeout=90_000)   # session must land on the desk
