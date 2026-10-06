@@ -180,9 +180,13 @@ jobs:
           assert user == "Administrator"
 
           shot = pathlib.Path("browser-ui-evidence.png")
+          console_errors, page_errors, failed_requests = [], [], []
           with pw.sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
               page = browser.new_page(viewport={"width": 1440, "height": 900})
+              page.on("console", lambda m: console_errors.append(m.text) if m.type == "error" else None)
+              page.on("pageerror", lambda e: page_errors.append(str(e)))
+              page.on("requestfailed", lambda r: failed_requests.append(f"{r.url} {r.failure}"))
               page.goto("http://127.0.0.1:8000/", wait_until="domcontentloaded", timeout=120_000)
               # Frappe v16 login form fields (frappe/www/login.html at the
               # pinned commit): id=login_email / id=login_password, submit
@@ -192,8 +196,33 @@ jobs:
               page.fill("#login_email", user)
               page.fill("#login_password", password)
               page.screenshot(path=str(shot))
+              # The inlined login handler needs the frappe web client; if the
+              # bundle failed to load, fail here with a clear message instead of a
+              # mysterious navigation timeout.
+              page.wait_for_function(
+                  "typeof frappe !== 'undefined' && typeof frappe.call === 'function'",
+                  timeout=30_000)
               page.click("button.btn-login[type=submit]")
-              page.wait_for_url("**/app**", timeout=180_000)   # session must land on the desk
+              try:
+                  page.wait_for_url("**/app**", timeout=90_000)   # session must land on the desk
+              except Exception:
+                  # Self-diagnosis: what the page itself says right now, plus the
+                  # JS-level errors, so a red step carries its own cause.
+                  def texts(sel):
+                      try:
+                          return [e.inner_text().strip() for e in page.query_selector_all(sel) if e.inner_text().strip()]
+                      except Exception:
+                          return []
+                  parts = [f"url={page.url}"]
+                  parts += [f"field-error: {t}" for t in texts(".field-error")]
+                  parts += [f"banner: {t}" for t in texts(".login-error-banner span")]
+                  parts += [f"console: {t}" for t in console_errors[-10:]]
+                  parts += [f"pageerror: {t}" for t in page_errors[-5:]]
+                  parts += [f"req-failed: {t}" for t in failed_requests[-10:]]
+                  parts.append(f"body-snippet: {page.inner_text('body')[:300]!r}")
+                  page.screenshot(path=str(shot))
+                  print("::error::browser UI diagnosis::" + " | ".join(parts))
+                  raise
               page.wait_for_timeout(5_000)                      # let the desk shell render
               assert page.url.startswith("http://127.0.0.1:8000/app"), page.url
               assert page.query_selector("#login_password") is None, "login form still present after login"
