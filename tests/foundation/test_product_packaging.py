@@ -304,6 +304,21 @@ class LineEndingContract(unittest.TestCase):
         self.assertIn(".dockerignore text eol=lf",
                       (ROOT / ".gitattributes").read_text())
 
+    def test_dockerfile_copy_sources_are_cr_free(self):
+        # The container can exec COPYed files directly (shebang). A CRLF
+        # worktree (Windows core.autocrlf=true) breaks every such exec the
+        # same way it broke entrypoint.sh - and it broke activate.py too
+        # (exit 127 in CI, observed when the image was built from a
+        # simulated Windows worktree, 2026-10-06). No COPYed file may
+        # carry a CR byte, wherever it is run from.
+        text = DOCKERFILE.read_text()
+        for src in re.findall(r"(?m)^COPY\s+(\S+)\s", text):
+            path = ROOT / src
+            if not path.is_file():
+                continue  # directory COPY (apps/): content is data, never exec'd
+            self.assertNotIn(b"\r", path.read_bytes(),
+                             f"{src} must be LF-only (the image may exec it)")
+
 
 class CmdParserSafetyContract(unittest.TestCase):
     # 2026-09-30: three independent real Windows runs aborted with

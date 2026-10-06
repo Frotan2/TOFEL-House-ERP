@@ -106,10 +106,16 @@ jobs:
           done
           echo "::notice title=Windows worktree contract::autocrlf=true bytes: entrypoint.sh + .dockerignore LF, all .cmd CRLF"
           docker build --build-arg NODE_TARBALL_SHA256="${NODE_TARBALL_SHA256}" -f product/app.Dockerfile -t toefl-house-erp-app:ci -t toefl-house-erp-app:local /tmp/win-worktree
-          # The kernel-visible shebang inside the built image, byte for byte.
+          # The kernel-visible shebangs inside the built image, byte for
+          # byte: the entrypoint (exec'd at container start) and
+          # activate.py (exec'd directly by the Windows lifecycle
+          # scripts; its CRLF shebang produced exit 127 when the image
+          # was first built from these owner-checkout bytes).
           in_image=$(docker run --rm --entrypoint sh toefl-house-erp-app:ci -c 'head -c 10 /product/entrypoint.sh | od -An -tx1 | tr -d " \n"')
           test "$in_image" = "23212f62696e2f73680a"
-          echo "::notice title=Image entrypoint::shebang bytes in the image are exactly #!/bin/sh + LF (owner-checkout bytes)"
+          act_shebang=$(docker run --rm --entrypoint sh toefl-house-erp-app:ci -c 'head -c 23 /product/activate.py')
+          test "$act_shebang" = "$(printf '#!/usr/bin/env python3\n')"
+          echo "::notice title=Image entrypoint::entrypoint.sh + activate.py shebang bytes in the image are exactly LF (owner-checkout bytes)"
       - name: Report image footprint
         run: |
           set -euo pipefail

@@ -28,3 +28,16 @@
 # A trailing CR on a pattern line would make that pattern match nothing,
 # so pin the file to LF in every worktree for the same reason as *.sh.
 .dockerignore text eol=lf
+#
+# The same kernel rule applies to every other file the container execs
+# directly: product/activate.py runs as `docker compose exec web
+# /product/activate.py ...` from the Windows lifecycle scripts. A CRLF
+# worktree (Windows core.autocrlf=true) made the kernel look for an
+# interpreter named `env python3\r` - observed exit 127 in CI when the
+# image was built from a simulated Windows worktree (2026-10-06), which
+# also made the Activate/Deactivate scripts report "not running" on a
+# machine that was actually running. Pinned like *.sh. (The other
+# COPYed product scripts are interpreted by python3, never exec'd, so
+# their endings are not kernel-relevant; the packaging guard still
+# checks every COPY source for CR bytes.)
+product/activate.py text eol=lf
