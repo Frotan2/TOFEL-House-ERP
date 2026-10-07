@@ -166,42 +166,17 @@ jobs:
           cred_password="$(printf '%s\n' "$cred" | awk '/^Password: /{print $2}')"
           test -n "$cred_user" && test -n "$cred_password"
           test "$cred_user" = "Administrator"
-          # Container-side ground truth about the asset pipeline (annotated
-          # so it is readable even when the job log is unreachable):
-          bootstrap_line="$(docker compose logs --no-color web 2>&1 | grep -a '"actions"' | tail -1)"
-          echo "::notice title=bootstrap summary::${bootstrap_line:-no bootstrap line found}"
-          build_log="$(docker compose logs --no-color web 2>&1 | grep -aiE "build|webpack|vite|asset" | tail -8)"
-          echo "::notice title=web build log tail::$(printf "%s" "$build_log" | tr "\n" "|")"
-          edu_assets="$(docker compose exec -T web sh -c 'find /home/frappe/bench/sites/assets/education -name "*bundle*" 2>/dev/null | head -8; echo ---; ls /home/frappe/bench/sites/assets 2>/dev/null | tr "\n" " "')"
-          echo "::notice title=sites/assets education::$(printf "%s" "$edu_assets" | tr "\n" "|")"
-          edu_app="$(docker compose exec -T web sh -c 'find /home/frappe/bench/apps/education/public -maxdepth 3 -name "*bundle*" 2>/dev/null | head -8; echo ---; find /home/frappe/bench/apps/education/public -maxdepth 2 -type d 2>/dev/null | head -10')"
-          echo "::notice title=education app public::$(printf "%s" "$edu_app" | tr "\n" "|")"
-          hashrefs="$(docker compose exec -T web sh -c 'grep -rl NS2O3ZWO /home/frappe/bench/sites/common_site_config.json /home/frappe/bench/sites/toeflhouse.localhost/site_config.json /home/frappe/bench/apps/education/education /home/frappe/bench/apps/education/public 2>/dev/null | head -5')"
-          echo "::notice title=hash NS2O3ZWO file refs::${hashrefs:-none found in probed files}"
-          # Direct evidence for the sync mystery: same code, live in the container,
-          # run BEFORE the page fetch so a working sync also unblocks the probe loop.
-          benchdir="$(docker compose exec -T web sh -c 'echo BENCH_DIR=${BENCH_DIR:-unset}; grep -c sync_built_assets /product/bootstrap.py' 2>&1)"
-          echo "::notice title=container benchdir + bootstrap code::$(printf "%s" "$benchdir" | tr "\n" "|")"
-          assetsdetail="$(docker compose exec -T web sh -c 'ls -la /home/frappe/bench/sites/assets/education/ 2>&1 | head -12; echo ---; ls -la /home/frappe/bench/sites/assets/education/dist/js/ 2>&1 | head -5; echo ---; ls -la /home/frappe/bench/apps/education/ 2>&1 | head -10; echo ---; ls -la /home/frappe/bench/apps/education/education/public/ 2>&1 | head -8' 2>&1)"
-          echo "::notice title=assets directories live::$(printf "%s" "$assetsdetail" | tr "\n" "|")"
-          livesync="$(docker compose exec -T web /home/frappe/bench/env/bin/python3 -c 'import sys; sys.path.insert(0, "/product"); import bootstrap; m = bootstrap.public_assets_missing(); print("missing-before:", len(m), m[:5]); s = bootstrap.sync_built_assets(); print("synced:", s); m2 = bootstrap.public_assets_missing(); print("missing-after:", len(m2), m2[:5])' 2>&1)"
-          echo "::notice title=live sync in container::$(printf "%s" "$livesync" | tr "\n" "|")"
-          # The bundle EXISTS on the served path and still 404s: identify the handler.
-          edu404="http://127.0.0.1:8000/assets/education/dist/js/education.bundle.NS2O3ZWO.js"
-          resp_headers="$(curl -sS -D - -o /dev/null "$edu404" 2>&1 | head -12)"
-          echo "::notice title=404 response headers::$(printf "%s" "$resp_headers" | tr "\n" "|")"
-          resp_body="$(curl -sS "$edu404" 2>&1 | head -c 400 | tr "\n" "|")"
-          echo "::notice title=404 response body::${resp_body:-empty}"
-          plain_code="$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/assets/education/js/education.bundle.js 2>&1)"
-          bogus_code="$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/assets/education/dist/js/does-not-exist.js 2>&1)"
-          echo "::notice title=control codes::plain bundle: ${plain_code} | bogus: ${bogus_code}"
-          manifest_head="$(head -c 1200 /home/frappe/bench/sites/assets/assets.json 2>&1 | tr "\n" "|")"
-          echo "::notice title=assets.json head::${manifest_head:-unreadable}"
           # Asset probes: the login page is server-rendered, but its web client
           # (the frappe global the inlined login handler needs) is a built
           # bundle. Show exactly which assets the served page references and
           # whether each answers, so a missing bundle is visible plainly.
-          login_html="$(curl --fail --silent --location http://127.0.0.1:8000/)"
+          login_html="$(curl --fail --silent --location http://127.0.0.1:8000/)" || {
+              # A dead page must not die silently: show its status and body.
+              page_code="$(curl --silent -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:8000/ || true)"
+              page_snippet="$(curl --silent --max-time 10 http://127.0.0.1:8000/ 2>&1 || true)"
+              echo "::error::login page fetch failed (HTTP ${page_code:-no response})::${page_snippet:0:400}"
+              exit 1
+          }
           asset_list="$(printf "%s" "$login_html" | tr '"' '\n' | grep -E '^/assets/[a-zA-Z0-9_./-]+\.(js|css)$' | sort -u)"
           if [ -z "$asset_list" ]; then
               echo "::error::login page references no /assets/ scripts or styles at all"
