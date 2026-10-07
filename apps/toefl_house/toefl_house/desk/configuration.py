@@ -1,4 +1,4 @@
-"""TOEFL House Configuration desk: the configuration map, as a surface.
+"""TOEFL House Configuration desk: the Course Owner configuration map and guarded control surface.
 
 Audience: Course Owner only. This desk is a read-only map over the nine
 configuration domains — it shows each domain's computed configuration
