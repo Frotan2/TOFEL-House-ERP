@@ -20,7 +20,7 @@
  "name": "TH Owner Operations Policy",
  "naming_rule": "By fieldname",
  "owner": "Administrator",
- "permissions": [{"create":1,"email":1,"print":1,"read":1,"report":1,"role":"Course Owner","select":1,"share":1,"write":1}],
+ "permissions": [{"create":1,"delete":0,"email":1,"print":1,"read":1,"report":1,"role":"Course Owner","select":1,"share":1,"write":1}],
  "row_format":"Dynamic",
  "sort_field":"modified",
  "sort_order":"DESC",
