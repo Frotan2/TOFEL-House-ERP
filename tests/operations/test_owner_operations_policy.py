@@ -78,6 +78,18 @@ class OwnerOperationsCommandTests(unittest.TestCase):
         ):
             self.assertIn(endpoint, text)
             self.assertIn(endpoint, client)
+        native_endpoints = (
+            "create_catalog_linkage_policy", "set_catalog_linkage_version", "set_catalog_linkage_status",
+            "create_returning_student_policy", "set_returning_student_policy_version", "set_returning_student_policy_status",
+            "create_enrollment_exit_policy", "set_enrollment_exit_policy_version", "set_enrollment_exit_policy_status",
+            "create_billing_policy", "set_billing_policy_version", "set_billing_policy_status",
+            "create_roster_change_policy", "set_roster_change_policy_version", "set_roster_change_policy_status",
+            "create_attendance_correction_policy", "set_attendance_correction_policy_version", "set_attendance_correction_policy_status",
+            "create_adjustment_posting_policy", "set_adjustment_posting_version", "set_adjustment_posting_status",
+        )
+        for endpoint in native_endpoints:
+            self.assertIn(endpoint, text)
+            self.assertIn(endpoint, client)
         self.assertIn('("configuration", "TH Owner Operations Policy")', (APP / "desk" / "__init__.py").read_text(encoding="utf-8"))
 
     def test_configuration_desk_no_longer_calls_domains_unimplemented(self):
