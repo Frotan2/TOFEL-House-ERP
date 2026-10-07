@@ -161,11 +161,36 @@ jobs:
           # service user (the product's security model), so - as in the
           # rehearsal step - it is read in-container as root and the
           # values are passed to the check via the environment.
-          cred="$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt)"
+          # The web can be briefly down (a loaded shared runner) right after
+          # the previous step; retry the read with a bounded backoff and, if
+          # it still fails, name the cause instead of dying bare under set -e
+          # with no annotation.
+          cred=""
+          cred_ok=0
+          for attempt in 1 2 3; do
+              if cred="$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt 2>&1)"; then
+                  cred_ok=1
+                  break
+              fi
+              echo "credentials read attempt $attempt failed: ${cred:0:300}"
+              sleep 10
+          done
+          if [ "$cred_ok" != "1" ]; then
+              ps_out="$(docker compose ps 2>&1 || true)"
+              echo "::error::first-run credentials read failed after 3 attempts: ${cred:0:400}"
+              echo "::error::stack states::${ps_out:0:800}"
+              exit 1
+          fi
           cred_user="$(printf '%s\n' "$cred" | awk '/^Username: /{print $2}')"
           cred_password="$(printf '%s\n' "$cred" | awk '/^Password: /{print $2}')"
-          test -n "$cred_user" && test -n "$cred_password"
-          test "$cred_user" = "Administrator"
+          if [ -z "$cred_user" ] || [ -z "$cred_password" ]; then
+              echo "::error::first-run credentials file is missing its Username or Password line"
+              exit 1
+          fi
+          if [ "$cred_user" != "Administrator" ]; then
+              echo "::error::first-run credentials user is not Administrator: $cred_user"
+              exit 1
+          fi
           # Asset probes: the login page is server-rendered, but its web client
           # (the frappe global the inlined login handler needs) is a built
           # bundle. Show exactly which assets the served page references and
