@@ -171,13 +171,17 @@ jobs:
           db_password="$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)"
           test -n "$admin_password" && test -n "$db_password"
 
+          # Quiesce background writers before replacing the database. Keep
+          # web alive only long enough to execute the restore; then restart the
+          # complete application process set before probing the restored site.
+          docker compose stop worker scheduler socketio
           restore_start="$(date +%s)"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost restore \
             "sites/toeflhouse.localhost/private/backups/$(basename "$db_backup")" \
             --with-public-files "sites/toeflhouse.localhost/private/backups/$(basename "$files_backup")" \
             --with-private-files "sites/toeflhouse.localhost/private/backups/$(basename "$private_backup")" \
             --db-root-password "$db_password" --admin-password "$admin_password"
-          docker compose restart web
+          docker compose restart web worker scheduler socketio
           for j in $(seq 1 60); do
             curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break
             sleep 2
