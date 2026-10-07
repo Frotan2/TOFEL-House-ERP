@@ -582,5 +582,19 @@ class HardCodedPolicyAuditTests(unittest.TestCase):
         self.assertEqual(offenders, [], "hard-coded money policy found")
 
 
+
+class OwnerDecisionLedgerTests(unittest.TestCase):
+    def test_resolved_recovery_and_backup_decisions_are_not_marked_unresolved(self):
+        decisions = json.loads((REPO / "docs" / "owner-decisions.json").read_text(encoding="utf-8"))
+        resolved = decisions["resolved_business_decisions"]
+        unresolved = " ".join(decisions["unresolved_business_inputs_not_reinterpreted"])
+        self.assertEqual(resolved["D13"]["status"], "DECIDED")
+        self.assertEqual(resolved["D14"]["status"], "DECIDED")
+        self.assertIn("RPO 24 hours, RTO 8 hours", resolved["D13"]["owner_answers"][0])
+        self.assertIn("Off-site hardware the Owner controls", resolved["D14"]["owner_answers"][0])
+        self.assertNotIn("D13", unresolved)
+        self.assertNotIn("D14", unresolved)
+
+
 if __name__ == "__main__":
     unittest.main()
