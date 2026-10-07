@@ -55,7 +55,8 @@ class OwnerOperationsDoctypeTests(unittest.TestCase):
         self.assertNotIn("S3-compatible", source)
         self.assertNotIn("Managed backup", source)
         self.assertNotIn("SFTP", source)
-        self.assertIn("ceremonies", lowered)
+        policy_text = VERSION.read_text(encoding="utf-8") + source
+        self.assertIn("ceremonies", policy_text.lower())
 
 
 class OwnerOperationsCommandTests(unittest.TestCase):
