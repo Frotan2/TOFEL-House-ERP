@@ -216,7 +216,7 @@ activation only changes which site mode the guards resolve.
 
 ## 9. Multi-user access (central server + Tailscale)
 
-The current deployment (owner decisions D13/D15) is one central computer
+The current deployment (owner decision D15) is one central computer
 running the product, with authorized staff computers accessing it through the
 owner's Tailscale tailnet. The product does not change for this: it keeps
 listening on `127.0.0.1` only, and the tailnet reach comes from **Tailscale
@@ -295,7 +295,7 @@ activation state `site_config.json` currently carries.
 
 ## 11. Record the rehearsal
 
-The Owner runs this runbook on the local server and records each run:
+The Owner runs this runbook on the local server and records each run. A successful local Bench backup/restore rehearsal is necessary evidence but does not by itself close D14: the Owner-controlled off-site encrypted copy and its restore must also be evidenced:
 
 | Date | Site | Step-4 site_mode | Step-5 mirror | Step-6 mixed | Elapsed | Outcome |
 | ---- | ---- | ---------------- | ------------- | ------------ | ------- | ------- |
