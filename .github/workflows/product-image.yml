@@ -792,27 +792,23 @@ jobs:
           def login(username, password, host=None):
               status, text, cookies = call("/api/method/login",
                                            data={"usr": username, "pwd": password}, host=host)
-              assert status == 200, (status, text[:200])
+              assert status == 200, ("login returned unexpected HTTP status", status)
               payload = json.loads(text)
-              assert "exc_info" not in payload, payload
-              # A 200 without a sid cookie is a frappe challenge/refusal
-              # ("Login Failed", "Password Reset", ...); surface it instead
-              # of dying in next() with a bare StopIteration.
-              sids = [c for c in cookies if c.startswith("sid=")]
-              assert sids, ("login returned no sid cookie", status, text[:300], cookies)
-              LOGIN_DIAG.append((username, status, text[:300],
-                                 [c[:40] for c in cookies]))
+              assert "exc_info" not in payload, ("login endpoint returned an exception", status)
+              cookie_names = [cookie.split("=", 1)[0] for cookie in cookies]
+              sids = [cookie for cookie in cookies if cookie.startswith("sid=")]
+              assert sids, ("login returned no sid cookie", status, "cookie names=%r" % cookie_names)
+              # Never retain cookie values or response bodies in diagnostics:
+              # sid and CSRF material are live credentials, even in CI.
+              LOGIN_DIAG.append({"user": username, "status": status,
+                                 "has_sid": bool(sids), "cookie_names": cookie_names})
               # The Set-Cookie header is "sid=<value>; attrs..."; the cookie
               # VALUE is what a Cookie header must carry ("sid=<value>").
-              # Keeping the "sid=" prefix doubled it to "sid=sid=<value>",
-              # which resolves to no session (guest fallback).
               return sids[0].split(";", 1)[0].split("=", 1)[1]
 
           def session_diag(sid):
-              # The staff session is resolved by the web worker from the
-              # tabSessions table / redis session cache; probe both from
-              # inside the container so a guest-fallback failure is
-              # self-explaining (row present? cache entry? which user?).
+              # Diagnose presence/cache state without emitting session IDs,
+              # sessiondata, CSRF tokens, DB rows, or raw exception values.
               try:
                   probe = subprocess.check_output(
                       ["docker", "compose", "exec", "-T", "-i", "-u", "root",
@@ -823,51 +819,51 @@ jobs:
                       "import frappe\n"
                       "frappe.init(site='toeflhouse.localhost', sites_path='/home/frappe/bench/sites')\n"
                       "frappe.connect()\n"
-                      "sid = os.environ.get('PROBE_SID', 'MISSING')\n"
-                      "rows = frappe.db.sql('select sid,user,status,lastupdate,sessiondata from `tabSessions` order by lastupdate desc limit 5', as_dict=True)\n"
-                      "out = {'probe_sid': sid[:8] + '...len=' + str(len(sid)), 'db_sessions': rows}\n"
-                      "sd = []\n"
-                      "for r in rows:\n"
-                      "    try:\n"
-                      "        d = json.loads(r['sessiondata'] or '{}')\n"
-                      "        sd.append({'user': r['user'], 'keys': sorted(d.keys()), 'has_csrf': 'csrf_token' in d})\n"
-                      "    except Exception:\n"
-                      "        sd.append({'user': r['user'], 'keys': 'unparseable'})\n"
-                      "out['sessiondata_summary'] = sd\n"
-                      "out['conf'] = {k: frappe.conf.get(k) for k in ('redis_cache','redis_queue','use_redis_for_cache','use_redis_for_sessions','db_name','db_host','db_port')}\n"
-                      "out['db'] = frappe.db.sql('select database() as db')[0][0]\n"
-                      "out['session_expiry'] = frappe.db.get_single_value('System Settings', 'session_expiry')\n"
-                      "import frappe.utils as u\n"
+                      "sid = os.environ.get('PROBE_SID', '')\n"
+                      "rows = frappe.db.sql('select user,status,lastupdate,sessiondata from `tabSessions` where sid=%s', (sid,), as_dict=True)\n"
+                      "row = rows[0] if rows else {}\n"
+                      "data = json.loads(row.get('sessiondata') or '{}') if row else {}\n"
+                      "out = {'session_present': bool(row), 'session_user': row.get('user'), 'session_status': row.get('status'), 'session_has_csrf': bool(data.get('csrf_token')), 'session_data_keys': sorted(data.keys())}\n"
+                      "out['staff_session_rows'] = frappe.db.sql('select count(*) as n from `tabSessions` where user=%s', ('staff-a@example.test',))[0][0]\n"
                       "exp = frappe.get_system_settings('session_expiry') or '240:00:00'\n"
                       "parts = exp.split(':')\n"
-                      "if len(parts) == 2:\n"
-                      "    parts = parts + ['00']\n"
+                      "if len(parts) == 2: parts = parts + ['00']\n"
                       "secs = int(parts[0])*3600 + int(parts[1])*60 + int(parts[2])\n"
-                      "thr = u.add_to_date(u.now(), seconds=-secs, as_string=True)\n"
-                      "out['resume_query'] = frappe.db.sql('select user from `tabSessions` where sid=%s and lastupdate > %s', (sid, thr))\n"
-                      "out['staff_session_rows'] = frappe.db.sql('select count(*) as n from `tabSessions` where user=%s', ('staff-a@example.test',))[0][0]\n"
+                      "thr = frappe.utils.add_to_date(frappe.utils.now(), seconds=-secs, as_string=True)\n"
+                      "out['session_not_expired'] = bool(frappe.db.sql('select count(*) from `tabSessions` where sid=%s and lastupdate > %s', (sid, thr))[0][0])\n"
                       "try:\n"
                       "    cached = frappe.cache.hget('session', sid)\n"
                       "    out['cache_hit'] = bool(cached)\n"
                       "    out['cache_user'] = (cached or {}).get('data', {}).get('user')\n"
-                      "except Exception as e:\n"
-                      "    out['cache_error'] = repr(e)\n"
+                      "except Exception as error:\n"
+                      "    out['cache_hit'] = None\n"
+                      "    out['cache_error_type'] = type(error).__name__\n"
                       "print('SESSIONS-DIAG ' + json.dumps(out, default=str))\n",
                       text=True, env={**os.environ, "PROBE_SID": sid}, timeout=120)
-                  print("::error::" + probe.strip()[:2500], flush=True)
-                  with open("tailnet-progress.txt", "a") as fh:
-                      fh.write("SESSIONS-DIAG " + probe.strip()[:2500] + "\n")
-              except Exception as e:
-                  print("::error::session probe failed: %r" % e, flush=True)
-                  with open("tailnet-progress.txt", "a") as fh:
-                      fh.write("session probe failed: %r\n" % e)
+                  prefix = "SESSIONS-DIAG "
+                  line = next((item for item in probe.splitlines() if item.startswith(prefix)), None)
+                  if line is None:
+                      raise ValueError("safe session summary missing")
+                  data = json.loads(line[len(prefix):])
+                  fields = ("session_present", "session_user", "session_status",
+                            "session_has_csrf", "session_data_keys", "staff_session_rows",
+                            "session_not_expired", "cache_hit", "cache_user", "cache_error_type")
+                  summary = json.dumps({key: data.get(key) for key in fields}, sort_keys=True)
+                  print("::notice title=Tailnet session diagnostics::" + summary, flush=True)
+                  with open("tailnet-progress.txt", "a", encoding="utf-8") as fh:
+                      fh.write("session diagnostics " + summary + "\n")
+              except Exception as error:
+                  message = "safe session diagnostics unavailable (%s)" % type(error).__name__
+                  print("::warning title=Tailnet session diagnostics::" + message, flush=True)
+                  with open("tailnet-progress.txt", "a", encoding="utf-8") as fh:
+                      fh.write(message + "\n")
 
           progress("admin password present: %s" % ("yes" if os.environ.get("TAILNET_ADMIN_PW") else "no"))
           admin_pw = os.environ["TAILNET_ADMIN_PW"]
           staff_pw = "staff-a-ci-123"
           progress("staff login start")
           staff = login("staff-a@example.test", staff_pw)
-          progress("staff login OK: " + repr(LOGIN_DIAG[-1][2])[:220])
+          progress("staff login OK: " + repr(LOGIN_DIAG[-1])[:220])
           session_diag(staff)
 
           # (1) The second client authenticates and uses the ERP.

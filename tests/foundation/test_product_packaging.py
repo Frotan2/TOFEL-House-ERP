@@ -528,6 +528,30 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn('site re-activation failed with exit', upgrade_step)
         self.assertIn("TOEFL_UPGRADE_REHEARSAL", upgrade_step)
 
+    def test_tailnet_diagnostics_never_emit_session_credentials(self):
+        # A previous qualification annotation included a live synthetic sid and
+        # CSRF token. Retain useful presence/cache summaries only; never log
+        # raw Set-Cookie values, session rows or full sessiondata.
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        login_start = workflow.index("          def login(username, password, host=None):")
+        diagnostic_start = workflow.index("          def session_diag(sid):", login_start)
+        progress_start = workflow.index('          progress("admin password present:', diagnostic_start)
+        login = workflow[login_start:diagnostic_start]
+        diagnostic = workflow[diagnostic_start:progress_start]
+        self.assertIn("cookie_names", login)
+        self.assertNotIn("[c[:40] for c in cookies]", login)
+        self.assertNotIn("text[:300]", login)
+        self.assertNotIn("cookies))", login)
+        self.assertNotIn('print("::error::" + probe.strip()', diagnostic)
+        self.assertNotIn("'db_sessions': rows", diagnostic)
+        self.assertNotIn("'probe_sid': sid", diagnostic)
+        self.assertNotIn("sessiondata': r", diagnostic)
+        self.assertIn("session_data_keys", diagnostic)
+        self.assertIn("session_has_csrf", diagnostic)
+        self.assertIn("Tailnet session diagnostics", diagnostic)
+        self.assertIn("{key: data.get(key) for key in fields}", diagnostic)
+        self.assertNotIn("::error::", diagnostic)
+
     def test_product_restore_replaces_file_trees_and_checks_both_scopes(self):
         # Pinned Frappe restore uses tar extraction into existing paths, so a
         # real snapshot rehearsal must stage the old trees, extract into clean
