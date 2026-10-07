@@ -25,7 +25,7 @@ echo  Waiting until TOEFL House ERP answers after repair...
 set READY_TRIES=60
 :waitready
 timeout /t 10 /nobreak >nul
-curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul || goto :waitservices
+docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-web 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
 docker inspect --format "{{.State.Status}}" toefl-house-erp-worker 2>nul | findstr /x /c:"running" >nul || goto :waitservices
 docker inspect --format "{{.State.Status}}" toefl-house-erp-socketio 2>nul | findstr /x /c:"running" >nul || goto :waitservices
 docker inspect --format "{{.State.Status}}" toefl-house-erp-scheduler 2>nul | findstr /x /c:"running" >nul || goto :waitservices
