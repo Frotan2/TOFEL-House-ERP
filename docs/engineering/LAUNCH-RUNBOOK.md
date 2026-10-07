@@ -231,12 +231,20 @@ the tailnet):
    the double-click flow):
 
    ```
-   tailscale serve --bg 8000
+   tailscale serve --set-path=/ --bg 8000
+   tailscale serve --set-path=/socket.io --bg 9000
    ```
 
-   This publishes the ERP to the tailnet as HTTPS on the central PC's
-   Tailscale hostname. It opens no public port: without Funnel (never
-   enable it for this product), only tailnet members can reach it.
+   The first route publishes the ERP HTTP service. The second mounts the
+   local SocketIO service under the same HTTPS origin, so realtime traffic
+   does not require staff browsers to reach port 9000 directly. Multiple
+   Serve mount points can coexist on one tailnet hostname. This opens no
+   public port: without Funnel (never enable it for this product), only
+   tailnet members can reach it. After configuring it, verify with
+   `tailscale serve status` and, from a staff PC, confirm that the ERP URL
+   loads and `/socket.io/` reaches the realtime service (a normal Socket.IO
+   probe may return a transport error rather than an HTML page; that still
+   proves the route is reaching SocketIO).
 3. On each staff PC, open
    `https://<central-PC-name>.<your-tailnet-name>.ts.net/` in the browser.
    The Tailscale certificate is trusted on all tailnet machines (MagicDNS is
@@ -253,12 +261,12 @@ Properties and limits:
 - The product resolves its single site independently of the hostname in the
   URL (`product/wsgi.py` pins the site), so the tailnet hostname needs no
   site configuration.
-- Live (realtime) desk refresh over the tailnet is not available today: the
-  realtime socket listens on a second local port that the tailnet does not
-  carry. Every desk and command works fully over the normal request path,
-  and the central PC's own browser has exactly the same behavior. If
-  realtime over the tailnet becomes a requirement, publishing the socketio
-  port through the tailnet must be qualified as a change first.
+- Live (realtime) desk refresh over the tailnet is supported by the two-route
+  Serve configuration above: `/` proxies to local port 8000 and `/socket.io`
+  proxies to local port 9000. The SocketIO container remains loopback-only;
+  staff browsers never receive direct access to port 9000. If realtime is
+  unavailable, `tailscale serve status` and the SocketIO logs are the first
+  diagnostics.
 - Removing the tailnet exposure at any time: run
   `tailscale serve --delete` on the central PC. The ERP remains
   loopback-only; nothing else is affected.
