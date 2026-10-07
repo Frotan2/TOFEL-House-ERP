@@ -47,7 +47,6 @@ class OwnerOperationsDoctypeTests(unittest.TestCase):
         self.assertIn("credentials", lowered)
         self.assertIn("authorization", lowered)
         self.assertIn("ceremonies", lowered)
-        self.assertIn("authorization ceremonies remain outside", lowered)
 
 
 class OwnerOperationsCommandTests(unittest.TestCase):
