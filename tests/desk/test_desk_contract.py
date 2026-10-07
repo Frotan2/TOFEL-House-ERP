@@ -1297,11 +1297,10 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         academic = self._section(payload, "academic")
         self.assertEqual(academic["kind"], "links")
         self.assertEqual(academic["items"][0]["slug"], "th-academic-setup")
-        # Reporting & Metrics has no configuration surface: an explicit
-        # "Not implemented" fact, never a dead link.
+        # Reporting & Metrics is carried by the owner-operations policy.
         metrics = self._section(payload, "reporting-metrics")
         self.assertEqual(metrics["kind"], "facts")
-        self.assertEqual(metrics["facts"][0]["value"], "Not implemented")
+        self.assertEqual(metrics["facts"][0]["value"], "Owner-configured carrier")
         # The alerting carrier made the Operations section real the same
         # way: computed readiness plus channel + retention, and the
         # receiver destination never leaks onto the desk.
@@ -1336,7 +1335,7 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertIn("delegation window: 90 day(s)",
                       items["GRD-POL"]["detail"])
         self.assertEqual(items["GRD-POL"]["stage"], "Student & Guardian")
-        self.assertEqual(items["finance"]["status"], "Not implemented")
+        self.assertEqual(items["finance"]["status"], "Carrier available")
         self.assertNotIn("action", items["finance"],
                          "future domains offer no dead buttons")
         for item in items.values():
