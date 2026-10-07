@@ -138,7 +138,7 @@ services:
     restart: unless-stopped
 
   redis-cache:
-    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66434f33dd0a502ce03cdcd36
+    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36
     container_name: toefl-house-erp-redis-cache
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
