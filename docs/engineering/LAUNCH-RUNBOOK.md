@@ -253,12 +253,11 @@ Properties and limits:
 - The product resolves its single site independently of the hostname in the
   URL (`product/wsgi.py` pins the site), so the tailnet hostname needs no
   site configuration.
-- Live (realtime) desk refresh over the tailnet is not available today: the
-  realtime socket listens on a second local port that the tailnet does not
-  carry. Every desk and command works fully over the normal request path,
-  and the central PC's own browser has exactly the same behavior. If
-  realtime over the tailnet becomes a requirement, publishing the socketio
-  port through the tailnet must be qualified as a change first.
+- Live realtime desk refresh over the tailnet is qualified for the current
+  deployment. SocketIO is routed through Tailscale Serve on the same HTTPS
+  origin, and the multi-user qualification proves a second client can use
+  realtime plus restart persistence. Do not publish the raw SocketIO port or
+  enable Funnel; any topology change still requires a new qualification.
 - Removing the tailnet exposure at any time: run
   `tailscale serve --delete` on the central PC. The ERP remains
   loopback-only; nothing else is affected.
