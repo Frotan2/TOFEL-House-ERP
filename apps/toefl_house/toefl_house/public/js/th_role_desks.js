@@ -294,6 +294,115 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "active", label: "Active", fieldtype: "Check" },
 		],
 
+		"toefl_house.academic.catalog_linkage.create_catalog_linkage_policy": [
+			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.academic.catalog_linkage.set_catalog_linkage_version": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "enforcement", label: "Enforcement", fieldtype: "Data", reqd: 1 },
+		],
+		"toefl_house.academic.catalog_linkage.set_catalog_linkage_status": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Check" },
+		],
+		"toefl_house.admission.policies.create_returning_student_policy": [
+			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.admission.policies.set_returning_student_policy_version": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "mode", label: "Mode", fieldtype: "Select", options: "placement_per_term", reqd: 1 },
+		],
+		"toefl_house.admission.policies.set_returning_student_policy_status": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Check" },
+		],
+		"toefl_house.enrollment.exits.create_enrollment_exit_policy": [
+			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.enrollment.exits.set_enrollment_exit_policy_version": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "approver_role", label: "Approver role", fieldtype: "Link", options: "Role", reqd: 1 },
+		],
+		"toefl_house.enrollment.exits.set_enrollment_exit_policy_status": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Check" },
+		],
+		"toefl_house.finance.policies.create_billing_policy": [
+			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.finance.policies.set_billing_policy_version": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "max_backdate_days", label: "Max backdate days", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "max_future_days", label: "Max future days", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "placement_fee_timing", label: "Placement-fee timing", fieldtype: "Data", reqd: 1 },
+		],
+		"toefl_house.finance.policies.set_billing_policy_status": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Check" },
+		],
+		"toefl_house.teaching.policies.create_roster_change_policy": [
+			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.policies.set_roster_change_policy_version": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "changes_allowed_until", label: "Changes allowed until", fieldtype: "Date", reqd: 1 },
+		],
+		"toefl_house.teaching.policies.set_roster_change_policy_status": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Check" },
+		],
+		"toefl_house.teaching.attendance_corrections.create_attendance_correction_policy": [
+			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.attendance_corrections.set_attendance_correction_policy_version": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "approver_role", label: "Approver role", fieldtype: "Link", options: "Role", reqd: 1 },
+			{ fieldname: "correction_window_days", label: "Correction window days", fieldtype: "Int", reqd: 1 },
+		],
+		"toefl_house.teaching.attendance_corrections.set_attendance_correction_policy_status": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Check" },
+		],
+		"toefl_house.teaching.adjustment_posting.create_adjustment_posting_policy": [
+			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.teaching.adjustment_posting.set_adjustment_posting_version": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "reason", label: "Reason", fieldtype: "Small Text", reqd: 1 },
+			{ fieldname: "orphan_posting", label: "Orphan posting", fieldtype: "Data", reqd: 1 },
+		],
+		"toefl_house.teaching.adjustment_posting.set_adjustment_posting_status": [
+			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Check" },
+		],
+
 		"toefl_house.admission.review_admission": [
 			{ fieldname: "name", label: "Admission decision", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "expected_version", label: "Expected version", fieldtype: "Int", reqd: 1 },
