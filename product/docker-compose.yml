@@ -30,9 +30,9 @@ services:
       db:
         condition: service_healthy
       redis-queue:
-        condition: service_started
+        condition: service_healthy
       redis-cache:
-        condition: service_started
+        condition: service_healthy
     # First boot runs the idempotent site bootstrap (product/bootstrap.py),
     # then starts gunicorn on 127.0.0.1-behind-loopback. Subsequent boots skip
     # completed steps and run migrate only.
@@ -95,6 +95,12 @@ services:
     working_dir: /home/frappe/bench
     ports:
       - "127.0.0.1:9000:9000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/socket.io/?EIO=4&transport=polling"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     volumes:
       - ./data/sites:/home/frappe/bench/sites
       - ./data/logs:/home/frappe/bench/logs
@@ -122,13 +128,23 @@ services:
 
   redis-queue:
     # Digest pinned: Redis 8.6.6 (see foundation-version-matrix.json).
-    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36
+    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66434f33dd0a502ce03cdcd36
     container_name: toefl-house-erp-redis-queue
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     restart: unless-stopped
 
   redis-cache:
-    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36
+    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66434f33dd0a502ce03cdcd36
     container_name: toefl-house-erp-redis-cache
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     restart: unless-stopped
 
 volumes:
