@@ -295,7 +295,7 @@ activation state `site_config.json` currently carries.
 
 ## 11. Record the rehearsal
 
-The Owner runs this runbook on the local server and records each run. A successful local Bench backup/restore rehearsal is necessary evidence but does not by itself close D14: the Owner-controlled off-site encrypted copy and its restore must also be evidenced:
+The Owner runs this runbook on the local server and records each run. A successful local Bench backup/restore rehearsal is the current backup evidence requirement. The backup must be kept on a separate local drive from the live data. Off-site/NAS/second-device backup is deferred future scope and is not a current launch gate:
 
 | Date | Site | Step-4 site_mode | Step-5 mirror | Step-6 mixed | Elapsed | Outcome |
 | ---- | ---- | ---------------- | ------------- | ------------ | ------- | ------- |
