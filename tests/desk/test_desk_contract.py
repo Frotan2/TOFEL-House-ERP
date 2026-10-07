@@ -1291,12 +1291,16 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
     def _section(payload, sid):
         return next(sect for sect in payload["sections"] if sect["id"] == sid)
 
-    def test_nine_sections_with_computed_readiness(self):
+    def test_ten_sections_with_computed_readiness(self):
         payload = self._run(validated=("ASM-EFF", "ALERT-POL", "GRD-POL"))
-        self.assertEqual(len(payload["sections"]), 9)
+        self.assertEqual(len(payload["sections"]), 10)
         academic = self._section(payload, "academic")
         self.assertEqual(academic["kind"], "links")
         self.assertEqual(academic["items"][0]["slug"], "th-academic-setup")
+        owner_policies = self._section(payload, "owner-policies")
+        self.assertEqual(owner_policies["kind"], "queue")
+        self.assertEqual(len(owner_policies["items"]), 7)
+        self.assertTrue(all("action" in item for item in owner_policies["items"]))
         # Reporting & Metrics is carried by the owner-operations policy.
         metrics = self._section(payload, "reporting-metrics")
         self.assertEqual(metrics["kind"], "facts")
