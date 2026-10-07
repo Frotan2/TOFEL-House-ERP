@@ -158,13 +158,13 @@ jobs:
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute "frappe.db.set_single_value('System Settings', 'encrypt_backup', 1)"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
           encrypted_backup_dir="data/sites/toeflhouse.localhost/private/backups"
-          encrypted_db="$(find "$encrypted_backup_dir" -maxdepth 1 -type f -name '*-database-enc.sql.gz' -printf '%T@ %p\\n' | sort -nr | head -1 | cut -d' ' -f2-)"
-          test -n "$encrypted_db" || { echo "::error::encrypted database artifact not found"; find "$encrypted_backup_dir" -maxdepth 1 -type f -printf '%p\\n' | sort; exit 1; }
+          encrypted_db="$(find "$encrypted_backup_dir" -maxdepth 1 -type f -name '*-database-enc.sql.gz' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
+          test -n "$encrypted_db" || { echo "::error::encrypted database artifact not found"; find "$encrypted_backup_dir" -maxdepth 1 -type f -printf '%p\n' | sort; exit 1; }
           encrypted_base="${encrypted_db%-database-enc.sql.gz}"
           echo "Encrypted backup artifacts:"
-          printf '  db=%s\\n' "$encrypted_db"
-          printf '  files=%s\\n' "${encrypted_base}-files-enc.tar"
-          printf '  private=%s\\n' "${encrypted_base}-private-files-enc.tar"
+          printf '  db=%s\n' "$encrypted_db"
+          printf '  files=%s\n' "${encrypted_base}-files-enc.tar"
+          printf '  private=%s\n' "${encrypted_base}-private-files-enc.tar"
           test -f "${encrypted_base}-files-enc.tar" || { echo "::error::encrypted public-files artifact missing"; exit 1; }
           test -f "${encrypted_base}-private-files-enc.tar" || { echo "::error::encrypted private-files artifact missing"; exit 1; }
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute "frappe.db.set_single_value('System Settings', 'encrypt_backup', 0)" || { echo "::error::failed to disable native backup encryption after qualification"; exit 1; }
@@ -174,7 +174,7 @@ jobs:
           # site before activation. A native ToDo marker is created after the
           # backup; restoring the backup must remove that post-backup mutation.
           backup_dir="data/sites/toeflhouse.localhost/private/backups"
-          db_backup="$(find "$backup_dir" -maxdepth 1 -type f -name '*-database.sql.gz' -printf '%T@ %p\\n' | sort -nr | head -1 | cut -d' ' -f2-)"
+          db_backup="$(find "$backup_dir" -maxdepth 1 -type f -name '*-database.sql.gz' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
           test -n "$db_backup" && test -f "$db_backup"
           backup_base="${db_backup%-database.sql.gz}"
           files_backup="${backup_base}-files.tar"
@@ -194,7 +194,7 @@ jobs:
           PY
 
           cred="$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt)"
-          admin_password="$(printf '%s\\n' "$cred" | awk '/^Password: /{print $2}')"
+          admin_password="$(printf '%s\n' "$cred" | awk '/^Password: /{print $2}')"
           db_password="$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)"
           test -n "$admin_password" && test -n "$db_password"
 
@@ -219,7 +219,7 @@ jobs:
           print(bool(frappe.db.exists("ToDo", {"description": "$marker"})))
           PY
           )"
-          printf '%s\\n' "$marker_after" | grep -q '^False$'
+          printf '%s\n' "$marker_after" | grep -q '^False$'
           test "$restore_elapsed" -lt 28800
           echo "::notice title=Restore rehearsal::restored successfully in ${restore_elapsed}s; post-backup marker absent"
 
