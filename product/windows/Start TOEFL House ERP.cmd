@@ -1,5 +1,5 @@
 @echo off
-rem Daily launcher: double-click. Checks for app updates, starts the app and
+rem Daily launcher: double-click. Starts the already-installed app and
 rem opens it in your browser. Never deletes data.
 rem Style rule (proven on real Windows runs, 2026-09-30): fully linear flow -
 rem single-line IF ... GOTO with dedicated labels, no multi-line
