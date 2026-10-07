@@ -82,7 +82,8 @@
   },
   "unresolved_business_inputs_not_reinterpreted": [
     "Future internet-hosted provider, hostname, DNS, and public-edge selection.",
-    "Deferred academic grading/progression, advanced guardian, calendar/transfer, tax, refund-term, and metrics-steward policies already recorded in OWNER-DECISIONS.md (retired; see git ef14970)."
+    "Deferred academic grading/progression, advanced guardian, tax, refund-term, calendar/transfer policy details, and metrics-steward policy remain unconfigured unless a later resolved decision explicitly supersedes that deferral.",
+    "D13 and D14 are resolved business inputs for recovery objectives and backup destination class; they authorize engineering work and evidence collection, not production GO."
   ],
   "source_documents": [
     "ef14970:docs/engineering/PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md",
