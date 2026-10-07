@@ -161,7 +161,22 @@ def set_owner_operations_policy_version(request_key, policy, effective_from,
             raise frappe.ValidationError("Owner operational policy is retired; reactivate it before adding a version")
         try:
             clean_from = rules.parse_date(effective_from)
-            values = validate_terms(locals())
+            values = validate_terms({
+                "reporting_review_days": reporting_review_days,
+                "capacity_target": capacity_target,
+                "tax_enabled": tax_enabled,
+                "tax_rate": tax_rate,
+                "tax_inclusive": tax_inclusive,
+                "transfer_allowed": transfer_allowed,
+                "withdrawal_allowed": withdrawal_allowed,
+                "calendar_notice_days": calendar_notice_days,
+                "backup_offsite_required": backup_offsite_required,
+                "backup_destination_kind": backup_destination_kind,
+                "backup_destination_reference": backup_destination_reference,
+                "custody_requirement": custody_requirement,
+                "recovery_quorum": recovery_quorum,
+                "reason": reason,
+            })
         except ValueError as exc:
             raise frappe.ValidationError(str(exc))
         rows = [r.as_dict() for r in (doc.get("versions") or [])]
