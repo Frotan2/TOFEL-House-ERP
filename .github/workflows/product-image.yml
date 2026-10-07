@@ -238,7 +238,10 @@ jobs:
                   raise
               page.click("button.btn-login[type=submit]")
               try:
-                  page.wait_for_url("**/app**", timeout=90_000)   # session must land on the desk
+                  # v16 desk lives at /desk (not /app); a fresh site routes the
+                  # first login through the native setup wizard, which is still
+                  # the authenticated post-login surface.
+                  page.wait_for_url("**/desk**", timeout=90_000)
               except Exception:
                   # Self-diagnosis: what the page itself says right now, plus the
                   # JS-level errors, so a red step carries its own cause.
@@ -258,12 +261,12 @@ jobs:
                   print("::error::browser UI diagnosis::" + " | ".join(parts))
                   raise
               page.wait_for_timeout(5_000)                      # let the desk shell render
-              assert page.url.startswith("http://127.0.0.1:8000/app"), page.url
+              assert page.url.startswith("http://127.0.0.1:8000/desk"), page.url
               assert page.query_selector("#login_password") is None, "login form still present after login"
               assert len(page.inner_text("body").strip()) > 200, "desk rendered no content"
               page.screenshot(path=str(shot))
               browser.close()
-          print("::notice title=Browser UI::real Chromium: login page -> real login -> desk rendered (screenshot kept)")
+          print("::notice title=Browser UI::real Chromium: login page -> real login -> authenticated desk surface (screenshot kept)")
           PYEOF
           # A dedicated venv keeps the browser tooling hermetic: the
           # runner's system python is externally managed, and a plain

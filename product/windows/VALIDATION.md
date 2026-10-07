@@ -56,6 +56,10 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
 ## Step 3 — Login
 
 - **Action:** type `Administrator` and the password from Step 1, click **Login**.
+- **First login only:** frappe's one-time setup wizard appears (organization
+  details, currency, fiscal year). Complete it with your institute's own
+  values — it is a native frappe step, once only; afterwards you land on the
+  desk.
 - **Expected:** the TOEFL House ERP desk (the work screen with menus/icons),
   not an error.
 - **Evidence 3:** screenshot of the desk after login.
