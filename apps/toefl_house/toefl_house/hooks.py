@@ -120,6 +120,7 @@ permission_query_conditions["TH Catalog Linkage Policy"] = "toefl_house.permissi
 permission_query_conditions["TH Adjustment Posting Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Alerting Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Guardian Lifecycle Policy"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Owner Operations Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
 # Branch isolation: the four native doctypes' row conditions (see
