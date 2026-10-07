@@ -136,13 +136,9 @@ def work():
                            "D1 assessment reference live on Academic Setup."),
     ]
     for sid, title, body in FUTURE_DOMAINS:
-        sections.append(section(sid, title, "facts",
-                                facts=[{
-                                    "value": "Owner-configured carrier",
-                                    "label": "Configuration surface",
-                                    "definition": body,
-                                }],
-                                empty_title=f"{title} is not implemented",
+        sections.append(section(sid, title, "queue",
+                                items=[_owner_policy_item(today, title, body)],
+                                empty_title=title,
                                 empty_body=body))
     sections.append(
         section("student-guardian", "Student & Guardian", "facts",
@@ -178,6 +174,54 @@ def work():
         "sections": sections,
     }
 
+
+
+def _owner_policy_item(today, title, body):
+    """Expose the real Course Owner policy commands on the Configuration desk.
+
+    The desk remains a projection: actions invoke guarded commands owned by
+    operations.owner_configuration; no direct document mutation is exposed.
+    """
+    policy = project_rows("configuration", OWNER_POLICY,
+                          ["name", "code", "title", "status", "description"],
+                          limit=1)
+    if not policy:
+        return {
+            "id": OWNER_POLICY, "person": "TH Owner Operations Policy",
+            "detail": "No policy exists yet; create the Course Owner policy here.",
+            "status": "Not configured", "stage": "Owner configuration",
+            "stage_definition": body,
+            "next": "Create the policy, then add its first effective-dated version.",
+            "next_role": "Course Owner", "waiting_since": None,
+            "action": {
+                "endpoint": "toefl_house.operations.owner_configuration.create_owner_operations_policy",
+                "label": "Create owner policy",
+                "args": {"code": "TH-OWNER-OPS", "title": "TH Owner Operations Policy"}
+            },
+        }
+    row = policy[0]
+    return {
+        "id": row["code"], "person": row["title"],
+        "detail": "Owner-configured cross-domain terms: reporting, capacity, tax, transfer/withdrawal, calendar, backup and custody requirements.",
+        "status": row["status"], "stage": "Owner configuration",
+        "stage_definition": body,
+        "next": "Add or replace the effective-dated owner terms; validate after every change.",
+        "next_role": "Course Owner", "waiting_since": None,
+        "actions": [
+            {
+                "endpoint": "toefl_house.operations.owner_configuration.set_owner_operations_policy_version",
+                "label": "Set policy version", "args": {"policy": row["code"]}
+            },
+            {
+                "endpoint": "toefl_house.operations.owner_configuration.validate_owner_operations_policy",
+                "label": "Validate policy", "args": {"policy": row["code"]}
+            },
+            {
+                "endpoint": "toefl_house.operations.owner_configuration.set_owner_operations_policy_status",
+                "label": "Change policy status", "args": {"policy": row["code"]}
+            },
+        ],
+    }
 
 def _domain_readiness(policies, versions_by_policy, today, what,
                       validate_action, evidence_lookup):
