@@ -1303,7 +1303,7 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertTrue(all("action" in item for item in owner_policies["items"]))
         # Reporting & Metrics is carried by the owner-operations policy.
         metrics = self._section(payload, "reporting-metrics")
-        self.assertEqual(metrics["kind"], "facts")
+        self.assertEqual(metrics["kind"], "queue")
         self.assertEqual(metrics["facts"][0]["value"], "Owner-configured carrier")
         # The alerting carrier made the Operations section real the same
         # way: computed readiness plus channel + retention, and the
