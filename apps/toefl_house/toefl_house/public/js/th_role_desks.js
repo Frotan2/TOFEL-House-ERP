@@ -288,7 +288,9 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
 		],
 		"toefl_house.operations.owner_configuration.set_owner_operations_policy_version": OWNER_POLICY_VERSION_FIELDS,
-		"toefl_house.operations.owner_configuration.validate_owner_operations_policy": [],
+		"toefl_house.operations.owner_configuration.validate_owner_operations_policy": [
+			{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+		],
 		"toefl_house.operations.owner_configuration.set_owner_operations_policy_status": [
 			{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Check" },
