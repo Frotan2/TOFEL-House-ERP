@@ -276,7 +276,7 @@ frappe.provide("toefl_house.role_desks");
 		{ fieldname: "withdrawal_allowed", label: "Withdrawals allowed", fieldtype: "Check" },
 		{ fieldname: "calendar_notice_days", label: "Calendar notice (days)", fieldtype: "Int", reqd: 1 },
 		{ fieldname: "backup_offsite_required", label: "Off-site backup required", fieldtype: "Check" },
-		{ fieldname: "backup_destination_kind", label: "Backup destination kind", fieldtype: "Select", options: "\nS3-compatible\nSFTP\nManaged backup\nOther" },
+		{ fieldname: "backup_destination_kind", label: "Backup destination kind", fieldtype: "Select", options: "\nOwner-controlled off-site hardware" },
 		{ fieldname: "backup_destination_reference", label: "Backup destination reference (no secrets)", fieldtype: "Data" },
 		{ fieldname: "custody_requirement", label: "Key custody requirement", fieldtype: "Small Text", reqd: 1 },
 		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
