@@ -39,6 +39,8 @@ class OwnerOperationsDoctypeTests(unittest.TestCase):
         self.assertTrue(required.issubset(fields))
         self.assertEqual(fields["tax_rate"]["fieldtype"], "Percent")
         self.assertEqual(fields["backup_destination_reference"]["fieldtype"], "Data")
+        self.assertEqual(fields["backup_destination_kind"]["options"], "Owner-controlled off-site hardware")
+        self.assertIn('DESTINATION_KINDS = ("Owner-controlled off-site hardware",)', SOURCE.read_text(encoding="utf-8"))
 
     def test_secrets_are_explicitly_out_of_scope(self):
         text = VERSION.read_text(encoding="utf-8") + SOURCE.read_text(encoding="utf-8")
@@ -46,6 +48,13 @@ class OwnerOperationsDoctypeTests(unittest.TestCase):
         self.assertNotIn("secret_material", lowered)
         self.assertIn("credentials", lowered)
         self.assertIn("authorization", lowered)
+
+    def test_d14_destination_boundary_is_owner_controlled_hardware_only(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn('DESTINATION_KINDS = ("Owner-controlled off-site hardware",)', source)
+        self.assertNotIn("S3-compatible", source)
+        self.assertNotIn("Managed backup", source)
+        self.assertNotIn("SFTP", source)
         self.assertIn("ceremonies", lowered)
 
 
