@@ -643,6 +643,42 @@ jobs:
               time.sleep(10)
           progress("ps settled: %d services, missing=%s" % (len(states), sorted(missing or set())))
           print("T-SITE compose ps raw: " + repr(states)[:400], flush=True)
+          if missing:
+              # Self-diagnose: name the actual cause (crash-loop exit code,
+              # OOMKilled, or a slow dependency) via annotations, since the
+              # job log is not reachable after the step ends.
+              import subprocess as _sp
+              def _diag(out, head, tail=1400):
+                  text = (out or "").strip()
+                  return ("::error::restart-diag %s::%s" % (head, text)).strip()[:tail]
+              try:
+                  states_a = _sp.check_output(
+                      ["docker", "compose", "ps", "-a", "--format", "json"],
+                      text=True)
+              except Exception as exc:
+                  states_a = "ps -a failed: %s" % exc
+              print(_diag(states_a, "ps"), flush=True)
+              for svc in sorted(missing):
+                  try:
+                      info = _sp.check_output(
+                          ["docker", "inspect", svc, "--format",
+                           "RestartCount={{.RestartCount}} State={{.State.Status}} Exit={{.State.ExitCode}} OOM={{.State.OOMKilled}}"],
+                          text=True)
+                  except Exception as exc:
+                      info = "inspect failed: %s" % exc
+                  try:
+                      logs = _sp.run(["docker", "logs", "--tail", "40", svc],
+                                     capture_output=True, text=True)
+                      log_text = (logs.stdout + "\n" + logs.stderr)[-1100:]
+                  except Exception as exc:
+                      log_text = "logs failed: %s" % exc
+                  print("::error::restart-diag %s::%s\n%s" % (
+                      svc, (info or "").strip(), log_text.replace("\n", " | ")), flush=True)
+              try:
+                  free = _sp.check_output(["free", "-m"], text=True)
+              except Exception:
+                  free = "free failed"
+              print(_diag(free, "mem"), flush=True)
           assert not missing, "services not running after restart: %s" % sorted(missing)
           # After a full restart the web can answer before the database is
           # back; the logins (which query the DB) therefore retry briefly.
