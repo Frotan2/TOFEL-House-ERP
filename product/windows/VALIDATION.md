@@ -20,7 +20,12 @@ differs from the "Expected" lines, that is a defect — stop and report it
 2. **Docker Desktop** installed: https://www.docker.com/products/docker-desktop/
    Its own installer is click-through and sets up WSL2 automatically if the PC
    asks. Restart the PC if it tells you to.
-3. This repository unzipped anywhere (e.g. Desktop): on GitHub use
+3. GPG/Gpg4win on a trusted Owner/custodian host is needed to create/export
+   or recover the dedicated OpenPGP key pair. Only the ASCII-armored public
+   key enters ERPNext; the private key and its recovery procedure stay under
+   Owner custody outside Frappe/the container and outside the backup drive.
+   The normal product backup encrypts inside the product container.
+4. This repository unzipped anywhere (e.g. Desktop): on GitHub use
    **Code → Download ZIP**, then right-click the ZIP → **Extract All…**.
 
 Then open the folder `product → windows` and do the steps below **in order**.
@@ -64,12 +69,23 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
   not an error.
 - **Evidence 3:** screenshot of the desk after login.
 
-## Step 4 — Make a tiny mark (needed to prove persistence later)
+## Step 4 — Create and use the Course Owner account
 
-- **Action:** click your name/avatar (top-right) → **My Profile** → set
-  **Full Name** to `Owner` → **Save**.
-- **Expected:** a saved confirmation, no error.
-- **Evidence 4:** screenshot showing **Full Name: Owner**.
+- **Action:** while signed in as the one-time `Administrator`, use the native
+  **User** list to create a separate enabled **System User** for the real
+  Course Owner, assign the native **Course Owner** role, and set that user's
+  own password with ERPNext's normal account flow. Do not use or rename the
+  built-in Administrator as the Course Owner: guarded Owner commands
+  deliberately reject Administrator. Keep the Administrator credential
+  private for setup/recovery. Sign out, sign in as the new Course Owner, open
+  **My Profile**, set **Full Name** to `Owner`, and save.
+- **Expected:** the dedicated Course Owner login reaches the desk and the
+  profile save succeeds. This is the account that will configure backup and
+  other Owner policies through the ERP Configuration desk.
+- **Evidence 4:** screenshot of the Course Owner account's native role
+  assignment and its profile showing **Full Name: Owner**. Do not include a
+  password or recovery key. If a separate Course Owner account cannot be
+  created/authenticated, stop; do not proceed using Administrator.
 
 ## Step 5 — Stop
 
@@ -85,19 +101,48 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
   min; it first checks a few seconds whether the app has been updated).
 - **Expected:** it waits, then opens the browser at `http://127.0.0.1:8000`
   and closes its window by itself.
-- **Evidence 6:** login as in Step 3; screenshot of the desk **and** of
-  My Profile still showing **Full Name: Owner** (your mark survived a stop).
+- **Evidence 6:** login as the Course Owner created in Step 4; screenshot of
+  the desk **and** My Profile still showing **Full Name: Owner** (the mark
+  survived a stop).
 
 ## Step 7 — Backup
 
-- **Action:** double-click `Backup TOEFL House ERP.cmd`, wait until it prints
-  "Backup finished" and a folder path ending in
-  `data\sites\toeflhouse.localhost\private\backups`. Press any key to close.
-- **Expected:** that folder now contains **new files with today's date**
-  (at least one file ending in `-database.sql.gz` and one ending in
-  `files.tar`).
-- **Evidence 7:** screenshot of that folder in File Explorer showing the new
-  files with today's date. (Good habit: copy the whole folder to a USB drive.)
+- **Before backup:** sign in as the dedicated Course Owner from Step 4 (not
+  Administrator). In **Configuration desk → Backup & Recovery**, create the
+  Owner policy if it does not exist, then choose **Set policy version** and
+  **Validate policy**. The version form requires actual Owner-approved values
+  for reporting review days, class capacity, tax choices/rate, transfer and
+  withdrawal rules, calendar notice, local nightly backup time, retention
+  (at least two), ASCII-armored OpenPGP **public** recovery key, custody
+  requirement, and recovery quorum, plus effective date and reason. No
+  defaults or placeholders are supplied: obtain any unresolved business
+  decision from the Owner rather than guessing. Generate/obtain the dedicated
+  key pair under the approved custody procedure using GPG/Gpg4win on a trusted
+  host; enter only its public key. Keep the matching private key and recovery
+  procedure outside Frappe and the backup drive. Never paste or copy private
+  key material into ERPNext, the container, or the backup set. If the effective
+  policy is incomplete or invalid, the backup launcher refuses and does not
+  create an activation receipt.
+- **Action:** double-click `Backup TOEFL House ERP.cmd` and wait for the
+  success message and the printed backup-set folder on a separate fixed local
+  drive on this same PC. Press any key to close.
+- **Expected:** the set contains `manifest.json` and exactly four encrypted
+  payloads: `*-database-enc.sql.gz`, `*-files-enc.tar`,
+  `*-private-files-enc.tar`, and `*-site-config.gpg`. The last artifact is
+  public-key encrypted for Owner recovery of Frappe's site config/native backup
+  key. The misleading plaintext `*-site_config_backup-enc.json` sidecar must
+  **not** be present. The script prints an error rather than success if GPG
+  packet checks, copy hashes/sizes, the Owner policy, Task Scheduler, or
+  retention verification fail.
+- **Schedule dependency:** the daily Windows task runs as the interactive
+  user who registered it; that user session and Docker Desktop/server must be
+  available for the task to run. Confirm this on the Owner PC; CI does not
+  qualify Windows Task Scheduler.
+- **Evidence 7:** screenshot of the printed separate-drive path and the
+  four-artifact set/manifest in File Explorer. Do not send the backup, private
+  key, decrypted site config, or any passwords as evidence. A separate local
+  drive on the same PC is the current requirement; off-site/NAS/second-device/
+  cloud copies are deferred future scope.
 
 ## Step 8 — Repair
 
@@ -114,14 +159,15 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
 
 ## Step 9 — Browser access after repair
 
-- **Action:** in the browser it opened, log in as in Step 3.
+- **Action:** in the browser it opened, log in as the dedicated Course Owner
+  created in Step 4.
 - **Expected:** the desk loads normally.
 - **Evidence 9:** screenshot of the desk after login.
 
 ## Step 10 — Persistence
 
-- **Action:** open **My Profile** again.
-- **Expected:** **Full Name: Owner** is still there — your mark survived the
+- **Action:** open the Course Owner's **My Profile** again.
+- **Expected:** **Full Name: Owner** is still there — the mark survived the
   full Stop → Start → Backup → Repair cycle.
 - **Evidence 10:** screenshot of My Profile showing **Owner**.
 
@@ -130,31 +176,35 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
 ## Finishing
 
 Send engineering: one message/email containing **Evidence 1–10** (password
-covered/blurred wherever it appears), plus your Windows version and the date
+and recovery key covered/omitted wherever they appear), plus your Windows version and the date
 you ran this. Engineering maps the ten items onto the release-gate steps and
 closes the **Desktop release gate**, which is OPEN until exactly this evidence
 set is confirmed.
 
 ## Later: switching on real operation (once, not part of this checklist)
 
-Only when engineering confirms the gate, and with the PC off the public
-internet: double-click `Backup TOEFL House ERP.cmd`, then
-`Activate TOEFL House ERP.cmd`, and type ACTIVATE when asked. It refuses
-without a backup from today and puts everything back if any safety check
-fails. `Deactivate TOEFL House ERP.cmd` switches real operation off again
-without touching your data.
+When the Owner policy/key custody and current backup checks are ready,
+double-click `Backup TOEFL House ERP.cmd`, then `Activate TOEFL House ERP.cmd`
+and type `ACTIVATE` when asked. Activation changes only the site's
+operational mode; it is **not** production release authorization, which stays
+REJECT until all acceptance evidence and Owner/non-engineering gates pass.
+The wrapper refuses without a current, verified four-artifact backup on the
+separate local drive. `Deactivate TOEFL House ERP.cmd` returns the site to
+REFUSED without changing native ERP data. Restore/key custody steps are in the
+canonical launch runbook.
 
 ## Later: letting authorized staff access it from their computers
 
 The ERP always listens only on the central PC (nothing is opened on the
 public internet). Authorized staff PCs that are in your Tailscale network
 reach it over that private network: Tailscale is installed on the central PC
-and the staff PCs, and one command on the central PC
-(`tailscale serve`, written out in the launch runbook section "Multi-user
-access (central server + Tailscale)") makes the ERP available to the tailnet
-as `https://<central-PC-name>.<your-tailnet>.ts.net/`. The supported setup also mounts `/socket.io` to the local SocketIO service so realtime requests use the same HTTPS origin. Access is limited to
-your Tailscale network members only; no firewall rule or public address is
-involved.
+and staff PCs. The supported Tailscale Serve setup has separate web and
+`/socket.io` routes on the central PC (written out in the launch runbook
+section "Multi-user access (central server + Tailscale)") so realtime requests
+use the same HTTPS origin. Access is limited to your Tailscale network
+members only; no firewall rule or public address is involved. CI does not run
+Tailscale Serve or prove the actual tailnet/WebSocket path; record that
+real Owner-PC check separately.
 
 ## If something fails
 

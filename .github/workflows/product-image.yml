@@ -2,8 +2,9 @@ name: Product image
 
 # Builds the desktop application image exactly as the owner's machine does
 # (product/app.Dockerfile via product/docker-compose.yml) and validates the
-# compose file, then boots the stack and runs the Owner's Backup and one-time
-# activation/deactivation commands against the real site (product/activate.py).
+# compose file, then boots the stack and qualifies disposable synthetic Owner
+# backup/recovery material plus the guarded operational site-mode lifecycle.
+# This is not production authorization or real Windows/Owner key-custody proof.
 on:
   push:
     paths:
@@ -127,92 +128,327 @@ jobs:
           echo "::notice title=Largest layers::${layers}"
           usage=$(docker run --rm --entrypoint sh toefl-house-erp-app:ci -c 'du -sm /home/frappe/bench/env /home/frappe/bench/apps/* /build/sources /build/owned /build/tools /usr/local /usr/lib /home/frappe/.cache 2>/dev/null | sort -rn' | awk '{print $1"MB "$2}' | paste -sd'|' -)
           echo "::notice title=Disk usage in image::${usage}"
-      - name: First boot, backup and Owner activation on the real product stack
+      - name: First boot, encrypted backup/restore and guarded site-mode activation
         working-directory: product
         run: |
           set -euo pipefail
-          mkdir -p data/sites data/logs && chmod 777 data/sites data/logs
+          mkdir -p data/sites data/logs data/secrets && chmod 777 data/sites data/logs data/secrets
           docker compose up -d --no-build
           for i in $(seq 1 300); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 10; done
           curl --fail --silent http://127.0.0.1:8000/ >/dev/null
           echo "::notice title=First boot::site answered after ~$((i*10))s"
           act() { docker compose exec -T web /product/activate.py "$@"; }
-          act status | tee status.txt; grep -q ': REFUSED' status.txt
-          # Seed the same native backup artifact the Owner's Backup command
-          # creates before testing activation. The production gate is
-          # intentionally fail-closed: activation must refuse with no recent
-          # backup, then succeed only after the qualifying backup exists.
+          act status | tee status.txt
+          grep -q 'Site operational mode: REFUSED' status.txt
+          grep -q 'Production authorization: REJECT' status.txt
+
+          # Create an ephemeral OpenPGP recovery identity on the runner. The
+          # private key stays in RUNNER_TEMP, outside Frappe and outside the
+          # mounted secondary backup volume; only its public half is sent to
+          # the disposable Course Owner policy and web container.
+          ci_gnupg_home="$RUNNER_TEMP/toefl-house-ci-gpg-$GITHUB_RUN_ID"
+          recovery_public_key_path="$RUNNER_TEMP/toefl-house-ci-recovery-public-$GITHUB_RUN_ID.asc"
+          recovered_config_path="$RUNNER_TEMP/toefl-house-ci-recovered-config-$GITHUB_RUN_ID.json"
+          ci_gpg_container_home="/tmp/toefl-house-ci-gpg-$GITHUB_RUN_ID"
+          cleanup_recovery_material() {
+            if [ -n "${ci_gpg_container_home:-}" ]; then
+              docker compose exec -T web rm -rf -- "$ci_gpg_container_home" >/dev/null 2>&1 || true
+            fi
+            if [ -n "${ci_gnupg_home:-}" ]; then
+              gpgconf --homedir "$ci_gnupg_home" --kill gpg-agent >/dev/null 2>&1 || true
+              rm -rf -- "$ci_gnupg_home"
+            fi
+            rm -f -- "${recovery_public_key_path:-}" "${recovered_config_path:-}"
+          }
+          trap cleanup_recovery_material EXIT
+          mkdir -m 700 -p "$ci_gnupg_home"
+          recovery_key_uid="TOEFL House disposable recovery key ${GITHUB_RUN_ID} <toefl-house-ci-${GITHUB_RUN_ID}@example.invalid>"
+          gpg --homedir "$ci_gnupg_home" --batch --pinentry-mode loopback --passphrase '' \
+            --quick-generate-key "$recovery_key_uid" rsa2048 encr 1d
+          recovery_fingerprint="$(gpg --homedir "$ci_gnupg_home" --with-colons --fingerprint "$recovery_key_uid" \
+            | awk -F: '$1 == "fpr" { print $10; exit }')"
+          test -n "$recovery_fingerprint" || { echo "::error::disposable recovery key generation returned no fingerprint"; exit 1; }
+          gpg --homedir "$ci_gnupg_home" --armor --export "$recovery_fingerprint" > "$recovery_public_key_path"
+          test -s "$recovery_public_key_path"
+          recovery_key_b64="$(base64 -w0 "$recovery_public_key_path")"
+          recovery_key_sha256="$(python3 - "$recovery_public_key_path" <<'PY'
+          import hashlib, pathlib, sys
+          print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes().strip()).hexdigest())
+          PY
+          )"
+
+          # Create a disposable Course Owner through native Frappe User/Role
+          # and the guarded Owner policy commands. Schedule and retention are
+          # synthetic CI values, never product defaults or Owner evidence.
+          docker compose exec -T -e TH_CI_RECOVERY_PUBLIC_KEY_B64="$recovery_key_b64" \
+            web /build/tools/bin/bench --site toeflhouse.localhost console <<'PY'
+          import base64
+          import os
+          import frappe
+          from toefl_house.operations.owner_configuration import (
+              create_owner_operations_policy,
+              set_owner_operations_policy_version,
+          )
+          recovery_public_key = base64.b64decode(
+              os.environ["TH_CI_RECOVERY_PUBLIC_KEY_B64"], validate=True
+          ).decode("ascii")
+          owner_email = "backup-owner@toeflhouse.localhost"
+          if not frappe.db.exists("User", owner_email):
+              owner = frappe.get_doc({
+                  "doctype": "User", "email": owner_email,
+                  "first_name": "Backup Qualification Owner", "enabled": 1,
+                  "send_welcome_email": 0,
+                  "roles": [{"doctype": "Has Role", "role": "Course Owner"}],
+              })
+              owner.insert(ignore_permissions=True)
+              frappe.db.commit()
+          previous_user = frappe.session.user
+          frappe.session.user = owner_email
+          try:
+              if not frappe.db.exists("TH Owner Operations Policy", {"code": "TH-OWNER-OPS"}):
+                  create_owner_operations_policy(
+                      "ci-backup-policy-create", "TH-OWNER-OPS",
+                      "CI backup policy", "Disposable synthetic qualification fixture")
+              set_owner_operations_policy_version(
+                  "ci-backup-policy-v1", "TH-OWNER-OPS", frappe.utils.today(),
+                  "Disposable policy fixture for product backup/restore qualification",
+                  30, 20, 0, 0, 0, 0, 0, 0,
+                  "02:30", 3, recovery_public_key,
+                  "CI-only key-custody fixture; not real recovery evidence", 1)
+              frappe.db.commit()
+          finally:
+              frappe.session.user = previous_user
+          print("CI Course Owner backup policy configured through guarded commands")
+          PY
+          policy_json="$(docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute toefl_house.operations.owner_configuration.current_backup_policy)"
+          printf '%s\n' "$policy_json" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read().splitlines()[-1]); assert d["configured"] is True and d["retention_versions"] >= 2 and d["recovery_key_sha256"] == sys.argv[1]; print("::notice title=Owner backup policy::synthetic CI policy/key identity configured through the guarded Course Owner command")' "$recovery_key_sha256"
+
+          # The product activation command must refuse before a complete
+          # encrypted, separate-volume backup receipt exists.
           set +e; act activate --confirm toeflhouse.localhost; rc=$?; set -e
-          test "$rc" = 2  # refused: no backup yet
-          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
-          echo "::notice title=Backup rehearsal::full database/files/private-files backup created"
-          act activate --confirm toeflhouse.localhost | tee pre_restore_activate.txt
-          grep -q 'All gates passed' pre_restore_activate.txt
-          act status | grep -q ': PRODUCTION'
-          echo "::notice title=Backup gate::activation passed only after a recent native backup was present"
-          act deactivate --confirm toeflhouse.localhost
-          act status | grep -q ': REFUSED'
-          # Native encryption contract: enable it for one disposable backup,
-          # verify the encrypted artifacts, then restore the prior disabled
-          # state so the existing unencrypted restore rehearsal remains unchanged.
+          test "$rc" = 2
+
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute "frappe.db.set_single_value('System Settings', 'encrypt_backup', 1)"
-          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
-          encrypted_backup_dir="data/sites/toeflhouse.localhost/private/backups"
-          encrypted_db="$(find "$encrypted_backup_dir" -maxdepth 1 -type f -name '*-database-enc.sql.gz' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
-          test -n "$encrypted_db" || { echo "::error::encrypted database artifact not found"; find "$encrypted_backup_dir" -maxdepth 1 -type f -printf '%p\n' | sort; exit 1; }
-          encrypted_base="${encrypted_db%-database-enc.sql.gz}"
-          echo "Encrypted backup artifacts:"
-          printf '  db=%s\n' "$encrypted_db"
-          printf '  files=%s\n' "${encrypted_base}-files-enc.tar"
-          printf '  private=%s\n' "${encrypted_base}-private-files-enc.tar"
-          test -f "${encrypted_base}-files-enc.tar" || { echo "::error::encrypted public-files artifact missing"; exit 1; }
-          test -f "${encrypted_base}-private-files-enc.tar" || { echo "::error::encrypted private-files artifact missing"; exit 1; }
-          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute "frappe.db.set_single_value('System Settings', 'encrypt_backup', 0)" || { echo "::error::failed to disable native backup encryption after qualification"; exit 1; }
-          echo "::notice title=Backup encryption::native encrypted backup artifacts verified"
-
-          # Rehearse an actual restore against the same disposable qualification
-          # site before activation. A native ToDo marker is created after the
-          # backup; restoring the backup must remove that post-backup mutation.
           backup_dir="data/sites/toeflhouse.localhost/private/backups"
-          db_backup="$(find "$backup_dir" -maxdepth 1 -type f -name '*-database.sql.gz' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
-          test -n "$db_backup" && test -f "$db_backup"
-          backup_base="${db_backup%-database.sql.gz}"
-          files_backup="${backup_base}-files.tar"
-          private_backup="${backup_base}-private-files.tar"
-          test -f "$files_backup"
-          test -f "$private_backup"
+          file_marker="ERP-RESTORE-FILE-${GITHUB_RUN_ID}"
+          docker compose exec -T -e CI_BACKUP_FILE_MARKER="$file_marker" web sh -eu -c '
+            mkdir -p sites/toeflhouse.localhost/public/files sites/toeflhouse.localhost/private/files
+            printf "%s\n" "$CI_BACKUP_FILE_MARKER" > sites/toeflhouse.localhost/public/files/product-image-restore-marker.txt
+            printf "%s\n" "$CI_BACKUP_FILE_MARKER" > sites/toeflhouse.localhost/private/files/product-image-restore-marker.txt
+          '
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
+          encrypted_db="$(find "$backup_dir" -maxdepth 1 -type f -name '*-database-enc.sql.gz' -printf '%T@ %f\n' | sort -nr | head -1 | cut -d' ' -f2-)"
+          test -n "$encrypted_db" || { echo "::error::encrypted database artifact not found"; find "$backup_dir" -maxdepth 1 -type f -printf '%f\n' | sort; exit 1; }
+          backup_set="${encrypted_db%-database-enc.sql.gz}"
+          encrypted_names=("$encrypted_db" "${backup_set}-files-enc.tar" "${backup_set}-private-files-enc.tar")
+          for name in "${encrypted_names[@]}"; do
+            test -s "$backup_dir/$name" || { echo "::error::required encrypted artifact missing: $name"; exit 1; }
+            packet_output="$(docker compose exec -T web gpg --list-packets "sites/toeflhouse.localhost/private/backups/$name" 2>&1)" || {
+              echo "::error::GPG packet inspection failed for $name: ${packet_output:0:500}"; exit 1;
+            }
+            printf '%s\n' "$packet_output" | grep -q ':symkey enc packet:' || {
+              echo "::error::artifact name is not proof of GPG encryption: $name"; exit 1;
+            }
+          done
 
+          # Frappe creates a site-config sidecar with a misleading -enc name;
+          # it is plaintext and contains DB credentials plus the native backup
+          # key. Encrypt this exact sidecar to the disposable Owner public key
+          # from inside the pinned product image; never put the plaintext on
+          # the secondary volume. The runner's private key stays outside both.
+          mapfile -t config_sidecars < <(find "$backup_dir" -maxdepth 1 -type f \
+            -name "${backup_set}-site_config_backup*.json" -print)
+          test "${#config_sidecars[@]}" -eq 1 || {
+            echo "::error::expected exactly one Frappe site-config backup sidecar for $backup_set"; exit 1;
+          }
+          site_config_sidecar="${config_sidecars[0]}"
+          recovery_config_name="${backup_set}-site-config.gpg"
+          recovery_config_path="$backup_dir/$recovery_config_name"
+          ci_site_path="sites/toeflhouse.localhost/private/backups"
+          ci_sidecar_path="$ci_site_path/$(basename "$site_config_sidecar")"
+          ci_recovery_config_path="$ci_site_path/$recovery_config_name"
+          docker compose exec -T web mkdir -m 700 -p "$ci_gpg_container_home"
+          docker compose cp "$recovery_public_key_path" \
+            "web:$ci_gpg_container_home/recovery-public.asc"
+          docker compose exec -T web gpg --batch --homedir "$ci_gpg_container_home" \
+            --import "$ci_gpg_container_home/recovery-public.asc"
+          docker compose exec -T web gpg --batch --yes --no-tty \
+            --homedir "$ci_gpg_container_home" --trust-model always \
+            --recipient "$recovery_fingerprint" --output "$ci_recovery_config_path" \
+            --encrypt "$ci_sidecar_path"
+          test -s "$recovery_config_path" || { echo "::error::encrypted site-config recovery artifact missing"; exit 1; }
+          config_packets="$(docker compose exec -T web gpg --batch --homedir "$ci_gpg_container_home" \
+            --list-packets "$ci_recovery_config_path" 2>&1)"
+          printf '%s\n' "$config_packets" | grep -q ':pubkey enc packet:' || {
+            echo "::error::site-config artifact is not an OpenPGP public-key encrypted packet"; exit 1;
+          }
+          (umask 077; gpg --homedir "$ci_gnupg_home" --batch --yes \
+            --output "$recovered_config_path" --decrypt "$recovery_config_path")
+          chmod 600 "$recovered_config_path"
+          cmp --silent "$site_config_sidecar" "$recovered_config_path" || {
+            echo "::error::private-key recovery did not reproduce the exact site-config sidecar"; exit 1;
+          }
+          backup_encryption_key="$(python3 - "$recovered_config_path" <<'PY'
+          import json, pathlib, sys
+          config = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          key = config.get("encryption_key")
+          if not isinstance(key, str) or not key:
+              raise SystemExit("recovered site config has no native Frappe encryption_key")
+          print(key)
+          PY
+          )"
+          test -n "$backup_encryption_key" || { echo "::error::recovered Frappe encryption key is empty"; exit 1; }
+          rm -f -- "${config_sidecars[@]}"
+          if find "$backup_dir" -maxdepth 1 -type f -name '*-site_config_backup*.json' -print -quit | grep -q .; then
+            echo "::error::plaintext Frappe site-config sidecar remains"; exit 1
+          fi
+
+          # Model a second local volume in CI with a loop-backed ext4 mount,
+          # then prove it is a distinct filesystem before copying. This is a
+          # product-image integration test, not qualification of a real
+          # Windows disk or Windows Task Scheduler.
+          backup_image="$RUNNER_TEMP/toefl-house-backup-volume.img"
+          truncate -s 2G "$backup_image"
+          backup_device="$(sudo losetup --find --show "$backup_image")"
+          sudo mkfs.ext4 -F "$backup_device" >/dev/null
+          sudo mkdir -p /mnt/toefl-house-backup
+          sudo mount "$backup_device" /mnt/toefl-house-backup
+          sudo chmod 777 /mnt/toefl-house-backup
+          source_device="$(stat -c '%d' "$backup_dir")"
+          secondary_device="$(stat -c '%d' /mnt/toefl-house-backup)"
+          test "$source_device" != "$secondary_device" || { echo "::error::backup volume is not a separate filesystem"; exit 1; }
+          backup_root="/mnt/toefl-house-backup/TOEFL-House-ERP-Backups"
+          set_root="$backup_root/$backup_set"
+          mkdir -p "$set_root"
+          policy_json="$(printf '%s\n' "$policy_json" | tail -n 1)"
+          python3 - "$backup_dir" "$set_root" "$backup_set" "$policy_json" <<'PY'
+          import hashlib, json, os, shutil, sys
+          from datetime import datetime, timezone
+          source, destination, backup_set, policy_text = sys.argv[1:]
+          policy = json.loads(policy_text)
+          suffixes = {
+              "database": "-database-enc.sql.gz",
+              "public_files": "-files-enc.tar",
+              "private_files": "-private-files-enc.tar",
+              "recovery_config": "-site-config.gpg",
+          }
+          artifacts = []
+          for role, suffix in suffixes.items():
+              name = backup_set + suffix
+              src, dst = os.path.join(source, name), os.path.join(destination, name)
+              if not os.path.isfile(src) or os.path.islink(src):
+                  raise SystemExit(f"missing/unsafe native encrypted artifact: {name}")
+              shutil.copyfile(src, dst)
+              def sha(path):
+                  h = hashlib.sha256()
+                  with open(path, "rb") as stream:
+                      for block in iter(lambda: stream.read(1024 * 1024), b""):
+                          h.update(block)
+                  return h.hexdigest()
+              digest = sha(src)
+              if sha(dst) != digest or os.path.getsize(src) != os.path.getsize(dst):
+                  raise SystemExit(f"secondary-volume copy verification failed: {name}")
+              artifacts.append({"role": role, "name": name, "sha256": digest,
+                                "bytes": os.path.getsize(dst)})
+          if len(artifacts) != 4 or any("site_config_backup" in item["name"] for item in artifacts):
+              raise SystemExit("backup set is incomplete or includes a plaintext site-config sidecar")
+          created = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+          manifest = {
+              "schema_version": 2, "backup_set": backup_set,
+              "source_site": "toeflhouse.localhost",
+              "source_drive": "C:", "backup_drive": "D:",
+              "encrypted": True, "verified": True,
+              "policy_hash": policy["policy_hash"],
+              "recovery_key_sha256": policy["recovery_key_sha256"],
+              "schedule_time": policy["schedule_time"],
+              "retention_versions": policy["retention_versions"],
+              "artifacts": artifacts, "created_utc": created,
+          }
+          manifest_path = os.path.join(destination, "manifest.json")
+          with open(manifest_path, "w", encoding="utf-8") as stream:
+              json.dump(manifest, stream, sort_keys=True, separators=(",", ":"))
+              stream.write("\n")
+          receipt = {
+              "schema_version": 1, "source_site": "toeflhouse.localhost",
+              "source_drive": "C:", "backup_drive": "D:",
+              "backup_root": os.path.dirname(destination),
+              "backup_path": destination, "backup_set": backup_set,
+              "created_utc": created, "encrypted": True, "verified": True,
+              "automation_ready": True, "task_name": "TOEFL House ERP Backup",
+              "schedule_time": policy["schedule_time"],
+              "retention_versions": policy["retention_versions"],
+              "policy_hash": policy["policy_hash"],
+              "recovery_key_sha256": policy["recovery_key_sha256"],
+              "manifest_sha256": hashlib.sha256(open(manifest_path, "rb").read()).hexdigest(),
+              "artifacts": artifacts,
+          }
+          with open("data/secrets/backup-receipt.json", "w", encoding="utf-8") as stream:
+              json.dump(receipt, stream, sort_keys=True, separators=(",", ":"))
+              stream.write("\n")
+          print("Four encrypted artifacts copied to a distinct mounted volume and SHA-256 verified")
+          PY
+
+          # Copy the set back from the mounted secondary volume into the
+          # disposable web container, then verify this second transfer before
+          # the restore. The real Windows operator performs the analogous
+          # separate-drive restore manually; this container copy is a CI model,
+          # not Windows drive or Task Scheduler qualification.
+          docker compose cp "$set_root" web:/tmp/
+          restore_container_dir="/tmp/$backup_set"
+          for name in "${encrypted_names[@]}" "$recovery_config_name"; do
+            expected_hash="$(sha256sum "$set_root/$name" | cut -d' ' -f1)"
+            actual_hash="$(docker compose exec -T web sha256sum "$restore_container_dir/$name" | cut -d' ' -f1)"
+            test "$actual_hash" = "$expected_hash" || { echo "::error::secondary-volume restore staging hash mismatch: $name"; exit 1; }
+            docker compose exec -T web cp -f -- "$restore_container_dir/$name" "sites/toeflhouse.localhost/private/backups/$name"
+            return_hash="$(docker compose exec -T web sha256sum "sites/toeflhouse.localhost/private/backups/$name" | cut -d' ' -f1)"
+            test "$return_hash" = "$expected_hash" || { echo "::error::verified backup return-to-site copy mismatch: $name"; exit 1; }
+          done
+          echo "::notice title=Secondary-volume copy::four artifacts copied back from the mounted secondary volume and reverified in the native site backup folder"
+
+          # Prove a real restore from the encrypted artifacts recovered from
+          # the separate volume. The native key is recovered only by using the
+          # runner-held private key on the GPG-encrypted site-config artifact.
+          # A post-backup marker must disappear after restore.
           marker="ERP-RESTORE-REHEARSAL-${GITHUB_RUN_ID}"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost console <<PY
           import frappe
           marker = "$marker"
-          if not frappe.db.exists("ToDo", {"description": marker}):
-              doc = frappe.get_doc({"doctype": "ToDo", "description": marker, "status": "Open"})
-              doc.insert(ignore_permissions=True)
-              frappe.db.commit()
+          doc = frappe.get_doc({"doctype": "ToDo", "description": marker, "status": "Open"})
+          doc.insert(ignore_permissions=True)
+          frappe.db.commit()
           print(marker)
           PY
-
           cred="$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt)"
           admin_password="$(printf '%s\n' "$cred" | awk '/^Password: /{print $2}')"
           db_password="$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)"
           test -n "$admin_password" && test -n "$db_password"
-
-          # Quiesce background writers before replacing the database. Keep
-          # web alive only long enough to execute the restore; then restart the
-          # complete application process set before probing the restored site.
-          docker compose stop worker scheduler socketio
-          restore_start="$(date +%s)"
-          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost restore \
-            "sites/toeflhouse.localhost/private/backups/$(basename "$db_backup")" \
-            --with-public-files "sites/toeflhouse.localhost/private/backups/$(basename "$files_backup")" \
-            --with-private-files "sites/toeflhouse.localhost/private/backups/$(basename "$private_backup")" \
-            --db-root-password "$db_password" --admin-password "$admin_password"
-          docker compose restart web worker scheduler socketio
-          for j in $(seq 1 60); do
-            curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break
-            sleep 2
+          # Stop the serving process as well as all background writers before
+          # touching the site files or replacing the database.
+          docker compose stop web worker scheduler socketio
+          # Frappe extracts file archives with tar into the existing file
+          # directories; it does not remove post-backup extras. Stage the old
+          # directories aside and restore into clean public/private targets so
+          # this is a faithful file snapshot, not an overlay.
+          site_root="data/sites/toeflhouse.localhost"
+          restore_stage="$site_root/private/.ci-restore-files-$GITHUB_RUN_ID"
+          mkdir -m 700 -p "$restore_stage"
+          for scope in public private; do
+            mkdir -p "$site_root/$scope"
+            files_dir="$site_root/$scope/files"
+            if [ -d "$files_dir" ]; then mv "$files_dir" "$restore_stage/$scope-files"; fi
+            mkdir -p "$files_dir"
           done
+          restore_start="$(date +%s)"
+          docker compose run --rm --no-deps -T --entrypoint /build/tools/bin/bench web \
+            --site toeflhouse.localhost restore --force \
+            "sites/toeflhouse.localhost/private/backups/$encrypted_db" \
+            --with-public-files "sites/toeflhouse.localhost/private/backups/${backup_set}-files-enc.tar" \
+            --with-private-files "sites/toeflhouse.localhost/private/backups/${backup_set}-private-files-enc.tar" \
+            --encryption-key "$backup_encryption_key" \
+            --db-root-password "$db_password" --admin-password "$admin_password"
+          docker compose up -d --no-build
+          for j in $(seq 1 60); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 2; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
           restore_elapsed="$(($(date +%s)-restore_start))"
           marker_after="$(docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost console <<PY
           import frappe
@@ -220,17 +456,24 @@ jobs:
           PY
           )"
           printf '%s\n' "$marker_after" | grep -q '^False$'
+          for scope in public private; do
+            restored_file="$(docker compose exec -T web cat "sites/toeflhouse.localhost/$scope/files/product-image-restore-marker.txt")"
+            test "$restored_file" = "$file_marker" || { echo "::error::${scope} file marker was not restored from the encrypted backup"; exit 1; }
+          done
+          rm -rf -- "$restore_stage"
           test "$restore_elapsed" -lt 28800
-          echo "::notice title=Restore rehearsal::restored successfully in ${restore_elapsed}s; post-backup marker absent"
+          echo "::notice title=Encrypted restore rehearsal::encrypted database, public/private file markers and Owner-key site-config recovery restored in ${restore_elapsed}s; post-backup database marker absent"
 
           act activate --confirm toeflhouse.localhost | tee activate.txt
           grep -q 'All gates passed' activate.txt
-          act status | grep -q ': PRODUCTION'
+          act status | tee activated-status.txt
+          grep -q 'Site operational mode: PRODUCTION' activated-status.txt
+          grep -q 'Production authorization: REJECT' activated-status.txt
           set +e; act fee-item --confirm toeflhouse.localhost NO-SUCH-ITEM; rc=$?; set -e
-          test "$rc" = 2  # refused: Item must already exist natively
+          test "$rc" = 2
           act deactivate --confirm toeflhouse.localhost
-          act status | grep -q ': REFUSED'
-          echo "::notice title=Owner activation::REFUSED -> backup gate -> PRODUCTION (all gates) -> fee-item refusal -> REFUSED"
+          act status | grep -q 'Site operational mode: REFUSED'
+          echo "::notice title=Owner site-mode lifecycle::REFUSED -> verified backup/restore -> PRODUCTION mode; production authorization remains REJECT -> REFUSED"
       - name: Browser UI acceptance (real headless Chromium, real login flow)
         # Container health, API calls and unit tests cannot prove the
         # operator actually sees a working UI. This drives a real headless
@@ -396,7 +639,7 @@ jobs:
           if-no-files-found: ignore
       - name: Multi-user tailnet contract (second client, no public exposure, restart persistence)
         # The owner deployment (D13/D15) is one central PC plus authorized
-        # staff PCs over a Tailscale tailnet (runbook section 9). Tailscale
+        # staff PCs over a Tailscale tailnet (runbook section 6). Tailscale
         # itself is external to the product, so this step proves the product
         # contract that makes the tailnet setup work:
         #   * a second, non-administrator client authenticates and uses the ERP
@@ -822,14 +1065,16 @@ jobs:
           print("restart persistence: %d services running, data and access intact" % len(names))
           EOF
           echo "::notice title=Multi-user tailnet contract::second client + tailnet proxy + loopback-only exposure + restart persistence"
-      - name: Upgrade/rollback rehearsal (backup -> rebuild -> migrate -> verify -> restore -> verify)
-        # P1 #8: the upgrade/rollback path is proven on the real product
-        # stack by rehearsing the owner's own procedure:
-        #   backup   the exact command the Windows Backup script runs
+      - name: Upgrade/rollback rehearsal (encrypted backup -> rebuild -> migrate -> verify -> restore -> verify)
+        # P1 #8: the upgrade/rollback path is exercised on the real product
+        # stack with native encrypted Frappe database/files artifacts. The
+        # preceding step qualifies the four-artifact Owner recovery set and
+        # separate-volume restore; this CI stage does not emulate Windows.
+        #   backup   a fresh native encrypted database/files set
         #   rebuild  image rebuild + full container redeploy (volumes intact)
         #   migrate  bench migrate, the migration phase of every ERP upgrade
         #   verify   data and the production activation survive the redeploy
-        #   restore  the runbook section-10 restore of the backup triplet
+        #   restore  the native encrypted files using the recovered site key
         #   verify   data is exactly at the backup point (the record written
         #            after the backup is rolled back; the pre-backup record
         #            is intact) and the site is healthy again
@@ -839,27 +1084,58 @@ jobs:
           act() { docker compose exec -T web /product/activate.py "$@"; }
           site=data/sites/toeflhouse.localhost
           backup_dir=$site/private/backups
+          cleanup_upgrade_sidecars() {
+            find "$backup_dir" -maxdepth 1 -type f -name '*-site_config_backup*.json' -delete 2>/dev/null || true
+          }
+          trap cleanup_upgrade_sidecars EXIT
 
           # (0) The rehearsal targets the site the owner would upgrade: an
           # activated production site (the first-boot step ended in REFUSED
           # after proving deactivation; activation is a reversible site
           # config, and the rehearsal re-proves the gate end to end).
-          act status | grep -q ': REFUSED'
+          act status | grep -q 'Site operational mode: REFUSED'
           act activate --confirm toeflhouse.localhost | tee rehearse-activate.txt
           grep -q 'All gates passed' rehearse-activate.txt
-          act status | grep -q ': PRODUCTION'
+          act status | grep -q 'Site operational mode: PRODUCTION'
           echo "::notice title=Rehearsal start::site re-activated to PRODUCTION"
+          upgrade_file_marker="ERP-UPGRADE-FILE-${GITHUB_RUN_ID}"
+          docker compose exec -T -e CI_UPGRADE_FILE_MARKER="$upgrade_file_marker" web sh -eu -c '
+            mkdir -p sites/toeflhouse.localhost/public/files sites/toeflhouse.localhost/private/files
+            printf "%s" "$CI_UPGRADE_FILE_MARKER" > sites/toeflhouse.localhost/public/files/upgrade-restore-marker.txt
+            printf "%s" "$CI_UPGRADE_FILE_MARKER" > sites/toeflhouse.localhost/private/files/upgrade-restore-marker.txt
+          '
 
-          # (1) BACKUP: the owner's exact backup command.
-          before=$(ls "$backup_dir"/*-database.sql.gz 2>/dev/null | wc -l)
+          # (1) BACKUP: fresh native encrypted database/files payloads.
+          # The Frappe site-config sidecar has a misleading -enc name but is
+          # plaintext; this rollback test does not export it and always removes
+          # it through the EXIT trap. The prior step separately tests its GPG
+          # recovery artifact on the loop-backed secondary volume.
+          before=$(find "$backup_dir" -maxdepth 1 -type f -name '*-database-enc.sql.gz' | wc -l)
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
-          after=$(ls "$backup_dir"/*-database.sql.gz 2>/dev/null | wc -l)
+          after=$(find "$backup_dir" -maxdepth 1 -type f -name '*-database-enc.sql.gz' | wc -l)
           test $((after - before)) = 1
-          triple_base=$(ls -t "$backup_dir" | grep -- '-database\.sql\.gz$' | head -1)
-          triple_base=${triple_base%-database.sql.gz}
-          test -f "$backup_dir/${triple_base}-files.tar"
-          test -f "$backup_dir/${triple_base}-private-files.tar"
-          echo "::notice title=Rehearsal backup::triplet ${triple_base}"
+          encrypted_db=$(find "$backup_dir" -maxdepth 1 -type f -name '*-database-enc.sql.gz' -printf '%T@ %f\n' | sort -nr | head -1 | cut -d' ' -f2-)
+          test -n "$encrypted_db"
+          triple_base=${encrypted_db%-database-enc.sql.gz}
+          test -s "$backup_dir/${triple_base}-files-enc.tar"
+          test -s "$backup_dir/${triple_base}-private-files-enc.tar"
+          for name in "$encrypted_db" "${triple_base}-files-enc.tar" "${triple_base}-private-files-enc.tar"; do
+            packet_output="$(docker compose exec -T web gpg --list-packets "sites/toeflhouse.localhost/private/backups/$name" 2>&1)" || {
+              echo "::error::GPG could not inspect native backup artifact $name"; exit 1;
+            }
+            if [[ "$packet_output" != *":symkey enc packet:"* ]]; then
+              echo "::error::native backup artifact is not symmetrically encrypted: $name"; exit 1;
+            fi
+          done
+          test "$(find "$backup_dir" -maxdepth 1 -type f -name '*-site_config_backup*.json' | wc -l)" -eq 1
+          find "$backup_dir" -maxdepth 1 -type f -name '*-site_config_backup*.json' -delete
+          test -z "$(find "$backup_dir" -maxdepth 1 -type f -name '*-site_config_backup*.json' -print -quit)"
+          echo "::notice title=Encrypted rollback backup::native encrypted database/files set ${triple_base}; plaintext site-config sidecar deleted immediately"
+          post_backup_file_marker="ERP-POST-UPGRADE-FILE-${GITHUB_RUN_ID}"
+          docker compose exec -T -e CI_POST_BACKUP_FILE_MARKER="$post_backup_file_marker" web sh -eu -c '
+            printf "%s" "$CI_POST_BACKUP_FILE_MARKER" > sites/toeflhouse.localhost/public/files/post-backup-upgrade-marker.txt
+            printf "%s" "$CI_POST_BACKUP_FILE_MARKER" > sites/toeflhouse.localhost/private/files/post-backup-upgrade-marker.txt
+          '
 
           # (2) REBUILD: rebuild the application image (cached: same source)
           # and redeploy every container; the data volumes are untouched -
@@ -913,30 +1189,42 @@ jobs:
           EOF
           )
           echo "$verify1" | grep -q "verify#1: pre-backup data intact"
-          act status | grep -q ': PRODUCTION'
-          echo "::notice title=Rehearsal verify 1::data and production activation intact after redeploy + migrate"
+          act status | tee rehearsal-verify1-status.txt
+          grep -q 'Site operational mode: PRODUCTION' rehearsal-verify1-status.txt
+          grep -q 'Production authorization: REJECT' rehearsal-verify1-status.txt
+          echo "::notice title=Rehearsal verify 1::data and PRODUCTION site mode intact after redeploy + migrate; authorization remains REJECT"
 
-          # (5) RESTORE: runbook section 10, as the rehearsal proved it. The
-          # restore runs in the running web container (the stack cannot be
-          # down: exec needs the container, and CI has no concurrent
-          # writers); paths are relative to the bench directory inside the
-          # container, which is where bench resolves them from.
-          # The credentials file is 0600 and owned by the container's
-          # service user; read it in-container as root (see the tailnet
-          # step). db.env is host-generated and host-readable.
+          # (5) RESTORE the encrypted database/files set with the native
+          # Frappe key. Read sensitive values into shell variables without
+          # echoing them. Stop web and background writers; use a one-off web
+          # container so no application request can race the restore.
           admin_pw=$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt | awk '/^Password: /{print $2}')
           db_root_pw=$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)
-          test -n "$admin_pw"
-          test -n "$db_root_pw"
-          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost \
-            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database.sql.gz" \
-            --with-public-files "sites/toeflhouse.localhost/private/backups/${triple_base}-files.tar" \
-            --with-private-files "sites/toeflhouse.localhost/private/backups/${triple_base}-private-files.tar" \
+          backup_encryption_key=$(docker compose exec -T web /home/frappe/bench/env/bin/python -c 'import json; print(json.load(open("/home/frappe/bench/sites/toeflhouse.localhost/site_config.json"))["encryption_key"])')
+          test -n "$admin_pw" && test -n "$db_root_pw" && test -n "$backup_encryption_key"
+          docker compose stop web worker scheduler socketio
+          # Native Frappe restore overlays archive members and leaves files
+          # absent from the backup untouched. Preserve the old trees beside
+          # the site, then extract into empty public/private destinations.
+          restore_stage="$site/private/.ci-restore-files-upgrade-$GITHUB_RUN_ID"
+          mkdir -m 700 -p "$restore_stage"
+          for scope in public private; do
+            mkdir -p "$site/$scope"
+            files_dir="$site/$scope/files"
+            if [ -d "$files_dir" ]; then mv "$files_dir" "$restore_stage/$scope-files"; fi
+            mkdir -p "$files_dir"
+          done
+          docker compose run --rm --no-deps -T --entrypoint /build/tools/bin/bench web \
+            --site toeflhouse.localhost restore --force \
+            "sites/toeflhouse.localhost/private/backups/${encrypted_db}" \
+            --with-public-files "sites/toeflhouse.localhost/private/backups/${triple_base}-files-enc.tar" \
+            --with-private-files "sites/toeflhouse.localhost/private/backups/${triple_base}-private-files-enc.tar" \
+            --encryption-key "$backup_encryption_key" \
             --db-root-password "$db_root_pw" --admin-password "$admin_pw"
-          docker compose restart web
+          docker compose up -d --no-build
           for i in $(seq 1 180); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 5; done
           curl --fail --silent http://127.0.0.1:8000/ >/dev/null
-          echo "::notice title=Rehearsal restore::triplet ${triple_base} restored, web restarted"
+          echo "::notice title=Encrypted rollback restore::native encrypted set ${triple_base} restored; full application stack is back online"
 
           # (6) VERIFY: the data is exactly at the backup point - the
           # pre-backup record is present, the post-backup record is gone -
@@ -966,8 +1254,17 @@ jobs:
           EOF
           )
           echo "$verify2" | grep -q "verify#2: data rolled back to the backup point"
-          act status | grep -q ': PRODUCTION'
-          echo "::notice title=Upgrade/rollback rehearsal::backup -> rebuild -> migrate -> verify -> restore -> verify"
+          for scope in public private; do
+            restored_file="$(docker compose exec -T web cat "sites/toeflhouse.localhost/$scope/files/upgrade-restore-marker.txt")"
+            test "$restored_file" = "$upgrade_file_marker" || { echo "::error::${scope} upgrade file marker was not restored"; exit 1; }
+            docker compose exec -T web sh -eu -c 'test ! -e "$1"' sh \
+              "sites/toeflhouse.localhost/$scope/files/post-backup-upgrade-marker.txt"
+          done
+          rm -rf -- "$restore_stage"
+          act status | tee rehearsal-verify2-status.txt
+          grep -q 'Site operational mode: PRODUCTION' rehearsal-verify2-status.txt
+          grep -q 'Production authorization: REJECT' rehearsal-verify2-status.txt
+          echo "::notice title=Upgrade/rollback rehearsal::encrypted native backup -> rebuild -> migrate -> restore -> verify; site mode PRODUCTION, authorization REJECT"
       - name: Performance baseline (measured, not policy)
         # P1 #9: record the responsiveness of the product's primary
         # surfaces on the final deployed stack (post-rehearsal state).

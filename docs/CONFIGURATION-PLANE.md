@@ -38,9 +38,13 @@ the **complete** owner-configurable carrier inventory as shipped today:
   (each + versions), and `TH Owner Operations Policy` (+ versions) —
   `toefl_house.operations.{alerting, guardian_lifecycle, owner_configuration}`.
   Owner Operations carries reporting review cadence, class-capacity target, tax,
-  transfer/withdrawal/calendar, off-site backup destination reference, and
-  non-secret custody requirements. Keys, credentials, custodian identities and
-  authorization ceremonies remain outside Frappe.
+  transfer/withdrawal/calendar, the Owner-selected local backup schedule and
+  retention, an ASCII-armored **public** recovery key, and non-secret custody
+  requirements. The old off-site destination columns remain hidden/read-only
+  only for historical compatibility; off-site/NAS/second-device/cloud backup
+  is deferred future scope, not a current release gate. Private keys,
+  credentials, custodian identities and authorization ceremonies remain
+  outside Frappe.
 
 Shared invariants for every carrier: Course-Owner-gated guarded commands,
 request-key idempotency, row locking, immutable effective-dated versions,

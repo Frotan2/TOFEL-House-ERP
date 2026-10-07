@@ -108,38 +108,61 @@ The product is bound to `127.0.0.1` only — no interface is opened for the
 LAN or the internet. The selected multi-user deployment (owner decision
 D15) reaches the ERP from authorized staff PCs through the owner's
 Tailscale tailnet: Tailscale Serve on the central PC terminates TLS and proxies to
-`127.0.0.1:8000`, tailnet-only (no Funnel, no public exposure). Realtime
-SocketIO routing through the same Tailscale Serve HTTPS origin is qualified for
-the current central-server + Tailscale deployment; the raw SocketIO port
-remains loopback-only and Funnel/public exposure is prohibited.
+`127.0.0.1:8000`, tailnet-only (no Funnel, no public exposure). The current
+Tailscale Serve instructions route web traffic and `/socket.io`
+through the same HTTPS origin; the raw Socket.IO port remains loopback-only
+and Funnel/public exposure is prohibited. Owned CI verifies an HTTP proxy-style
+foreign-host request and the local Socket.IO healthcheck, but does not run
+Tailscale Serve or prove an actual tailnet/WebSocket upgrade. Record that
+real central-PC check as Owner/non-engineering evidence before claiming the
+Tailscale path qualified.
 The exact setup is in
 [engineering/LAUNCH-RUNBOOK.md](engineering/LAUNCH-RUNBOOK.md), section
 "Multi-user access (central server + Tailscale)".
 
 The owner uses double-click scripts in `product/windows/`: Install, Start,
 Stop, Backup and Repair for daily use, and Activate / Deactivate for the
-one-time production activation and its rollback. Activate runs
-`product/activate.py` inside the container, which executes every gate of
-[engineering/LAUNCH-RUNBOOK.md](engineering/LAUNCH-RUNBOOK.md) and restores
-the previous settings if any gate fails; a failed deactivation verification
-restores the previous settings the same way (the site stays ACTIVE rather
-than half-deactivated).
+guarded operational site-mode switch and rollback. A dedicated native
+Course Owner user (not the built-in Administrator) configures policies in the
+Configuration desk. `Activate TOEFL House ERP.cmd` first verifies the external
+backup set, manifest, current Owner policy and scheduled task on the Windows
+host; only then does it run `product/activate.py` inside the container for the
+site-mode and business-policy mirror checks. Any failed site-mode verification
+restores the previous settings. A failed deactivation verification restores
+the previous settings the same way (the site stays ACTIVE rather than
+half-deactivated).
 
 ## 6. Current state and open items
 
 - The implemented lifecycle above is covered by the owned unit suite and by the
   real-site `Native lifecycle integration` workflow.
 - **Owner values are not configured yet.** Every policy record ships empty and
-  fails closed until the owner enters it through the Configuration and Academic
-  Setup desks.
+  fails closed until the Course Owner enters it through the Configuration and
+  Academic Setup desks. Backup activation additionally requires the Owner's
+  local schedule, retention count, public recovery key and out-of-ERP custody
+  plan.
 - **Pinned dependency advisories (SEC-DEPS-01).** The pinned upstream stack
-  carries known advisories. Each finding is triaged in
-  `engineering/evidence/sec-deps-01/`, and the `Foundation runtime` workflow
-  fails until an upstream release clears them. This is the gate on internet
-  exposure. The desktop runtime is loopback-only.
-- **Backup** is a current local requirement: the desktop Backup flow stores the full native backup on a separate local drive from the live data on the same computer. Restore is qualified against the local backup path. Off-site/NAS/second-device backup is explicitly deferred future scope and is not a current release gate; the Course Owner will decide that later.
-
-
-## Current backup rule
-
-The required launch backup is an encrypted, verified copy on a separate local fixed drive on the same computer. Off-site/NAS/second-device storage is deferred future scope.
+  carries known advisory matches, with per-finding dispositions in
+  `engineering/evidence/sec-deps-01/`. The `Foundation runtime` audit fails
+  closed on a newly untriaged match; it may pass while documented upstream
+  fixes remain unavailable. A green audit therefore proves disposition
+  coverage/runtime checks, not that every vendor advisory is patched or that
+  production is ready. SEC-DEPS-01 remains the gate before any public-internet
+  exposure. The selected desktop deployment is loopback-only with private
+  Tailscale access, so public-edge exposure is not a current launch gate.
+- **Backup** is a current local requirement: the Windows host script creates
+  three native Frappe encrypted database/files artifacts and a fourth
+  OpenPGP-encrypted site-config recovery artifact, verifies/copies the four
+  artifacts plus manifest to a separate fixed local drive on the same
+  computer, and checks Owner policy, Task Scheduler, hashes and retention.
+  The unencrypted native site-config sidecar is never copied to the external
+  backup set. Owned Product-image CI uses a disposable synthetic Owner key and
+  a loop-backed separate filesystem to qualify artifact encryption/recovery,
+  copy/return and restore into clean public/private file trees when that
+  workflow passes (pinned Frappe restore otherwise overlays files without
+  removing post-backup extras); it cannot qualify a real Windows drive,
+  PowerShell/GPG installation, Task Scheduler, Owner key custody or the actual
+  restore ceremony. Off-site/NAS/second-device/cloud backup is
+  explicitly deferred future scope and is not a current release gate.
+- **Production authorization remains REJECT.** The operational site-mode
+  transition to PRODUCTION is a guarded mechanism, not release/launch approval.

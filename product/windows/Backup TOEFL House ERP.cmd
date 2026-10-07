@@ -6,14 +6,24 @@ rem current launch requirement.
 cd /d "%~dp0.."
 title Backing up TOEFL House ERP
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Backup TOEFL House ERP.ps1"
-if errorlevel 1 goto :backupfailed
+set "BACKUP_EXIT=%ERRORLEVEL%"
+if "%BACKUP_EXIT%"=="2" goto :policyrequired
+if not "%BACKUP_EXIT%"=="0" goto :backupfailed
 echo.
-echo  Backup completed and verified on a separate local drive.
+echo  Backup completed, GPG encryption and integrity verified on a separate local drive.
+echo  Owner-configured schedule and retention are installed.
 pause
 exit /b 0
+:policyrequired
+echo.
+echo  No backup was created because the Owner backup policy is incomplete.
+echo  Configure the local nightly time, retention (at least two versions), and public recovery key in the ERP Configuration desk.
+echo  Keep the matching private key outside Frappe and the backup drive. Activation remains REFUSED until a complete backup is verified.
+pause
+exit /b 2
 :backupfailed
 echo.
 echo  Backup failed or no separate local drive was available.
-echo  No success is reported until encryption, copy and SHA-256 verification pass.
+echo  No success is reported until actual GPG encryption, copy and SHA-256 verification pass.
 pause
 exit /b 1

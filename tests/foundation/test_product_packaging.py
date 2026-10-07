@@ -266,6 +266,12 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("Get-FileHash", body)
         self.assertIn("SHA256", body)
         self.assertIn("manifest.json", body)
+        self.assertIn("function Test-ExactBackupSetFiles", body)
+        self.assertIn("$entries.Count -ne 5", body)
+        self.assertIn("$entry.PSIsContainer", body)
+        self.assertIn("ReparsePoint", body)
+        self.assertIn("only manifest.json and exactly four safe encrypted payload files", body)
+        self.assertIn("A plaintext Frappe site-config sidecar remains in the native backup folder", body)
 
     def test_install_generates_password_as_variable_not_literal(self):
         install = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
@@ -498,6 +504,44 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn("Funnel", runbook)  # the document must warn it stays off
         self.assertIn("no public port", runbook.lower())
         self.assertIn("Restore from backup (operator)", runbook)
+
+    def test_product_restore_replaces_file_trees_and_checks_both_scopes(self):
+        # Pinned Frappe restore uses tar extraction into existing paths, so a
+        # real snapshot rehearsal must stage the old trees, extract into clean
+        # public/private targets, and prove both restored and post-backup file
+        # state. Keep the human restore ceremony consistent with that behavior.
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text()
+        self.assertIn('restore_stage="$site_root/private/.ci-restore-files-$GITHUB_RUN_ID"', workflow)
+        self.assertIn('restore_stage="$site/private/.ci-restore-files-upgrade-$GITHUB_RUN_ID"', workflow)
+        self.assertIn('mv "$files_dir" "$restore_stage/$scope-files"', workflow)
+        self.assertIn('product-image-restore-marker.txt', workflow)
+        self.assertIn('upgrade-restore-marker.txt', workflow)
+        self.assertIn('post-backup-upgrade-marker.txt', workflow)
+        self.assertIn("test ! -e \"$1\"", workflow)
+        self.assertIn('restored_file" = "$file_marker"', workflow)
+        self.assertIn('restored_file" = "$upgrade_file_marker"', workflow)
+        self.assertIn('rm -rf -- "$restore_stage"', workflow)
+        self.assertIn("it does not remove files absent from the", runbook)
+        self.assertIn('stage="$site/private/$RESTORE_STAGE_NAME"', runbook)
+        self.assertIn('mv "$files" "$stage/$scope-files"', runbook)
+        self.assertIn("umask 077", runbook)
+        self.assertIn("docker compose exec -T web sh -eu -c 'rm -rf", runbook)
+
+        # Both rehearsals must stage the old trees after quiescing writers and
+        # before the destructive native restore invocation.
+        first_stage = workflow.index('restore_stage="$site_root/private/.ci-restore-files-')
+        first_stop = workflow.rfind("docker compose stop web worker scheduler socketio", 0, first_stage)
+        first_restore = workflow.index("restore --force", first_stage)
+        self.assertGreaterEqual(first_stop, 0)
+        self.assertLess(first_stop, first_stage)
+        self.assertLess(first_stage, first_restore)
+        upgrade_stage = workflow.index('restore_stage="$site/private/.ci-restore-files-upgrade-')
+        upgrade_stop = workflow.rfind("docker compose stop web worker scheduler socketio", 0, upgrade_stage)
+        upgrade_restore = workflow.index("restore --force", upgrade_stage)
+        self.assertGreaterEqual(upgrade_stop, 0)
+        self.assertLess(upgrade_stop, upgrade_stage)
+        self.assertLess(upgrade_stage, upgrade_restore)
 
 
 class EntrypointContract(unittest.TestCase):

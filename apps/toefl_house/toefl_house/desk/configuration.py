@@ -18,6 +18,7 @@ Two honesties are load-bearing here:
 import frappe
 
 from toefl_house.configuration import rules as foundation
+from toefl_house.operations.owner_configuration import current_backup_policy
 from toefl_house.desk import (
     LIMIT_QUEUES,
     project_count,
@@ -95,9 +96,9 @@ GUARDIAN_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
                            "consent_evidence", "consent_expiry_days",
                            "reason", "set_by", "set_on", "superseded_on"]
 
-# Domains with no configuration surface yet. Each renders as an
-# explicit "not implemented" fact — never a dead link, never a guessing
-# readiness badge.
+# Domains whose business policy remains a decision input without a qualified
+# canonical runtime consumer. Each renders as an explicit deferred fact —
+# never a dead link, never a guessing readiness badge.
 FUTURE_DOMAINS = (
     ("reporting-metrics", "Reporting & Metrics",
      "Owner-selected reporting review interval and class-capacity target are Owner decision inputs; "
@@ -108,12 +109,14 @@ FUTURE_DOMAINS = (
     ("enrollment-lifecycle", "Enrollment & Lifecycle",
      "Withdrawal/dismissal remains governed by Enrollment Exit Policy; transfer and calendar terms are decision carriers only "
      "and remain deferred/not runtime-bound until their canonical lifecycle consumers are explicitly implemented and qualified."),
-    ("backup-recovery", "Backup & Recovery",
-     "Off-site requirement and non-secret destination reference are recovery requirements only; "
-     "they do not constitute backup execution evidence or production authorization."),
     ("security", "Security",
      "Custody requirements and recovery quorum are decision requirements only; recording them is not proof "
      "that recovery controls are implemented. Keys, credentials, custodians and authorization ceremonies remain outside Frappe."),
+)
+
+CURRENT_BACKUP_DOMAIN = (
+    "Backup & Recovery",
+    "The current local release scope is a nightly encrypted backup copied to a separate local drive, with Owner-selected version retention. Off-site, NAS, second-device and cloud copies remain deferred. Restore and release authorization require separate evidence.",
 )
 
 
@@ -179,6 +182,11 @@ def work():
                                 items=[_owner_policy_item(today, title, body)],
                                 empty_title=title,
                                 empty_body=body))
+    backup_title, backup_body = CURRENT_BACKUP_DOMAIN
+    sections.append(section(
+        "backup-recovery", backup_title, "queue",
+        items=[_owner_policy_item(today, backup_title, backup_body)],
+        empty_title=backup_title, empty_body=backup_body))
     sections.append(
         section("owner-policies", "Course Owner Policy Controls", "queue",
                 items=[_native_owner_policy_item(*spec) for spec in NATIVE_OWNER_POLICIES],
@@ -265,17 +273,18 @@ def _native_owner_policy_item(sid, title, doctype, create_endpoint,
 
 def _owner_policy_item(today, title, body):
     """Project the canonical Course Owner carrier and its guarded commands."""
+    is_backup = title == "Backup & Recovery"
+    item_id = "backup-recovery" if is_backup else OWNER_POLICY
     policy = project_rows("configuration", OWNER_POLICY,
                           ["name", "code", "title", "status", "description"],
                           limit=1)
     if not policy:
-        status = "Owner configuration required"
-        detail = "No owner policy exists yet; this domain has no governing terms."
-        next_text = "Create TH Owner Operations Policy, then add and validate its first effective-dated version."
         return {
-            "id": OWNER_POLICY, "person": "TH Owner Operations Policy",
-            "detail": detail, "status": status, "stage": "Owner configuration",
-            "stage_definition": body, "next": next_text,
+            "id": item_id, "person": title if is_backup else "TH Owner Operations Policy",
+            "detail": "No owner policy exists yet; this domain has no governing terms.",
+            "status": "Owner configuration required", "stage": "Owner configuration",
+            "stage_definition": body,
+            "next": "Create TH Owner Operations Policy, then add and validate its first effective-dated version.",
             "next_role": "Course Owner", "waiting_since": None,
             "action": {
                 "endpoint": "toefl_house.operations.owner_configuration.create_owner_operations_policy",
@@ -284,16 +293,36 @@ def _owner_policy_item(today, title, body):
             },
         }
     row = policy[0]
-    status = row["status"]
-    detail = "Owner decision inputs cover reporting/capacity, tax, transfer/withdrawal, calendar, backup and custody; only explicitly bound canonical consumers may treat them as runtime policy."
-    if status != "Active":
+    if row["status"] != "Active":
         status_label = "Owner policy retired"
-        next_text = "Reactivate the owner policy before relying on these terms."
+        detail = "Owner policy is retired; its terms cannot govern the scheduled backup."
+        next_text = "Reactivate the owner policy, then add and validate current effective-dated terms."
+    elif is_backup:
+        backup = current_backup_policy(today)
+        if backup.get("configured") is True:
+            status_label = "Backup policy configured"
+            detail = (f"Nightly at {backup['schedule_time']} local time; "
+                      f"retain {backup['retention_versions']} verified encrypted versions "
+                      "on the separate local drive; the configured public recovery key "
+                      "encrypts the site-config recovery artifact.")
+            next_text = "Keep the matching private recovery key under the Owner's separate custody requirement, then run Backup.ps1 to install or refresh the Windows task."
+        else:
+            status_label = "Owner backup configuration required"
+            detail = "Nightly schedule, multi-version retention count, or ASCII-armored public recovery key is missing or invalid. Backup activation remains refused."
+            next_text = (
+                "Complete every required Owner field with approved values "
+                "(reporting review, class capacity, tax, transfers/withdrawals, "
+                "calendar, nightly backup, retention, public key, custody and "
+                "quorum); no defaults or placeholders. Set an effective-dated "
+                "version, validate it, then double-click Backup TOEFL House ERP.cmd. "
+                "Keep the matching private key outside Frappe and the backup drive."
+            )
     else:
         status_label = "Owner policy active"
+        detail = "Owner decision inputs cover reporting/capacity, tax, transfer/withdrawal, calendar, backup and custody; only explicitly bound canonical consumers may treat them as runtime policy."
         next_text = "Add or replace effective-dated terms, then validate the current policy."
     return {
-        "id": row["code"], "person": row["title"],
+        "id": item_id, "person": title if is_backup else row["title"],
         "detail": detail, "status": status_label, "stage": "Owner configuration",
         "stage_definition": body, "next": next_text,
         "next_role": "Course Owner", "waiting_since": None,

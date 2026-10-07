@@ -33,6 +33,10 @@ AUDIT = "TH Configuration Audit Event"
 # twelve academic catalog commands (S5 idempotency: they validate keys
 # and now keep receipts, so a retried call replays instead of erroring).
 KIND_AUTHORITY = {
+    "create_owner_operations_policy": "business_policy",
+    "set_owner_operations_policy_version": "business_policy",
+    "set_owner_operations_policy_status": "business_policy",
+    "validate_owner_operations_policy": "business_policy",
     "create_assessment_policy": "business_policy",
     "set_assessment_policy_version": "business_policy",
     "set_assessment_policy_status": "business_policy",
