@@ -138,10 +138,20 @@ jobs:
           echo "::notice title=First boot::site answered after ~$((i*10))s"
           act() { docker compose exec -T web /product/activate.py "$@"; }
           act status | tee status.txt; grep -q ': REFUSED' status.txt
+          # Seed the same native backup artifact the Owner's Backup command
+          # creates before testing activation. The production gate is
+          # intentionally fail-closed: activation must refuse with no recent
+          # backup, then succeed only after the qualifying backup exists.
           set +e; act activate --confirm toeflhouse.localhost; rc=$?; set -e
           test "$rc" = 2  # refused: no backup yet
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
           echo "::notice title=Backup rehearsal::full database/files/private-files backup created"
+          act activate --confirm toeflhouse.localhost | tee pre_restore_activate.txt
+          grep -q 'All gates passed' pre_restore_activate.txt
+          act status | grep -q ': PRODUCTION'
+          echo "::notice title=Backup gate::activation passed only after a recent native backup was present"
+          act deactivate --confirm toeflhouse.localhost
+          act status | grep -q ': REFUSED'
           # Native encryption contract: enable it for one disposable backup,
           # verify the encrypted artifacts, then restore the prior disabled
           # state so the existing unencrypted restore rehearsal remains unchanged.
