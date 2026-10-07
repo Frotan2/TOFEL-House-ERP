@@ -274,7 +274,7 @@ guided operator step, not a double-click (a restore overwrites data):
    ERP.cmd` runs `docker compose down`, which removes the container the
    restore executes in. Choose a moment when nobody is mid-command; the
    restore takes a few seconds.
-2. Copy the chosen triplet (from the external drive) into
+2. Copy the chosen encrypted backup set (from the separate local drive) into
    `data\sites\toeflhouse.localhost\private\backups` — its original
    location; no other copy is needed.
 3. Operator step in a terminal inside the product folder (the paths are
@@ -282,7 +282,7 @@ guided operator step, not a double-click (a restore overwrites data):
    bench resolves them from):
 
    ```
-   docker compose exec web /build/tools/bin/bench --site toeflhouse.localhost restore "sites/toeflhouse.localhost/private/backups/<triple name>-database.sql.gz" --with-public-files "sites/toeflhouse.localhost/private/backups/<triple name>-files.tar" --with-private-files "sites/toeflhouse.localhost/private/backups/<triple name>-private-files.tar" --db-root-password <password from data\secrets\db.env> --admin-password <Administrator password from data\sites\toeflhouse.localhost\private\first-run-credentials.txt>
+   docker compose exec web /build/tools/bin/bench --site toeflhouse.localhost restore "sites/toeflhouse.localhost/private/backups/<triple name>-database-enc.sql.gz" --with-public-files "sites/toeflhouse.localhost/private/backups/<triple name>-files-enc.tar" --with-private-files "sites/toeflhouse.localhost/private/backups/<triple name>-private-files-enc.tar" --db-root-password <password from data\secrets\db.env> --admin-password <Administrator password from data\sites\toeflhouse.localhost\private\first-run-credentials.txt>
    ```
 
 4. `docker compose restart web` (a terminal step, same folder), then log in;
@@ -295,7 +295,7 @@ activation state `site_config.json` currently carries.
 
 ## 11. Record the rehearsal
 
-The Owner runs this runbook on the local server and records each run. A successful local Bench backup/restore rehearsal is the current backup evidence requirement. The backup must be kept on a separate local drive from the live data. Off-site/NAS/second-device backup is deferred future scope and is not a current launch gate:
+The Owner runs this runbook on the local server and records each run. A successful encrypted local secondary-drive backup/restore rehearsal is the current backup evidence requirement. The backup must be kept on a separate local drive from the live data. Off-site/NAS/second-device backup is deferred future scope and is not a current launch gate:
 
 | Date | Site | Step-4 site_mode | Step-5 mirror | Step-6 mixed | Elapsed | Outcome |
 | ---- | ---- | ---------------- | ------------- | ------------ | ------- | ------- |
