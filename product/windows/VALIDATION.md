@@ -152,7 +152,7 @@ reach it over that private network: Tailscale is installed on the central PC
 and the staff PCs, and one command on the central PC
 (`tailscale serve`, written out in the launch runbook section "Multi-user
 access (central server + Tailscale)") makes the ERP available to the tailnet
-as `https://<central-PC-name>.<your-tailnet>.ts.net/`. Access is limited to
+as `https://<central-PC-name>.<your-tailnet>.ts.net/`. The supported setup also mounts `/socket.io` to the local SocketIO service so realtime requests use the same HTTPS origin. Access is limited to
 your Tailscale network members only; no firewall rule or public address is
 involved.
 
