@@ -393,12 +393,10 @@ class ImageRecreationContract(unittest.TestCase):
                               text, flags=re.M).group(1)
             self.assertIn("image: toefl-house-erp-app:local", block, svc)
 
-    def test_daily_launcher_rebuilds_before_redeploy(self):
+    def test_daily_launcher_reuses_the_reviewed_image_without_rebuild(self):
         start = (PRODUCT / "windows" / "Start TOEFL House ERP.cmd").read_text()
-        self.assertLess(start.index("docker compose build"),
-                        start.index("docker compose up -d"),
-                        "Start must rebuild the image before up -d so a "
-                        "changed image is reliably recreated")
+        self.assertIn("docker compose up -d --no-build", start)
+        self.assertNotIn("docker compose build", start)
 
     def test_missing_db_env_has_a_guided_path(self):
         # If data\secrets\db.env is missing, every compose command fails
@@ -615,14 +613,15 @@ class BootstrapLogicContract(unittest.TestCase):
         self.assertIn("/build/sites-seed/", (PRODUCT / "app.Dockerfile").read_text())
 
     def test_readiness_waits_require_a_successful_page(self):
-        # An HTTP error page must never count as "ready": the 127.0.0.1 site
-        # bug (run 36758667184) answered errors that plain curl accepted.
-        for name in ("Install", "Start", "Repair"):
+        # Readiness must never accept an HTTP error page. Install uses a
+        # fail-closed curl probe; the daily/recovery launchers use the Docker
+        # web healthcheck, whose probe is itself curl --fail.
+        install = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
+        self.assertIn("curl --fail --silent http://127.0.0.1:8000/ ", install)
+        for name in ("Start", "Repair"):
             text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
-            probes = [line for line in text.splitlines() if "curl " in line]
-            self.assertTrue(probes, name)
-            for line in probes:
-                self.assertIn("curl --fail --silent http://127.0.0.1:8000/ ", line, name)
+            self.assertIn("State.Health.Status", text, name)
+            self.assertIn('findstr /x /c:"healthy"', text, name)
 
     def test_web_server_pins_the_product_site(self):
         # Regression (product-image run 36758667184): frappe resolves the site
