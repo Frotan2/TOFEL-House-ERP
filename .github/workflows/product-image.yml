@@ -170,6 +170,8 @@ jobs:
           # (the frappe global the inlined login handler needs) is a built
           # bundle. Show exactly which assets the served page references and
           # whether each answers, so a missing bundle is visible plainly.
+          # The grep is pipefail-proof: a page that references no /assets at
+          # all must hit the friendly diagnostic below, not a silent exit 1.
           login_html="$(curl --fail --silent --location http://127.0.0.1:8000/)" || {
               # A dead page must not die silently: show its status and body.
               page_code="$(curl --silent -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:8000/ || true)"
@@ -177,10 +179,14 @@ jobs:
               echo "::error::login page fetch failed (HTTP ${page_code:-no response})::${page_snippet:0:400}"
               exit 1
           }
-          asset_list="$(printf "%s" "$login_html" | tr '"' '\n' | grep -E '^/assets/[a-zA-Z0-9_./-]+\.(js|css)$' | sort -u)"
+          asset_list="$(printf "%s" "$login_html" | tr '"' '\n' | { grep -E '^/assets/[a-zA-Z0-9_./-]+\.(js|css)$' || true; } | sort -u)"
           if [ -z "$asset_list" ]; then
+              # Bash substring, not a pipe: head -c on a long page can SIGPIPE
+              # printf and kill the diagnostic under pipefail.
+              page_start="${login_html:0:500}"
+              page_start="${page_start//$'\n'/ }"
               echo "::error::login page references no /assets/ scripts or styles at all"
-              echo "::error::page start::$(printf "%s" "$login_html" | head -c 500 | tr "\n" " ")"
+              echo "::error::page start::${page_start}"
           fi
           test -n "$asset_list"
           printf "%s\n" "$asset_list" | while IFS= read -r asset; do
@@ -191,8 +197,6 @@ jobs:
               fi
               test "$code" = "200"
           done
-          tagline="$(printf "%s" "$login_html" | tr "\n" " " | grep -oE "<(script|link)[^>]*education[^>]*>" | head -3)"
-          echo "::notice title=education tags in served HTML::${tagline:-no education tags}"
           cat > browser_ui_check.py <<'PYEOF'
           import os, pathlib, sys, traceback
           def _ci_excepthook(typ, value, tb):
