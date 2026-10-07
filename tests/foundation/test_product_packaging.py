@@ -889,8 +889,8 @@ class DesktopRuntimeReliabilityContract(unittest.TestCase):
         # The image default entrypoint is bootstrap.py and requires web-only
         # /run/secrets/db.env; inheriting it causes restart crash loops.
         text = COMPOSE.read_text()
-        worker = re.search(r"^  worker:\\n(.*?)(?=^  \\S)", text, flags=re.M | re.S).group(1)
-        socketio = re.search(r"^  socketio:\\n(.*?)(?=^  \\S)", text, flags=re.M | re.S).group(1)
+        worker = re.search(r"^  worker:\n(.*?)(?=^  \S)", text, flags=re.M | re.S).group(1)
+        socketio = re.search(r"^  socketio:\n(.*?)(?=^  \S)", text, flags=re.M | re.S).group(1)
         self.assertIn('entrypoint: ["/build/tools/bin/bench"]', worker)
         self.assertIn('command: ["worker", "--queue", "short,default,long"]', worker)
         self.assertIn('entrypoint: ["node"]', socketio)
