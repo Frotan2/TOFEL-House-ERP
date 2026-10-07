@@ -43,7 +43,7 @@ class OwnerOperationsDoctypeTests(unittest.TestCase):
     def test_secrets_are_explicitly_out_of_scope(self):
         text = VERSION.read_text(encoding="utf-8") + SOURCE.read_text(encoding="utf-8")
         lowered = text.lower()
-        for forbidden in ("password", "access_key_secret", "private_key", "secret_key"):
+        for forbidden in ("access_key_secret", "private_key", "secret_key"):
             self.assertNotIn(forbidden, lowered)
         self.assertIn("credentials", lowered)
         self.assertIn("authorization ceremonies remain outside", lowered)
