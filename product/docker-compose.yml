@@ -128,7 +128,7 @@ services:
 
   redis-queue:
     # Digest pinned: Redis 8.6.6 (see foundation-version-matrix.json).
-    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66434f33dd0a502ce03cdcd36
+    image: redis@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36
     container_name: toefl-house-erp-redis-queue
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
