@@ -4330,7 +4330,7 @@ def main():
             n_before=frappe.db.count('TH Placement Audit Event',{'operation':opname})
             as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
                 'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
-                '2026-09-05','2026-10-05'))
+                pf_post,pf_due))
             assert frappe.db.count('TH Placement Audit Event',{'operation':opname})==n_before
             # the discounted fee belongs to the admission->enrollment journey:
             pe_student=frappe.db.get_value('Program Enrollment',second['program_enrollment'],'student')
