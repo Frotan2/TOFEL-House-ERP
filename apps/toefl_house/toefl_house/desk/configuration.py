@@ -1,9 +1,10 @@
 """TOEFL House Configuration desk: the Course Owner configuration map and guarded control surface.
 
-Audience: Course Owner only. This desk is a read-only map over the nine
-configuration domains — it shows each domain's computed configuration
-readiness and links to the domain's own surface. It configures nothing
-itself and offers no mutating action in Phase 1.
+Audience: Course Owner only. This desk is a projection over the configuration
+domains. It computes readiness from canonical records and exposes guarded
+Course Owner actions where the domain has a supported configuration carrier.
+The desk never mutates documents directly and never decides production
+readiness.
 
 Two honesties are load-bearing here:
 
@@ -177,21 +178,18 @@ def work():
 
 
 def _owner_policy_item(today, title, body):
-    """Expose the real Course Owner policy commands on the Configuration desk.
-
-    The desk remains a projection: actions invoke guarded commands owned by
-    operations.owner_configuration; no direct document mutation is exposed.
-    """
+    """Project the canonical Course Owner carrier and its guarded commands."""
     policy = project_rows("configuration", OWNER_POLICY,
                           ["name", "code", "title", "status", "description"],
                           limit=1)
     if not policy:
+        status = "Owner configuration required"
+        detail = "No owner policy exists yet; this domain has no governing terms."
+        next_text = "Create TH Owner Operations Policy, then add and validate its first effective-dated version."
         return {
             "id": OWNER_POLICY, "person": "TH Owner Operations Policy",
-            "detail": "No policy exists yet; create the Course Owner policy here.",
-            "status": "Not configured", "stage": "Owner configuration",
-            "stage_definition": body,
-            "next": "Create the policy, then add its first effective-dated version.",
+            "detail": detail, "status": status, "stage": "Owner configuration",
+            "stage_definition": body, "next": next_text,
             "next_role": "Course Owner", "waiting_since": None,
             "action": {
                 "endpoint": "toefl_house.operations.owner_configuration.create_owner_operations_policy",
@@ -200,12 +198,18 @@ def _owner_policy_item(today, title, body):
             },
         }
     row = policy[0]
+    status = row["status"]
+    detail = "Canonical owner terms cover reporting, capacity, tax, transfer/withdrawal, calendar, backup and custody requirements."
+    if status != "Active":
+        status_label = "Owner policy retired"
+        next_text = "Reactivate the owner policy before relying on these terms."
+    else:
+        status_label = "Owner policy active"
+        next_text = "Add or replace effective-dated terms, then validate the current policy."
     return {
         "id": row["code"], "person": row["title"],
-        "detail": "Owner-configured cross-domain terms: reporting, capacity, tax, transfer/withdrawal, calendar, backup and custody requirements.",
-        "status": row["status"], "stage": "Owner configuration",
-        "stage_definition": body,
-        "next": "Add or replace the effective-dated owner terms; validate after every change.",
+        "detail": detail, "status": status_label, "stage": "Owner configuration",
+        "stage_definition": body, "next": next_text,
         "next_role": "Course Owner", "waiting_since": None,
         "actions": [
             {
