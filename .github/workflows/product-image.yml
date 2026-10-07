@@ -904,7 +904,7 @@ jobs:
           test -n "$admin_pw"
           test -n "$db_root_pw"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost \
-            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database.sql.gz" \
+            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database-enc.sql.gz" \
             --with-public-files "sites/toeflhouse.localhost/private/backups/${triple_base}-files-enc.tar" \
             --with-private-files "sites/toeflhouse.localhost/private/backups/${triple_base}-private-files-enc.tar" \
             --db-root-password "$db_root_pw" --admin-password "$admin_pw"
@@ -980,7 +980,7 @@ jobs:
           done
           docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
  | head -1)
-          triple_base=${triple_base%-database.sql.gz}
+          triple_base=${triple_base%-database-enc.sql.gz}
           test -f "$backup_dir/${triple_base}-files-enc.tar"
           test -f "$backup_dir/${triple_base}-private-files-enc.tar"
           echo "::notice title=Rehearsal backup::encrypted triplet ${triple_base}"
@@ -1053,7 +1053,7 @@ jobs:
           test -n "$admin_pw"
           test -n "$db_root_pw"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost \
-            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database.sql.gz" \
+            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database-enc.sql.gz" \
             --with-public-files "sites/toeflhouse.localhost/private/backups/${triple_base}-files-enc.tar" \
             --with-private-files "sites/toeflhouse.localhost/private/backups/${triple_base}-private-files-enc.tar" \
             --db-root-password "$db_root_pw" --admin-password "$admin_pw"
@@ -1129,7 +1129,7 @@ jobs:
           done
           docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
  | head -1)
-          triple_base=${triple_base%-database.sql.gz}
+          triple_base=${triple_base%-database-enc.sql.gz}
           test -f "$backup_dir/${triple_base}-files-enc.tar"
           test -f "$backup_dir/${triple_base}-private-files-enc.tar"
           echo "::notice title=Rehearsal backup::encrypted triplet ${triple_base}"
@@ -1202,7 +1202,7 @@ jobs:
           test -n "$admin_pw"
           test -n "$db_root_pw"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost \
-            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database.sql.gz" \
+            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database-enc.sql.gz" \
             --with-public-files "sites/toeflhouse.localhost/private/backups/${triple_base}-files-enc.tar" \
             --with-private-files "sites/toeflhouse.localhost/private/backups/${triple_base}-private-files-enc.tar" \
             --db-root-password "$db_root_pw" --admin-password "$admin_pw"
@@ -1278,7 +1278,7 @@ jobs:
           done
           docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
  | head -1)
-          triple_base=${triple_base%-database.sql.gz}
+          triple_base=${triple_base%-database-enc.sql.gz}
           test -f "$backup_dir/${triple_base}-files-enc.tar"
           test -f "$backup_dir/${triple_base}-private-files-enc.tar"
           echo "::notice title=Rehearsal backup::encrypted triplet ${triple_base}"
@@ -1351,7 +1351,603 @@ jobs:
           test -n "$admin_pw"
           test -n "$db_root_pw"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost \
-            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database.sql.gz" \
+            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database-enc.sql.gz" \
+            --with-public-files "sites/toeflhouse.localhost/private/backups/${triple_base}-files-enc.tar" \
+            --with-private-files "sites/toeflhouse.localhost/private/backups/${triple_base}-private-files-enc.tar" \
+            --db-root-password "$db_root_pw" --admin-password "$admin_pw"
+          docker compose restart web
+          for i in $(seq 1 180); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 5; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
+          echo "::notice title=Rehearsal restore::triplet ${triple_base} restored, web restarted"
+
+          # (6) VERIFY: the data is exactly at the backup point - the
+          # pre-backup record is present, the post-backup record is gone -
+          # and the site is healthy in production mode. (exec -i + marker
+          # assertion, as in verify#1.)
+          verify2=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          import sys
+          import traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::rehearsal verify#2 failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
+          # Run from bench/sites: frappe's database logger opens the
+          # CWD-relative ../logs/<name>.log (see the tailnet staff-user
+          # setup above); an exec inherits the container WORKDIR (bench).
+          import os
+          os.chdir("/home/frappe/bench/sites")
+          import frappe
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
+          frappe.connect()
+          assert frappe.db.exists("Student", {"first_name": "Tailnet", "last_name": "Marker"}), \
+              "pre-backup marker student lost in the restore"
+          assert not frappe.db.exists("Student", {"student_email_id": "upgrade-probe@example.test"}), \
+              "post-backup probe record survived the restore"
+          print("verify#2: data rolled back to the backup point")
+          EOF
+          )
+          echo "$verify2" | grep -q "verify#2: data rolled back to the backup point"
+          act status | grep -q ': PRODUCTION'
+          echo "::notice title=Upgrade/rollback rehearsal::backup -> rebuild -> migrate -> verify -> restore -> verify"
+      - name: Performance baseline (measured, not policy)
+        # P1 #9: record the responsiveness of the product's primary
+        # surfaces on the final deployed stack (post-rehearsal state).
+        # The owner has set no performance target, so the numbers are a
+        # baseline record, not a gate: the script carries no thresholds.
+        working-directory: product
+        run: |
+          set -euo pipefail
+          docker compose exec -T web \
+            env PERF_DESK_USER="staff-a@example.test" PERF_DESK_PASSWORD="staff-a-ci-123" \
+            python3 /product/perf_baseline.py | tee perf-baseline.json
+          python3 - <<'EOF'
+          import json
+          data = json.load(open("perf-baseline.json"))
+          for name, s in data["surfaces"].items():
+              if "median_ms" in s:
+                  print("::notice title=Baseline %s::min %.1f / median %.1f / max %.1f ms (%d samples)"
+                        % (name, s["min_ms"], s["median_ms"], s["max_ms"], s["samples"]))
+                  if not s.get("ok", True):
+                      print("::warning title=Baseline %s::record not ok: %s" % (name, s.get("error", "")))
+              else:
+                  print("::notice title=Baseline %s::%s" % (name, s.get("skipped", s.get("error", ""))))
+          print("::notice title=Performance baseline::measured, not policy (no owner capacity target exists)")
+          EOF
+      - name: Stack logs on failure
+        if: failure()
+        working-directory: product
+        run: |
+          # CI annotations cap the whole run at ~19 lines, and the
+          # session probe already annotates from the failed tailnet step
+          # itself; keep this step to the minimum context: which later
+          # stage started, and the tail of the web container log.
+          for f in rehearse-activate.txt perf-baseline.json; do
+            if [ -f "$f" ]; then echo "::error::marker present: $f"; else echo "::error::marker absent: $f"; fi
+          done
+          docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
+ | head -1)
+          triple_base=${triple_base%-database-enc.sql.gz}
+          test -f "$backup_dir/${triple_base}-files-enc.tar"
+          test -f "$backup_dir/${triple_base}-private-files-enc.tar"
+          echo "::notice title=Rehearsal backup::encrypted triplet ${triple_base}"
+
+          # (2) REBUILD: rebuild the application image (cached: same source)
+          # and redeploy every container; the data volumes are untouched -
+          # exactly what a software update does on the owner's machine. The
+          # db-data volume identity is asserted explicitly across the
+          # rebuild (content survival is proven by the marker data below).
+          vol_before=$(docker volume inspect toefl-house-erp_db-data --format '{{.Name}}|{{.Driver}}')
+          docker compose build
+          docker compose up -d --force-recreate
+          for i in $(seq 1 180); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 5; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
+          vol_after=$(docker volume inspect toefl-house-erp_db-data --format '{{.Name}}|{{.Driver}}')
+          test "$vol_before" = "$vol_after"
+          echo "::notice title=Rehearsal rebuild::stack redeployed after ~$((i*5))s; db-data volume identity unchanged"
+
+          # (3) MIGRATE: the upgrade's migration phase (the boot entrypoint
+          # already ran one; the explicit run is the command the owner's
+          # upgrade performs).
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost migrate
+          echo "::notice title=Rehearsal migrate::bench migrate OK"
+
+          # (4) VERIFY: pre-backup data and the production activation
+          # survived the redeploy; then a post-backup record that the
+          # restore must roll back. (exec -i + marker assertion: a
+          # script that never ran must never count as verified.)
+          verify1=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          import sys
+          import traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::rehearsal verify#1 failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
+          # Run from bench/sites: frappe's database logger opens the
+          # CWD-relative ../logs/<name>.log (see the tailnet staff-user
+          # setup above); an exec inherits the container WORKDIR (bench).
+          import os
+          os.chdir("/home/frappe/bench/sites")
+          import frappe
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
+          frappe.connect()
+          assert frappe.db.exists("Student", {"first_name": "Tailnet", "last_name": "Marker"}), \
+              "pre-backup marker student lost in the redeploy"
+          email = "upgrade-probe@example.test"
+          if not frappe.db.exists("Student", {"student_email_id": email}):
+              frappe.get_doc({"doctype": "Student", "first_name": "Upgrade", "last_name": "Probe",
+                              "student_email_id": email}).insert(ignore_permissions=True)
+              frappe.db.commit()
+          assert frappe.db.exists("Student", {"student_email_id": email})
+          print("verify#1: pre-backup data intact; post-backup probe record created")
+          EOF
+          )
+          echo "$verify1" | grep -q "verify#1: pre-backup data intact"
+          act status | grep -q ': PRODUCTION'
+          echo "::notice title=Rehearsal verify 1::data and production activation intact after redeploy + migrate"
+
+          # (5) RESTORE: runbook section 10, as the rehearsal proved it. The
+          # restore runs in the running web container (the stack cannot be
+          # down: exec needs the container, and CI has no concurrent
+          # writers); paths are relative to the bench directory inside the
+          # container, which is where bench resolves them from.
+          # The credentials file is 0600 and owned by the container's
+          # service user; read it in-container as root (see the tailnet
+          # step). db.env is host-generated and host-readable.
+          admin_pw=$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt | awk '/^Password: /{print $2}')
+          db_root_pw=$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)
+          test -n "$admin_pw"
+          test -n "$db_root_pw"
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost \
+            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database-enc.sql.gz" \
+            --with-public-files "sites/toeflhouse.localhost/private/backups/${triple_base}-files-enc.tar" \
+            --with-private-files "sites/toeflhouse.localhost/private/backups/${triple_base}-private-files-enc.tar" \
+            --db-root-password "$db_root_pw" --admin-password "$admin_pw"
+          docker compose restart web
+          for i in $(seq 1 180); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 5; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
+          echo "::notice title=Rehearsal restore::triplet ${triple_base} restored, web restarted"
+
+          # (6) VERIFY: the data is exactly at the backup point - the
+          # pre-backup record is present, the post-backup record is gone -
+          # and the site is healthy in production mode. (exec -i + marker
+          # assertion, as in verify#1.)
+          verify2=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          import sys
+          import traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::rehearsal verify#2 failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
+          # Run from bench/sites: frappe's database logger opens the
+          # CWD-relative ../logs/<name>.log (see the tailnet staff-user
+          # setup above); an exec inherits the container WORKDIR (bench).
+          import os
+          os.chdir("/home/frappe/bench/sites")
+          import frappe
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
+          frappe.connect()
+          assert frappe.db.exists("Student", {"first_name": "Tailnet", "last_name": "Marker"}), \
+              "pre-backup marker student lost in the restore"
+          assert not frappe.db.exists("Student", {"student_email_id": "upgrade-probe@example.test"}), \
+              "post-backup probe record survived the restore"
+          print("verify#2: data rolled back to the backup point")
+          EOF
+          )
+          echo "$verify2" | grep -q "verify#2: data rolled back to the backup point"
+          act status | grep -q ': PRODUCTION'
+          echo "::notice title=Upgrade/rollback rehearsal::backup -> rebuild -> migrate -> verify -> restore -> verify"
+      - name: Performance baseline (measured, not policy)
+        # P1 #9: record the responsiveness of the product's primary
+        # surfaces on the final deployed stack (post-rehearsal state).
+        # The owner has set no performance target, so the numbers are a
+        # baseline record, not a gate: the script carries no thresholds.
+        working-directory: product
+        run: |
+          set -euo pipefail
+          docker compose exec -T web \
+            env PERF_DESK_USER="staff-a@example.test" PERF_DESK_PASSWORD="staff-a-ci-123" \
+            python3 /product/perf_baseline.py | tee perf-baseline.json
+          python3 - <<'EOF'
+          import json
+          data = json.load(open("perf-baseline.json"))
+          for name, s in data["surfaces"].items():
+              if "median_ms" in s:
+                  print("::notice title=Baseline %s::min %.1f / median %.1f / max %.1f ms (%d samples)"
+                        % (name, s["min_ms"], s["median_ms"], s["max_ms"], s["samples"]))
+                  if not s.get("ok", True):
+                      print("::warning title=Baseline %s::record not ok: %s" % (name, s.get("error", "")))
+              else:
+                  print("::notice title=Baseline %s::%s" % (name, s.get("skipped", s.get("error", ""))))
+          print("::notice title=Performance baseline::measured, not policy (no owner capacity target exists)")
+          EOF
+      - name: Stack logs on failure
+        if: failure()
+        working-directory: product
+        run: |
+          # CI annotations cap the whole run at ~19 lines, and the
+          # session probe already annotates from the failed tailnet step
+          # itself; keep this step to the minimum context: which later
+          # stage started, and the tail of the web container log.
+          for f in rehearse-activate.txt perf-baseline.json; do
+            if [ -f "$f" ]; then echo "::error::marker present: $f"; else echo "::error::marker absent: $f"; fi
+          done
+          docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
+ | head -1)
+          triple_base=${triple_base%-database-enc.sql.gz}
+          test -f "$backup_dir/${triple_base}-files-enc.tar"
+          test -f "$backup_dir/${triple_base}-private-files-enc.tar"
+          echo "::notice title=Rehearsal backup::encrypted triplet ${triple_base}"
+
+          # (2) REBUILD: rebuild the application image (cached: same source)
+          # and redeploy every container; the data volumes are untouched -
+          # exactly what a software update does on the owner's machine. The
+          # db-data volume identity is asserted explicitly across the
+          # rebuild (content survival is proven by the marker data below).
+          vol_before=$(docker volume inspect toefl-house-erp_db-data --format '{{.Name}}|{{.Driver}}')
+          docker compose build
+          docker compose up -d --force-recreate
+          for i in $(seq 1 180); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 5; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
+          vol_after=$(docker volume inspect toefl-house-erp_db-data --format '{{.Name}}|{{.Driver}}')
+          test "$vol_before" = "$vol_after"
+          echo "::notice title=Rehearsal rebuild::stack redeployed after ~$((i*5))s; db-data volume identity unchanged"
+
+          # (3) MIGRATE: the upgrade's migration phase (the boot entrypoint
+          # already ran one; the explicit run is the command the owner's
+          # upgrade performs).
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost migrate
+          echo "::notice title=Rehearsal migrate::bench migrate OK"
+
+          # (4) VERIFY: pre-backup data and the production activation
+          # survived the redeploy; then a post-backup record that the
+          # restore must roll back. (exec -i + marker assertion: a
+          # script that never ran must never count as verified.)
+          verify1=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          import sys
+          import traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::rehearsal verify#1 failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
+          # Run from bench/sites: frappe's database logger opens the
+          # CWD-relative ../logs/<name>.log (see the tailnet staff-user
+          # setup above); an exec inherits the container WORKDIR (bench).
+          import os
+          os.chdir("/home/frappe/bench/sites")
+          import frappe
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
+          frappe.connect()
+          assert frappe.db.exists("Student", {"first_name": "Tailnet", "last_name": "Marker"}), \
+              "pre-backup marker student lost in the redeploy"
+          email = "upgrade-probe@example.test"
+          if not frappe.db.exists("Student", {"student_email_id": email}):
+              frappe.get_doc({"doctype": "Student", "first_name": "Upgrade", "last_name": "Probe",
+                              "student_email_id": email}).insert(ignore_permissions=True)
+              frappe.db.commit()
+          assert frappe.db.exists("Student", {"student_email_id": email})
+          print("verify#1: pre-backup data intact; post-backup probe record created")
+          EOF
+          )
+          echo "$verify1" | grep -q "verify#1: pre-backup data intact"
+          act status | grep -q ': PRODUCTION'
+          echo "::notice title=Rehearsal verify 1::data and production activation intact after redeploy + migrate"
+
+          # (5) RESTORE: runbook section 10, as the rehearsal proved it. The
+          # restore runs in the running web container (the stack cannot be
+          # down: exec needs the container, and CI has no concurrent
+          # writers); paths are relative to the bench directory inside the
+          # container, which is where bench resolves them from.
+          # The credentials file is 0600 and owned by the container's
+          # service user; read it in-container as root (see the tailnet
+          # step). db.env is host-generated and host-readable.
+          admin_pw=$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt | awk '/^Password: /{print $2}')
+          db_root_pw=$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)
+          test -n "$admin_pw"
+          test -n "$db_root_pw"
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost \
+            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database-enc.sql.gz" \
+            --with-public-files "sites/toeflhouse.localhost/private/backups/${triple_base}-files-enc.tar" \
+            --with-private-files "sites/toeflhouse.localhost/private/backups/${triple_base}-private-files-enc.tar" \
+            --db-root-password "$db_root_pw" --admin-password "$admin_pw"
+          docker compose restart web
+          for i in $(seq 1 180); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 5; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
+          echo "::notice title=Rehearsal restore::triplet ${triple_base} restored, web restarted"
+
+          # (6) VERIFY: the data is exactly at the backup point - the
+          # pre-backup record is present, the post-backup record is gone -
+          # and the site is healthy in production mode. (exec -i + marker
+          # assertion, as in verify#1.)
+          verify2=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          import sys
+          import traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::rehearsal verify#2 failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
+          # Run from bench/sites: frappe's database logger opens the
+          # CWD-relative ../logs/<name>.log (see the tailnet staff-user
+          # setup above); an exec inherits the container WORKDIR (bench).
+          import os
+          os.chdir("/home/frappe/bench/sites")
+          import frappe
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
+          frappe.connect()
+          assert frappe.db.exists("Student", {"first_name": "Tailnet", "last_name": "Marker"}), \
+              "pre-backup marker student lost in the restore"
+          assert not frappe.db.exists("Student", {"student_email_id": "upgrade-probe@example.test"}), \
+              "post-backup probe record survived the restore"
+          print("verify#2: data rolled back to the backup point")
+          EOF
+          )
+          echo "$verify2" | grep -q "verify#2: data rolled back to the backup point"
+          act status | grep -q ': PRODUCTION'
+          echo "::notice title=Upgrade/rollback rehearsal::backup -> rebuild -> migrate -> verify -> restore -> verify"
+      - name: Performance baseline (measured, not policy)
+        # P1 #9: record the responsiveness of the product's primary
+        # surfaces on the final deployed stack (post-rehearsal state).
+        # The owner has set no performance target, so the numbers are a
+        # baseline record, not a gate: the script carries no thresholds.
+        working-directory: product
+        run: |
+          set -euo pipefail
+          docker compose exec -T web \
+            env PERF_DESK_USER="staff-a@example.test" PERF_DESK_PASSWORD="staff-a-ci-123" \
+            python3 /product/perf_baseline.py | tee perf-baseline.json
+          python3 - <<'EOF'
+          import json
+          data = json.load(open("perf-baseline.json"))
+          for name, s in data["surfaces"].items():
+              if "median_ms" in s:
+                  print("::notice title=Baseline %s::min %.1f / median %.1f / max %.1f ms (%d samples)"
+                        % (name, s["min_ms"], s["median_ms"], s["max_ms"], s["samples"]))
+                  if not s.get("ok", True):
+                      print("::warning title=Baseline %s::record not ok: %s" % (name, s.get("error", "")))
+              else:
+                  print("::notice title=Baseline %s::%s" % (name, s.get("skipped", s.get("error", ""))))
+          print("::notice title=Performance baseline::measured, not policy (no owner capacity target exists)")
+          EOF
+      - name: Stack logs on failure
+        if: failure()
+        working-directory: product
+        run: |
+          # CI annotations cap the whole run at ~19 lines, and the
+          # session probe already annotates from the failed tailnet step
+          # itself; keep this step to the minimum context: which later
+          # stage started, and the tail of the web container log.
+          for f in rehearse-activate.txt perf-baseline.json; do
+            if [ -f "$f" ]; then echo "::error::marker present: $f"; else echo "::error::marker absent: $f"; fi
+          done
+          docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
+ | head -1)
+          triple_base=${triple_base%-database-enc.sql.gz}
+          test -f "$backup_dir/${triple_base}-files-enc.tar"
+          test -f "$backup_dir/${triple_base}-private-files-enc.tar"
+          echo "::notice title=Rehearsal backup::encrypted triplet ${triple_base}"
+
+          # (2) REBUILD: rebuild the application image (cached: same source)
+          # and redeploy every container; the data volumes are untouched -
+          # exactly what a software update does on the owner's machine. The
+          # db-data volume identity is asserted explicitly across the
+          # rebuild (content survival is proven by the marker data below).
+          vol_before=$(docker volume inspect toefl-house-erp_db-data --format '{{.Name}}|{{.Driver}}')
+          docker compose build
+          docker compose up -d --force-recreate
+          for i in $(seq 1 180); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 5; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
+          vol_after=$(docker volume inspect toefl-house-erp_db-data --format '{{.Name}}|{{.Driver}}')
+          test "$vol_before" = "$vol_after"
+          echo "::notice title=Rehearsal rebuild::stack redeployed after ~$((i*5))s; db-data volume identity unchanged"
+
+          # (3) MIGRATE: the upgrade's migration phase (the boot entrypoint
+          # already ran one; the explicit run is the command the owner's
+          # upgrade performs).
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost migrate
+          echo "::notice title=Rehearsal migrate::bench migrate OK"
+
+          # (4) VERIFY: pre-backup data and the production activation
+          # survived the redeploy; then a post-backup record that the
+          # restore must roll back. (exec -i + marker assertion: a
+          # script that never ran must never count as verified.)
+          verify1=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          import sys
+          import traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::rehearsal verify#1 failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
+          # Run from bench/sites: frappe's database logger opens the
+          # CWD-relative ../logs/<name>.log (see the tailnet staff-user
+          # setup above); an exec inherits the container WORKDIR (bench).
+          import os
+          os.chdir("/home/frappe/bench/sites")
+          import frappe
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
+          frappe.connect()
+          assert frappe.db.exists("Student", {"first_name": "Tailnet", "last_name": "Marker"}), \
+              "pre-backup marker student lost in the redeploy"
+          email = "upgrade-probe@example.test"
+          if not frappe.db.exists("Student", {"student_email_id": email}):
+              frappe.get_doc({"doctype": "Student", "first_name": "Upgrade", "last_name": "Probe",
+                              "student_email_id": email}).insert(ignore_permissions=True)
+              frappe.db.commit()
+          assert frappe.db.exists("Student", {"student_email_id": email})
+          print("verify#1: pre-backup data intact; post-backup probe record created")
+          EOF
+          )
+          echo "$verify1" | grep -q "verify#1: pre-backup data intact"
+          act status | grep -q ': PRODUCTION'
+          echo "::notice title=Rehearsal verify 1::data and production activation intact after redeploy + migrate"
+
+          # (5) RESTORE: runbook section 10, as the rehearsal proved it. The
+          # restore runs in the running web container (the stack cannot be
+          # down: exec needs the container, and CI has no concurrent
+          # writers); paths are relative to the bench directory inside the
+          # container, which is where bench resolves them from.
+          # The credentials file is 0600 and owned by the container's
+          # service user; read it in-container as root (see the tailnet
+          # step). db.env is host-generated and host-readable.
+          admin_pw=$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt | awk '/^Password: /{print $2}')
+          db_root_pw=$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)
+          test -n "$admin_pw"
+          test -n "$db_root_pw"
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost \
+            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database-enc.sql.gz" \
+            --with-public-files "sites/toeflhouse.localhost/private/backups/${triple_base}-files-enc.tar" \
+            --with-private-files "sites/toeflhouse.localhost/private/backups/${triple_base}-private-files-enc.tar" \
+            --db-root-password "$db_root_pw" --admin-password "$admin_pw"
+          docker compose restart web
+          for i in $(seq 1 180); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 5; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
+          echo "::notice title=Rehearsal restore::triplet ${triple_base} restored, web restarted"
+
+          # (6) VERIFY: the data is exactly at the backup point - the
+          # pre-backup record is present, the post-backup record is gone -
+          # and the site is healthy in production mode. (exec -i + marker
+          # assertion, as in verify#1.)
+          verify2=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          import sys
+          import traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::rehearsal verify#2 failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
+          # Run from bench/sites: frappe's database logger opens the
+          # CWD-relative ../logs/<name>.log (see the tailnet staff-user
+          # setup above); an exec inherits the container WORKDIR (bench).
+          import os
+          os.chdir("/home/frappe/bench/sites")
+          import frappe
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
+          frappe.connect()
+          assert frappe.db.exists("Student", {"first_name": "Tailnet", "last_name": "Marker"}), \
+              "pre-backup marker student lost in the restore"
+          assert not frappe.db.exists("Student", {"student_email_id": "upgrade-probe@example.test"}), \
+              "post-backup probe record survived the restore"
+          print("verify#2: data rolled back to the backup point")
+          EOF
+          )
+          echo "$verify2" | grep -q "verify#2: data rolled back to the backup point"
+          act status | grep -q ': PRODUCTION'
+          echo "::notice title=Upgrade/rollback rehearsal::backup -> rebuild -> migrate -> verify -> restore -> verify"
+      - name: Performance baseline (measured, not policy)
+        # P1 #9: record the responsiveness of the product's primary
+        # surfaces on the final deployed stack (post-rehearsal state).
+        # The owner has set no performance target, so the numbers are a
+        # baseline record, not a gate: the script carries no thresholds.
+        working-directory: product
+        run: |
+          set -euo pipefail
+          docker compose exec -T web \
+            env PERF_DESK_USER="staff-a@example.test" PERF_DESK_PASSWORD="staff-a-ci-123" \
+            python3 /product/perf_baseline.py | tee perf-baseline.json
+          python3 - <<'EOF'
+          import json
+          data = json.load(open("perf-baseline.json"))
+          for name, s in data["surfaces"].items():
+              if "median_ms" in s:
+                  print("::notice title=Baseline %s::min %.1f / median %.1f / max %.1f ms (%d samples)"
+                        % (name, s["min_ms"], s["median_ms"], s["max_ms"], s["samples"]))
+                  if not s.get("ok", True):
+                      print("::warning title=Baseline %s::record not ok: %s" % (name, s.get("error", "")))
+              else:
+                  print("::notice title=Baseline %s::%s" % (name, s.get("skipped", s.get("error", ""))))
+          print("::notice title=Performance baseline::measured, not policy (no owner capacity target exists)")
+          EOF
+      - name: Stack logs on failure
+        if: failure()
+        working-directory: product
+        run: |
+          # CI annotations cap the whole run at ~19 lines, and the
+          # session probe already annotates from the failed tailnet step
+          # itself; keep this step to the minimum context: which later
+          # stage started, and the tail of the web container log.
+          for f in rehearse-activate.txt perf-baseline.json; do
+            if [ -f "$f" ]; then echo "::error::marker present: $f"; else echo "::error::marker absent: $f"; fi
+          done
+          docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
+ | head -1)
+          triple_base=${triple_base%-database-enc.sql.gz}
+          test -f "$backup_dir/${triple_base}-files-enc.tar"
+          test -f "$backup_dir/${triple_base}-private-files-enc.tar"
+          echo "::notice title=Rehearsal backup::encrypted triplet ${triple_base}"
+
+          # (2) REBUILD: rebuild the application image (cached: same source)
+          # and redeploy every container; the data volumes are untouched -
+          # exactly what a software update does on the owner's machine. The
+          # db-data volume identity is asserted explicitly across the
+          # rebuild (content survival is proven by the marker data below).
+          vol_before=$(docker volume inspect toefl-house-erp_db-data --format '{{.Name}}|{{.Driver}}')
+          docker compose build
+          docker compose up -d --force-recreate
+          for i in $(seq 1 180); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 5; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
+          vol_after=$(docker volume inspect toefl-house-erp_db-data --format '{{.Name}}|{{.Driver}}')
+          test "$vol_before" = "$vol_after"
+          echo "::notice title=Rehearsal rebuild::stack redeployed after ~$((i*5))s; db-data volume identity unchanged"
+
+          # (3) MIGRATE: the upgrade's migration phase (the boot entrypoint
+          # already ran one; the explicit run is the command the owner's
+          # upgrade performs).
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost migrate
+          echo "::notice title=Rehearsal migrate::bench migrate OK"
+
+          # (4) VERIFY: pre-backup data and the production activation
+          # survived the redeploy; then a post-backup record that the
+          # restore must roll back. (exec -i + marker assertion: a
+          # script that never ran must never count as verified.)
+          verify1=$(docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - <<'EOF'
+          import sys
+          import traceback
+          def _ci_excepthook(typ, value, tb):
+              lineno = tb.tb_lineno if tb else -1
+              traceback.print_exception(typ, value, tb)
+              print("::error::rehearsal verify#1 failed at line %s: %s" % (lineno, value))
+          sys.excepthook = _ci_excepthook
+          # Run from bench/sites: frappe's database logger opens the
+          # CWD-relative ../logs/<name>.log (see the tailnet staff-user
+          # setup above); an exec inherits the container WORKDIR (bench).
+          import os
+          os.chdir("/home/frappe/bench/sites")
+          import frappe
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
+          frappe.connect()
+          assert frappe.db.exists("Student", {"first_name": "Tailnet", "last_name": "Marker"}), \
+              "pre-backup marker student lost in the redeploy"
+          email = "upgrade-probe@example.test"
+          if not frappe.db.exists("Student", {"student_email_id": email}):
+              frappe.get_doc({"doctype": "Student", "first_name": "Upgrade", "last_name": "Probe",
+                              "student_email_id": email}).insert(ignore_permissions=True)
+              frappe.db.commit()
+          assert frappe.db.exists("Student", {"student_email_id": email})
+          print("verify#1: pre-backup data intact; post-backup probe record created")
+          EOF
+          )
+          echo "$verify1" | grep -q "verify#1: pre-backup data intact"
+          act status | grep -q ': PRODUCTION'
+          echo "::notice title=Rehearsal verify 1::data and production activation intact after redeploy + migrate"
+
+          # (5) RESTORE: runbook section 10, as the rehearsal proved it. The
+          # restore runs in the running web container (the stack cannot be
+          # down: exec needs the container, and CI has no concurrent
+          # writers); paths are relative to the bench directory inside the
+          # container, which is where bench resolves them from.
+          # The credentials file is 0600 and owned by the container's
+          # service user; read it in-container as root (see the tailnet
+          # step). db.env is host-generated and host-readable.
+          admin_pw=$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt | awk '/^Password: /{print $2}')
+          db_root_pw=$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)
+          test -n "$admin_pw"
+          test -n "$db_root_pw"
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost \
+            restore "sites/toeflhouse.localhost/private/backups/${triple_base}-database-enc.sql.gz" \
             --with-public-files "sites/toeflhouse.localhost/private/backups/${triple_base}-files-enc.tar" \
             --with-private-files "sites/toeflhouse.localhost/private/backups/${triple_base}-private-files-enc.tar" \
             --db-root-password "$db_root_pw" --admin-password "$admin_pw"
