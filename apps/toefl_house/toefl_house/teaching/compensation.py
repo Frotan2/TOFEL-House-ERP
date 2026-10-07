@@ -287,9 +287,9 @@ def assign_teaching_skill(request_key, student_group, skill, instructor, contrac
                           effective_start, effective_end="", course_schedule=""):
     """Record who actually teaches which skill area for which class (teaching ops).
 
-    One instructor holds a skill area for a class at a time; a class holds
-    at most the three skill areas; an instructor may hold many skills and
-    classes. The assignment references the contract that compensates it.
+    One instructor holds a skill area for a class at a time; a class may have
+    any number of configured skill areas; an instructor may hold many skills
+    and classes. The assignment references the contract that compensates it.
     """
     def work(actor):
         group_name = _bounded(student_group, "Student Group")
