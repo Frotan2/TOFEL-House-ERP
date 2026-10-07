@@ -49,11 +49,8 @@ RUN set -eux; \
     curl --fail --silent --show-error --location \
       "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
       -o /tmp/node.tar.xz; \
-    if [ -n "${NODE_TARBALL_SHA256}" ]; then \
-      echo "${NODE_TARBALL_SHA256}  /tmp/node.tar.xz" | sha256sum -c -; \
-    else \
-      echo "WARNING: NODE_TARBALL_SHA256 not provided; node tarball integrity NOT verified" >&2; \
-    fi; \
+    test -n "${NODE_TARBALL_SHA256}" || { echo "NODE_TARBALL_SHA256 is required; refusing an unverified Node tarball" >&2; exit 1; }; \
+    echo "${NODE_TARBALL_SHA256}  /tmp/node.tar.xz" | sha256sum -c -; \
     tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1; \
     rm /tmp/node.tar.xz; \
     node --version; \
