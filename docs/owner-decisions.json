@@ -41,7 +41,7 @@
     "backup": "Automated multi-version encrypted backup is REQUIRED.",
     "recovery": "Recovery onto another system MUST be supported.",
     "priority": "Preserving data is more important than minimizing recovery time.",
-    "offsite_backup": "Owner-controlled off-site hardware is REQUIRED for the selected local-server + Tailscale deployment; no third-party cloud is authorized.",
+    "offsite_backup": "DEFERRED FUTURE SCOPE. It is not a current launch requirement. The current launch backup is an automated multi-version encrypted backup stored on a separate local drive on the same computer; any off-site/NAS/second-device strategy will be decided later by the Course Owner.",
     "retention_and_rotation": "Engineering-owned implementation contract: versioned encrypted backups with deterministic rotation and restoration verification; exact deployed retention values remain configuration, not invented business policy.",
     "rpo_rto": "RPO 24 hours; RTO 8 hours. These are owner-selected targets for the current local-server + Tailscale deployment and must be measured and evidenced; recording them does not mean they are met."
   },
@@ -83,7 +83,7 @@
   "unresolved_business_inputs_not_reinterpreted": [
     "Future internet-hosted provider, hostname, DNS, and public-edge selection.",
     "Deferred academic grading/progression, advanced guardian, tax, refund-term, calendar/transfer policy details, and metrics-steward policy remain unconfigured unless a later resolved decision explicitly supersedes that deferral.",
-    "Resolved recovery objectives and backup destination class authorize engineering work and evidence collection, not production GO."
+    "Resolved RPO/RTO authorize engineering measurement; off-site backup is deferred future scope and is not a current release gate."
   ],
   "source_documents": [
     "ef14970:docs/engineering/PRODUCTION-OPERATIONS-IMPLEMENTATION-CONTRACT.md",
@@ -121,9 +121,9 @@
       "public_asset_storage_reference": "Current public assets are local/server-based; future external asset storage is not selected."
     },
     "D8-BACKUP-RECOVERY": {
-      "backup_destination_reference": "Current selected destination class is Owner-controlled off-site hardware at a separate physical location; no third-party cloud is authorized and no specific device/site is invented.",
+      "backup_destination_reference": "Current selected destination is a separate local drive on the same computer. Off-site/NAS/second-device backup is deferred future scope and is not a current release gate.",
       "backup_retention_reference": "Multi-version rotation and retention are required; exact deployed values are engineering configuration, not invented business policy.",
-      "backup_encryption_reference": "Backup content must be encrypted before or at rest under engineering-selected secret management, including the required Owner-controlled off-site copy."
+      "backup_encryption_reference": "Backup content must be encrypted before or at rest under engineering-selected secret management for the current separate-local-drive backup."
       "key_retrieval_authority_reference": "Engineering controls key retrieval; operational recovery is coordinated by General Manager with Course Owner strategic escalation.",
       "restore_authority_reference": "General Manager coordinates restoration; Course Owner retains final strategic/data-preservation escalation.",
       "rpo_reference": "RPO is 24 hours for the selected local-server + Tailscale deployment; the target must be measured and evidenced and is not assumed met merely because it is recorded.",
@@ -302,26 +302,26 @@
     },
     "D14": {
       "id": "D14",
-      "date": "2026-09-19",
+      "date": "2026-10-07",
       "title": "Off-site backup destination",
-      "status": "DECIDED",
+      "status": "DEFERRED / FUTURE",
       "authority": "Course Owner",
       "questions": [
-        "Where do encrypted backups go so that a single-site loss (fire, flood, theft) does not destroy the data?"
+        "Is an off-site backup destination required for the current launch?"
       ],
       "owner_answers": [
-        "Off-site hardware the Owner controls - a separate physical location, such as an off-site NAS or a second building. No third-party cloud; student data stays in Owner-controlled custody, consistent with the local-server + Tailscale architecture."
+        "Not required now. Current launch backup remains on a separate local drive on the same computer. Off-site hardware, NAS, second-device, or cloud custody will be reconsidered later by the Course Owner."
       ],
-      "exact_scope": "Destination class and custody for encrypted backups. No specific device, hostname, address or vendor is recorded, and none is invented here.",
+      "exact_scope": "Current launch backup destination is a separate local drive on the same computer. Off-site destination and custody are future scope and no device, site, vendor or address is selected.",
       "authorizes": [
-        "Engineering to design and rehearse an encrypted off-site copy to Owner-controlled hardware, and to prove the copy and its restore."
+        "Engineering is authorized to complete and evidence the current local secondary-drive backup and restore. No off-site implementation is required at this stage."
       ],
       "does_not_authorize": [
-        "Does NOT authorize production. Selecting a target is an input to engineering, not evidence that the target is met; the corresponding D8 gate stays BLOCKED until it is independently proven.",
-        "Sending student data to any third-party cloud or provider.",
-        "Naming a specific device, site or address; that remains an operational detail the Owner supplies at implementation time."
+        "Does NOT authorize or block production by itself. The current launch backup requirement is the separate-local-drive backup and its tested restore.",
+        "Treating future off-site/NAS/second-device backup as a current requirement.",
+        "Sending student data to a third-party cloud; any future off-site strategy requires a later explicit Owner decision."
       ],
-      "why_owner_only": "The destination determines who physically holds student data and where a disaster can and cannot destroy it. That is a custody decision, not an engineering one.",
+      "why_owner_only": "Whether to require off-site custody is a business risk decision. The Owner has explicitly deferred it for the current launch.",
       "supersedes": null,
       "related": [
         "D8",
