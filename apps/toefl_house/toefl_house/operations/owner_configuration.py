@@ -247,10 +247,21 @@ def validate_owner_operations_policy(request_key, policy):
         "validate_owner_operations_policy", request_key, {"policy": policy}, work)
 
 
+GOVERNING_FIELDS = (
+    "effective_from", "reporting_review_days", "capacity_target",
+    "tax_enabled", "tax_rate", "tax_inclusive", "transfer_allowed",
+    "withdrawal_allowed", "calendar_notice_days", "backup_offsite_required",
+    "backup_destination_kind", "backup_destination_reference",
+    "custody_requirement", "recovery_quorum",
+)
+
 def governing_owner_operations(on_date=None):
+    """Return only governing business terms; never expose audit metadata."""
     doc = _policy_doc()
     if not doc or doc.status != "Active":
         return {}
     rows = [r.as_dict() for r in (doc.get("versions") or [])]
     row = foundation.resolve_governing(rows, on_date or frappe.utils.today())
-    return dict(row) if row else {}
+    if not row:
+        return {}
+    return {field: row.get(field) for field in GOVERNING_FIELDS}
