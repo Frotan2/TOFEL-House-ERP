@@ -1304,7 +1304,7 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         # Reporting & Metrics is carried by the owner-operations policy.
         metrics = self._section(payload, "reporting-metrics")
         self.assertEqual(metrics["kind"], "queue")
-        self.assertEqual(metrics["facts"][0]["value"], "Owner-configured carrier")
+        self.assertEqual(metrics["items"][0]["status"], "Owner configuration required")
         # The alerting carrier made the Operations section real the same
         # way: computed readiness plus channel + retention, and the
         # receiver destination never leaks onto the desk.
