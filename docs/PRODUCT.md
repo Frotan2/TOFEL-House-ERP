@@ -107,9 +107,10 @@ is an explicit stop and still wins.
 The product is bound to `127.0.0.1` only — no interface is opened for the
 LAN or the internet. The selected multi-user deployment (owner decision
 D13) reaches the ERP from authorized staff PCs through the owner's
-Tailscale tailnet: Tailscale Serve on the central PC terminates TLS and proxies `/` to
-`127.0.0.1:8000` and `/socket.io` to `127.0.0.1:9000`, tailnet-only (no
-Funnel, no public exposure).
+Tailscale tailnet: Tailscale Serve on the central PC terminates TLS and proxies to
+`127.0.0.1:8000`, tailnet-only (no Funnel, no public exposure). Realtime
+SocketIO remains a separate local port and is not yet qualified for tailnet
+routing.
 The exact setup is in
 [engineering/LAUNCH-RUNBOOK.md](engineering/LAUNCH-RUNBOOK.md), section
 "Multi-user access (central server + Tailscale)".
