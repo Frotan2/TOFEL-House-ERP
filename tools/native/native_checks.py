@@ -4202,7 +4202,7 @@ def main():
             frappe.set_user('Administrator')
             fees=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
                 'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
-                '2026-09-05','2026-10-05'))
+                pf_post,pf_due))
             applied={d['fee_category']:d for d in fees['discounts_applied']}
             assert set(applied)=={'SYN-Tuition','SYN-Books'},applied
             # one winner per line by precedence; tie broken by documented order;
@@ -4224,7 +4224,7 @@ def main():
             count=frappe.db.count(api.AUDIT);fees_count=frappe.db.count('Fees')
             again=as_user('finance_officer',lambda:fin_m.issue_tuition_fees(
                 'odcp-fee-discounted-0001',second['program_enrollment'],fsx['fs2'],
-                '2026-09-05','2026-10-05'))
+                pf_post,pf_due))
             assert again==fees and frappe.db.count(api.AUDIT)==count and frappe.db.count('Fees')==fees_count
             return {'fees':fees['fees'],'grand_total':26000.0,
                     'one_discount_per_line':True,'no_stacking':True,
