@@ -171,10 +171,17 @@ const endpointFiles = {
 	"toefl_house.admission": ["admission/__init__.py"],
 	"toefl_house.enrollment": ["enrollment/__init__.py"],
 	"toefl_house.api": ["api.py"],
-	"toefl_house.finance": ["finance/__init__.py"],
 	"toefl_house.finance.corrections": ["finance/corrections.py"],
 	"toefl_house.academic": ["academic/__init__.py"],
+	"toefl_house.academic.catalog_linkage": ["academic/catalog_linkage.py"],
+	"toefl_house.admission.policies": ["admission/policies.py"],
+	"toefl_house.enrollment.exits": ["enrollment/exits.py"],
+	"toefl_house.finance": ["finance/__init__.py"],
+	"toefl_house.finance.policies": ["finance/policies.py"],
 	"toefl_house.teaching": ["teaching/__init__.py"],
+	"toefl_house.teaching.policies": ["teaching/policies.py"],
+	"toefl_house.teaching.attendance_corrections": ["teaching/attendance_corrections.py"],
+	"toefl_house.teaching.adjustment_posting": ["teaching/adjustment_posting.py"],
 	"toefl_house.teaching.compensation": ["teaching/compensation.py"],
 };
 function signatureOf(method) {
