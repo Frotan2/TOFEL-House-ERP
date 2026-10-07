@@ -100,19 +100,19 @@ GUARDIAN_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
 # readiness badge.
 FUTURE_DOMAINS = (
     ("reporting-metrics", "Reporting & Metrics",
-     "Owner-selected reporting review interval and class-capacity target "
+     "Owner-selected reporting review interval and class-capacity target are Owner decision inputs; no derived metric or capacity enforcement consumes them until its canonical domain authority is explicitly bound."),
      "are carried by TH Owner Operations Policy."),
     ("finance", "Finance",
      "Billing and correction authorities remain on the Finance desk; "
-     "tax terms are carried by TH Owner Operations Policy."),
+     "Billing and correction authorities remain on the Finance desk; tax terms are a decision carrier only and are NOT a live tax authority until a native finance consumer is explicitly implemented and qualified."),
     ("enrollment-lifecycle", "Enrollment & Lifecycle",
      "Withdrawal/dismissal remains governed by Enrollment Exit Policy; "
-     "transfer and calendar terms are carried by TH Owner Operations Policy."),
+     "Withdrawal/dismissal remains governed by Enrollment Exit Policy; transfer and calendar terms are decision carriers only and remain deferred/not runtime-bound until their canonical lifecycle consumers are explicitly implemented and qualified."),
     ("backup-recovery", "Backup & Recovery",
-     "Off-site requirement and non-secret destination reference are carried "
+     "Off-site requirement and non-secret destination reference are recovery requirements only; they do not constitute backup execution evidence or production authorization."),
      "by TH Owner Operations Policy; credentials are never stored there."),
     ("security", "Security",
-     "Custody requirements and recovery quorum may be recorded as policy "
+     "Custody requirements and recovery quorum are decision requirements only; recording them is not proof that recovery controls are implemented."),
      "requirements; keys, credentials, custodians and authorization "
      "ceremonies remain outside Frappe."),
 )
@@ -286,7 +286,7 @@ def _owner_policy_item(today, title, body):
         }
     row = policy[0]
     status = row["status"]
-    detail = "Canonical owner terms cover reporting, capacity, tax, transfer/withdrawal, calendar, backup and custody requirements."
+    detail = "Owner decision inputs cover reporting/capacity, tax, transfer/withdrawal, calendar, backup and custody; only explicitly bound canonical consumers may treat them as runtime policy."
     if status != "Active":
         status_label = "Owner policy retired"
         next_text = "Reactivate the owner policy before relying on these terms."
