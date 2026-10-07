@@ -830,7 +830,7 @@ jobs:
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
           after=$(ls "$backup_dir"/*-database-enc.sql.gz 2>/dev/null | wc -l)
           test $((after - before)) = 1
-          triple_base=$(ls -t "$backup_dir" | grep -- '-database-enc\.sql\.gz
+          triple_base=$(ls -t "$backup_dir" | grep -- '-database-enc\.sql\.gz$' | head -1)
           triple_base=${triple_base%-database-enc.sql.gz}
           test -f "$backup_dir/${triple_base}-files-enc.tar"
           test -f "$backup_dir/${triple_base}-private-files-enc.tar"
