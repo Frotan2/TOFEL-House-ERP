@@ -61,7 +61,8 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
-    command: ["/build/tools/bin/bench", "worker", "--queue", "short,default,long"]
+    entrypoint: ["/build/tools/bin/bench"]
+    command: ["worker", "--queue", "short,default,long"]
     working_dir: /home/frappe/bench
     volumes:
       - ./data/sites:/home/frappe/bench/sites
@@ -91,7 +92,8 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
-    command: ["node", "apps/frappe/socketio.js"]
+    entrypoint: ["node"]
+    command: ["apps/frappe/socketio.js"]
     working_dir: /home/frappe/bench
     ports:
       - "127.0.0.1:9000:9000"
