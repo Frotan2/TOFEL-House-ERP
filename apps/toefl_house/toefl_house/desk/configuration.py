@@ -138,7 +138,7 @@ def work():
     for sid, title, body in FUTURE_DOMAINS:
         sections.append(section(sid, title, "facts",
                                 facts=[{
-                                    "value": "Not implemented",
+                                    "value": "Owner-configured carrier",
                                     "label": "Configuration surface",
                                     "definition": body,
                                 }],
@@ -426,12 +426,12 @@ def _readiness_items(policies, versions_by_policy, readiness_by_policy,
         items.append({
             "id": sid,
             "person": title,
-            "detail": "No configuration surface in Phase 1.",
-            "status": "Not implemented",
+            "detail": "Terms are carried by TH Owner Operations Policy or the existing domain authority.",
+            "status": "Carrier available",
             "stage": "Configuration",
             "stage_definition": ("This domain has no configuration records "
                                  "yet, so readiness cannot be computed."),
-            "next": f"{title} configuration arrives in a later phase.",
+            "next": f"{title} is configured through the owner policy carrier or its existing native policy surface.",
             "next_role": "Course Owner",
             "waiting_since": None,
         })
