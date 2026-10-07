@@ -138,3 +138,8 @@ than half-deactivated).
   fails until an upstream release clears them. This is the gate on internet
   exposure. The desktop runtime is loopback-only.
 - **Backup** is a current local requirement: the desktop Backup flow stores the full native backup on a separate local drive from the live data on the same computer. Restore is qualified against the local backup path. Off-site/NAS/second-device backup is explicitly deferred future scope and is not a current release gate; the Course Owner will decide that later.
+
+
+## Current backup rule
+
+The required launch backup is an encrypted, verified copy on a separate local fixed drive on the same computer. Off-site/NAS/second-device storage is deferred future scope.
