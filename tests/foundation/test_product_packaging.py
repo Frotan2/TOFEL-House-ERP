@@ -248,6 +248,25 @@ class DesktopContract(unittest.TestCase):
         self.assertFalse((PRODUCT / "secrets").exists())
         self.assertFalse(list(PRODUCT.rglob("db.env")))
 
+    def test_backup_launcher_uses_verified_secondary_drive_flow(self):
+        cmd = (PRODUCT / "windows" / "Backup TOEFL House ERP.cmd").read_text()
+        ps1 = PRODUCT / "windows" / "Backup TOEFL House ERP.ps1"
+        self.assertTrue(ps1.is_file())
+        self.assertIn("ExecutionPolicy Bypass", cmd)
+        self.assertIn("Backup TOEFL House ERP.ps1", cmd)
+        body = ps1.read_text()
+        self.assertIn("Win32_LogicalDisk", body)
+        self.assertIn("DriveType=3", body)
+        self.assertIn("FreeSpace -gt 1073741824", body)
+        self.assertIn("DeviceID -ne $sourceDrive", body)
+        self.assertIn("encrypt_backup", body)
+        self.assertIn("database-enc.sql.gz", body)
+        self.assertIn("files-enc.tar", body)
+        self.assertIn("private-files-enc.tar", body)
+        self.assertIn("Get-FileHash", body)
+        self.assertIn("SHA256", body)
+        self.assertIn("manifest.json", body)
+
     def test_install_generates_password_as_variable_not_literal(self):
         install = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
         self.assertIn("NewGuid", install)  # generated on the owner's PC at install time
