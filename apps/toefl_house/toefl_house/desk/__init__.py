@@ -346,6 +346,15 @@ PROJECTION_FIELDS = {
     ("configuration", "TH Owner Operations Policy"): [
         "name", "code", "title", "status", "description", "modified",
     ],
+    # Native Course Owner policy masters are projected here only as a
+    # configuration index; their guarded commands remain the write authority.
+    ("configuration", "TH Catalog Linkage Policy"): ["name", "code", "title", "status", "description", "modified"],
+    ("configuration", "TH Returning Student Policy"): ["name", "code", "title", "status", "description", "modified"],
+    ("configuration", "TH Enrollment Exit Policy"): ["name", "code", "title", "status", "description", "modified"],
+    ("configuration", "TH Billing Policy"): ["name", "code", "title", "status", "description", "modified"],
+    ("configuration", "TH Roster Change Policy"): ["name", "code", "title", "status", "description", "modified"],
+    ("configuration", "TH Attendance Correction Policy"): ["name", "code", "title", "status", "description", "modified"],
+    ("configuration", "TH Adjustment Posting Policy"): ["name", "code", "title", "status", "description", "modified"],
     ("configuration", "TH Assessment Policy"): [
         "name", "family", "code", "title", "status", "description",
         "modified",
