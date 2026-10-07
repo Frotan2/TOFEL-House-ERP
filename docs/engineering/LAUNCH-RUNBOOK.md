@@ -264,10 +264,7 @@ Properties and limits:
 
 ## 10. Restore from backup (operator)
 
-The `Backup TOEFL House ERP.cmd` script writes a full backup triplet
-(`*-database.sql.gz`, `*-files.tar`, `*-private-files.tar`) into
-`data\sites\toeflhouse.localhost\private\backups`. Restoring one of them is a
-guided operator step, not a double-click (a restore overwrites data):
+The `Backup TOEFL House ERP.cmd` script enables native backup encryption, creates the full backup set, and copies the verified encrypted artifacts to a separate local fixed drive on the same computer under `TOEFL-House-ERP-Backups\<backup-set>`. It also writes a SHA-256 manifest. Restoring one of them is a guided operator step, not a double-click (a restore overwrites data):
 
 1. Keep the ERP running (start it first if it is stopped). The restore runs
    inside the web container, so the stack must be up — `Stop TOEFL House
