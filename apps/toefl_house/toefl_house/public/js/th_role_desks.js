@@ -263,7 +263,37 @@ frappe.provide("toefl_house.role_desks");
 	 * signature, adds a fresh idempotency key and submits to the same
 	 * whitelisted, guarded command the command pages use.
 	 */
+	const OWNER_POLICY_VERSION_FIELDS = [
+		{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+		{ fieldname: "effective_from", label: "Effective from", fieldtype: "Date", reqd: 1 },
+		{ fieldname: "reason", label: "Change reason", fieldtype: "Small Text", reqd: 1 },
+		{ fieldname: "reporting_review_days", label: "Reporting review interval (days)", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "capacity_target", label: "Class capacity target", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "tax_enabled", label: "Tax enabled", fieldtype: "Check" },
+		{ fieldname: "tax_rate", label: "Tax rate (%)", fieldtype: "Float", reqd: 1 },
+		{ fieldname: "tax_inclusive", label: "Tax inclusive", fieldtype: "Check" },
+		{ fieldname: "transfer_allowed", label: "Transfers allowed", fieldtype: "Check" },
+		{ fieldname: "withdrawal_allowed", label: "Withdrawals allowed", fieldtype: "Check" },
+		{ fieldname: "calendar_notice_days", label: "Calendar notice (days)", fieldtype: "Int", reqd: 1 },
+		{ fieldname: "backup_offsite_required", label: "Off-site backup required", fieldtype: "Check" },
+		{ fieldname: "backup_destination_kind", label: "Backup destination kind", fieldtype: "Select", options: "\nS3-compatible\nSFTP\nManaged backup\nOther" },
+		{ fieldname: "backup_destination_reference", label: "Backup destination reference (no secrets)", fieldtype: "Data" },
+		{ fieldname: "custody_requirement", label: "Key custody requirement", fieldtype: "Small Text", reqd: 1 },
+		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
+	];
 	const ACTION_FIELDS = Object.freeze({
+		"toefl_house.operations.owner_configuration.create_owner_operations_policy": [
+			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
+		],
+		"toefl_house.operations.owner_configuration.set_owner_operations_policy_version": OWNER_POLICY_VERSION_FIELDS,
+		"toefl_house.operations.owner_configuration.validate_owner_operations_policy": [],
+		"toefl_house.operations.owner_configuration.set_owner_operations_policy_status": [
+			{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "active", label: "Active", fieldtype: "Check" },
+		],
+
 		"toefl_house.admission.review_admission": [
 			{ fieldname: "name", label: "Admission decision", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "expected_version", label: "Expected version", fieldtype: "Int", reqd: 1 },
