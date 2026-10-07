@@ -121,13 +121,13 @@
       "public_asset_storage_reference": "Current public assets are local/server-based; future external asset storage is not selected."
     },
     "D8-BACKUP-RECOVERY": {
-      "backup_destination_reference": "Current destination is not a selected provider or off-site service; implementation must support automated versioned encrypted output and a future destination.",
+      "backup_destination_reference": "Current selected destination class is Owner-controlled off-site hardware at a separate physical location; no third-party cloud is authorized and no specific device/site is invented.",
       "backup_retention_reference": "Multi-version rotation and retention are required; exact deployed values are engineering configuration, not invented business policy.",
-      "backup_encryption_reference": "Backup content must be encrypted before or at rest under engineering-selected secret management.",
+      "backup_encryption_reference": "Backup content must be encrypted before or at rest under engineering-selected secret management, including the required Owner-controlled off-site copy."
       "key_retrieval_authority_reference": "Engineering controls key retrieval; operational recovery is coordinated by General Manager with Course Owner strategic escalation.",
       "restore_authority_reference": "General Manager coordinates restoration; Course Owner retains final strategic/data-preservation escalation.",
-      "rpo_reference": "Data preservation has priority over minimizing recovery time; no numeric RPO is supplied.",
-      "rto_reference": "Data preservation has priority over minimizing recovery time; no numeric RTO is supplied."
+      "rpo_reference": "RPO is 24 hours for the selected local-server + Tailscale deployment; the target must be measured and evidenced and is not assumed met merely because it is recorded.",
+      "rto_reference": "RTO is 8 hours for the selected local-server + Tailscale deployment; the target must be measured and evidenced and is not assumed met merely because it is recorded."
     },
     "D8-OBSERVABILITY-INCIDENT": {
       "monitoring_responsibility_reference": "Engineering implements monitoring; General Manager owns routine operational visibility and response; Course Owner receives high-level attention visibility.",
