@@ -137,8 +137,4 @@ than half-deactivated).
   `engineering/evidence/sec-deps-01/`, and the `Foundation runtime` workflow
   fails until an upstream release clears them. This is the gate on internet
   exposure. The desktop runtime is loopback-only.
-- **Off-site backup** (owner decision D14) is not built. The interim backup
-  engine can produce encrypted, multi-version backups on a separately mounted
-  volume, but the desktop Backup script still uses native Bench backups and the
-  required Owner-controlled off-site copy is not yet integrated or rehearsed;
-  production remains blocked on D14 evidence.
+- **Backup** is a current local requirement: the desktop Backup flow stores the full native backup on a separate local drive from the live data on the same computer. Restore is qualified against the local backup path. Off-site/NAS/second-device backup is explicitly deferred future scope and is not a current release gate; the Course Owner will decide that later.
