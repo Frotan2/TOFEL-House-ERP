@@ -142,6 +142,19 @@ jobs:
           test "$rc" = 2  # refused: no backup yet
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
           echo "::notice title=Backup rehearsal::full database/files/private-files backup created"
+          # Native encryption contract: enable it for one disposable backup,
+          # verify the encrypted artifacts, then restore the prior disabled
+          # state so the existing unencrypted restore rehearsal remains unchanged.
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute "frappe.db.set_single_value('System Settings', 'encrypt_backup', 1)"
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
+          encrypted_backup_dir="data/sites/toeflhouse.localhost/private/backups"
+          encrypted_db="$(find "$encrypted_backup_dir" -maxdepth 1 -type f -name '*-database-enc.sql.gz' -printf '%T@ %p\\n' | sort -nr | head -1 | cut -d' ' -f2-)"
+          test -n "$encrypted_db"
+          encrypted_base="${encrypted_db%-database-enc.sql.gz}"
+          test -f "${encrypted_base}-files-enc.tar"
+          test -f "${encrypted_base}-private-files-enc.tar"
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute "frappe.db.set_single_value('System Settings', 'encrypt_backup', 0)"
+          echo "::notice title=Backup encryption::native encrypted backup artifacts verified"
 
           # Rehearse an actual restore against the same disposable qualification
           # site before activation. A native ToDo marker is created after the
