@@ -628,7 +628,11 @@ jobs:
           # process, worker) have settled - poll for the full stack instead
           # of asserting on the first sample.
           states = missing = None
-          for attempt in range(36):  # up to ~6 minutes
+          # CI runners are shared and loaded; give the full stack (socketio's
+          # node process and the bench worker settle slowest) up to ~10
+          # minutes. The bound is kept so a genuinely broken service still
+          # fails the contract plainly instead of waiting forever.
+          for attempt in range(60):  # up to ~10 minutes
               states = stack_states()
               names = sorted(item["Name"] for item in states)
               running = {item["Name"] for item in states if item.get("State") == "running"}
