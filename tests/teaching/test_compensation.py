@@ -150,6 +150,16 @@ def _doctypes_set():
     raise AssertionError("DOCTYPES missing")
 
 
+class SkillMultiplicityTests(unittest.TestCase):
+    def test_class_skill_assignments_are_not_limited_to_three(self):
+        source = COMPENSATION.read_text()
+        self.assertNotIn("at most the three skill areas", source)
+        self.assertIn("any number of configured skill areas", source)
+        # A per-class/per-skill uniqueness guard may exist, but there must be
+        # no fixed count gate tying a class to the historical three-skill setup.
+        self.assertNotIn("len(skill", source)
+
+
 class WiringTests(unittest.TestCase):
     def test_command_roles(self):
         roles = _kind_roles()
