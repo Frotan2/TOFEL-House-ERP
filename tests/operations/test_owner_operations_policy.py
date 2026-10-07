@@ -67,6 +67,19 @@ class OwnerOperationsCommandTests(unittest.TestCase):
         self.assertIn("check_appends", ast.unparse(names["set_owner_operations_policy_version"]))
         self.assertIn("compute_readiness", ast.unparse(names["validate_owner_operations_policy"]))
 
+    def test_configuration_desk_exposes_guarded_owner_commands(self):
+        text = DESK.read_text(encoding="utf-8")
+        client = (APP / "public" / "js" / "th_role_desks.js").read_text(encoding="utf-8")
+        for endpoint in (
+            "create_owner_operations_policy",
+            "set_owner_operations_policy_version",
+            "set_owner_operations_policy_status",
+            "validate_owner_operations_policy",
+        ):
+            self.assertIn(endpoint, text)
+            self.assertIn(endpoint, client)
+        self.assertIn('("configuration", "TH Owner Operations Policy")', (APP / "desk" / "__init__.py").read_text(encoding="utf-8"))
+
     def test_configuration_desk_no_longer_calls_domains_unimplemented(self):
         text = DESK.read_text(encoding="utf-8")
         self.assertIn("TH Owner Operations Policy", text)
