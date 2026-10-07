@@ -45,7 +45,8 @@ class OwnerOperationsDoctypeTests(unittest.TestCase):
         lowered = text.lower()
         self.assertNotIn("secret_material", lowered)
         self.assertIn("credentials", lowered)
-        self.assertIn("authorization ceremonies remain outside", lowered)
+        self.assertIn("authorization", lowered)
+        self.assertIn("ceremonies", lowered)
         self.assertIn("authorization ceremonies remain outside", lowered)
 
 
