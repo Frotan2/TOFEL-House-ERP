@@ -26,7 +26,7 @@ ARG HRMS_REPOSITORY=https://github.com/frappe/hrms
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl ca-certificates build-essential pkg-config libffi-dev libssl-dev \
-    xz-utils wkhtmltopdf mariadb-client libmariadb-dev file \
+    xz-utils wkhtmltopdf mariadb-client libmariadb-dev file gnupg \
     && rm -rf /var/lib/apt/lists/*
 # file: the foundation's bench restore (frappe 16) identifies the backup dump
 # with the `file` utility and refuses to run without it; the slim base does
