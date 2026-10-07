@@ -888,7 +888,7 @@ class DesktopRuntimeReliabilityContract(unittest.TestCase):
     def test_core_services_wait_for_web_health(self):
         text = COMPOSE.read_text()
         for service in ("worker", "socketio", "scheduler"):
-            block = re.search(rf"^  {service}:\\n(.*?)(?=^  \\S)", text, flags=re.M | re.S)
+            block = re.search(rf"^  {service}:\n(.*?)(?=^  \S)", text, flags=re.M | re.S)
             self.assertIsNotNone(block, service)
             body = block.group(1)
             self.assertIn("condition: service_healthy", body,
