@@ -123,7 +123,7 @@
     "D8-BACKUP-RECOVERY": {
       "backup_destination_reference": "Current selected destination is a separate local drive on the same computer. Off-site/NAS/second-device backup is deferred future scope and is not a current release gate.",
       "backup_retention_reference": "Multi-version rotation and retention are required; exact deployed values are engineering configuration, not invented business policy.",
-      "backup_encryption_reference": "Backup content must be encrypted before or at rest under engineering-selected secret management for the current separate-local-drive backup."
+      "backup_encryption_reference": "Backup content must be encrypted before or at rest under engineering-selected secret management for the current separate-local-drive backup.",
       "key_retrieval_authority_reference": "Engineering controls key retrieval; operational recovery is coordinated by General Manager with Course Owner strategic escalation.",
       "restore_authority_reference": "General Manager coordinates restoration; Course Owner retains final strategic/data-preservation escalation.",
       "rpo_reference": "RPO is 24 hours for the selected local-server + Tailscale deployment; the target must be measured and evidenced and is not assumed met merely because it is recorded.",
