@@ -343,6 +343,9 @@ PROJECTION_FIELDS = {
     # Configuration map (Course Owner): the same D1 reference reads, for the
     # computed configuration-readiness rollup. No other domain has any
     # configuration records in Phase 1.
+    ("configuration", "TH Owner Operations Policy"): [
+        "name", "code", "title", "status", "description", "modified",
+    ],
     ("configuration", "TH Assessment Policy"): [
         "name", "family", "code", "title", "status", "description",
         "modified",
