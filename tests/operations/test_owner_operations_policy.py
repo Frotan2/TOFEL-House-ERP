@@ -41,6 +41,8 @@ class OwnerOperationsDoctypeTests(unittest.TestCase):
         self.assertEqual(fields["backup_destination_reference"]["fieldtype"], "Data")
         self.assertEqual(fields["backup_destination_kind"]["options"], "Owner-controlled off-site hardware")
         self.assertIn('DESTINATION_KINDS = ("Owner-controlled off-site hardware",)', SOURCE.read_text(encoding="utf-8"))
+        client = (APP / "public" / "js" / "th_role_desks.js").read_text(encoding="utf-8")
+        self.assertIn('options: "\\nOwner-controlled off-site hardware"', client)
 
     def test_secrets_are_explicitly_out_of_scope(self):
         text = VERSION.read_text(encoding="utf-8") + SOURCE.read_text(encoding="utf-8")
