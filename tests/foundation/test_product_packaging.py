@@ -519,6 +519,15 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn('checkpoint="public-key site-config recovery and plaintext-sidecar cleanup"', step)
         self.assertIn("TOEFL_FIRST_BOOT", step)
 
+        upgrade_start = workflow.index("Upgrade/rollback rehearsal")
+        upgrade_end = workflow.index("Performance baseline", upgrade_start)
+        upgrade_step = workflow[upgrade_start:upgrade_end]
+        self.assertIn("tools/foundation/annotated_step.py", upgrade_step)
+        self.assertIn("Product upgrade/rollback failure", upgrade_step)
+        self.assertIn('checkpoint="native encrypted database and files restore"', upgrade_step)
+        self.assertIn('site re-activation failed with exit', upgrade_step)
+        self.assertIn("TOEFL_UPGRADE_REHEARSAL", upgrade_step)
+
     def test_product_restore_replaces_file_trees_and_checks_both_scopes(self):
         # Pinned Frappe restore uses tar extraction into existing paths, so a
         # real snapshot rehearsal must stage the old trees, extract into clean

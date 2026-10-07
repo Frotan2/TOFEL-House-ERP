@@ -1097,7 +1097,9 @@ jobs:
         #            is intact) and the site is healthy again
         working-directory: product
         run: |
-          set -euo pipefail
+          python3 ../tools/foundation/annotated_step.py "Upgrade/rollback rehearsal" -- bash -euo pipefail <<'TOEFL_UPGRADE_REHEARSAL'
+          checkpoint="upgrade setup"
+          trap 'rc=$?; echo "::error title=Product upgrade/rollback failure::checkpoint=$checkpoint exit=$rc"; exit "$rc"' ERR
           act() { docker compose exec -T web /product/activate.py "$@"; }
           site=data/sites/toeflhouse.localhost
           backup_dir=$site/private/backups
@@ -1110,8 +1112,18 @@ jobs:
           # activated production site (the first-boot step ended in REFUSED
           # after proving deactivation; activation is a reversible site
           # config, and the rehearsal re-proves the gate end to end).
+          checkpoint="re-activate the verified backup site before upgrade"
           act status | grep -q 'Site operational mode: REFUSED'
-          act activate --confirm toeflhouse.localhost | tee rehearse-activate.txt
+          set +e
+          act activate --confirm toeflhouse.localhost > rehearse-activate.txt 2>&1
+          activation_rc=$?
+          set -e
+          if [ "$activation_rc" -ne 0 ]; then
+            activation_detail="$(tail -n 1 rehearse-activate.txt | tr '\r\n' ' ')"
+            echo "::error title=Upgrade precondition::site re-activation failed with exit $activation_rc: ${activation_detail:0:400}"
+            exit "$activation_rc"
+          fi
+          cat rehearse-activate.txt
           grep -q 'All gates passed' rehearse-activate.txt
           act status | grep -q 'Site operational mode: PRODUCTION'
           echo "::notice title=Rehearsal start::site re-activated to PRODUCTION"
@@ -1122,6 +1134,7 @@ jobs:
             printf "%s" "$CI_UPGRADE_FILE_MARKER" > sites/toeflhouse.localhost/private/files/upgrade-restore-marker.txt
           '
 
+          checkpoint="fresh encrypted native database/public/private file backup"
           # (1) BACKUP: fresh native encrypted database/files payloads.
           # The Frappe site-config sidecar has a misleading -enc name but is
           # plaintext; this rollback test does not export it and always removes
@@ -1154,6 +1167,7 @@ jobs:
             printf "%s" "$CI_POST_BACKUP_FILE_MARKER" > sites/toeflhouse.localhost/private/files/post-backup-upgrade-marker.txt
           '
 
+          checkpoint="image rebuild and full container redeploy"
           # (2) REBUILD: rebuild the application image (cached: same source)
           # and redeploy every container; the data volumes are untouched -
           # exactly what a software update does on the owner's machine. The
@@ -1168,12 +1182,14 @@ jobs:
           test "$vol_before" = "$vol_after"
           echo "::notice title=Rehearsal rebuild::stack redeployed after ~$((i*5))s; db-data volume identity unchanged"
 
+          checkpoint="bench migrate"
           # (3) MIGRATE: the upgrade's migration phase (the boot entrypoint
           # already ran one; the explicit run is the command the owner's
           # upgrade performs).
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost migrate
           echo "::notice title=Rehearsal migrate::bench migrate OK"
 
+          checkpoint="pre/post-backup database verification"
           # (4) VERIFY: pre-backup data and the production activation
           # survived the redeploy; then a post-backup record that the
           # restore must roll back. (exec -i + marker assertion: a
@@ -1211,6 +1227,7 @@ jobs:
           grep -q 'Production authorization: REJECT' rehearsal-verify1-status.txt
           echo "::notice title=Rehearsal verify 1::data and PRODUCTION site mode intact after redeploy + migrate; authorization remains REJECT"
 
+          checkpoint="native encrypted database and files restore"
           # (5) RESTORE the encrypted database/files set with the native
           # Frappe key. Read sensitive values into shell variables without
           # echoing them. Stop web and background writers; use a one-off web
@@ -1243,6 +1260,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:8000/ >/dev/null
           echo "::notice title=Encrypted rollback restore::native encrypted set ${triple_base} restored; full application stack is back online"
 
+          checkpoint="database and public/private file snapshot verification"
           # (6) VERIFY: the data is exactly at the backup point - the
           # pre-backup record is present, the post-backup record is gone -
           # and the site is healthy in production mode. (exec -i + marker
@@ -1282,6 +1300,7 @@ jobs:
           grep -q 'Site operational mode: PRODUCTION' rehearsal-verify2-status.txt
           grep -q 'Production authorization: REJECT' rehearsal-verify2-status.txt
           echo "::notice title=Upgrade/rollback rehearsal::encrypted native backup -> rebuild -> migrate -> restore -> verify; site mode PRODUCTION, authorization REJECT"
+          TOEFL_UPGRADE_REHEARSAL
       - name: Performance baseline (measured, not policy)
         # P1 #9: record the responsiveness of the product's primary
         # surfaces on the final deployed stack (post-rehearsal state).
