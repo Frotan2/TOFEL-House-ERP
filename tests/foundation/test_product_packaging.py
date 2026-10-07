@@ -894,6 +894,24 @@ class DesktopRuntimeReliabilityContract(unittest.TestCase):
             self.assertIn("condition: service_healthy", body,
                           f"{service} must wait for the web healthcheck before starting")
 
+    def test_redis_readiness_is_explicit(self):
+        text = COMPOSE.read_text()
+        for service in ("redis-queue", "redis-cache"):
+            block = re.search(rf"^  {re.escape(service)}:\n(.*?)(?=^  \S)", text, flags=re.M | re.S)
+            self.assertIsNotNone(block, service)
+            body = block.group(1)
+            self.assertIn("redis-cli", body)
+            self.assertIn("healthcheck:", body)
+        web = re.search(r"^  web:\n(.*?)(?=^  \S)", text, flags=re.M | re.S).group(1)
+        self.assertIn("redis-queue:\n        condition: service_healthy", web)
+        self.assertIn("redis-cache:\n        condition: service_healthy", web)
+
+    def test_start_and_repair_require_healthy_web(self):
+        for name in ("Start", "Repair"):
+            text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
+            self.assertIn("State.Health.Status", text)
+            self.assertIn('findstr /x /c:"healthy"', text)
+
     def test_start_does_not_rebuild_on_every_daily_launch(self):
         text = (PRODUCT / "windows" / "Start TOEFL House ERP.cmd").read_text()
         self.assertIn("docker compose up -d --no-build", text)
