@@ -589,9 +589,9 @@ class OwnerDecisionLedgerTests(unittest.TestCase):
         resolved = decisions["resolved_business_decisions"]
         unresolved = " ".join(decisions["unresolved_business_inputs_not_reinterpreted"])
         self.assertEqual(resolved["D13"]["status"], "DECIDED")
-        self.assertEqual(resolved["D14"]["status"], "DECIDED")
+        self.assertEqual(resolved["D14"]["status"], "DEFERRED / FUTURE")
         self.assertIn("RPO 24 hours, RTO 8 hours", resolved["D13"]["owner_answers"][0])
-        self.assertIn("Off-site hardware the Owner controls", resolved["D14"]["owner_answers"][0])
+        self.assertIn("separate local drive on the same computer", resolved["D14"]["owner_answers"][0])
         self.assertNotIn("D13", unresolved)
         self.assertNotIn("D14", unresolved)
 
