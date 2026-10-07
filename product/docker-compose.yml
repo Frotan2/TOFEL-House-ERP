@@ -58,7 +58,7 @@ services:
     # this service restarts itself until the site exists instead of blocking.
     depends_on:
       web:
-        condition: service_started
+        condition: service_healthy
       db:
         condition: service_healthy
     command: ["/build/tools/bin/bench", "worker", "--queue", "short,default,long"]
@@ -73,7 +73,7 @@ services:
     container_name: toefl-house-erp-scheduler
     depends_on:
       web:
-        condition: service_started
+        condition: service_healthy
       db:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c", "exec /build/tools/bin/bench --site toeflhouse.localhost schedule"]
@@ -88,7 +88,9 @@ services:
     container_name: toefl-house-erp-socketio
     depends_on:
       web:
-        condition: service_started
+        condition: service_healthy
+      db:
+        condition: service_healthy
     command: ["node", "apps/frappe/socketio.js"]
     working_dir: /home/frappe/bench
     ports:
