@@ -19,7 +19,7 @@ POLICY = "TH Owner Operations Policy"
 MAX_REASON = 500
 MAX_DESTINATION = 200
 MAX_CUSTODY = 2000
-DESTINATION_KINDS = ("S3-compatible", "SFTP", "Managed backup", "Other")
+DESTINATION_KINDS = ("Owner-controlled off-site hardware",)
 
 
 def _policy_doc(for_update=False):
