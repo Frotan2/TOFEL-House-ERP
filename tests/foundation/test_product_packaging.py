@@ -876,5 +876,47 @@ class OwnerValidationChecklistTests(unittest.TestCase):
         self.assertNotIn("Install TOEFL House ERP.cmd", tail)
 
 
+class DesktopRuntimeReliabilityContract(unittest.TestCase):
+    """The end-user scripts must declare the whole stack ready, not just HTTP.
+
+    A prior acceptance run exposed the exact gap: web+db were reachable while
+    worker/socketio were still down. The daily Start path must not report
+    success in that state, and Repair must have a real success path after the
+    Docker daemon check.
+    """
+
+    def test_core_services_wait_for_web_health(self):
+        text = COMPOSE.read_text()
+        for service in ("worker", "socketio", "scheduler"):
+            block = re.search(rf"^  {service}:\\n(.*?)(?=^  \\S)", text, flags=re.M | re.S)
+            self.assertIsNotNone(block, service)
+            body = block.group(1)
+            self.assertIn("condition: service_healthy", body,
+                          f"{service} must wait for the web healthcheck before starting")
+
+    def test_start_does_not_rebuild_on_every_daily_launch(self):
+        text = (PRODUCT / "windows" / "Start TOEFL House ERP.cmd").read_text()
+        self.assertIn("docker compose up -d --no-build", text)
+        self.assertNotIn("docker compose build", text)
+        for name in ("worker", "socketio", "scheduler"):
+            self.assertIn(f"toefl-house-erp-{name}", text)
+        self.assertIn("services did not all become ready within 10 minutes", text)
+
+    def test_repair_has_reachable_success_path_after_docker_check(self):
+        text = (PRODUCT / "windows" / "Repair TOEFL House ERP.cmd").read_text()
+        self.assertIn("if errorlevel 1 goto :daemondown", text)
+        self.assertIn("goto :repair", text)
+        self.assertIn(":repair", text)
+        self.assertIn("if not exist data\\secrets\\db.env goto :nosecret", text)
+        self.assertIn("docker compose up -d --no-build", text)
+        self.assertIn("services did not all become ready within 10 minutes", text)
+
+    def test_failure_diagnostics_include_all_core_runtime_services(self):
+        for name in ("Start", "Repair"):
+            text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
+            for service in ("web", "worker", "socketio", "scheduler"):
+                self.assertIn(service, text)
+
+
 if __name__ == "__main__":
     unittest.main()
