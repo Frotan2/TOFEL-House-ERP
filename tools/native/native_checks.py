@@ -4434,7 +4434,8 @@ def main():
             # SYNTHETIC, so PRODUCTION can never be stated here.
             posture={f['label']:f['value'] for f in
                      next(s for s in own['sections'] if s['id']=='posture')['facts']}
-            assert posture['Production']=='SYNTHETIC',('the qualification bench must state its own resolved mode',posture)
+            assert posture['Site operational mode']=='SYNTHETIC',('the qualification bench must state its own resolved site mode',posture)
+            assert posture['Production authorization']=='REJECT',('the cockpit must keep release authorization separate and rejected',posture)
             # S6 obs-engineering-layer: native health facts ride the GM desk
             # and the owner cockpit as counts-and-identities, never traces.
             assert {'health','health-facts'}<=desk_sections(ops)

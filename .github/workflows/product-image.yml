@@ -131,17 +131,21 @@ jobs:
       - name: First boot, encrypted backup/restore and guarded site-mode activation
         working-directory: product
         run: |
-          set -euo pipefail
+          python3 ../tools/foundation/annotated_step.py "First boot, encrypted backup/restore and guarded site-mode activation" -- bash -euo pipefail <<'TOEFL_FIRST_BOOT'
+          checkpoint="site startup"
+          trap 'rc=$?; echo "::error title=Product image first-boot failure::checkpoint=$checkpoint exit=$rc"; exit "$rc"' ERR
           mkdir -p data/sites data/logs data/secrets && chmod 777 data/sites data/logs data/secrets
           docker compose up -d --no-build
           for i in $(seq 1 300); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 10; done
           curl --fail --silent http://127.0.0.1:8000/ >/dev/null
           echo "::notice title=First boot::site answered after ~$((i*10))s"
+          checkpoint="initial status and fail-closed mode"
           act() { docker compose exec -T web /product/activate.py "$@"; }
           act status | tee status.txt
           grep -q 'Site operational mode: REFUSED' status.txt
           grep -q 'Production authorization: REJECT' status.txt
 
+          checkpoint="ephemeral Owner recovery-key generation"
           # Create an ephemeral OpenPGP recovery identity on the runner. The
           # private key stays in RUNNER_TEMP, outside Frappe and outside the
           # mounted secondary backup volume; only its public half is sent to
@@ -177,6 +181,7 @@ jobs:
           PY
           )"
 
+          checkpoint="synthetic Course Owner policy commands"
           # Create a disposable Course Owner through native Frappe User/Role
           # and the guarded Owner policy commands. Schedule and retention are
           # synthetic CI values, never product defaults or Owner evidence.
@@ -220,14 +225,17 @@ jobs:
               frappe.session.user = previous_user
           print("CI Course Owner backup policy configured through guarded commands")
           PY
+          checkpoint="effective Owner backup-policy projection and key identity"
           policy_json="$(docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute toefl_house.operations.owner_configuration.current_backup_policy)"
           printf '%s\n' "$policy_json" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read().splitlines()[-1]); assert d["configured"] is True and d["retention_versions"] >= 2 and d["recovery_key_sha256"] == sys.argv[1]; print("::notice title=Owner backup policy::synthetic CI policy/key identity configured through the guarded Course Owner command")' "$recovery_key_sha256"
 
+          checkpoint="activation refusal without a verified backup"
           # The product activation command must refuse before a complete
           # encrypted, separate-volume backup receipt exists.
           set +e; act activate --confirm toeflhouse.localhost; rc=$?; set -e
           test "$rc" = 2
 
+          checkpoint="native encrypted database/public/private file backup"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute "frappe.db.set_single_value('System Settings', 'encrypt_backup', 1)"
           backup_dir="data/sites/toeflhouse.localhost/private/backups"
           file_marker="ERP-RESTORE-FILE-${GITHUB_RUN_ID}"
@@ -241,6 +249,7 @@ jobs:
           test -n "$encrypted_db" || { echo "::error::encrypted database artifact not found"; find "$backup_dir" -maxdepth 1 -type f -printf '%f\n' | sort; exit 1; }
           backup_set="${encrypted_db%-database-enc.sql.gz}"
           encrypted_names=("$encrypted_db" "${backup_set}-files-enc.tar" "${backup_set}-private-files-enc.tar")
+          checkpoint="GPG verification of native database and file artifacts"
           for name in "${encrypted_names[@]}"; do
             test -s "$backup_dir/$name" || { echo "::error::required encrypted artifact missing: $name"; exit 1; }
             packet_output="$(docker compose exec -T web gpg --list-packets "sites/toeflhouse.localhost/private/backups/$name" 2>&1)" || {
@@ -256,6 +265,7 @@ jobs:
           # key. Encrypt this exact sidecar to the disposable Owner public key
           # from inside the pinned product image; never put the plaintext on
           # the secondary volume. The runner's private key stays outside both.
+          checkpoint="public-key site-config recovery and plaintext-sidecar cleanup"
           mapfile -t config_sidecars < <(find "$backup_dir" -maxdepth 1 -type f \
             -name "${backup_set}-site_config_backup*.json" -print)
           test "${#config_sidecars[@]}" -eq 1 || {
@@ -303,6 +313,7 @@ jobs:
             echo "::error::plaintext Frappe site-config sidecar remains"; exit 1
           fi
 
+          checkpoint="separate-filesystem copy and manifest/receipt verification"
           # Model a second local volume in CI with a loop-backed ext4 mount,
           # then prove it is a distinct filesystem before copying. This is a
           # product-image integration test, not qualification of a real
@@ -388,6 +399,7 @@ jobs:
           print("Four encrypted artifacts copied to a distinct mounted volume and SHA-256 verified")
           PY
 
+          checkpoint="secondary-volume copy-back hash verification"
           # Copy the set back from the mounted secondary volume into the
           # disposable web container, then verify this second transfer before
           # the restore. The real Windows operator performs the analogous
@@ -405,6 +417,7 @@ jobs:
           done
           echo "::notice title=Secondary-volume copy::four artifacts copied back from the mounted secondary volume and reverified in the native site backup folder"
 
+          checkpoint="database marker setup and encrypted restore"
           # Prove a real restore from the encrypted artifacts recovered from
           # the separate volume. The native key is recovered only by using the
           # runner-held private key on the GPG-encrypted site-config artifact.
@@ -422,6 +435,7 @@ jobs:
           admin_password="$(printf '%s\n' "$cred" | awk '/^Password: /{print $2}')"
           db_password="$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)"
           test -n "$admin_password" && test -n "$db_password"
+          checkpoint="clean public/private tree staging and Frappe restore"
           # Stop the serving process as well as all background writers before
           # touching the site files or replacing the database.
           docker compose stop web worker scheduler socketio
@@ -450,6 +464,7 @@ jobs:
           for j in $(seq 1 60); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 2; done
           curl --fail --silent http://127.0.0.1:8000/ >/dev/null
           restore_elapsed="$(($(date +%s)-restore_start))"
+          checkpoint="database and public/private file restore verification"
           marker_after="$(docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost console <<PY
           import frappe
           print(bool(frappe.db.exists("ToDo", {"description": "$marker"})))
@@ -464,6 +479,7 @@ jobs:
           test "$restore_elapsed" -lt 28800
           echo "::notice title=Encrypted restore rehearsal::encrypted database, public/private file markers and Owner-key site-config recovery restored in ${restore_elapsed}s; post-backup database marker absent"
 
+          checkpoint="site-mode activation, refusals and deactivation"
           act activate --confirm toeflhouse.localhost | tee activate.txt
           grep -q 'All gates passed' activate.txt
           act status | tee activated-status.txt
@@ -474,6 +490,7 @@ jobs:
           act deactivate --confirm toeflhouse.localhost
           act status | grep -q 'Site operational mode: REFUSED'
           echo "::notice title=Owner site-mode lifecycle::REFUSED -> verified backup/restore -> PRODUCTION mode; production authorization remains REJECT -> REFUSED"
+          TOEFL_FIRST_BOOT
       - name: Browser UI acceptance (real headless Chromium, real login flow)
         # Container health, API calls and unit tests cannot prove the
         # operator actually sees a working UI. This drives a real headless

@@ -505,6 +505,20 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn("no public port", runbook.lower())
         self.assertIn("Restore from backup (operator)", runbook)
 
+    def test_product_first_boot_preserves_failure_diagnostics(self):
+        # Workflow logs are not always reachable from the qualification
+        # environment. Keep the long encrypted lifecycle step wrapped so a
+        # failed command still emits selected output and its non-secret
+        # checkpoint as GitHub annotations, without weakening its exit gate.
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        start = workflow.index("First boot, encrypted backup/restore and guarded site-mode activation")
+        end = workflow.index("Browser UI acceptance", start)
+        step = workflow[start:end]
+        self.assertIn("tools/foundation/annotated_step.py", step)
+        self.assertIn("Product image first-boot failure", step)
+        self.assertIn('checkpoint="public-key site-config recovery and plaintext-sidecar cleanup"', step)
+        self.assertIn("TOEFL_FIRST_BOOT", step)
+
     def test_product_restore_replaces_file_trees_and_checks_both_scopes(self):
         # Pinned Frappe restore uses tar extraction into existing paths, so a
         # real snapshot rehearsal must stage the old trees, extract into clean

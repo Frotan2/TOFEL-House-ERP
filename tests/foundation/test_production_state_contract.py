@@ -45,6 +45,12 @@ class ProductionStateContractTests(unittest.TestCase):
         self.assertIn('print(f"Production authorization: {PRODUCTION_AUTHORIZATION}")', source)
         self.assertIn("PRODUCTION site mode is not approval", source)
 
+    def test_native_posture_probe_uses_distinct_mode_and_authorization_facts(self):
+        source = (ROOT / "tools/native/native_checks.py").read_text(encoding="utf-8")
+        self.assertIn("posture['Site operational mode']=='SYNTHETIC'", source)
+        self.assertIn("posture['Production authorization']=='REJECT'", source)
+        self.assertNotIn("posture['Production']", source)
+
 
 if __name__ == "__main__":
     unittest.main()
