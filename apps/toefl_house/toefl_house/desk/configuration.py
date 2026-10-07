@@ -33,6 +33,8 @@ ALERTING_POLICY = "TH Alerting Policy"
 ALERTING_VERSION = "TH Alerting Policy Version"
 GUARDIAN_POLICY = "TH Guardian Lifecycle Policy"
 GUARDIAN_VERSION = "TH Guardian Lifecycle Policy Version"
+OWNER_POLICY = "TH Owner Operations Policy"
+OWNER_VERSION = "TH Owner Operations Policy Version"
 CONFIG_AUDIT = "TH Configuration Audit Event"
 
 POLICY_FIELDS = ["name", "family", "code", "title", "status", "description",
@@ -58,18 +60,21 @@ GUARDIAN_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
 # readiness badge.
 FUTURE_DOMAINS = (
     ("reporting-metrics", "Reporting & Metrics",
-     "Reports use native ERPNext/Education reporting; no derived-metric "
-     "definitions are configured."),
+     "Owner-selected reporting review interval and class-capacity target "
+     "are carried by TH Owner Operations Policy."),
     ("finance", "Finance",
-     "Correction terms live on the Finance desk; tax readiness arrives "
-     "in a later phase."),
+     "Billing and correction authorities remain on the Finance desk; "
+     "tax terms are carried by TH Owner Operations Policy."),
     ("enrollment-lifecycle", "Enrollment & Lifecycle",
-     "Calendar and lifecycle rules arrive in a later phase."),
+     "Withdrawal/dismissal remains governed by Enrollment Exit Policy; "
+     "transfer and calendar terms are carried by TH Owner Operations Policy."),
     ("backup-recovery", "Backup & Recovery",
-     "Offsite destination records arrive in a later phase."),
+     "Off-site requirement and non-secret destination reference are carried "
+     "by TH Owner Operations Policy; credentials are never stored there."),
     ("security", "Security",
-     "Custody records arrive in a later phase; safety controls stay "
-     "code-controlled and are never configured from any desk."),
+     "Custody requirements and recovery quorum may be recorded as policy "
+     "requirements; keys, credentials, custodians and authorization "
+     "ceremonies remain outside Frappe."),
 )
 
 
