@@ -159,11 +159,15 @@ jobs:
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
           encrypted_backup_dir="data/sites/toeflhouse.localhost/private/backups"
           encrypted_db="$(find "$encrypted_backup_dir" -maxdepth 1 -type f -name '*-database-enc.sql.gz' -printf '%T@ %p\\n' | sort -nr | head -1 | cut -d' ' -f2-)"
-          test -n "$encrypted_db"
+          test -n "$encrypted_db" || { echo "::error::encrypted database artifact not found"; find "$encrypted_backup_dir" -maxdepth 1 -type f -printf '%p\\n' | sort; exit 1; }
           encrypted_base="${encrypted_db%-database-enc.sql.gz}"
-          test -f "${encrypted_base}-files-enc.tar"
-          test -f "${encrypted_base}-private-files-enc.tar"
-          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute "frappe.db.set_single_value('System Settings', 'encrypt_backup', 0)"
+          echo "Encrypted backup artifacts:"
+          printf '  db=%s\\n' "$encrypted_db"
+          printf '  files=%s\\n' "${encrypted_base}-files-enc.tar"
+          printf '  private=%s\\n' "${encrypted_base}-private-files-enc.tar"
+          test -f "${encrypted_base}-files-enc.tar" || { echo "::error::encrypted public-files artifact missing"; exit 1; }
+          test -f "${encrypted_base}-private-files-enc.tar" || { echo "::error::encrypted private-files artifact missing"; exit 1; }
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute "frappe.db.set_single_value('System Settings', 'encrypt_backup', 0)" || { echo "::error::failed to disable native backup encryption after qualification"; exit 1; }
           echo "::notice title=Backup encryption::native encrypted backup artifacts verified"
 
           # Rehearse an actual restore against the same disposable qualification
