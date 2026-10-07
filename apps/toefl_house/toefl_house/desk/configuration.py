@@ -38,6 +38,45 @@ OWNER_POLICY = "TH Owner Operations Policy"
 OWNER_VERSION = "TH Owner Operations Policy Version"
 CONFIG_AUDIT = "TH Configuration Audit Event"
 
+NATIVE_OWNER_POLICIES = (
+    ("catalog-linkage", "Catalog Linkage", "TH Catalog Linkage Policy",
+     "toefl_house.academic.catalog_linkage.create_catalog_linkage_policy",
+     "toefl_house.academic.catalog_linkage.set_catalog_linkage_version",
+     "toefl_house.academic.catalog_linkage.set_catalog_linkage_status",
+     "The Course Owner controls whether catalog linkage is advisory or enforcing."),
+    ("returning-student", "Returning Student", "TH Returning Student Policy",
+     "toefl_house.admission.policies.create_returning_student_policy",
+     "toefl_house.admission.policies.set_returning_student_policy_version",
+     "toefl_house.admission.policies.set_returning_student_policy_status",
+     "The Course Owner controls the returning-student intake mode."),
+    ("enrollment-exit", "Enrollment Exit", "TH Enrollment Exit Policy",
+     "toefl_house.enrollment.exits.create_enrollment_exit_policy",
+     "toefl_house.enrollment.exits.set_enrollment_exit_policy_version",
+     "toefl_house.enrollment.exits.set_enrollment_exit_policy_status",
+     "The Course Owner controls the approver role for enrollment exits."),
+    ("billing", "Billing", "TH Billing Policy",
+     "toefl_house.finance.policies.create_billing_policy",
+     "toefl_house.finance.policies.set_billing_policy_version",
+     "toefl_house.finance.policies.set_billing_policy_status",
+     "The Course Owner controls posting bounds and placement-fee timing."),
+    ("roster-change", "Roster Change", "TH Roster Change Policy",
+     "toefl_house.teaching.policies.create_roster_change_policy",
+     "toefl_house.teaching.policies.set_roster_change_policy_version",
+     "toefl_house.teaching.policies.set_roster_change_policy_status",
+     "The Course Owner controls the roster-change cutoff."),
+    ("attendance-correction", "Attendance Correction", "TH Attendance Correction Policy",
+     "toefl_house.teaching.attendance_corrections.create_attendance_correction_policy",
+     "toefl_house.teaching.attendance_corrections.set_attendance_correction_policy_version",
+     "toefl_house.teaching.attendance_corrections.set_attendance_correction_policy_status",
+     "The Course Owner controls the correction approver and correction window."),
+    ("adjustment-posting", "Adjustment Posting", "TH Adjustment Posting Policy",
+     "toefl_house.teaching.adjustment_posting.create_adjustment_posting_policy",
+     "toefl_house.teaching.adjustment_posting.set_adjustment_posting_version",
+     "toefl_house.teaching.adjustment_posting.set_adjustment_posting_status",
+     "The Course Owner controls orphan payroll posting behavior."),
+)
+
+
 POLICY_FIELDS = ["name", "family", "code", "title", "status", "description",
                  "modified"]
 FACET_FIELDS = ["components", "weights", "pass_rules", "rubrics",
@@ -142,6 +181,11 @@ def work():
                                 empty_title=title,
                                 empty_body=body))
     sections.append(
+        section("owner-policies", "Course Owner Policy Controls", "queue",
+                items=[_native_owner_policy_item(*spec) for spec in NATIVE_OWNER_POLICIES],
+                empty_title="No native policy controls",
+                empty_body="Native Course Owner policies are indexed here; mutations still use their guarded domain commands."))
+    sections.append(
         section("student-guardian", "Student & Guardian", "facts",
                 facts=_guardian_facts(guardian, guardian_readiness,
                                       guardian_by_policy, today),
@@ -175,6 +219,41 @@ def work():
         "sections": sections,
     }
 
+
+
+def _native_owner_policy_item(sid, title, doctype, create_endpoint,
+                               version_endpoint, status_endpoint, description):
+    """Index an existing canonical policy without creating a second authority."""
+    rows = project_rows("configuration", doctype,
+                        ["name", "code", "title", "status", "description", "modified"],
+                        limit=1)
+    if not rows:
+        return {
+            "id": sid, "person": title,
+            "detail": "No policy shell exists; the governed feature stays fail-closed until the Course Owner configures it.",
+            "status": "Owner configuration required", "stage": "Course Owner policy",
+            "stage_definition": description,
+            "next": "Create the policy shell, then add and validate its first effective-dated version.",
+            "next_role": "Course Owner", "waiting_since": None,
+            "action": {"endpoint": create_endpoint, "label": "Create policy",
+                       "args": {"code": "", "title": title, "description": description}},
+        }
+    row = rows[0]
+    status = row.get("status") or ""
+    return {
+        "id": row["code"], "person": row["title"],
+        "detail": description,
+        "status": "Owner policy active" if status == "Active" else "Owner policy retired",
+        "stage": "Course Owner policy", "stage_definition": description,
+        "next": "Add or replace effective-dated terms, then validate the current policy.",
+        "next_role": "Course Owner", "waiting_since": None,
+        "actions": [
+            {"endpoint": version_endpoint, "label": "Set policy version",
+             "args": {"policy": row["code"]}},
+            {"endpoint": status_endpoint, "label": "Change policy status",
+             "args": {"policy": row["code"]}},
+        ],
+    }
 
 
 def _owner_policy_item(today, title, body):
