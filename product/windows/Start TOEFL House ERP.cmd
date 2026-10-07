@@ -24,19 +24,22 @@ echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :up
 if not exist data\secrets\db.env goto :nosecret
-echo  Checking for app updates...
-docker compose build
-if errorlevel 1 goto :failed
-docker compose up -d
+echo  Starting TOEFL House ERP...
+docker compose up -d --no-build
 if errorlevel 1 goto :failed
 echo  Waiting until TOEFL House ERP answers...
-set READY_TRIES=40
+set READY_TRIES=60
 :waitready
-timeout /t 8 /nobreak >nul
-curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul && goto :ready
+timeout /t 10 /nobreak >nul
+curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul || goto :waitservices
+docker inspect --format "{{.State.Status}}" toefl-house-erp-worker 2>nul | findstr /x /c:"running" >nul || goto :waitservices
+docker inspect --format "{{.State.Status}}" toefl-house-erp-socketio 2>nul | findstr /x /c:"running" >nul || goto :waitservices
+docker inspect --format "{{.State.Status}}" toefl-house-erp-scheduler 2>nul | findstr /x /c:"running" >nul || goto :waitservices
+goto :ready
+:waitservices
 set /a READY_TRIES-=1
 if READY_TRIES GTR 0 goto :waitready
-echo  TOEFL House ERP did not answer within 5 minutes.
+echo  TOEFL House ERP services did not all become ready within 10 minutes.
 goto :failed
 :ready
 start "" "http://127.0.0.1:8000/"
@@ -65,11 +68,11 @@ echo  TOEFL House ERP could not start. Current service state:
 echo.
 docker compose ps
 echo.
-echo  Last lines of the application log:
-docker compose logs --tail 5 web 2>&1
+echo  Last lines of the application logs:
+docker compose logs --tail 5 web worker socketio scheduler 2>&1
 echo.
-echo  Web restart count since the last Docker start:
-docker inspect --format {{.RestartCount}} toefl-house-erp-web 2>nul
+echo  Container state and restart counts:
+docker inspect --format "{{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} restarts={{.RestartCount}} oom={{.State.OOMKilled}}" toefl-house-erp-web toefl-house-erp-worker toefl-house-erp-socketio toefl-house-erp-scheduler 2>nul
 echo.
 echo  What the state above usually means:
 echo    no rows, or rows "not running"     the ERP services are not up.
