@@ -58,7 +58,7 @@ has_permission = {
                  "TH Catalog Linkage Policy",
                  "TH Adjustment Posting Policy",
                  "TH Alerting Policy",
-                 "TH Guardian Lifecycle Policy",
+                 "TH Guardian Lifecycle Policy", "TH Owner Operations Policy",
                  "TH Configuration Operation", "TH Configuration Audit Event")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
@@ -75,6 +75,7 @@ has_permission["TH Catalog Linkage Policy"] = "toefl_house.permissions.configura
 has_permission["TH Adjustment Posting Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Alerting Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Guardian Lifecycle Policy"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Owner Operations Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
 # Branch isolation (the multi-branch operating rule): the four native
