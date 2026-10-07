@@ -41,9 +41,9 @@
     "backup": "Automated multi-version encrypted backup is REQUIRED.",
     "recovery": "Recovery onto another system MUST be supported.",
     "priority": "Preserving data is more important than minimizing recovery time.",
-    "offsite_backup": "Should be supported in the future; no provider or destination is selected now.",
+    "offsite_backup": "Owner-controlled off-site hardware is REQUIRED for the selected local-server + Tailscale deployment; no third-party cloud is authorized.",
     "retention_and_rotation": "Engineering-owned implementation contract: versioned encrypted backups with deterministic rotation and restoration verification; exact deployed retention values remain configuration, not invented business policy.",
-    "rpo_rto": "No numeric RPO/RTO is supplied. Recovery priority is authoritative: preserve data first; do not claim a time objective until measured in the selected architecture."
+    "rpo_rto": "RPO 24 hours; RTO 8 hours. These are owner-selected targets for the current local-server + Tailscale deployment and must be measured and evidenced; recording them does not mean they are met."
   },
   "configurable_business_policy": {
     "fees_discounts_courses_levels_skills_terms": "Must be configurable through native configuration or the smallest justified controlled extension; values must not be hard-coded.",
