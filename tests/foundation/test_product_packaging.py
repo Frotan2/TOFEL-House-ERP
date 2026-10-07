@@ -552,6 +552,15 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn("{key: data.get(key) for key in fields}", diagnostic)
         self.assertNotIn("::error::", diagnostic)
 
+    def test_product_workflow_masks_secrets_and_suppresses_credential_read_output(self):
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        self.assertNotIn("${cred:0:300}", workflow)
+        self.assertNotIn("${cred:0:400}", workflow)
+        self.assertIn("command output suppressed because it may contain credentials", workflow)
+        for variable in ("cred_password", "admin_cred", "backup_encryption_key",
+                         "admin_pw", "db_root_pw"):
+            self.assertIn('echo "::add-mask::$%s"' % variable, workflow)
+
     def test_product_restore_replaces_file_trees_and_checks_both_scopes(self):
         # Pinned Frappe restore uses tar extraction into existing paths, so a
         # real snapshot rehearsal must stage the old trees, extract into clean

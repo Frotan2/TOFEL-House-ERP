@@ -308,6 +308,7 @@ jobs:
           PY
           )"
           test -n "$backup_encryption_key" || { echo "::error::recovered Frappe encryption key is empty"; exit 1; }
+          echo "::add-mask::$backup_encryption_key"
           rm -f -- "${config_sidecars[@]}"
           if find "$backup_dir" -maxdepth 1 -type f -name '*-site_config_backup*.json' -print -quit | grep -q .; then
             echo "::error::plaintext Frappe site-config sidecar remains"; exit 1
@@ -516,12 +517,12 @@ jobs:
                   cred_ok=1
                   break
               fi
-              echo "credentials read attempt $attempt failed: ${cred:0:300}"
+              echo "credentials read attempt $attempt failed; command output suppressed because it may contain credentials"
               sleep 10
           done
           if [ "$cred_ok" != "1" ]; then
               ps_out="$(docker compose ps 2>&1 || true)"
-              echo "::error::first-run credentials read failed after 3 attempts: ${cred:0:400}"
+              echo "::error::first-run credentials read failed after 3 attempts; command output suppressed because it may contain credentials"
               echo "::error::stack states::${ps_out:0:800}"
               exit 1
           fi
@@ -531,6 +532,7 @@ jobs:
               echo "::error::first-run credentials file is missing its Username or Password line"
               exit 1
           fi
+          echo "::add-mask::$cred_password"
           if [ "$cred_user" != "Administrator" ]; then
               echo "::error::first-run credentials user is not Administrator: $cred_user"
               exit 1
@@ -723,6 +725,7 @@ jobs:
           # three attempts locks the account for 60 seconds).
           admin_cred=$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt | awk '/^Password: /{print $2}')
           test -n "$admin_cred"
+          echo "::add-mask::$admin_cred"
           echo "stage: admin credentials read (in-container root)" >> tailnet-progress.txt
           TAILNET_ADMIN_PW="$admin_cred" python3 - <<'EOF'
           import json
@@ -1232,6 +1235,9 @@ jobs:
           db_root_pw=$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)
           backup_encryption_key=$(docker compose exec -T web /home/frappe/bench/env/bin/python -c 'import json; print(json.load(open("/home/frappe/bench/sites/toeflhouse.localhost/site_config.json"))["encryption_key"])')
           test -n "$admin_pw" && test -n "$db_root_pw" && test -n "$backup_encryption_key"
+          echo "::add-mask::$admin_pw"
+          echo "::add-mask::$db_root_pw"
+          echo "::add-mask::$backup_encryption_key"
           docker compose stop web worker scheduler socketio
           # Native Frappe restore overlays archive members and leaves files
           # absent from the backup untouched. Preserve the old trees beside
