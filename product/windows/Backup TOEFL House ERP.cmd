@@ -13,8 +13,8 @@ if errorlevel 1 goto :backupfailed
 echo.
 echo  Backup finished. Backup files are in:
 echo    %CD%\data\sites\toeflhouse.localhost\private\backups
-echo  Copy that folder to an external drive for safekeeping.
-echo  Note: restore is a guided operator step (see docs/engineering/LAUNCH-RUNBOOK.md).
+echo  This is the local native backup. D14 production recovery requires an encrypted\necho  copy to Owner-controlled off-site hardware at a separate physical location.
+echo  Note: restore is a guided operator step. This backup alone does NOT close D14.
 pause
 exit /b 0
 :backupfailed
