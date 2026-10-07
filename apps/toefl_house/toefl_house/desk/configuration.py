@@ -224,9 +224,17 @@ def work():
 def _native_owner_policy_item(sid, title, doctype, create_endpoint,
                                version_endpoint, status_endpoint, description):
     """Index an existing canonical policy without creating a second authority."""
-    rows = project_rows("configuration", doctype,
-                        ["name", "code", "title", "status", "description", "modified"],
-                        limit=1)
+    fields = ["name", "code", "title", "status", "description", "modified"]
+    projectors = {
+        "TH Catalog Linkage Policy": lambda: project_rows("configuration", "TH Catalog Linkage Policy", fields, limit=1),
+        "TH Returning Student Policy": lambda: project_rows("configuration", "TH Returning Student Policy", fields, limit=1),
+        "TH Enrollment Exit Policy": lambda: project_rows("configuration", "TH Enrollment Exit Policy", fields, limit=1),
+        "TH Billing Policy": lambda: project_rows("configuration", "TH Billing Policy", fields, limit=1),
+        "TH Roster Change Policy": lambda: project_rows("configuration", "TH Roster Change Policy", fields, limit=1),
+        "TH Attendance Correction Policy": lambda: project_rows("configuration", "TH Attendance Correction Policy", fields, limit=1),
+        "TH Adjustment Posting Policy": lambda: project_rows("configuration", "TH Adjustment Posting Policy", fields, limit=1),
+    }
+    rows = projectors[doctype]()
     if not rows:
         return {
             "id": sid, "person": title,
