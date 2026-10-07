@@ -4,8 +4,9 @@ Date: 2026-09-18 · Refreshed 2026-09-25 (inventory section below brought curren
 
 This document is the contract for the Business Configuration & Academic Control
 Plane: the layer that turns the Owner's operating rules into governed,
-versioned, auditable, reusable configuration — and makes every module consume
-the same rules. It follows the mission's first directive: **verify the native
+versioned, auditable, reusable configuration. Each consuming domain must retain an
+explicit canonical authority; a carrier never silently overrides a native or
+domain-specific policy. It follows the mission's first directive: **verify the native
 model before creating anything**.
 
 Governing principle: **native Frappe / ERPNext / Education / HRMS remain the
