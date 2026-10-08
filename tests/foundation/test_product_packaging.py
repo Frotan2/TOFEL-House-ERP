@@ -689,7 +689,13 @@ class BootstrapLogicContract(unittest.TestCase):
             body = first.read_text()
             self.assertIn("pw-one", body)
             self.assertNotIn("pw-two", body)  # never rotates silently
-            self.assertEqual(oct(first.stat().st_mode & 0o777), "0o600")
+            # The credential file is created inside the Linux product container,
+            # where chmod(0600) is enforced. A Windows host filesystem does not
+            # expose POSIX permission bits through pathlib.chmod(), so the same
+            # assertion is not meaningful when this offline contract suite runs
+            # directly from a Windows checkout.
+            if sys.platform != "win32":
+                self.assertEqual(oct(first.stat().st_mode & 0o777), "0o600")
 
     def test_root_password_parsing_requires_key_and_value(self):
         import tempfile
