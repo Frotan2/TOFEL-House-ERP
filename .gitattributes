@@ -41,3 +41,8 @@
 # their endings are not kernel-relevant; the packaging guard still
 # checks every COPY source for CR bytes.)
 product/activate.py text eol=lf
+# The in-image performance baseline is COPYed into the product image and is
+# also executed directly by the performance qualification step. Pin it to LF
+# in every Windows worktree so a local build cannot bake a CRLF shebang/script
+# into the image.
+product/perf_baseline.py text eol=lf
