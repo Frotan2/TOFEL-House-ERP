@@ -207,7 +207,7 @@ def public_assets_missing(sites_dir: Path = SITES_DIR, apps_dir: Path | None = N
         dest = sites_dir / "assets" / app_root.name
         for file in public.rglob("*"):
             if file.is_file() and not (dest / file.relative_to(public)).is_file():
-                missing.append(f"{app_root.name}/{file.relative_to(public)}")
+                missing.append(f"{app_root.name}/{file.relative_to(public).as_posix()}")
     return missing
 
 
@@ -222,7 +222,9 @@ def write_credentials(site: str, admin_password: str, sites_dir: Path = SITES_DI
         f"Site: {site}\nUsername: Administrator\nPassword: {admin_password}\n\n"
         "Keep this file private. You can change the password after logging in\n"
         "(User Menu → My Profile → Set New Password). If you lose it before any\n"
-        "backup, use the Repair script: it cannot and will not print secrets.\n")
+        "backup, use the Repair script: it cannot and will not print secrets.\n",
+        encoding="utf-8",
+    )
     credentials.chmod(stat.S_IRUSR | stat.S_IWUSR)
     return credentials
 
