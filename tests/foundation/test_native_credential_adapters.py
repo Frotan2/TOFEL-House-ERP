@@ -114,12 +114,13 @@ class NativeSiteSetupAdapterTests(unittest.TestCase):
 
 
 class NativeSiteCreationDiagnosticsTests(unittest.TestCase):
-    def test_child_failure_marker_exposes_only_type_and_numeric_errno(self):
+    def test_child_failure_marker_exposes_only_safe_type_code_and_frames(self):
         secrets_ = ("synthetic-root-secret", "synthetic-admin-secret",
                     "synthetic-db-secret")
         stderr = ("Traceback (most recent call last):\n"
                   "TOEFL_NATIVE_SITE_EXCEPTION=OSError\n"
                   "TOEFL_NATIVE_SITE_ERRNO=2\n"
+                  "TOEFL_NATIVE_SITE_FRAMES=_new_site|42,setup_db|80\n"
                   + "database password was " + secrets_[0])
         child = mock.Mock(returncode=1, stdout="child output " + secrets_[1],
                           stderr=stderr)
@@ -128,8 +129,11 @@ class NativeSiteCreationDiagnosticsTests(unittest.TestCase):
                 bootstrap.create_site("diagnostic.localhost", *secrets_)
         self.assertEqual(caught.exception.failure_type, "OSError")
         self.assertEqual(caught.exception.failure_errno, 2)
+        self.assertEqual(caught.exception.failure_frames,
+                         ("_new_site:42", "setup_db:80"))
         self.assertIn("OSError", str(caught.exception))
         self.assertIn("OS error code: 2", str(caught.exception))
+        self.assertIn("frames: _new_site:42,setup_db:80", str(caught.exception))
         for secret in secrets_:
             self.assertNotIn(secret, str(caught.exception))
         argv = run.call_args.args[0]
@@ -155,6 +159,15 @@ class NativeSiteCreationDiagnosticsTests(unittest.TestCase):
             bootstrap._native_site_failure_errno(
                 "TOEFL_NATIVE_SITE_ERRNO=999999"),
             None)
+        self.assertEqual(
+            bootstrap._native_site_failure_frames(
+                "TOEFL_NATIVE_SITE_FRAMES=source|2\n"
+                "TOEFL_NATIVE_SITE_FRAMES=frame|3"),
+            ())
+        self.assertEqual(
+            bootstrap._native_site_failure_frames(
+                "TOEFL_NATIVE_SITE_FRAMES=secret text|2"),
+            ())
 
     def test_parent_os_error_exposes_only_validated_numeric_code(self):
         secrets_ = ("synthetic-root-secret", "synthetic-admin-secret",

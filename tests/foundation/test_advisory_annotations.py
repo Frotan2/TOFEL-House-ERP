@@ -21,6 +21,7 @@ class AdvisoryAnnotationTests(unittest.TestCase):
     def test_only_one_exact_sanitized_native_site_failure_is_annotated(self):
         detail = ("Native Frappe site creation failed: secure native site creation failed "
                   "(exit 1); exception type: OSError; OS error code: 2; "
+                  "frames: _new_site:42,setup_db:80; "
                   "sensitive diagnostics were withheld")
         output = "private traceback and credentials\n" + detail + "\nraw private message"
         self.assertEqual(safe_native_site_failure_detail(output), detail)

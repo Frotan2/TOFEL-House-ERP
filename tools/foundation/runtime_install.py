@@ -33,6 +33,8 @@ _SAFE_NATIVE_SITE_FAILURE = re.compile(
     r"(?: \(exit [0-9]{1,4}\))?"
     r"(?:; exception type: [A-Za-z_][A-Za-z0-9_]{0,127})?"
     r"(?:; OS error code: (?:0|[1-9][0-9]{0,4}))?"
+    r"(?:; frames: [A-Za-z0-9_<>.-]{1,128}:[1-9][0-9]{0,5}"
+    r"(?:,[A-Za-z0-9_<>.-]{1,128}:[1-9][0-9]{0,5}){0,5})?"
     r"; sensitive diagnostics were withheld\Z")
 
 

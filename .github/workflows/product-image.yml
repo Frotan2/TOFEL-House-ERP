@@ -1377,10 +1377,10 @@ jobs:
           for f in rehearse-activate.txt perf-baseline.json; do
             if [ -f "$f" ]; then echo "::error::marker present: $f"; else echo "::error::marker absent: $f"; fi
           done
-          # bootstrap prints only a safe exception class, exit status, and
-          # optional numeric OS error code; it never forwards Frappe messages
-          # or stdin secrets. Surface its short tail so first-boot failures have
-          # an actionable, secret-free cause in the check annotations.
+          # bootstrap prints only a safe exception class, exit status, numeric
+          # OS error code, and compact frame names/line numbers; it never forwards
+          # Frappe messages, paths, source text, or stdin secrets. This short
+          # tail gives startup failures an actionable, secret-free annotation.
           docker compose logs --tail 3 bootstrap 2>&1 | tail -3 | sed 's/^/::error::bootstrap::/' || true
           docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
 

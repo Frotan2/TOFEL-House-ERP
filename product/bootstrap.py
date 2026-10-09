@@ -131,10 +131,11 @@ def read_root_password(secrets_dir: Path = SECRETS_DIR) -> str:
 
 _NATIVE_SITE_FAILURE_MARKER = "TOEFL_NATIVE_SITE_EXCEPTION="
 _NATIVE_SITE_ERRNO_MARKER = "TOEFL_NATIVE_SITE_ERRNO="
+_NATIVE_SITE_FRAMES_MARKER = "TOEFL_NATIVE_SITE_FRAMES="
 _NATIVE_EXCEPTION_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}\Z")
 
 _CREATE_SITE_SCRIPT = r'''
-import json, re, sys
+import json, re, sys, traceback
 frappe = None
 initialized = False
 failure = None
@@ -185,6 +186,13 @@ if failure is not None:
         code = getattr(failure, "errno", None)
         if type(code) is int and 0 <= code <= 65535:
             print("TOEFL_NATIVE_SITE_ERRNO=" + str(code), file=sys.stderr, flush=True)
+    frames = []
+    for frame in traceback.extract_tb(failure.__traceback__)[-6:]:
+        if re.fullmatch(r"[A-Za-z0-9_<>.-]{1,128}", frame.name):
+            frames.append(frame.name + "|" + str(frame.lineno))
+    if frames:
+        print("TOEFL_NATIVE_SITE_FRAMES=" + ",".join(frames),
+              file=sys.stderr, flush=True)
     raise failure
 '''
 
@@ -193,13 +201,20 @@ class NativeSiteCreationError(RuntimeError):
     """A safe site-creation failure containing no child output or credentials."""
 
     def __init__(self, returncode: int | None, failure_type: str | None = None,
-                 failure_errno: int | None = None):
+                 failure_errno: int | None = None,
+                 failure_frames: tuple[str, ...] | None = None):
         self.returncode = returncode
         self.failure_type = (failure_type if isinstance(failure_type, str)
                              and _NATIVE_EXCEPTION_NAME.fullmatch(failure_type)
                              else None)
         self.failure_errno = (failure_errno if type(failure_errno) is int
                               and 0 <= failure_errno <= 65535 else None)
+        frames = failure_frames if isinstance(failure_frames, (tuple, list)) else ()
+        valid_frames = (len(frames) <= 6 and all(
+            isinstance(frame, str) and re.fullmatch(
+                r"[A-Za-z0-9_<>.-]{1,128}:[1-9][0-9]{0,5}", frame)
+            for frame in frames))
+        self.failure_frames = tuple(frames) if valid_frames else ()
         message = "secure native site creation failed"
         if returncode is not None:
             message += f" (exit {returncode})"
@@ -207,6 +222,8 @@ class NativeSiteCreationError(RuntimeError):
             message += f"; exception type: {self.failure_type}"
         if self.failure_errno is not None:
             message += f"; OS error code: {self.failure_errno}"
+        if self.failure_frames:
+            message += "; frames: " + ",".join(self.failure_frames)
         message += "; sensitive diagnostics were withheld"
         super().__init__(message)
 
@@ -230,6 +247,27 @@ def _native_site_failure_errno(stderr: str) -> int | None:
         return None
     code = int(markers[0])
     return code if code <= 65535 else None
+
+
+def _native_site_failure_frames(stderr: str) -> tuple[str, ...]:
+    """Extract one compact frame-name/line marker; omit paths and source text."""
+    markers = [line[len(_NATIVE_SITE_FRAMES_MARKER):]
+               for line in (stderr or "").splitlines()
+               if line.startswith(_NATIVE_SITE_FRAMES_MARKER)]
+    if len(markers) != 1:
+        return ()
+    raw_frames = markers[0].split(",")
+    if not 1 <= len(raw_frames) <= 6:
+        return ()
+    frames = []
+    for raw in raw_frames:
+        name, separator, line_number = raw.partition("|")
+        if (not separator
+                or not re.fullmatch(r"[A-Za-z0-9_<>.-]{1,128}", name)
+                or not re.fullmatch(r"[1-9][0-9]{0,5}", line_number)):
+            return ()
+        frames.append(f"{name}:{line_number}")
+    return tuple(frames)
 
 
 def create_site(site: str, root_password: str, admin_password: str,
@@ -277,12 +315,14 @@ def create_site(site: str, root_password: str, admin_password: str,
             None, type(error).__name__, getattr(error, "errno", None)) from None
     if result.returncode:
         # The child receives credentials on stdin. Never forward its exception,
-        # argv, or captured output: only a validated, program-defined exception
-        # class is safe to surface to the operator/CI annotation.
+        # argv, paths, source text or captured output: only a validated type,
+        # numeric OS code, and compact function-name/line summary are safe.
+        failure_type = _native_site_failure_type(result.stderr)
         raise NativeSiteCreationError(
             result.returncode,
-            _native_site_failure_type(result.stderr),
+            failure_type,
             _native_site_failure_errno(result.stderr),
+            _native_site_failure_frames(result.stderr) if failure_type else (),
         ) from None
 
 
@@ -610,9 +650,9 @@ def main() -> int:
     try:
         summary = bootstrap()
     except NativeSiteCreationError as error:
-        # Deliberately emit only a validated exception class and numeric OS
-        # error code; native messages/paths/tracebacks remain private to the
-        # captured process.
+        # Deliberately emit only a validated exception class, numeric OS error
+        # code, and compact frame-name/line summary; messages, paths, source
+        # text and full tracebacks remain private to the captured process.
         print(str(error), file=sys.stderr)
         return 1
     print(json.dumps(summary))
