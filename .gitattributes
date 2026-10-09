@@ -16,13 +16,12 @@
 .dockerignore text eol=lf
 
 # The product build context is an allowlist. All text in the owned apps and
-# all product Python scripts must be LF even in fresh Windows checkouts.
+# product Python scripts must be LF even in fresh Windows checkouts.
 apps/** text=auto eol=lf
 product/*.py text eol=lf
 product/app.Dockerfile text eol=lf
 product/docker-compose.yml text eol=lf
 
-# Git attributes control future checkouts and Git's clean/smudge conversion;
-# they do NOT rewrite files already present in an existing worktree. The
-# Windows installer and Repair flow invoke Normalize Product Sources.ps1
-# before a build so a stale CRLF checkout is repaired safely in place.
+# This includes directly executed product/activate.py and perf_baseline.py.
+# Git attributes govern future checkouts; they do not rewrite an existing
+# stale worktree, which the Windows installer/Repair flow normalizes first.
