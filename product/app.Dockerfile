@@ -145,6 +145,15 @@ RUN set -eux; \
     mkdir -p /build/sites-seed; \
     cp sites/apps.txt sites/apps.json sites/common_site_config.json /build/sites-seed/; \
     yarn cache clean; rm -rf /home/frappe/.cache
+# Ghostscript guard (GHSA-r543-q48m-4c9j, WeasyPrint RCE). Pillow's EPS plugin
+# renders EPS/PS bytes by running the `gs` executable found on PATH
+# (PIL/EpsImagePlugin.py), and WeasyPrint hands it attacker-reachable images
+# through beta print formats. The runtime image must never ship Ghostscript:
+# the build fails if a `gs` executable exists on PATH, including one pulled in
+# transitively by an apt dependency. Evidence and scope:
+# docs/engineering/evidence/sec-deps-01/advisory-delta-2026-10-09/README.md
+RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GHSA-r543-q48m-4c9j precondition violated" >&2; exit 1; fi
+
 # The compose bind mount (./data/sites) hides the bench's own sites/ files on a
 # fresh install; bootstrap.py restores them from /build/sites-seed before the
 # first bench call (bench resolves installed apps from sites/apps.txt).

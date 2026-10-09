@@ -1,0 +1,1805 @@
+{
+ "schema": "sec-deps-01/replay-snapshot/v1",
+ "captured_utc": "2026-10-09T11:08:29Z",
+ "method": {
+  "npm": "POST https://registry.npmjs.org/-/npm/v1/security/advisories/bulk with name -> installed versions read from the pinned yarn.lock files (dev dependencies included, matching bench's full install); an advisory counts only when semver.satisfies(version, vulnerable_versions, includePrerelease) (semver 7.8.5).",
+  "pypi": "GET https://pypi.org/pypi/<name>/<version>/json for each of the 153 pins in python-pins-replay.txt; the vulnerabilities[] array (OSV-backed) is the proxy for the CI OSV querybatch, which is unreachable from the sandbox (api.osv.dev).",
+  "python_pins": "uv 0.11.6: uv pip compile over the union of the five pinned upstream pyproject dependency lists, --python-version 3.14 --python-platform x86_64-unknown-linux-gnu (153 pins; oauthlib 3.3.1, pdfkit 1.0.0, pypdf 6.15.0, pyjwt 2.13.0, setuptools 80.9.0, weasyprint 68.0, werkzeug 3.1.6 match the CI annotation)."
+ },
+ "pinned_upstream_input_sha256": {
+  "frappe/yarn.lock": "4e39da1b48edcc235f1973302d96b283219b44774f07f447256319b66adfa608",
+  "erpnext/yarn.lock": "ba6a3285c968d3e7ac606652b1aee15ed9c3ea133c019a7c0697533cf5dad8f0",
+  "education/yarn.lock": "38df2378ed26e20124d8c38a945af1b4a058656aab3b3b1f71a9d8a629cc0d81",
+  "education/frontend/yarn.lock": "10618b30bd7dfd48d6fc5e85d56af3d07562c2c11f62efe0b746a8f95f328072",
+  "hrms/yarn.lock": "0ba78c1d62bacf9af7177df2ecb2c7ef1406fac5cf5f36fadec195196a983daf",
+  "hrms/frontend/yarn.lock (not CI-audited)": "8aaf33ce7e5756a992d68f07caa1df03d88f3694e085d99adcca047efcf6df7d",
+  "frappe/pyproject.toml": "75a442bcc2fdf946920bd4352c9719370869c5d943ad11e46e4f552bf301d8a6",
+  "erpnext/pyproject.toml": "8d473ef638e91c825d6d6d8e816c392b18b0f201c220f8ab2ecc0a4839d7f83b",
+  "education/pyproject.toml": "ddf79d9b134c34744473d4a570e19607f9b3d1302d863a1771ddb9172adfa7d9",
+  "hrms/pyproject.toml": "9ab7257a74ffdf2f0645e9ebd38ff5a6655411d0c19d7fa7811f8451413d2cc1",
+  "payments/pyproject.toml": "580711f2fe0f4098b401c6f6a97098a1f9ba366f76b296862aa86f0d976531be"
+ },
+ "ci_reference": {
+  "workflow": "Foundation runtime",
+  "run_id": 37902411810,
+  "head_sha": "a3b45abc9534e722b02866bc5381ced2ba37c3f0",
+  "branch": "arena/abdece6c-tofel-house-erp",
+  "check_run_id": 113727794492,
+  "header": "advisory matches=160 in 47 packages",
+  "untriaged_gate_set": [
+   "py:pyjwt@2.13.0 GHSA-x33g-cr3x-6449",
+   "py:pyjwt@2.13.0 PYSEC-2026-4183",
+   "py:weasyprint@68.0 GHSA-r543-q48m-4c9j",
+   "py:werkzeug@3.1.6 GHSA-g6x2-hccm-hh4m",
+   "npm:@vue/server-renderer 1241259",
+   "npm:postcss-selector-parser 1241232",
+   "npm:prosemirror-view 1241270",
+   "npm:source-map-js 1241209"
+  ]
+ },
+ "counts": {
+  "groups_npm_packages": 40,
+  "groups_python_package_versions": 7,
+  "npm_bulk_entries_raw": 108,
+  "npm_matches_ci_style_unique_ghsa_per_package": 96,
+  "npm_unique_ghsa_ids": 91,
+  "pypi_records_raw": 62,
+  "pypi_matches_ci_style_no_pysec_alias_merge": 62,
+  "python_unique_advisories_alias_merged": 32,
+  "unique_advisories_total_npm_ghsa_plus_python": 123,
+  "untriaged_matches_replayed_before_delta": 8,
+  "untriaged_unique_advisories": 7,
+  "ci_reported_matches": 160,
+  "ci_reported_groups": 47
+ },
+ "npm_entries": [
+  {
+   "package": "@tiptap/core",
+   "numeric_id": 1158508,
+   "ghsa": "GHSA-CP6Q-959Q-F8RH",
+   "severity": "moderate",
+   "vulnerable_versions": ">=2.0.0-alpha.0 <3.30.4",
+   "matched_versions": [
+    "2.2.3"
+   ],
+   "title": "Tiptap: mergeAttributes() turns an own __proto__ key into inherited executable DOM attributes"
+  },
+  {
+   "package": "@tiptap/extension-link",
+   "numeric_id": 1111311,
+   "ghsa": "GHSA-VHRC-HGRQ-X75R",
+   "severity": "low",
+   "vulnerable_versions": "<2.10.4",
+   "matched_versions": [
+    "2.2.3"
+   ],
+   "title": "@tiptap/extension-link vulnerable to Cross-site Scripting (XSS)"
+  },
+  {
+   "package": "@vue/server-renderer",
+   "numeric_id": 1241259,
+   "ghsa": "GHSA-G2V6-RQMX-R4W6",
+   "severity": "high",
+   "vulnerable_versions": "<3.5.42",
+   "matched_versions": [
+    "3.3.9",
+    "3.4.19"
+   ],
+   "title": "@vue/server-renderer: XSS via missing CR in attribute-name blacklist"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1105443,
+   "ghsa": "GHSA-V6H2-P8H4-QCJW",
+   "severity": "low",
+   "vulnerable_versions": ">=1.0.0 <=1.1.11",
+   "matched_versions": [
+    "1.1.11"
+   ],
+   "title": "brace-expansion Regular Expression Denial of Service vulnerability"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1105444,
+   "ghsa": "GHSA-V6H2-P8H4-QCJW",
+   "severity": "low",
+   "vulnerable_versions": ">=2.0.0 <=2.0.1",
+   "matched_versions": [
+    "2.0.1"
+   ],
+   "title": "brace-expansion Regular Expression Denial of Service vulnerability"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1115540,
+   "ghsa": "GHSA-F886-M6HF-6M8V",
+   "severity": "moderate",
+   "vulnerable_versions": "<1.1.13",
+   "matched_versions": [
+    "1.1.11"
+   ],
+   "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1115541,
+   "ghsa": "GHSA-F886-M6HF-6M8V",
+   "severity": "moderate",
+   "vulnerable_versions": ">=2.0.0 <2.0.3",
+   "matched_versions": [
+    "2.0.1"
+   ],
+   "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1123896,
+   "ghsa": "GHSA-3JXR-9VMJ-R5CP",
+   "severity": "high",
+   "vulnerable_versions": ">=2.0.0 <2.1.2",
+   "matched_versions": [
+    "2.0.1"
+   ],
+   "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1123897,
+   "ghsa": "GHSA-3JXR-9VMJ-R5CP",
+   "severity": "high",
+   "vulnerable_versions": "<1.1.16",
+   "matched_versions": [
+    "1.1.11"
+   ],
+   "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1130588,
+   "ghsa": "GHSA-MH99-V99M-4GVG",
+   "severity": "high",
+   "vulnerable_versions": "<1.1.17",
+   "matched_versions": [
+    "1.1.11"
+   ],
+   "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1130589,
+   "ghsa": "GHSA-MH99-V99M-4GVG",
+   "severity": "high",
+   "vulnerable_versions": ">=2.0.0 <2.1.3",
+   "matched_versions": [
+    "2.0.1"
+   ],
+   "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1130736,
+   "ghsa": "GHSA-RGW5-RVV9-X895",
+   "severity": "high",
+   "vulnerable_versions": ">=2.0.0 <2.1.4",
+   "matched_versions": [
+    "2.0.1"
+   ],
+   "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1130737,
+   "ghsa": "GHSA-RGW5-RVV9-X895",
+   "severity": "high",
+   "vulnerable_versions": "<1.1.18",
+   "matched_versions": [
+    "1.1.11"
+   ],
+   "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1240100,
+   "ghsa": "GHSA-Q2HR-2G5M-VWHR",
+   "severity": "moderate",
+   "vulnerable_versions": "<1.1.21",
+   "matched_versions": [
+    "1.1.11"
+   ],
+   "title": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1240101,
+   "ghsa": "GHSA-Q2HR-2G5M-VWHR",
+   "severity": "moderate",
+   "vulnerable_versions": ">=2.0.0 <2.1.7",
+   "matched_versions": [
+    "2.0.1"
+   ],
+   "title": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1240104,
+   "ghsa": "GHSA-QHR7-859C-M2P7",
+   "severity": "high",
+   "vulnerable_versions": "<1.1.20",
+   "matched_versions": [
+    "1.1.11"
+   ],
+   "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1240105,
+   "ghsa": "GHSA-QHR7-859C-M2P7",
+   "severity": "high",
+   "vulnerable_versions": ">=2.0.0 <2.1.6",
+   "matched_versions": [
+    "2.0.1"
+   ],
+   "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1240108,
+   "ghsa": "GHSA-6J4F-FJ2G-MC7P",
+   "severity": "high",
+   "vulnerable_versions": "<1.1.19",
+   "matched_versions": [
+    "1.1.11"
+   ],
+   "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion"
+  },
+  {
+   "package": "brace-expansion",
+   "numeric_id": 1240109,
+   "ghsa": "GHSA-6J4F-FJ2G-MC7P",
+   "severity": "high",
+   "vulnerable_versions": ">=2.0.0 <2.1.5",
+   "matched_versions": [
+    "2.0.1"
+   ],
+   "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion"
+  },
+  {
+   "package": "braces",
+   "numeric_id": 1098094,
+   "ghsa": "GHSA-GRV7-FG5C-XMJG",
+   "severity": "high",
+   "vulnerable_versions": "<3.0.3",
+   "matched_versions": [
+    "3.0.2"
+   ],
+   "title": "Uncontrolled resource consumption in braces"
+  },
+  {
+   "package": "braces",
+   "numeric_id": 1240992,
+   "ghsa": "GHSA-VFJ7-8CJW-P6XM",
+   "severity": "high",
+   "vulnerable_versions": "<=3.0.3",
+   "matched_versions": [
+    "3.0.2",
+    "3.0.3"
+   ],
+   "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns"
+  },
+  {
+   "package": "browserslist",
+   "numeric_id": 1153171,
+   "ghsa": "GHSA-C83G-RGW3-J3CX",
+   "severity": "high",
+   "vulnerable_versions": "<=4.28.6",
+   "matched_versions": [
+    "4.22.1",
+    "4.23.0"
+   ],
+   "title": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM"
+  },
+  {
+   "package": "browserslist",
+   "numeric_id": 1153172,
+   "ghsa": "GHSA-73WF-GQ98-2V4G",
+   "severity": "high",
+   "vulnerable_versions": "<=4.28.6",
+   "matched_versions": [
+    "4.22.1",
+    "4.23.0"
+   ],
+   "title": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)"
+  },
+  {
+   "package": "colord",
+   "numeric_id": 1193675,
+   "ghsa": "GHSA-2WM5-Q62R-HMRV",
+   "severity": "moderate",
+   "vulnerable_versions": "<2.9.4",
+   "matched_versions": [
+    "2.9.3"
+   ],
+   "title": "Colord: Slow rejection of oversized malformed color strings"
+  },
+  {
+   "package": "cookie",
+   "numeric_id": 1103907,
+   "ghsa": "GHSA-PXG6-PF52-XH8X",
+   "severity": "low",
+   "vulnerable_versions": "<0.7.0",
+   "matched_versions": [
+    "0.4.2"
+   ],
+   "title": "cookie accepts cookie name, path, and domain with out of bounds characters"
+  },
+  {
+   "package": "cross-spawn",
+   "numeric_id": 1104664,
+   "ghsa": "GHSA-3XGQ-45JJ-V275",
+   "severity": "high",
+   "vulnerable_versions": ">=7.0.0 <7.0.5",
+   "matched_versions": [
+    "7.0.3"
+   ],
+   "title": "Regular Expression Denial of Service (ReDoS) in cross-spawn"
+  },
+  {
+   "package": "decode-uri-component",
+   "numeric_id": 1147955,
+   "ghsa": "GHSA-VCC3-GHJQ-M6FR",
+   "severity": "moderate",
+   "vulnerable_versions": "<=0.4.2",
+   "matched_versions": [
+    "0.2.2"
+   ],
+   "title": "decode-uri-component: Denial of service via exponential decoding of malformed percent-encoded input"
+  },
+  {
+   "package": "engine.io",
+   "numeric_id": 1123943,
+   "ghsa": "GHSA-R635-G3XR-VW7X",
+   "severity": "high",
+   "vulnerable_versions": ">=4.1.0 <6.6.7",
+   "matched_versions": [
+    "6.5.4"
+   ],
+   "title": "Socket.IO: Engine.IO Polling Transport Connection Exhaustion"
+  },
+  {
+   "package": "engine.io",
+   "numeric_id": 1147953,
+   "ghsa": "GHSA-GR94-W7QR-F4J3",
+   "severity": "high",
+   "vulnerable_versions": ">=6.5.0 <6.6.7",
+   "matched_versions": [
+    "6.5.4"
+   ],
+   "title": "Socket.IO: Engine.IO WebTransport SID DoS"
+  },
+  {
+   "package": "esbuild",
+   "numeric_id": 1102341,
+   "ghsa": "GHSA-67MH-4WV8-2F99",
+   "severity": "moderate",
+   "vulnerable_versions": "<=0.24.2",
+   "matched_versions": [
+    "0.14.54"
+   ],
+   "title": "esbuild enables any website to send any requests to the development server and read the response"
+  },
+  {
+   "package": "glob",
+   "numeric_id": 1109842,
+   "ghsa": "GHSA-5J98-MCP5-4VW2",
+   "severity": "high",
+   "vulnerable_versions": ">=10.2.0 <10.5.0",
+   "matched_versions": [
+    "10.3.10"
+   ],
+   "title": "glob CLI: Command injection via -c/--cmd executes matches with shell:true"
+  },
+  {
+   "package": "immutable",
+   "numeric_id": 1117067,
+   "ghsa": "GHSA-WF6X-7X77-MVGW",
+   "severity": "high",
+   "vulnerable_versions": ">=4.0.0-rc.1 <4.3.8",
+   "matched_versions": [
+    "4.3.4"
+   ],
+   "title": "Immutable is vulnerable to Prototype Pollution"
+  },
+  {
+   "package": "immutable",
+   "numeric_id": 1164796,
+   "ghsa": "GHSA-XVCM-6775-5M9R",
+   "severity": "high",
+   "vulnerable_versions": ">=4.0.0-beta.1 <4.3.9",
+   "matched_versions": [
+    "4.3.4"
+   ],
+   "title": "Immutable: Hash-collision algorithmic complexity denial of service in Immutable.Map/Set"
+  },
+  {
+   "package": "immutable",
+   "numeric_id": 1224658,
+   "ghsa": "GHSA-V56Q-MH7H-F735",
+   "severity": "high",
+   "vulnerable_versions": ">=4.0.0-rc.1 <4.3.9",
+   "matched_versions": [
+    "4.3.4"
+   ],
+   "title": "Immutable.js `List` 32-bit trie overflow \u2192 unrecoverable DoS"
+  },
+  {
+   "package": "json5",
+   "numeric_id": 1096543,
+   "ghsa": "GHSA-9C47-M6QQ-7P4H",
+   "severity": "high",
+   "vulnerable_versions": "<1.0.2",
+   "matched_versions": [
+    "0.5.1"
+   ],
+   "title": "Prototype Pollution in JSON5 via Parse Method"
+  },
+  {
+   "package": "launch-editor",
+   "numeric_id": 1120062,
+   "ghsa": "GHSA-C27G-Q93R-2CWF",
+   "severity": "high",
+   "vulnerable_versions": "<=2.8.2",
+   "matched_versions": [
+    "2.6.1"
+   ],
+   "title": "launch-editor vulnerable to command injection via the crafted request on Windows"
+  },
+  {
+   "package": "launch-editor",
+   "numeric_id": 1120787,
+   "ghsa": "GHSA-V6WH-96G9-6WX3",
+   "severity": "moderate",
+   "vulnerable_versions": "<=2.14.0",
+   "matched_versions": [
+    "2.6.1"
+   ],
+   "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows"
+  },
+  {
+   "package": "linkify-it",
+   "numeric_id": 1121797,
+   "ghsa": "GHSA-22P9-WV53-3RQ4",
+   "severity": "high",
+   "vulnerable_versions": "<=5.0.0",
+   "matched_versions": [
+    "5.0.0"
+   ],
+   "title": "LinkifyIt#match scan loop has quadratic algorithmic complexity"
+  },
+  {
+   "package": "linkify-it",
+   "numeric_id": 1124012,
+   "ghsa": "GHSA-V245-V573-V5VM",
+   "severity": "high",
+   "vulnerable_versions": "<=5.0.1",
+   "matched_versions": [
+    "5.0.0"
+   ],
+   "title": "linkify-it: Quadratic-complexity DoS via the `mailto:` validator scan-loop on attacker text"
+  },
+  {
+   "package": "loader-utils",
+   "numeric_id": 1094088,
+   "ghsa": "GHSA-76P3-8JX3-JPFQ",
+   "severity": "critical",
+   "vulnerable_versions": "<1.4.1",
+   "matched_versions": [
+    "0.2.17"
+   ],
+   "title": "Prototype pollution in webpack loader-utils"
+  },
+  {
+   "package": "lodash",
+   "numeric_id": 1115806,
+   "ghsa": "GHSA-R5FR-RJXR-66JC",
+   "severity": "high",
+   "vulnerable_versions": ">=4.0.0 <=4.17.23",
+   "matched_versions": [
+    "4.17.21"
+   ],
+   "title": "lodash vulnerable to Code Injection via `_.template` imports key names"
+  },
+  {
+   "package": "lodash",
+   "numeric_id": 1115810,
+   "ghsa": "GHSA-F23M-R3PF-42RH",
+   "severity": "moderate",
+   "vulnerable_versions": "<=4.17.23",
+   "matched_versions": [
+    "4.17.21"
+   ],
+   "title": "lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`"
+  },
+  {
+   "package": "lodash",
+   "numeric_id": 1120370,
+   "ghsa": "GHSA-XXJR-MMJV-4GPG",
+   "severity": "moderate",
+   "vulnerable_versions": ">=4.0.0 <=4.17.22",
+   "matched_versions": [
+    "4.17.21"
+   ],
+   "title": "Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions"
+  },
+  {
+   "package": "lodash-es",
+   "numeric_id": 1115805,
+   "ghsa": "GHSA-R5FR-RJXR-66JC",
+   "severity": "high",
+   "vulnerable_versions": ">=4.0.0 <=4.17.23",
+   "matched_versions": [
+    "4.17.21"
+   ],
+   "title": "lodash vulnerable to Code Injection via `_.template` imports key names"
+  },
+  {
+   "package": "lodash-es",
+   "numeric_id": 1115809,
+   "ghsa": "GHSA-F23M-R3PF-42RH",
+   "severity": "moderate",
+   "vulnerable_versions": "<=4.17.23",
+   "matched_versions": [
+    "4.17.21"
+   ],
+   "title": "lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`"
+  },
+  {
+   "package": "lodash-es",
+   "numeric_id": 1120368,
+   "ghsa": "GHSA-XXJR-MMJV-4GPG",
+   "severity": "moderate",
+   "vulnerable_versions": ">=4.0.0 <=4.17.22",
+   "matched_versions": [
+    "4.17.21"
+   ],
+   "title": "Lodash has Prototype Pollution Vulnerability in `_.unset` and `_.omit` functions"
+  },
+  {
+   "package": "markdown-it",
+   "numeric_id": 1113190,
+   "ghsa": "GHSA-38C4-R59V-3VQW",
+   "severity": "moderate",
+   "vulnerable_versions": ">=13.0.0 <14.1.1",
+   "matched_versions": [
+    "14.0.0"
+   ],
+   "title": "markdown-it is has a Regular Expression Denial of Service (ReDoS)"
+  },
+  {
+   "package": "markdown-it",
+   "numeric_id": 1120820,
+   "ghsa": "GHSA-6V5V-WF23-FMFQ",
+   "severity": "moderate",
+   "vulnerable_versions": "<=14.1.1",
+   "matched_versions": [
+    "14.0.0"
+   ],
+   "title": "markdown-it: Quadratic complexity DoS in smartquotes rule via replaceAt string operations"
+  },
+  {
+   "package": "markdown-it",
+   "numeric_id": 1239989,
+   "ghsa": "GHSA-253C-MCHW-3W2R",
+   "severity": "moderate",
+   "vulnerable_versions": "<14.3.1",
+   "matched_versions": [
+    "14.0.0"
+   ],
+   "title": "markdown-it linkify: true has two quadratic paths, so a few hundred KB of markdown blocks the event loop for tens of seconds"
+  },
+  {
+   "package": "micromatch",
+   "numeric_id": 1098681,
+   "ghsa": "GHSA-952P-6RRQ-RCJV",
+   "severity": "moderate",
+   "vulnerable_versions": "<4.0.8",
+   "matched_versions": [
+    "4.0.5"
+   ],
+   "title": "Regular Expression Denial of Service (ReDoS) in micromatch"
+  },
+  {
+   "package": "minimatch",
+   "numeric_id": 1113459,
+   "ghsa": "GHSA-3PPC-4F35-3M26",
+   "severity": "high",
+   "vulnerable_versions": "<3.1.3",
+   "matched_versions": [
+    "3.1.2"
+   ],
+   "title": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern"
+  },
+  {
+   "package": "minimatch",
+   "numeric_id": 1113465,
+   "ghsa": "GHSA-3PPC-4F35-3M26",
+   "severity": "high",
+   "vulnerable_versions": ">=9.0.0 <9.0.6",
+   "matched_versions": [
+    "9.0.3"
+   ],
+   "title": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern"
+  },
+  {
+   "package": "minimatch",
+   "numeric_id": 1113538,
+   "ghsa": "GHSA-7R86-CG39-JMMJ",
+   "severity": "high",
+   "vulnerable_versions": "<3.1.3",
+   "matched_versions": [
+    "3.1.2"
+   ],
+   "title": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments"
+  },
+  {
+   "package": "minimatch",
+   "numeric_id": 1113544,
+   "ghsa": "GHSA-7R86-CG39-JMMJ",
+   "severity": "high",
+   "vulnerable_versions": ">=9.0.0 <9.0.7",
+   "matched_versions": [
+    "9.0.3"
+   ],
+   "title": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments"
+  },
+  {
+   "package": "minimatch",
+   "numeric_id": 1113546,
+   "ghsa": "GHSA-23C5-XMQV-RM74",
+   "severity": "high",
+   "vulnerable_versions": "<3.1.4",
+   "matched_versions": [
+    "3.1.2"
+   ],
+   "title": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions"
+  },
+  {
+   "package": "minimatch",
+   "numeric_id": 1113552,
+   "ghsa": "GHSA-23C5-XMQV-RM74",
+   "severity": "high",
+   "vulnerable_versions": ">=9.0.0 <9.0.7",
+   "matched_versions": [
+    "9.0.3"
+   ],
+   "title": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions"
+  },
+  {
+   "package": "moment",
+   "numeric_id": 1240099,
+   "ghsa": "GHSA-4P3W-J4W9-5JQW",
+   "severity": "moderate",
+   "vulnerable_versions": ">=2.29.2 <2.31.0",
+   "matched_versions": [
+    "2.29.4"
+   ],
+   "title": "moment vulnerable to Path Traversal via crafted non-string locale name"
+  },
+  {
+   "package": "nanoid",
+   "numeric_id": 1109563,
+   "ghsa": "GHSA-MWCW-C2X4-8C55",
+   "severity": "moderate",
+   "vulnerable_versions": "<3.3.8",
+   "matched_versions": [
+    "3.3.7"
+   ],
+   "title": "Predictable results in nanoid generation when given non-integer values"
+  },
+  {
+   "package": "nanoid",
+   "numeric_id": 1138811,
+   "ghsa": "GHSA-28WG-GHJ8-5HJV",
+   "severity": "high",
+   "vulnerable_versions": "<3.3.16",
+   "matched_versions": [
+    "3.3.7",
+    "3.3.8"
+   ],
+   "title": "nanoid: non-secure generators can loop indefinitely with negative size"
+  },
+  {
+   "package": "nanoid",
+   "numeric_id": 1139427,
+   "ghsa": "GHSA-2V37-7H3G-55P8",
+   "severity": "high",
+   "vulnerable_versions": "<3.3.18",
+   "matched_versions": [
+    "3.3.7",
+    "3.3.8"
+   ],
+   "title": "nanoid: custom generators can loop indefinitely when size is zero"
+  },
+  {
+   "package": "nanoid",
+   "numeric_id": 1153189,
+   "ghsa": "GHSA-XWG4-73V4-XW9W",
+   "severity": "high",
+   "vulnerable_versions": "<3.3.12",
+   "matched_versions": [
+    "3.3.7",
+    "3.3.8"
+   ],
+   "title": "nanoid: Integer Overflow or Wraparound"
+  },
+  {
+   "package": "picomatch",
+   "numeric_id": 1115549,
+   "ghsa": "GHSA-3V7F-55P6-F55P",
+   "severity": "moderate",
+   "vulnerable_versions": "<2.3.2",
+   "matched_versions": [
+    "2.3.1"
+   ],
+   "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching"
+  },
+  {
+   "package": "picomatch",
+   "numeric_id": 1115552,
+   "ghsa": "GHSA-C2C7-RCM5-VVQJ",
+   "severity": "high",
+   "vulnerable_versions": "<2.3.2",
+   "matched_versions": [
+    "2.3.1"
+   ],
+   "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers"
+  },
+  {
+   "package": "postcss",
+   "numeric_id": 1093539,
+   "ghsa": "GHSA-566M-QJ78-RWW5",
+   "severity": "moderate",
+   "vulnerable_versions": "<7.0.36",
+   "matched_versions": [
+    "5.2.18",
+    "6.0.23"
+   ],
+   "title": "Regular Expression Denial of Service in postcss"
+  },
+  {
+   "package": "postcss",
+   "numeric_id": 1109574,
+   "ghsa": "GHSA-7FH5-64P2-3V2J",
+   "severity": "moderate",
+   "vulnerable_versions": "<8.4.31",
+   "matched_versions": [
+    "5.2.18",
+    "6.0.23",
+    "7.0.39"
+   ],
+   "title": "PostCSS line return parsing error"
+  },
+  {
+   "package": "postcss",
+   "numeric_id": 1117015,
+   "ghsa": "GHSA-QX2V-QP2M-JG93",
+   "severity": "moderate",
+   "vulnerable_versions": "<8.5.10",
+   "matched_versions": [
+    "5.2.18",
+    "6.0.23",
+    "7.0.39",
+    "8.4.31",
+    "8.4.35"
+   ],
+   "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output"
+  },
+  {
+   "package": "postcss",
+   "numeric_id": 1124252,
+   "ghsa": "GHSA-6G55-P6WH-862Q",
+   "severity": "high",
+   "vulnerable_versions": "<=8.5.11",
+   "matched_versions": [
+    "5.2.18",
+    "6.0.23",
+    "7.0.39",
+    "8.4.31",
+    "8.4.35"
+   ],
+   "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments"
+  },
+  {
+   "package": "postcss",
+   "numeric_id": 1130709,
+   "ghsa": "GHSA-FXQJ-RQCC-2CMP",
+   "severity": "moderate",
+   "vulnerable_versions": "<=8.5.22",
+   "matched_versions": [
+    "5.2.18",
+    "6.0.23",
+    "7.0.39",
+    "8.4.31",
+    "8.4.35"
+   ],
+   "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q \u2014 attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset"
+  },
+  {
+   "package": "postcss",
+   "numeric_id": 1139510,
+   "ghsa": "GHSA-R28C-9Q8G-F849",
+   "severity": "high",
+   "vulnerable_versions": "<=8.5.17",
+   "matched_versions": [
+    "5.2.18",
+    "6.0.23",
+    "7.0.39",
+    "8.4.31",
+    "8.4.35"
+   ],
+   "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure"
+  },
+  {
+   "package": "postcss-selector-parser",
+   "numeric_id": 1241232,
+   "ghsa": "GHSA-RJ75-HQRM-R3GF",
+   "severity": "moderate",
+   "vulnerable_versions": "<7.1.6",
+   "matched_versions": [
+    "6.0.10",
+    "6.0.13",
+    "6.0.15"
+   ],
+   "title": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion"
+  },
+  {
+   "package": "prosemirror-view",
+   "numeric_id": 1241270,
+   "ghsa": "GHSA-C8X8-7FP4-3X9W",
+   "severity": "high",
+   "vulnerable_versions": "<1.42.3",
+   "matched_versions": [
+    "1.33.1"
+   ],
+   "title": "ProseMirror has a XSS vulnerability in prosemirror-view's paste handling"
+  },
+  {
+   "package": "quill",
+   "numeric_id": 1098574,
+   "ghsa": "GHSA-4943-9VGG-GR5R",
+   "severity": "moderate",
+   "vulnerable_versions": "<=1.3.7",
+   "matched_versions": [
+    "1.3.7"
+   ],
+   "title": "Cross-site Scripting in quill"
+  },
+  {
+   "package": "quill",
+   "numeric_id": 1116451,
+   "ghsa": "GHSA-V3M3-F69X-JF25",
+   "severity": "low",
+   "vulnerable_versions": "=2.0.3",
+   "matched_versions": [
+    "2.0.3"
+   ],
+   "title": "Quill is vulnerable to XSS via HTML export feature"
+  },
+  {
+   "package": "rollup",
+   "numeric_id": 1099757,
+   "ghsa": "GHSA-GCX4-MW62-G8WM",
+   "severity": "high",
+   "vulnerable_versions": "<2.79.2",
+   "matched_versions": [
+    "2.77.3"
+   ],
+   "title": "DOM Clobbering Gadget found in rollup bundled scripts that leads to XSS"
+  },
+  {
+   "package": "rollup",
+   "numeric_id": 1113517,
+   "ghsa": "GHSA-MW96-CPMX-2VGC",
+   "severity": "high",
+   "vulnerable_versions": "<2.80.0",
+   "matched_versions": [
+    "2.77.3"
+   ],
+   "title": "Rollup 4 has Arbitrary File Write via Path Traversal"
+  },
+  {
+   "package": "shell-quote",
+   "numeric_id": 1120422,
+   "ghsa": "GHSA-W7JW-789Q-3M8P",
+   "severity": "critical",
+   "vulnerable_versions": ">=1.1.0 <=1.8.3",
+   "matched_versions": [
+    "1.8.1"
+   ],
+   "title": "shell-quote quote() does not escape newlines in object .op values"
+  },
+  {
+   "package": "shell-quote",
+   "numeric_id": 1123944,
+   "ghsa": "GHSA-395F-4HP3-45GV",
+   "severity": "high",
+   "vulnerable_versions": "<=1.8.4",
+   "matched_versions": [
+    "1.8.1"
+   ],
+   "title": "shell-quote: Quadratic-complexity Denial of Service in `parse()` (CWE-407)"
+  },
+  {
+   "package": "showdown",
+   "numeric_id": 1117038,
+   "ghsa": "GHSA-RMMH-P597-PPVV",
+   "severity": "moderate",
+   "vulnerable_versions": "<=2.1.0",
+   "matched_versions": [
+    "2.1.0"
+   ],
+   "title": "Showdown vulnerable to Regular Expression Denial of Service (ReDoS) in link/anchor parsing"
+  },
+  {
+   "package": "showdown",
+   "numeric_id": 1138814,
+   "ghsa": "GHSA-CR32-G25G-VXJJ",
+   "severity": "moderate",
+   "vulnerable_versions": "<=2.1.0",
+   "matched_versions": [
+    "2.1.0"
+   ],
+   "title": "showdown metadata title handling allows cross-site scripting"
+  },
+  {
+   "package": "showdown",
+   "numeric_id": 1138815,
+   "ghsa": "GHSA-22G5-R2X5-97CX",
+   "severity": "moderate",
+   "vulnerable_versions": "<=2.1.0",
+   "matched_versions": [
+    "2.1.0"
+   ],
+   "title": "showdown allows stored cross-site scripting through table header ID injection"
+  },
+  {
+   "package": "socket.io-parser",
+   "numeric_id": 1115154,
+   "ghsa": "GHSA-677M-J7P3-52F9",
+   "severity": "high",
+   "vulnerable_versions": ">=4.0.0 <4.2.6",
+   "matched_versions": [
+    "4.2.4"
+   ],
+   "title": "socket.io allows an unbounded number of binary attachments"
+  },
+  {
+   "package": "socket.io-parser",
+   "numeric_id": 1130713,
+   "ghsa": "GHSA-2M8V-J782-FHVR",
+   "severity": "high",
+   "vulnerable_versions": ">=4.0.0 <4.2.7",
+   "matched_versions": [
+    "4.2.4"
+   ],
+   "title": "Socket.IO: Zero-attachment Memory Exhaustion"
+  },
+  {
+   "package": "source-map-js",
+   "numeric_id": 1241209,
+   "ghsa": "GHSA-68FV-2MGG-JV7Q",
+   "severity": "high",
+   "vulnerable_versions": ">=1.0.0 <1.2.2",
+   "matched_versions": [
+    "1.0.2"
+   ],
+   "title": "source-map-js allows event-loop denial of service through indexed source-map section offsets"
+  },
+  {
+   "package": "svgo",
+   "numeric_id": 1114152,
+   "ghsa": "GHSA-XPQW-6GX7-V673",
+   "severity": "high",
+   "vulnerable_versions": ">=2.1.0 <2.8.1",
+   "matched_versions": [
+    "2.8.0"
+   ],
+   "title": "SVGO DoS through entity expansion in DOCTYPE (Billion Laughs)"
+  },
+  {
+   "package": "svgo",
+   "numeric_id": 1139520,
+   "ghsa": "GHSA-2P49-HGCM-8545",
+   "severity": "high",
+   "vulnerable_versions": ">=1.0.0 <2.8.3",
+   "matched_versions": [
+    "2.8.0"
+   ],
+   "title": "SVGO removeScripts plugin leaves some executable scripts intact"
+  },
+  {
+   "package": "svgo",
+   "numeric_id": 1193737,
+   "ghsa": "GHSA-W27V-7Q3P-W38R",
+   "severity": "high",
+   "vulnerable_versions": ">=1.0.0 <2.8.4",
+   "matched_versions": [
+    "2.8.0"
+   ],
+   "title": "SVGO: removeScripts allows executable links through namespace and control-character bypasses"
+  },
+  {
+   "package": "svgo",
+   "numeric_id": 1193740,
+   "ghsa": "GHSA-4VPR-X523-8J87",
+   "severity": "moderate",
+   "vulnerable_versions": ">=1.0.0 <2.8.4",
+   "matched_versions": [
+    "2.8.0"
+   ],
+   "title": "SVGO: removeScripts incompletely sanitizes executable HTML in SVG foreignObject elements"
+  },
+  {
+   "package": "tmp",
+   "numeric_id": 1120654,
+   "ghsa": "GHSA-PH9P-34F9-6G65",
+   "severity": "high",
+   "vulnerable_versions": "<0.2.6",
+   "matched_versions": [
+    "0.2.4"
+   ],
+   "title": "tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1096897,
+   "ghsa": "GHSA-8JHW-289H-JH2G",
+   "severity": "moderate",
+   "vulnerable_versions": ">=2.7.0 <=2.9.17",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite's `server.fs.deny` did not deny requests for patterns with directories."
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1099690,
+   "ghsa": "GHSA-64VR-G452-QVP3",
+   "severity": "moderate",
+   "vulnerable_versions": "<3.2.11",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite DOM Clobbering gadget found in vite bundled scripts that leads to XSS"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1099695,
+   "ghsa": "GHSA-9CWX-2883-4WFX",
+   "severity": "moderate",
+   "vulnerable_versions": "<=3.2.10",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite's `server.fs.deny` is bypassed when using `?import&raw`"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1102436,
+   "ghsa": "GHSA-VG6X-RCGG-RJX6",
+   "severity": "moderate",
+   "vulnerable_versions": "<=4.5.5",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Websites were able to send any requests to the development server and read the response in vite"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1103516,
+   "ghsa": "GHSA-X574-M823-4X7W",
+   "severity": "moderate",
+   "vulnerable_versions": "<4.5.10",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite bypasses server.fs.deny when using ?raw??"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1103883,
+   "ghsa": "GHSA-356W-63V5-8WF4",
+   "severity": "moderate",
+   "vulnerable_versions": "<4.5.13",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite has an `server.fs.deny` bypass with an invalid `request-target`"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1104172,
+   "ghsa": "GHSA-859W-5945-R5V3",
+   "severity": "moderate",
+   "vulnerable_versions": "<=4.5.13",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite's server.fs.deny bypassed with /. for files under project root"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1104201,
+   "ghsa": "GHSA-XCJ6-PQ6G-QJ4X",
+   "severity": "moderate",
+   "vulnerable_versions": "<4.5.12",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite allows server.fs.deny to be bypassed with .svg or relative paths"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1107323,
+   "ghsa": "GHSA-G4JQ-H2W9-997C",
+   "severity": "low",
+   "vulnerable_versions": "<=5.4.19",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite middleware may serve files starting with the same name with the public directory"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1107327,
+   "ghsa": "GHSA-JQFW-VQ24-V9C3",
+   "severity": "low",
+   "vulnerable_versions": "<=5.4.19",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite's `server.fs` settings were not applied to HTML files"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1112510,
+   "ghsa": "GHSA-4R4M-QW57-CHR8",
+   "severity": "moderate",
+   "vulnerable_versions": "<4.5.11",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite has a `server.fs.deny` bypassed for `inline` and `raw` with `?import` query"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1116229,
+   "ghsa": "GHSA-4W7W-66W2-5VF9",
+   "severity": "moderate",
+   "vulnerable_versions": "<=6.4.1",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1120061,
+   "ghsa": "GHSA-C27G-Q93R-2CWF",
+   "severity": "high",
+   "vulnerable_versions": "<=5.4.8",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "launch-editor vulnerable to command injection via the crafted request on Windows"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1120784,
+   "ghsa": "GHSA-V6WH-96G9-6WX3",
+   "severity": "moderate",
+   "vulnerable_versions": "<=6.4.2",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows"
+  },
+  {
+   "package": "vite",
+   "numeric_id": 1123525,
+   "ghsa": "GHSA-FX2H-PF6J-XCFF",
+   "severity": "high",
+   "vulnerable_versions": "<=6.4.2",
+   "matched_versions": [
+    "2.9.17"
+   ],
+   "title": "vite: `server.fs.deny` bypass on Windows alternate paths"
+  },
+  {
+   "package": "ws",
+   "numeric_id": 1118728,
+   "ghsa": "GHSA-3H5V-Q93C-6H6Q",
+   "severity": "high",
+   "vulnerable_versions": ">=8.0.0 <8.17.1",
+   "matched_versions": [
+    "8.11.0"
+   ],
+   "title": "ws affected by a DoS when handling a request with many HTTP headers"
+  },
+  {
+   "package": "ws",
+   "numeric_id": 1119108,
+   "ghsa": "GHSA-58QX-3VCG-4XPX",
+   "severity": "moderate",
+   "vulnerable_versions": ">=8.0.0 <8.20.1",
+   "matched_versions": [
+    "8.11.0"
+   ],
+   "title": "ws: Uninitialized memory disclosure"
+  },
+  {
+   "package": "ws",
+   "numeric_id": 1123259,
+   "ghsa": "GHSA-96HV-2XVQ-FX4P",
+   "severity": "high",
+   "vulnerable_versions": ">=8.0.0 <8.21.0",
+   "matched_versions": [
+    "8.11.0"
+   ],
+   "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks"
+  },
+  {
+   "package": "yaml",
+   "numeric_id": 1115555,
+   "ghsa": "GHSA-48C2-RRV3-QJMP",
+   "severity": "moderate",
+   "vulnerable_versions": ">=1.0.0 <1.10.3",
+   "matched_versions": [
+    "1.10.2"
+   ],
+   "title": "yaml is vulnerable to Stack Overflow via deeply nested YAML collections"
+  },
+  {
+   "package": "yaml",
+   "numeric_id": 1115556,
+   "ghsa": "GHSA-48C2-RRV3-QJMP",
+   "severity": "moderate",
+   "vulnerable_versions": ">=2.0.0 <2.8.3",
+   "matched_versions": [
+    "2.3.4"
+   ],
+   "title": "yaml is vulnerable to Stack Overflow via deeply nested YAML collections"
+  }
+ ],
+ "pypi_records": [
+  {
+   "package": "oauthlib",
+   "version": "3.3.1",
+   "id": "GHSA-xpv3-w29h-x7cv",
+   "aliases": [
+    "CVE-2026-49265"
+   ]
+  },
+  {
+   "package": "oauthlib",
+   "version": "3.3.1",
+   "id": "PYSEC-2026-4114",
+   "aliases": [
+    "CVE-2026-49265",
+    "GHSA-xpv3-w29h-x7cv"
+   ]
+  },
+  {
+   "package": "pdfkit",
+   "version": "1.0.0",
+   "id": "GHSA-9g3x-6x24-vf9f",
+   "aliases": [
+    "CVE-2025-26240",
+    "PYSEC-2026-2860"
+   ]
+  },
+  {
+   "package": "pdfkit",
+   "version": "1.0.0",
+   "id": "PYSEC-2026-2860",
+   "aliases": [
+    "CVE-2025-26240",
+    "GHSA-9g3x-6x24-vf9f"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-w6j9-cwv2-h6wq",
+   "aliases": [
+    "CVE-2026-102274"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-2gx3-rcp4-g85q",
+   "aliases": [
+    "CVE-2026-101917"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-w2cx-738m-mc7w",
+   "aliases": [
+    "CVE-2026-102273"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-hxm8-2xgr-2p9m",
+   "aliases": [
+    "CVE-2026-102269"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-9v7f-9g4p-ffgj",
+   "aliases": [
+    "CVE-2026-102267"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-ffc3-869f-jxw9",
+   "aliases": [
+    "CVE-2026-102268"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-r6x4-923q-g947",
+   "aliases": [
+    "CVE-2026-102272"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-p4g4-x82p-q773",
+   "aliases": [
+    "CVE-2026-102271"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-8wjv-2p76-3863",
+   "aliases": [
+    "CVE-2026-102265"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-9j54-fg26-wv3r",
+   "aliases": [
+    "CVE-2026-102266"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-jwrc-g2q2-pq5p",
+   "aliases": [
+    "CVE-2026-102270"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-42vr-xj54-vc7v",
+   "aliases": [
+    "CVE-2026-101918"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-gvp8-978c-rx2q",
+   "aliases": [
+    "CVE-2026-103001"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4145",
+   "aliases": [
+    "CVE-2026-102268",
+    "GHSA-ffc3-869f-jxw9"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4146",
+   "aliases": [
+    "CVE-2026-103001",
+    "GHSA-gvp8-978c-rx2q"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4149",
+   "aliases": [
+    "CVE-2026-102271",
+    "GHSA-p4g4-x82p-q773"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4152",
+   "aliases": [
+    "CVE-2026-102274",
+    "GHSA-w6j9-cwv2-h6wq"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4144",
+   "aliases": [
+    "CVE-2026-102267",
+    "GHSA-9v7f-9g4p-ffgj"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4143",
+   "aliases": [
+    "CVE-2026-102266",
+    "GHSA-9j54-fg26-wv3r"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4148",
+   "aliases": [
+    "CVE-2026-102270",
+    "GHSA-jwrc-g2q2-pq5p"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4140",
+   "aliases": [
+    "CVE-2026-101917",
+    "GHSA-2gx3-rcp4-g85q"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4141",
+   "aliases": [
+    "CVE-2026-101918",
+    "GHSA-42vr-xj54-vc7v"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4147",
+   "aliases": [
+    "CVE-2026-102269",
+    "GHSA-hxm8-2xgr-2p9m"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4151",
+   "aliases": [
+    "CVE-2026-102273",
+    "GHSA-w2cx-738m-mc7w"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4150",
+   "aliases": [
+    "CVE-2026-102272",
+    "GHSA-r6x4-923q-g947"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4142",
+   "aliases": [
+    "CVE-2026-102265",
+    "GHSA-8wjv-2p76-3863"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "GHSA-x33g-cr3x-6449",
+   "aliases": [
+    "CVE-2026-102275"
+   ]
+  },
+  {
+   "package": "pyjwt",
+   "version": "2.13.0",
+   "id": "PYSEC-2026-4183",
+   "aliases": [
+    "CVE-2026-102275",
+    "GHSA-x33g-cr3x-6449"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-qv6h-rv94-w285",
+   "aliases": [
+    "CVE-2026-102993"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-w23x-9jrw-r45c",
+   "aliases": [
+    "CVE-2026-103000"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-fp3h-c4fm-7vvf",
+   "aliases": [
+    "CVE-2026-102995"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-5jq2-8x83-x246",
+   "aliases": [
+    "CVE-2026-102994"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-jp53-mhqp-8xcg",
+   "aliases": [
+    "CVE-2026-84309"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-23w6-3w8w-8484",
+   "aliases": [
+    "CVE-2026-84310"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-763m-79hh-57f2",
+   "aliases": [
+    "CVE-2026-84311"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-php9-fj8v-98fj",
+   "aliases": [
+    "CVE-2026-102998"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-g9cg-prrw-2r8q",
+   "aliases": [
+    "CVE-2026-102996"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-jw7q-gvrg-4vj3",
+   "aliases": [
+    "CVE-2026-102997"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "GHSA-v247-6f48-mgcj",
+   "aliases": [
+    "CVE-2026-102999"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-3910",
+   "aliases": [
+    "CVE-2026-84310",
+    "GHSA-23w6-3w8w-8484"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-3911",
+   "aliases": [
+    "CVE-2026-84311",
+    "GHSA-763m-79hh-57f2"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-3913",
+   "aliases": [
+    "CVE-2026-84309",
+    "GHSA-jp53-mhqp-8xcg"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-4153",
+   "aliases": [
+    "CVE-2026-102994",
+    "GHSA-5jq2-8x83-x246"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-4154",
+   "aliases": [
+    "CVE-2026-102995",
+    "GHSA-fp3h-c4fm-7vvf"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-4160",
+   "aliases": [
+    "CVE-2026-103000",
+    "GHSA-w23x-9jrw-r45c"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-4159",
+   "aliases": [
+    "CVE-2026-102999",
+    "GHSA-v247-6f48-mgcj"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-4156",
+   "aliases": [
+    "CVE-2026-102997",
+    "GHSA-jw7q-gvrg-4vj3"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-4155",
+   "aliases": [
+    "CVE-2026-102996",
+    "GHSA-g9cg-prrw-2r8q"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-4158",
+   "aliases": [
+    "CVE-2026-102993",
+    "GHSA-qv6h-rv94-w285"
+   ]
+  },
+  {
+   "package": "pypdf",
+   "version": "6.15.0",
+   "id": "PYSEC-2026-4157",
+   "aliases": [
+    "CVE-2026-102998",
+    "GHSA-php9-fj8v-98fj"
+   ]
+  },
+  {
+   "package": "setuptools",
+   "version": "80.9.0",
+   "id": "PYSEC-2026-3447",
+   "aliases": [
+    "CVE-2026-59890",
+    "GHSA-h35f-9h28-mq5c"
+   ]
+  },
+  {
+   "package": "setuptools",
+   "version": "80.9.0",
+   "id": "GHSA-h35f-9h28-mq5c",
+   "aliases": [
+    "BIT-setuptools-2026-59890",
+    "CVE-2026-59890",
+    "PYSEC-2026-3447"
+   ]
+  },
+  {
+   "package": "weasyprint",
+   "version": "68.0",
+   "id": "GHSA-jhhc-3hcp-qhm5",
+   "aliases": [
+    "CVE-2026-49452",
+    "PYSEC-2026-3412"
+   ]
+  },
+  {
+   "package": "weasyprint",
+   "version": "68.0",
+   "id": "PYSEC-2026-3412",
+   "aliases": [
+    "CVE-2026-49452",
+    "GHSA-jhhc-3hcp-qhm5"
+   ]
+  },
+  {
+   "package": "weasyprint",
+   "version": "68.0",
+   "id": "GHSA-jf6q-chmf-3h3v",
+   "aliases": [
+    "CVE-2026-55073"
+   ]
+  },
+  {
+   "package": "weasyprint",
+   "version": "68.0",
+   "id": "PYSEC-2026-3940",
+   "aliases": [
+    "CVE-2026-55073",
+    "GHSA-jf6q-chmf-3h3v"
+   ]
+  },
+  {
+   "package": "weasyprint",
+   "version": "68.0",
+   "id": "GHSA-r543-q48m-4c9j",
+   "aliases": [
+    "CVE-2026-106443"
+   ]
+  },
+  {
+   "package": "werkzeug",
+   "version": "3.1.6",
+   "id": "GHSA-g6x2-hccm-hh4m",
+   "aliases": [
+    "CVE-2026-102598"
+   ]
+  }
+ ]
+}
