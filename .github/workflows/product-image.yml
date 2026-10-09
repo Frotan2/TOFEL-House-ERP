@@ -241,6 +241,89 @@ jobs:
           policy_json="$(docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute toefl_house.operations.owner_configuration.current_backup_policy)"
           printf '%s\n' "$policy_json" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read().splitlines()[-1]); assert d["configured"] is True and d["retention_versions"] >= 2 and d["retention_behavior"] == "Preserve all valid backup sets" and d["recovery_key_sha256"] == sys.argv[1]; print("::notice title=Owner backup policy::synthetic CI policy/key identity configured through the guarded Course Owner command")' "$recovery_key_sha256"
 
+          checkpoint="Course Owner login secret and account fingerprint (pre-backup)"
+          # The disposable Course Owner gets a synthetic login secret so it can
+          # authenticate after the restore and after the repair. The secret is
+          # generated here, masked, passed to docker by name only (never on a
+          # command line) and never printed. The fingerprint covers the account
+          # identity, roles and the effective Owner backup policy, not the secret.
+          owner_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$owner_password"
+          export CI_OWNER_PASSWORD="$owner_password"
+          cat > owner-probe.py <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          import traceback
+
+          def _ci_excepthook(typ, value, tb):
+              traceback.print_exception(typ, value, tb)
+              print("RESULT owner_fingerprint=error %s: %s" % (typ.__name__, value))
+
+          sys.excepthook = _ci_excepthook
+          os.chdir("/home/frappe/bench/sites")
+          import frappe
+          from frappe.utils.password import update_password
+          from toefl_house.operations.owner_configuration import current_backup_policy
+
+          OWNER = "backup-owner@toeflhouse.localhost"
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
+          frappe.connect()
+          if os.environ.get("CI_SET_OWNER_PASSWORD") == "1":
+              update_password(OWNER, os.environ["CI_OWNER_PASSWORD"])
+              frappe.db.commit()
+          user = frappe.get_doc("User", OWNER)
+          roles = sorted(row.role for row in user.roles)
+          policy = current_backup_policy()
+          keep = {key: policy.get(key) for key in (
+              "configured", "retention_versions", "retention_behavior", "recovery_key_sha256")}
+          record = {"email": user.email, "full_name": user.full_name,
+                    "enabled": int(user.enabled), "user_type": user.user_type,
+                    "roles": roles, "policy": keep}
+          digest = hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()
+          print("RESULT owner_fingerprint=%s" % digest)
+          print("RESULT owner_roles=%s configured=%s" % (",".join(roles), keep["configured"]))
+          frappe.destroy()
+          PY
+          set +e
+          docker compose exec -T -i -w /home/frappe/bench/sites -e CI_OWNER_PASSWORD -e CI_SET_OWNER_PASSWORD=1 web /home/frappe/bench/env/bin/python3 - < owner-probe.py > owner-pre.txt 2>&1
+          owner_pre_rc=$?
+          set -e
+          owner_pre="$(grep -o '^RESULT owner_fingerprint=[0-9a-f]*' owner-pre.txt | cut -d= -f2 || true)"
+          if [ "$owner_pre_rc" -ne 0 ] || [ -z "$owner_pre" ]; then
+            echo "::error title=Course Owner::pre-backup account fingerprint failed (rc=${owner_pre_rc})"
+            tail -n 40 owner-pre.txt | cut -c1-400
+            exit 1
+          fi
+          echo "::notice title=Course Owner::synthetic login secret set; account, roles and effective Owner backup policy fingerprinted before the encrypted backup"
+          cat > owner-login-check.py <<'PY'
+          import http.cookiejar
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          base = os.environ.get("CI_BASE_URL", "http://127.0.0.1:8000")
+          owner = "backup-owner@toeflhouse.localhost"
+          jar = http.cookiejar.CookieJar()
+          opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+          form = urllib.parse.urlencode({"usr": owner, "pwd": os.environ["CI_OWNER_PASSWORD"]}).encode()
+          try:
+              with opener.open(urllib.request.Request(base + "/api/method/login", data=form), timeout=60) as reply:
+                  body = json.loads(reply.read().decode())
+          except urllib.error.HTTPError:
+              raise SystemExit("RESULT owner_login=refused")
+          if body.get("message") != "Logged In":
+              raise SystemExit("RESULT owner_login=refused")
+          with opener.open(base + "/api/method/frappe.auth.get_logged_user", timeout=60) as reply:
+              logged = json.loads(reply.read().decode()).get("message")
+          if logged != owner:
+              raise SystemExit("RESULT owner_login=wrong_session")
+          print("RESULT owner_login=ok user=%s" % logged)
+          PY
+
           checkpoint="activation refusal without a verified backup"
           # The product activation command must refuse before a complete
           # encrypted, separate-volume backup receipt exists.
@@ -554,6 +637,50 @@ jobs:
           rm -rf -- "$restore_stage"
           test "$restore_elapsed" -lt 28800
           echo "::notice title=Encrypted restore rehearsal::encrypted database, public/private file markers and Owner-key site-config recovery restored in ${restore_elapsed}s; post-backup database marker absent"
+
+          checkpoint="Course Owner login, account fingerprint and configuration after restore"
+          set +e
+          docker compose exec -T -i -w /home/frappe/bench/sites web /home/frappe/bench/env/bin/python3 - < owner-probe.py > owner-post-restore.txt 2>&1
+          owner_restore_rc=$?
+          set -e
+          owner_restored="$(grep -o '^RESULT owner_fingerprint=[0-9a-f]*' owner-post-restore.txt | cut -d= -f2 || true)"
+          if [ "$owner_restore_rc" -ne 0 ] || [ "$owner_restored" != "$owner_pre" ]; then
+            echo "::error title=Course Owner::account, roles or Owner backup policy changed across the restore (rc=${owner_restore_rc})"
+            tail -n 40 owner-post-restore.txt | cut -c1-400
+            exit 1
+          fi
+          set +e; python3 owner-login-check.py > owner-login-restore.txt 2>&1; owner_login_rc=$?; set -e
+          if [ "$owner_login_rc" -ne 0 ] || ! grep -q '^RESULT owner_login=ok user=backup-owner@toeflhouse.localhost$' owner-login-restore.txt; then
+            echo "::error title=Course Owner::Course Owner login failed after the restore (rc=${owner_login_rc})"
+            sed -e 's/^/login: /' owner-login-restore.txt | tail -n 5 | cut -c1-200
+            exit 1
+          fi
+          echo "::notice title=Course Owner restore::Course Owner logged in after the encrypted restore; account, roles and effective Owner backup policy unchanged"
+
+          checkpoint="restart and repair (service restart and migrate), then Course Owner login and fingerprint"
+          # The Windows repair command restarts services and reruns migrations
+          # (product/windows/Repair TOEFL House ERP.cmd). This is its CI equivalent.
+          docker compose restart web worker scheduler socketio
+          for j in $(seq 1 60); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 2; done
+          curl --fail --silent http://127.0.0.1:8000/ >/dev/null
+          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost migrate
+          set +e
+          docker compose exec -T -i -w /home/frappe/bench/sites web /home/frappe/bench/env/bin/python3 - < owner-probe.py > owner-post-repair.txt 2>&1
+          owner_repair_rc=$?
+          set -e
+          owner_repaired="$(grep -o '^RESULT owner_fingerprint=[0-9a-f]*' owner-post-repair.txt | cut -d= -f2 || true)"
+          if [ "$owner_repair_rc" -ne 0 ] || [ "$owner_repaired" != "$owner_pre" ]; then
+            echo "::error title=Course Owner::account, roles or Owner backup policy changed across restart and repair (rc=${owner_repair_rc})"
+            tail -n 40 owner-post-repair.txt | cut -c1-400
+            exit 1
+          fi
+          set +e; python3 owner-login-check.py > owner-login-repair.txt 2>&1; owner_login_rc=$?; set -e
+          if [ "$owner_login_rc" -ne 0 ] || ! grep -q '^RESULT owner_login=ok user=backup-owner@toeflhouse.localhost$' owner-login-repair.txt; then
+            echo "::error title=Course Owner::Course Owner login failed after restart and repair (rc=${owner_login_rc})"
+            sed -e 's/^/login: /' owner-login-repair.txt | tail -n 5 | cut -c1-200
+            exit 1
+          fi
+          echo "::notice title=Course Owner repair::after service restart and migrate the Course Owner logs in; account, roles and effective Owner backup policy match the pre-backup fingerprint"
 
           checkpoint="site-mode activation, refusals and deactivation"
           act activate --confirm toeflhouse.localhost | tee activate.txt
