@@ -107,8 +107,13 @@ The current audit found one resolver hardening gap and closed it: the public
 gate as backup/activation, so a future consumer cannot accidentally treat a
 saved-but-unvalidated Owner Operations version as live policy. The tests cover
 the UI/command/audit contracts and the pure business-rule paths; hosted Owner-
-policy suite evidence is synthetic. The latest native-site-creation failures
-mean none of this is a claim of a live Frappe UI-to-database or Owner-PC pass.
+policy suite evidence is synthetic. Current Foundation run `37902411810` failed
+during restore-with-files and failed the advisory gate; its safe annotations do
+not establish a restore cause, and the 160-match/47-package advisory set remains
+untriaged. Current Native run `37902411710` also failed at restore-with-files;
+its safe annotation reports `SystemExit`, OS error code `2`, and pinned Frappe
+restore frames, but not the failing operation. None of this is a claim of a live
+Frappe UI-to-database or Owner-PC pass.
 
 ---
 

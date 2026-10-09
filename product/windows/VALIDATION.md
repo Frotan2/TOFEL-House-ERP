@@ -27,6 +27,25 @@ does not validate Docker Desktop, Owner data, Task Scheduler, real login,
 backup recovery, Tailscale, or a real Windows lifecycle. Record those results
 from the Owner PC; production authorization remains **REJECTED**.
 
+**Hosted CI snapshot (2026-10-09; code head `a3b45ab`):** Product-image run
+[37902411869](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37902411869)
+**PASS**, including Compose validation and actual Docker image build, fresh
+checkout EOL contract, first boot, disposable encrypted backup/restore,
+Chromium login, proxy/tailnet contract simulation, upgrade/rollback, and
+performance. Its Windows stale-worktree EOL job
+[113727794775](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37902411869/job/113727794775)
+also **PASS**: physical CRLF/BOM fixture → real normalizer → LF/package
+contracts → idempotence. This is not a native Windows Owner lifecycle.
+Foundation run
+[37902411810](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37902411810)
+**FAIL** at restore-with-files and advisory triage (`STACK-ADVISORY-UNTRIAGED`,
+160 matches across 47 packages). Native run
+[37902411710](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37902411710)
+**FAIL** at restore-with-files; its safe annotation reports `SystemExit`, OS
+error code `2`, and pinned Frappe restore frames, but not the failing operation.
+These failures do not close the Owner backup/restore HOLD or change production
+authorization.
+
 ---
 
 ## Before you start (once)
