@@ -146,7 +146,7 @@ class NativeSiteCreationDiagnosticsTests(unittest.TestCase):
             with mock.patch.dict(sys.modules, {
                     "frappe": frappe, "frappe.installer": installer}):
                 with mock.patch("sys.stdin", io.StringIO(json.dumps(payload))):
-                    with mock.patch("os.getcwd", return_value=str(bench)):
+                    with mock.patch("os.getcwd", return_value=str(sites)):
                         exec(bootstrap._CREATE_SITE_SCRIPT, {})
             self.assertEqual(observed, {
                 "site": "native-probe.localhost",
@@ -179,6 +179,8 @@ class NativeSiteCreationDiagnosticsTests(unittest.TestCase):
         argv = run.call_args.args[0]
         stdin_payload = run.call_args.kwargs["input"]
         self.assertEqual(run.call_args.kwargs["errors"], "replace")
+        self.assertEqual(Path(run.call_args.kwargs["cwd"]),
+                         bootstrap.BENCH_DIR / "sites")
         self.assertFalse(any(secret in repr(argv) for secret in secrets_))
         for secret in secrets_:
             self.assertIn(secret, stdin_payload)

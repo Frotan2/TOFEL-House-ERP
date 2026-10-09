@@ -144,10 +144,10 @@ try:
     from frappe.installer import _new_site, update_site_config
     payload = json.load(sys.stdin)
     site = payload["site"]
-    # Frappe 16 defaults sites_path='.' even when called from the bench root.
-    # Pass the real sites directory or setup_module_map looks for apps.txt in
-    # the bench root and aborts before native _new_site can start.
-    frappe.init(site, sites_path=os.path.join(os.getcwd(), "sites"), new_site=True)
+    # Bench's native new-site command runs from sites/: Frappe resolves its
+    # relative log paths there, while setup_module_map reads apps.txt from the
+    # same directory. Pass it explicitly so the native API is cwd-independent.
+    frappe.init(site, sites_path=os.getcwd(), new_site=True)
     initialized = True
     _new_site(
         payload.get("db_name"), site,
@@ -305,7 +305,7 @@ def create_site(site: str, root_password: str, admin_password: str,
     try:
         result = subprocess.run(
             [str(ENV_PYTHON), "-c", _CREATE_SITE_SCRIPT],
-            cwd=BENCH_DIR,
+            cwd=BENCH_DIR / "sites",
             input=payload,
             text=True,
             errors="replace",
