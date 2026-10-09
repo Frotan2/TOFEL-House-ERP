@@ -16,6 +16,30 @@
 name: toefl-house-erp
 
 services:
+  bootstrap:
+    image: toefl-house-erp-app:local
+    container_name: toefl-house-erp-bootstrap
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    # The one-shot initializer alone can read the MariaDB root password.
+    # Web/worker/scheduler/socketio never receive db.env or the DB root secret.
+    entrypoint: ["python3", "/product/bootstrap.py"]
+    volumes:
+      - ./data/sites:/home/frappe/bench/sites
+      - ./data/logs:/home/frappe/bench/logs
+      - type: bind
+        source: ./data/secrets/db.env
+        target: /run/bootstrap-secrets/db.env
+        read_only: true
+        bind:
+          create_host_path: false
+    restart: "no"
+
   web:
     build:
       context: ..
@@ -27,22 +51,25 @@ services:
     image: toefl-house-erp-app:local
     container_name: toefl-house-erp-web
     depends_on:
+      bootstrap:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis-queue:
         condition: service_healthy
       redis-cache:
         condition: service_healthy
-    # First boot runs the idempotent site bootstrap (product/bootstrap.py),
-    # then starts gunicorn on 127.0.0.1-behind-loopback. Subsequent boots skip
-    # completed steps and run migrate only.
+    # The bootstrap service completes all privileged initialization before the
+    # web process starts; this long-lived service never sees the DB root file.
     entrypoint: ["/product/entrypoint.sh"]
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./data/sites:/home/frappe/bench/sites
       - ./data/logs:/home/frappe/bench/logs
-      - ./data/secrets:/run/secrets:ro
+      # The activation receipt contains verification evidence, not credentials;
+      # DB secrets stay in bootstrap-only ./data/secrets and are never mounted.
+      - ./data/activation:/run/activation:ro
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8000/"]
       interval: 30s
@@ -54,8 +81,8 @@ services:
   worker:
     image: toefl-house-erp-app:local
     container_name: toefl-house-erp-worker
-    # Starts beside web; the site may still be bootstrapping on first boot, so
-    # this service restarts itself until the site exists instead of blocking.
+    # Start only after web is healthy (bootstrap and migrations have completed);
+    # unless-stopped also recovers the worker after transient service failures.
     depends_on:
       web:
         condition: service_healthy

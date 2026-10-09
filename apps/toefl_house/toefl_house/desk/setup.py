@@ -378,8 +378,7 @@ def work():
             chain += " — " + "; ".join(issues)
         progression_facts.append({
             "label": program["title"],
-            "definition": "Configured progression in level order; mismatches "
-                          "between the order and the configured next level are named.",
+            "definition": "Configured catalog next-level links in sequence order; mismatches are named. This is reference data only: no automatic grading or student-promotion consumer exists (Owner decision D1 remains deferred).",
             "value": chain, "owner": "Course Owner",
         })
 
@@ -713,11 +712,12 @@ def _grading_items(policies, versions, today):
             "detail": detail,
             "status": readiness.capitalize(),
             "stage": "Assessment policy",
-            "stage_definition": ("Computed configuration readiness. "
-                                 "Versions carry the grading-scale link and "
-                                 "the owned facet structures; each facet "
-                                 "stays empty until the Course Owner "
-                                 "defines it."),
+            "stage_definition": ("Computed configuration readiness only. "
+                                 "Versions carry reference facets; no runtime "
+                                 "grading, assessment or student-progression "
+                                 "consumer is implemented/qualified, and D1 "
+                                 "remains deferred. Nothing here activates a "
+                                 "grade or promotion rule."),
             "next": _assessment_next(policy, readiness, governing),
             "next_role": "Course Owner",
             "waiting_since": None,

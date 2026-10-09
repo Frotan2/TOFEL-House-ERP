@@ -38,9 +38,41 @@ the **complete** owner-configurable carrier inventory as shipped today:
   (each + versions), and `TH Owner Operations Policy` (+ versions) —
   `toefl_house.operations.{alerting, guardian_lifecycle, owner_configuration}`.
   Owner Operations carries reporting review cadence, class-capacity target, tax,
-  transfer/withdrawal/calendar, off-site backup destination reference, and
-  non-secret custody requirements. Keys, credentials, custodian identities and
-  authorization ceremonies remain outside Frappe.
+  transfer/withdrawal/calendar, the Owner-selected local backup schedule,
+  retention count and explicit preserve/delete behavior, an ASCII-armored
+  **public** recovery key, and non-secret custody
+  requirements. The old off-site destination columns remain hidden/read-only
+  only for historical compatibility; off-site/NAS/second-device/cloud backup
+  is deferred future scope, not a current release gate. Private keys,
+  credentials, custodian identities and authorization ceremonies remain
+  outside Frappe.
+
+**Policy status is not implied by carrier status.** A shipped carrier/active
+policy shell does not mean its values are configured or runtime-consumed:
+
+- **Configured** means a validated, effective-dated version exists for the
+  relevant domain; only its named canonical consumer may apply it.
+- **Unconfigured** means no valid effective version exists; the consuming
+  command reports `NOT CONFIGURED` and fails closed. CI fixtures are synthetic,
+  not Owner configuration evidence.
+- **Deferred** means the policy/feature is explicitly outside the current
+  operating scope. A carrier value may be recorded, but it is not active
+  authority and does not enable behavior; no default is inferred.
+- **Runtime-consumed** is limited to the consumers explicitly qualified in
+  the domain map. In `TH Owner Operations Policy`, the nightly backup time,
+  retention count, explicit retention behavior and public recovery-key identity
+  are consumed by the Windows backup/activation checks. The Owner must choose
+  either preservation of all valid backup sets or authorization to delete valid
+  older sets beyond the keep count; no default is supplied, and an unset choice
+  leaves the policy unconfigured. This review has not run the Windows helper;
+  preserve existing backups and do not invoke backup/retention or activation
+  while the Owner decision is unresolved. Reporting review, capacity, tax,
+  transfer/withdrawal and calendar
+  terms are decision carriers only until their canonical domain consumers are
+  implemented and qualified. Custody/quorum fields record requirements; they do
+  not prove an actual custody ceremony. The Configuration desk labels these
+  unbound domains as deferred rather than implying that an `Active` policy
+  shell enforces them.
 
 Shared invariants for every carrier: Course-Owner-gated guarded commands,
 request-key idempotency, row locking, immutable effective-dated versions,
@@ -86,9 +118,10 @@ Field-level verification (read from the pinned Education source):
 Also verified for the record: the placement domain deliberately forbids
 business policy content (percentages, cutoffs, CEFR) inside its content
 pipeline (`policy.py`, `controllers.py`), and assessment thresholds / payroll
-policy are recorded owner-deferred (D1/B04/B05, D2/A09 in
-`docs/engineering/OWNER-DECISIONS.md`). This control plane does not reopen
-those decisions — it prepares the carriers for them.
+policy remain Owner-deferred in the canonical [architecture decisions](DECISIONS.md)
+(D1/B04/B05, D2/A09) and [Owner decision record](owner-decisions.json). This
+control plane does not reopen those decisions — it prepares carriers without
+activating unapproved policy.
 
 ## 2. Classification of the requirement (NATIVE / CONFIGURATION / THIN EXTENSION / DEFERRED)
 

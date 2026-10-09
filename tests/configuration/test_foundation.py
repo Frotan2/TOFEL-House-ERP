@@ -422,9 +422,9 @@ class ConfigurationAuditContractTests(unittest.TestCase):
                  "th_configuration_audit_event.py").read_text(encoding="utf-8")
         self.assertIn("Configuration audit events are append-only", event)
 
-    def test_kinds_bind_exactly_the_d1_commands_to_business_policy(self):
-        # S5: the twelve academic catalog commands join the eleven D1
-        # commands on the same business_policy (Course Owner) authority.
+    def test_kinds_bind_exactly_the_registered_configuration_commands_to_business_policy(self):
+        # Every literal configuration command kind, including the four global
+        # Owner-operations commands, binds to the Course Owner authority.
         source = (APP / "configuration/audit.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
         kinds = None
@@ -433,6 +433,10 @@ class ConfigurationAuditContractTests(unittest.TestCase):
                     and getattr(node.targets[0], "id", "") == "KIND_AUTHORITY"):
                 kinds = ast.literal_eval(node.value)
         self.assertEqual(kinds, {
+            "create_owner_operations_policy": "business_policy",
+            "set_owner_operations_policy_version": "business_policy",
+            "set_owner_operations_policy_status": "business_policy",
+            "validate_owner_operations_policy": "business_policy",
             "create_assessment_policy": "business_policy",
             "set_assessment_policy_version": "business_policy",
             "set_assessment_policy_status": "business_policy",

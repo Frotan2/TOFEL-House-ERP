@@ -85,6 +85,10 @@ RUN set -eux; \
 # carries working-tree state and nothing mutates the operator's checkout.
 COPY apps/toefl_house /build/owned/toefl_house
 COPY apps/foundation_security /build/owned/foundation_security
+# Package the canonical Owner decision ledger as immutable release input. The
+# enrollment-exit resolver consults this copy and stays fail-closed unless a
+# resolved Course Owner record explicitly supersedes D5 for both exit actions.
+COPY docs/owner-decisions.json /product/owner-decisions.json
 RUN set -eux; \
     for name in toefl_house foundation_security; do \
       find "/build/owned/${name}" -name '__pycache__' -type d -prune -exec rm -rf {} + ; \
@@ -96,6 +100,10 @@ RUN set -eux; \
 
 COPY product/bootstrap.py /product/bootstrap.py
 COPY product/activate.py /product/activate.py
+COPY product/restore.py /product/restore.py
+COPY product/backup.py /product/backup.py
+COPY product/native_gpg.py /product/native_gpg.py
+COPY product/native_db.py /product/native_db.py
 COPY product/wsgi.py /product/wsgi.py
 COPY product/entrypoint.sh /product/entrypoint.sh
 # The performance baseline (finding 9) runs inside the deployed image:
@@ -104,6 +112,12 @@ COPY product/entrypoint.sh /product/entrypoint.sh
 # an allowlist - enforced by the packaging guard in
 # tests/foundation/test_product_packaging.py.)
 COPY product/perf_baseline.py /product/perf_baseline.py
+# Fail the build if a Windows checkout or manually altered build context
+# carries CRLFs, a Unicode BOM, or a non-LF kernel shebang into the image.
+# The Windows preflight normalizes existing worktrees before docker build;
+# this independent in-image check makes bypassing that preflight fail closed.
+RUN python3 -c 'from pathlib import Path; import codecs; suffixes={".py",".sh",".js",".json",".css",".md",".txt",".toml",".yaml",".yml",".html",".xml",".csv",".svg",".jinja",".jinja2"}; roots=(Path("/build/owned"),Path("/product")); files=[p for root in roots for p in root.rglob("*") if p.is_file() and p.suffix.lower() in suffixes]; bom=(codecs.BOM_UTF8,codecs.BOM_UTF16_LE,codecs.BOM_UTF16_BE,codecs.BOM_UTF32_LE,codecs.BOM_UTF32_BE); bad=[str(p) for p in files if b"\r" in p.read_bytes() or p.read_bytes().startswith(bom)]; [print("LF/BOM contract violation: "+p) for p in bad]; assert Path("/product/entrypoint.sh").read_bytes().startswith(b"#!/bin/sh\n"), "entrypoint shebang is not LF"; assert Path("/product/activate.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "activate shebang is not LF"; assert Path("/product/bootstrap.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "bootstrap shebang is not LF"; assert Path("/product/restore.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "restore shebang is not LF"; assert Path("/product/backup.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "backup shebang is not LF"; assert Path("/product/perf_baseline.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "performance shebang is not LF"; raise SystemExit(bool(bad))'
+LABEL org.toefl-house.source-eol="lf-v1"
 RUN chmod +x /product/entrypoint.sh /product/activate.py
 
 # Local bench: frappe from the pinned source (not re-resolved), then the rest.
@@ -117,8 +131,8 @@ RUN chmod +x /product/entrypoint.sh /product/activate.py
 # setup step). The hosted-qualification parity is to keep every bench
 # operation as a non-root user, exactly like the runner user in the hosted
 # installation path — so the frappe user exists before the FIRST bench
-# invocation and stays the image's effective user through the entrypoint
-# (bootstrap.py also drives bench: new-site, migrate, build).
+# invocation and stays the image's effective user through the one-shot
+# bootstrap service and long-lived web entrypoint (both run as frappe).
 RUN useradd --create-home --home-dir /home/frappe --shell /bin/bash frappe \
     && chown -R frappe:frappe /build
 USER frappe

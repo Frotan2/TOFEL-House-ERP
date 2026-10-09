@@ -36,8 +36,12 @@ class ProductRestoreContractTests(unittest.TestCase):
             "PLACEMENT_RESTORE_REPORT", "source_db_credentials_copied"
         ):
             self.assertIn(token, RUNNER)
-        self.assertIn("'--with-public-files'", RUNNER)
-        self.assertIn("'--with-private-files'", RUNNER)
+        self.assertIn("restore_backup_dir.mkdir(parents=True,exist_ok=True)", RUNNER)
+        self.assertIn("shutil.copy2(artifact,restore_backup_dir/artifact.name)", RUNNER)
+        self.assertIn("input_text=restore_payload", RUNNER)
+        self.assertIn("ROOT/'product/restore.py'", RUNNER)
+        self.assertNotIn("'--with-public-files'", RUNNER)
+        self.assertNotIn("'--with-private-files'", RUNNER)
         self.assertIn("assert source_config['db_name'] != restore_config['db_name']", RUNNER)
         self.assertIn("assert source_config.get('db_password') != restore_config.get('db_password')", RUNNER)
         self.assertIn("restore_config['encryption_key'] = source_config['encryption_key']", RUNNER)

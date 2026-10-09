@@ -5,10 +5,19 @@ remain authoritative where they already exist (Billing Policy and Enrollment
 Exit Policy); this carrier owns only the missing cross-domain terms and
 surfaces them in one Settings-plane record.
 
-No secrets, credentials, keys, custodians or authorization grants are stored.
-Custody fields describe requirements/evidence only; ceremonies remain outside
-Frappe as required by the separate-control principle.
+No secrets, credentials, private keys, custodians or authorization grants are
+stored. A public recovery key may be recorded because it cannot decrypt without
+the externally held private key. Custody fields describe requirements/evidence
+only; ceremonies remain outside Frappe as required by the separate-control
+principle.
 """
+import base64
+import hashlib
+import json
+import math
+import re
+from datetime import datetime
+
 import frappe
 from toefl_house.academic import rules
 from toefl_house.configuration import audit as configuration_audit
@@ -17,9 +26,16 @@ from toefl_house.policy import digest
 
 POLICY = "TH Owner Operations Policy"
 MAX_REASON = 500
-MAX_DESTINATION = 200
 MAX_CUSTODY = 2000
-DESTINATION_KINDS = ("Owner-controlled off-site hardware",)
+MIN_BACKUP_VERSIONS = 2
+MAX_BACKUP_VERSIONS = 10000
+MAX_BACKUP_PUBLIC_KEY = 65536
+RETENTION_PRESERVE_ALL = "Preserve all valid backup sets"
+RETENTION_DELETE_BEYOND_KEEP = "Delete valid older sets beyond keep count"
+BACKUP_RETENTION_BEHAVIORS = frozenset({
+    RETENTION_PRESERVE_ALL,
+    RETENTION_DELETE_BEYOND_KEEP,
+})
 
 
 def _policy_doc(for_update=False):
@@ -49,45 +65,96 @@ def _int(value, label, minimum=0, maximum=3650):
     return value
 
 
-def validate_terms(values):
+def _backup_schedule_time(value):
+    text = str(value or "").strip()
+    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?", text):
+        raise ValueError("Nightly backup time is required in 24-hour HH:MM format")
+    for clock_format in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(text, clock_format).strftime("%H:%M")
+        except ValueError:
+            pass
+    raise ValueError("Nightly backup time is required in 24-hour HH:MM format")
+
+
+def _backup_public_key(value):
+    key = str(value or "").strip()
+    lines = key.splitlines()
+    if (len(key) > MAX_BACKUP_PUBLIC_KEY or not key.isascii()
+            or not lines
+            or lines[0] != "-----BEGIN PGP PUBLIC KEY BLOCK-----"
+            or lines[-1] != "-----END PGP PUBLIC KEY BLOCK-----"
+            or re.search(r"PRIVATE KEY", key, re.IGNORECASE)):
+        raise ValueError(
+            "A valid ASCII-armored public recovery key is required; private-key material must stay outside Frappe")
+    return key
+
+
+def _backup_retention_behavior(value):
+    behavior = str(value or "").strip()
+    if behavior not in BACKUP_RETENTION_BEHAVIORS:
+        raise ValueError(
+            "An explicit backup retention behavior is required: preserve all valid sets, or delete valid older sets beyond the keep count")
+    return behavior
+
+
+def validate_terms(values, *, allow_legacy_backup=False):
     review = _int(values.get("reporting_review_days"), "Reporting review days", 1, 366)
     capacity = _int(values.get("capacity_target"), "Class capacity target", 1, 1000)
     tax_enabled = _bool(values.get("tax_enabled"), "Tax enabled")
     rate = values.get("tax_rate")
+    if isinstance(rate, bool):
+        raise ValueError("Tax rate must be numeric")
     try:
         rate = float(rate)
     except (TypeError, ValueError) as exc:
         raise ValueError("Tax rate must be numeric") from exc
-    if not 0 <= rate <= 100:
+    if not math.isfinite(rate) or not 0 <= rate <= 100:
         raise ValueError("Tax rate must be between 0 and 100")
     inclusive = _bool(values.get("tax_inclusive"), "Tax inclusive")
     transfer = _bool(values.get("transfer_allowed"), "Transfers allowed")
     withdrawal = _bool(values.get("withdrawal_allowed"), "Withdrawals allowed")
     notice = _int(values.get("calendar_notice_days"), "Calendar notice days", 0, 366)
-    offsite = _bool(values.get("backup_offsite_required"), "Off-site backup required")
-    kind = (values.get("backup_destination_kind") or "").strip()
-    ref = (values.get("backup_destination_reference") or "").strip()
-    if offsite:
-        if kind not in DESTINATION_KINDS:
-            raise ValueError("A backup destination kind is required when off-site backup is required")
-        if not ref or len(ref) > MAX_DESTINATION:
-            raise ValueError("A non-secret backup destination reference is required")
-        lowered = ref.lower()
-        if any(secret in lowered for secret in ("password=", "token=", "secret=", "private_key=", "access_key=")):
-            raise ValueError("Backup destination reference must not contain credentials or secret material")
     custody = str(values.get("custody_requirement") or "").strip()
     if not 1 <= len(custody) <= MAX_CUSTODY:
         raise ValueError("Key custody requirement is required and must be concise")
     quorum = _int(values.get("recovery_quorum"), "Recovery quorum", 1, 20)
+
+    schedule_value = values.get("backup_schedule_time")
+    retention_value = values.get("backup_retention_versions")
+    retention_behavior_value = values.get("backup_retention_behavior")
+    recovery_key = str(values.get("backup_recovery_public_key") or "").strip()
+    if allow_legacy_backup and retention_behavior_value in (None, ""):
+        retention_behavior = ""
+    else:
+        retention_behavior = _backup_retention_behavior(retention_behavior_value)
+    if allow_legacy_backup and not recovery_key:
+        # Historical versions predate the required recovery key. Preserve
+        # their saveability (and validate any old fields they did set), while
+        # current_backup_policy remains NOT CONFIGURED until a new version
+        # supplies the schedule, count, retention behavior and public key.
+        schedule = _backup_schedule_time(schedule_value) if schedule_value else ""
+        retention = (
+            _int(retention_value, "Backup versions to retain",
+                 MIN_BACKUP_VERSIONS, MAX_BACKUP_VERSIONS)
+            if retention_value not in (None, "") else None
+        )
+    else:
+        schedule = _backup_schedule_time(schedule_value)
+        retention = _int(retention_value, "Backup versions to retain",
+                         MIN_BACKUP_VERSIONS, MAX_BACKUP_VERSIONS)
+        recovery_key = _backup_public_key(recovery_key)
+
     reason = foundation.validate_change_reason(values.get("reason") or "")
     return {
         "reporting_review_days": review, "capacity_target": capacity,
         "tax_enabled": tax_enabled, "tax_rate": rate,
         "tax_inclusive": inclusive, "transfer_allowed": transfer,
         "withdrawal_allowed": withdrawal, "calendar_notice_days": notice,
-        "backup_offsite_required": offsite,
-        "backup_destination_kind": kind if offsite else "",
-        "backup_destination_reference": ref if offsite else "",
+        "backup_schedule_time": schedule,
+        "backup_retention_versions": retention,
+        "backup_retention_behavior": retention_behavior,
+        "backup_recovery_public_key": recovery_key,
         "custody_requirement": custody, "recovery_quorum": quorum,
         "reason": reason,
     }
@@ -105,7 +172,7 @@ def validate_policy(doc):
     if len(dates) != len(set(dates)):
         frappe.throw("Two owner operational policy versions cannot share one effective date")
     for row in rows:
-        validate_terms(row)
+        validate_terms(row, allow_legacy_backup=True)
 
 
 def _result(doc, extra=None):
@@ -148,11 +215,12 @@ def set_owner_operations_policy_version(request_key, policy, effective_from,
                                         capacity_target, tax_enabled, tax_rate,
                                         tax_inclusive, transfer_allowed,
                                         withdrawal_allowed, calendar_notice_days,
-                                        backup_offsite_required,
-                                        backup_destination_kind="",
-                                        backup_destination_reference="",
-                                        custody_requirement="",
-                                        recovery_quorum=1):
+                                        backup_schedule_time,
+                                        backup_retention_versions,
+                                        backup_retention_behavior,
+                                        backup_recovery_public_key,
+                                        custody_requirement,
+                                        recovery_quorum):
     def work(actor):
         doc = _policy_doc(for_update=True)
         if not doc or doc.code != policy:
@@ -170,9 +238,10 @@ def set_owner_operations_policy_version(request_key, policy, effective_from,
                 "transfer_allowed": transfer_allowed,
                 "withdrawal_allowed": withdrawal_allowed,
                 "calendar_notice_days": calendar_notice_days,
-                "backup_offsite_required": backup_offsite_required,
-                "backup_destination_kind": backup_destination_kind,
-                "backup_destination_reference": backup_destination_reference,
+                "backup_schedule_time": backup_schedule_time,
+                "backup_retention_versions": backup_retention_versions,
+                "backup_retention_behavior": backup_retention_behavior,
+                "backup_recovery_public_key": backup_recovery_public_key,
                 "custody_requirement": custody_requirement,
                 "recovery_quorum": recovery_quorum,
                 "reason": reason,
@@ -233,9 +302,11 @@ def validate_owner_operations_policy(request_key, policy):
         if not rows:
             raise frappe.ValidationError("Owner operational policy has no versions yet")
         try:
-            for row in rows: validate_terms(row)
+            for row in rows:
+                validate_terms(row, allow_legacy_backup=True)
             foundation.assert_no_ambiguous_versions(rows, what="owner operational policy version")
-        except ValueError as exc: raise frappe.ValidationError(str(exc))
+        except ValueError as exc:
+            raise frappe.ValidationError(str(exc))
         before = configuration_audit.latest_after_hash(doc.name)
         after = foundation.snapshot_digest(rows)
         readiness = foundation.compute_readiness(
@@ -243,25 +314,147 @@ def validate_owner_operations_policy(request_key, policy):
             today=frappe.utils.today(), what="owner operational policy")
         return _result(doc, {"readiness": readiness}), {
             "target": doc.name, "before_hash": before, "after_hash": after}
-    return configuration_audit.execute(
+    result = configuration_audit.execute(
         "validate_owner_operations_policy", request_key, {"policy": policy}, work)
+    # The validation audit event must exist before a runtime consumer may
+    # resolve backup policy. Recompute after the guarded command has written
+    # its receipt and event; replays are safe because the resolver verifies
+    # the current version snapshot against the validation ledger each time.
+    result["backup_policy"] = current_backup_policy()
+    return result
 
 
 GOVERNING_FIELDS = (
     "effective_from", "reporting_review_days", "capacity_target",
     "tax_enabled", "tax_rate", "tax_inclusive", "transfer_allowed",
-    "withdrawal_allowed", "calendar_notice_days", "backup_offsite_required",
-    "backup_destination_kind", "backup_destination_reference",
+    "withdrawal_allowed", "calendar_notice_days", "backup_schedule_time",
+    "backup_retention_versions", "backup_retention_behavior",
+    "backup_recovery_public_key",
     "custody_requirement", "recovery_quorum",
 )
+
+
+def _version_rows(doc):
+    return [row.as_dict() for row in (doc.get("versions") or [])]
+
+
+def _owner_policy_validation_is_current(target, rows):
+    """Fail closed unless the latest policy changes follow a validation.
+
+    A validation event commits to the exact effective-dated version snapshot.
+    Any later policy mutation—including a status change—requires revalidation.
+    Equal creation timestamps are treated as ambiguous and fail closed rather
+    than relying on database row ordering.
+    """
+    if not target or not rows:
+        return False
+    snapshot = foundation.snapshot_digest(rows)
+    events = frappe.db.get_all(
+        configuration_audit.AUDIT,
+        filters={"target": target},
+        fields=["action", "after_hash", "creation"],
+        limit_page_length=0,
+    )
+    matching_times = [
+        str(event.get("creation") or "")
+        for event in events
+        if event.get("action") == "validate_owner_operations_policy"
+        and event.get("after_hash") == snapshot
+        and event.get("creation")
+    ]
+    if not matching_times:
+        return False
+    latest_validation = max(matching_times)
+    return not any(
+        event.get("action") != "validate_owner_operations_policy"
+        and (not event.get("creation")
+             or str(event.get("creation")) >= latest_validation)
+        for event in events
+    )
+
+
+def _governing_owner_terms(doc, rows, on_date=None):
+    if not doc or doc.status != "Active":
+        return {}
+    row = foundation.resolve_governing_strict(
+        rows, on_date or frappe.utils.today(),
+        what="owner operational policy version")
+    if not row:
+        return {}
+    return {field: row.get(field) for field in GOVERNING_FIELDS}
+
 
 def governing_owner_operations(on_date=None):
     """Return only governing business terms; never expose audit metadata."""
     doc = _policy_doc()
+    return _governing_owner_terms(doc, _version_rows(doc) if doc else [], on_date)
+
+
+def _validated_governing_owner_operations(on_date=None):
+    """Resolve terms only when the active policy's latest snapshot is validated."""
+    doc = _policy_doc()
     if not doc or doc.status != "Active":
         return {}
-    rows = [r.as_dict() for r in (doc.get("versions") or [])]
-    row = foundation.resolve_governing(rows, on_date or frappe.utils.today())
-    if not row:
+    rows = _version_rows(doc)
+    if not _owner_policy_validation_is_current(doc.name, rows):
         return {}
-    return {field: row.get(field) for field in GOVERNING_FIELDS}
+    return _governing_owner_terms(doc, rows, on_date)
+
+
+def current_backup_policy(on_date=None):
+    """Expose only a currently validated, non-secret backup policy to tooling."""
+    try:
+        terms = _validated_governing_owner_operations(on_date)
+        if not terms:
+            return {"configured": False, "status": "NOT CONFIGURED"}
+        schedule_value = terms.get("backup_schedule_time")
+        retention_value = terms.get("backup_retention_versions")
+        retention_behavior_value = terms.get("backup_retention_behavior")
+        recovery_key = str(terms.get("backup_recovery_public_key") or "").strip()
+        if (not schedule_value or retention_value in (None, "")
+                or not retention_behavior_value or not recovery_key):
+            return {"configured": False, "status": "NOT CONFIGURED"}
+        schedule = _backup_schedule_time(schedule_value)
+        retention = _int(retention_value, "Backup versions to retain",
+                         MIN_BACKUP_VERSIONS, MAX_BACKUP_VERSIONS)
+        retention_behavior = _backup_retention_behavior(retention_behavior_value)
+        try:
+            recovery_key = _backup_public_key(recovery_key)
+        except ValueError:
+            return {"configured": False, "status": "NOT CONFIGURED"}
+        recovery_key_hash = hashlib.sha256(recovery_key.encode("utf-8")).hexdigest()
+        effective = str(terms["effective_from"])
+        identity = {
+            "effective_from": effective,
+            "schedule_time": schedule,
+            "retention_versions": retention,
+            "retention_behavior": retention_behavior,
+            "recovery_key_sha256": recovery_key_hash,
+        }
+        policy_hash = hashlib.sha256(json.dumps(
+            identity, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")).hexdigest()
+        return {
+            "configured": True,
+            "status": "CONFIGURED",
+            "schedule_time": schedule,
+            "retention_versions": retention,
+            "retention_behavior": retention_behavior,
+            "recovery_key_sha256": recovery_key_hash,
+            "effective_from": effective,
+            "policy_hash": policy_hash,
+        }
+    except (TypeError, ValueError, KeyError):
+        return {"configured": False, "status": "NOT CONFIGURED"}
+
+
+def current_backup_public_key_b64(on_date=None):
+    """Return only the configured public recovery key, ASCII-safe for tooling."""
+    policy = current_backup_policy(on_date)
+    if policy.get("configured") is not True:
+        return ""
+    terms = _validated_governing_owner_operations(on_date)
+    key = str(terms.get("backup_recovery_public_key") or "").strip()
+    if hashlib.sha256(key.encode("utf-8")).hexdigest() != policy.get("recovery_key_sha256"):
+        return ""
+    return base64.b64encode(key.encode("utf-8")).decode("ascii")

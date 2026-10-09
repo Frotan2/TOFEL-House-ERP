@@ -8,6 +8,7 @@
   "effective_from",
   "column_break_1",
   "approver_role",
+  "superseding_owner_decision_reference",
   "section_break_1",
   "reason",
   "column_break_2",
@@ -34,6 +35,13 @@
    "in_list_view": 1,
    "label": "Approver role",
    "options": "Role",
+   "reqd": 1
+  },
+  {
+   "description": "Required reference to a separately recorded Course Owner decision that explicitly supersedes D5. Use D5-SUPERSESSION:<record-id>; do not use a placeholder. This reference is audited but is not itself the decision.",
+   "fieldname": "superseding_owner_decision_reference",
+   "fieldtype": "Data",
+   "label": "Superseding Owner decision reference (D5)",
    "reqd": 1
   },
   {

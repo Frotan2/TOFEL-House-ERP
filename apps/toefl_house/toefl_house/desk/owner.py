@@ -36,10 +36,11 @@ GROUP = "Student Group"
 # Release posture lines. All are the same records the administration control
 # centre serves, so the cockpit and the control centre cannot disagree.
 #
-# The production line is the only dynamic one: it states the site's own
-# resolved production mode (toefl_house.security.site_mode — the same
-# resolver the LAUNCH-RUNBOOK verification uses), not a stored claim. If the
-# site settings are unreadable it fails closed to REFUSED.
+# Site operational mode and release authorization are separate facts. The
+# former is dynamically resolved by the same security.site_mode guard used by
+# the lifecycle; the latter stays REJECT until the acceptance ledger's real
+# evidence and the Owner/non-engineering release gates pass. PRODUCTION mode
+# must never be presented as production authorization.
 #
 # The dependency-security line states what SEC-DEPS-01 is today: known
 # upstream advisories on the pinned stack. It gates internet exposure; the
@@ -50,14 +51,17 @@ GROUP = "Student Group"
 # docs/owner-decisions.json; the line carries the as-of date so a future
 # ledger change cannot silently stale the cockpit.
 RELEASE_POSTURE = [
-    {"label": "Production",
-     "definition": "Production mode resolved by the site's own guard (LAUNCH-RUNBOOK verification): REFUSED or PRODUCTION.",
-     "value": None, "owner": None},  # value filled by _production_mode()
+    {"label": "Site operational mode",
+     "definition": "SYNTHETIC, PRODUCTION or REFUSED as resolved by the site's own security guard. Operational mode is not release authorization.",
+     "value": None, "owner": None},  # value filled by _site_mode()
+    {"label": "Production authorization",
+     "definition": "Separate release decision. It stays REJECT until all evidence gates in docs/engineering/ACCEPTANCE.md and Owner/non-engineering gates pass; a PRODUCTION site mode cannot change it.",
+     "value": "REJECT", "owner": "Course Owner"},
     {"label": "Dependency security (SEC-DEPS-01)",
      "definition": "The pinned stack carries known upstream advisories. The gate binds to internet exposure; the selected deployment (D13/D15) is loopback-only with private-Tailscale access and opens none.",
      "value": "OPEN (gates internet exposure)", "owner": None},
-    {"label": "Synthetic-only activation",
-     "definition": "All owned business commands stay confined to explicitly isolated synthetic sites until the owner authorizes activation; every command REFUSES otherwise.",
+    {"label": "Synthetic and operational guards",
+     "definition": "Site-mode guards, synthetic-record restrictions and production-only validation remain enforced. Changing site mode does not authorize release.",
      "value": "ENFORCED", "owner": None},
     {"label": "Deployment",
      "definition": "Current deployment decision recorded by the owner in docs/owner-decisions.json (as of 2026-09-16).",
@@ -65,8 +69,8 @@ RELEASE_POSTURE = [
 ]
 
 
-def _production_mode():
-    """The site's own production mode; REFUSED when settings are unreadable."""
+def _site_mode():
+    """The site's operational mode; REFUSED when settings are unreadable."""
     try:
         from toefl_house import security
         return security.site_mode()
@@ -163,7 +167,7 @@ def cockpit():
                     empty_title="No recorded actions yet",
                     empty_body="When staff complete an important action, the record appears here. The full trail stays with auditor roles."),
             section("posture", "Release posture (fail-closed facts)", "facts",
-                    facts=[dict(row, value=_production_mode() if row["value"] is None else row["value"])
+                    facts=[dict(row, value=_site_mode() if row["value"] is None else row["value"])
                            for row in RELEASE_POSTURE],
                     empty_title="Release posture is always stated",
                     empty_body="These facts come from the reviewed acceptance ledger, not from a live computation."),

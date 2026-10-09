@@ -53,9 +53,14 @@ def main():
             data=json.loads(f.read_text());values.extend(str(v) for k,v in data.items() if any(x in k.lower() for x in ['password','secret','encryption_key']) and v)
         for v in values:text=text.replace(v,'[REDACTED]')
         return text
-    def run(label,args,cwd=None,timeout=1200):
+    def run(label,args,cwd=None,timeout=1200,input_text=None,env_overrides=None):
         started=time.monotonic();print(label,flush=True)
-        p=subprocess.run([str(a) for a in args],cwd=cwd or lab,env=env,text=True,capture_output=True,timeout=timeout)
+        child_env = dict(env)
+        child_env.update(env_overrides or {})
+        options = dict(cwd=cwd or lab,env=child_env,text=True,capture_output=True,timeout=timeout)
+        if input_text is not None:
+            options["input"] = input_text
+        p=subprocess.run([str(a) for a in args],**options)
         (evidence/(label+'.txt')).write_text(redact(p.stdout+p.stderr))
         report['checks'].append(dict(name=label,exit_code=p.returncode,seconds=round(time.monotonic()-started,3)))
         if p.returncode:
@@ -66,6 +71,18 @@ def main():
             raise RuntimeError(f'{label} failed (exit {p.returncode}); see retained log\n--- {label} log tail ---\n{tail}')
         return p.stdout.strip()
     def bench(label,*args):return run(label,[lab/'tools/bin/bench',*args],benchdir)
+    def create_site(label,site,site_db_password,set_default=False):
+        payload=json.dumps({'site':site,'db_root_password':rootpw,
+                            'admin_password':adminpw,'db_password':site_db_password,
+                            'db_host':'127.0.0.1','db_port':13306,
+                            'set_default_site':set_default})
+        return run(label,[py,ROOT/'tools/native/site_setup.py'],input_text=payload,
+                   env_overrides={'SITE_BENCH_DIR':str(benchdir),
+                                  'SITE_PYTHON':str(benchdir/'env/bin/python')})
+    def product_backup(label,site):
+        return run(label,[benchdir/'env/bin/python',ROOT/'tools/native/run_product_backup.py',site],
+                   cwd=benchdir/'sites',
+                   env_overrides={'BENCH_DIR':str(benchdir),'SITE_NAME':site})
     try:
         run('python-version',[py,'--version']);run('node-version',['node','--version']);run('yarn-version',['yarn','--version'])
         run('tools-env',[py,'-m','venv',lab/'tools'])
@@ -99,7 +116,7 @@ def main():
             bench('get-'+name,'get-app','--soft-link','--skip-assets',str(export))
         run('pip-check',[lab/'tools/bin/uv','pip','check','--python',benchdir/'env/bin/python'])
         for site in ('placement-test.localhost','placement-second.localhost'):
-            bench('new-'+site,'new-site',site,'--db-type','mariadb','--db-host','127.0.0.1','--db-port','13306','--db-root-username','root','--db-root-password',rootpw,'--admin-password',adminpw,'--db-password',dbpw,'--no-mariadb-socket')
+            create_site('new-'+site,site,dbpw)
             for name in ('erpnext','education','payments','hrms','foundation_security','toefl_house'):bench('install-'+site+'-'+name,'--site',site,'install-app',name)
             for key in ('allow_tests','toefl_house_synthetic_only','disable_website_cache'):bench('enable-'+site+'-'+key,'--site',site,'set-config',key,'1','--parse')
             bench('migrate-'+site,'--site',site,'migrate');bench('migrate-replay-'+site,'--site',site,'migrate')
@@ -107,25 +124,47 @@ def main():
         server=subprocess.Popen([str(benchdir/'env/bin/gunicorn'),'--bind','127.0.0.1:18000','--workers','2','frappe.app:application'],cwd=benchdir/'sites',env=env,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
         processes.append((server,stream,log))
         run('native-acceptance',[benchdir/'env/bin/python',ROOT/'tools/native/native_checks.py'],benchdir/'sites')
-        # D8-scoped product persistence rehearsal. This is a true Bench backup
-        # plus files and a restore into a separately created DB/site. It is not
-        # an offsite backup, production recovery objective, or topology claim.
+        # D8-scoped synthetic persistence rehearsal. The product adapter calls
+        # pinned Frappe native backup/restore while moving GPG/MariaDB secrets
+        # off child argv. This is not Owner evidence, offsite backup, production
+        # recovery objective, or a topology claim.
         expectation=lab/'product-restore-expectation.json'
         env['PLACEMENT_RESTORE_EXPECTATION']=str(expectation)
         env['PLACEMENT_RESTORE_REPORT']=str(expectation)
         run('capture-product-restore-snapshot',[benchdir/'env/bin/python',ROOT/'tools/native/runtime_restore.py','capture','placement-test.localhost'],benchdir/'sites')
-        bench('backup-placement-test-with-files','--site','placement-test.localhost','backup','--with-files')
+        bench('enable-native-backup-encryption','--site','placement-test.localhost','execute',
+              "frappe.db.set_single_value('System Settings', 'encrypt_backup', 1)")
+        product_backup('backup-placement-test-with-files','placement-test.localhost')
         backup_dir=benchdir/'sites'/'placement-test.localhost'/'private/backups'
-        database=max(backup_dir.glob('*-database.sql.gz'),key=lambda p:p.stat().st_mtime_ns)
-        private_files=max(backup_dir.glob('*-private-files.tar'),key=lambda p:p.stat().st_mtime_ns)
-        public_files=max((p for p in backup_dir.glob('*-files.tar') if '-private-files' not in p.name),key=lambda p:p.stat().st_mtime_ns)
+        database_suffix='-database-enc.sql.gz'
+        database=max(backup_dir.glob('*'+database_suffix),key=lambda p:p.stat().st_mtime_ns)
+        backup_set=database.name[:-len(database_suffix)]
+        private_files=backup_dir/(backup_set+'-private-files-enc.tar')
+        public_files=backup_dir/(backup_set+'-files-enc.tar')
+        for artifact in (database,private_files,public_files):
+            if not artifact.is_file() or artifact.stat().st_size <= 0:
+                raise RuntimeError('Native encrypted backup set is incomplete: '+artifact.name)
+        sidecar=backup_dir/(backup_set+'-site_config_backup-enc.json')
+        recovered_backup_config=json.loads(sidecar.read_text())
+        backup_encryption_key=recovered_backup_config.get('backup_encryption_key')
+        if not isinstance(backup_encryption_key,str) or not backup_encryption_key:
+            raise RuntimeError('Native site-config sidecar did not preserve backup_encryption_key')
         report['product_backup']={label:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for label,p in
                                   (('database',database),('private_files',private_files),('public_files',public_files))}
         restore_site='placement-restore.localhost'
-        bench('new-placement-restore-site','new-site',restore_site,'--db-type','mariadb','--db-host','127.0.0.1','--db-port','13306','--db-root-username','root','--db-root-password',rootpw,'--admin-password',adminpw,'--db-password',restorepw,'--no-mariadb-socket')
+        create_site('new-placement-restore-site',restore_site,restorepw)
+        restore_backup_dir=benchdir/'sites'/restore_site/'private/backups'
+        restore_backup_dir.mkdir(parents=True,exist_ok=True)
+        for artifact in (database,public_files,private_files):shutil.copy2(artifact,restore_backup_dir/artifact.name)
         for name in ('erpnext','education','payments','hrms','foundation_security','toefl_house'):bench('install-'+restore_site+'-'+name,'--site',restore_site,'install-app',name)
         for key in ('allow_tests','toefl_house_synthetic_only','disable_website_cache'):bench('enable-'+restore_site+'-'+key,'--site',restore_site,'set-config',key,'1','--parse')
-        bench('restore-placement-test-with-files','--site',restore_site,'restore',str(database),'--db-root-password',rootpw,'--admin-password',adminpw,'--with-public-files',str(public_files),'--with-private-files',str(private_files))
+        restore_payload=json.dumps({'site':restore_site,'backup_set':backup_set,
+                                    'encryption_key':backup_encryption_key,
+                                    'db_root_password':rootpw,'admin_password':adminpw})
+        run('restore-placement-test-with-files',
+            [benchdir/'env/bin/python',ROOT/'product/restore.py'],cwd=benchdir,
+            input_text=restore_payload,
+            env_overrides={'BENCH_DIR':str(benchdir),'SITE_NAME':restore_site})
         source_config=json.loads((benchdir/'sites'/'placement-test.localhost'/'site_config.json').read_text())
         restore_config_file=benchdir/'sites'/restore_site/'site_config.json'
         restore_config=json.loads(restore_config_file.read_text())
