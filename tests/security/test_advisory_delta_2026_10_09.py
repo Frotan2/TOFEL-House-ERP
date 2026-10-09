@@ -234,5 +234,130 @@ class WeasyPrintOverrideWiringTests(unittest.TestCase):
         self.assertIn('getattr(doc, "print_format_builder_beta", False)', self.printing)
 
 
+SEC_DIR = ROOT / "docs/engineering/evidence/sec-deps-01"
+README_PATH = DELTA_DIR / "README.md"
+ERRATUM = SEC_DIR / "ERRATUM-2026-10-09.md"
+REGISTER = SEC_DIR / "per-finding-remediation-analysis-2026-09-23.json"
+DELTA_1003 = SEC_DIR / "advisory-delta-2026-10-03" / "delta-dispositions.json"
+SECURITY_TEST_MODULE = "tests/security/test_advisory_delta_2026_10_09.py"
+
+
+class ReconciliationTests(unittest.TestCase):
+    """CI reported 160 matches. The replay reproduces 96 npm + 62 PyPI = 158, and the gap is two oauthlib matches."""
+
+    OAUTHLIB_IDS = ("GHSA-hj66-6f7g-4r5v", "PYSEC-2026-4113")
+
+    def test_counts_reconcile_to_the_ci_header(self):
+        counts = SNAPSHOT["counts"]
+        self.assertEqual(counts["npm_matches_ci_style_unique_ghsa_per_package"], 96)
+        self.assertEqual(counts["pypi_matches_ci_style_no_pysec_alias_merge"], 62)
+        self.assertEqual(counts["ci_reported_matches"], 160)
+        self.assertEqual(96 + 62 + len(self.OAUTHLIB_IDS), counts["ci_reported_matches"])
+
+    def test_the_two_extra_ci_matches_are_closed_oauthlib_records(self):
+        for aid in self.OAUTHLIB_IDS:
+            rec = t.load_triage()["by_id"].get(t._norm(aid))
+            self.assertIsNotNone(rec, aid)
+            self.assertEqual(rec["package"], "py:oauthlib@3.3.1")
+            self.assertIn(rec["runtime_disposition"], CLOSED, aid)
+
+    def test_readme_states_the_reconciliation(self):
+        text = README_PATH.read_text(encoding="utf-8")
+        self.assertIn("96 + 62 + 2 = 160", text)
+        self.assertIn("py:oauthlib@3.3.1", text)
+
+
+class ProductScopeTests(unittest.TestCase):
+    """c8x8 is closed for the education tree only. The HRMS SPA is a product-level open release blocker."""
+
+    def _c8x8(self):
+        recs = {adv["id"]: adv for _, adv in _delta_records()}
+        return recs["GHSA-c8x8-7fp4-3x9w"]
+
+    def test_c8x8_product_scope_is_an_open_release_blocker(self):
+        scope = self._c8x8()["product_scope"]
+        self.assertEqual(scope["status"], "OPEN_RELEASE_BLOCKER")
+        self.assertIn("hrms/frontend", scope["tree"])
+        self.assertIn("REACHABLE WITH USER INTERACTION", scope["reachability"])
+        joined = " ".join(scope["evidence"])
+        self.assertIn("FormField.vue:37-38", joined)
+        self.assertIn("hooks.py:83-84", joined)
+
+    def test_no_current_document_says_hrms_is_unbuilt_or_unserved(self):
+        for path in (README_PATH, DELTA_DIR / "delta-dispositions.json"):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn("not built or served by the product", text, path.name)
+            self.assertNotIn("not built by the product build path", text, path.name)
+
+    def test_the_hrms_build_and_serve_facts_are_pinned_in_the_json(self):
+        joined = " ".join(self._c8x8()["product_scope"]["evidence"])
+        self.assertIn("esbuild/esbuild.js:511-543", joined)
+        self.assertIn("frappe/build.py:255", joined)
+        self.assertIn("product/bootstrap.py:691-692", joined)
+
+
+class EchartsErratumTests(unittest.TestCase):
+    """The 2026-10-03 ECharts reasoning cannot be reproduced from any pinned lockfile. It is BLOCKED, not NOT_REACHABLE."""
+
+    def test_withdrawn_echarts_disposition_is_blocked(self):
+        data = json.loads(DELTA_1003.read_text(encoding="utf-8"))
+        hits = [adv for pkg in data["packages"] for adv in pkg["advisories"]
+                if adv["id"] == "GHSA-fgmj-fm8m-jvvx"]
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["runtime_disposition"], "BLOCKED")
+        self.assertIn("ERRATUM 2026-10-09", hits[0]["runtime_disposition_evidence"])
+        self.assertTrue((ROOT / hits[0]["erratum"]).is_file())
+
+    def test_no_replayed_npm_entry_is_echarts(self):
+        self.assertNotIn("echarts", json.dumps(SNAPSHOT["npm_entries"]))
+
+    def test_the_loader_does_not_treat_the_blocked_echarts_entry_as_closed(self):
+        rec = t.load_triage()["by_id"].get(t._norm("GHSA-fgmj-fm8m-jvvx"))
+        self.assertIsNotNone(rec)
+        self.assertNotIn(rec["runtime_disposition"], CLOSED)
+
+
+class DanglingReferenceTests(unittest.TestCase):
+    """The 2026-09-23 register is immutable. Its dangling test references are corrected by the erratum, not by editing it."""
+
+    def test_the_register_still_cites_the_missing_test_path(self):
+        self.assertIn("tests/foundation/test_sec_deps_triage.py::test_weasyprint_whitelist_overrides_pin_beta_gate",
+                      REGISTER.read_text(encoding="utf-8"))
+        self.assertFalse((ROOT / "tests/foundation/test_sec_deps_triage.py").exists())
+
+    def test_erratum_names_only_replacement_tests_that_exist(self):
+        import ast
+        text = ERRATUM.read_text(encoding="utf-8")
+        tree = ast.parse(Path(ROOT / SECURITY_TEST_MODULE).read_text(encoding="utf-8"))
+        defined = {f"{cls.name}.{fn.name}" for cls in tree.body if isinstance(cls, ast.ClassDef)
+                   for fn in cls.body if isinstance(fn, ast.FunctionDef)}
+        refs = re.findall(r"tests/security/test_advisory_delta_2026_10_09\.py::(\w+)::(\w+)", text)
+        self.assertGreaterEqual(len(refs), 3)
+        for cls_name, fn_name in refs:
+            self.assertIn(f"{cls_name}.{fn_name}", defined, f"{cls_name}::{fn_name}")
+
+
+class WeasyPrintOwnedFixtureTests(unittest.TestCase):
+    """Static fixture audit for the register's beta-gate claim, over owned app trees only."""
+
+    def test_no_owned_fixture_enables_print_format_builder_beta(self):
+        pattern = re.compile(r'"print_format_builder_beta"\s*:\s*(1|true)')
+        offenders = []
+        for root in (ROOT / "apps/toefl_house", ROOT / "apps/foundation_security"):
+            for path in root.rglob("*.json"):
+                if pattern.search(path.read_text(encoding="utf-8", errors="replace")):
+                    offenders.append(str(path.relative_to(ROOT)))
+        self.assertEqual(offenders, [])
+
+
+class GhostscriptGuardStageTests(unittest.TestCase):
+    """The guard must hold for the shipped image: one runtime stage, and no cross-stage copy that could bring gs back."""
+
+    def test_dockerfile_is_a_single_runtime_stage(self):
+        froms = [line for line in DOCKERFILE.splitlines() if line.startswith("FROM ")]
+        self.assertEqual(len(froms), 1, froms)
+        self.assertNotIn("COPY --from", DOCKERFILE)
+
+
 if __name__ == "__main__":
     unittest.main()
