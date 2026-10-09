@@ -8,6 +8,9 @@ on:
     paths:
       - .github/workflows/foundation-runtime.yml
       - tools/foundation/**
+      - tools/native/site_setup.py
+      - tools/native/run_product_backup.py
+      - tests/foundation/test_native_credential_adapters.py
       - apps/foundation_security/**
       - docs/engineering/foundation-version-matrix.json
       # The SEC-DEPS-01 dispositions are read by tools/foundation/advisory_triage.py,
