@@ -34,7 +34,7 @@ def main():
     expected = json.loads(Path(os.environ["FOUNDATION_BUSINESS_REPORT"]).read_text())["records"]
     output = Path(os.environ["FOUNDATION_RESTORE_REPORT"])
     report = {"scope": "Actual restored synthetic site; no production data", "status": "running", "checks": []}
-    frappe.init(site=sys.argv[1], sites_path=str(Path.cwd()))
+    frappe.init(site=sys.argv[1])
     try:
         frappe.connect()
         frappe.set_user("Administrator")

@@ -18,6 +18,8 @@ Two honesties are load-bearing here:
 import frappe
 
 from toefl_house.configuration import rules as foundation
+from toefl_house.enrollment.exits import governing_exit_terms
+from toefl_house.operations.owner_configuration import current_backup_policy
 from toefl_house.desk import (
     LIMIT_QUEUES,
     project_count,
@@ -53,7 +55,7 @@ NATIVE_OWNER_POLICIES = (
      "toefl_house.enrollment.exits.create_enrollment_exit_policy",
      "toefl_house.enrollment.exits.set_enrollment_exit_policy_version",
      "toefl_house.enrollment.exits.set_enrollment_exit_policy_status",
-     "The Course Owner controls the approver role for enrollment exits."),
+     "The guarded exit commands fail closed unless the effective version cites a resolved Course Owner decision in the immutable release copy of docs/owner-decisions.json. The record must explicitly supersede D5, name the exact exit scope, and authorize both withdrawal and dismissal; a reason or well-formed but unrecorded reference cannot activate exits. Canonical D5 currently defers withdrawal/transfer terms. The separate Owner Operations withdrawal field is not consumed here."),
     ("billing", "Billing", "TH Billing Policy",
      "toefl_house.finance.policies.create_billing_policy",
      "toefl_house.finance.policies.set_billing_policy_version",
@@ -95,9 +97,9 @@ GUARDIAN_VERSION_FIELDS = ["name", "parent", "parenttype", "effective_from",
                            "consent_evidence", "consent_expiry_days",
                            "reason", "set_by", "set_on", "superseded_on"]
 
-# Domains with no configuration surface yet. Each renders as an
-# explicit "not implemented" fact — never a dead link, never a guessing
-# readiness badge.
+# Domains whose business policy remains a decision input without a qualified
+# canonical runtime consumer. Each renders as an explicit deferred fact —
+# never a dead link, never a guessing readiness badge.
 FUTURE_DOMAINS = (
     ("reporting-metrics", "Reporting & Metrics",
      "Owner-selected reporting review interval and class-capacity target are Owner decision inputs; "
@@ -106,14 +108,15 @@ FUTURE_DOMAINS = (
      "Billing and correction authorities remain on the Finance desk; tax terms are a decision carrier only "
      "and are NOT a live tax authority until a native finance consumer is explicitly implemented and qualified."),
     ("enrollment-lifecycle", "Enrollment & Lifecycle",
-     "Withdrawal/dismissal remains governed by Enrollment Exit Policy; transfer and calendar terms are decision carriers only "
-     "and remain deferred/not runtime-bound until their canonical lifecycle consumers are explicitly implemented and qualified."),
-    ("backup-recovery", "Backup & Recovery",
-     "Off-site requirement and non-secret destination reference are recovery requirements only; "
-     "they do not constitute backup execution evidence or production authorization."),
+     "The guarded Enrollment Exit Policy is the withdrawal/dismissal resolver. Canonical D5 still defers withdrawal/transfer; exits remain fail-closed until a release-packaged, resolved Course Owner record explicitly supersedes D5 and authorizes both exit actions. Transfer and calendar carrier fields have no runtime consumer."),
     ("security", "Security",
      "Custody requirements and recovery quorum are decision requirements only; recording them is not proof "
      "that recovery controls are implemented. Keys, credentials, custodians and authorization ceremonies remain outside Frappe."),
+)
+
+CURRENT_BACKUP_DOMAIN = (
+    "Backup & Recovery",
+    "Intended local scope is a verified encrypted backup on a separate local drive. The Windows helper is on preservation hold: the Owner must explicitly choose to preserve all valid sets or authorize deletion of older valid sets beyond the keep count. There is no default; an unset choice blocks backup and activation. Do not run the helper or proceed through activation until the Owner resolves the retention behavior and the implementation/docs agree. Off-site, NAS, second-device and cloud copies remain deferred. Restore and release authorization require separate evidence.",
 )
 
 
@@ -179,6 +182,11 @@ def work():
                                 items=[_owner_policy_item(today, title, body)],
                                 empty_title=title,
                                 empty_body=body))
+    backup_title, backup_body = CURRENT_BACKUP_DOMAIN
+    sections.append(section(
+        "backup-recovery", backup_title, "queue",
+        items=[_owner_policy_item(today, backup_title, backup_body)],
+        empty_title=backup_title, empty_body=backup_body))
     sections.append(
         section("owner-policies", "Course Owner Policy Controls", "queue",
                 items=[_native_owner_policy_item(*spec) for spec in NATIVE_OWNER_POLICIES],
@@ -189,19 +197,13 @@ def work():
                 facts=_guardian_facts(guardian, guardian_readiness,
                                       guardian_by_policy, today),
                 empty_title="No guardian lifecycle policy exists",
-                empty_body="Advanced guardian features stay refused "
-                           "(fail-closed) until the Course Owner enters the "
-                           "guardian lifecycle terms; identity and guardian "
-                           "access remain exactly as the SEC-GUARDIAN-01 "
-                           "containment enforces."))
+                empty_body="Guardian lifecycle terms are a configuration carrier only; no runtime feature consumes them. Advanced guardian/portal features remain deferred and refused. Identity and access remain exactly as SEC-GUARDIAN-01 enforces, even if terms are later recorded."))
     sections.append(
         section("operations", "Operations", "facts",
                 facts=_alerting_facts(alerting, alerting_readiness,
                                       alerting_by_policy, today),
                 empty_title="No alerting policy exists",
-                empty_body="Alert delivery stays refused (fail-closed) until "
-                           "the Course Owner selects a receiver and its "
-                           "retention terms."))
+                empty_body="The alerting policy records receiver and retention terms only; no runtime delivery consumer is implemented, so adding a version does not send alerts."))
     sections.append(section("system-readiness", "System Readiness", "queue",
                             items=_readiness_items(
                                 policies, versions_by_policy,
@@ -211,8 +213,7 @@ def work():
                                 guardian,
                                 guardian_by_policy, guardian_readiness),
                             empty_title="Nothing configured yet",
-                            empty_body="No assessment policy exists; the "
-                                       "Academic domain is incomplete."))
+                            empty_body="No assessment policy exists. Academic grading and progression remain deferred by D1; this readiness section reports configuration only, and nothing computes grades or promotion decisions."))
     return {
         "desk": SLUG,
         "sections": sections,
@@ -235,24 +236,44 @@ def _native_owner_policy_item(sid, title, doctype, create_endpoint,
     }
     rows = projectors[doctype]()
     if not rows:
+        next_text = (
+            "Keep exits inactive. No resolved D5 supersession is currently in the canonical ledger. After the Course Owner's explicit decision is recorded and shipped, configure a version that cites its exact record ID; the guarded command resolves and audits it."
+            if sid == "enrollment-exit" else
+            "Create the policy shell, then add its first effective-dated version through the guarded command; that command validates and audits its terms.")
         return {
             "id": sid, "person": title,
             "detail": "No policy shell exists; the governed feature stays fail-closed until the Course Owner configures it.",
             "status": "Owner configuration required", "stage": "Course Owner policy",
             "stage_definition": description,
-            "next": "Create the policy shell, then add and validate its first effective-dated version.",
+            "next": next_text,
             "next_role": "Course Owner", "waiting_since": None,
             "action": {"endpoint": create_endpoint, "label": "Create policy",
                        "args": {"code": "", "title": title, "description": description}},
         }
     row = rows[0]
     status = row.get("status") or ""
+    detail = description
+    if sid == "enrollment-exit" and status == "Active":
+        terms = governing_exit_terms()
+        if terms:
+            status_label = "Exit policy authorized by resolved D5 supersession"
+            detail = (description + " Current version cites canonical Owner decision " +
+                      terms["superseding_owner_decision_reference"] +
+                      " from " + terms["effective_from"] + ". The runtime resolved its scope and both authorized exit actions in the immutable release ledger.")
+            next_text = "Keep the referenced Owner decision and this version's audit event together; use the guarded status command to retire exits if that authority is withdrawn."
+        else:
+            status_label = "Exit behavior fail-closed (D5 unresolved)"
+            detail = (description + " No effective version resolves to an explicit, in-scope D5 supersession decision in the canonical release ledger.")
+            next_text = "Keep exits inactive. Do not add a version until an explicit Owner decision that supersedes D5 and authorizes both withdrawal and dismissal is recorded in the canonical ledger and shipped; a reason or fabricated ID cannot activate exits."
+    else:
+        status_label = "Owner policy active" if status == "Active" else "Owner policy retired"
+        next_text = "Append effective-dated terms or change status through this domain's guarded commands; each command validates its input and records the audit event."
     return {
         "id": row["code"], "person": row["title"],
-        "detail": description,
-        "status": "Owner policy active" if status == "Active" else "Owner policy retired",
+        "detail": detail,
+        "status": status_label,
         "stage": "Course Owner policy", "stage_definition": description,
-        "next": "Add or replace effective-dated terms, then validate the current policy.",
+        "next": next_text,
         "next_role": "Course Owner", "waiting_since": None,
         "actions": [
             {"endpoint": version_endpoint, "label": "Set policy version",
@@ -265,17 +286,26 @@ def _native_owner_policy_item(sid, title, doctype, create_endpoint,
 
 def _owner_policy_item(today, title, body):
     """Project the canonical Course Owner carrier and its guarded commands."""
+    is_backup = title == "Backup & Recovery"
+    item_id = "backup-recovery" if is_backup else OWNER_POLICY
     policy = project_rows("configuration", OWNER_POLICY,
                           ["name", "code", "title", "status", "description"],
                           limit=1)
     if not policy:
-        status = "Owner configuration required"
-        detail = "No owner policy exists yet; this domain has no governing terms."
-        next_text = "Create TH Owner Operations Policy, then add and validate its first effective-dated version."
+        detail = (
+            "No Owner Operations policy exists; no explicit retention behavior is configured, so backup and activation fail closed."
+            if is_backup else
+            "No owner policy exists yet; this domain has no governing terms.")
+        next_text = (
+            "After receiving the Course Owner's decision, create the policy and explicitly choose to preserve all valid sets or authorize deletion beyond the keep count; no default is supplied. Do not run the backup helper or proceed through activation while this choice is unresolved."
+            if is_backup else
+            "Create TH Owner Operations Policy, then add and validate its first effective-dated version.")
         return {
-            "id": OWNER_POLICY, "person": "TH Owner Operations Policy",
-            "detail": detail, "status": status, "stage": "Owner configuration",
-            "stage_definition": body, "next": next_text,
+            "id": item_id, "person": title if is_backup else "TH Owner Operations Policy",
+            "detail": detail,
+            "status": "Owner configuration required", "stage": "Owner configuration",
+            "stage_definition": body,
+            "next": next_text,
             "next_role": "Course Owner", "waiting_since": None,
             "action": {
                 "endpoint": "toefl_house.operations.owner_configuration.create_owner_operations_policy",
@@ -284,16 +314,42 @@ def _owner_policy_item(today, title, body):
             },
         }
     row = policy[0]
-    status = row["status"]
-    detail = "Owner decision inputs cover reporting/capacity, tax, transfer/withdrawal, calendar, backup and custody; only explicitly bound canonical consumers may treat them as runtime policy."
-    if status != "Active":
+    if row["status"] != "Active":
         status_label = "Owner policy retired"
-        next_text = "Reactivate the owner policy before relying on these terms."
+        detail = "Owner policy is retired; its terms cannot govern the scheduled backup."
+        next_text = "Reactivate the owner policy, then add and validate current effective-dated terms."
+    elif is_backup:
+        backup = current_backup_policy(today)
+        if backup.get("configured") is True:
+            status_label = "Backup policy configured"
+            detail = (f"Nightly at {backup['schedule_time']} local time; "
+                      f"configured keep count {backup['retention_versions']} "
+                      "(used only in the explicit deletion mode); retention behavior: "
+                      f"{backup['retention_behavior']}; the configured public recovery key "
+                      "encrypts the site-config recovery artifact.")
+            next_text = ("Keep the matching private recovery key under the Owner's separate custody requirement. The retention behavior must be an explicit Course Owner decision. Do not run Backup TOEFL House ERP.cmd or proceed through activation until the Owner resolves the preservation hold described in the launch runbook and the implementation/docs agree.")
+        else:
+            status_label = "Owner backup configuration required"
+            detail = "Nightly schedule, multi-version retention count, explicit retention behavior (preserve all or authorize deletion beyond the keep count), or ASCII-armored public recovery key is missing or invalid. Backup activation remains refused."
+            next_text = (
+                "Complete every required Owner field with approved values "
+                "(reporting review, class capacity, tax, transfers/withdrawals, "
+                "calendar, nightly backup, retention count/behavior, public key, custody and "
+                "quorum); no defaults or placeholders. Set an effective-dated "
+                "version and validate it. Explicitly choose to preserve all "
+                "valid sets or authorize deleting older valid sets beyond the "
+                "keep count; there is no default. Do not run Backup TOEFL House "
+                "ERP.cmd or proceed through activation until the Owner resolves "
+                "this choice and the implementation/docs agree; see the launch "
+                "runbook. Keep the matching private "
+                "key outside Frappe and the backup drive."
+            )
     else:
         status_label = "Owner policy active"
+        detail = "The Owner Operations fields for reporting, capacity target, tax, transfer/withdrawal and calendar are decision inputs only; native ERPNext tax settings and the separate Enrollment Exit Policy remain their canonical authorities. This policy's runtime-bound domain is the current local backup path; custody/quorum records do not prove a ceremony."
         next_text = "Add or replace effective-dated terms, then validate the current policy."
     return {
-        "id": row["code"], "person": row["title"],
+        "id": item_id, "person": title if is_backup else row["title"],
         "detail": detail, "status": status_label, "stage": "Owner configuration",
         "stage_definition": body, "next": next_text,
         "next_role": "Course Owner", "waiting_since": None,
@@ -381,30 +437,30 @@ def _alerting_facts(policies, readiness_by_policy, versions_by_policy,
             "value": readiness.capitalize(),
             "label": f"{policy['code']} configuration readiness",
             "definition": (
-                "The alerting policy records the selected alert receiver "
-                "and its retention terms; nothing is delivered from this "
-                "desk. "
-                + (f"Governing since {governing.get('effective_from')} "
-                   f"on channel {channel}, retained {retention} day(s)"
-                   + (f", escalating after {escalation} minute(s)."
+                "The policy stores the selected alert receiver and retention "
+                "terms only; no runtime delivery consumer exists, so even an "
+                "effective version does not send alerts. "
+                + (f"Effective in configuration since "
+                   f"{governing.get('effective_from')} on channel {channel}, "
+                   f"retained {retention} day(s)"
+                   + (f", escalation term {escalation} minute(s)."
                       if escalation else "."))
                 if governing else
-                ("Versions exist but none governs today."
+                ("Versions exist but none is effective in configuration."
                  if rows else
-                 "No versions; alert delivery stays refused "
-                 "(fail-closed)."))})
+                 "No versions are configured; no alert delivery is active."))})
     return facts
 
 
 def _guardian_facts(policies, readiness_by_policy, versions_by_policy,
                     today):
-    """The Student & Guardian domain facts for the configuration map.
+    """The Student & Guardian configuration facts, not runtime activation.
 
-    The O-D4 carrier records the lifecycle TERMS only; identity and
-    guardian access stay exactly as SEC-GUARDIAN-01 enforces until the
-    policy governs — the desk says that on the face of every fact.
-    Fail-closed language is deliberate: advanced guardian features
-    refuse while nothing governs.
+    The D4 carrier records terms only and has no runtime consumer.
+    Advanced guardian/portal features remain deferred and refused even
+    when a policy version is effective; identity/access remain exactly
+    as SEC-GUARDIAN-01 enforces until a separately approved consumer is
+    implemented and qualified.
     """
     facts = []
     for policy in policies:
@@ -419,19 +475,18 @@ def _guardian_facts(policies, readiness_by_policy, versions_by_policy,
             "value": readiness.capitalize(),
             "label": f"{policy['code']} configuration readiness",
             "definition": (
-                "The guardian lifecycle policy records the owner's "
-                "delegation, proxy, consent and records-rights terms; "
-                "identity and guardian access stay exactly as the "
-                "SEC-GUARDIAN-01 containment enforces while no policy "
-                "governs. "
-                + (f"Governing since {governing.get('effective_from')} "
-                   f"with a delegation window of {window} day(s).")
+                "This carrier stores delegation, proxy, consent and records-"
+                "rights terms only; it has no runtime consumer. Advanced "
+                "guardian/portal features remain deferred and refused, and "
+                "identity/access remain as SEC-GUARDIAN-01 enforces, even "
+                "when a version is effective. "
+                + (f"Effective in configuration since "
+                   f"{governing.get('effective_from')} with a delegation "
+                   f"window of {window} day(s).")
                 if governing else
-                ("Versions exist but none governs today; advanced guardian "
-                 "features stay refused (fail-closed)."
+                ("Versions exist but none is effective in configuration."
                  if rows else
-                 "No versions; advanced guardian features stay refused "
-                 "(fail-closed)."))})
+                 "No versions are configured."))})
     return facts
 
 
@@ -478,9 +533,12 @@ def _readiness_items(policies, versions_by_policy, readiness_by_policy,
             "detail": detail,
             "status": readiness.capitalize(),
             "stage": "Academic",
-            "stage_definition": ("Computed configuration readiness for this "
-                                 "assessment policy. Production readiness "
-                                 "is separate and is never decided here."),
+            "stage_definition": ("Computed configuration readiness only. "
+                                 "No runtime grading, assessment or student-"
+                                 "progression consumer is implemented/qualified; "
+                                 "Owner decision D1 remains deferred. "
+                                 "Production readiness is separate and is "
+                                 "never decided here."),
             "next": _readiness_next(policy, readiness, governing, rows),
             "next_role": "Course Owner",
             "waiting_since": None,
@@ -508,11 +566,11 @@ def _readiness_items(policies, versions_by_policy, readiness_by_policy,
             "detail": detail,
             "status": readiness.capitalize(),
             "stage": "Operations",
-            "stage_definition": ("Computed configuration readiness for the "
-                                 "alerting receiver policy. Alert delivery "
-                                 "stays refused until a version governs. "
-                                 "Production readiness is separate and is "
-                                 "never decided here."),
+            "stage_definition": ("Computed configuration readiness only. "
+                                 "No runtime alert-delivery consumer is "
+                                 "implemented; an effective version does not "
+                                 "send alerts. Production readiness is "
+                                 "separate and is never decided here."),
             "next": _readiness_next(policy, readiness, governing, rows,
                                     "through the guarded "
                                     "alerting commands"),
@@ -542,14 +600,14 @@ def _readiness_items(policies, versions_by_policy, readiness_by_policy,
             "detail": detail,
             "status": readiness.capitalize(),
             "stage": "Student & Guardian",
-            "stage_definition": ("Computed configuration readiness for the "
-                                 "guardian lifecycle policy. Advanced "
-                                 "guardian features stay refused until a "
-                                 "version governs; identity and guardian "
-                                 "access remain exactly as the "
-                                 "SEC-GUARDIAN-01 containment enforces. "
-                                 "Production readiness is separate and is "
-                                 "never decided here."),
+            "stage_definition": ("Computed configuration readiness only. "
+                                 "No runtime guardian consumer is "
+                                 "implemented; advanced guardian features "
+                                 "remain deferred/refused even when a version "
+                                 "is effective, and identity/access remain as "
+                                 "SEC-GUARDIAN-01 enforces. Production "
+                                 "readiness is separate and is never decided "
+                                 "here."),
             "next": _readiness_next(policy, readiness, governing, rows,
                                     "through the guarded "
                                     "guardian-lifecycle commands"),
@@ -576,15 +634,17 @@ def _readiness_next(policy, readiness, governing, rows,
                     surface="on Academic Setup"):
     code = policy["code"]
     if readiness == "incomplete":
-        return (f"Add the first version of {code} {surface}; the "
-                "policy governs nothing until then.")
+        return (f"Add the first version of {code} {surface}; no effective "
+                "configuration version exists yet.")
     if readiness == "configured":
         return (f"Validate {code} {surface}; versions exist but no "
                 "validation covers the current set.")
     if readiness == "validated":
         first = min(str(row.get("effective_from") or "") for row in rows)
-        return (f"{code} is validated and takes effect {first}.")
+        return (f"{code} is validated; its configuration is effective from "
+                f"{first}. This does not imply runtime activation.")
     if readiness == "effective":
-        return (f"{code} governs since "
-                f"{governing.get('effective_from') if governing else 'its effective date'}.")
-    return f"{code} is retired; it governs nothing."
+        return (f"{code} is effective in configuration since "
+                f"{governing.get('effective_from') if governing else 'its effective date'}; "
+                "this desk status is not runtime activation.")
+    return f"{code} is retired and has no effective configuration."

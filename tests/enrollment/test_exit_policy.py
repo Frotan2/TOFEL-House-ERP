@@ -10,13 +10,17 @@ frappe stub; hosted CI proves the exit journey.
 """
 import ast
 import importlib.util
+import json
 import sys
+import tempfile
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 APP = Path(__file__).resolve().parents[2] / "apps/toefl_house/toefl_house"
 ACTOR = "course.owner@example.com"
+TEST_DECISION_ID = "SYNTHETIC-TEST-OWNER-DECISION-01"
 COMMANDS = (
     "create_enrollment_exit_policy",
     "set_enrollment_exit_policy_version",
@@ -121,9 +125,45 @@ def _throw(message):
     raise _ValidationError(message)
 
 
+def _write_synthetic_owner_decision_ledger(path, **overrides):
+    """Test-only decision fixture; never edit docs/owner-decisions.json."""
+    decision = {
+        "id": TEST_DECISION_ID,
+        "date": "2026-10-08",
+        "title": "Synthetic exit-policy decision for unit tests only",
+        "status": "DECIDED",
+        "authority": "Course Owner",
+        "owner_answers": ["Synthetic authorization used only by unit tests."],
+        "exact_scope": "toefl_house.enrollment.exits",
+        "supersedes": ["D5"],
+        "authorizes_runtime_policy": [
+            "enrollment_exit.withdrawal",
+            "enrollment_exit.dismissal",
+        ],
+    }
+    decision.update(overrides)
+    path.write_text(json.dumps({
+        "resolved_business_decisions": {TEST_DECISION_ID: decision}
+    }), encoding="utf-8")
+
+
 class EnrollmentExitPolicyTests(unittest.TestCase):
     def setUp(self):
         _install_command_harness(self)
+
+    def test_default_owner_ledger_prefers_release_packaged_copy(self):
+        release_ledger = Path("/product/owner-decisions.json")
+        checkout_ledger = Path(__file__).resolve().parents[2] / "docs" / "owner-decisions.json"
+        with mock.patch.object(
+                Path, "is_file", autospec=True,
+                side_effect=lambda candidate: candidate in {release_ledger, checkout_ledger}):
+            self.assertEqual(
+                self.exits._default_owner_decisions_path(), release_ledger)
+        with mock.patch.object(
+                Path, "is_file", autospec=True,
+                side_effect=lambda candidate: candidate == checkout_ledger):
+            self.assertEqual(
+                self.exits._default_owner_decisions_path(), checkout_ledger)
 
     def _existing_policy(self, status="Active", versions=()):
         self.policy_rows = [{"name": "ENROLL-EXIT-POL"}]
@@ -132,10 +172,11 @@ class EnrollmentExitPolicyTests(unittest.TestCase):
                                      versions=[_Row(v) for v in versions])
         return self.policy_doc
 
-    def _version(self, key, date, role="Academic Manager"):
+    def _version(self, key, date, role="Academic Manager",
+                 decision_reference=f"D5-SUPERSESSION:{TEST_DECISION_ID}"):
         return self.exits.set_enrollment_exit_policy_version(
             key, "ENROLL-EXIT-POL", date,
-            "Owner opens enrollment exits", role)
+            "Owner opens enrollment exits", role, decision_reference)
 
     def test_create_shell_carries_no_versions(self):
         result = self.exits.create_enrollment_exit_policy(
@@ -164,7 +205,9 @@ class EnrollmentExitPolicyTests(unittest.TestCase):
         self.today = "2026-09-23"
         self.assertEqual(self.exits.governing_exit_terms(), {
             "effective_from": "2026-09-23",
-            "approver_role": "Academic Manager"})
+            "approver_role": "Academic Manager",
+            "superseding_owner_decision_reference":
+                "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01"})
 
     def test_unknown_approver_role_is_refused(self):
         self._existing_policy()
@@ -174,9 +217,65 @@ class EnrollmentExitPolicyTests(unittest.TestCase):
                           role="No Such Role")
         self.assertIn("Unknown approver role", str(ctx.exception))
 
+    def test_version_requires_a_structured_d5_supersession_reference(self):
+        self._existing_policy()
+        for reference in ("", "D5", "D5-SUPERSESSION:TBD", "not a decision id"):
+            with self.subTest(reference=reference):
+                with self.assertRaises(_ValidationError) as ctx:
+                    self._version("test-key-enrexit-refuse01", "2026-09-23",
+                                  decision_reference=reference)
+                self.assertIn("D5", str(ctx.exception))
+        result = self._version("test-key-enrexit-refuse02", "2026-09-23")
+        self.assertEqual(result["version_count"], 1)
+        self.assertEqual(
+            self.policy_doc.versions[0]["superseding_owner_decision_reference"],
+            "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01")
+
+    def test_fabricated_reference_cannot_override_canonical_d5_deferral(self):
+        canonical_ledger = Path(__file__).resolve().parents[2] / "docs" / "owner-decisions.json"
+        self.exits.OWNER_DECISIONS_PATH = canonical_ledger
+        self._existing_policy()
+        with self.assertRaises(_ValidationError) as ctx:
+            self._version("test-key-enrexit-unrecorded01", "2026-09-23")
+        self.assertIn("No resolved Course Owner decision", str(ctx.exception))
+        self.assertEqual(self.policy_doc.versions, [])
+        self.assertEqual(self.exits.governing_exit_terms(), {})
+
+        ledger = json.loads(canonical_ledger.read_text(encoding="utf-8"))
+        d5 = next(row for row in ledger["domain_gate_decisions"] if row["id"] == "D5")
+        self.assertIn("deferred", d5["scope"].lower())
+        self.assertIn("A05/A11 remain unstarted", d5["consequence"])
+
+    def test_decision_record_must_resolve_d5_and_both_exit_actions(self):
+        invalid_records = (
+            {"status": "PENDING"},
+            {"authority": "General Manager"},
+            {"supersedes": []},
+            {"exact_scope": "toefl_house.operations.owner_configuration"},
+            {"authorizes_runtime_policy": ["enrollment_exit.withdrawal"]},
+        )
+        for overrides in invalid_records:
+            with self.subTest(overrides=overrides):
+                _write_synthetic_owner_decision_ledger(
+                    self.exits.OWNER_DECISIONS_PATH, **overrides)
+                with self.assertRaises(ValueError):
+                    self.exits.validate_superseding_owner_decision_reference(
+                        f"D5-SUPERSESSION:{TEST_DECISION_ID}")
+        _write_synthetic_owner_decision_ledger(self.exits.OWNER_DECISIONS_PATH)
+
+    def test_legacy_or_malformed_reference_never_activates_exits(self):
+        self._existing_policy(versions=[{
+            "effective_from": "2026-09-20", "approver_role": "Academic Manager",
+            "reason": "Legacy version without a D5 supersession reference",
+            "set_by": ACTOR, "set_on": "2026-09-19 12:00:00"}])
+        self.assertEqual(self.exits.governing_exit_terms(), {})
+        self.policy_doc.versions[0]["superseding_owner_decision_reference"] = "D5-SUPERSESSION:TBD"
+        self.assertEqual(self.exits.governing_exit_terms(), {})
+
     def test_backdated_and_same_day_versions_refused(self):
         self._existing_policy(versions=[{
             "effective_from": "2026-09-23", "approver_role": "Academic Manager",
+            "superseding_owner_decision_reference": "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01",
             "reason": "Owner opens enrollment exits",
             "set_by": ACTOR, "set_on": "2026-09-22 12:00:00"}])
         with self.assertRaises(_ValidationError):
@@ -187,6 +286,7 @@ class EnrollmentExitPolicyTests(unittest.TestCase):
     def test_superseded_version_is_closed_not_rewritten(self):
         self._existing_policy(versions=[{
             "effective_from": "2026-09-23", "approver_role": "Academic Manager",
+            "superseding_owner_decision_reference": "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01",
             "reason": "Owner opens enrollment exits",
             "set_by": ACTOR, "set_on": "2026-09-22 12:00:00"}])
         self._version("test-key-enrexit-versn06", "2026-10-01",
@@ -200,6 +300,7 @@ class EnrollmentExitPolicyTests(unittest.TestCase):
     def test_retire_is_the_off_switch(self):
         self._existing_policy(versions=[{
             "effective_from": "2026-09-20", "approver_role": "Academic Manager",
+            "superseding_owner_decision_reference": "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01",
             "reason": "Owner opens enrollment exits",
             "set_by": ACTOR, "set_on": "2026-09-19 12:00:00"}])
         self.assertEqual(
@@ -214,6 +315,18 @@ class EnrollmentExitPolicyTests(unittest.TestCase):
         self.assertEqual(
             self.exits.governing_exit_terms()["approver_role"],
             "Academic Manager")
+
+    def test_unresolvable_historical_reference_does_not_block_retirement(self):
+        self._existing_policy(versions=[{
+            "effective_from": "2026-09-20", "approver_role": "Academic Manager",
+            "superseding_owner_decision_reference": "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01",
+            "reason": "Owner opens enrollment exits",
+            "set_by": ACTOR, "set_on": "2026-09-19 12:00:00"}])
+        self.exits.OWNER_DECISIONS_PATH.unlink()
+        self.assertEqual(self.exits.governing_exit_terms(), {})
+        result = self.exits.set_enrollment_exit_policy_status(
+            "test-key-enrexit-retire-no-ledger", "ENROLL-EXIT-POL", 0)
+        self.assertEqual(result["status"], "Retired")
 
     def test_governing_read_fails_closed_without_policy_or_version(self):
         self.assertEqual(self.exits.governing_exit_terms(), {})
@@ -307,6 +420,10 @@ def _install_command_harness(test):
     test.exits = _load_real(
         "toefl_house.enrollment.exits",
         APP / "enrollment/exits.py")
+    test._owner_decisions_tempdir = tempfile.TemporaryDirectory()
+    test.addCleanup(test._owner_decisions_tempdir.cleanup)
+    test.exits.OWNER_DECISIONS_PATH = Path(test._owner_decisions_tempdir.name) / "owner-decisions.json"
+    _write_synthetic_owner_decision_ledger(test.exits.OWNER_DECISIONS_PATH)
 
 
 class EnrollmentExitPolicyGateTests(unittest.TestCase):
@@ -373,6 +490,7 @@ class ControllerChildRowSemanticsTests(unittest.TestCase):
 
     def _version(self, effective, superseded=None):
         row = {"effective_from": effective, "approver_role": "Academic Manager",
+               "superseding_owner_decision_reference": "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01",
                "reason": "Owner opens enrollment exits",
                "set_by": ACTOR, "set_on": "2026-09-19 12:00:00"}
         if superseded is not None:
@@ -393,6 +511,16 @@ class ControllerChildRowSemanticsTests(unittest.TestCase):
             with self.assertRaises(_ValidationError) as ctx:
                 self.controller.validate(doc)
         self.assertIn("must fall after its effective date", str(ctx.exception))
+
+    def test_malformed_reference_is_refused_inside_the_doc_type_controller(self):
+        doc = self._doc([{
+            **self._version("2026-09-23"),
+            "superseding_owner_decision_reference": "D5-SUPERSESSION:TBD",
+        }])
+        with self.foundation.command_context("set_enrollment_exit_policy_version"):
+            with self.assertRaises(_ValidationError) as ctx:
+                self.controller.validate(doc)
+        self.assertIn("placeholders are not accepted", str(ctx.exception))
 
     def test_validate_outside_a_command_is_refused_first(self):
         doc = self._doc([self._version("2026-09-23")])

@@ -1,12 +1,19 @@
 # Build context allowlist for product/app.Dockerfile (context = repository root).
-# Only the owned apps and the product entrypoint files enter the image; this
-# keeps .git, docs, tests and above all product/data/ (live site data, backups
-# and secrets) out of the build context.
+# Only the owned apps, the canonical Owner decision ledger, and product
+# entrypoint files enter the image; this keeps .git, other docs, tests and above
+# all product/data/ (live site data, backups and secrets) out of the context.
 *
 !apps/
+!docs/
+docs/*
+!docs/owner-decisions.json
 !product/app.Dockerfile
 !product/bootstrap.py
 !product/activate.py
+!product/restore.py
+!product/backup.py
+!product/native_gpg.py
+!product/native_db.py
 !product/wsgi.py
 !product/entrypoint.sh
 !product/perf_baseline.py

@@ -1,48 +1,27 @@
-# ----------------------------------------------------------------------------------
-# Windows batch files MUST materialize with CRLF line endings in every working
-# tree. cmd.exe parses multi-line constructs with CR/LF assumptions; when a
-# checkout delivers LF-only bytes (e.g. core.autocrlf=input), any parenthesized
-# IF block aborts with:
-#     ) was unexpected at this time.
-# This was reproduced three times by real Windows E2E runs of the Desktop gate
-# (2026-09-30). Attributes (not user git config) decide the worktree bytes, so
-# the pin here overrides per-machine autocrlf/input settings.
-# ----------------------------------------------------------------------------------
+# All text files materialize with LF by default, independent of core.autocrlf.
+# This covers every owned application source and every text file copied into
+# the Linux product image. Binary files remain byte-for-byte unchanged.
+* text=auto eol=lf
+
+# Windows cmd.exe scripts are the deliberate exception: CRLF is required for
+# its multi-line parser on real Windows Git checkouts. Their syntax also stays
+# LF-safe for GitHub ZIP delivery (no multi-line command blocks).
 *.cmd text eol=crlf
 *.bat text eol=crlf
-#
-# The Linux side of the same bug class (2026-10-06):
-# product/entrypoint.sh is exec'd directly by the container kernel
-# (Dockerfile ENTRYPOINT), so its shebang must reach the kernel as
-# "#!/bin/sh" + LF. A Windows checkout (core.autocrlf=true) materialized
-# "#!/bin/sh\r" in the worktree, the owner's docker compose build baked it
-# into the image, and the container died at boot with
-# `exec /product/entrypoint.sh: no such file or directory` (the kernel
-# looks for an interpreter named `/bin/sh\r`). eol=lf pins every *.sh
-# worktree to LF on all platforms and overrides the user autocrlf
-# heuristic the same way eol=crlf does for *.cmd.
+
+# Keep the Linux entrypoint and Docker context control file explicit: a CR
+# before the shebang newline breaks the kernel's /bin/sh lookup, and a CR on
+# a .dockerignore rule changes the build allowlist.
 *.sh text eol=lf
-#
-# The build context is defined by .dockerignore patterns (it keeps
-# product/data/ - live site data, backups, secrets - OUT of the image).
-# A trailing CR on a pattern line would make that pattern match nothing,
-# so pin the file to LF in every worktree for the same reason as *.sh.
 .dockerignore text eol=lf
-#
-# The same kernel rule applies to every other file the container execs
-# directly: product/activate.py runs as `docker compose exec web
-# /product/activate.py ...` from the Windows lifecycle scripts. A CRLF
-# worktree (Windows core.autocrlf=true) made the kernel look for an
-# interpreter named `env python3\r` - observed exit 127 in CI when the
-# image was built from a simulated Windows worktree (2026-10-06), which
-# also made the Activate/Deactivate scripts report "not running" on a
-# machine that was actually running. Pinned like *.sh. (The other
-# COPYed product scripts are interpreted by python3, never exec'd, so
-# their endings are not kernel-relevant; the packaging guard still
-# checks every COPY source for CR bytes.)
-product/activate.py text eol=lf
-# The in-image performance baseline is COPYed into the product image and is
-# also executed directly by the performance qualification step. Pin it to LF
-# in every Windows worktree so a local build cannot bake a CRLF shebang/script
-# into the image.
-product/perf_baseline.py text eol=lf
+
+# The product build context is an allowlist. All text in the owned apps and
+# product Python scripts must be LF even in fresh Windows checkouts.
+apps/** text=auto eol=lf
+product/*.py text eol=lf
+product/app.Dockerfile text eol=lf
+product/docker-compose.yml text eol=lf
+
+# This includes directly executed product/activate.py and perf_baseline.py.
+# Git attributes govern future checkouts; they do not rewrite an existing
+# stale worktree, which the Windows installer/Repair flow normalizes first.

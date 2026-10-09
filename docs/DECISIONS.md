@@ -33,7 +33,7 @@ This record supersedes conflicting proposals in the earlier Phase 3 documents. A
 | A10 | Admission approval semantics | **DECIDED** | Explicit admission decision; placement, offer acceptance and registration remain distinct |
 | A11 | Enrollment cancellation | **BLOCKED** | No destructive cancellation as a transfer/repeat shortcut; safe history-preserving path must be proven |
 | A12 | Reporting and derived data | **DECIDED** | Source-owned metrics with separated grains, provenance, permissions and rebuildable projections |
-| A13 | Backend containment of native bypass routes | **CONDITIONAL** | Server invariants plus contained native entry points; coverage must be demonstrated. Implemented-slice coverage now demonstrated: hosted negative route proofs for the seven command-only doctypes (cancel/post-submit-edit/RPC/REST/Desk-cancel/copy-amend seams, run `35008705885`, 523/523) — see CONTAINMENT-A13.md. Full writer/side-effect inventory for unimplemented domains (B10/B11/B13) remains open |
+| A13 | Backend containment of native bypass routes | **CONDITIONAL** | Server invariants plus contained native entry points; coverage must be demonstrated. Current implemented-slice evidence is `tests/finance/test_containment_hooks.py`, `tests/foundation/test_app_assembly.py`, and `tools/native/native_checks.py`; the hosted [Native lifecycle run 37655663645](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37655663645) passed at `1af6950` (Native inputs unchanged through `e6946ed`). This does not claim coverage for deferred/unimplemented domains; their writer/side-effect inventory is required before those workflows are activated. |
 
 ## Evidence register
 
@@ -402,4 +402,4 @@ These inputs remain explicitly unsatisfied, not thirteen silently discarded ques
 | D12 operations/recovery | A13 and production gate | **B12** topology/operators, RPO/RTO, capacity, security and recovery targets; existing Phase 2 gates remain open |
 | D13 minimum extension records | A01, A06, A09, A12, A13 | **B13** approve justified entity/technical-record inventory only after checking native facilities; no duplicate masters or unproven payroll bridge |
 
-**Decision-lock result:** five DECIDED boundaries, five CONDITIONAL decisions, three BLOCKED capabilities. The record is decision-complete in coverage, **not globally implementation-ready or approved**. See IMPLEMENTATION-READINESS.md for slice-level readiness and required user approval.
+**Decision-lock result:** five DECIDED boundaries, five CONDITIONAL decisions, three BLOCKED capabilities. The record is decision-complete in coverage, **not globally implementation-ready or approved**. Current shipped scope is summarized in [PRODUCT.md](PRODUCT.md), acceptance evidence and open gates are in [engineering/ACCEPTANCE.md](engineering/ACCEPTANCE.md), and Owner inputs remain in [owner-decisions.json](owner-decisions.json).

@@ -5,8 +5,9 @@ idempotency, input hash, receipt + event inside one retried transaction,
 before/after hash chain per target — without the placement site-mode
 machinery: configuration is governance state, deliberately NOT
 synthetic-gated, the same boundary as ``toefl_house.administration`` and
-the academic control plane. No safety control or evidence gate reads or
-writes this ledger; production authorization never flows through it.
+the academic control plane. The Owner backup-policy resolver reads the
+current validation evidence and fails closed after an unvalidated policy
+change; production authorization never flows through this ledger.
 
 Ledger: ``TH Configuration Operation`` (idempotency receipt) +
 ``TH Configuration Audit Event`` (hash-chained trail). Both are read-only
@@ -33,6 +34,10 @@ AUDIT = "TH Configuration Audit Event"
 # twelve academic catalog commands (S5 idempotency: they validate keys
 # and now keep receipts, so a retried call replays instead of erroring).
 KIND_AUTHORITY = {
+    "create_owner_operations_policy": "business_policy",
+    "set_owner_operations_policy_version": "business_policy",
+    "set_owner_operations_policy_status": "business_policy",
+    "validate_owner_operations_policy": "business_policy",
     "create_assessment_policy": "business_policy",
     "set_assessment_policy_version": "business_policy",
     "set_assessment_policy_status": "business_policy",

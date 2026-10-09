@@ -43,6 +43,16 @@ def validate(doc, method=None):
         foundation.validate_change_reason(row.get("reason") or "",
                                           "Version reason")
         exits.validate_terms(row.get("approver_role") or "")
+        reference = row.get("superseding_owner_decision_reference") or ""
+        if reference:
+            try:
+                # Historical references stay inspectable and the policy must
+                # remain retireable even if a later package cannot resolve an
+                # old decision. The version-setting command performs the full
+                # canonical-ledger authorization check before append.
+                exits.validate_superseding_owner_decision_reference_shape(reference)
+            except ValueError as exc:
+                raise frappe.ValidationError(str(exc)) from exc
     _assert_versions_sound(doc)
 
 

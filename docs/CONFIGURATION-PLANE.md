@@ -1,6 +1,6 @@
 # The Academic Control Plane — Owner-Managed Configuration
 
-Date: 2026-09-18 · Refreshed 2026-09-25 (inventory section below brought current).
+Date: 2026-09-18 · Inventory refreshed 2026-09-25; end-to-end policy-to-runtime audit refreshed 2026-10-09.
 
 This document is the contract for the Business Configuration & Academic Control
 Plane: the layer that turns the Owner's operating rules into governed,
@@ -38,9 +38,41 @@ the **complete** owner-configurable carrier inventory as shipped today:
   (each + versions), and `TH Owner Operations Policy` (+ versions) —
   `toefl_house.operations.{alerting, guardian_lifecycle, owner_configuration}`.
   Owner Operations carries reporting review cadence, class-capacity target, tax,
-  transfer/withdrawal/calendar, off-site backup destination reference, and
-  non-secret custody requirements. Keys, credentials, custodian identities and
-  authorization ceremonies remain outside Frappe.
+  transfer/withdrawal/calendar, the Owner-selected local backup schedule,
+  retention count and explicit preserve/delete behavior, an ASCII-armored
+  **public** recovery key, and non-secret custody
+  requirements. The old off-site destination columns remain hidden/read-only
+  only for historical compatibility; off-site/NAS/second-device/cloud backup
+  is deferred future scope, not a current release gate. Private keys,
+  credentials, custodian identities and authorization ceremonies remain
+  outside Frappe.
+
+**Policy status is not implied by carrier status.** A shipped carrier/active
+policy shell does not mean its values are configured or runtime-consumed:
+
+- **Configured** means a validated, effective-dated version exists for the
+  relevant domain; only its named canonical consumer may apply it.
+- **Unconfigured** means no valid effective version exists; the consuming
+  command reports `NOT CONFIGURED` and fails closed. CI fixtures are synthetic,
+  not Owner configuration evidence.
+- **Deferred** means the policy/feature is explicitly outside the current
+  operating scope. A carrier value may be recorded, but it is not active
+  authority and does not enable behavior; no default is inferred.
+- **Runtime-consumed** is limited to the consumers explicitly qualified in
+  the domain map. In `TH Owner Operations Policy`, the nightly backup time,
+  retention count, explicit retention behavior and public recovery-key identity
+  are consumed by the Windows backup/activation checks. The Owner must choose
+  either preservation of all valid backup sets or authorization to delete valid
+  older sets beyond the keep count; no default is supplied, and an unset choice
+  leaves the policy unconfigured. This review has not run the Windows helper;
+  preserve existing backups and do not invoke backup/retention or activation
+  while the Owner decision is unresolved. Reporting review, capacity, tax,
+  transfer/withdrawal and calendar
+  terms are decision carriers only until their canonical domain consumers are
+  implemented and qualified. Custody/quorum fields record requirements; they do
+  not prove an actual custody ceremony. The Configuration desk labels these
+  unbound domains as deferred rather than implying that an `Active` policy
+  shell enforces them.
 
 Shared invariants for every carrier: Course-Owner-gated guarded commands,
 request-key idempotency, row locking, immutable effective-dated versions,
@@ -49,6 +81,39 @@ hash-chained configuration audit (`TH Configuration Audit Event` /
 hard-coded business values (the hard-coded-policy audit in §7 scans this).
 Canonical product state: [PRODUCT.md](PRODUCT.md); recorded owner decisions:
 [owner-decisions.json](owner-decisions.json).
+
+## 0.1 End-to-end policy-to-runtime audit (2026-10-09)
+
+This is a source/UI/contract-test audit, not a live Owner-site or production
+runtime qualification. For each presented policy I traced the desk action to
+the guarded write, persisted version/audit record, resolver, and current
+runtime consumer (or confirmed that the domain is explicitly deferred and has
+no consumer). A form field or a validation badge is not evidence that a policy
+runs.
+
+| Domain | UI, saved record and audit path | Resolver and current runtime consumer | Audit outcome |
+| --- | --- | --- | --- |
+| Assessment and progression | Academic Setup / Configuration desks call the guarded `toefl_house.academic` commands; effective-dated facets and level links are saved with `TH Configuration Operation` + hash-chained `TH Configuration Audit Event` records. | `TH Assessment Policy` facets and `TH Program Level.next_level` are reference/readiness data only. No grading, pass-threshold, retake, or automatic-promotion consumer exists. | **DEFER (D1).** The UI labels configuration as reference-only; no hidden threshold or promotion fallback was found. |
+| Admission `Deferred` outcome | Admission Reviewer/Releaser command records a native `TH Admission Decision` transition with actor, reason and audit; allowed outcomes are the native state-machine vocabulary. | `decide_admission` accepts `Deferred` as a human decision, not as an assessment result or policy threshold. Returning-student mode has its own effective-dated `TH Returning Student Policy` resolver in admission. | **PASS (contract only).** Manual `Deferred` status is distinct from D1's deferred academic policy. |
+| Refunds and corrections | Finance desk actions append `TH Correction Policy` versions through guarded commands and the `TH Placement Audit Event` policy stream; the version captures approver role, correction window and reason. | `_governing_policy` resolves the active effective version; requests pin it; approvals use the pinned approver/window and post only native Sales Invoice credit notes or native Fees cancellation. Full-amount-only rules refuse partial refunds. `validate_correction_policy` records structural-readiness evidence; it is not a second, hard-coded refund authority. | **PASS (contract only).** OD-CP-2 Option B is the stated Fees scope; no unconfigured approver/window default is used. Actual Owner terms remain unconfigured/unverified. |
+| Identity, branch access and guardian | Native Frappe `User`/`Role` and the existing permission/command gates remain the identity authority; guarded Owner configuration uses the Course Owner role. `TH Guardian Lifecycle Policy` versions use the same configuration audit spine. | No second identity store or guardian-portal consumer exists. Administrator/Guest cannot act as Course Owner. Guardian lifecycle terms do not grant access or activate delegation/consent behavior; SEC-GUARDIAN-01 and D4 remain the limit. | **PASS (static/contract); advanced guardian/portal DEFERRED.** Owner user/branch setup is still an actual deployment check. |
+| Student lifecycle, withdrawal and transfer | Returning-student versions are saved/audited through Admission commands. The Enrollment Exit desk exposes guarded `TH Enrollment Exit Policy` versions. | Returning-student mode is read by admission. Withdrawal/dismissal refuses unless the effective exit version cites an explicit, shipped Owner decision that supersedes D5 and authorizes both actions; the current canonical D5 record does not. The separate Owner Operations `withdrawal_allowed` and `transfer_allowed` fields are not exit resolvers; no transfer command is enabled. | **PASS (fail-closed contract); exits/transfer UNVERIFIED and D5-gated.** No hard-coded permission bypass was found. |
+| Calendar, tax, metrics and capacity | Owner Operations versions/audit store `calendar_notice_days`, tax inputs, `reporting_review_days` and `capacity_target`; the desk labels these as decision inputs. | No calendar scheduler consumes the notice value; tax remains native ERPNext configuration; no derived-metric/review runner consumes the metrics interval; class membership enforcement remains native `Student Group.max_strength`, not the Owner planning target. | **PASS (static honesty); these inputs are NOT runtime policy.** No silent default or cross-domain consumer was found. |
+| Backup, off-site scope and key custody | Backup schedule, retention count/behavior and public recovery key are versioned and audited in `TH Owner Operations Policy`; the desk resolves only a currently validated snapshot. | `current_backup_policy` and the Windows backup/activation checks consume the local schedule, explicit retention choice and public-key identity. Private keys, custodian identities and ceremonies remain external. Legacy off-site fields are hidden/read-only and ignored; only the separate fixed local drive on the same PC is in scope. | **UNVERIFIED / HOLD.** The Owner retention choice is unresolved: do not run the helper, cleanup/deletion, or activation. Off-site/NAS/second-device/cloud backup stays deferred; CI fixtures do not authorize the Owner. |
+| Production and launch controls | Owner/Administration projections report operational site mode separately from the immutable production-authorization decision. | `product/activate.py` can change only guarded site mode after its backup checks; neither a `PRODUCTION` mode nor a configured policy can flip release authorization. | **REJECTED.** Production authorization remains REJECT until real Owner/deployment evidence and authorization are supplied and verified. |
+
+The current audit found one resolver hardening gap and closed it: the public
+`governing_owner_operations` helper now delegates to the same current-validation
+gate as backup/activation, so a future consumer cannot accidentally treat a
+saved-but-unvalidated Owner Operations version as live policy. The tests cover
+the UI/command/audit contracts and the pure business-rule paths; hosted Owner-
+policy suite evidence is synthetic. Current Foundation run `37902411810` failed
+during restore-with-files and failed the advisory gate; its safe annotations do
+not establish a restore cause, and the 160-match/47-package advisory set remains
+untriaged. Current Native run `37902411710` also failed at restore-with-files;
+its safe annotation reports `SystemExit`, OS error code `2`, and pinned Frappe
+restore frames, but not the failing operation. None of this is a claim of a live
+Frappe UI-to-database or Owner-PC pass.
 
 ---
 
@@ -86,9 +151,10 @@ Field-level verification (read from the pinned Education source):
 Also verified for the record: the placement domain deliberately forbids
 business policy content (percentages, cutoffs, CEFR) inside its content
 pipeline (`policy.py`, `controllers.py`), and assessment thresholds / payroll
-policy are recorded owner-deferred (D1/B04/B05, D2/A09 in
-`docs/engineering/OWNER-DECISIONS.md`). This control plane does not reopen
-those decisions — it prepares the carriers for them.
+policy remain Owner-deferred in the canonical [architecture decisions](DECISIONS.md)
+(D1/B04/B05, D2/A09) and [Owner decision record](owner-decisions.json). This
+control plane does not reopen those decisions — it prepares carriers without
+activating unapproved policy.
 
 ## 2. Classification of the requirement (NATIVE / CONFIGURATION / THIN EXTENSION / DEFERRED)
 

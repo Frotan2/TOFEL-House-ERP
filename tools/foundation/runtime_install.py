@@ -28,12 +28,59 @@ EXPORT_BRANCH = "product-export"
 from runtime_encryption_key import restore_key_into_config
 
 
-def hosted_failure_annotations(failure: str, last_failed_check: str | None = None) -> list[str]:
+_SAFE_NATIVE_SITE_FAILURE = re.compile(
+    r"Native Frappe site creation failed: secure native site creation failed"
+    r"(?: \(exit [0-9]{1,4}\))?"
+    r"(?:; exception type: [A-Za-z_][A-Za-z0-9_]{0,127})?"
+    r"(?:; OS error code: (?:0|[1-9][0-9]{0,4}))?"
+    r"(?:; frames: [A-Za-z0-9_<>.-]{1,128}:[1-9][0-9]{0,5}"
+    r"(?:,[A-Za-z0-9_<>.-]{1,128}:[1-9][0-9]{0,5}){0,5})?"
+    r"; sensitive diagnostics were withheld\Z")
+
+
+def safe_native_site_failure_detail(output: str) -> str | None:
+    """Retain one adapter-generated, message-free native failure summary."""
+    matches = [line.strip() for line in (output or "").splitlines()
+               if _SAFE_NATIVE_SITE_FAILURE.fullmatch(line.strip())]
+    return matches[0] if len(matches) == 1 else None
+
+
+_RESTORE_COMPONENT = r"(?:[A-Za-z0-9][A-Za-z0-9._+-]{0,200}|<path-withheld>|<root>)"
+_RESTORE_FRAME = r"[A-Za-z0-9_<>.-]{1,128}:[1-9][0-9]{0,5}"
+_SAFE_NATIVE_RESTORE_FAILURE = re.compile(
+    r"Native Frappe restore failed; exception type: [A-Za-z_][A-Za-z0-9_]{0,63}"
+    r"(?:; reported exception type: [A-Za-z_][A-Za-z0-9_]{0,63})?"
+    r"(?:; OS error code: (?:0|[1-9][0-9]{0,4}))?"
+    r"(?:; GPG diagnostic category: [a-z][a-z0-9-]{0,63})?"
+    rf"(?:; frames: {_RESTORE_FRAME}(?:,{_RESTORE_FRAME}){{0,5}})?"
+    rf"(?:; reported frames: {_RESTORE_FRAME}(?:,{_RESTORE_FRAME}){{0,5}})?"
+    r"(?:; reported CWD: (?:site-data|bench|bench-parent|other|unknown))?"
+    rf"(?:; reported path: (?:restore-temp|site-data|bench|bench-parent|system-bin|relative):"
+    rf"{_RESTORE_COMPONENT}(?:/{_RESTORE_COMPONENT}){{0,15}})?"
+    rf"(?:; reported parent: (?:restore-temp|site-data|bench|bench-parent|system-bin):"
+    rf"{_RESTORE_COMPONENT}(?:/{_RESTORE_COMPONENT}){{0,15}} "
+    r"\((?:directory|missing|not-directory|unknown)\))?"
+    r"; Sensitive diagnostics were withheld\. Leave the application writers stopped "
+    r"and inspect logs through the approved secure procedure\.\Z")
+
+
+def safe_native_restore_failure_detail(output: str) -> str | None:
+    """Retain one adapter-generated restore summary with no raw exception text."""
+    matches = [line.strip() for line in (output or "").splitlines()
+               if _SAFE_NATIVE_RESTORE_FAILURE.fullmatch(line.strip())]
+    return matches[0] if len(matches) == 1 else None
+
+
+def hosted_failure_annotations(failure: str, last_failed_check: str | None = None,
+                               safe_site_detail: str | None = None,
+                               safe_restore_detail: str | None = None) -> list[str]:
     """Single-line ``::error::`` commands for GitHub check annotations.
 
     Job logs and artifact zips EOF from this environment. Annotations are the
     only diagnostic that survives. Multi-line tails are collapsed: a library
     warning dump as an annotation is how the previous blind spot started.
+    Only exact, validated, message-free native site-creation or restore
+    summaries are eligible as supplemental detail.
     """
     lines: list[str] = []
     if last_failed_check:
@@ -44,6 +91,15 @@ def hosted_failure_annotations(failure: str, last_failed_check: str | None = Non
     if len(text) > 700:
         text = text[:697] + "..."
     lines.append(f"::error file=tools/foundation/runtime_install.py::{text}")
+    if safe_site_detail and _SAFE_NATIVE_SITE_FAILURE.fullmatch(safe_site_detail):
+        lines.append(
+            "::error file=tools/foundation/runtime_install.py::native site diagnostic: "
+            + safe_site_detail)
+    if (safe_restore_detail
+            and _SAFE_NATIVE_RESTORE_FAILURE.fullmatch(safe_restore_detail)):
+        lines.append(
+            "::error file=tools/foundation/runtime_install.py::native restore diagnostic: "
+            + safe_restore_detail)
     return lines
 
 
@@ -296,13 +352,18 @@ def main() -> int:
             text = text.replace(value, "[REDACTED]")
         return text
 
-    def run(name, command, *, cwd=None, timeout=1200):
+    def run(name, command, *, cwd=None, timeout=1200, input_text=None, env_overrides=None):
         command = [str(c) for c in command]
+        child_env = dict(env)
+        child_env.update(env_overrides or {})
         started = time.monotonic()
         print("Running", name, flush=True)
         try:
-            result = subprocess.run(command, cwd=cwd or lab, env=env, text=True,
-                                    capture_output=True, timeout=timeout, check=False)
+            options = dict(cwd=cwd or lab, env=child_env, text=True,
+                           capture_output=True, timeout=timeout, check=False)
+            if input_text is not None:
+                options["input"] = input_text
+            result = subprocess.run(command, **options)
             output = redact(result.stdout + result.stderr)
             (evidence / (name + ".txt")).write_text(output)
             record = {"name": name, "command": [redact(c) for c in command],
@@ -319,6 +380,51 @@ def main() -> int:
 
     def bench(name, *args, timeout=1200):
         return run(name, [lab / "tools/bin/bench", *args], cwd=bench_dir, timeout=timeout)
+
+    def create_site(name, site_name, site_db_password, set_default=False):
+        payload = json.dumps({
+            "site": site_name,
+            "db_root_password": root_password,
+            "admin_password": admin_password,
+            "db_password": site_db_password,
+            "db_host": "127.0.0.1",
+            "db_port": 13306,
+            "set_default_site": set_default,
+        })
+        return run(
+            name, [py, ROOT / "tools/native/site_setup.py"], input_text=payload,
+            env_overrides={
+                "SITE_BENCH_DIR": str(bench_dir),
+                "SITE_PYTHON": str(bench_dir / "env/bin/python"),
+            })
+
+    def product_backup(name, site_name):
+        return run(
+            name, [bench_dir / "env/bin/python", ROOT / "tools/native/run_product_backup.py", site_name],
+            cwd=bench_dir / "sites",
+            env_overrides={"BENCH_DIR": str(bench_dir), "SITE_NAME": site_name})
+
+    def product_restore(name, site_name, backup_set, encryption_key, source_backup_dir):
+        target_backup_dir = bench_dir / "sites" / site_name / "private/backups"
+        target_backup_dir.mkdir(parents=True, exist_ok=True)
+        for suffix in ("-database-enc.sql.gz", "-files-enc.tar", "-private-files-enc.tar"):
+            source_artifact = source_backup_dir / (backup_set + suffix)
+            destination_artifact = target_backup_dir / source_artifact.name
+            if destination_artifact.exists() or destination_artifact.is_symlink():
+                raise RuntimeError("Refusing to overwrite a pre-existing restore artifact")
+            shutil.copy2(source_artifact, destination_artifact)
+        payload = json.dumps({
+            "site": site_name,
+            "backup_set": backup_set,
+            "encryption_key": encryption_key,
+            "db_root_password": root_password,
+            "admin_password": admin_password,
+        })
+        return run(
+            name, [bench_dir / "env/bin/python", ROOT / "product/restore.py"],
+            cwd=bench_dir,
+            input_text=payload,
+            env_overrides={"BENCH_DIR": str(bench_dir), "SITE_NAME": site_name})
 
     def surface_gate_failure(label):
         """Echo gate diagnostics to the job log, not only to the artifact.
@@ -430,9 +536,7 @@ def main() -> int:
         run("python-dependency-check", [lab / "tools/bin/uv", "pip", "check", "--python", bench_dir / "env/bin/python"])
         run("python-resolved-dependencies", [lab / "tools/bin/uv", "pip", "freeze", "--python", bench_dir / "env/bin/python"])
         site = "foundation.localhost"
-        bench("new-site", "new-site", site, "--db-type", "mariadb", "--db-host", "127.0.0.1", "--db-port", "13306",
-              "--db-root-password", root_password, "--db-password", db_password, "--admin-password", admin_password,
-              "--mariadb-user-host-login-scope", "%", "--set-default")
+        create_site("new-site", site, db_password, set_default=True)
         report["created_sites"].append(site)
         # Frappe's realtime server resolves the socket Origin hostname itself
         # when it calls back into the site (get_user_info, has_permission, and
@@ -523,20 +627,30 @@ def main() -> int:
         if prepare_result["status"] != "pass":
             raise RuntimeError("Native encrypted fixture was not written before the backup")
         report["encrypted_fixture_before_backup"] = prepare_result["checks"][0]["observation"]
-        bench("backup-with-files", "--site", site, "backup", "--with-files")
+        bench("enable-native-backup-encryption", "--site", site, "execute",
+              "frappe.db.set_single_value('System Settings', 'encrypt_backup', 1)")
+        product_backup("backup-with-files", site)
         backup_dir = bench_dir / "sites" / site / "private/backups"
-        database = next(backup_dir.glob("*-database.sql.gz"))
-        private_files = next(backup_dir.glob("*-private-files.tar"))
-        public_files = next(p for p in backup_dir.glob("*-files.tar") if "-private-files" not in p.name)
+        database_suffix = "-database-enc.sql.gz"
+        database = max(backup_dir.glob("*" + database_suffix), key=lambda path: path.stat().st_mtime_ns)
+        backup_set = database.name[:-len(database_suffix)]
+        private_files = backup_dir / (backup_set + "-private-files-enc.tar")
+        public_files = backup_dir / (backup_set + "-files-enc.tar")
+        for artifact in (database, private_files, public_files):
+            if not artifact.is_file() or artifact.stat().st_size <= 0:
+                raise RuntimeError("Native encrypted backup set is incomplete: " + artifact.name)
+        sidecar = backup_dir / (backup_set + "-site_config_backup-enc.json")
+        recovered_backup_config = json.loads(sidecar.read_text())
+        backup_encryption_key = recovered_backup_config.get("backup_encryption_key")
+        if not isinstance(backup_encryption_key, str) or not backup_encryption_key:
+            raise RuntimeError("Native site-config sidecar did not preserve backup_encryption_key")
         report["backup"] = {label: {"bytes": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
                             for label, path in (("database", database), ("private_files", private_files), ("public_files", public_files))}
         restored_site = "restore.localhost"
-        bench("new-restore-site", "new-site", restored_site, "--db-type", "mariadb", "--db-host", "127.0.0.1", "--db-port", "13306",
-              "--db-root-password", root_password, "--db-password", restore_password, "--admin-password", admin_password,
-              "--mariadb-user-host-login-scope", "%")
+        create_site("new-restore-site", restored_site, restore_password)
         report["created_sites"].append(restored_site)
-        bench("restore-with-files", "--site", restored_site, "restore", str(database), "--db-root-password", root_password,
-              "--admin-password", admin_password, "--with-public-files", str(public_files), "--with-private-files", str(private_files))
+        product_restore("restore-with-files", restored_site, backup_set,
+                        backup_encryption_key, backup_dir)
         original_config = json.loads((bench_dir / "sites" / site / "site_config.json").read_text())
         restore_config_file = bench_dir / "sites" / restored_site / "site_config.json"
         restore_config = json.loads(restore_config_file.read_text())
@@ -765,18 +879,25 @@ def main() -> int:
         hardened_prepare = json.loads((evidence / "encryption-key-hardened-prepare.json").read_text())
         if hardened_prepare["status"] != "pass":
             raise RuntimeError("Native encrypted fixture was not refreshed before the hardened backup")
-        bench("hardened-backup-with-files", "--site", site, "backup", "--with-files")
-        secured_database = max(backup_dir.glob("*-database.sql.gz"), key=lambda p: p.stat().st_mtime_ns)
-        secured_private = max(backup_dir.glob("*-private-files.tar"), key=lambda p: p.stat().st_mtime_ns)
-        secured_public = max((p for p in backup_dir.glob("*-files.tar") if "-private-files" not in p.name), key=lambda p: p.stat().st_mtime_ns)
+        product_backup("hardened-backup-with-files", site)
+        secured_database = max(backup_dir.glob("*-database-enc.sql.gz"), key=lambda p: p.stat().st_mtime_ns)
+        secured_backup_set = secured_database.name[:-len("-database-enc.sql.gz")]
+        secured_private = backup_dir / (secured_backup_set + "-private-files-enc.tar")
+        secured_public = backup_dir / (secured_backup_set + "-files-enc.tar")
+        secured_sidecar = backup_dir / (secured_backup_set + "-site_config_backup-enc.json")
+        secured_backup_config = json.loads(secured_sidecar.read_text())
+        secured_backup_key = secured_backup_config.get("backup_encryption_key")
+        if not isinstance(secured_backup_key, str) or not secured_backup_key:
+            raise RuntimeError("Hardened native site-config sidecar lost backup_encryption_key")
+        for artifact in (secured_database, secured_private, secured_public):
+            if not artifact.is_file() or artifact.stat().st_size <= 0:
+                raise RuntimeError("Hardened native encrypted backup set is incomplete: " + artifact.name)
         report["hardened_backup"] = {label: {"bytes": p.stat().st_size, "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for label, p in (("database",secured_database),("private_files",secured_private),("public_files",secured_public))}
         recovered_site = "recovery.localhost"
-        bench("new-hardened-recovery-site", "new-site", recovered_site, "--db-type", "mariadb", "--db-host", "127.0.0.1", "--db-port", "13306",
-              "--db-root-password", root_password, "--db-password", recovery_password, "--admin-password", admin_password,
-              "--mariadb-user-host-login-scope", "%")
+        create_site("new-hardened-recovery-site", recovered_site, recovery_password)
         report["created_sites"].append(recovered_site)
-        bench("hardened-restore-with-files", "--site", recovered_site, "restore", str(secured_database), "--db-root-password", root_password,
-              "--admin-password", admin_password, "--with-public-files", str(secured_public), "--with-private-files", str(secured_private))
+        product_restore("hardened-restore-with-files", recovered_site,
+                        secured_backup_set, secured_backup_key, backup_dir)
         recovered_config_file = bench_dir / "sites" / recovered_site / "site_config.json"
         recovered_config = json.loads(recovered_config_file.read_text())
         assert recovered_config["db_name"] not in (original_config["db_name"], restore_config["db_name"])
@@ -824,9 +945,7 @@ def main() -> int:
         run("upstream-test-python-consistency", [lab / "tools/bin/uv", "pip", "check", "--python", bench_dir / "env/bin/python"])
         test_freeze = run("upstream-test-python-freeze", [lab / "tools/bin/uv", "pip", "freeze", "--python", bench_dir / "env/bin/python"])
         report["upstream_test_dependency_freeze_sha256"] = hashlib.sha256(test_freeze.encode()).hexdigest()
-        bench("new-upstream-security-test-site", "new-site", upstream_site, "--db-type", "mariadb", "--db-host", "127.0.0.1", "--db-port", "13306",
-              "--db-root-password", root_password, "--db-password", upstream_password, "--admin-password", admin_password,
-              "--mariadb-user-host-login-scope", "%")
+        create_site("new-upstream-security-test-site", upstream_site, upstream_password)
         report["created_sites"].append(upstream_site)
         bench("upstream-test-allow-tests", "--site", upstream_site, "set-config", "allow_tests", "1", "--parse")
         bench("upstream-test-developer-mode", "--site", upstream_site, "set-config", "developer_mode", "1", "--parse")
@@ -975,9 +1094,23 @@ def main() -> int:
         if report.get("status") != "pass":
             failed_checks = [c.get("name") for c in report.get("checks", [])
                              if isinstance(c, dict) and c.get("status") == "fail"]
+            last_failed_check = failed_checks[-1] if failed_checks else None
+            site_detail = None
+            if last_failed_check and last_failed_check.startswith("new-"):
+                site_detail = safe_native_site_failure_detail(
+                    report.get("failure_output_tail") or "")
+            restore_detail = None
+            if last_failed_check in ("restore-with-files", "hardened-restore-with-files"):
+                restore_log = evidence / (last_failed_check + ".txt")
+                try:
+                    restore_detail = safe_native_restore_failure_detail(
+                        restore_log.read_text())
+                except (OSError, UnicodeError):
+                    pass
             for line in hosted_failure_annotations(
                     report.get("failure") or "runtime_install failed",
-                    failed_checks[-1] if failed_checks else None):
+                    last_failed_check, safe_site_detail=site_detail,
+                    safe_restore_detail=restore_detail):
                 print(line, flush=True)
     return 0 if report["status"] == "pass" else 1
 

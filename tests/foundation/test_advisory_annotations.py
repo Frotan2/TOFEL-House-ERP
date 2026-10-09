@@ -5,7 +5,10 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "foundation"))
 from runtime_install import (ANNOTATION_MAX_LINES, ANNOTATION_TEXT_LIMIT,  # noqa: E402
-                             advisory_finding_annotations)
+                             advisory_finding_annotations,
+                             hosted_failure_annotations,
+                             safe_native_restore_failure_detail,
+                             safe_native_site_failure_detail)
 
 PREFIX = "::warning file=tools/foundation/runtime_install.py::"
 
@@ -16,6 +19,61 @@ def stack(py=(), npm=()):
 
 
 class AdvisoryAnnotationTests(unittest.TestCase):
+    def test_only_one_exact_sanitized_native_site_failure_is_annotated(self):
+        detail = ("Native Frappe site creation failed: secure native site creation failed "
+                  "(exit 1); exception type: OSError; OS error code: 2; "
+                  "frames: _new_site:42,setup_db:80; "
+                  "sensitive diagnostics were withheld")
+        output = "private traceback and credentials\n" + detail + "\nraw private message"
+        self.assertEqual(safe_native_site_failure_detail(output), detail)
+        self.assertIsNone(safe_native_site_failure_detail(output + "\n" + detail))
+        self.assertIsNone(safe_native_site_failure_detail(
+            "Native Frappe site creation failed: password was leaked"))
+        lines = hosted_failure_annotations(
+            "new-site: exit 1", "new-site", safe_site_detail=detail)
+        self.assertTrue(any("OS error code: 2" in line for line in lines))
+        self.assertTrue(all("private traceback" not in line and
+                            "raw private message" not in line for line in lines))
+        self.assertFalse(any("password was leaked" in line for line in
+                             hosted_failure_annotations(
+                                 "new-site: exit 1", "new-site",
+                                 safe_site_detail="Native Frappe site creation failed: password was leaked")))
+
+    def test_only_exact_sanitized_native_restore_summary_is_annotated(self):
+        detail = (
+            "Native Frappe restore failed; exception type: SystemExit; "
+            "reported exception type: FileNotFoundError; OS error code: 2; "
+            "frames: _native_restore:267,_restore:276,restore_backup:378; "
+            "reported frames: native_restore:91; reported CWD: other; "
+            "reported path: restore-temp:artifacts/missing.sql.gz; "
+            "reported parent: restore-temp:artifacts (directory); "
+            "Sensitive diagnostics were withheld. Leave the application writers stopped "
+            "and inspect logs through the approved secure procedure.")
+        output = "raw private traceback\n" + detail + "\n/private/secret-backup"
+        self.assertEqual(safe_native_restore_failure_detail(output), detail)
+        self.assertIsNone(safe_native_restore_failure_detail(output + "\n" + detail))
+        bench_path_detail = (
+            detail.replace("reported CWD: other", "reported CWD: site-data")
+            .replace("restore-temp:artifacts/missing.sql.gz", "bench:logs/frappe.log")
+            .replace("restore-temp:artifacts (directory)", "bench:logs (missing)"))
+        self.assertEqual(
+            safe_native_restore_failure_detail(bench_path_detail), bench_path_detail)
+        bench_parent_detail = (
+            bench_path_detail.replace("reported CWD: site-data", "reported CWD: bench")
+            .replace("bench:logs/frappe.log", "bench-parent:logs/frappe.log")
+            .replace("bench:logs (missing)", "bench-parent:logs (missing)"))
+        self.assertEqual(
+            safe_native_restore_failure_detail(bench_parent_detail), bench_parent_detail)
+        self.assertIsNone(safe_native_restore_failure_detail(
+            detail.replace("restore-temp:artifacts/missing.sql.gz", "/private/secret-backup")))
+
+        lines = hosted_failure_annotations(
+            "restore-with-files: exit 1", "restore-with-files",
+            safe_restore_detail=detail)
+        self.assertTrue(any("native restore diagnostic: " + detail in line for line in lines))
+        self.assertTrue(all("raw private traceback" not in line and
+                            "/private/secret-backup" not in line for line in lines))
+
     def test_public_ids_are_preferred_from_aliases_and_urls(self):
         lines = advisory_finding_annotations(stack(
             py=[{"package": "pypdf", "version": "3.1", "id": "PYSEC-2099-1",

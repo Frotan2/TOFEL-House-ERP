@@ -21,6 +21,7 @@ MANAGED_ROLES = {
     "Teaching Auditor", "Finance Officer", "Finance Auditor",
 }
 PROTECTED_USERS = {"Administrator", "Guest"}
+PRODUCTION_AUTHORIZATION = "REJECT"
 
 
 def _require_control_role():
@@ -41,7 +42,8 @@ def get_control_center_snapshot():
     return {
         "viewer_roles": sorted(roles.intersection(CONTROL_ROLES)),
         "managed_roles": sorted(MANAGED_ROLES),
-        "production_state": security.site_mode(),
+        "site_mode": security.site_mode(),
+        "production_authorization": PRODUCTION_AUTHORIZATION,
         "synthetic_only_guard": "ENFORCED",
         "deployment_phase": "LOCAL_SERVER_TAILSCALE",
         "operational_attention": [
@@ -52,8 +54,8 @@ def get_control_center_snapshot():
             },
             {
                 "id": "d8-evidence",
-                "state": "IN PROGRESS",
-                "detail": "Remaining evidence (backup/restore rehearsal, branch isolation, upgrade/rollback rehearsal, monitoring, capacity baseline) is being recorded in docs/engineering/ACCEPTANCE.md as each acceptance round proves it in CI.",
+                "state": "REJECT",
+                "detail": "Production authorization remains REJECT: the current repository acceptance ledger still has blocked Product-image, Windows/Tailscale and Owner-run evidence gates. A PRODUCTION site mode is not release authorization; see docs/engineering/ACCEPTANCE.md.",
             },
             {
                 "id": "future-hosting",

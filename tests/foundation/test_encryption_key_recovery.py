@@ -272,7 +272,7 @@ class HarnessWiringTests(unittest.TestCase):
     def test_harness_initializes_the_key_before_the_first_backup(self):
         initialize = HARNESS.index("initialize-native-site-encryption-key")
         prepare = HARNESS.index("prepare-native-encrypted-fixture-before-backup")
-        first_backup = HARNESS.index("bench(\"backup-with-files\"")
+        first_backup = HARNESS.index('product_backup("backup-with-files", site)')
         self.assertLess(initialize, prepare, "the key must exist before the encrypted fixture")
         self.assertLess(prepare, first_backup, "ciphertext must be written before the backup")
         # Both lifecycle steps must actually invoke the native probe in the
@@ -301,7 +301,7 @@ class HarnessWiringTests(unittest.TestCase):
         its own recorded ciphertext digest; comparing against the first cycle's
         would make the hardened verification fail for the wrong reason."""
         hardened_prepare = HARNESS.index("prepare-native-encrypted-fixture-before-hardened-backup")
-        hardened_backup = HARNESS.index('bench("hardened-backup-with-files"')
+        hardened_backup = HARNESS.index('product_backup("hardened-backup-with-files", site)')
         hardened_verify = HARNESS.index("verify-encryption-key-survived-hardened-recovery")
         self.assertLess(hardened_prepare, hardened_backup)
         self.assertLess(hardened_backup, hardened_verify)

@@ -4,6 +4,7 @@ from datetime import timedelta
 import json
 import os
 from pathlib import Path
+import tempfile
 import time
 import traceback
 from unittest.mock import patch
@@ -4434,7 +4435,8 @@ def main():
             # SYNTHETIC, so PRODUCTION can never be stated here.
             posture={f['label']:f['value'] for f in
                      next(s for s in own['sections'] if s['id']=='posture')['facts']}
-            assert posture['Production']=='SYNTHETIC',('the qualification bench must state its own resolved mode',posture)
+            assert posture['Site operational mode']=='SYNTHETIC',('the qualification bench must state its own resolved site mode',posture)
+            assert posture['Production authorization']=='REJECT',('the cockpit must keep release authorization separate and rejected',posture)
             # S6 obs-engineering-layer: native health facts ride the GM desk
             # and the owner cockpit as counts-and-identities, never traces.
             assert {'health','health-facts'}<=desk_sections(ops)
@@ -5463,7 +5465,7 @@ def main():
             return {'request':r1['name'],'voided':att,'replacement':posted['replacement_attendance'],
                     'policy':pol['name']}
         check('teaching-s9-attendance-correction-pin-window',traced(s9_correction_journey))
-        def s10_exit_journey():
+        def _s10_exit_journey_with_test_decision():
             # S10 (GAP-EXIT / OD-NEW-07): enrollment exits. Unconfigured
             # exits refuse; after the owner sets terms, a withdrawal ends
             # one registration single-shot, a dismissal posts through the
@@ -5505,7 +5507,8 @@ def main():
                 's10_wd_shell_000001',pe_wd,today,'SYN shell governs nothing')))
             v1=as_user('course_owner',lambda:enrx.set_enrollment_exit_policy_version(
                 's10_pol_versn_000001','SYN-ENROLL-EXIT',today,
-                'SYN owner opens enrollment exits','Academic Manager'))
+                'SYN owner opens enrollment exits','Academic Manager',
+                'D5-SUPERSESSION:SYNTHETIC-NATIVE-TEST-D5'))
             assert v1['governing_approver_role']=='Academic Manager',v1
             assert denied(lambda:as_user('enrollment_officer',lambda:enrx.withdraw_enrollment(
                 's10_wd_billed_00001',billed,today,'SYN billed blocks exit')))
@@ -5557,7 +5560,8 @@ def main():
             assert frappe.db.get_value('Program Enrollment',pe_deny,'docstatus')==1
             v2=as_user('course_owner',lambda:enrx.set_enrollment_exit_policy_version(
                 's10_pol_versn_000002','SYN-ENROLL-EXIT',tomorrow,
-                'SYN owner names the next approver','General Manager'))
+                'SYN owner names the next approver','General Manager',
+                'D5-SUPERSESSION:SYNTHETIC-NATIVE-TEST-D5'))
             assert v2['version_count']==2,v2
             assert v2['governing_approver_role']=='Academic Manager',v2
             assert str(frappe.db.get_value('TH Enrollment Exit Policy Version',
@@ -5581,6 +5585,47 @@ def main():
             frappe.db.commit()
             return {'withdrawal':wd['name'],'dismissal':posted['name'],'denied':d2['name'],
                     'policy':pol['name']}
+        def s10_exit_journey():
+            """Run the journey under an explicitly synthetic decision fixture.
+
+            The canonical D5 decision still defers enrollment exits, so the
+            production ledger must remain unchanged and unconfigured. This
+            temporary runtime-only fixture lets CI exercise the positive
+            command journey without pretending it is an Owner decision.
+            """
+            original_ledger = enrx.OWNER_DECISIONS_PATH
+            try:
+                enrx.validate_superseding_owner_decision_reference(
+                    'D5-SUPERSESSION:SYNTHETIC-NATIVE-TEST-D5')
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('canonical Owner ledger accepted a synthetic D5 reference')
+            with tempfile.TemporaryDirectory(prefix='toefl-house-s10-ledger-') as temp_dir:
+                source = json.loads(Path(original_ledger).read_text(encoding='utf-8'))
+                decision_id = 'SYNTHETIC-NATIVE-TEST-D5'
+                source.setdefault('resolved_business_decisions', {})[decision_id] = {
+                    'id': decision_id,
+                    'date': str(frappe.utils.today()),
+                    'title': 'Synthetic native-check fixture only',
+                    'status': 'DECIDED',
+                    'authority': 'Course Owner',
+                    'owner_answers': ['Synthetic test authorization only; not an Owner decision.'],
+                    'exact_scope': 'toefl_house.enrollment.exits',
+                    'supersedes': ['D5'],
+                    'authorizes_runtime_policy': [
+                        'enrollment_exit.withdrawal', 'enrollment_exit.dismissal'],
+                }
+                test_ledger = Path(temp_dir) / 'owner-decisions.json'
+                test_ledger.write_text(json.dumps(source), encoding='utf-8')
+                enrx.OWNER_DECISIONS_PATH = test_ledger
+                try:
+                    result = _s10_exit_journey_with_test_decision()
+                    result['canonical_d5_gate'] = 'synthetic reference refused; canonical ledger unchanged'
+                    result['owner_decision_fixture'] = 'synthetic-only; canonical ledger unchanged'
+                    return result
+                finally:
+                    enrx.OWNER_DECISIONS_PATH = original_ledger
         check('enrollment-s10-exit-withdraw-dismiss',traced(s10_exit_journey))
         def s11_billing_journey():
             # S11 (GAP-BILL-POLICY / OD-NEW-03/OD-NEW-04): billing policy

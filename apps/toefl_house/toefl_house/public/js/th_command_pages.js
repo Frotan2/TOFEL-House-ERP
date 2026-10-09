@@ -353,7 +353,8 @@ frappe.provide("toefl_house.command_pages");
 		scheduled: "info", "in progress": "info",
 		conditional: "warn", deferred: "warn", partial: "warn", warning: "warn",
 		hold: "warn", "on hold": "warn",
-		rejected: "danger", cancelled: "danger", canceled: "danger",
+		reject: "danger", rejected: "danger", refused: "danger",
+		cancelled: "danger", canceled: "danger",
 		failed: "danger", blocked: "danger", error: "danger", expired: "danger",
 		withdrawn: "danger",
 	});
@@ -621,8 +622,10 @@ frappe.provide("toefl_house.command_pages");
 		$("<h2 class='th-section-title'></h2>").text(text("System attention")).appendTo(attention);
 
 		const states = $("<p class='th-page-purpose'></p>").appendTo(attention);
-		states.append(text("Production: "));
-		statusElement(snapshot.production_state || "REJECT").appendTo(states);
+		states.append(text("Site mode: "));
+		statusElement(snapshot.site_mode || "REFUSED").appendTo(states);
+		states.append(text(" · Production authorization: "));
+		statusElement(snapshot.production_authorization || "REJECT").appendTo(states);
 		states.append(text(" · Deployment: "));
 		statusElement(snapshot.deployment_phase || "UNVERIFIED").appendTo(states);
 
