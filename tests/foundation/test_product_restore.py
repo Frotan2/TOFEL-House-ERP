@@ -46,7 +46,8 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertEqual(status, 0)
         native.assert_called_once_with(
             request["site"], request["backup_set"], request["encryption_key"],
-            request["db_root_password"], request["admin_password"])
+            request["db_root_password"], request["admin_password"],
+            context_writer=stdout)
         self.assertEqual(stdout.getvalue(), "Native Frappe restore completed.\n")
         self.assertEqual(stderr.getvalue(), "")
 
@@ -114,6 +115,41 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertEqual(
             restore._safe_failure_location(command_error, Path("/tmp/restore-test")),
             "relative:mariadb")
+
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        bench_dir = Path(temp.name) / "bench"
+        sites_dir = bench_dir / "sites"
+        sites_dir.mkdir(parents=True)
+        restore.BENCH_DIR = bench_dir
+        restore.SITES_DIR = sites_dir
+        logger_error = FileNotFoundError(
+            2, "No such file or directory", "../logs/frappe.log")
+        restore_temp = Path(temp.name) / "restore-temp"
+        with patch("os.getcwd", return_value=str(sites_dir)):
+            self.assertEqual(
+                restore._safe_failure_location(logger_error, restore_temp),
+                "bench:logs/frappe.log")
+            self.assertEqual(
+                restore._safe_failure_parent(logger_error, restore_temp),
+                ("bench:logs", "missing"))
+            self.assertEqual(restore._safe_restore_context(), ("site-data", "missing"))
+            summary = restore._native_restore_failure(logger_error, "")
+            self.assertEqual(summary.reported_cwd, "site-data")
+            self.assertEqual(summary.failure_location, "bench:logs/frappe.log")
+            self.assertEqual(summary.failure_parent_location, "bench:logs")
+            self.assertEqual(summary.failure_parent_state, "missing")
+        (bench_dir / "logs").mkdir()
+        with patch("os.getcwd", return_value=str(sites_dir)):
+            self.assertEqual(restore._safe_restore_context(), ("site-data", "directory"))
+        with patch("os.getcwd", return_value=str(bench_dir)):
+            self.assertEqual(
+                restore._safe_failure_location(logger_error, restore_temp),
+                "bench-parent:logs/frappe.log")
+            self.assertEqual(
+                restore._safe_failure_parent(logger_error, restore_temp),
+                ("bench-parent:logs", "missing"))
+            self.assertEqual(restore._safe_restore_context(), ("bench", "missing"))
 
     def test_native_restore_output_and_exceptions_cannot_leak_credentials(self):
         restore = load_restore()
@@ -243,6 +279,9 @@ class ProductRestoreInputTests(unittest.TestCase):
 
         self.assertEqual(status, 1)
         self.assertEqual(len(gpg_calls), 1)
+        self.assertIn(
+            "Restore context before frappe.init: cwd=other; ../logs=unknown\n",
+            stdout.getvalue())
         self.assertNotIn(request["encryption_key"], " ".join(gpg_calls[0][0]))
         self.assertEqual(gpg_calls[0][1]["input"],
                          (request["encryption_key"] + "\n").encode("ascii"))
@@ -288,9 +327,12 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertIn("GPG diagnostic category: terminal-unavailable", stderr.getvalue())
         self.assertIn("frames:", stderr.getvalue())
         self.assertRegex(stderr.getvalue(), r"reported frames: native_restore:[0-9]+")
+        self.assertIn("reported CWD: other", stderr.getvalue())
         self.assertIn(
             "reported path: restore-temp:artifacts/missing-native-restore-input",
             stderr.getvalue())
+        self.assertIn(
+            "reported parent: restore-temp:artifacts (unknown)", stderr.getvalue())
         self.assertNotIn("/tmp/toefl-house-native-restore-", stderr.getvalue())
         self.assertNotIn("synthetic-private-context", stderr.getvalue())
         self.assertNotIn("synthetic-secret", stderr.getvalue())

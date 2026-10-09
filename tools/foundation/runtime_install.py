@@ -45,7 +45,7 @@ def safe_native_site_failure_detail(output: str) -> str | None:
     return matches[0] if len(matches) == 1 else None
 
 
-_RESTORE_COMPONENT = r"(?:[A-Za-z0-9][A-Za-z0-9._+-]{0,200}|<path-withheld>)"
+_RESTORE_COMPONENT = r"(?:[A-Za-z0-9][A-Za-z0-9._+-]{0,200}|<path-withheld>|<root>)"
 _RESTORE_FRAME = r"[A-Za-z0-9_<>.-]{1,128}:[1-9][0-9]{0,5}"
 _SAFE_NATIVE_RESTORE_FAILURE = re.compile(
     r"Native Frappe restore failed; exception type: [A-Za-z_][A-Za-z0-9_]{0,63}"
@@ -54,8 +54,12 @@ _SAFE_NATIVE_RESTORE_FAILURE = re.compile(
     r"(?:; GPG diagnostic category: [a-z][a-z0-9-]{0,63})?"
     rf"(?:; frames: {_RESTORE_FRAME}(?:,{_RESTORE_FRAME}){{0,5}})?"
     rf"(?:; reported frames: {_RESTORE_FRAME}(?:,{_RESTORE_FRAME}){{0,5}})?"
-    rf"(?:; reported path: (?:restore-temp|site-data|bench|system-bin|relative):"
+    r"(?:; reported CWD: (?:site-data|bench|bench-parent|other|unknown))?"
+    rf"(?:; reported path: (?:restore-temp|site-data|bench|bench-parent|system-bin|relative):"
     rf"{_RESTORE_COMPONENT}(?:/{_RESTORE_COMPONENT}){{0,15}})?"
+    rf"(?:; reported parent: (?:restore-temp|site-data|bench|bench-parent|system-bin):"
+    rf"{_RESTORE_COMPONENT}(?:/{_RESTORE_COMPONENT}){{0,15}} "
+    r"\((?:directory|missing|not-directory|unknown)\))?"
     r"; Sensitive diagnostics were withheld\. Leave the application writers stopped "
     r"and inspect logs through the approved secure procedure\.\Z")
 

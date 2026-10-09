@@ -44,13 +44,26 @@ class AdvisoryAnnotationTests(unittest.TestCase):
             "Native Frappe restore failed; exception type: SystemExit; "
             "reported exception type: FileNotFoundError; OS error code: 2; "
             "frames: _native_restore:267,_restore:276,restore_backup:378; "
-            "reported frames: native_restore:91; "
+            "reported frames: native_restore:91; reported CWD: other; "
             "reported path: restore-temp:artifacts/missing.sql.gz; "
+            "reported parent: restore-temp:artifacts (directory); "
             "Sensitive diagnostics were withheld. Leave the application writers stopped "
             "and inspect logs through the approved secure procedure.")
         output = "raw private traceback\n" + detail + "\n/private/secret-backup"
         self.assertEqual(safe_native_restore_failure_detail(output), detail)
         self.assertIsNone(safe_native_restore_failure_detail(output + "\n" + detail))
+        bench_path_detail = (
+            detail.replace("reported CWD: other", "reported CWD: site-data")
+            .replace("restore-temp:artifacts/missing.sql.gz", "bench:logs/frappe.log")
+            .replace("restore-temp:artifacts (directory)", "bench:logs (missing)"))
+        self.assertEqual(
+            safe_native_restore_failure_detail(bench_path_detail), bench_path_detail)
+        bench_parent_detail = (
+            bench_path_detail.replace("reported CWD: site-data", "reported CWD: bench")
+            .replace("bench:logs/frappe.log", "bench-parent:logs/frappe.log")
+            .replace("bench:logs (missing)", "bench-parent:logs (missing)"))
+        self.assertEqual(
+            safe_native_restore_failure_detail(bench_parent_detail), bench_parent_detail)
         self.assertIsNone(safe_native_restore_failure_detail(
             detail.replace("restore-temp:artifacts/missing.sql.gz", "/private/secret-backup")))
 

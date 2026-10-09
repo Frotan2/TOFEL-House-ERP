@@ -55,7 +55,10 @@ class NativeRestoreError(RuntimeError):
                  failure_errno: int | None, failure_category: str,
                  reported_failure_type: str | None,
                  reported_frames: tuple[str, ...] = (),
-                 failure_location: str | None = None):
+                 failure_location: str | None = None,
+                 reported_cwd: str | None = None,
+                 failure_parent_location: str | None = None,
+                 failure_parent_state: str | None = None):
         self.failure_type = (failure_type if re.fullmatch(
             r"[A-Za-z_][A-Za-z0-9_]{0,63}", failure_type) else "Exception")
         self.failure_frames = tuple(failure_frames[:6])
@@ -65,6 +68,11 @@ class NativeRestoreError(RuntimeError):
         self.reported_failure_type = reported_failure_type
         self.reported_frames = tuple(reported_frames[:6])
         self.failure_location = failure_location
+        self.reported_cwd = (reported_cwd if reported_cwd in {
+            "site-data", "bench", "bench-parent", "other", "unknown"} else None)
+        self.failure_parent_location = failure_parent_location
+        self.failure_parent_state = (failure_parent_state if failure_parent_state in {
+            "directory", "missing", "not-directory", "unknown"} else None)
         super().__init__("native Frappe restore failed; sensitive diagnostics were withheld")
 
 
@@ -102,6 +110,81 @@ def _safe_traceback_frames(error: BaseException) -> tuple[str, ...]:
     return tuple(frames)
 
 
+def _runtime_path_roots(temporary_root: Path | None = None):
+    roots = []
+    if temporary_root is not None:
+        roots.append(("restore-temp", Path(os.path.abspath(temporary_root))))
+    roots.extend((
+        ("site-data", Path(os.path.abspath(SITES_DIR))),
+        ("bench", Path(os.path.abspath(BENCH_DIR))),
+        ("bench-parent", Path(os.path.abspath(BENCH_DIR.parent))),
+        ("system-bin", Path("/usr/bin")),
+        ("system-bin", Path("/bin")),
+        ("system-bin", Path("/usr/sbin")),
+    ))
+    return roots
+
+
+def _safe_runtime_path_location(candidate: Path,
+                                temporary_root: Path | None = None) -> str | None:
+    safe_component = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,200}\Z")
+    candidate = Path(os.path.abspath(candidate))
+    for label, root in _runtime_path_roots(temporary_root):
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError:
+            continue
+        parts = relative.parts
+        if not parts:
+            return label + ":<root>"
+        if (len(parts) > 16
+                or any(not safe_component.fullmatch(part) for part in parts)):
+            return label + ":<path-withheld>"
+        return label + ":" + "/".join(parts)
+    return None
+
+
+def _safe_current_directory() -> str:
+    try:
+        current = Path(os.path.abspath(os.getcwd()))
+    except OSError:
+        return "unknown"
+    for label, root in _runtime_path_roots():
+        if label == "system-bin":
+            continue
+        try:
+            current.relative_to(root)
+        except ValueError:
+            continue
+        return label
+    return "other"
+
+
+def _safe_directory_state(path: Path,
+                          temporary_root: Path | None = None) -> str:
+    if _safe_runtime_path_location(path, temporary_root) is None:
+        return "unknown"
+    try:
+        mode = path.stat().st_mode
+    except FileNotFoundError:
+        return "missing"
+    except NotADirectoryError:
+        return "not-directory"
+    except OSError:
+        return "unknown"
+    return "directory" if stat.S_ISDIR(mode) else "not-directory"
+
+
+def _safe_restore_context(temporary_root: Path | None = None) -> tuple[str, str]:
+    """Describe only the known-root CWD class and relative Frappe log dir."""
+    try:
+        log_directory = Path(os.path.abspath(Path("..") / "logs"))
+    except OSError:
+        return _safe_current_directory(), "unknown"
+    return (_safe_current_directory(),
+            _safe_directory_state(log_directory, temporary_root))
+
+
 def _safe_failure_location(error: BaseException | None,
                            temporary_root: Path | None) -> str | None:
     """Map an exception filename to a known disposable/runtime root.
@@ -125,32 +208,33 @@ def _safe_failure_location(error: BaseException | None,
     candidate = Path(raw_path)
     if not candidate.is_absolute():
         parts = candidate.parts
-        if (not parts or len(parts) > 16
-                or any(not safe_component.fullmatch(part) for part in parts)):
-            return None
-        return "relative:" + "/".join(parts)
-    candidate = Path(os.path.abspath(candidate))
-    roots = []
-    if temporary_root is not None:
-        roots.append(("restore-temp", Path(os.path.abspath(temporary_root))))
-    roots.extend((
-        ("site-data", Path(os.path.abspath(SITES_DIR))),
-        ("bench", Path(os.path.abspath(BENCH_DIR))),
-        ("system-bin", Path("/usr/bin")),
-        ("system-bin", Path("/bin")),
-        ("system-bin", Path("/usr/sbin")),
-    ))
-    for label, root in roots:
-        try:
-            relative = candidate.relative_to(root)
-        except ValueError:
-            continue
-        parts = relative.parts
-        if (not parts or len(parts) > 16
-                or any(not safe_component.fullmatch(part) for part in parts)):
-            return label + ":<path-withheld>"
-        return label + ":" + "/".join(parts)
-    return None
+        if ".." not in parts:
+            if (not parts or len(parts) > 16
+                    or any(not safe_component.fullmatch(part) for part in parts)):
+                return None
+            return "relative:" + "/".join(parts)
+    return _safe_runtime_path_location(candidate, temporary_root)
+
+
+def _safe_failure_parent(error: BaseException | None,
+                         temporary_root: Path | None) -> tuple[str | None, str | None]:
+    if _safe_failure_location(error, temporary_root) is None:
+        return None, None
+    filename = getattr(error, "filename", None)
+    try:
+        candidate = Path(os.fsdecode(os.fspath(filename)))
+        if not candidate.is_absolute():
+            candidate = Path(os.path.abspath(candidate))
+        parent = candidate.parent
+        parent_location = _safe_runtime_path_location(parent, temporary_root)
+        if parent_location is None:
+            return None, None
+        if (parent_location.startswith("restore-temp:")
+                or not isinstance(error, FileNotFoundError)):
+            return parent_location, "unknown"
+        return parent_location, _safe_directory_state(parent, temporary_root)
+    except (OSError, TypeError, ValueError):
+        return None, None
 
 
 def _native_restore_failure(error: BaseException, captured_output: str,
@@ -174,12 +258,20 @@ def _native_restore_failure(error: BaseException, captured_output: str,
                          and 0 <= getattr(candidate, "errno") <= 65535), None)
     if error_number is None:
         error_number = _captured_os_error_code(captured_output)
-    failure_location = _safe_failure_location(reported_error, temporary_root)
+    path_error = next(
+        (candidate for candidate in reversed(chain)
+         if _safe_failure_location(candidate, temporary_root) is not None), None)
+    failure_location = _safe_failure_location(path_error, temporary_root)
+    failure_parent_location, failure_parent_state = _safe_failure_parent(
+        path_error, temporary_root)
+    reported_cwd = _safe_current_directory() if failure_location else None
     gpg_lines = [line for line in captured_output.splitlines()
                  if re.search(r"\bgpg(?:\[[^]]+\])?:", line, re.IGNORECASE)]
     category = safe_gpg_diagnostic_category("\n".join(gpg_lines))
-    return NativeRestoreError(failure_type, frames, error_number, category,
-                              reported_type, reported_frames, failure_location)
+    return NativeRestoreError(
+        failure_type, frames, error_number, category, reported_type,
+        reported_frames, failure_location, reported_cwd,
+        failure_parent_location, failure_parent_state)
 
 
 def _read_payload(stdin) -> dict:
@@ -295,7 +387,8 @@ def _stage_restore_artifacts(paths: dict[str, Path], temporary_root: Path) -> di
 
 
 def _native_restore(site: str, backup_set: str, encryption_key: str,
-                    db_root_password: str, admin_password: str) -> None:
+                    db_root_password: str, admin_password: str,
+                    context_writer=None) -> None:
     backup_dir = SITES_DIR / site / "private" / "backups"
     paths = {
         role: backup_dir / f"{backup_set}{suffix}"
@@ -344,6 +437,15 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
             staged_paths = _stage_restore_artifacts(paths, working_dir)
             with safe_mariadb_credential_transport(frappe, working_dir):
                 with safe_gpg_transport(frappe, encryption_key):
+                    if context_writer is not None:
+                        cwd_class, log_directory_state = _safe_restore_context(working_dir)
+                        try:
+                            context_writer.write(
+                                f"Restore context before frappe.init: cwd={cwd_class}; "
+                                f"../logs={log_directory_state}\n")
+                            context_writer.flush()
+                        except (OSError, ValueError):
+                            pass
                     with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
                         frappe.init(site, sites_path=str(SITES_DIR))
                         initialized = True
@@ -392,7 +494,7 @@ def main(stdin=None, stdout=None, stderr=None, argv=None) -> int:
         site, backup_set, encryption_key, db_root_password, admin_password = (
             _validate_payload(payload))
         _native_restore(site, backup_set, encryption_key,
-                        db_root_password, admin_password)
+                        db_root_password, admin_password, context_writer=stdout)
     except RestoreInputError as exc:
         stderr.write(f"Restore refused: {exc}\n")
         return 2
@@ -410,8 +512,14 @@ def main(stdin=None, stdout=None, stderr=None, argv=None) -> int:
             details.append("frames: " + ",".join(error.failure_frames))
         if error.reported_frames:
             details.append("reported frames: " + ",".join(error.reported_frames))
+        if error.reported_cwd:
+            details.append("reported CWD: " + error.reported_cwd)
         if error.failure_location:
             details.append("reported path: " + error.failure_location)
+        if error.failure_parent_location and error.failure_parent_state:
+            details.append(
+                "reported parent: " + error.failure_parent_location
+                + " (" + error.failure_parent_state + ")")
         details.append("Sensitive diagnostics were withheld")
         stderr.write("; ".join(details) + ". Leave the application writers stopped "
                      "and inspect logs through the approved secure procedure.\n")
