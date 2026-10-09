@@ -594,15 +594,43 @@ jobs:
               if [ "$code" != "200" ]; then
                   echo "::error::login page asset ${code}: ${asset}"
                   relative_asset="${asset#/assets/}"
-                  docker compose exec -T web sh -c '
-                    target="sites/assets/$1"
-                    echo "container asset target: $target"
-                    if [ -f "$target" ]; then ls -l "$target"; else echo "container asset target is absent"; fi
-                    echo "education public link: $(readlink sites/assets/education 2>/dev/null || true)"
-                    echo "resolved target: $(readlink -f "$target" 2>/dev/null || true)"
-                  ' sh "$relative_asset" || true
-                  docker compose exec -T web /home/frappe/bench/env/bin/python -c \
-                    'import wsgi; print("wsgi module:", wsgi.__file__); print("static root:", wsgi.sites_path)' || true
+                  asset_debug="$(docker compose exec -T web /home/frappe/bench/env/bin/python - "$relative_asset" <<'PY' 2>&1 || true
+          import pathlib, re, sys, urllib.error, urllib.request
+          relative = sys.argv[1]
+          if (not re.fullmatch(r"[A-Za-z0-9_./-]+", relative)
+                  or any(part in {"", ".", ".."} for part in relative.split("/"))):
+              print("asset_path=invalid")
+              raise SystemExit(0)
+          try:
+              import wsgi
+          except Exception:
+              print("wsgi_import=failed")
+              raise SystemExit(0)
+          root = pathlib.Path(wsgi.sites_path)
+          asset_root = root / "assets"
+          target = asset_root.joinpath(*relative.split("/"))
+          print("wsgi_import=ok")
+          print("static_root_exists=" + str(asset_root.is_dir()).lower())
+          print("static_root_is_symlink=" + str(asset_root.is_symlink()).lower())
+          print("asset_exists=" + str(target.is_file()).lower())
+          print("asset_is_symlink=" + str(target.is_symlink()).lower())
+          try:
+              with urllib.request.urlopen(
+                      "http://127.0.0.1:8000/assets/" + relative, timeout=10) as response:
+                  print("container_asset_http=" + str(response.status))
+          except urllib.error.HTTPError as error:
+              print("container_asset_http=" + str(error.code))
+          except Exception:
+              print("container_asset_http=no-response")
+          PY
+          )"
+                  while IFS= read -r debug_line; do
+                    case "$debug_line" in
+                      asset_path=invalid|wsgi_import=*|static_root_exists=*|static_root_is_symlink=*|asset_exists=*|asset_is_symlink=*|container_asset_http=*)
+                        echo "::error title=Asset route diagnostic::${debug_line}"
+                        ;;
+                    esac
+                  done <<< "$asset_debug"
                   exit 1
               fi
               test "$code" = "200"

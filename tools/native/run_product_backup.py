@@ -24,13 +24,21 @@ def safe_failure_summary(error: BaseException) -> str:
     if type(code) is int and 0 <= code <= 65535:
         details.append("OS error code: " + str(code))
     if name == "CommandFailedError":
-        client_error = getattr(error, "err", None)
-        if isinstance(client_error, str):
+        # Pinned Frappe stores subprocess stderr in `.err` and stdout in `.out`.
+        # MariaDB/MySQL clients do not use one consistent stream for every
+        # diagnostic; inspect both, but emit only the bounded numeric code.
+        for attribute in ("err", "out"):
+            client_output = getattr(error, attribute, None)
+            if not isinstance(client_output, str):
+                continue
             match = re.search(
                 r"\b(?:got error|error(?:\s+code)?)\s*(?::|=|#)?\s*(\d{1,5})\b",
-                client_error, re.IGNORECASE)
+                client_output, re.IGNORECASE)
             if match:
-                details.append("client diagnostic code: " + str(int(match.group(1))))
+                code = int(match.group(1))
+                if 0 < code <= 65535:
+                    details.append("client diagnostic code: " + str(code))
+                    break
     frames = []
     try:
         for frame in traceback.extract_tb(error.__traceback__)[-6:]:

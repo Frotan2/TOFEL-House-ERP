@@ -29,6 +29,45 @@ def stage_owner_decision_ledger(lab_dir):
     return target
 
 
+def write_mysqldump_wrapper(wrapper_path, dump_binary, *, disable_column_statistics):
+    """Write a POSIX wrapper without displacing MariaDB's first-option file flag.
+
+    The native credential adapter supplies ``--defaults-extra-file`` as the
+    first client option. MySQL clients require that option to remain first;
+    prepending ``--column-statistics=0`` (as the previous wrapper did) makes
+    mysqldump reject the safe credential-file option before it can connect.
+    """
+    column_statistics = ' --column-statistics=0' if disable_column_statistics else ''
+    binary = shlex.quote(str(dump_binary))
+    lines = [
+        '#!/bin/sh',
+        'set -eu',
+        f'binary={binary}',
+        'case "${1-}" in',
+        '  --defaults-extra-file=*|--defaults-file=*)',
+        '    defaults_option=$1',
+        '    shift',
+        f'    exec "$binary" "$defaults_option"{column_statistics} "$@"',
+        '    ;;',
+        '  --defaults-extra-file|--defaults-file)',
+        '    if [ "$#" -lt 2 ]; then exit 2; fi',
+        '    defaults_option=$1',
+        '    defaults_value=$2',
+        '    shift 2',
+        f'    exec "$binary" "$defaults_option" "$defaults_value"{column_statistics} "$@"',
+        '    ;;',
+        '  *)',
+        f'    exec "$binary"{column_statistics} "$@"',
+        '    ;;',
+        'esac',
+        '',
+    ]
+    wrapper_path = Path(wrapper_path)
+    wrapper_path.write_text('\n'.join(lines), encoding='utf-8')
+    wrapper_path.chmod(0o700)
+    return wrapper_path
+
+
 def main():
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise SystemExit('Hosted authorized branch only; no local/production execution')
@@ -51,9 +90,11 @@ def main():
         raise RuntimeError('Hosted runner has no mysqldump client for Bench backup')
     dump_help = subprocess.run([dump_binary, '--help'], text=True, capture_output=True, check=False).stdout
     dump_wrapper = lab/'tools/bin/mysqldump'; dump_wrapper.parent.mkdir(parents=True, exist_ok=True)
-    dump_option = ' --column-statistics=0' if '--column-statistics' in dump_help else ''
-    dump_wrapper.write_text('#!/bin/sh\nexec ' + shlex.quote(dump_binary) + dump_option + ' "$@"\n')
-    dump_wrapper.chmod(0o700)
+    write_mysqldump_wrapper(
+        dump_wrapper,
+        dump_binary,
+        disable_column_statistics='--column-statistics' in dump_help,
+    )
     env = dict(os.environ, PATH=str(lab/'tools/bin')+os.pathsep+os.environ['PATH'], UV_PYTHON_DOWNLOADS='never',
                UV_NATIVE_TLS='true', PYTHONUNBUFFERED='1', CI='1', PLACEMENT_TEST_PASSWORD=userpw,
                PLACEMENT_REPORT=str(evidence/'native-checks.json'))

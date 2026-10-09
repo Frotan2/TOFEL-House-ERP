@@ -733,6 +733,22 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn('site re-activation failed with exit', upgrade_step)
         self.assertIn("TOEFL_UPGRADE_REHEARSAL", upgrade_step)
 
+    def test_browser_asset_failure_emits_safe_static_route_diagnostics(self):
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        browser_start = workflow.index("Browser UI acceptance (real headless Chromium, real login flow)")
+        browser_end = workflow.index("Multi-user tailnet contract", browser_start)
+        browser = workflow[browser_start:browser_end]
+        self.assertIn("container_asset_http=", browser)
+        self.assertIn("target.is_file()", browser)
+        self.assertIn("static_root_exists=", browser)
+        self.assertIn("::error title=Asset route diagnostic::", browser)
+        self.assertNotIn("error.err", browser)
+        debug_start = browser.index('asset_debug="$(docker compose exec')
+        debug_end = browser.index('                  exit 1', debug_start)
+        diagnostics = browser[debug_start:debug_end]
+        self.assertNotIn("Password:", diagnostics)
+        self.assertNotIn("site_config.json", diagnostics)
+
     def test_tailnet_diagnostics_never_emit_session_credentials(self):
         # A previous qualification annotation included a live synthetic sid and
         # CSRF token. Retain useful presence/cache summaries only; never log

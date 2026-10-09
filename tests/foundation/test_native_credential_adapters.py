@@ -8,6 +8,7 @@ import io
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import types
@@ -267,12 +268,75 @@ class NativeProductBackupDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("synthetic-secret", summary)
         self.assertNotIn("/private", summary)
 
+    def test_backup_failure_summary_checks_client_stdout_for_only_the_numeric_code(self):
+        adapter = load_tool_module(
+            "native_product_backup_stdout_under_test", ROOT / "tools/native/run_product_backup.py")
+        failure_type = type("CommandFailedError", (Exception,), {})
+        error = failure_type("Command failed")
+        error.err = ""
+        error.out = (
+            "mysqldump: Got error: 1049: Unknown database 'synthetic-secret' "
+            "at /private/synthetic.cnf")
+        summary = adapter.safe_failure_summary(error)
+        self.assertIn("client diagnostic code: 1049", summary)
+        self.assertNotIn("Unknown database", summary)
+        self.assertNotIn("synthetic-secret", summary)
+        self.assertNotIn("/private", summary)
+
     def test_backup_failure_summary_never_surfaces_system_exit_text(self):
         adapter = load_tool_module(
             "native_product_backup_under_test", ROOT / "tools/native/run_product_backup.py")
         summary = adapter.safe_failure_summary(SystemExit("synthetic private detail"))
         self.assertIn("exception type: SystemExit", summary)
         self.assertNotIn("synthetic private detail", summary)
+
+
+class NativeDumpWrapperTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "native wrapper is a POSIX runner helper")
+    def test_mysqldump_wrapper_keeps_defaults_file_before_optional_client_flag(self):
+        runner = load_tool_module("native_dump_wrapper_under_test", ROOT / "tools/native/run_native.py")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            captured = root / "argv.json"
+            fake_client = root / "fake-mysqldump"
+            fake_client.write_text(
+                f"""#!{sys.executable}
+import json, os, sys
+from pathlib import Path
+Path(os.environ["DUMP_ARGUMENTS_LOG"]).write_text(json.dumps(sys.argv[1:]))
+""",
+                encoding="utf-8",
+            )
+            fake_client.chmod(0o700)
+            wrapper = runner.write_mysqldump_wrapper(
+                root / "mysqldump", fake_client, disable_column_statistics=True)
+            env = dict(os.environ, DUMP_ARGUMENTS_LOG=str(captured))
+            for options in (
+                ["--defaults-extra-file=/tmp/synthetic.cnf", "--host=127.0.0.1"],
+                ["--defaults-extra-file", "/tmp/synthetic.cnf", "--host=127.0.0.1"],
+            ):
+                with self.subTest(options=options):
+                    result = subprocess.run(
+                        [str(wrapper), *options, "--user=synthetic", "synthetic_db"],
+                        env=env, text=True, capture_output=True, check=False)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    actual = json.loads(captured.read_text(encoding="utf-8"))
+                    expected_prefix = (options[:2] if options[0] == "--defaults-extra-file"
+                                       else options[:1])
+                    self.assertEqual(actual[:len(expected_prefix)], expected_prefix)
+                    self.assertEqual(actual[len(expected_prefix)], "--column-statistics=0")
+                    self.assertIn("--host=127.0.0.1", actual)
+
+    def test_mysqldump_wrapper_does_not_add_unsupported_client_flag(self):
+        runner = load_tool_module("native_dump_wrapper_without_flag_under_test",
+                                  ROOT / "tools/native/run_native.py")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            wrapper = runner.write_mysqldump_wrapper(
+                root / "mysqldump", "/synthetic/mysqldump", disable_column_statistics=False)
+            text = wrapper.read_text(encoding="utf-8")
+            self.assertNotIn("--column-statistics=0", text)
+            self.assertIn('exec "$binary" "$defaults_option" "$@"', text)
 
 
 class NativeHarnessAuthorityTests(unittest.TestCase):
