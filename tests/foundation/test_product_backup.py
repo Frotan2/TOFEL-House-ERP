@@ -312,8 +312,9 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
 
     def test_unverified_native_backup_does_not_replace_or_delete_old_backups(self):
         self.fail_packet_verification = True
-        with self.assertRaises(self.backup.BackupInputError):
+        with self.assertRaises(self.backup.BackupInputError) as caught:
             self._run_adapter()
+        self.assertEqual(caught.exception.safe_code, "gpg-database-symmetric-packet-missing")
         self.assertEqual(self.old_database.read_bytes(), self.old_database_bytes)
         self.assertEqual(self.old_config.read_bytes(), self.old_config_bytes)
         self.assertEqual(self.backups.delete_temp_backups, self.original_cleanup)

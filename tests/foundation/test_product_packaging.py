@@ -742,6 +742,7 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn("target.is_file()", browser)
         self.assertIn("static_root_exists=", browser)
         self.assertIn("::error title=Asset route diagnostic::", browser)
+        self.assertIn("-e PYTHONPATH=/product", browser)
         self.assertNotIn("error.err", browser)
         debug_start = browser.index('asset_debug="$(docker compose exec')
         debug_end = browser.index('                  exit 1', debug_start)

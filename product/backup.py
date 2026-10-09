@@ -41,6 +41,10 @@ BACKUP_SET_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}\Z")
 class BackupInputError(ValueError):
     """The product backup preconditions or verification are incomplete."""
 
+    def __init__(self, message: str, *, safe_code: str | None = None):
+        super().__init__(message)
+        self.safe_code = safe_code
+
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -85,6 +89,11 @@ def _staged_file(raw_path, staging_dir: Path, role: str) -> Path:
 
 
 def _assert_gpg_encrypted(path: Path, role: str) -> None:
+    role_code = {
+        "database": "database",
+        "public files": "public-files",
+        "private files": "private-files",
+    }.get(role, "artifact")
     try:
         result = subprocess.run(
             ["gpg", "--list-packets", str(path)],
@@ -94,11 +103,21 @@ def _assert_gpg_encrypted(path: Path, role: str) -> None:
         )
     except Exception:
         raise BackupInputError(
-            f"native Frappe {role} artifact could not be checked for GPG encryption") from None
+            f"native Frappe {role} artifact could not be checked for GPG encryption",
+            safe_code=f"gpg-{role_code}-probe-error",
+        ) from None
     output = (result.stdout or b"") + (result.stderr or b"")
-    if result.returncode != 0 or b":symkey enc packet:" not in output:
+    if result.returncode != 0:
+        code = result.returncode if type(result.returncode) is int and 0 <= result.returncode <= 255 else "other"
         raise BackupInputError(
-            f"native Frappe {role} artifact is not verified as GPG-encrypted")
+            f"native Frappe {role} artifact could not be checked for GPG encryption",
+            safe_code=f"gpg-{role_code}-check-exit-{code}",
+        )
+    if b":symkey enc packet:" not in output:
+        raise BackupInputError(
+            f"native Frappe {role} artifact is not verified as GPG-encrypted",
+            safe_code=f"gpg-{role_code}-symmetric-packet-missing",
+        )
 
 
 def _publish_without_overwrite(source: Path, destination: Path) -> None:

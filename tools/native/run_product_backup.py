@@ -23,6 +23,14 @@ def safe_failure_summary(error: BaseException) -> str:
     code = getattr(error, "errno", None)
     if type(code) is int and 0 <= code <= 65535:
         details.append("OS error code: " + str(code))
+    if name == "BackupInputError":
+        safe_code = getattr(error, "safe_code", None)
+        if (isinstance(safe_code, str)
+                and re.fullmatch(
+                    r"gpg-(?:database|public-files|private-files)-(?:probe-error|"
+                    r"symmetric-packet-missing|check-exit-(?:other|\d{1,3}))",
+                    safe_code)):
+            details.append("backup diagnostic code: " + safe_code)
     if name == "CommandFailedError":
         # Pinned Frappe stores subprocess stderr in `.err` and stdout in `.out`.
         # MariaDB/MySQL clients do not use one consistent stream for every

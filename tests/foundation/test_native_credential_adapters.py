@@ -283,6 +283,18 @@ class NativeProductBackupDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("synthetic-secret", summary)
         self.assertNotIn("/private", summary)
 
+    def test_backup_failure_summary_exposes_only_allowlisted_gpg_verification_code(self):
+        adapter = load_tool_module(
+            "native_product_backup_gpg_under_test", ROOT / "tools/native/run_product_backup.py")
+        failure_type = type("BackupInputError", (Exception,), {})
+        error = failure_type("synthetic private path and key")
+        error.safe_code = "gpg-database-symmetric-packet-missing"
+        summary = adapter.safe_failure_summary(error)
+        self.assertIn("backup diagnostic code: gpg-database-symmetric-packet-missing", summary)
+        self.assertNotIn("synthetic private path", summary)
+        error.safe_code = "gpg-database-/private/path"
+        self.assertNotIn("backup diagnostic code:", adapter.safe_failure_summary(error))
+
     def test_backup_failure_summary_never_surfaces_system_exit_text(self):
         adapter = load_tool_module(
             "native_product_backup_under_test", ROOT / "tools/native/run_product_backup.py")

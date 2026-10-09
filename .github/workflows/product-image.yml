@@ -594,7 +594,7 @@ jobs:
               if [ "$code" != "200" ]; then
                   echo "::error::login page asset ${code}: ${asset}"
                   relative_asset="${asset#/assets/}"
-                  asset_debug="$(docker compose exec -T web /home/frappe/bench/env/bin/python - "$relative_asset" <<'PY' 2>&1 || true
+                  asset_debug="$(docker compose exec -T -e PYTHONPATH=/product web /home/frappe/bench/env/bin/python - "$relative_asset" <<'PY' 2>&1 || true
           import pathlib, re, sys, urllib.error, urllib.request
           relative = sys.argv[1]
           if (not re.fullmatch(r"[A-Za-z0-9_./-]+", relative)
@@ -603,8 +603,11 @@ jobs:
               raise SystemExit(0)
           try:
               import wsgi
-          except Exception:
-              print("wsgi_import=failed")
+          except Exception as error:
+              name = type(error).__name__
+              if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", name):
+                  name = "Exception"
+              print("wsgi_import=failed:" + name)
               raise SystemExit(0)
           root = pathlib.Path(wsgi.sites_path)
           asset_root = root / "assets"
