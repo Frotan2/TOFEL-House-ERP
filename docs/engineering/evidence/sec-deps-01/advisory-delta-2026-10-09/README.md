@@ -94,8 +94,8 @@ matches. The Frappe pyproject hash is recorded in the JSON and enforced by a tes
 2. `docs/engineering/evidence/sec-deps-01/ERRATUM-2026-10-09.md` (new): the dangling register references (E1), the withdrawn 2026-10-03 ECharts reasoning (E2), and corrections to this README (E3).
 3. `docs/engineering/evidence/sec-deps-01/advisory-delta-2026-10-03/delta-dispositions.json`: GHSA-fgmj-fm8m-jvvx changed from NOT_REACHABLE to BLOCKED, with an erratum pointer.
 4. `product/app.Dockerfile`: one final `RUN` guard at line 169. It fails the image build if a `gs` executable is on PATH. Pillow's EPS plugin runs the `gs` found on PATH (`PIL/EpsImagePlugin.py`), so the guard removes the precondition from the shipped image. The image is single-stage. The base image and the explicit apt set name no ghostscript package. Transitive absence could not be proven offline, so the guard enforces it at build time.
-5. `.github/workflows/product-image.yml`: main's workflow (PR #14) plus one change to the restore rehearsal marker gate (section 8). The branch's earlier plain-restore diagnostic revision (`5bbf157`) is superseded by main's encrypted-restore path and is not carried forward.
-6. `tests/foundation/test_restore_rehearsal_gate.py` (new, 12 tests): wiring checks, plus behaviour tests that execute both marker probe bodies against a stub `frappe` module.
+5. `.github/workflows/product-image.yml`: main's workflow (PR #14) plus (a) one change to the restore rehearsal marker gate (section 8) and (b) a Course Owner acceptance block in the first-boot step. The block sets a synthetic login secret before the encrypted backup, compares the account, roles and effective Owner backup-policy fingerprint before the backup, after the restore and after a restart-plus-migrate repair, and logs the Course Owner in over HTTP after the restore and after the repair. The branch's earlier plain-restore diagnostic revision (`5bbf157`) is superseded by main's encrypted-restore path and is not carried forward.
+6. `tests/foundation/test_restore_rehearsal_gate.py` (new, 12 tests): wiring checks, plus behaviour tests that execute both marker probe bodies against a stub `frappe` module. `tests/foundation/test_course_owner_acceptance.py` (new, 9 tests): wiring of the Course Owner block, and behaviour tests that execute its probe against a stub `frappe` and its login helper against a local stub HTTP server.
 7. `tests/security/test_advisory_delta_2026_10_09.py` (new): 16 original tests and 13 added in this revision (reconciliation, product scope, the withdrawn ECharts record, dangling references, the owned-fixture audit, and the single-stage guard).
 8. Merge commit `b379c28` (main into this branch; no history rewrite, no force push).
 
@@ -110,7 +110,7 @@ Sandbox after a reset: Python 3.11.2, Node v22.22.3 (CI pins Node 24.21.0). The 
 | Check | Result |
 |---|---|
 | `ruff check .` (ruff 0.16.8, hash-pinned install as in `owned-suite.yml`) | `All checks passed!`, exit 0 |
-| `python3 -m unittest discover -s tests -t . -v` | `Ran 1246 tests`, `OK`, exit 0 |
+| `python3 -m unittest discover -s tests -t . -v` | `Ran 1255 tests`, `OK`, exit 0 (includes the 9 Course Owner acceptance tests, all passing) |
 | of which `tests/security/test_advisory_delta_2026_10_09.py` | 29 of 29 pass |
 | of which `tests/foundation/test_restore_rehearsal_gate.py` | 12 of 12 pass |
 | Node: `test_realtime_guard.cjs`, `test_command_pages.cjs`, `test_design_system.cjs`, `test_role_desks.cjs` | all exit 0 |
@@ -132,7 +132,14 @@ merged is recorded in the PR #13 body, which is updated per head.
 | `b379c28` (merge with main) | Owned suite (push / pull_request) | 37968077192 / 37968080351 | success / success |
 | `b379c28` | Native lifecycle integration (push) | 37968077170 | success |
 | `b379c28` | Product image (push) | 37968077218 | **success**: every step, including the build with the Ghostscript guard, the first-boot restore with the corrected marker probes, browser UI, multi-user, upgrade/rollback and performance |
-| `b379c28` | Foundation runtime (push) | 37968077191 | see PR #13 body (in progress when this README was written) |
+| `b379c28` | Foundation runtime (push) | 37968077191 | **success**: every step, including "Install and validate the pinned foundation". The advisory gate passes on the merged head. Header `advisory matches=160 in 47 packages`; zero failure-level annotations |
+| `57c73b6` (evidence corrections) | Owned suite (push / pull_request) | 37969450770 / 37969455366 | success / success |
+| `57c73b6` | Foundation runtime (push) | 37969450759 | **success**: every step passed; zero failure-level annotations. Triaged matches appear as warnings; the gate does not fail on them |
+| `8bca360` (Course Owner acceptance) | Owned suite (push / pull_request) | 37969852236 / 37969856908 | success / success |
+| `8bca360` | Product image (push) | 37969852289 | **success**: all 13 steps, including the build with the Ghostscript guard, the first-boot encrypted backup/restore with the corrected marker probes and the Course Owner checks, browser UI, multi-user, upgrade/rollback and performance. Zero failure-level annotations |
+
+`8bca360` does not trigger Foundation runtime, because its path filter does not match the two
+files it changed. The gate result for the final head is recorded in the PR #13 body.
 
 ## 7. Remaining security risks and open items (not closed by this PR)
 
@@ -146,7 +153,7 @@ merged is recorded in the PR #13 body, which is updated per head.
 8. **Unpatched pinned Python packages.** Werkzeug, WeasyPrint and PyJWT are not upgraded. Each is closed by reachability, not by a patch, and each reachability claim reopens when its trigger changes (`upgrade_blockers`).
 9. **npm fixes depend on frozen upstream lockfiles** (vue, tailwind/typography, frappe-ui/tiptap, postcss, prosemirror). They need upstream refreshes.
 10. **Werkzeug bind-mount residual.** Docker Desktop device-name handling through the `sites/` mount is untested. Impact would be availability only.
-11. **Restore acceptance gaps (in scope, not security).** See section 8. The Course Owner login, the account and configuration comparison after restore/restart/repair, and a separate repair step are not yet demonstrated by CI.
+11. **Restore acceptance (in scope, not security).** The Course Owner login and the account and policy comparison after the restore and after a restart-plus-migrate repair are now in the Product image job (`8bca360`, success; section 8). Not exercised: the Windows repair command's `docker compose down` and `up` sequence (CI runs a service restart and `bench migrate`). The individual Course Owner notices are hidden by the annotation cap (10 notices per step), so that pass is evidenced by the step's success and its fail-closed gates, not by visible lines. The job log is not reachable from this sandbox.
 12. **Release readiness is not established.** This PR claims no release gate. Open: items 1, 2 and 11, plus the other release gates not verified in this session.
 
 ## 8. Coordination with `arena/abdece6c-tofel-house-erp` (PR #14, merged)
@@ -154,5 +161,6 @@ merged is recorded in the PR #13 body, which is updated per head.
 * PR #14 (`arena/abdece6c-tofel-house-erp` → `main`, "Match native Frappe backup and restore paths") merged at `13482fe` on 2026-10-09T13:55:47Z. This branch merged `origin/main` into itself (`b379c28`, no force push). The one conflict was `.github/workflows/product-image.yml`.
 * Resolution: main's workflow, plus one change to the restore rehearsal's marker gate. Marker creation and the post-restore absence check moved from `bench console` heredocs to python3 probes. Each probe runs from `bench/sites`, prints a `RESULT` line, and fails closed. Reason: a raised exception in a console cell can exit 0 with no row, which makes an absence check vacuous. The first python3 attempt (`5bbf157`) ran from the container WORKDIR and failed with exit 1. The most likely cause is Frappe's logger, which opens a CWD-relative `../logs/` file (`frappe/utils/logger.py`, pinned 988e54f3). The subsequent passing run with the directory change supports that cause, but the failing output was not captured. The corrected probes follow the pattern of main's passing verification probes, and the Product image run on `b379c28` passed with them (section 6.2).
 * Please review the marker gate (`marker-create.txt`, `marker-after.txt`) and `tests/foundation/test_restore_rehearsal_gate.py`. Please avoid editing `product-image.yml` in parallel until this PR is merged or the two branches are reconciled.
-* Acceptance gaps still open on main's workflow: (a) the synthetic Course Owner `backup-owner@toeflhouse.localhost` is created and its backup policy configured, but it never logs in. The browser step logs in as Administrator; (b) the Owner configuration (backup policy and recovery-key identity) and the account/profile state are checked only before the backup, and are not compared after restore, restart and repair; (c) `Repair TOEFL House ERP.cmd` is not exercised as a distinct step.
+* Gaps on main's workflow that this PR addresses, in the first-boot step (Product image success on `8bca360`): (a) the synthetic Course Owner `backup-owner@toeflhouse.localhost` logs in over HTTP after the restore and after the repair (main's browser step still logs in as Administrator); (b) its account, roles and effective backup policy are fingerprinted before the backup and compared after the restore and after the repair; (c) the repair equivalent (service restart and `bench migrate`) runs as its own step. Still not exercised: the Windows `docker compose down` and `up` sequence in `Repair TOEFL House ERP.cmd`.
+* The Course Owner block and the marker-gate change are new on this branch. Please review them together, and avoid parallel edits to `product-image.yml` until they are reconciled.
 * Suggested row text for the owner of `docs/engineering/ACCEPTANCE.md` (not applied here, because the file is shared): "STACK-ADVISORY-UNTRIAGED: 8 matches = 7 unique advisories, dispositioned in advisory-delta-2026-10-09 (replay: 0 untriaged). Gate closure on a head depends on that head's Foundation runtime run. GHSA-c8x8 in the HRMS SPA is an open release blocker, not gated."
