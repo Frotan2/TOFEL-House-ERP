@@ -385,9 +385,13 @@ def _governing_owner_terms(doc, rows, on_date=None):
 
 
 def governing_owner_operations(on_date=None):
-    """Return only governing business terms; never expose audit metadata."""
-    doc = _policy_doc()
-    return _governing_owner_terms(doc, _version_rows(doc) if doc else [], on_date)
+    """Return business terms only when the current snapshot is validated.
+
+    Keep every public resolver on the same fail-closed validation boundary
+    used by the backup/activation consumer; callers must not accidentally
+    consume a saved-but-unvalidated Owner version as live policy.
+    """
+    return _validated_governing_owner_operations(on_date)
 
 
 def _validated_governing_owner_operations(on_date=None):

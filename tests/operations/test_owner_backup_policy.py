@@ -22,8 +22,8 @@ def load_policy_helpers():
     names = {"_int", "_bool", "_backup_schedule_time", "_backup_public_key",
              "_backup_retention_behavior", "validate_terms", "_version_rows", "_governing_owner_terms",
              "_owner_policy_validation_is_current",
-             "_validated_governing_owner_operations", "current_backup_policy",
-             "current_backup_public_key_b64"}
+             "_validated_governing_owner_operations", "governing_owner_operations",
+             "current_backup_policy", "current_backup_public_key_b64"}
     selected = [node for node in source.body
                 if isinstance(node, ast.FunctionDef) and node.name in names]
     constants = [node for node in source.body
@@ -197,6 +197,16 @@ class BackupPolicyValidationTests(unittest.TestCase):
 
         self.assertFalse(is_current("", rows))
         self.assertFalse(is_current("OWNER-OPERATIONS", []))
+
+    def test_public_owner_resolver_uses_validation_gated_terms(self):
+        sentinel = {"effective_from": "2026-10-08", "capacity_target": 20}
+        calls = []
+        self.policy["_validated_governing_owner_operations"] = (
+            lambda on_date=None: calls.append(on_date) or sentinel)
+        self.assertEqual(
+            self.policy["governing_owner_operations"]("2026-10-08"),
+            sentinel)
+        self.assertEqual(calls, ["2026-10-08"])
 
     def test_backup_resolver_fails_closed_until_current_snapshot_is_validated(self):
         terms = valid_terms()

@@ -54,6 +54,7 @@ import stat
 import shutil
 import socket
 import subprocess
+import sys
 import time
 
 BENCH_DIR = Path(os.environ.get("BENCH_DIR", "/home/frappe/bench"))
@@ -128,34 +129,86 @@ def read_root_password(secrets_dir: Path = SECRETS_DIR) -> str:
     raise RuntimeError("db.env lacks MARIADB_ROOT_PASSWORD")
 
 
+_NATIVE_SITE_FAILURE_MARKER = "TOEFL_NATIVE_SITE_EXCEPTION="
+_NATIVE_EXCEPTION_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}\Z")
+
 _CREATE_SITE_SCRIPT = r'''
-import json, sys
-import frappe
-from frappe.installer import _new_site, update_site_config
-payload = json.load(sys.stdin)
-site = payload["site"]
-frappe.init(site, new_site=True)
-_new_site(
-    payload.get("db_name"), site,
-    db_root_username="root",
-    db_root_password=payload["db_root_password"],
-    admin_password=payload["admin_password"],
-    db_password=payload["db_password"],
-    db_type=payload.get("db_type", "mariadb"),
-    db_host=payload.get("db_host", "db"),
-    db_port=int(payload.get("db_port", 3306)),
-    setup_db=True,
-    mariadb_user_host_login_scope=payload.get("mariadb_user_host_login_scope", "%"),
-)
-if payload.get("set_default_site", True):
-    update_site_config(
-        "default_site", site, validate=False,
-        site_config_path=payload.get(
-            "common_site_config_path",
-            "/home/frappe/bench/sites/common_site_config.json"),
+import json, re, sys
+frappe = None
+initialized = False
+failure = None
+try:
+    import frappe
+    from frappe.installer import _new_site, update_site_config
+    payload = json.load(sys.stdin)
+    site = payload["site"]
+    frappe.init(site, new_site=True)
+    initialized = True
+    _new_site(
+        payload.get("db_name"), site,
+        db_root_username="root",
+        db_root_password=payload["db_root_password"],
+        admin_password=payload["admin_password"],
+        db_password=payload["db_password"],
+        db_type=payload.get("db_type", "mariadb"),
+        db_host=payload.get("db_host", "db"),
+        db_port=int(payload.get("db_port", 3306)),
+        setup_db=True,
+        mariadb_user_host_login_scope=payload.get("mariadb_user_host_login_scope", "%"),
     )
-frappe.destroy()
+    if payload.get("set_default_site", True):
+        update_site_config(
+            "default_site", site, validate=False,
+            site_config_path=payload.get(
+                "common_site_config_path",
+                "/home/frappe/bench/sites/common_site_config.json"),
+        )
+except Exception as error:
+    failure = error
+
+if initialized:
+    try:
+        frappe.destroy()
+    except Exception as error:
+        if failure is None:
+            failure = error
+
+if failure is not None:
+    # Surface only the exception's program-defined type. Its message and
+    # traceback may contain credential-bearing upstream diagnostics and stay
+    # captured by the parent process, which never forwards them.
+    name = type(failure).__name__
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name):
+        print("TOEFL_NATIVE_SITE_EXCEPTION=" + name, file=sys.stderr, flush=True)
+    raise failure
 '''
+
+
+class NativeSiteCreationError(RuntimeError):
+    """A safe site-creation failure containing no child output or credentials."""
+
+    def __init__(self, returncode: int | None, failure_type: str | None = None):
+        self.returncode = returncode
+        self.failure_type = (failure_type if isinstance(failure_type, str)
+                             and _NATIVE_EXCEPTION_NAME.fullmatch(failure_type)
+                             else None)
+        message = "secure native site creation failed"
+        if returncode is not None:
+            message += f" (exit {returncode})"
+        if self.failure_type:
+            message += f"; exception type: {self.failure_type}"
+        message += "; sensitive diagnostics were withheld"
+        super().__init__(message)
+
+
+def _native_site_failure_type(stderr: str) -> str | None:
+    """Extract the one safe exception-class marker, never an error message."""
+    markers = [line[len(_NATIVE_SITE_FAILURE_MARKER):]
+               for line in (stderr or "").splitlines()
+               if line.startswith(_NATIVE_SITE_FAILURE_MARKER)]
+    if len(markers) != 1 or not _NATIVE_EXCEPTION_NAME.fullmatch(markers[0]):
+        return None
+    return markers[0]
 
 
 def create_site(site: str, root_password: str, admin_password: str,
@@ -186,20 +239,28 @@ def create_site(site: str, root_password: str, admin_password: str,
         "set_default_site": set_default_site,
         "common_site_config_path": str(BENCH_DIR / "sites" / "common_site_config.json"),
     })
-    result = subprocess.run(
-        [str(ENV_PYTHON), "-c", _CREATE_SITE_SCRIPT],
-        cwd=BENCH_DIR,
-        input=payload,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [str(ENV_PYTHON), "-c", _CREATE_SITE_SCRIPT],
+            cwd=BENCH_DIR,
+            input=payload,
+            text=True,
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+    except OSError as error:
+        # Keep executable/path diagnostics out of logs; the exception class is
+        # useful and cannot contain the stdin credentials.
+        raise NativeSiteCreationError(None, type(error).__name__) from None
     if result.returncode:
         # The child receives credentials on stdin. Never forward its exception,
-        # argv, or captured output: upstream diagnostics can echo credentials.
-        raise RuntimeError(
-            f"secure native site creation failed (exit {result.returncode}); "
-            "sensitive diagnostics were withheld")
+        # argv, or captured output: only a validated, program-defined exception
+        # class is safe to surface to the operator/CI annotation.
+        raise NativeSiteCreationError(
+            result.returncode,
+            _native_site_failure_type(result.stderr),
+        ) from None
 
 
 def site_exists(site: str, sites_dir: Path = SITES_DIR) -> bool:
@@ -292,8 +353,11 @@ def public_assets_missing(sites_dir: Path = SITES_DIR, apps_dir: Path | None = N
             continue
         dest = sites_dir / "assets" / app_root.name
         for file in public.rglob("*"):
-            if file.is_file() and not (dest / file.relative_to(public)).is_file():
-                missing.append(f"{app_root.name}/{file.relative_to(public)}")
+            relative = file.relative_to(public)
+            if file.is_file() and not (dest / relative).is_file():
+                # Report stable POSIX asset URLs/paths on every host, including
+                # the Windows packaging-test runner.
+                missing.append(f"{app_root.name}/{relative.as_posix()}")
     return missing
 
 
@@ -337,8 +401,14 @@ def _create_private_credentials_file(path: Path, content: str) -> Path:
 
 def _validate_private_credentials(path: Path) -> None:
     try:
-        safe = (not path.is_symlink() and path.is_file()
-                and stat.S_IMODE(path.stat().st_mode) == 0o600)
+        safe = not path.is_symlink() and path.is_file()
+        if os.name != "nt":
+            # The product bootstrap runs inside its Linux container, where
+            # mode 0600 is the enforced file-permission contract. Windows
+            # host test filesystems do not report POSIX mode bits faithfully;
+            # the Windows job still exercises atomic/write-once behavior,
+            # while the Linux runtime test below retains the real mode check.
+            safe = safe and stat.S_IMODE(path.stat().st_mode) == 0o600
     except OSError:
         safe = False
     if not safe:
@@ -514,7 +584,13 @@ def bootstrap(site: str = SITE_NAME, *, log=print) -> dict:
 
 
 def main() -> int:
-    summary = bootstrap()
+    try:
+        summary = bootstrap()
+    except NativeSiteCreationError as error:
+        # Deliberately emit only the exception class produced by the child;
+        # native messages/tracebacks remain private to the captured process.
+        print(str(error), file=sys.stderr)
+        return 1
     print(json.dumps(summary))
     return 0
 

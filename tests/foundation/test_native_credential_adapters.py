@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PRODUCT = ROOT / "product"
 if str(PRODUCT) not in sys.path:
     sys.path.insert(0, str(PRODUCT))
+import bootstrap
 
 
 def load_tool_module(name: str, path: Path):
@@ -96,6 +97,65 @@ class NativeSiteSetupAdapterTests(unittest.TestCase):
         for secret in (self.payload["db_root_password"],
                        self.payload["admin_password"], self.payload["db_password"]):
             self.assertNotIn(secret, output + errors)
+
+    def test_native_exception_type_is_safe_to_surface_but_stdin_is_not(self):
+        failure = self.adapter.bootstrap.NativeSiteCreationError(
+            1, "OperationalError")
+        with mock.patch.object(self.adapter.bootstrap, "create_site",
+                               side_effect=failure):
+            status, output, errors = self.invoke(self.payload)
+        self.assertEqual(status, 1)
+        self.assertIn("OperationalError", errors)
+        self.assertIn("sensitive diagnostics were withheld", errors)
+        self.assertNotIn("Traceback", output + errors)
+        for secret in (self.payload["db_root_password"],
+                       self.payload["admin_password"], self.payload["db_password"]):
+            self.assertNotIn(secret, output + errors)
+
+
+class NativeSiteCreationDiagnosticsTests(unittest.TestCase):
+    def test_child_failure_marker_exposes_only_a_valid_exception_class(self):
+        secrets_ = ("synthetic-root-secret", "synthetic-admin-secret",
+                    "synthetic-db-secret")
+        stderr = ("Traceback (most recent call last):\n"
+                  "TOEFL_NATIVE_SITE_EXCEPTION=OperationalError\n"
+                  + "database password was " + secrets_[0])
+        child = mock.Mock(returncode=1, stdout="child output " + secrets_[1],
+                          stderr=stderr)
+        with mock.patch.object(bootstrap.subprocess, "run", return_value=child) as run:
+            with self.assertRaises(bootstrap.NativeSiteCreationError) as caught:
+                bootstrap.create_site("diagnostic.localhost", *secrets_)
+        self.assertEqual(caught.exception.failure_type, "OperationalError")
+        self.assertIn("OperationalError", str(caught.exception))
+        for secret in secrets_:
+            self.assertNotIn(secret, str(caught.exception))
+        argv = run.call_args.args[0]
+        stdin_payload = run.call_args.kwargs["input"]
+        self.assertEqual(run.call_args.kwargs["errors"], "replace")
+        self.assertFalse(any(secret in repr(argv) for secret in secrets_))
+        for secret in secrets_:
+            self.assertIn(secret, stdin_payload)
+        self.assertEqual(
+            bootstrap._native_site_failure_type(
+                "TOEFL_NATIVE_SITE_EXCEPTION=OSError\n"
+                "TOEFL_NATIVE_SITE_EXCEPTION=ValueError"),
+            None)
+        self.assertEqual(
+            bootstrap._native_site_failure_type(
+                "TOEFL_NATIVE_SITE_EXCEPTION=Bad Type"),
+            None)
+
+    def test_product_bootstrap_log_surfaces_safe_type_without_child_text(self):
+        output, errors = io.StringIO(), io.StringIO()
+        failure = bootstrap.NativeSiteCreationError(1, "OperationalError")
+        with mock.patch.object(bootstrap, "bootstrap", side_effect=failure):
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                status = bootstrap.main()
+        self.assertEqual(status, 1)
+        self.assertEqual(output.getvalue(), "")
+        self.assertIn("OperationalError", errors.getvalue())
+        self.assertIn("sensitive diagnostics were withheld", errors.getvalue())
+        self.assertNotIn("Traceback", errors.getvalue())
 
 
 class NativeHarnessAuthorityTests(unittest.TestCase):

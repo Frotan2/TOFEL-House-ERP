@@ -66,6 +66,11 @@ def main(argv=None) -> int:
             set_default_site=set_default,
             db_name=db_name,
         )
+    except bootstrap.NativeSiteCreationError as error:
+        # This exception contains only a validated native exception class and
+        # exit code, never Frappe's message, traceback, argv, or stdin payload.
+        sys.stderr.write(f"Native Frappe site creation failed: {error}\n")
+        return 1
     except Exception:
         sys.stderr.write(
             "Native Frappe site creation failed; sensitive diagnostics were withheld.\n")

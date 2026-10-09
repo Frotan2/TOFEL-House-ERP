@@ -183,6 +183,19 @@ class DependencyPinContract(unittest.TestCase):
             for key in ("status", "source_version", "runtime_imported_version", "risk"):
                 self.assertNotIn(key, part, f"stale field {key}")
 
+    def test_remaining_unlocked_inputs_are_explicitly_not_claimed_reproducible(self):
+        matrix = json.loads(self.MATRIX.read_text())
+        lock_status = matrix["lock_status"]
+        self.assertTrue(any("python base image" in item
+                            for item in lock_status["tag_pinned"]))
+        self.assertTrue(any("Debian bookworm OS packages" in item
+                            for item in lock_status["not_locked"]))
+        self.assertTrue(any("resolved Python dependency set" in item
+                            for item in lock_status["not_locked"]))
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        self.assertIn("does not turn the", workflow)
+        self.assertIn("bit-for-bit reproducible image", workflow)
+
     def test_upstream_contradictions_are_recorded_not_hidden(self):
         parts = matrix_parts()
         # education: the tag v16.1.0 vs source 16.0.1 mismatch is an upstream
@@ -387,6 +400,10 @@ class LineEndingContract(unittest.TestCase):
         self.assertIn('if ($before -notmatch "w/crlf")', workflow)
         self.assertIn("$copyMatches.Count -ne $copyLines.Count", workflow)
         self.assertIn("0xEF, 0xBB, 0xBF", workflow)
+        self.assertIn('if (-not $staleText.Contains("`r`n"))', workflow)
+        self.assertIn("Windows normalized physical-byte EOL contract", workflow)
+        self.assertIn("Windows normalized stale-worktree packaging suite", workflow)
+        self.assertIn(".Replace('" + chr(92) + "', '/')", workflow)
         self.assertIn("if ($normalizerExit -ne 10)", workflow)
         self.assertGreaterEqual(workflow.count("if ($LASTEXITCODE -ne 0)"), 2)
         # The source normalizer must never be given runtime-state paths as
@@ -500,6 +517,8 @@ class LineEndingContract(unittest.TestCase):
         for relative in (".gitattributes", ".dockerignore", "product/app.Dockerfile",
                          "product/docker-compose.yml"):
             raw = (ROOT / relative).read_bytes()
+            self.assertFalse(raw.startswith(bom_prefixes),
+                             f"{relative} must not have a Unicode BOM")
             self.assertNotIn(b"\r", raw, f"{relative} must be LF-only")
             eol_line = subprocess.run(
                 ["git", "ls-files", "--eol", "--", relative], cwd=ROOT,
@@ -1207,13 +1226,15 @@ class OwnerValidationChecklistTests(unittest.TestCase):
         headers = re.findall(r"^## Step (\d+) — (.+)$", text, flags=re.MULTILINE)
         self.assertEqual([int(n) for n, _ in headers], list(range(1, 11)),
                          "exactly ten ordered validation steps required")
-        # DoD order pinned step-by-step: install -> first boot -> login ->
-        # (persistence probe) -> stop -> start -> backup -> repair ->
-        # browser access -> persistence.
-        expected = {1: "install", 2: "first boot", 3: "login", 5: "stop",
-                    6: "start", 7: "backup", 8: "repair",
+        # Owner-machine lifecycle is explicit and ordered: install -> first
+        # boot -> login -> Start -> Stop -> Start again -> Repair -> browser
+        # access -> persistence. Backup/restore are separate, explicitly held
+        # Owner gates rather than being represented as completed lifecycle steps.
+        expected = {1: "install", 2: "first boot", 3: "login", 5: "start",
+                    6: "stop", 7: "start", 8: "repair",
                     9: "browser access", 10: "persistence"}
         titles = {int(n): title.lower() for n, title in headers}
+        self.assertIn("start again", titles[7])
         for step, keyword in expected.items():
             self.assertIn(keyword, titles[step],
                           f"step {step} title must contain '{keyword}' (release-gate order)")
@@ -1229,10 +1250,16 @@ class OwnerValidationChecklistTests(unittest.TestCase):
                           f"checklist must explicitly exclude end-user need for: {phrase}")
         self.assertNotIn("```", plain, "no code fences: the end user types nothing")
 
-    def test_every_step_carries_numbered_evidence(self):
+    def test_lifecycle_and_separate_backup_restore_gates_carry_numbered_evidence(self):
         text = self.DOC.read_text(encoding="utf-8")
-        for n in range(1, 11):
-            self.assertIn(f"Evidence {n}", text, f"step {n} lacks a numbered evidence item")
+        for n in range(1, 14):
+            self.assertIn(f"Evidence {n}", text,
+                          f"Owner validation lacks numbered evidence item {n}")
+        self.assertIn("Backup and restore — separate mandatory Owner gate", text)
+        self.assertIn("Task Scheduler Library", text)
+        self.assertIn("Tailscale/private-exposure", text)
+        self.assertIn("WebSocket handshake", text)
+        self.assertIn("UNVERIFIED / HOLD", text)
 
     def test_gate_open_statement_and_single_failure_path(self):
         text = self.DOC.read_text(encoding="utf-8")

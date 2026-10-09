@@ -1,24 +1,31 @@
-# First-run validation checklist (Windows) — one pass, ten steps
+# First-run validation checklist (Windows) — ten lifecycle steps plus backup/restore gates
 
 **Who this is for:** the TOEFL House owner. You do **not** need any PowerShell,
 WSL, Git, Python, Bench, database, or command-line knowledge. Every action
 below is a **double-click**, a **browser click**, or **taking a screenshot**
 (`Win + Shift + S`, drag, then paste — or simply take a photo with your phone).
 
-**What its result means:** this checklist is the exact release-gate evidence
-set (`Install → first boot → login → Start → Stop → Start → Backup → Repair →
-browser access → persistence`). The Desktop release gate stays **OPEN** until
-all ten evidence items exist and engineering confirms them. If anything
-differs from the "Expected" lines, that is a defect — stop and report it
+**What its result means:** the ten-step on-machine lifecycle sequence is
+`Install → first boot → login → Start → Stop → Start again → Repair → browser
+login → persistence`. Backup and restore are additional mandatory Owner gates
+(Evidence 11–12 below); the later private-network/Tailscale check is
+Evidence 13. None may be inferred from the ten-step lifecycle.
+The Desktop release gate stays **OPEN** until the lifecycle, backup/restore,
+Task Scheduler, and other applicable Owner evidence is recorded and engineering
+confirms it. If anything differs from the "Expected" lines, stop and report it
 (see "If something fails").
 
-**Validation status:** this document describes expected results; it is not
-proof that a Windows installation or Owner lifecycle has passed. The
-`product-image.yml` workflow checks a fresh Windows-style Git worktree and
-simulates a stale CRLF/BOM worktree, but that CI check does not validate Docker
-Desktop, the Owner's real data, Task Scheduler, login, backup recovery,
-Tailscale, or a real Windows lifecycle. Record those results from the Owner PC
-and keep the Desktop release gate open until engineering verifies them.
+**Validation status (2026-10-09):** **UNVERIFIED** — no actual Windows Owner
+installation/lifecycle, browser login, backup/readability/restore rehearsal,
+Task Scheduler, key-custody ceremony, or Tailscale/private-exposure evidence
+has been supplied. Backup/restore is additionally **HOLD** because the Owner's
+retention choice remains unresolved; do not run the helper, cleanup/deletion, or
+activation while that hold is open. This document describes expected results;
+it is not proof of a Windows installation or Owner lifecycle. The
+`product-image.yml` workflow's Windows worktree check is CI evidence only and
+does not validate Docker Desktop, Owner data, Task Scheduler, real login,
+backup recovery, Tailscale, or a real Windows lifecycle. Record those results
+from the Owner PC; production authorization remains **REJECTED**.
 
 ---
 
@@ -111,25 +118,64 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
   password or recovery key. If a separate Course Owner account cannot be
   created/authenticated, stop; do not proceed using Administrator.
 
-## Step 5 — Stop
+## Step 5 — Start
+
+- **Action:** after the first login, double-click `Start TOEFL House ERP.cmd`
+  while the installation is already running. This verifies the daily Start
+  launcher is idempotent on a healthy stack; do not run a shell command.
+- **Expected:** it checks all service health, opens
+  `http://127.0.0.1:8000`, and closes its window.
+- **Evidence 5:** screenshot of the Course Owner desk opened by Start.
+
+## Step 6 — Stop
 
 - **Action:** double-click `Stop TOEFL House ERP.cmd`.
 - **Expected:** it says "TOEFL House ERP has stopped." and the window closes
   by itself. The browser page will no longer load (that is correct).
-- **Evidence 5:** screenshot of the stopped message (or a photo of the
+- **Evidence 6:** screenshot of the stopped message (or a photo of the
   refreshed browser showing the page no longer loads).
 
-## Step 6 — Start
+## Step 7 — Start again
 
-- **Action:** double-click `Start TOEFL House ERP.cmd`, wait (usually 1–5
-  min; it first checks a few seconds whether the app has been updated).
-- **Expected:** it waits, then opens the browser at `http://127.0.0.1:8000`
-  and closes its window by itself.
-- **Evidence 6:** login as the Course Owner created in Step 4; screenshot of
-  the desk **and** My Profile still showing **Full Name: Owner** (the mark
-  survived a stop).
+- **Action:** double-click `Start TOEFL House ERP.cmd` again after Step 6;
+  wait while it checks services and opens the browser.
+- **Expected:** the Course Owner can sign in and the profile mark from Step 4
+  remains saved across Stop → Start.
+- **Evidence 7:** screenshot of the desk and My Profile still showing
+  **Full Name: Owner** (the mark survived the restart).
 
-## Step 7 — Backup
+## Step 8 — Repair
+
+- **Action:** double-click `Repair TOEFL House ERP.cmd`, wait (a few minutes).
+- **Expected:** it restarts services, waits, then opens the browser and says
+  "Repair complete". It never deletes data.
+- **Also true after a PC or Docker Desktop restart:** the ERP comes back by
+  itself the next time Docker Desktop runs; if anything still misbehaves after
+  a restart, this same Repair script is the one recovery path. If it cannot
+  finish, it now shows which service is not up (a short service list plus the
+  last log lines) so the problem can be reported without guessing.
+- **Evidence 8:** screenshot of the Repair window's "Repair complete" message
+  (take it before pressing a key to close).
+
+## Step 9 — Browser access after repair
+
+- **Action:** in the browser it opened, log in as the dedicated Course Owner
+  created in Step 4.
+- **Expected:** the desk loads normally.
+- **Evidence 9:** screenshot of the desk after login.
+
+## Step 10 — Persistence
+
+- **Action:** open the Course Owner's **My Profile** again.
+- **Expected:** **Full Name: Owner** is still there after the Stop → Start →
+  Repair cycle. The backup step remains intentionally unrun while the
+  preservation hold is active; after the Owner resolves the hold and the
+  implementation/docs agree, repeat this persistence check after the
+  separately authorized backup run.
+- **Evidence 10:** screenshot of My Profile showing **Owner**. Backup/restore
+  and downstream activation evidence remain UNVERIFIED while the hold is open.
+
+## Backup and restore — separate mandatory Owner gate (currently HOLD)
 
 - **Before backup:** sign in as the dedicated Course Owner from Step 4 (not
   Administrator). In **Configuration desk → Backup & Recovery**, create the
@@ -196,56 +242,56 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
   copies. Those
   unit/static checks do not execute Docker, Windows, GPG against real backup
   data, Task Scheduler, Owner key custody, or a real backup/restore.
-- **Schedule dependency:** the daily Windows task runs as the interactive
-  user who registered it; that user session and Docker Desktop/server must be
-  available for the task to run. Confirm this on the Owner PC; CI does not
-  qualify Windows Task Scheduler.
-- **Evidence 7:** screenshot of the printed separate-drive path and the
-  four-artifact set/manifest in File Explorer. Do not send the backup, private
-  key, decrypted site config, or any passwords as evidence. A separate local
-  drive on the same PC is the current requirement; off-site/NAS/second-device/
-  cloud copies are deferred future scope.
+- **Owner Task Scheduler check (after the first successful backup registers
+  the task):** open Windows **Task Scheduler → Task Scheduler Library** and
+  find `TOEFL House ERP Backup`. Confirm it is enabled, runs daily at the
+  Owner-approved local time, and uses the same interactive Windows account
+  that can use Docker Desktop. Do not change its action or identity. Keep that
+  account signed in and Docker Desktop/server available through the next
+  scheduled run; confirm **Last Run Result** is `0x0` and a new set/manifest
+  passes the same integrity checks. Do not click **Run** to simulate the
+  schedule. A CI fixture does not qualify Task Scheduler.
+- **Evidence 11:** redacted screenshot(s) of the separate-drive path and
+  four-artifact set/manifest, plus Task Scheduler's task name, enabled state,
+  daily time, interactive account, and successful scheduled-run result. Do not
+  send the backup, private key, decrypted site config, or any passwords as
+  evidence. A separate local drive on the same PC is the current requirement;
+  off-site/NAS/second-device/cloud copies are deferred future scope.
 
-## Step 8 — Repair
 
-- **Action:** double-click `Repair TOEFL House ERP.cmd`, wait (a few minutes).
-- **Expected:** it restarts services, waits, then opens the browser and says
-  "Repair complete". It never deletes data.
-- **Also true after a PC or Docker Desktop restart:** the ERP comes back by
-  itself the next time Docker Desktop runs; if anything still misbehaves after
-  a restart, this same Repair script is the one recovery path. If it cannot
-  finish, it now shows which service is not up (a short service list plus the
-  last log lines) so the problem can be reported without guessing.
-- **Evidence 8:** screenshot of the Repair window's "Repair complete" message
-  (take it before pressing a key to close).
+### Restore rehearsal (only after the backup gate is released)
 
-## Step 9 — Browser access after repair
-
-- **Action:** in the browser it opened, log in as the dedicated Course Owner
-  created in Step 4.
-- **Expected:** the desk loads normally.
-- **Evidence 9:** screenshot of the desk after login.
-
-## Step 10 — Persistence
-
-- **Action:** open the Course Owner's **My Profile** again.
-- **Expected:** **Full Name: Owner** is still there after the Stop → Start →
-  Repair cycle. The backup step remains intentionally unrun while the
-  preservation hold is active; after the Owner resolves the hold and the
-  implementation/docs agree, repeat this persistence check after the
-  separately authorized backup run.
-- **Evidence 10:** screenshot of My Profile showing **Owner**. Backup/restore
-  and downstream activation evidence remain UNVERIFIED while the hold is open.
+- **Status:** **UNVERIFIED / HOLD.** Do not perform this destructive rehearsal
+  while the Owner retention decision is unresolved or before a verified backup
+  exists on the separate fixed local drive.
+- **Action after authorization:** follow
+  [`docs/engineering/LAUNCH-RUNBOOK.md` §7](../../docs/engineering/LAUNCH-RUNBOOK.md)
+  exactly. Do not bypass `product/restore.py` with direct Bench/Frappe CLI
+  commands. Verify the manifest and all four artifact hashes/sizes and
+  encryption packets; recover the site-config key on the trusted Owner host;
+  quiesce writers; stage the existing public/private file trees; restore via
+  the product adapter; restart; and verify representative native records and
+  public/private files, including that post-backup markers are absent. Preserve
+  the original encrypted source set. Record the date, set, checks, elapsed
+  recovery time and outcome; production authorization stays **REJECT**.
+- **Evidence 12:** a redacted checklist/rehearsal record showing integrity,
+  decryption, data/file checks, elapsed time and result. Never send a backup,
+  private key, decrypted site config, password or recovery secret.
 
 ---
 
 ## Finishing
 
-Send engineering: one message/email containing **Evidence 1–10** (password
-and recovery key covered/omitted wherever they appear), plus your Windows version and the date
-you ran this. Engineering maps the ten items onto the release-gate steps and
-closes the **Desktop release gate**, which is OPEN until exactly this evidence
-set is confirmed.
+Send engineering: one message/email containing **Evidence 1–10** for the
+non-destructive Windows lifecycle, plus your Windows version and the date you
+ran this. Evidence 11–12 are required separately only after the Owner resolves
+the retention hold and authorizes the backup/restore rehearsal; do not run
+those steps while the hold is open. Send Evidence 13 only after the actual
+Tailscale/private-exposure check. Cover passwords and omit recovery keys,
+backups, and decrypted configuration wherever evidence is captured. The
+**Desktop release gate remains OPEN** until all applicable lifecycle,
+backup/restore, Task Scheduler, network, and Owner evidence is independently
+confirmed; a CI result cannot close the Owner-machine gate.
 
 ## Later: switching on real operation (once, not part of this checklist)
 
@@ -269,10 +315,31 @@ reach it over that private network: Tailscale is installed on the central PC
 and staff PCs. The supported Tailscale Serve setup has separate web and
 `/socket.io` routes on the central PC (written out in the launch runbook
 section "Multi-user access (central server + Tailscale)") so realtime requests
-use the same HTTPS origin. Access is limited to your Tailscale network
-members only; no firewall rule or public address is involved. CI does not run
-Tailscale Serve or prove the actual tailnet/WebSocket path; record that
-real Owner-PC check separately.
+use the same HTTPS origin. Access is intended to be limited to your Tailscale
+network members only; no firewall rule or public address is involved. CI does
+not run Tailscale Serve or prove the actual tailnet/WebSocket path.
+
+### Evidence 13 — private network and exposure (UNVERIFIED until actually checked)
+
+1. On the central PC, follow
+   [`docs/engineering/LAUNCH-RUNBOOK.md` §6](../../docs/engineering/LAUNCH-RUNBOOK.md)
+   to configure Serve for the web port and `/socket.io`. Do not enable Funnel,
+   router port forwarding, or a public firewall rule.
+2. From a separate authorized staff PC that is joined to the Owner's tailnet,
+   open the central PC's HTTPS tailnet name and sign in with that staff
+   member's own ERPNext User. In the browser's developer tools, confirm the
+   Socket.IO WebSocket handshake succeeds (HTTP `101`) and that an ordinary
+   realtime desk update arrives without refreshing the page.
+3. On a device not joined to the tailnet (for example, a phone with Wi-Fi and
+   Tailscale both off), confirm the same address does not load. On the central
+   PC, confirm `tailscale serve status` lists only the intended web and
+   `/socket.io` routes, and `tailscale funnel status` reports that Funnel is
+   not enabled.
+4. **Evidence 13:** redacted Serve status plus screenshots/notes of the
+   authorized-client sign-in, successful WebSocket/realtime check, and
+   non-tailnet failure. Do not expose passwords, private keys, or public
+   tunnels. If this topology is not deployed, leave the gate **UNVERIFIED**;
+   CI proxy tests are not a substitute.
 
 ## If something fails
 

@@ -134,6 +134,9 @@ class OwnerOperationsCommandTests(unittest.TestCase):
         backup_resolver = ast.unparse(names["_validated_governing_owner_operations"])
         self.assertIn("_owner_policy_validation_is_current", backup_resolver,
                       "runtime backup policy must require current validation evidence")
+        public_resolver = ast.unparse(names["governing_owner_operations"])
+        self.assertIn("_validated_governing_owner_operations", public_resolver,
+                      "no public policy resolver may bypass current validation evidence")
         audit_tree = ast.parse(AUDIT.read_text(encoding="utf-8"))
         authorities = next(ast.literal_eval(node.value) for node in audit_tree.body
                            if isinstance(node, ast.Assign)

@@ -78,9 +78,10 @@ jobs:
             echo "::notice title=Node tarball::v${node_version} linux-x64 sha256 ${live} (recorded; matrix pin pending)"
           fi
       - name: Record base image resolved digest
-        # The Python base image is pinned by exact patch tag; the registry's
-        # resolved digest for that tag is recorded per build so the pin's
-        # actual content is traceable (the tag is immutable once published).
+        # The Python base image is pinned by exact patch tag; record the
+        # registry-resolved digest for traceability. This does not turn the
+        # tag into a digest pin or claim a bit-for-bit reproducible image;
+        # remaining unlocked inputs are listed in the canonical matrix.
         run: |
           set -euo pipefail
           base=$(python3 -c "
@@ -1376,6 +1377,11 @@ jobs:
           for f in rehearse-activate.txt perf-baseline.json; do
             if [ -f "$f" ]; then echo "::error::marker present: $f"; else echo "::error::marker absent: $f"; fi
           done
+          # bootstrap prints only a safe exception class/exit code on native
+          # site-creation failure; it never forwards Frappe diagnostics or
+          # stdin secrets. Surface its short tail so first-boot failures have
+          # an actionable, secret-free cause in the check annotations.
+          docker compose logs --tail 3 bootstrap 2>&1 | tail -3 | sed 's/^/::error::bootstrap::/' || true
           docker compose logs --tail 3 web 2>&1 | tail -3 | sed 's/^/::error::web::/' || true
 
   windows-worktree-eol:
@@ -1421,7 +1427,8 @@ jobs:
               Get-ChildItem -LiteralPath $sourcePath -File -Recurse -Force |
                 Where-Object { $textExtensions -contains $_.Extension.ToLowerInvariant() } |
                 ForEach-Object {
-                  $relative = $_.FullName.Substring($PWD.Path.TrimEnd('\\').Length + 1).Replace('\\', '/')
+                  $rootPath = $PWD.Path.TrimEnd([char[]]@('\', '/'))
+                  $relative = $_.FullName.Substring($rootPath.Length + 1).Replace('\', '/')
                   [void]$staleTargetList.Add($relative)
                 }
             } elseif ($textExtensions -contains ([System.IO.Path]::GetExtension($sourcePath).ToLowerInvariant())) {
@@ -1450,6 +1457,17 @@ jobs:
           $body = [System.IO.File]::ReadAllBytes($perfPath)
           [byte[]]$withBom = ([byte[]](0xEF, 0xBB, 0xBF)) + $body
           [System.IO.File]::WriteAllBytes($perfPath, $withBom)
+          # Prove the fixture is physical bytes, not an attribute-only
+          # simulation: this exact Docker COPY input begins UTF-8 BOM + CRLF.
+          $staleBytes = [System.IO.File]::ReadAllBytes($perfPath)
+          if ($staleBytes.Length -lt 5 -or $staleBytes[0] -ne 0xEF -or
+              $staleBytes[1] -ne 0xBB -or $staleBytes[2] -ne 0xBF) {
+            throw "stale worktree simulation failed: UTF-8 BOM bytes are absent"
+          }
+          $staleText = $strict.GetString($staleBytes, 3, $staleBytes.Length - 3)
+          if (-not $staleText.Contains("`r`n")) {
+            throw "stale worktree simulation failed: physical CRLF bytes are absent"
+          }
           $before = git ls-files --eol -- product/perf_baseline.py
           if ($before -notmatch "w/crlf") { throw "stale worktree simulation failed: $before" }
 
@@ -1460,7 +1478,9 @@ jobs:
           if ($normalizerExit -ne 10) {
             throw "expected normalizer exit 10 for repaired CRLF/BOM files, got $normalizerExit"
           }
-          python tools/foundation/annotated_step.py "Windows stale-worktree EOL and packaging contract" -- python -m unittest tests.foundation.test_product_packaging
+          python tools/foundation/annotated_step.py "Windows normalized physical-byte EOL contract" -- python -m unittest tests.foundation.test_product_packaging.LineEndingContract
+          if ($LASTEXITCODE -ne 0) { throw "normalized physical-byte EOL tests failed with exit $LASTEXITCODE" }
+          python tools/foundation/annotated_step.py "Windows normalized stale-worktree packaging suite" -- python -m unittest tests.foundation.test_product_packaging
           if ($LASTEXITCODE -ne 0) { throw "normalized packaging tests failed with exit $LASTEXITCODE" }
 
           & $windowsPowerShell -NoProfile -ExecutionPolicy Bypass -File $normalizer
