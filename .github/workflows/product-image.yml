@@ -151,6 +151,12 @@ jobs:
           checkpoint="activation refusal before any backup"
           set +e; act activate --confirm toeflhouse.localhost; rc=$?; set -e
           test "$rc" = 2  # refused: no backup yet
+          checkpoint="synthetic uploaded-file markers (public and private)"
+          file_marker="ERP-RESTORE-FILE-${GITHUB_RUN_ID}"
+          docker compose exec -T -e CI_FILE_MARKER="$file_marker" web sh -eu -c '
+            printf "%s\n" "$CI_FILE_MARKER" > sites/toeflhouse.localhost/public/files/product-image-restore-marker.txt
+            printf "%s\n" "$CI_FILE_MARKER" > sites/toeflhouse.localhost/private/files/product-image-restore-marker.txt
+          '
           checkpoint="plain native backup (database, public files, private files)"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
           echo "::notice title=Backup rehearsal::full database/files/private-files backup created"
@@ -200,15 +206,29 @@ jobs:
           echo "::notice title=Restore inputs::plain database, public-files and private-files backups present"
 
           marker="ERP-RESTORE-REHEARSAL-${GITHUB_RUN_ID}"
-          docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost console <<PY
+          # Marker I/O runs in a plain python3 process, never `bench console`: the
+          # IPython console prefixes printed values with prompts (`In [n]: False`),
+          # and command substitution discards its exit status, so the earlier
+          # anchored `^False$` check could not reliably report the marker state.
+          checkpoint="restore: pre-backup marker creation"
+          docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - "$marker" > marker-create.txt 2>&1 <<'PY'
+          import sys
+
           import frappe
-          marker = "$marker"
+
+          SITE = "toeflhouse.localhost"
+          SITES = "/home/frappe/bench/sites"
+          marker = sys.argv[1]
+          frappe.init(site=SITE, sites_path=SITES)
+          frappe.connect()
           if not frappe.db.exists("ToDo", {"description": marker}):
               doc = frappe.get_doc({"doctype": "ToDo", "description": marker, "status": "Open"})
               doc.insert(ignore_permissions=True)
               frappe.db.commit()
-          print(marker)
+          print("RESULT marker_created=%s" % bool(frappe.db.exists("ToDo", {"description": marker})))
+          frappe.destroy()
           PY
+          grep -q '^RESULT marker_created=True$' marker-create.txt || { echo "::error title=Restore marker::pre-backup marker was not created"; tail -n 20 marker-create.txt; exit 1; }
 
           checkpoint="restore: credential inputs (values masked, never printed)"
           cred="$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt)"
@@ -258,8 +278,12 @@ jobs:
           PY
           probe_rc=$?
           set -e
-          grep '^PROBE ' restore-gate-probes.txt | sed 's/^PROBE /::notice title=Restore gate probe::/' || true
-          echo "::notice title=Restore gate probes::exit=${probe_rc}"
+          probe_summary="$(grep '^PROBE ' restore-gate-probes.txt | sed 's/^PROBE //' | tr '\n' ' ' | cut -c1-900)"
+          echo "::notice title=Restore gate probes::exit=${probe_rc} ${probe_summary}"
+          if ! grep -q '^PROBE marker_present_before_restore=True$' restore-gate-probes.txt; then
+            echo "::error title=Restore precondition::the post-backup marker is not present before the restore; the post-restore absence check would be vacuous"
+            exit 1
+          fi
 
           # Quiesce background writers before replacing the database. Web stays up for
           # this restore call (unchanged from main) so the failure reproduces as-is.
@@ -293,14 +317,32 @@ jobs:
           done
           restore_elapsed="$(($(date +%s)-restore_start))"
           checkpoint="restore: post-restore marker probe"
-          marker_after="$(docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost console <<PY
+          docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - "$marker" > marker-after.txt 2>&1 <<'PY'
+          import sys
+
           import frappe
-          print(bool(frappe.db.exists("ToDo", {"description": "$marker"})))
+
+          marker = sys.argv[1]
+          frappe.init(site="toeflhouse.localhost", sites_path="/home/frappe/bench/sites")
+          frappe.connect()
+          print("RESULT marker_after_present=%s" % bool(frappe.db.exists("ToDo", {"description": marker})))
+          frappe.destroy()
           PY
-          )"
-          printf '%s\n' "$marker_after" | grep -q '^False$'
+          if ! grep -q '^RESULT marker_after_present=False$' marker-after.txt; then
+            echo "::error title=Restore rehearsal::post-backup marker still present or probe failed: $(tr '\r\n' '  ' < marker-after.txt | cut -c1-600)"
+            exit 1
+          fi
+          # Uploaded files: the synthetic public and private markers written before the
+          # plain backup must come back byte-for-byte from the restored backup.
+          for scope in public private; do
+            restored_file="$(docker compose exec -T web cat "sites/toeflhouse.localhost/$scope/files/product-image-restore-marker.txt")"
+            if [ "$restored_file" != "$file_marker" ]; then
+              echo "::error title=Restore file marker::${scope} uploaded-file marker missing or different after restore"
+              exit 1
+            fi
+          done
           test "$restore_elapsed" -lt 28800
-          echo "::notice title=Restore rehearsal::restored successfully in ${restore_elapsed}s; post-backup marker absent"
+          echo "::notice title=Restore rehearsal::restored in ${restore_elapsed}s; post-backup DB marker absent; public and private uploaded-file markers restored"
 
           checkpoint="post-restore site-mode activation"
           act activate --confirm toeflhouse.localhost | tee activate.txt
