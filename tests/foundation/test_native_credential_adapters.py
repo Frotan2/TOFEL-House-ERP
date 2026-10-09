@@ -292,8 +292,14 @@ class NativeProductBackupDiagnosticsTests(unittest.TestCase):
         summary = adapter.safe_failure_summary(error)
         self.assertIn("backup diagnostic code: gpg-database-symmetric-packet-missing", summary)
         self.assertNotIn("synthetic private path", summary)
+        error.safe_category = "no-valid-openpgp-data"
+        self.assertIn("backup diagnostic category: no-valid-openpgp-data",
+                      adapter.safe_failure_summary(error))
         error.safe_code = "gpg-database-/private/path"
-        self.assertNotIn("backup diagnostic code:", adapter.safe_failure_summary(error))
+        error.safe_category = "synthetic private data"
+        summary = adapter.safe_failure_summary(error)
+        self.assertNotIn("backup diagnostic code:", summary)
+        self.assertNotIn("backup diagnostic category:", summary)
 
     def test_backup_failure_summary_never_surfaces_system_exit_text(self):
         adapter = load_tool_module(

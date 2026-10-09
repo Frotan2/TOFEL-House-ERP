@@ -41,9 +41,11 @@ BACKUP_SET_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}\Z")
 class BackupInputError(ValueError):
     """The product backup preconditions or verification are incomplete."""
 
-    def __init__(self, message: str, *, safe_code: str | None = None):
+    def __init__(self, message: str, *, safe_code: str | None = None,
+                 safe_category: str | None = None):
         super().__init__(message)
         self.safe_code = safe_code
+        self.safe_category = safe_category
 
 
 def _sha256(path: Path) -> str:
@@ -88,6 +90,25 @@ def _staged_file(raw_path, staging_dir: Path, role: str) -> Path:
     return path
 
 
+def _gpg_diagnostic_category(output: bytes) -> str:
+    """Map known GPG errors to non-sensitive categories; never return raw text."""
+    lowered = output.lower()
+    categories = (
+        (b"no valid openpgp data", "no-valid-openpgp-data"),
+        (b"invalid packet", "invalid-packet"),
+        (b"no such file or directory", "input-missing"),
+        (b"permission denied", "permission-denied"),
+        (b"bad passphrase", "bad-passphrase"),
+        (b"invalid option", "invalid-option"),
+        (b"unknown option", "invalid-option"),
+        (b"operation not permitted", "operation-not-permitted"),
+        (b"inappropriate ioctl", "terminal-unavailable"),
+        (b"no pinentry", "pinentry-unavailable"),
+        (b"no gpg-agent", "agent-unavailable"),
+    )
+    return next((category for marker, category in categories if marker in lowered), "unclassified")
+
+
 def _assert_gpg_encrypted(path: Path, role: str) -> None:
     role_code = {
         "database": "database",
@@ -105,18 +126,23 @@ def _assert_gpg_encrypted(path: Path, role: str) -> None:
         raise BackupInputError(
             f"native Frappe {role} artifact could not be checked for GPG encryption",
             safe_code=f"gpg-{role_code}-probe-error",
+            safe_category="probe-error",
         ) from None
     output = (result.stdout or b"") + (result.stderr or b"")
     if result.returncode != 0:
-        code = result.returncode if type(result.returncode) is int and 0 <= result.returncode <= 255 else "other"
+        code = (result.returncode
+                if type(result.returncode) is int and 0 <= result.returncode <= 255
+                else "other")
         raise BackupInputError(
             f"native Frappe {role} artifact could not be checked for GPG encryption",
             safe_code=f"gpg-{role_code}-check-exit-{code}",
+            safe_category=_gpg_diagnostic_category(output),
         )
     if b":symkey enc packet:" not in output:
         raise BackupInputError(
             f"native Frappe {role} artifact is not verified as GPG-encrypted",
             safe_code=f"gpg-{role_code}-symmetric-packet-missing",
+            safe_category=_gpg_diagnostic_category(output),
         )
 
 

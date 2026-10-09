@@ -31,6 +31,15 @@ def safe_failure_summary(error: BaseException) -> str:
                     r"symmetric-packet-missing|check-exit-(?:other|\d{1,3}))",
                     safe_code)):
             details.append("backup diagnostic code: " + safe_code)
+        safe_category = getattr(error, "safe_category", None)
+        if (isinstance(safe_category, str)
+                and safe_category in {
+                    "probe-error", "no-valid-openpgp-data", "invalid-packet",
+                    "input-missing", "permission-denied", "bad-passphrase",
+                    "invalid-option", "operation-not-permitted", "terminal-unavailable",
+                    "pinentry-unavailable", "agent-unavailable", "unclassified",
+                }):
+            details.append("backup diagnostic category: " + safe_category)
     if name == "CommandFailedError":
         # Pinned Frappe stores subprocess stderr in `.err` and stdout in `.out`.
         # MariaDB/MySQL clients do not use one consistent stream for every

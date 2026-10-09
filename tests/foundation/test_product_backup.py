@@ -298,6 +298,17 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         for _arguments, kwargs in encryption_calls:
             self.assertEqual(kwargs["input"], (self.key + "\n").encode("ascii"))
 
+    def test_gpg_packet_error_category_is_safe_and_does_not_retain_raw_output(self):
+        with patch.object(self.backup.subprocess, "run", return_value=types.SimpleNamespace(
+                returncode=2,
+                stdout=b"gpg: no valid OpenPGP data found for /private/synthetic-secret",
+                stderr=b"")):
+            with self.assertRaises(self.backup.BackupInputError) as caught:
+                self.backup._assert_gpg_encrypted(self.old_database, "database")
+        self.assertEqual(caught.exception.safe_code, "gpg-database-check-exit-2")
+        self.assertEqual(caught.exception.safe_category, "no-valid-openpgp-data")
+        self.assertNotIn("synthetic-secret", str(caught.exception))
+
     def test_cli_failure_diagnostics_withhold_native_secret_exceptions(self):
         secret = "synthetic-gpg-or-mariadb-secret"
         for failure in (RuntimeError("traceback leaked " + secret), SystemExit(secret)):
@@ -315,6 +326,7 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         with self.assertRaises(self.backup.BackupInputError) as caught:
             self._run_adapter()
         self.assertEqual(caught.exception.safe_code, "gpg-database-symmetric-packet-missing")
+        self.assertEqual(caught.exception.safe_category, "unclassified")
         self.assertEqual(self.old_database.read_bytes(), self.old_database_bytes)
         self.assertEqual(self.old_config.read_bytes(), self.old_config_bytes)
         self.assertEqual(self.backups.delete_temp_backups, self.original_cleanup)

@@ -743,6 +743,8 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn("static_root_exists=", browser)
         self.assertIn("::error title=Asset route diagnostic::", browser)
         self.assertIn("-e PYTHONPATH=/product", browser)
+        self.assertIn("-w /home/frappe/bench/sites", browser)
+        self.assertIn("wsgi_import_frames=", browser)
         self.assertNotIn("error.err", browser)
         debug_start = browser.index('asset_debug="$(docker compose exec')
         debug_end = browser.index('                  exit 1', debug_start)

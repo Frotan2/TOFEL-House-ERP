@@ -594,7 +594,7 @@ jobs:
               if [ "$code" != "200" ]; then
                   echo "::error::login page asset ${code}: ${asset}"
                   relative_asset="${asset#/assets/}"
-                  asset_debug="$(docker compose exec -T -e PYTHONPATH=/product web /home/frappe/bench/env/bin/python - "$relative_asset" <<'PY' 2>&1 || true
+                  asset_debug="$(docker compose exec -T -w /home/frappe/bench/sites -e PYTHONPATH=/product web /home/frappe/bench/env/bin/python - "$relative_asset" <<'PY' 2>&1 || true
           import pathlib, re, sys, urllib.error, urllib.request
           relative = sys.argv[1]
           if (not re.fullmatch(r"[A-Za-z0-9_./-]+", relative)
@@ -608,6 +608,17 @@ jobs:
               if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", name):
                   name = "Exception"
               print("wsgi_import=failed:" + name)
+              code = getattr(error, "errno", None)
+              if type(code) is int and 0 <= code <= 255:
+                  print("wsgi_import_errno=" + str(code))
+              import traceback
+              frames = traceback.extract_tb(error.__traceback__)
+              safe_frames = [
+                  f"{pathlib.PurePath(frame.filename).name}:{frame.name}:{frame.lineno}"
+                  for frame in frames[-4:]
+              ]
+              if safe_frames:
+                  print("wsgi_import_frames=" + ",".join(safe_frames))
               raise SystemExit(0)
           root = pathlib.Path(wsgi.sites_path)
           asset_root = root / "assets"
@@ -629,7 +640,7 @@ jobs:
           )"
                   while IFS= read -r debug_line; do
                     case "$debug_line" in
-                      asset_path=invalid|wsgi_import=*|static_root_exists=*|static_root_is_symlink=*|asset_exists=*|asset_is_symlink=*|container_asset_http=*)
+                      asset_path=invalid|wsgi_import=*|wsgi_import_errno=*|wsgi_import_frames=*|static_root_exists=*|static_root_is_symlink=*|asset_exists=*|asset_is_symlink=*|container_asset_http=*)
                         echo "::error title=Asset route diagnostic::${debug_line}"
                         ;;
                     esac
