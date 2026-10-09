@@ -114,19 +114,22 @@ class NativeSiteSetupAdapterTests(unittest.TestCase):
 
 
 class NativeSiteCreationDiagnosticsTests(unittest.TestCase):
-    def test_child_failure_marker_exposes_only_a_valid_exception_class(self):
+    def test_child_failure_marker_exposes_only_type_and_numeric_errno(self):
         secrets_ = ("synthetic-root-secret", "synthetic-admin-secret",
                     "synthetic-db-secret")
         stderr = ("Traceback (most recent call last):\n"
-                  "TOEFL_NATIVE_SITE_EXCEPTION=OperationalError\n"
+                  "TOEFL_NATIVE_SITE_EXCEPTION=OSError\n"
+                  "TOEFL_NATIVE_SITE_ERRNO=2\n"
                   + "database password was " + secrets_[0])
         child = mock.Mock(returncode=1, stdout="child output " + secrets_[1],
                           stderr=stderr)
         with mock.patch.object(bootstrap.subprocess, "run", return_value=child) as run:
             with self.assertRaises(bootstrap.NativeSiteCreationError) as caught:
                 bootstrap.create_site("diagnostic.localhost", *secrets_)
-        self.assertEqual(caught.exception.failure_type, "OperationalError")
-        self.assertIn("OperationalError", str(caught.exception))
+        self.assertEqual(caught.exception.failure_type, "OSError")
+        self.assertEqual(caught.exception.failure_errno, 2)
+        self.assertIn("OSError", str(caught.exception))
+        self.assertIn("OS error code: 2", str(caught.exception))
         for secret in secrets_:
             self.assertNotIn(secret, str(caught.exception))
         argv = run.call_args.args[0]
@@ -144,6 +147,29 @@ class NativeSiteCreationDiagnosticsTests(unittest.TestCase):
             bootstrap._native_site_failure_type(
                 "TOEFL_NATIVE_SITE_EXCEPTION=Bad Type"),
             None)
+        self.assertEqual(
+            bootstrap._native_site_failure_errno(
+                "TOEFL_NATIVE_SITE_ERRNO=2\nTOEFL_NATIVE_SITE_ERRNO=13"),
+            None)
+        self.assertEqual(
+            bootstrap._native_site_failure_errno(
+                "TOEFL_NATIVE_SITE_ERRNO=999999"),
+            None)
+
+    def test_parent_os_error_exposes_only_validated_numeric_code(self):
+        secrets_ = ("synthetic-root-secret", "synthetic-admin-secret",
+                    "synthetic-db-secret")
+        error = PermissionError(13, "secret path /synthetic/private", "/synthetic/private")
+        with mock.patch.object(bootstrap.subprocess, "run", side_effect=error):
+            with self.assertRaises(bootstrap.NativeSiteCreationError) as caught:
+                bootstrap.create_site("diagnostic.localhost", *secrets_)
+        self.assertEqual(caught.exception.failure_type, "PermissionError")
+        self.assertEqual(caught.exception.failure_errno, 13)
+        self.assertIn("OS error code: 13", str(caught.exception))
+        self.assertNotIn("secret path", str(caught.exception))
+        self.assertNotIn("/synthetic/private", str(caught.exception))
+        for secret in secrets_:
+            self.assertNotIn(secret, str(caught.exception))
 
     def test_product_bootstrap_log_surfaces_safe_type_without_child_text(self):
         output, errors = io.StringIO(), io.StringIO()

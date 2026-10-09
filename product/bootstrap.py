@@ -130,6 +130,7 @@ def read_root_password(secrets_dir: Path = SECRETS_DIR) -> str:
 
 
 _NATIVE_SITE_FAILURE_MARKER = "TOEFL_NATIVE_SITE_EXCEPTION="
+_NATIVE_SITE_ERRNO_MARKER = "TOEFL_NATIVE_SITE_ERRNO="
 _NATIVE_EXCEPTION_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}\Z")
 
 _CREATE_SITE_SCRIPT = r'''
@@ -174,12 +175,16 @@ if initialized:
             failure = error
 
 if failure is not None:
-    # Surface only the exception's program-defined type. Its message and
-    # traceback may contain credential-bearing upstream diagnostics and stay
-    # captured by the parent process, which never forwards them.
+    # Surface only the exception's program-defined type and a numeric OS error
+    # code when available. Its message, path, and traceback may contain
+    # credential-bearing upstream diagnostics and stay captured by the parent.
     name = type(failure).__name__
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name):
         print("TOEFL_NATIVE_SITE_EXCEPTION=" + name, file=sys.stderr, flush=True)
+    if isinstance(failure, OSError):
+        code = getattr(failure, "errno", None)
+        if type(code) is int and 0 <= code <= 65535:
+            print("TOEFL_NATIVE_SITE_ERRNO=" + str(code), file=sys.stderr, flush=True)
     raise failure
 '''
 
@@ -187,16 +192,21 @@ if failure is not None:
 class NativeSiteCreationError(RuntimeError):
     """A safe site-creation failure containing no child output or credentials."""
 
-    def __init__(self, returncode: int | None, failure_type: str | None = None):
+    def __init__(self, returncode: int | None, failure_type: str | None = None,
+                 failure_errno: int | None = None):
         self.returncode = returncode
         self.failure_type = (failure_type if isinstance(failure_type, str)
                              and _NATIVE_EXCEPTION_NAME.fullmatch(failure_type)
                              else None)
+        self.failure_errno = (failure_errno if type(failure_errno) is int
+                              and 0 <= failure_errno <= 65535 else None)
         message = "secure native site creation failed"
         if returncode is not None:
             message += f" (exit {returncode})"
         if self.failure_type:
             message += f"; exception type: {self.failure_type}"
+        if self.failure_errno is not None:
+            message += f"; OS error code: {self.failure_errno}"
         message += "; sensitive diagnostics were withheld"
         super().__init__(message)
 
@@ -209,6 +219,17 @@ def _native_site_failure_type(stderr: str) -> str | None:
     if len(markers) != 1 or not _NATIVE_EXCEPTION_NAME.fullmatch(markers[0]):
         return None
     return markers[0]
+
+
+def _native_site_failure_errno(stderr: str) -> int | None:
+    """Extract one bounded numeric OS error code; never parse error text."""
+    markers = [line[len(_NATIVE_SITE_ERRNO_MARKER):]
+               for line in (stderr or "").splitlines()
+               if line.startswith(_NATIVE_SITE_ERRNO_MARKER)]
+    if len(markers) != 1 or not re.fullmatch(r"(?:0|[1-9][0-9]{0,4})", markers[0]):
+        return None
+    code = int(markers[0])
+    return code if code <= 65535 else None
 
 
 def create_site(site: str, root_password: str, admin_password: str,
@@ -250,9 +271,10 @@ def create_site(site: str, root_password: str, admin_password: str,
             check=False,
         )
     except OSError as error:
-        # Keep executable/path diagnostics out of logs; the exception class is
-        # useful and cannot contain the stdin credentials.
-        raise NativeSiteCreationError(None, type(error).__name__) from None
+        # Keep executable/path/message diagnostics out of logs; only the
+        # exception class and a validated numeric OS error code are safe.
+        raise NativeSiteCreationError(
+            None, type(error).__name__, getattr(error, "errno", None)) from None
     if result.returncode:
         # The child receives credentials on stdin. Never forward its exception,
         # argv, or captured output: only a validated, program-defined exception
@@ -260,6 +282,7 @@ def create_site(site: str, root_password: str, admin_password: str,
         raise NativeSiteCreationError(
             result.returncode,
             _native_site_failure_type(result.stderr),
+            _native_site_failure_errno(result.stderr),
         ) from None
 
 
@@ -587,8 +610,9 @@ def main() -> int:
     try:
         summary = bootstrap()
     except NativeSiteCreationError as error:
-        # Deliberately emit only the exception class produced by the child;
-        # native messages/tracebacks remain private to the captured process.
+        # Deliberately emit only a validated exception class and numeric OS
+        # error code; native messages/paths/tracebacks remain private to the
+        # captured process.
         print(str(error), file=sys.stderr)
         return 1
     print(json.dumps(summary))

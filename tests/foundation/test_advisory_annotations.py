@@ -5,7 +5,9 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "foundation"))
 from runtime_install import (ANNOTATION_MAX_LINES, ANNOTATION_TEXT_LIMIT,  # noqa: E402
-                             advisory_finding_annotations)
+                             advisory_finding_annotations,
+                             hosted_failure_annotations,
+                             safe_native_site_failure_detail)
 
 PREFIX = "::warning file=tools/foundation/runtime_install.py::"
 
@@ -16,6 +18,25 @@ def stack(py=(), npm=()):
 
 
 class AdvisoryAnnotationTests(unittest.TestCase):
+    def test_only_one_exact_sanitized_native_site_failure_is_annotated(self):
+        detail = ("Native Frappe site creation failed: secure native site creation failed "
+                  "(exit 1); exception type: OSError; OS error code: 2; "
+                  "sensitive diagnostics were withheld")
+        output = "private traceback and credentials\n" + detail + "\nraw private message"
+        self.assertEqual(safe_native_site_failure_detail(output), detail)
+        self.assertIsNone(safe_native_site_failure_detail(output + "\n" + detail))
+        self.assertIsNone(safe_native_site_failure_detail(
+            "Native Frappe site creation failed: password was leaked"))
+        lines = hosted_failure_annotations(
+            "new-site: exit 1", "new-site", safe_site_detail=detail)
+        self.assertTrue(any("OS error code: 2" in line for line in lines))
+        self.assertTrue(all("private traceback" not in line and
+                            "raw private message" not in line for line in lines))
+        self.assertFalse(any("password was leaked" in line for line in
+                             hosted_failure_annotations(
+                                 "new-site: exit 1", "new-site",
+                                 safe_site_detail="Native Frappe site creation failed: password was leaked")))
+
     def test_public_ids_are_preferred_from_aliases_and_urls(self):
         lines = advisory_finding_annotations(stack(
             py=[{"package": "pypdf", "version": "3.1", "id": "PYSEC-2099-1",

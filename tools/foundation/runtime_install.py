@@ -28,12 +28,30 @@ EXPORT_BRANCH = "product-export"
 from runtime_encryption_key import restore_key_into_config
 
 
-def hosted_failure_annotations(failure: str, last_failed_check: str | None = None) -> list[str]:
+_SAFE_NATIVE_SITE_FAILURE = re.compile(
+    r"Native Frappe site creation failed: secure native site creation failed"
+    r"(?: \(exit [0-9]{1,4}\))?"
+    r"(?:; exception type: [A-Za-z_][A-Za-z0-9_]{0,127})?"
+    r"(?:; OS error code: (?:0|[1-9][0-9]{0,4}))?"
+    r"; sensitive diagnostics were withheld\Z")
+
+
+def safe_native_site_failure_detail(output: str) -> str | None:
+    """Retain one adapter-generated, message-free native failure summary."""
+    matches = [line.strip() for line in (output or "").splitlines()
+               if _SAFE_NATIVE_SITE_FAILURE.fullmatch(line.strip())]
+    return matches[0] if len(matches) == 1 else None
+
+
+def hosted_failure_annotations(failure: str, last_failed_check: str | None = None,
+                               safe_site_detail: str | None = None) -> list[str]:
     """Single-line ``::error::`` commands for GitHub check annotations.
 
     Job logs and artifact zips EOF from this environment. Annotations are the
     only diagnostic that survives. Multi-line tails are collapsed: a library
     warning dump as an annotation is how the previous blind spot started.
+    Only the exact, validated, message-free native site-creation summary is
+    eligible as supplemental detail.
     """
     lines: list[str] = []
     if last_failed_check:
@@ -44,6 +62,10 @@ def hosted_failure_annotations(failure: str, last_failed_check: str | None = Non
     if len(text) > 700:
         text = text[:697] + "..."
     lines.append(f"::error file=tools/foundation/runtime_install.py::{text}")
+    if safe_site_detail and _SAFE_NATIVE_SITE_FAILURE.fullmatch(safe_site_detail):
+        lines.append(
+            "::error file=tools/foundation/runtime_install.py::native site diagnostic: "
+            + safe_site_detail)
     return lines
 
 
@@ -1038,9 +1060,14 @@ def main() -> int:
         if report.get("status") != "pass":
             failed_checks = [c.get("name") for c in report.get("checks", [])
                              if isinstance(c, dict) and c.get("status") == "fail"]
+            last_failed_check = failed_checks[-1] if failed_checks else None
+            site_detail = None
+            if last_failed_check and last_failed_check.startswith("new-"):
+                site_detail = safe_native_site_failure_detail(
+                    report.get("failure_output_tail") or "")
             for line in hosted_failure_annotations(
                     report.get("failure") or "runtime_install failed",
-                    failed_checks[-1] if failed_checks else None):
+                    last_failed_check, safe_site_detail=site_detail):
                 print(line, flush=True)
     return 0 if report["status"] == "pass" else 1
 
