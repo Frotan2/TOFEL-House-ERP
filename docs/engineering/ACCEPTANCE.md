@@ -10,15 +10,16 @@ readiness. **Production authorization remains REJECT.**
 The current local worktree's full Python command `python3 -m unittest discover
 -s tests -t .` ran **1,207 tests, OK**, after the latest hold wording and
 packaging-contract assertions; `git diff --check` passed. This local suite is
-not live Frappe/Docker/Owner recovery evidence. The hosted checks on PR #15's
-prior tracked head `58337b6`—before the current local-only hold clarifications—were
-Owned suite [37975034446](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37975034446)
+not live Frappe/Docker/Owner recovery evidence. Hosted checks on PR #15's prior
+tracked head `58337b6` were Owned suite
+[37975034446](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37975034446)
 and [37975039678](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37975039678)
 **PASS** (Ruff static analysis, Python test tree, Node suites), and Product image
 [37975034434](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37975034434)
-**PASS** in both the Windows stale-worktree/EOL and Linux image jobs. No local
-Ruff, Node, or Docker build was run. No Windows Owner operation or Owner
-backup/restore was run.
+**PASS** in both the Windows stale-worktree/EOL and Linux image jobs. Those runs
+pre-date the additional Owner-hold wording and contract assertions in this
+follow-up. No local Ruff, Node, or Docker build was run. No Windows Owner
+operation or Owner backup/restore was run.
 
 Hosted on merged commit `13482fe`: Product image
 [37940397957](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397957),
