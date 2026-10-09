@@ -239,7 +239,45 @@ class NativeSiteCreationDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("Traceback", errors.getvalue())
 
 
+class NativeProductBackupDiagnosticsTests(unittest.TestCase):
+    def test_backup_failure_summary_withholds_message_path_and_secrets(self):
+        adapter = load_tool_module(
+            "native_product_backup_under_test", ROOT / "tools/native/run_product_backup.py")
+        try:
+            raise PermissionError(13, "synthetic secret path", "/private/synthetic-secret")
+        except PermissionError as error:
+            summary = adapter.safe_failure_summary(error)
+        self.assertIn("exception type: PermissionError", summary)
+        self.assertIn("OS error code: 13", summary)
+        self.assertIn("frames: test_backup_failure_summary_withholds_message_path_and_secrets:",
+                      summary)
+        self.assertNotIn("synthetic secret", summary)
+        self.assertNotIn("/private", summary)
+        self.assertNotIn("Traceback", summary)
+
+    def test_backup_failure_summary_never_surfaces_system_exit_text(self):
+        adapter = load_tool_module(
+            "native_product_backup_under_test", ROOT / "tools/native/run_product_backup.py")
+        summary = adapter.safe_failure_summary(SystemExit("synthetic private detail"))
+        self.assertIn("exception type: SystemExit", summary)
+        self.assertNotIn("synthetic private detail", summary)
+
+
 class NativeHarnessAuthorityTests(unittest.TestCase):
+    def test_native_runner_stages_the_exact_canonical_owner_ledger_idempotently(self):
+        runner = load_tool_module("native_runner_under_test", ROOT / "tools/native/run_native.py")
+        canonical = ROOT / "docs/owner-decisions.json"
+        with tempfile.TemporaryDirectory() as directory:
+            lab = Path(directory) / "lab"
+            target = runner.stage_owner_decision_ledger(lab)
+            self.assertEqual(target, lab / "docs/owner-decisions.json")
+            self.assertEqual(target.read_bytes(), canonical.read_bytes())
+            self.assertEqual(runner.stage_owner_decision_ledger(lab), target)
+            target.write_text("conflicting ledger", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "conflicts with the canonical copy"):
+                runner.stage_owner_decision_ledger(lab)
+            self.assertEqual(target.read_text(encoding="utf-8"), "conflicting ledger")
+
     @staticmethod
     def direct_bench_authority_calls(source: str):
         tree = ast.parse(source)

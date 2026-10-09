@@ -895,7 +895,11 @@ class BootstrapLogicContract(unittest.TestCase):
             (sites / "x.localhost" / "site_config.json").write_text("{}")
             self.assertTrue(bootstrap.site_exists("x.localhost", sites))
             self.assertFalse(bootstrap.assets_present(sites))
-            (sites / "assets" / "js").mkdir(parents=True)
+            assets = sites / "assets"
+            (assets / "js").mkdir(parents=True)
+            (assets / "css").mkdir()
+            self.assertFalse(bootstrap.assets_present(sites))
+            (assets / "assets.json").write_text("{}", encoding="utf-8")
             self.assertTrue(bootstrap.assets_present(sites))
 
     def test_built_assets_are_merged_into_the_static_root(self):
@@ -929,8 +933,12 @@ class BootstrapLogicContract(unittest.TestCase):
             (top / "site.css").write_text("css")
             sites = root / "sites"
             (sites / "assets" / "js").mkdir(parents=True)
-            (sites / "assets" / "assets.json").write_text("{}")
+            (sites / "assets" / "assets.json").write_text(json.dumps({
+                "education.bundle.js": "/assets/education/dist/js/education.bundle.NS2O3ZWO.js",
+            }), encoding="utf-8")
             (sites / "assets" / "education").mkdir(parents=True)
+            self.assertEqual(bootstrap.manifest_assets_missing(sites),
+                             ["education/dist/js/education.bundle.NS2O3ZWO.js"])
             self.assertEqual(sorted(bootstrap.public_assets_missing(sites, apps)),
                              sorted(["education/dist/js/education.bundle.NS2O3ZWO.js",
                                      "education/js/education.bundle.js",
@@ -943,8 +951,11 @@ class BootstrapLogicContract(unittest.TestCase):
             self.assertFalse((sites / "assets" / "education" / "frontend"
                               / "vite-artifact.js").exists(),
                              "the shadow top-level public must not be the sync source")
-            self.assertEqual((sites / "assets" / "assets.json").read_text(), "{}")
+            self.assertEqual(
+                json.loads((sites / "assets" / "assets.json").read_text()),
+                {"education.bundle.js": "/assets/education/dist/js/education.bundle.NS2O3ZWO.js"})
             self.assertEqual(bootstrap.public_assets_missing(sites, apps), [])
+            self.assertEqual(bootstrap.manifest_assets_missing(sites), [])
             # idempotent: a complete volume copies nothing
             self.assertEqual(bootstrap.sync_built_assets(sites, apps), [])
 

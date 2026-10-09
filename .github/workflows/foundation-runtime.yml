@@ -13,7 +13,9 @@ on:
       - tools/native/run_product_backup.py
       - tests/foundation/test_native_credential_adapters.py
       - apps/foundation_security/**
+      - apps/toefl_house/**
       - docs/engineering/foundation-version-matrix.json
+      - docs/owner-decisions.json
       # The SEC-DEPS-01 dispositions are read by tools/foundation/advisory_triage.py,
       # so any disposition change must re-run the audit that consumes it.
       - docs/engineering/evidence/sec-deps-01/**

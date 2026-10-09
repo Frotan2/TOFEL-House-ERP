@@ -87,7 +87,10 @@ elif cmd == "execute":
     log(sys.argv[1:])
     save()
 elif cmd == "build":
-    (BENCH_ROOT / "sites" / "assets" / "js").mkdir(parents=True, exist_ok=True)
+    assets = BENCH_ROOT / "sites" / "assets"
+    (assets / "js").mkdir(parents=True, exist_ok=True)
+    (assets / "css").mkdir(parents=True, exist_ok=True)
+    (assets / "assets.json").write_text("{}")
     state["build_calls"] = state.get("build_calls", 0) + 1
     log(sys.argv[1:])
     save()
@@ -275,7 +278,8 @@ class ProductLifecycleSim(unittest.TestCase):
                           "credentials-written", "installed-erpnext", "installed-education", "installed-payments",
                           "installed-hrms", "installed-foundation_security", "installed-toefl_house",
                           "migrated", "migrate-replayed", "encryption-key-initialized",
-                          "assets-built", "assets-complete", "scheduler-enabled"])
+                          "assets-built", "assets-complete", "assets-manifest-complete",
+                          "scheduler-enabled"])
         state = self.state()
         site_state = state["sites"][SITE]
         self.assertEqual(site_state["apps"],
@@ -372,7 +376,8 @@ class ProductLifecycleSim(unittest.TestCase):
         self.assertEqual(summary["actions"],
                          ["services-reachable", "sites-seeded", "redis-configured", "site-present", "apps-present",
                           "migrated", "migrate-replayed", "encryption-key-initialized",
-                          "assets-present", "assets-complete", "scheduler-enabled"])
+                          "assets-present", "assets-complete", "assets-manifest-complete",
+                          "scheduler-enabled"])
         after = (self.bench_root / "sites" / SITE / "private" / "first-run-credentials.txt").read_bytes()
         self.assertEqual(before, after, "credentials must never rotate silently")
         state = self.state()

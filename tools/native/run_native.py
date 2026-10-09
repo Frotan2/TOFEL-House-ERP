@@ -15,6 +15,20 @@ ROOT = Path(__file__).resolve().parents[2]
 EXPORT_BRANCH = 'product-export'
 
 
+def stage_owner_decision_ledger(lab_dir):
+    """Stage the canonical ledger beside the resolved disposable app export."""
+    source = ROOT / 'docs/owner-decisions.json'
+    target = Path(lab_dir) / 'docs/owner-decisions.json'
+    if target.exists() or target.is_symlink():
+        if (target.is_symlink() or not target.is_file()
+                or target.read_bytes() != source.read_bytes()):
+            raise RuntimeError('Native test bench Owner ledger conflicts with the canonical copy')
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
+    return target
+
+
 def main():
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise SystemExit('Hosted authorized branch only; no local/production execution')
@@ -114,6 +128,7 @@ def main():
             run('export-add-'+name,['git','-C',export,'add','.'])
             run('export-commit-'+name,['git','-C',export,'-c','user.name=Synthetic qualification','-c','user.email=validation@example.test','commit','-m','Exact app export '+os.environ['GITHUB_SHA']])
             bench('get-'+name,'get-app','--soft-link','--skip-assets',str(export))
+        stage_owner_decision_ledger(lab)
         run('pip-check',[lab/'tools/bin/uv','pip','check','--python',benchdir/'env/bin/python'])
         for site in ('placement-test.localhost','placement-second.localhost'):
             create_site('new-'+site,site,dbpw)

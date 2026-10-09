@@ -351,7 +351,35 @@ def missing_apps(installed: list[str], order: tuple = APP_ORDER) -> list[str]:
 
 
 def assets_present(sites_dir: Path = SITES_DIR) -> bool:
-    return (sites_dir / "assets" / "js").exists() or (sites_dir / "assets" / "css").exists()
+    assets = sites_dir / "assets"
+    return ((assets / "assets.json").is_file()
+            and (assets / "js").is_dir()
+            and (assets / "css").is_dir())
+
+
+def manifest_assets_missing(sites_dir: Path = SITES_DIR) -> list[str]:
+    """Verify every local manifest URL resolves inside the served assets root."""
+    assets = sites_dir / "assets"
+    manifest = assets / "assets.json"
+    try:
+        mappings = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return ["assets.json"]
+    if not isinstance(mappings, dict):
+        return ["assets.json"]
+
+    missing = []
+    for url in mappings.values():
+        if not isinstance(url, str) or not url.startswith("/assets/"):
+            continue
+        relative = url[len("/assets/"):]
+        parts = relative.split("/")
+        if not relative or any(part in {"", ".", ".."} for part in parts):
+            missing.append(relative or "assets.json")
+            continue
+        if not assets.joinpath(*parts).is_file():
+            missing.append(relative)
+    return sorted(set(missing))
 
 
 def _app_public(app_root: Path) -> Path | None:
@@ -639,6 +667,13 @@ def bootstrap(site: str = SITE_NAME, *, log=print) -> dict:
             f"static root): {missing_assets[:8]}{' ...' if len(missing_assets) > 8 else ''}"
         )
     actions.append("assets-complete")
+    missing_manifest_assets = manifest_assets_missing(SITES_DIR)
+    if missing_manifest_assets:
+        raise RuntimeError(
+            "served-asset 404s would occur (manifest URLs missing from the "
+            f"static root): {missing_manifest_assets[:8]}"
+        )
+    actions.append("assets-manifest-complete")
 
     # This is idempotent and also repairs a first boot that stopped after site
     # creation but before scheduler setup. The password file was already stored

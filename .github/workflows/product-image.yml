@@ -17,6 +17,7 @@ on:
       - docs/engineering/foundation-version-matrix.json
       - docs/engineering/LAUNCH-RUNBOOK.md
       - docs/PRODUCT.md
+      - docs/owner-decisions.json
   workflow_dispatch:
 
 permissions:
@@ -592,6 +593,17 @@ jobs:
               echo "asset ${code} ${asset}"
               if [ "$code" != "200" ]; then
                   echo "::error::login page asset ${code}: ${asset}"
+                  relative_asset="${asset#/assets/}"
+                  docker compose exec -T web sh -c '
+                    target="sites/assets/$1"
+                    echo "container asset target: $target"
+                    if [ -f "$target" ]; then ls -l "$target"; else echo "container asset target is absent"; fi
+                    echo "education public link: $(readlink sites/assets/education 2>/dev/null || true)"
+                    echo "resolved target: $(readlink -f "$target" 2>/dev/null || true)"
+                  ' sh "$relative_asset" || true
+                  docker compose exec -T web /home/frappe/bench/env/bin/python -c \
+                    'import wsgi; print("wsgi module:", wsgi.__file__); print("static root:", wsgi.sites_path)' || true
+                  exit 1
               fi
               test "$code" = "200"
           done
