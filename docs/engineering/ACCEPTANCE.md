@@ -143,7 +143,7 @@ existing runtime data or backups.
   / [37971945002](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37971945002)
   on the current head **PASS**. Foundation run
   [37971944970](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37971944970)
-  on `58d20fd` remains **IN PROGRESS**. Earlier Foundation run
+  on `58d20fd` **PASS**. Earlier Foundation run
   [37969450759](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37969450759)
   on `57c73b6` **PASS**. PR #13 remains open and unmerged.
 

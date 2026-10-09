@@ -703,14 +703,14 @@ class RecoveryContract(unittest.TestCase):
         # The owner deployment (D13/D15) is central server + Tailscale; the
         # runbook is the single place that states the exact supported setup,
         # and the product stays loopback-only underneath it.
-        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text()
+        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text(encoding="utf-8")
         self.assertIn("Multi-user access (central server + Tailscale)", runbook)
         self.assertIn("tailscale serve --bg 8000", runbook)
         self.assertIn("Funnel", runbook)  # the document must warn it stays off
         self.assertIn("no public port", runbook.lower())
 
     def test_runbook_owner_restore_section_is_hold_only(self):
-        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text()
+        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text(encoding="utf-8")
         start = runbook.index("## 7. Restore and recovery — HOLD")
         end = runbook.index("## 8. Record read-only status", start)
         held = runbook[start:end]
@@ -844,7 +844,7 @@ class RecoveryContract(unittest.TestCase):
         # disposable CI site. Owner guidance must remain read-only until a
         # separately approved isolated target and complete verifier exist.
         workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
-        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text()
+        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text(encoding="utf-8")
         self.assertIn('restore_stage="$site_root/private/.ci-restore-files-$GITHUB_RUN_ID"', workflow)
         self.assertIn('restore_stage="$site/private/.ci-restore-files-upgrade-$GITHUB_RUN_ID"', workflow)
         self.assertIn('mv "$files_dir" "$restore_stage/$scope-files"', workflow)
