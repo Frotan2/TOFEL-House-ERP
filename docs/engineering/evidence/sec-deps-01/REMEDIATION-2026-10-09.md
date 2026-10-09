@@ -50,14 +50,29 @@ not close any finding without a successful installed-image and audit run.
 2. Independently disposition/remediate **every** additional advisory in the
    newly included HRMS frontend/roster and ERPNext banking trees. The offline
    union-lock replay in `audit-expansion-replay-2026-10-09.json` found 168 npm
-   advisory-version entries: 91 closed by the current triage, **77 untriaged**
+   advisory-version entries: 91 matched existing closed dispositions (**not**
+   independently revalidated for these newly scanned trees), **77 untriaged**
    (73 distinct GHSA identifiers; 3 critical, 29 high, 35 moderate, 10 low).
    This is a public lockfile replay, not the installed-tree result. Several
    criticals are code-generation/RCE matches; none is dismissed as build-only
    without callsite analysis. Do not relabel matches BUILD_ONLY or
    NOT_REACHABLE without pinned callsite or build evidence. The Foundation gate
    must fail until this is done; a passing earlier head did not scan these
-   trees.
+   trees. Hosted Foundation run `37977729365` on `492019a` failed at
+   `hosted-full-stack-dependency-audit` (exit 1), with header `advisory
+   matches=235 in 69 packages`; 76 npm package/id pairs are visible across
+   the three capped failure annotations, and the lock replay lists 77.
+   `follow-redirects` / 1116560 is in the replay but not in the visible
+   annotation set; this discrepancy is **unreconciled**, not a waiver or a
+   claim that 77 advisories were seen in the installed scan.
+   Native run `37977729383` on `492019a` reached its final source check and
+   failed at `tools/native/run_native.py:246`: `assert not run('unchanged-'+name,
+   ['git','-C',d,'diff','--name-only'])`. The owned installer intentionally
+   patches pinned Frappe's WeasyPrint file; the old invariant allowed *no*
+   tracked modification. Commit `d0d74f7` narrows that invariant to exactly
+   `frappe/utils/weasyprint.py` with a verified post-patch SHA-256, and still
+   rejects every other tracked change. Its Native rerun is required; the old
+   run is not a pass.
 3. Real Windows installation, encrypted backup, restore (DB plus uploaded
    public/private files), restart and repair on a disposable Windows machine
    with Docker Desktop, including Course Owner login and policy/account

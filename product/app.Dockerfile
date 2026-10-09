@@ -163,6 +163,7 @@ RUN set -eux; \
     yarn cache clean; rm -rf /home/frappe/.cache
 # Fail closed if the pinned Frappe renderer drifts; guard its constructor so
 # direct printview/attach_print/Print Format calls cannot bypass the policy.
+# The installer verifies the post-patch source digest before the image can boot.
 RUN python3 /product/secure_weasyprint.py /home/frappe/bench/apps/frappe \
     && python3 /product/secure_hrms.py /home/frappe/bench/apps/hrms
 # Ghostscript guard (GHSA-r543-q48m-4c9j, WeasyPrint RCE). Pillow's EPS plugin
