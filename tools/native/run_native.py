@@ -217,6 +217,18 @@ def main():
         restore_payload=json.dumps({'site':restore_site,'backup_set':backup_set,
                                     'encryption_key':backup_encryption_key,
                                     'db_root_password':rootpw,'admin_password':adminpw})
+        # Native Frappe logging opens ../logs/<module>.log relative to this
+        # bench-root CWD. Create its expected parent in the isolated runner;
+        # keep the restore adapter's native working-directory semantics.
+        logger_dir = benchdir.parent / 'logs'
+        try:
+            if logger_dir.is_symlink():
+                raise OSError
+            logger_dir.mkdir(mode=0o700, exist_ok=True)
+            if logger_dir.is_symlink() or not logger_dir.is_dir():
+                raise OSError
+        except OSError:
+            raise RuntimeError('native Frappe logger directory is unsafe') from None
         run('restore-placement-test-with-files',
             [benchdir/'env/bin/python',ROOT/'product/restore.py'],cwd=benchdir,
             input_text=restore_payload,

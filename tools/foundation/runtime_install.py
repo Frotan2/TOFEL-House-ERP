@@ -405,6 +405,18 @@ def main() -> int:
             env_overrides={"BENCH_DIR": str(bench_dir), "SITE_NAME": site_name})
 
     def product_restore(name, site_name, backup_set, encryption_key, source_backup_dir):
+        # Native Frappe logging opens ../logs/<module>.log relative to the
+        # bench-root CWD used below. Supply that expected parent in this
+        # isolated harness instead of altering the restore adapter's CWD.
+        logger_dir = bench_dir.parent / "logs"
+        try:
+            if logger_dir.is_symlink():
+                raise OSError
+            logger_dir.mkdir(mode=0o700, exist_ok=True)
+            if logger_dir.is_symlink() or not logger_dir.is_dir():
+                raise OSError
+        except OSError:
+            raise RuntimeError("native Frappe logger directory is unsafe") from None
         target_backup_dir = bench_dir / "sites" / site_name / "private/backups"
         target_backup_dir.mkdir(parents=True, exist_ok=True)
         for suffix in ("-database-enc.sql.gz", "-files-enc.tar", "-private-files-enc.tar"):

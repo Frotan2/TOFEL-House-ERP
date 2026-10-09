@@ -413,6 +413,10 @@ class NativeHarnessAuthorityTests(unittest.TestCase):
             self.assertIn("tools/native/run_product_backup.py", source)
         self.assertIn("product/restore.py", native)
         self.assertIn("product/restore.py", runtime)
+        self.assertIn("logger_dir = benchdir.parent / 'logs'", native)
+        self.assertIn("logger_dir.mkdir(mode=0o700, exist_ok=True)", native)
+        self.assertIn('logger_dir = bench_dir.parent / "logs"', runtime)
+        self.assertIn("logger_dir.mkdir(mode=0o700, exist_ok=True)", runtime)
 
     def test_product_image_workflow_uses_product_adapters_and_fd_secret_transport(self):
         workflow = (ROOT / ".github/workflows/product-image.yml").read_text(encoding="utf-8")
