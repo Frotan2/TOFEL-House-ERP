@@ -17,7 +17,8 @@ Files:
 * The gate's untriaged set is exactly 8 matches = **7 unique advisories**. PYSEC-2026-4183 is the PyPI mirror of GHSA-x33g-cr3x-6449, and the npm numeric IDs are the same advisories as GHSA-g2v6, GHSA-rj75, GHSA-c8x8 and GHSA-68fv.
 * After this delta, the replay yields **0 untriaged** npm entries (108/108 closed) and **0 untriaged** Python records (62/62 closed) under the repository loader.
 * No dependency was upgraded. Every fixed version lies outside the pins that the pinned upstream stack enforces. A forced upgrade would violate upstream requirements or require patching frozen upstream lockfiles, which the repository policy forbids. See section 4.
-* Closure of GHSA-r543-q48m-4c9j (WeasyPrint RCE) is conditional on the Product image build on the PR head passing with the new Ghostscript guard (section 5). If that build fails, that disposition must reopen.
+* Closure of GHSA-r543-q48m-4c9j (WeasyPrint RCE) rests on the new Ghostscript guard. The guard ran inside the Product image build on `48f8422` (run 37922276124, step "Build application image" succeeded), so the built image has no `gs` on PATH. If a later build fails the guard, this disposition must reopen.
+* Hosted gate on `48f8422`: the Foundation runtime (run 37922276120) concluded **success** with no `STACK-ADVISORY-UNTRIAGED` annotation (section 6.2).
 
 ## 2. Advisory triage table
 
@@ -26,7 +27,7 @@ Reachability notes are summarized. Full evidence is in `delta-dispositions.json`
 | # | Advisory (aliases) | Package @ installed | Sev. / CVSS | Path | Fixed in | Upgrade blocked by | Disposition | Basis (short) |
 |---|---|---|---|---|---|---|---|---|
 | 1 | GHSA-x33g-cr3x-6449 (CVE-2026-102275, PYSEC-2026-4183) | pyjwt 2.13.0 | medium 6.5 | direct (frappe pin) | 2.15.0 | frappe `PyJWT~=2.13.0` | NOT_REACHABLE | Trigger is OKP private-JWK import (PyJWK / from_jwk, DPoP-style). Frappe uses HS256 with string secrets only; no JWK/OKP/DPoP code in any pinned or owned tree. |
-| 2 | GHSA-r543-q48m-4c9j (CVE-2026-106443) | weasyprint 68.0 | high 8.8 | direct (frappe pin) | 70.0 | frappe `WeasyPrint==68.0` | MITIGATED | RCE needs WeasyPrint to render an attacker EPS image (beta print formats only) **and** a `gs` binary. The image guard in `product/app.Dockerfile` fails the build if `gs` is on PATH. Conditional on the image build; see section 5. |
+| 2 | GHSA-r543-q48m-4c9j (CVE-2026-106443) | weasyprint 68.0 | high 8.8 | direct (frappe pin) | 70.0 | frappe `WeasyPrint==68.0` | MITIGATED | RCE needs WeasyPrint to render an attacker EPS image (beta print formats only) **and** a `gs` binary. The image guard in `product/app.Dockerfile` fails the build if `gs` is on PATH. Guard passed in the Product image build on `48f8422` (run 37922276124); see section 5. |
 | 3 | GHSA-g6x2-hccm-hh4m (CVE-2026-102598) | werkzeug 3.1.6 | medium | direct (frappe pin) | 3.1.9 | frappe `Werkzeug==3.1.6` | NOT_REACHABLE | Windows/NTFS device-name issue. The product is a Linux container; the Windows host only runs `docker compose`. Residual: Docker Desktop bind-mount semantics not tested (availability only). |
 | 4 | GHSA-g2v6-rqmx-r4w6 (1241259) | @vue/server-renderer 3.3.9 (frappe), 3.4.19 (education SPA) | high 7.2 | transitive via vue | 3.5.42 | frozen upstream lockfiles (vue ^3.3.0 / ^3.2.25) | NOT_REACHABLE | Needs SSR of attacker-controlled attribute names. No SSR entry in pinned sources; the built education bundle has zero server-renderer code markers. |
 | 5 | GHSA-rj75-hqrm-r3gf (CVE-2026-104844, 1241232) | postcss-selector-parser 6.0.10, 6.0.13, 6.0.15 | moderate 5.9 | transitive (tailwind, typography, component-compiler-utils) | 7.1.6 (major) | frozen lockfiles; 6.x to 7.x is a major bump | BUILD_ONLY | Needs synchronous parsing of attacker selectors in a request path. Consumers are build tools over repo-owned CSS; nothing parses selectors at runtime. |
@@ -106,6 +107,15 @@ check, and the repository loader. Sandbox limits: `api.osv.dev` unreachable (PyP
 its proxy); Debian mirrors unreachable; no Docker or MariaDB; Node v22.22.3 used locally versus
 the pinned Node 24.21.0 in CI.
 
+6.2 Hosted CI on `48f8422` (PR #13, branch `arena/e650655f-tofel-house-erp`):
+
+| Workflow (event) | Run | Result |
+|---|---|---|
+| Owned suite (push) | 37922276115 | success |
+| Owned suite (pull_request) | 37922308868 | success |
+| Foundation runtime (push) | 37922276120 | **success**: every step passed, including the advisory gate. No `STACK-ADVISORY-UNTRIAGED` annotation. Its match header is `advisory matches=160 in 47 packages`, the same raw total as the CI-reported run |
+| Product image (push) | 37922276124 | job failed at step "First boot, backup and Owner activation on the real product stack"; step "Build application image" (with the Ghostscript guard) **succeeded**. The failing step is pre-existing: main's run 37713038932 (2026-10-08) failed at the same step with the same annotation signature |
+
 6.1 Results (sandbox, Python 3.11.2 and Node v22.22.3; this change tree before commit):
 
 | Check | Result |
@@ -124,7 +134,7 @@ the pinned Node 24.21.0 in CI.
 
 Not run here: the Product image build (no Docker) and the hosted Foundation runtime (both
 depend on the hosted runners). They are the only checks that can prove the guard and the full
-gate. Their results on the PR head are recorded in the PR body.
+gate. Their results on the PR head are in section 6.2.
 
 ## 7. Remaining security risks (not closed by this PR)
 
@@ -134,7 +144,7 @@ gate. Their results on the PR head are recorded in the PR body.
 4. **Register references a missing test.** The 2026-09-23 register cites `tests/foundation/test_sec_deps_triage.py::test_weasyprint_whitelist_overrides_pin_beta_gate`. That file exists on neither `main` nor `arena/abdece6c-tofel-house-erp`. The static checks in this PR cover only the wiring, not behavior.
 5. **HRMS SPA is outside the gate.** `hrms/frontend` (not built by the product build path, not in the CI audit) mounts frappe-ui `TextEditor` in `src/components/FormField.vue` with `prosemirror-view` 1.31.3 (GHSA-c8x8 applies). It also carries `@vue/server-renderer` 3.5.13, `postcss-selector-parser` 6.0.10/6.0.13/6.1.2 (including low GHSA-w9m9-85wc-3x92), and `source-map-js` 1.2.1. Those would be untriaged if that tree were scanned. Audit it before any HRMS SPA is built or served.
 6. **Incorrect evidence in the 2026-10-03 delta.** Its echarts and frappe-ui@0.1.278 reasoning came from a non-lockfile resolution. The frozen trees use frappe-ui 0.1.31, and echarts is absent from all six lockfiles, including HRMS. The disposition stands, but its evidence text should be corrected by the owner. This PR does not edit the earlier delta.
-7. **Ghostscript guard unverified until built.** The closure of GHSA-r543 is conditional on the Product image build on the PR head. The build could not run in this sandbox.
+7. **Product image job is red on `main`'s lineage, not caused by this change.** On `48f8422` the guard-enabled image built (step "Build application image" succeeded). The job then failed at "First boot, backup and Owner activation on the real product stack" (the restore rehearsal). Main's last Product image run 37713038932 (2026-10-08) failed at the same step with the same annotation signature. The other branch's Product image runs are green because they include native backup and restore changes absent from `main`. Until that restore path lands on `main`, Product image stays red and no release gate can be claimed.
 8. **Werkzeug bind-mount residual.** Docker Desktop mounts `sites/` from the Windows host. Device-name handling through that mount is untested. Impact would be availability only.
 9. **Feed drift.** The CI-reported 160 cannot be reproduced exactly (the 2-match difference above). The untriaged set is reproduced exactly. Re-run the replay on any new gate failure.
 10. **Release readiness is not established.** Other release gates (restore-with-files, native lifecycle, browser and live E2E) were not verified in this session. The other branch's Foundation run fails at restore-with-files, which is outside this PR's scope.
