@@ -172,6 +172,14 @@ def parse_images(values: list[str]) -> dict[str, str]:
 def report_for(args: argparse.Namespace) -> dict[str, Any]:
     python_packages = installed_python_inventory()
     node_packages, node_roots = combined_node_inventory(args.node_modules)
+    required = set(getattr(args, "require_node_modules", []) or [])
+    supplied = set(args.node_modules)
+    if not required.issubset(supplied):
+        raise RuntimeError("Required Node roots were not supplied to the audit")
+    root_status = {Path(row["path"]): row["status"] for row in node_roots}
+    for root in required:
+        if root_status.get(root) != "collected":
+            raise RuntimeError("Required installed Node root missing or empty: " + str(root))
     npm = npm_advisories(node_packages)
     npm_findings = npm_finding_summary(npm, node_packages)
     osv = osv_pypi_advisories(python_packages)
@@ -214,6 +222,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--node-modules", type=Path, action="append", required=True,
                         help="Installed node_modules root; repeat for every built app root")
+    parser.add_argument("--require-node-modules", type=Path, action="append", default=[],
+                        help="Fail closed if this shipped nested tree is missing or empty")
     parser.add_argument("--image", action="append", default=[], metavar="COMPONENT=REFERENCE",
                         help="Pinned container reference (must include @sha256); repeat as needed")
     parser.add_argument("--output", type=Path, required=True)

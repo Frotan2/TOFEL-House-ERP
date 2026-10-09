@@ -601,6 +601,8 @@ def main() -> int:
         stack_audit_command = [bench_dir / "env/bin/python", ROOT / "tools/foundation/audit_stack.py"]
         for root in stack_node_roots:
             stack_audit_command += ["--node-modules", root]
+        for root in stack_node_roots[-4:]:
+            stack_audit_command += ["--require-node-modules", root]
         for name in ("mariadb", "redis"):
             stack_audit_command += ["--image", name + "=" + components[name]["image_digest"]]
         stack_audit_command += ["--output", stack_audit_path]

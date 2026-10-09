@@ -64,6 +64,9 @@ class HrmsEditorTests(unittest.TestCase):
             manifest = json.loads((nested / "package.json").read_text())
             self.assertEqual(manifest["version"], "1.42.3")
             self.assertIn("^1.25.8", manifest["dependencies"]["prosemirror-model"])
+            (nested / "dist/index.js").write_text("tampered editor implementation")
+            with self.assertRaisesRegex(ValueError, "code differs"):
+                secure_hrms.verify(base)
             (nested / "package.json").write_text(json.dumps({"name": "prosemirror-view", "version": "1.31.3"}))
             with self.assertRaisesRegex(ValueError, "Vulnerable prosemirror-view"):
                 secure_hrms.verify(base)
@@ -134,6 +137,7 @@ class WeasyPrintTests(unittest.TestCase):
         frappe = types.ModuleType("frappe")
         frappe.PermissionError = PermissionError
         frappe.get_doc = lambda doctype, name: formats[name]
+        frappe.has_permission = lambda doctype, action, doc: getattr(doc, "role_allowed", True)
         frappe.throw = lambda message, cls: (_ for _ in ()).throw(cls(message))
         frappe._ = lambda message: message
         utils = types.ModuleType("frappe.utils")
@@ -152,6 +156,10 @@ class WeasyPrintTests(unittest.TestCase):
                     module.authorize_weasyprint(name, Document())
             with self.assertRaises(PermissionError):
                 module.authorize_weasyprint("beta", Document(False))
+            flagged = Document()
+            flagged.role_allowed = False  # doc.check_permission alone would pass
+            with self.assertRaises(PermissionError):
+                module.authorize_weasyprint("beta", flagged)
             module.download_pdf("Expense Claim", "EC-1", "beta")
             module.get_html("Expense Claim", "EC-1", "beta", "L")
         self.assertEqual(calls, [("Expense Claim", "EC-1", "beta", None),

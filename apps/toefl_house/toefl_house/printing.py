@@ -19,6 +19,11 @@ def authorize_weasyprint(print_format: str, doc) -> None:
     if not print_format or not getattr(doc, "doctype", None):
         frappe.throw(_("A target document and beta Print Format are required"), frappe.PermissionError)
     doc.check_permission("print")
+    # Document flags can bypass check_permission in internal jobs; do not let
+    # a caller-supplied ignore_permissions flag bypass the actual role/record
+    # authorization at this shared constructor seam.
+    if not frappe.has_permission(doc.doctype, "print", doc):
+        frappe.throw(_("Print permission is required for WeasyPrint"), frappe.PermissionError)
     fmt = frappe.get_doc("Print Format", print_format)
     if (not fmt.get("print_format_builder_beta")
             or fmt.get("doc_type") != doc.doctype):

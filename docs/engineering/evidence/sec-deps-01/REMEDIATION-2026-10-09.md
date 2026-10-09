@@ -27,8 +27,12 @@ not close any finding without a successful installed-image and audit run.
   A SHA-256-bound installation patch inserts an authorization check at the
   **single** pinned `PrintFormatGenerator` constructor, reached by the whitelisted
   helpers, `printview`, Print Format methods and `attach_print`, including jobs.
-  It requires target document print permission, a beta format and matching
-  DocType before rendering. A source mismatch fails the build. The existing
+  It requires target document print permission (including an independent
+  role/record check not bypassed by `doc.flags.ignore_permissions`), a beta
+  format and matching DocType before rendering. Scheduled jobs or guest/key
+  printing that lack print permission may now fail; compatibility must be
+  exercised on a synthetic site before calling this functionality preserved.
+  A source mismatch fails the build. The existing
   final-stage `gs` absence check remains a separate RCE mitigation. This
   deliberately refuses unsafe rendering rather than disabling printing.
 * Audit: Foundation supplies root, education/frontend, HRMS frontend/roster

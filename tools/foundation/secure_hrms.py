@@ -22,6 +22,23 @@ PATCHES = {
     "prosemirror-view": ("1.42.3", "oTN7EtH+CpwxU9NrwEYWd0UZ4JUx7l048l5A2Xppm4p/60isZYLnth9QVQmC3VRIvdrIWCxwZSd+Uz791G31/w=="),
     "prosemirror-model": ("1.25.8", "BswA4BLSFEiORV6Vjj/yZBXDbos1zTEnhyeSSgT8psGFhstQS7UJ8/WOLiDos9Byaee27+tml0/DuMNxYR84zg=="),
 }
+# Hash of sorted relative file name + NUL + SHA256(file bytes), from the
+# integrity-verified npm tarballs. Verify the *code*, not just package.json.
+FILE_TREE_SHA256 = {
+    "prosemirror-view": "dcf389324798cd44ba0dfb99484c867d8926af48245c185f27893816ed601b49",
+    "prosemirror-model": "769a68d022eb80af04f98ecfea0767ec573eb24952290658b5699ee07c8a844f",
+}
+
+
+def tree_digest(folder: Path) -> str:
+    digest = hashlib.sha256()
+    files = sorted(p for p in folder.rglob("*") if p.is_file() or p.is_symlink())
+    if not files or any(p.is_symlink() for p in files):
+        raise ValueError("Missing or symlinked editor package files")
+    for path in files:
+        digest.update(path.relative_to(folder).as_posix().encode() + b"\0"
+                      + hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
 
 
 def installed_copies(hrms: Path, name: str) -> list[Path]:
@@ -49,6 +66,8 @@ def verify(hrms: Path) -> dict[str, int]:
             manifest = json.loads((folder / "package.json").read_text())
             if manifest.get("version") != version:
                 raise ValueError(f"Vulnerable {name} remains in HRMS")
+            if tree_digest(folder) != FILE_TREE_SHA256[name]:
+                raise ValueError(f"Installed {name} code differs from the pinned publisher tarball")
         counts[name] = len(copies)
     return counts
 
@@ -76,6 +95,8 @@ def patch(hrms: Path) -> dict[str, int]:
             manifest = json.loads((extracted / "package.json").read_text())
             if manifest.get("name") != name or manifest.get("version") != version:
                 raise ValueError(f"Unexpected npm package for {name}")
+            if tree_digest(extracted) != FILE_TREE_SHA256[name]:
+                raise ValueError(f"Unexpected file tree for {name}")
             for folder in copies:
                 shutil.rmtree(folder)
                 shutil.copytree(extracted, folder)
