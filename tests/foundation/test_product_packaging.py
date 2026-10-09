@@ -447,6 +447,7 @@ class LineEndingContract(unittest.TestCase):
             "product/bootstrap.py", "product/activate.py", "product/restore.py",
             "product/backup.py", "product/native_gpg.py", "product/native_db.py",
             "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
+            "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_hrms.py",
         }
         self.assertEqual(sources, expected, "audit any new Dockerfile COPY source")
         self.assertEqual(len(copy_rows), len(expected), "COPY syntax must stay source/destination only")
@@ -1046,8 +1047,10 @@ class BootstrapLogicContract(unittest.TestCase):
         from unittest.mock import patch
         with patch.object(bootstrap, "ensure_built_assets",
                           side_effect=[RuntimeError("incomplete"), ["education"]]) as verify:
-            with patch.object(bootstrap, "run_bench") as build:
+            with patch.object(bootstrap, "run_bench") as build, \
+                 patch.object(bootstrap, "verify_hrms_editor") as security:
                 self.assertEqual(bootstrap.ensure_web_assets(), ["education"])
+                self.assertEqual(security.call_count, 2)
         self.assertEqual(verify.call_count, 2)
         build.assert_called_once_with(["build"], cwd=bootstrap.BENCH_DIR)
 

@@ -533,6 +533,12 @@ def main() -> int:
                     raise RuntimeError("Upstream input modified during install: " + name + "/" + relative)
             installed_shas[name] = sha
         report["source_revisions"] = installed_shas
+        run("guard-all-weasyprint-entrypoints", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_weasyprint.py", bench_dir / "apps/frappe"])
+        run("patch-hrms-editor-dependencies", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/hrms"])
+        run("security-remediation-regressions", [bench_dir / "env/bin/python", "-m", "unittest",
+            "tests.security.test_security_remediation_2026_10_09", "-v"], cwd=ROOT)
         run("python-dependency-check", [lab / "tools/bin/uv", "pip", "check", "--python", bench_dir / "env/bin/python"])
         run("python-resolved-dependencies", [lab / "tools/bin/uv", "pip", "freeze", "--python", bench_dir / "env/bin/python"])
         site = "foundation.localhost"
@@ -577,12 +583,21 @@ def main() -> int:
         report["site_encryption_key_initialized"] = True
         report["site_encryption_key_sha256"] = initialize_result["checks"][0]["observation"]["sha256"]
         bench("asset-build", "build", timeout=1800)
+        run("verify-hrms-editor-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/hrms", "--verify"])
         # Inventory resolved dependency trees after their actual asset build.
         # Findings remain REJECT evidence rather than a hidden best-effort scan.
         stack_audit_path = evidence / "stack-dependency-audit.json"
         stack_node_roots = [bench_dir / "apps" / name / "node_modules"
                             for name in ("frappe", "erpnext", "education", "payments", "hrms")]
-        stack_node_roots.append(bench_dir / "apps" / "education" / "frontend" / "node_modules")
+        for app, tree in (("education", "frontend"), ("hrms", "frontend"),
+                          ("hrms", "roster"), ("erpnext", "banking")):
+            stack_node_roots.append(bench_dir / "apps" / app / tree / "node_modules")
+        # Nested shipped frontends are part of the product, not optional audit
+        # inventory. Missing/empty roots must fail rather than silently pass.
+        for root in stack_node_roots[-4:]:
+            if not root.is_dir() or not any(root.iterdir()):
+                raise RuntimeError("Missing required built frontend dependency tree: " + str(root))
         stack_audit_command = [bench_dir / "env/bin/python", ROOT / "tools/foundation/audit_stack.py"]
         for root in stack_node_roots:
             stack_audit_command += ["--node-modules", root]

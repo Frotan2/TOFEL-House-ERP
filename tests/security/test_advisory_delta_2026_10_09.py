@@ -214,11 +214,8 @@ class GhostscriptGuardTests(unittest.TestCase):
 
 
 class WeasyPrintOverrideWiringTests(unittest.TestCase):
-    """Static checks for the WeasyPrint whitelist override that the 2026-09-23
-    register cites for its MITIGATED WeasyPrint dispositions. The register's
-    cited test file does not exist on main; these checks keep the mechanism
-    itself from silently changing. They do not prove the override covers every
-    call path (printview and attach_print call the vendor code directly)."""
+    """Static wiring checks; the renderer constructor guard and direct-path
+    execution are tested in test_security_remediation_2026_10_09.py."""
 
     def setUp(self):
         self.hooks = (ROOT / "apps/toefl_house/toefl_house/hooks.py").read_text()
@@ -229,9 +226,11 @@ class WeasyPrintOverrideWiringTests(unittest.TestCase):
         self.assertIn('"frappe.utils.weasyprint.get_html": "toefl_house.printing.get_html"', self.hooks)
 
     def test_override_gate_requires_beta_flag_and_print_permission(self):
-        self.assertIn('doctype != "Print Format"', self.printing)
         self.assertIn('doc.check_permission("print")', self.printing)
-        self.assertIn('getattr(doc, "print_format_builder_beta", False)', self.printing)
+        self.assertIn('fmt.get("print_format_builder_beta")', self.printing)
+        self.assertIn('fmt.get("doc_type") != doc.doctype', self.printing)
+        self.assertIn('authorize_weasyprint(print_format, doc)',
+                      (ROOT / "tools/foundation/secure_weasyprint.py").read_text())
 
 
 SEC_DIR = ROOT / "docs/engineering/evidence/sec-deps-01"

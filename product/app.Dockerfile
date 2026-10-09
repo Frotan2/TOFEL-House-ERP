@@ -106,6 +106,8 @@ COPY product/native_gpg.py /product/native_gpg.py
 COPY product/native_db.py /product/native_db.py
 COPY product/wsgi.py /product/wsgi.py
 COPY product/entrypoint.sh /product/entrypoint.sh
+COPY tools/foundation/secure_weasyprint.py /product/secure_weasyprint.py
+COPY tools/foundation/secure_hrms.py /product/secure_hrms.py
 # The performance baseline (finding 9) runs inside the deployed image:
 # the CI perf step execs it by this exact path. (Every script COPYed
 # here must also be allowlisted in .dockerignore - the build context is
@@ -159,6 +161,10 @@ RUN set -eux; \
     mkdir -p /build/sites-seed; \
     cp sites/apps.txt sites/apps.json sites/common_site_config.json /build/sites-seed/; \
     yarn cache clean; rm -rf /home/frappe/.cache
+# Fail closed if the pinned Frappe renderer drifts; guard its constructor so
+# direct printview/attach_print/Print Format calls cannot bypass the policy.
+RUN python3 /product/secure_weasyprint.py /home/frappe/bench/apps/frappe \
+    && python3 /product/secure_hrms.py /home/frappe/bench/apps/hrms
 # Ghostscript guard (GHSA-r543-q48m-4c9j, WeasyPrint RCE). Pillow's EPS plugin
 # renders EPS/PS bytes by running the `gs` executable found on PATH
 # (PIL/EpsImagePlugin.py), and WeasyPrint hands it attacker-reachable images

@@ -17,5 +17,11 @@ docs/*
 !product/wsgi.py
 !product/entrypoint.sh
 !product/perf_baseline.py
+!tools/
+tools/*
+!tools/foundation/
+tools/foundation/*
+!tools/foundation/secure_weasyprint.py
+!tools/foundation/secure_hrms.py
 **/__pycache__
 **/*.pyc

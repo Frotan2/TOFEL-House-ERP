@@ -250,6 +250,9 @@ class ProductLifecycleSim(unittest.TestCase):
             mock.patch.object(bootstrap, "ENV_PYTHON", site_python),
             mock.patch.object(bootstrap, "SECRETS_DIR", secrets_dir),
             mock.patch.object(bootstrap, "SITES_SEED", seed),
+            # Simulated bench has no real node_modules; security package validation
+            # is tested separately with installed synthetic dependency trees.
+            mock.patch.object(bootstrap, "verify_hrms_editor"),
             mock.patch.object(bootstrap, "SERVICE_ENDPOINTS",
                               tuple(("127.0.0.1", port) for port in self.ports)),
             mock.patch.dict(os.environ, {

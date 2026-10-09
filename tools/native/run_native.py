@@ -170,6 +170,8 @@ def main():
             run('export-commit-'+name,['git','-C',export,'-c','user.name=Synthetic qualification','-c','user.email=validation@example.test','commit','-m','Exact app export '+os.environ['GITHUB_SHA']])
             bench('get-'+name,'get-app','--soft-link','--skip-assets',str(export))
         stage_owner_decision_ledger(lab)
+        run('guard-all-weasyprint-entrypoints',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_weasyprint.py',benchdir/'apps/frappe'])
+        run('patch-hrms-editor-dependencies',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/hrms'])
         run('pip-check',[lab/'tools/bin/uv','pip','check','--python',benchdir/'env/bin/python'])
         for site in ('placement-test.localhost','placement-second.localhost'):
             create_site('new-'+site,site,dbpw)
