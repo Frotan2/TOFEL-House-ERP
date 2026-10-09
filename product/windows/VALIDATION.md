@@ -18,33 +18,44 @@ confirms it. If anything differs from the "Expected" lines, stop and report it
 **Validation status (2026-10-09):** **UNVERIFIED** — no actual Windows Owner
 installation/lifecycle, browser login, backup/readability/restore rehearsal,
 Task Scheduler, key-custody ceremony, or Tailscale/private-exposure evidence
-has been supplied. Backup/restore is additionally **HOLD** because the Owner's
-retention choice remains unresolved; do not run the helper, cleanup/deletion, or
-activation while that hold is open. This document describes expected results;
-it is not proof of a Windows installation or Owner lifecycle. The
-`product-image.yml` workflow's Windows worktree check is CI evidence only and
-does not validate Docker Desktop, Owner data, Task Scheduler, real login,
-backup recovery, Tailscale, or a real Windows lifecycle. Record those results
-from the Owner PC; production authorization remains **REJECTED**.
+has been supplied. Backup/restore is under a **PRESERVATION / RESTORE HOLD**:
+the Owner's retention choice remains unresolved and the Owner package has no
+qualified isolated restore workflow. Do not run the backup/retention helper,
+restore, cleanup/deletion, or activation; never replace the existing site or
+clean up `product/data`. The backup/restore section below contains read-only
+checks only. Production authorization remains **REJECTED**.
 
-**Hosted CI snapshot (2026-10-09; code head `a3b45ab`):** Product-image run
-[37902411869](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37902411869)
-**PASS**, including Compose validation and actual Docker image build, fresh
-checkout EOL contract, first boot, disposable encrypted backup/restore,
-Chromium login, proxy/tailnet contract simulation, upgrade/rollback, and
-performance. Its Windows stale-worktree EOL job
-[113727794775](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37902411869/job/113727794775)
-also **PASS**: physical CRLF/BOM fixture → real normalizer → LF/package
-contracts → idempotence. This is not a native Windows Owner lifecycle.
-Foundation run
-[37902411810](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37902411810)
-**FAIL** at restore-with-files and advisory triage (`STACK-ADVISORY-UNTRIAGED`,
-160 matches across 47 packages). Native run
-[37902411710](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37902411710)
-**FAIL** at restore-with-files; its safe annotation reports `SystemExit`, OS
-error code `2`, and pinned Frappe restore frames, but not the failing operation.
-These failures do not close the Owner backup/restore HOLD or change production
-authorization.
+**Hosted CI snapshot (2026-10-09; merged head `13482fe285768e43ccadc0d93182a9a14eddf953`):**
+
+- Product-image run
+  [37940397957](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397957)
+  **PASS** — Compose validation, pinned image build, synthetic first boot,
+  encrypted backup/restore and mode checks, Chromium login, multi-user proxy
+  contract, upgrade/rollback, and measured performance. The restore is into the
+  same disposable CI site; it is not an Owner restore.
+- Native lifecycle run
+  [37940397967](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397967)
+  **PASS** — the runner creates a new `placement-restore.localhost` site and a
+  separate database in its ephemeral Bench. The verifier checks 14 synthetic
+  DocTypes by count/name digest (not field values) and one private `File`'s
+  content hash, `is_private`, attached DocType, and attached-name digest. It does
+  not check a public file, File owner/share metadata, filesystem mode/UID/GID,
+  CWD restoration, or a post-restore restart. Its happy-path run has no negative
+  snapshot-mismatch test. The retained result artifact could not be retrieved in
+  this review; per-run counts and hashes are unavailable.
+- Owned suite
+  [37940397970](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397970)
+  **PASS**.
+- Foundation runtime
+  [37940398359](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940398359)
+  **FAIL** — both dependency-audit gates failed. The annotation reports 160
+  matches across 47 packages and 8 untriaged matches (7 unique advisories).
+  This is not a restore failure and is not a security pass.
+
+CI evidence is synthetic Linux evidence only. It does not validate Docker
+Desktop, the Owner's existing data, Windows operations, Task Scheduler, real
+backup/restore, key custody, Tailscale, or release readiness. Production
+authorization remains **REJECTED**.
 
 ---
 
@@ -194,137 +205,98 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
 - **Evidence 10:** screenshot of My Profile showing **Owner**. Backup/restore
   and downstream activation evidence remain UNVERIFIED while the hold is open.
 
-## Backup and restore — separate mandatory Owner gate (currently HOLD)
+## Backup and restore — Owner PRESERVATION / RESTORE HOLD
 
-- **Before backup:** sign in as the dedicated Course Owner from Step 4 (not
-  Administrator). In **Configuration desk → Backup & Recovery**, create the
-  Owner policy if it does not exist, then choose **Set policy version** and
-  **Validate policy**. The version form requires actual Owner-approved values
-  for reporting review days, class capacity, tax choices/rate, transfer and
-  withdrawal rules, calendar notice, local nightly backup time, retention
-  count (at least two) and explicit preserve/delete behavior, ASCII-armored
-  OpenPGP **public** recovery key, custody
-  requirement, and recovery quorum, plus effective date and reason. No
-  defaults or placeholders are supplied: obtain any unresolved business
-  decision from the Owner rather than guessing. Generate/obtain the dedicated
-  key pair under the approved custody procedure using GPG/Gpg4win on a trusted
-  host; enter only its public key. Keep the matching private key and recovery
-  procedure outside Frappe and the backup drive. Never paste or copy private
-  key material into ERPNext, the container, or the backup set. If the effective
-  policy is incomplete or invalid, the backup launcher refuses and does not
-  create an activation receipt.
-- **Preservation hold:** do **not** invoke `Backup TOEFL House ERP.cmd`, its
-  Windows backup/retention helper, or activation while the Owner's explicit
-  retention behavior is unresolved. The effective-dated Owner policy must
-  choose either to preserve all valid backup sets or to authorize deletion of
-  valid older sets beyond the keep count (the current cleanup protects the
-  current and previous receipt sets). There is no default; an unset choice
-  keeps backup/activation fail-closed. This review has not run the Windows
-  backup/retention helper.
-- **Action (only after the Owner resolves the preservation hold):** double-click
-  `Backup TOEFL House ERP.cmd` and wait for the success message and the printed
-  backup-set folder on a separate fixed local drive on this same PC. Press any
-  key to close.
-- **Expected:** the set contains `manifest.json` and exactly four encrypted
-  payloads: `*-database-enc.sql.gz`, `*-files-enc.tar`,
-  `*-private-files-enc.tar`, and `*-site-config.gpg`. The last artifact is
-  public-key encrypted for Owner recovery of Frappe's site config/native backup
-  key. The misleading plaintext `*-site_config_backup-enc.json` sidecar must
-  **not** be present after a successful run. Before starting, the script refuses
-  and preserves any pre-existing plaintext sidecars for Owner review; it removes
-  only the exact sidecar created by this run, and only after the separate-drive
-  set and its hashes/sizes verify. If the run fails before that point, it warns
-  that the newly created plaintext sidecar remains; do not activate or delete it
-  without the approved secure-handling procedure. **Important preservation
-  hold:** after verifying a new backup, the helper deletes valid older external
-  sets beyond the configured keep count only when the Owner explicitly selects
-  that behavior; the alternate choice preserves all valid sets. An unset choice
-  fails closed before backup generation or cleanup. This review has not run the
-  helper on Windows. Do not run `Backup TOEFL House ERP.cmd` or activate until
-  the Owner resolves the retention choice and the implementation/docs agree.
-  The script prints an error
-  rather than success if GPG packet checks, copy hashes/sizes, the Owner policy,
-  Task Scheduler identity, or retention verification fail.
-- **Implementation/evidence note:** `product/backup.py` delegates artifact
-  creation to pinned Frappe `scheduled_backup`/`BackupGenerator`; it does not
-  introduce another backup format. The native GPG key is written to GPG stdin
-  through `--passphrase-fd 0`; native MariaDB dump/import passwords are moved
-  from Frappe's upstream `--password` argument into a temporary mode-0600
-  option file. `product/restore.py` calls pinned Frappe `_restore` with the
-  same GPG and MariaDB credential transports. Because native Frappe decrypts
-  its input artifacts in place, the adapter gives it mode-0600 copies in a
-  private disposable `/tmp` directory; the Owner's encrypted source set is not
-  passed to the mutating restore implementation. Focused synthetic source tests
-  inspect mocked GPG child argv, check database passwords are absent from
-  native arguments/command text, and verify both that backup publication leaves
-  existing artifacts unchanged and that restore mutations remain on disposable
-  copies. Those
-  unit/static checks do not execute Docker, Windows, GPG against real backup
-  data, Task Scheduler, Owner key custody, or a real backup/restore.
-- **Owner Task Scheduler check (after the first successful backup registers
-  the task):** open Windows **Task Scheduler → Task Scheduler Library** and
-  find `TOEFL House ERP Backup`. Confirm it is enabled, runs daily at the
-  Owner-approved local time, and uses the same interactive Windows account
-  that can use Docker Desktop. Do not change its action or identity. Keep that
-  account signed in and Docker Desktop/server available through the next
-  scheduled run; confirm **Last Run Result** is `0x0` and a new set/manifest
-  passes the same integrity checks. Do not click **Run** to simulate the
-  schedule. A CI fixture does not qualify Task Scheduler.
-- **Evidence 11:** redacted screenshot(s) of the separate-drive path and
-  four-artifact set/manifest, plus Task Scheduler's task name, enabled state,
-  daily time, interactive account, and successful scheduled-run result. Do not
-  send the backup, private key, decrypted site config, or any passwords as
-  evidence. A separate local drive on the same PC is the current requirement;
-  off-site/NAS/second-device/cloud copies are deferred future scope.
+**No backup or restore action is authorized.** The Owner's retention choice is
+unresolved. Do not create or change an effective policy, run `Backup TOEFL House
+ERP.cmd` or its retention helper, trigger cleanup/deletion, decrypt a backup,
+restore, activate/deactivate, or change the existing site. Preserve the current
+site, `product/data`, all runtime data, credentials, and every existing backup.
+The former in-place restore procedure in
+[`docs/engineering/LAUNCH-RUNBOOK.md` §7](../../docs/engineering/LAUNCH-RUNBOOK.md)
+has been withdrawn; do not follow saved copies of it.
 
+### Read-only checks allowed while the hold remains
 
-### Restore rehearsal (only after the backup gate is released)
+1. In the normal browser, note whether the existing site responds. Do not
+   create or edit records. If it is unavailable, stop and contact engineering;
+   do not attempt restore or replacement.
+2. In Windows File Explorer, observe whether a separate fixed local drive on
+   this PC is present and note its free-space figure. If an existing backup
+   folder is visible, inspect only directory names and file metadata (names,
+   sizes, timestamps). Do not open, copy, move, decrypt, or delete any file.
+   Keep complete paths and backup-set names in Owner-controlled records; share
+   only redacted status evidence.
+3. In **Configuration desk → Backup & Recovery**, view—without editing or
+   saving—whether an effective policy exists and whether the retention choice
+   is unset. Do not create a policy version, validate/save changes, or start a
+   backup.
+4. If `TOEFL House ERP Backup` already appears in Task Scheduler, view its
+   enabled state and last result only. Do not run, edit, enable, disable, or
+   delete the task.
 
-- **Status:** **UNVERIFIED / HOLD.** Do not perform this destructive rehearsal
-  while the Owner retention decision is unresolved or before a verified backup
-  exists on the separate fixed local drive.
-- **Action after authorization:** follow
-  [`docs/engineering/LAUNCH-RUNBOOK.md` §7](../../docs/engineering/LAUNCH-RUNBOOK.md)
-  exactly. Do not bypass `product/restore.py` with direct Bench/Frappe CLI
-  commands. Verify the manifest and all four artifact hashes/sizes and
-  encryption packets; recover the site-config key on the trusted Owner host;
-  quiesce writers; stage the existing public/private file trees; restore via
-  the product adapter; restart; and verify representative native records and
-  public/private files, including that post-backup markers are absent. Preserve
-  the original encrypted source set. Record the date, set, checks, elapsed
-  recovery time and outcome; production authorization stays **REJECT**.
-- **Evidence 12:** a redacted checklist/rehearsal record showing integrity,
-  decryption, data/file checks, elapsed time and result. Never send a backup,
-  private key, decrypted site config, password or recovery secret.
+These checks use no command line and do not inspect backup contents. Never send
+private keys, passwords, decrypted site configuration, raw backups, or
+unredacted screenshots.
+
+### Future restore target (not currently available on the Owner PC)
+
+Any later engineering-approved rehearsal must target a **new unique Frappe site
+and distinct database in an isolated disposable Bench/site-data root**, after a
+disk-capacity preflight. It must not use `toeflhouse.localhost`, its database or
+file trees, or the existing `product/data` volume. Use synthetic data only and
+verify actual public/private file contents, record integrity, Frappe File
+metadata, filesystem ownership/permissions, CWD restoration, failure paths, and
+snapshot persistence after restarting the target. Do not clean up or alter the
+existing site or any existing backup. The current Owner package has no qualified
+isolated restore runner; do not improvise a restore command or treat CI as
+Owner evidence.
+
+### CI evidence boundary
+
+- Product-image run
+  [37940397957](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397957)
+  passed its synthetic encrypted restore into the same disposable CI site and
+  checked public/private markers after redeploy/restore. It does not restore to
+  a separate target site.
+- Native lifecycle run
+  [37940397967](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397967)
+  passed after creating a separate restore site and database in an ephemeral
+  Bench. It checks 14 DocTypes by count/name digest and a private File's content
+  hash and selected attachment metadata. Public-file integrity, filesystem
+  owner/mode/UID/GID, and a post-restore target restart are not established.
+  The result artifact was not retrievable in this review, so exact per-run
+  counts/hashes are unavailable.
+- Neither run qualifies Windows, Docker Desktop, Task Scheduler, the Owner's
+  same-computer backup drive, retention choice, key custody, or production
+  recovery.
+
+**Evidence 11–12:** do not report backup or restore as passed and do not send a
+backup, private key, decrypted configuration, or password. Record only the
+read-only checks above until an isolated Owner procedure is independently
+approved.
 
 ---
 
 ## Finishing
 
-Send engineering: one message/email containing **Evidence 1–10** for the
-non-destructive Windows lifecycle, plus your Windows version and the date you
-ran this. Evidence 11–12 are required separately only after the Owner resolves
-the retention hold and authorizes the backup/restore rehearsal; do not run
-those steps while the hold is open. Send Evidence 13 only after the actual
-Tailscale/private-exposure check. Cover passwords and omit recovery keys,
-backups, and decrypted configuration wherever evidence is captured. The
-**Desktop release gate remains OPEN** until all applicable lifecycle,
-backup/restore, Task Scheduler, network, and Owner evidence is independently
-confirmed; a CI result cannot close the Owner-machine gate.
+Send engineering Evidence 1–10 for the non-destructive Windows lifecycle, plus
+your Windows version and the date. Do not perform or submit backup/restore
+Evidence 11–12 while the preservation/restore hold is open. Evidence 13 is
+separate and remains unverified until the actual Tailscale/private-exposure
+check is authorized and performed. Cover passwords and omit recovery keys,
+backups, and decrypted configuration from all evidence. The Desktop release
+gate remains **OPEN**; CI cannot close the Owner-machine gate.
 
-## Later: switching on real operation (once, not part of this checklist)
+## Later: switching on real operation (HOLD; not an instruction)
 
-Do **not** perform this switch while the preservation hold is unresolved,
-even if an older receipt exists. Only after the Owner explicitly resolves the
-retention behavior and the implementation/docs agree may the Owner run
-`Backup TOEFL House ERP.cmd`, verify its result, then run
-`Activate TOEFL House ERP.cmd` and type `ACTIVATE` when asked. Activation
-changes only the site's operational mode; it is **not** production release
-authorization, which stays REJECT until all acceptance evidence and
-Owner/non-engineering gates pass. The wrapper also refuses without a current,
-verified four-artifact backup on the separate local drive.
-`Deactivate TOEFL House ERP.cmd` returns the site to REFUSED without changing
-native ERP data. Restore/key custody steps are in the canonical launch runbook.
+Do not run `Backup TOEFL House ERP.cmd`, `Activate TOEFL House ERP.cmd`, or
+`Deactivate TOEFL House ERP.cmd` under the current hold. A future explicit Owner
+retention decision alone is not authorization: the isolated restore procedure,
+verified same-computer backup, actual Owner/deployment evidence, and every
+applicable acceptance gate must be reviewed first, followed by separate
+production authorization. Operational site mode is not release authorization;
+production authorization remains **REJECTED**.
 
 ## Later: letting authorized staff access it from their computers
 

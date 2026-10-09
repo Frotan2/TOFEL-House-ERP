@@ -9,17 +9,18 @@ without this mode switch. Do not expose the service to the public internet
 while SEC-DEPS-01 is open; the selected local-server + Tailscale deployment
 is not a public-edge release gate (see [../PRODUCT.md](../PRODUCT.md) §6).
 
-**Desktop product (Owner) — PRESERVATION HOLD:** the Owner must explicitly
-choose whether to preserve all valid backup sets or authorize deletion of
-valid older external backup-set directories beyond the keep count (the current
-cleanup protects the current set and prior receipt set). The policy has no
-default: if the choice is unset, backup and activation remain fail-closed.
-**Do not run `Backup TOEFL House ERP.cmd` or invoke the Windows
-backup/retention helper, and do not proceed through activation, until the Owner
-resolves this choice and the implementation/docs agree.** No Windows
-backup/retention run has been performed in this review. The procedure below
-documents the guarded implementation, not authorization to run it. Any later
-Owner decision must be recorded in the effective-dated policy before execution.
+**Desktop product (Owner) — PRESERVATION / RESTORE HOLD:** the Owner must
+explicitly choose whether to preserve all valid backup sets or authorize
+deletion of valid older external backup-set directories beyond the keep count.
+The policy has no default: while unresolved, backup and activation remain
+fail-closed. **Do not run `Backup TOEFL House ERP.cmd`, the Windows
+backup/retention helper, restore, cleanup/deletion, or activation. Never restore
+over the existing `toeflhouse.localhost` site or replace/clean its files.** The
+former in-place restore instructions in §7 are withdrawn. No Owner
+backup/restore/activation run has been performed in this review. Sections §7–8
+now contain only read-only checks; they are not authorization to change policy,
+run a helper, or modify the existing site. Any future restore requires a
+separately approved workflow targeting a new disposable site and database.
 
 The Owner-configured local nightly backup time, retention count (at least two),
 explicit retention behavior, ASCII-armored OpenPGP public recovery key, and
@@ -281,178 +282,89 @@ Properties and limits:
   `tailscale serve --delete` on the central PC. The ERP remains
   loopback-only; nothing else is affected.
 
-## 7. Restore from backup (operator)
+## 7. Restore and recovery — HOLD (no Owner restore is authorized)
 
-A restore overwrites site data and is deliberately an operator task. Use the
-chosen set on the separate fixed local drive; keep the ERP idle and ensure no
-staff member is issuing commands. The private key is never imported into
-Frappe or the web container.
+**Safety correction (2026-10-09).** The previous in-place restore procedure is
+withdrawn. It targeted `toeflhouse.localhost`, moved/replaced the site's public
+and private file trees, and deleted staged and temporary files. Do not follow a
+saved copy. `product/restore.py` delegates to Frappe's native restore with
+`force=True`; that replaces the target database. A verified backup or a
+separate recovery key does not make restoring over the existing site safe.
 
-1. Confirm the chosen backup's `manifest.json` belongs to that set and verify
-   each of its four artifact SHA-256 digests and byte sizes against the
-   manifest. Refuse a set with any plaintext `*-site_config_backup*.json`
-   sidecar. Record the set name and the outcome.
-2. Gpg4win is not installed by the desktop product. On a trusted Windows
-   host, install/use GPG (for example, Gpg4win) and make the Owner-held private
-   recovery key available through its separate custody procedure. If the key
-   is in an armored key file, import it into the current Windows user's GPG
-   keyring with `gpg --import "<Owner-private-key-file>"`; do not copy the key
-   into the product, Frappe, container, or backup drive. In PowerShell, set
-   the chosen backup path/set name and decrypt into a unique protected temp
-   file (GPG may prompt for the private-key passphrase):
+Keep the current site, `product/data`, all runtime data, credentials, and every
+existing backup unchanged. Do not run `product/restore.py`, a Bench/Frappe
+restore, the backup/retention helper, activation, or any cleanup. Do not stop or
+restart the existing stack for a restore rehearsal, move/copy files into the
+site, decrypt a backup, or stage replacement files. If the existing site is
+unavailable, stop and contact engineering; do not attempt recovery by replacing
+its data.
 
-   ```powershell
-   $backupRoot = "D:\TOEFL-House-ERP-Backups"
-   $backupSet = "<backup-set>"
-   $configArtifact = Join-Path $backupRoot $backupSet
-   $configArtifact += "-site-config.gpg"
-   $recoveredConfig = Join-Path $env:TEMP ("toefl-house-site-config-" + [Guid]::NewGuid().ToString("N") + ".json")
-   gpg --output $recoveredConfig --decrypt $configArtifact
-   if ($LASTEXITCODE -ne 0) { throw "Owner recovery-key decryption failed; stop." }
-   $siteConfig = Get-Content -LiteralPath $recoveredConfig -Raw -Encoding UTF8 | ConvertFrom-Json
-   $backupEncryptionKey = [string]$siteConfig.backup_encryption_key
-   if ([string]::IsNullOrWhiteSpace($backupEncryptionKey)) { throw "Recovered config has no native backup_encryption_key; stop." }
-   ```
+### Read-only Owner checks while the hold remains
 
-   Keep the recovered JSON/key private; do not print them, paste them into
-   chat, or leave plaintext in the backup set, Frappe site directory, Docker
-   container, or a shared folder. If the private key is unavailable or
-   decryption fails, stop. Delete `$recoveredConfig` only after the restore checks succeed.
-3. Copy the three native encrypted database/files artifacts (not the config
-   artifact) into
-   `product\data\sites\toeflhouse.localhost\private\backups`. From the
-   `product` directory, quiesce the app and run the restore in a one-off web
-   container so no staff request can write during the restore. Keep MariaDB
-   and Redis running. **Frappe extracts its public/private tar archives into
-   the existing `files` directories; it does not remove files absent from the
-   backup.** To restore an exact file snapshot rather than merge/overlay it,
-   move the existing trees aside on the same filesystem and create empty
-   targets before invoking Frappe. Keep enough free space for the restored
-   files while the old trees are staged, and do not delete the stage until
-   database and file checks pass. The pinned product restore adapter calls
-   Frappe's native restore implementation. Since native Frappe decrypts each
-   encrypted input in place, the adapter first copies the three encrypted
-   artifacts to mode-0600 files under a private disposable `/tmp` directory in
-   the one-off container; it never hands the Owner's original backup files to
-   the mutating restore routine. Normal completion or failure cleanup removes
-   those copies, while the Owner's source encrypted set remains unchanged. It
-   accepts the Frappe key, MariaDB root password, and Administrator
-   password as a JSON document on stdin; none of those values is placed in a
-   Docker/Bench command argument, transcript, or failure diagnostic:
+1. If the existing site responds in the normal browser, record the date and
+   whether the page is reachable; do not create or edit records. If it is not
+   reachable, report that fact and stop.
+2. In Windows File Explorer, observe whether the required separate fixed local
+   drive is present and its free-space figure. If a backup-set folder already
+   exists, inspect only its directory listing and file metadata (names, sizes,
+   timestamps). Do not open, copy, move, decrypt, or delete any backup file.
+   Keep complete paths and set identifiers in Owner-controlled records; share
+   only redacted status evidence.
+3. In the ERP Configuration desk, view—without editing or saving—whether an
+   effective backup policy exists and whether its retention choice is unset.
+   Do not create a policy version, validate/save changes, or start a backup.
+4. If a `TOEFL House ERP Backup` task already exists, view its status and last
+   result in Task Scheduler only. Do not run, edit, enable, disable, or delete
+   the task.
 
-   ```powershell
-   docker compose stop web worker scheduler socketio
-   $restoreStageName = ".restore-files-" + [Guid]::NewGuid().ToString("N")
-   $stageFiles = @'
-   set -eu
-   umask 077
-   site=sites/toeflhouse.localhost
-   stage="$site/private/$RESTORE_STAGE_NAME"
-   mkdir -p "$stage"
-   for scope in public private; do
-       files="$site/$scope/files"
-       if [ -d "$files" ]; then mv "$files" "$stage/$scope-files"; fi
-       mkdir -p "$files"
-   done
-   '@
-   docker compose run --rm --no-deps -e "RESTORE_STAGE_NAME=$restoreStageName" --entrypoint /bin/sh web -eu -c "$stageFiles"
+No shell, PowerShell, Docker, Bench, GPG, or restore command is part of these
+checks. Never share private keys, passwords, decrypted site configuration, raw
+backup contents, or unredacted screenshots.
 
-   $dbRootLine = Get-Content -LiteralPath "data\secrets\db.env" |
-       Where-Object { $_.StartsWith("MARIADB_ROOT_PASSWORD=") } |
-       Select-Object -First 1
-   if (-not $dbRootLine) { throw "MariaDB root password is missing; stop." }
-   $dbRootPassword = $dbRootLine.Substring("MARIADB_ROOT_PASSWORD=".Length)
-   $adminSecure = Read-Host "Enter the Owner-controlled Administrator password for this restore" -AsSecureString
-   $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($adminSecure)
-   try { $adminPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer) }
-   finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer) }
-   $restorePayload = [ordered]@{
-       site = "toeflhouse.localhost"
-       backup_set = $backupSet
-       encryption_key = $backupEncryptionKey
-       db_root_password = $dbRootPassword
-       admin_password = $adminPassword
-   } | ConvertTo-Json -Compress
-   $restoreStartInfo = New-Object System.Diagnostics.ProcessStartInfo
-   $restoreStartInfo.FileName = "docker"
-   $restoreStartInfo.Arguments = "compose run --rm --no-deps --interactive --no-TTY --entrypoint /home/frappe/bench/env/bin/python web /product/restore.py"
-   $restoreStartInfo.UseShellExecute = $false
-   $restoreStartInfo.RedirectStandardInput = $true
-   $restoreProcess = New-Object System.Diagnostics.Process
-   $restoreProcess.StartInfo = $restoreStartInfo
-   $restoreStream = $null
-   $restoreStarted = $false
-   try {
-       if (-not $restoreProcess.Start()) { throw "Docker Compose restore adapter did not start." }
-       $restoreStarted = $true
-       $restoreStream = $restoreProcess.StandardInput.BaseStream
-       $restoreBytes = [Text.Encoding]::UTF8.GetBytes($restorePayload + "`n")
-       $restoreStream.Write($restoreBytes, 0, $restoreBytes.Length)
-       $restoreStream.Flush()
-       $restoreProcess.StandardInput.Close()
-       $restoreProcess.WaitForExit()
-       $restoreExitCode = $restoreProcess.ExitCode
-   }
-   finally {
-       if ($restoreStream) { $restoreStream.Dispose() }
-       if ($restoreStarted -and -not $restoreProcess.HasExited) {
-           $restoreProcess.Kill()
-           $restoreProcess.WaitForExit()
-       }
-       $restoreProcess.Dispose()
-       $restoreBytes = $null
-       $restorePayload = $null
-       $dbRootPassword = $null
-       $adminPassword = $null
-       $adminSecure.Dispose()
-       $backupEncryptionKey = $null
-   }
-   if ($restoreExitCode -ne 0) { throw "Native Frappe restore failed; sensitive diagnostics were withheld." }
-   ```
+### Required target for any future restore test (not currently available to the Owner)
 
-   Do not enable shell tracing or record this PowerShell session in a
-   transcript. The product restore adapter reads credentials only from stdin
-   and withholds native restore diagnostics on failure. No application writer
-   is running during the restore.
-4. Start the full stack again with `docker compose up -d`, log in, verify
-   expected native ERPNext/Education/HRMS records plus representative public
-   and private files from the selected set, and confirm files created after
-   that set are absent. Only after all checks pass, delete the staged old
-   trees and protected temporary config:
+A later engineering-approved restore rehearsal must use a unique new Frappe
+site and a distinct database inside an isolated disposable Bench/site-data
+root, after a disk-capacity preflight. It must not target `toeflhouse.localhost`,
+that site's database or files, or the existing `product/data` volume. The test
+must use synthetic data and verify authentic public/private file content,
+record integrity, Frappe file metadata, filesystem ownership/permissions, CWD
+restoration, explicit failure cases, and persistence after a target restart.
+No cleanup of the existing site or existing backup is allowed. The current Owner
+package does not provide a qualified isolated restore workflow, so do not
+improvise one or run a restore. CI synthetic results are not Owner-machine
+evidence or authorization.
 
-   ```powershell
-   docker compose exec -T web sh -eu -c 'rm -rf -- "sites/toeflhouse.localhost/private/$1"' sh $restoreStageName
-   Remove-Item -LiteralPath $recoveredConfig -Force
-   ```
+### Current CI evidence boundary
 
-   The native Frappe restore is destructive and must not be interrupted. If the restore
-   command fails, leave the services stopped. If a post-start verification
-   fails, stop the full stack again. In either case retain the staged trees
-   and escalate rather than allowing staff to use a partially restored
-   database/filesystem.
-5. Create a new encrypted backup and re-verify the Owner policy/task/receipt
-   before any site-mode activation. Restoring data does not restore or
-   authorize a site mode; the current `site_config.json` operational-mode
-   state remains under the guarded activation/rollback flow. Record the date,
-   set name, manifest/artifact verification, key recovery outcome, elapsed
-   restore time, data checks, and result in the Owner's acceptance evidence.
-   The actual Owner key-custody/recovery ceremony is a non-engineering gate;
-   CI cannot qualify it.
+- Product-image run
+  [37940397957](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397957)
+  passed its synthetic encrypted restore into the same disposable product
+  site, including public/private marker checks after the CI redeploy/restore.
+  This is not a clean-target Owner rehearsal.
+- Native lifecycle run
+  [37940397967](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397967)
+  passed after creating `placement-restore.localhost` and a separate database
+  inside an ephemeral Bench. Its verifier checks 14 synthetic DocTypes by
+  count/name digest and one private file's content hash and selected attachment
+  metadata. It does not verify a public marker, filesystem mode/UID/GID or file
+  owner, and it does not restart the restored site before rechecking the
+  snapshot. The retained result artifact could not be retrieved in this review,
+  so per-run counts and hashes are unavailable.
+- Neither workflow qualifies Windows, Docker Desktop, Task Scheduler, the
+  Owner backup drive, key custody, retention choice, or production recovery.
 
-## 8. Record the rehearsal
+## 8. Record read-only status (not a restore rehearsal)
 
-The Owner runs the backup and restore rehearsal on the actual local server and
-records each run. Current backup scope is an encrypted, verified set on a
-separate local drive on the same computer. Off-site/NAS/second-device/cloud
-backup is deferred future scope and is not a current release gate:
+While the hold remains open, record only what was observed without changing
+anything. Do not report a backup or restore as passed based on CI or on these
+checks.
 
-| Date | Site | Backup set | Artifact hashes / config decrypt | Restore checks | Elapsed | Outcome |
-| ---- | ---- | ---------- | --------------------------------- | -------------- | ------- | ------- |
-|      |      |            |                                   |                |         |         |
+| Date | Existing site reachable? | Separate fixed drive/free space | Existing backup metadata observed? | Policy retention choice | Scheduled-task status | Notes (redacted) |
+| ---- | ------------------------ | ------------------------------ | --------------------------------- | ----------------------- | --------------------- | ----------------- |
+|      |                          |                                |                                   |                         |                       |                   |
 
-Activation is a mechanism, not a GO decision. SEC-DEPS-01 (known upstream
-advisories in the pinned stack) gates **internet exposure** of the product;
-it is not a stop for the selected loopback / local-Tailscale deployment
-(owner decisions D13/D15). The current evidence state of the acceptance
-items (backup, branch isolation, rollback, monitoring, capacity) is recorded
-in `docs/engineering/ACCEPTANCE.md`.
+The verified encrypted backup requirement remains a separate fixed local drive
+on the same computer; off-site/NAS/second-device/cloud backup is deferred. The
+preservation and restore holds remain in force. Do not clean up, delete, move,
+replace, or decrypt data. Production authorization remains **REJECTED**.
