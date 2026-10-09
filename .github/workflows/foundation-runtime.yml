@@ -10,6 +10,10 @@ on:
       - tools/foundation/**
       - tools/native/site_setup.py
       - product/bootstrap.py
+      - product/backup.py
+      - product/restore.py
+      - product/native_gpg.py
+      - product/native_db.py
       - tools/native/run_product_backup.py
       - tests/foundation/test_native_credential_adapters.py
       - apps/foundation_security/**
