@@ -412,18 +412,20 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
         if path.is_symlink() or not valid_path or not valid_file:
             raise RestoreInputError(f"required restore artifact is missing or unsafe: {role}")
 
-    # Match the pinned Frappe CLI's native restore wrapper: initialize the
-    # selected site, acquire its restore lock, then call the same internal
-    # implementation that `bench restore` invokes. Secrets remain in-process.
-    import frappe
-    import frappe.utils
-    from frappe.commands.site import _restore
-    from frappe.utils.synchronization import filelock
-
+    # The pinned Bench `frappe_cmd` changes to bench/sites before running
+    # Frappe's CLI. Mirror that native context for logger and site-path
+    # resolution while retaining this adapter's in-process secret transport.
+    caller_cwd = Path.cwd()
     initialized = False
     captured = io.StringIO()
     working_dir = None
     try:
+        os.chdir(SITES_DIR)
+        import frappe
+        import frappe.utils
+        from frappe.commands.site import _restore
+        from frappe.utils.synchronization import filelock
+
         # Frappe's native decrypt_backup temporarily replaces its input files
         # with plaintext while restoring. Keep that in-place behavior confined
         # to disposable container storage, not the preserved native backup set.
@@ -473,12 +475,15 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
         raise _native_restore_failure(
             error, captured.getvalue(), working_dir) from None
     finally:
-        if initialized:
-            try:
-                with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
-                    frappe.destroy()
-            except Exception:
-                pass
+        try:
+            if initialized:
+                try:
+                    with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
+                        frappe.destroy()
+                except Exception:
+                    pass
+        finally:
+            os.chdir(caller_cwd)
 
 
 def main(stdin=None, stdout=None, stderr=None, argv=None) -> int:

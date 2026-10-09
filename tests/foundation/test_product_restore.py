@@ -170,7 +170,8 @@ class ProductRestoreInputTests(unittest.TestCase):
         frappe = types.ModuleType("frappe")
         frappe.__path__ = []
         frappe.conf = types.SimpleNamespace(db_type="mariadb")
-        frappe.init = lambda name, sites_path: events.append(("init", name, sites_path))
+        frappe.init = lambda name, sites_path: events.append(
+            ("init", name, sites_path, Path.cwd()))
         frappe.destroy = lambda: events.append(("destroy",))
         database = types.ModuleType("frappe.database")
         synthetic_site_db_password = "synthetic-native-site-db-password"
@@ -265,6 +266,7 @@ class ProductRestoreInputTests(unittest.TestCase):
             "frappe.utils.synchronization": synchronization,
         }
         request = payload(site=site, backup_set=backup_set)
+        caller_cwd = Path.cwd()
         stdout, stderr = io.StringIO(), io.StringIO()
         gpg_calls = []
 
@@ -280,7 +282,7 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(len(gpg_calls), 1)
         self.assertIn(
-            "Restore context before frappe.init: cwd=other; ../logs=unknown\n",
+            "Restore context before frappe.init: cwd=site-data; ../logs=unknown\n",
             stdout.getvalue())
         self.assertNotIn(request["encryption_key"], " ".join(gpg_calls[0][0]))
         self.assertEqual(gpg_calls[0][1]["input"],
@@ -299,7 +301,9 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertFalse(credential_path.exists())
         self.assertIs(frappe.database.get_command, get_database_command)
         self.assertIs(frappe.utils.execute_in_shell, original_execute)
-        self.assertEqual(events[0][0], "init")
+        self.assertEqual(
+            events[0], ("init", site, str(restore.SITES_DIR), restore.SITES_DIR))
+        self.assertEqual(Path.cwd(), caller_cwd)
         self.assertEqual(events[1], ("lock", "site_restore", 1))
         native_call = next(event[1] for event in events if event[0] == "restore")
         self.assertEqual(native_call["db_root_password"], request["db_root_password"])
@@ -327,7 +331,7 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertIn("GPG diagnostic category: terminal-unavailable", stderr.getvalue())
         self.assertIn("frames:", stderr.getvalue())
         self.assertRegex(stderr.getvalue(), r"reported frames: native_restore:[0-9]+")
-        self.assertIn("reported CWD: other", stderr.getvalue())
+        self.assertIn("reported CWD: site-data", stderr.getvalue())
         self.assertIn(
             "reported path: restore-temp:artifacts/missing-native-restore-input",
             stderr.getvalue())
