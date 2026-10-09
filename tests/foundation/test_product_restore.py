@@ -142,6 +142,7 @@ class ProductRestoreInputTests(unittest.TestCase):
             print(kwargs["db_root_password"])
             print(kwargs["admin_password"])
             print(kwargs["encryption_key"])
+            print("gpg: Inappropriate ioctl for device /private/synthetic-private-context")
             staged = {}
             for field in ("sql_file_path", "with_public_files", "with_private_files"):
                 staged_path = Path(kwargs[field])
@@ -234,6 +235,11 @@ class ProductRestoreInputTests(unittest.TestCase):
                        request["admin_password"]):
             self.assertNotIn(secret, combined)
         self.assertIn("Sensitive diagnostics were withheld", stderr.getvalue())
+        self.assertIn("exception type: SystemExit", stderr.getvalue())
+        self.assertIn("GPG diagnostic category: terminal-unavailable", stderr.getvalue())
+        self.assertIn("frames:", stderr.getvalue())
+        self.assertNotIn("synthetic-private-context", stderr.getvalue())
+        self.assertNotIn("Inappropriate ioctl", stderr.getvalue())
 
     def test_adapter_uses_stdin_in_product_and_ci_restore_paths(self):
         workflow = (ROOT / ".github/workflows/product-image.yml").read_text()

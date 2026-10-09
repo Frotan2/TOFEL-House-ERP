@@ -15,6 +15,32 @@ import shlex
 import subprocess
 
 
+_GPG_DIAGNOSTIC_CATEGORIES = (
+    (b"no valid openpgp data", "no-valid-openpgp-data"),
+    (b"invalid packet", "invalid-packet"),
+    (b"no such file or directory", "input-missing"),
+    (b"permission denied", "permission-denied"),
+    (b"bad passphrase", "bad-passphrase"),
+    (b"invalid option", "invalid-option"),
+    (b"unknown option", "invalid-option"),
+    (b"operation not permitted", "operation-not-permitted"),
+    (b"inappropriate ioctl", "terminal-unavailable"),
+    (b"no pinentry", "pinentry-unavailable"),
+    (b"no gpg-agent", "agent-unavailable"),
+)
+
+
+def safe_gpg_diagnostic_category(output: bytes | str) -> str:
+    """Map known GPG errors to non-sensitive categories; never return raw text."""
+    if isinstance(output, str):
+        output = output.encode("utf-8", "replace")
+    if not isinstance(output, bytes):
+        return "unclassified"
+    lowered = output.lower()
+    return next((category for marker, category in _GPG_DIAGNOSTIC_CATEGORIES
+                 if marker in lowered), "unclassified")
+
+
 _PREFIX = "gpg --yes --passphrase "
 _SAFE_GPG_PREFIX = [
     "gpg", "--batch", "--yes", "--passphrase-fd", "0", "--pinentry-mode", "loopback",

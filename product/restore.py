@@ -21,9 +21,10 @@ import shutil
 import stat
 import sys
 import tempfile
+import traceback
 
 from native_db import safe_mariadb_credential_transport
-from native_gpg import safe_gpg_transport
+from native_gpg import safe_gpg_diagnostic_category, safe_gpg_transport
 
 BENCH_DIR = Path(os.environ.get("BENCH_DIR", "/home/frappe/bench"))
 SITES_DIR = BENCH_DIR / "sites"
@@ -38,6 +39,37 @@ BACKUP_SUFFIXES = {
 
 class RestoreInputError(ValueError):
     """Invalid or incomplete secret-bearing restore input."""
+
+
+class NativeRestoreError(RuntimeError):
+    """Sanitized native-restore failure with allowlisted diagnostic details."""
+
+    def __init__(self, failure_type: str, failure_frames: tuple[str, ...],
+                 failure_errno: int | None, failure_category: str):
+        self.failure_type = (failure_type if re.fullmatch(
+            r"[A-Za-z_][A-Za-z0-9_]{0,63}", failure_type) else "Exception")
+        self.failure_frames = tuple(failure_frames[:6])
+        self.failure_errno = (failure_errno if type(failure_errno) is int
+                              and 0 <= failure_errno <= 65535 else None)
+        self.failure_category = failure_category
+        super().__init__("native Frappe restore failed; sensitive diagnostics were withheld")
+
+
+def _native_restore_failure(error: BaseException, captured_output: str) -> NativeRestoreError:
+    """Keep only exception class, numeric OS code, safe GPG category and frames."""
+    failure_type = type(error).__name__
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", failure_type):
+        failure_type = "Exception"
+    frames = []
+    for frame in traceback.extract_tb(error.__traceback__)[-6:]:
+        if (re.fullmatch(r"[A-Za-z0-9_<>.-]{1,128}", frame.name)
+                and type(frame.lineno) is int and 1 <= frame.lineno <= 999999):
+            frames.append(f"{frame.name}:{frame.lineno}")
+    error_number = getattr(error, "errno", None)
+    if type(error_number) is not int or not 0 <= error_number <= 65535:
+        error_number = None
+    category = safe_gpg_diagnostic_category(captured_output)
+    return NativeRestoreError(failure_type, tuple(frames), error_number, category)
 
 
 def _read_payload(stdin) -> dict:
@@ -218,13 +250,13 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
                             )
     except RestoreInputError:
         raise
-    except SystemExit as exc:
-        if exc.code not in (None, 0):
-            raise RuntimeError("native Frappe restore exited unsuccessfully") from None
-    except Exception:
-        # Native restore diagnostics can include command context. Do not copy
-        # them to a console or transcript that might contain secret values.
-        raise RuntimeError("native Frappe restore failed; sensitive diagnostics were withheld") from None
+    except SystemExit as error:
+        if error.code not in (None, 0):
+            raise _native_restore_failure(error, captured.getvalue()) from None
+    except Exception as error:
+        # Native restore diagnostics can include command context. Preserve only
+        # an allowlisted class/category and compact frame names/line numbers.
+        raise _native_restore_failure(error, captured.getvalue()) from None
     finally:
         if initialized:
             try:
@@ -251,6 +283,19 @@ def main(stdin=None, stdout=None, stderr=None, argv=None) -> int:
     except RestoreInputError as exc:
         stderr.write(f"Restore refused: {exc}\n")
         return 2
+    except NativeRestoreError as error:
+        details = ["Native Frappe restore failed",
+                   "exception type: " + error.failure_type]
+        if error.failure_errno is not None:
+            details.append("OS error code: " + str(error.failure_errno))
+        if error.failure_category != "unclassified":
+            details.append("GPG diagnostic category: " + error.failure_category)
+        if error.failure_frames:
+            details.append("frames: " + ",".join(error.failure_frames))
+        details.append("Sensitive diagnostics were withheld")
+        stderr.write("; ".join(details) + ". Leave the application writers stopped "
+                     "and inspect logs through the approved secure procedure.\n")
+        return 1
     except Exception:
         stderr.write(
             "Native Frappe restore failed. Sensitive diagnostics were withheld; "

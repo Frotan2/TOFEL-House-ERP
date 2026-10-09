@@ -23,7 +23,7 @@ import sys
 import tempfile
 
 from native_db import safe_mariadb_credential_transport
-from native_gpg import safe_gpg_transport
+from native_gpg import safe_gpg_diagnostic_category, safe_gpg_transport
 
 BENCH_DIR = Path(os.environ.get("BENCH_DIR", "/home/frappe/bench"))
 SITES_DIR = BENCH_DIR / "sites"
@@ -90,25 +90,6 @@ def _staged_file(raw_path, staging_dir: Path, role: str) -> Path:
     return path
 
 
-def _gpg_diagnostic_category(output: bytes) -> str:
-    """Map known GPG errors to non-sensitive categories; never return raw text."""
-    lowered = output.lower()
-    categories = (
-        (b"no valid openpgp data", "no-valid-openpgp-data"),
-        (b"invalid packet", "invalid-packet"),
-        (b"no such file or directory", "input-missing"),
-        (b"permission denied", "permission-denied"),
-        (b"bad passphrase", "bad-passphrase"),
-        (b"invalid option", "invalid-option"),
-        (b"unknown option", "invalid-option"),
-        (b"operation not permitted", "operation-not-permitted"),
-        (b"inappropriate ioctl", "terminal-unavailable"),
-        (b"no pinentry", "pinentry-unavailable"),
-        (b"no gpg-agent", "agent-unavailable"),
-    )
-    return next((category for marker, category in categories if marker in lowered), "unclassified")
-
-
 def _assert_gpg_encrypted(path: Path, role: str, encryption_key: str) -> None:
     role_code = {
         "database": "database",
@@ -138,13 +119,13 @@ def _assert_gpg_encrypted(path: Path, role: str, encryption_key: str) -> None:
         raise BackupInputError(
             f"native Frappe {role} artifact could not be checked for GPG encryption",
             safe_code=f"gpg-{role_code}-check-exit-{code}",
-            safe_category=_gpg_diagnostic_category(output),
+            safe_category=safe_gpg_diagnostic_category(output),
         )
     if b":symkey enc packet:" not in output:
         raise BackupInputError(
             f"native Frappe {role} artifact is not verified as GPG-encrypted",
             safe_code=f"gpg-{role_code}-symmetric-packet-missing",
-            safe_category=_gpg_diagnostic_category(output),
+            safe_category=safe_gpg_diagnostic_category(output),
         )
 
 
