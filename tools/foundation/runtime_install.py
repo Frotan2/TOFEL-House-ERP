@@ -405,16 +405,24 @@ def main() -> int:
             env_overrides={"BENCH_DIR": str(bench_dir), "SITE_NAME": site_name})
 
     def product_restore(name, site_name, backup_set, encryption_key, source_backup_dir):
-        # Native Frappe logging opens ../logs/<module>.log relative to the
-        # bench-root CWD used below. Supply that expected parent in this
-        # isolated harness instead of altering the restore adapter's CWD.
-        logger_dir = bench_dir.parent / "logs"
+        # Native Frappe opens both ../logs/<module>.log and
+        # <site>/logs/<module>.log relative to the bench-root CWD used below.
+        # Supply those expected parents in this isolated harness instead of
+        # altering the restore adapter's CWD.
+        site_log_root = bench_dir / site_name
         try:
-            if logger_dir.is_symlink():
+            if site_log_root.is_symlink():
                 raise OSError
-            logger_dir.mkdir(mode=0o700, exist_ok=True)
-            if logger_dir.is_symlink() or not logger_dir.is_dir():
+            site_log_root.mkdir(mode=0o700, exist_ok=True)
+            if site_log_root.is_symlink() or not site_log_root.is_dir():
                 raise OSError
+            logger_dirs = (bench_dir.parent / "logs", site_log_root / "logs")
+            for logger_dir in logger_dirs:
+                if logger_dir.is_symlink():
+                    raise OSError
+                logger_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+                if logger_dir.is_symlink() or not logger_dir.is_dir():
+                    raise OSError
         except OSError:
             raise RuntimeError("native Frappe logger directory is unsafe") from None
         target_backup_dir = bench_dir / "sites" / site_name / "private/backups"
