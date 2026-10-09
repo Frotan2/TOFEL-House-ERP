@@ -101,6 +101,7 @@ class WeasyPrintTests(unittest.TestCase):
             dest = Path(tmp) / "weasyprint.py"
             dest.write_bytes(source.read_bytes())
             secure_weasyprint.apply_guard(dest)
+            secure_weasyprint.verify_guard(dest)
             body = dest.read_text()
             self.assertIn("authorize_weasyprint(print_format, doc)", body)
             self.assertLess(body.index("authorize_weasyprint(print_format, doc)"), body.index("self.base_url ="))
@@ -130,6 +131,8 @@ class WeasyPrintTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "source changed"):
                 secure_weasyprint.apply_guard(dest)
             dest.write_text("class PrintFormatGenerator: pass")
+            with self.assertRaisesRegex(ValueError, "bytes changed"):
+                secure_weasyprint.verify_guard(dest)
             with self.assertRaisesRegex(ValueError, "source changed"):
                 secure_weasyprint.apply_guard(dest)
 
