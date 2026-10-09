@@ -131,31 +131,42 @@ jobs:
         working-directory: product
         run: |
           set -euo pipefail
+          checkpoint="site startup"
+          # The ERR trap also fires inside `set +e` regions (expected, handled
+          # failures such as the gate probes); report only errexit failures.
+          on_err() { [[ $- == *e* ]] || return 0; local cmd="${3//$'\n'/ }"; echo "::error title=First-boot checkpoint failed::checkpoint=${checkpoint} line=$1 exit=$2 command=${cmd:0:400}"; exit "$2"; }
+          trap 'rc=$?; on_err "$LINENO" "$rc" "$BASH_COMMAND"' ERR
           mkdir -p data/sites data/logs && chmod 777 data/sites data/logs
           docker compose up -d --no-build
           for i in $(seq 1 300); do curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break; sleep 10; done
           curl --fail --silent http://127.0.0.1:8000/ >/dev/null
           echo "::notice title=First boot::site answered after ~$((i*10))s"
           act() { docker compose exec -T web /product/activate.py "$@"; }
+          checkpoint="initial status: fail-closed REFUSED"
           act status | tee status.txt; grep -q ': REFUSED' status.txt
           # Seed the same native backup artifact the Owner's Backup command
           # creates before testing activation. The production gate is
           # intentionally fail-closed: activation must refuse with no recent
           # backup, then succeed only after the qualifying backup exists.
+          checkpoint="activation refusal before any backup"
           set +e; act activate --confirm toeflhouse.localhost; rc=$?; set -e
           test "$rc" = 2  # refused: no backup yet
+          checkpoint="plain native backup (database, public files, private files)"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
           echo "::notice title=Backup rehearsal::full database/files/private-files backup created"
+          checkpoint="activation after the plain backup"
           act activate --confirm toeflhouse.localhost | tee pre_restore_activate.txt
           grep -q 'All gates passed' pre_restore_activate.txt
           act status | grep -q ': PRODUCTION'
           echo "::notice title=Backup gate::activation passed only after a recent native backup was present"
           act deactivate --confirm toeflhouse.localhost
           act status | grep -q ': REFUSED'
+          checkpoint="native encryption: enable, back up, verify artifacts, disable"
           # Native encryption contract: enable it for one disposable backup,
           # verify the encrypted artifacts, then restore the prior disabled
           # state so the existing unencrypted restore rehearsal remains unchanged.
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute "frappe.db.set_single_value('System Settings', 'encrypt_backup', 1)"
+          checkpoint="encrypted native backup"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost backup --with-files
           encrypted_backup_dir="data/sites/toeflhouse.localhost/private/backups"
           encrypted_db="$(find "$encrypted_backup_dir" -maxdepth 1 -type f -name '*-database-enc.sql.gz' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
@@ -173,14 +184,20 @@ jobs:
           # Rehearse an actual restore against the same disposable qualification
           # site before activation. A native ToDo marker is created after the
           # backup; restoring the backup must remove that post-backup mutation.
+          # Diagnostic revision: every input and gate is an explicit check, the restore
+          # output is captured and redacted, and read-only probes report gate state.
+          # The restore call itself is unchanged (no --force, web left running).
+          checkpoint="restore: backup artifact discovery"
           backup_dir="data/sites/toeflhouse.localhost/private/backups"
           db_backup="$(find "$backup_dir" -maxdepth 1 -type f -name '*-database.sql.gz' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
-          test -n "$db_backup" && test -f "$db_backup"
+          if [ -z "$db_backup" ]; then echo "::error title=Restore input missing::no plain database backup in $backup_dir"; ls -l "$backup_dir"; exit 1; fi
           backup_base="${db_backup%-database.sql.gz}"
           files_backup="${backup_base}-files.tar"
           private_backup="${backup_base}-private-files.tar"
-          test -f "$files_backup"
-          test -f "$private_backup"
+          for artifact in "$db_backup" "$files_backup" "$private_backup"; do
+            if [ ! -f "$artifact" ]; then echo "::error title=Restore input missing::$(basename "$artifact") not found"; ls -l "$backup_dir"; exit 1; fi
+          done
+          echo "::notice title=Restore inputs::plain database, public-files and private-files backups present"
 
           marker="ERP-RESTORE-REHEARSAL-${GITHUB_RUN_ID}"
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost console <<PY
@@ -193,27 +210,89 @@ jobs:
           print(marker)
           PY
 
+          checkpoint="restore: credential inputs (values masked, never printed)"
           cred="$(docker compose exec -T -u root web cat /home/frappe/bench/sites/toeflhouse.localhost/private/first-run-credentials.txt)"
           admin_password="$(printf '%s\n' "$cred" | awk '/^Password: /{print $2}')"
           db_password="$(awk -F= '/^MARIADB_ROOT_PASSWORD=/{print $2}' data/secrets/db.env)"
-          test -n "$admin_password" && test -n "$db_password"
+          if [ -z "$admin_password" ] || [ -z "$db_password" ]; then echo "::error title=Restore credential input::administrator or database credential not available"; exit 1; fi
+          echo "::add-mask::$admin_password"
+          echo "::add-mask::$db_password"
+          unset cred
 
-          # Quiesce background writers before replacing the database. Keep
-          # web alive only long enough to execute the restore; then restart the
-          # complete application process set before probing the restored site.
+          checkpoint="restore: read-only gate probes (no site mutation)"
+          set +e
+          docker compose exec -T -i web /home/frappe/bench/env/bin/python3 - "$(basename "$db_backup")" "$marker" > restore-gate-probes.txt 2>&1 <<'PY'
+          import os
+          import shutil
+          import subprocess
+          import sys
+
+          import frappe
+          from frappe.installer import is_downgrade, is_partial, validate_database_sql
+
+          SITE = "toeflhouse.localhost"
+          SITES = "/home/frappe/bench/sites"
+          name, marker = sys.argv[1], sys.argv[2]
+          path = os.path.join(SITES, SITE, "private", "backups", name)
+          frappe.init(site=SITE, sites_path=SITES)
+          print("PROBE frappe_version=%s" % frappe.__version__)
+          print("PROBE db_type=%s" % frappe.conf.get("db_type"))
+          print("PROBE backup_file_present=%s" % os.path.isfile(path))
+          print("PROBE tools zgrep=%s file=%s" % (shutil.which("zgrep") is not None, shutil.which("file") is not None))
+          zgrep = subprocess.run(["zgrep", "-m1", "__Auth", path], capture_output=True)
+          print("PROBE zgrep_auth_exit=%s" % zgrep.returncode)
+          filetype = subprocess.run(["file", "-b", path], capture_output=True, text=True)
+          print("PROBE file_type=%s" % filetype.stdout.strip()[:120])
+          for label, call in (("is_partial", lambda: is_partial(path)), ("is_downgrade", lambda: is_downgrade(path))):
+              try:
+                  print("PROBE %s=%s" % (label, call()))
+              except Exception as exc:
+                  print("PROBE %s=error:%s" % (label, type(exc).__name__))
+          try:
+              validate_database_sql(path, _raise=True)
+              print("PROBE validate_database_sql=ok")
+          except Exception as exc:
+              print("PROBE validate_database_sql=error:%s" % type(exc).__name__)
+          frappe.connect()
+          print("PROBE marker_present_before_restore=%s" % bool(frappe.db.exists("ToDo", {"description": marker})))
+          PY
+          probe_rc=$?
+          set -e
+          grep '^PROBE ' restore-gate-probes.txt | sed 's/^PROBE /::notice title=Restore gate probe::/' || true
+          echo "::notice title=Restore gate probes::exit=${probe_rc}"
+
+          # Quiesce background writers before replacing the database. Web stays up for
+          # this restore call (unchanged from main) so the failure reproduces as-is.
+          checkpoint="restore: bench restore (plain backup, web running, no --force)"
           docker compose stop worker scheduler socketio
           restore_start="$(date +%s)"
+          set +e
           docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost restore \
             "sites/toeflhouse.localhost/private/backups/$(basename "$db_backup")" \
             --with-public-files "sites/toeflhouse.localhost/private/backups/$(basename "$files_backup")" \
             --with-private-files "sites/toeflhouse.localhost/private/backups/$(basename "$private_backup")" \
-            --db-root-password "$db_password" --admin-password "$admin_password"
+            --db-root-password "$db_password" --admin-password "$admin_password" > restore-output.txt 2>&1
+          restore_rc=$?
+          set -e
+          sed -e "s|${db_password}|[redacted]|g" -e "s|${admin_password}|[redacted]|g" restore-output.txt > restore-output.redacted.txt
+          echo "::group::bench restore output (credentials redacted; exit ${restore_rc})"
+          cat restore-output.redacted.txt
+          echo "::endgroup::"
+          if [ "$restore_rc" -ne 0 ]; then
+            restore_tail="$(tail -n 30 restore-output.redacted.txt | tr '\r\n' '  ')"
+            echo "::error title=Native bench restore failed::exit=${restore_rc} tail=${restore_tail:0:1500}"
+            exit "$restore_rc"
+          fi
+          echo "::notice title=Native bench restore::exit=0 output_lines=$(wc -l < restore-output.redacted.txt)"
+
+          checkpoint="restore: web restart and health wait"
           docker compose restart web worker scheduler socketio
           for j in $(seq 1 60); do
             curl --fail --silent http://127.0.0.1:8000/ >/dev/null && break
             sleep 2
           done
           restore_elapsed="$(($(date +%s)-restore_start))"
+          checkpoint="restore: post-restore marker probe"
           marker_after="$(docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost console <<PY
           import frappe
           print(bool(frappe.db.exists("ToDo", {"description": "$marker"})))
@@ -223,9 +302,11 @@ jobs:
           test "$restore_elapsed" -lt 28800
           echo "::notice title=Restore rehearsal::restored successfully in ${restore_elapsed}s; post-backup marker absent"
 
+          checkpoint="post-restore site-mode activation"
           act activate --confirm toeflhouse.localhost | tee activate.txt
           grep -q 'All gates passed' activate.txt
           act status | grep -q ': PRODUCTION'
+          checkpoint="fee-item refusal"
           set +e; act fee-item --confirm toeflhouse.localhost NO-SUCH-ITEM; rc=$?; set -e
           test "$rc" = 2  # refused: Item must already exist natively
           act deactivate --confirm toeflhouse.localhost
