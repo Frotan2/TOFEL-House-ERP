@@ -1301,6 +1301,16 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertEqual(owner_policies["kind"], "queue")
         self.assertEqual(len(owner_policies["items"]), 7)
         self.assertTrue(all("action" in item for item in owner_policies["items"]))
+        backup_section = self._section(payload, "backup-recovery")
+        self.assertEqual(backup_section["kind"], "queue")
+        backup_item = backup_section["items"][0]
+        self.assertEqual(backup_item["status"], "Owner configuration required")
+        self.assertIn("explicit retention behavior is configured", backup_item["detail"])
+        self.assertIn("backup and activation fail closed", backup_item["detail"])
+        self.assertIn("preserve all valid sets or authorize deletion beyond the keep count",
+                      backup_item["next"])
+        self.assertIn("no default is supplied", backup_item["next"])
+        self.assertIn("preservation hold", backup_item["stage_definition"])
         # Reporting & Metrics is carried by the owner-operations policy.
         metrics = self._section(payload, "reporting-metrics")
         self.assertEqual(metrics["kind"], "queue")
@@ -1311,9 +1321,11 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         operations = self._section(payload, "operations")
         self.assertEqual(operations["kind"], "facts")
         self.assertEqual(operations["facts"][0]["value"], "Effective")
-        self.assertIn("Governing since 2026-01-01 on channel Email",
+        self.assertIn("Effective in configuration since 2026-01-01 on channel Email",
                       operations["facts"][0]["definition"])
-        self.assertIn("retained 30 day(s), escalating after 60 minute(s)",
+        self.assertIn("retained 30 day(s), escalation term 60 minute(s)",
+                      operations["facts"][0]["definition"])
+        self.assertIn("no runtime delivery consumer exists",
                       operations["facts"][0]["definition"])
         # The guardian lifecycle policy is real too: computed readiness
         # plus the containment-still-applies statement on its face.
@@ -1321,10 +1333,14 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertEqual(guardian_section["kind"], "facts")
         self.assertEqual(guardian_section["facts"][0]["value"], "Effective")
         self.assertIn(
-            "Governing since 2026-01-01 with a delegation window of 90 "
-            "day(s).",
+            "Effective in configuration since 2026-01-01 with a delegation "
+            "window of 90 day(s).",
             guardian_section["facts"][0]["definition"])
-        self.assertIn("SEC-GUARDIAN-01 containment enforces",
+        self.assertIn("no runtime consumer",
+                      guardian_section["facts"][0]["definition"])
+        self.assertIn("even when a version is effective",
+                      guardian_section["facts"][0]["definition"])
+        self.assertIn("SEC-GUARDIAN-01 enforces",
                       guardian_section["facts"][0]["definition"])
         items = {item["id"]: item
                  for item in self._section(payload, "system-readiness")["items"]}
@@ -1347,11 +1363,21 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
                              "the map desk configures nothing")
         self.assertIn("never decided here",
                       items["ASM-EFF"]["stage_definition"])
-        self.assertIn("Alert delivery stays refused",
+        self.assertIn("No runtime grading, assessment or student-progression consumer",
+                      items["ASM-EFF"]["stage_definition"])
+        self.assertIn("D1 remains deferred",
+                      items["ASM-EFF"]["stage_definition"])
+        self.assertIn("this desk status is not runtime activation",
+                      items["ASM-EFF"]["next"])
+        self.assertIn("No runtime alert-delivery consumer is implemented",
                       items["ALERT-POL"]["stage_definition"])
         self.assertIn("never decided here",
                       items["ALERT-POL"]["stage_definition"])
-        self.assertIn("SEC-GUARDIAN-01 containment enforces",
+        self.assertIn("No runtime guardian consumer is implemented",
+                      items["GRD-POL"]["stage_definition"])
+        self.assertIn("even when a version is effective",
+                      items["GRD-POL"]["stage_definition"])
+        self.assertIn("SEC-GUARDIAN-01 enforces",
                       items["GRD-POL"]["stage_definition"])
         self.assertIn("never decided here",
                       items["GRD-POL"]["stage_definition"])

@@ -24,6 +24,9 @@ echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :up
 if not exist data\secrets\db.env goto :nosecret
+if not exist data\activation mkdir data\activation
+icacls data\activation /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
+if errorlevel 1 goto :failed
 echo  Starting TOEFL House ERP...
 docker compose up -d --no-build
 if errorlevel 1 goto :failed
@@ -32,8 +35,11 @@ set READY_TRIES=60
 :waitready
 timeout /t 10 /nobreak >nul
 docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-web 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
+docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-db 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
+docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-queue 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
+docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-cache 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
+docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-socketio 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
 docker inspect --format "{{.State.Status}}" toefl-house-erp-worker 2>nul | findstr /x /c:"running" >nul || goto :waitservices
-docker inspect --format "{{.State.Status}}" toefl-house-erp-socketio 2>nul | findstr /x /c:"running" >nul || goto :waitservices
 docker inspect --format "{{.State.Status}}" toefl-house-erp-scheduler 2>nul | findstr /x /c:"running" >nul || goto :waitservices
 goto :ready
 :waitservices
@@ -69,7 +75,7 @@ echo.
 docker compose ps
 echo.
 echo  Last lines of the application logs:
-docker compose logs --tail 5 web worker socketio scheduler 2>&1
+docker compose logs --tail 5 bootstrap web worker socketio scheduler 2>&1
 echo.
 echo  Container state and restart counts:
 docker inspect --format "{{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} restarts={{.RestartCount}} oom={{.State.OOMKilled}}" toefl-house-erp-web toefl-house-erp-worker toefl-house-erp-socketio toefl-house-erp-scheduler 2>nul

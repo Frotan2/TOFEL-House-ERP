@@ -52,7 +52,25 @@ echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :dockerup
 
+echo  Checking product source line endings before the image build...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Normalize Product Sources.ps1"
+set "NORMALIZE_STATUS=%ERRORLEVEL%"
+if "%NORMALIZE_STATUS%"=="0" goto :sourcesready
+if "%NORMALIZE_STATUS%"=="10" goto :sourceschanged
+goto :sourcefailed
+:sourceschanged
+echo  Existing checkout source endings were repaired safely.
+:sourcesready
+
 if not exist data\secrets mkdir data\secrets
+rem  Restrict database credentials before writing any temporary password.
+rem  The interactive Docker Desktop user, LocalSystem and local admins need
+rem  access; inherited access for unrelated local accounts is removed.
+icacls data\secrets /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
+if errorlevel 1 goto :secretaclfailed
+if not exist data\activation mkdir data\activation
+icacls data\activation /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
+if errorlevel 1 goto :secretaclfailed
 rem  Secret generation: no FOR /F here. cmd's FOR parser mishandles the ')'
 rem  inside PowerShell's ToString('N') even at top level (proven on a real
 rem  Windows run: ") was unexpected at this time."). Instead PowerShell
@@ -82,7 +100,16 @@ echo  You can watch progress in Docker Desktop, or simply wait for the browser.
 set READY_TRIES=300
 :waitready
 timeout /t 10 /nobreak >nul
-curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul && goto :ready
+curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul || goto :preparing
+docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-web 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
+docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-db 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
+docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-queue 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
+docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-cache 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
+docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-socketio 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
+docker inspect --format "{{.State.Status}}" toefl-house-erp-worker 2>nul | findstr /x /c:"running" >nul || goto :preparing
+docker inspect --format "{{.State.Status}}" toefl-house-erp-scheduler 2>nul | findstr /x /c:"running" >nul || goto :preparing
+goto :ready
+:preparing
 echo  Still preparing... site setup can take 15-40 minutes on first run.
 set /a READY_TRIES-=1
 if READY_TRIES GTR 0 goto :waitready
@@ -105,13 +132,27 @@ echo  Install finished. From now on use the "Start TOEFL House ERP" shortcut.
 pause
 exit /b 0
 
+:secretaclfailed
+echo.
+echo  Windows could not restrict access to the local secrets and activation receipt folders.
+echo  No database password was generated. Check this account's local permissions and try again.
+pause
+exit /b 1
+
+:sourcefailed
+echo.
+echo  Product source files could not be safely normalized. No product data was changed.
+echo  Send a photo of this window and the product source folder to support.
+pause
+exit /b 1
+
 :failed
 echo.
 echo  ------------------------------------------------------------------
 echo  Something went wrong. Current service state:
 docker compose ps
 echo  Last lines of the application log:
-docker compose logs --tail 5 web 2>&1
+docker compose logs --tail 5 bootstrap web worker scheduler socketio 2>&1
 echo.
 echo  Double-click "Repair TOEFL House ERP.cmd"; it restarts the system
 echo  and finishes the unfinished setup safely. If it repeats, send a

@@ -23,6 +23,9 @@ snapshots every Fees on record so finance acts on native documents.
 
 from contextlib import contextmanager
 from datetime import date
+import json
+from pathlib import Path
+import re
 import frappe
 
 from toefl_house.academic import rules
@@ -54,11 +57,102 @@ def _name(value, label):
 
 
 def validate_terms(approver_role):
-    """Shape-check one policy version's terms (command + controller)."""
+    """Shape-check one policy version's dismissal approver term."""
     if not isinstance(approver_role, str) or not approver_role \
             or len(approver_role) > 140:
         raise ValueError("Approver role required")
     return approver_role
+
+
+def _default_owner_decisions_path():
+    # In the shipped image the immutable copy packaged at build time is always
+    # authoritative. The checkout copy is only a local test/development fallback;
+    # never let a mutable bench/docs file shadow the release ledger.
+    release_ledger = Path("/product/owner-decisions.json")
+    if release_ledger.is_file():
+        return release_ledger
+    checkout_ledger = Path(__file__).resolve().parents[4] / "docs" / "owner-decisions.json"
+    return checkout_ledger
+
+
+# This is the immutable, release-packaged copy of the canonical Owner decision
+# ledger (docs/owner-decisions.json). The runtime never trusts a free-form
+# reference or a DocType reason as an Owner decision. Keep D5 deferred unless
+# a reviewed ledger record meets the exact supersession contract below.
+OWNER_DECISIONS_PATH = _default_owner_decisions_path()
+_REQUIRED_EXIT_AUTHORIZATIONS = frozenset({
+    "enrollment_exit.withdrawal",
+    "enrollment_exit.dismissal",
+})
+
+
+def _d5_supersession_record_authorizes_exits(record_id):
+    path = Path(OWNER_DECISIONS_PATH)
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 2 * 1024 * 1024:
+            return False
+        ledger = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(ledger, dict):
+        return False
+    decisions = ledger.get("resolved_business_decisions")
+    if not isinstance(decisions, dict):
+        return False
+    decision = decisions.get(record_id)
+    if not isinstance(decision, dict) or decision.get("id") != record_id:
+        return False
+    if decision.get("status") != "DECIDED" or decision.get("authority") != "Course Owner":
+        return False
+    try:
+        date.fromisoformat(str(decision.get("date") or ""))
+    except ValueError:
+        return False
+    supersedes = decision.get("supersedes")
+    if not isinstance(supersedes, list) or "D5" not in supersedes:
+        return False
+    if decision.get("exact_scope") != "toefl_house.enrollment.exits":
+        return False
+    answers = decision.get("owner_answers")
+    if (not isinstance(answers, list) or not answers
+            or any(not isinstance(answer, str) or not answer.strip() for answer in answers)):
+        return False
+    authorizations = decision.get("authorizes_runtime_policy")
+    if not isinstance(authorizations, list) or not all(
+            isinstance(item, str) for item in authorizations):
+        return False
+    return _REQUIRED_EXIT_AUTHORIZATIONS.issubset(set(authorizations))
+
+
+def validate_superseding_owner_decision_reference_shape(value):
+    """Validate only the stored reference syntax; this is not authorization."""
+    if not isinstance(value, str):
+        raise ValueError("A recorded Owner decision reference that supersedes D5 is required")
+    text = value.strip()
+    match = re.fullmatch(
+        r"D5-SUPERSESSION:([A-Za-z0-9][A-Za-z0-9._/-]{0,119})", text)
+    placeholders = {"d5", "tbd", "tbc", "pending", "none", "na", "deferred", "placeholder"}
+    if not match or match.group(1).casefold() in placeholders:
+        raise ValueError(
+            "Use D5-SUPERSESSION:<record-id> for a separately recorded Owner decision; placeholders are not accepted")
+    return text, match.group(1)
+
+
+def validate_superseding_owner_decision_reference(value):
+    """Resolve a D5 reference against the immutable canonical Owner ledger.
+
+    A shape-valid id is not authorization. The release-packaged
+    ``owner-decisions.json`` must contain a DECIDED Course Owner record with
+    valid date, explicit ``supersedes: ["D5"]``, the exact enrollment-exits
+    scope, nonempty Owner answers, and runtime authorization for both
+    withdrawal and dismissal. Missing, malformed, unreadable, or out-of-scope
+    records fail closed.
+    """
+    text, record_id = validate_superseding_owner_decision_reference_shape(value)
+    if not _d5_supersession_record_authorizes_exits(record_id):
+        raise ValueError(
+            "No resolved Course Owner decision in owner-decisions.json explicitly supersedes D5 and authorizes both withdrawal and dismissal")
+    return text
 
 
 def _policy_doc(code, for_update=False):
@@ -84,6 +178,12 @@ def _policy_result(doc, extra=None):
     versions = [row.as_dict() for row in (doc.get("versions") or [])]
     governing = configuration_rules.resolve_governing(
         versions, frappe.utils.today())
+    if governing:
+        try:
+            validate_superseding_owner_decision_reference(
+                governing.get("superseding_owner_decision_reference"))
+        except ValueError:
+            governing = None
     result = {
         "name": doc.name, "code": doc.code, "title": doc.title,
         "status": doc.status, "version_count": len(versions),
@@ -115,9 +215,18 @@ def governing_exit_terms(on_date=None):
         versions, on_date or frappe.utils.today())
     if not governing:
         return {}
+    try:
+        decision_reference = validate_superseding_owner_decision_reference(
+            governing.get("superseding_owner_decision_reference"))
+        validate_terms(governing.get("approver_role") or "")
+    except ValueError:
+        # Legacy, fabricated, unresolved, or out-of-scope references never
+        # override the canonical Owner decision ledger's D5 deferral.
+        return {}
     return {
         "effective_from": str(governing.get("effective_from") or ""),
         "approver_role": governing.get("approver_role") or "",
+        "superseding_owner_decision_reference": decision_reference,
     }
 
 
@@ -161,13 +270,14 @@ def create_enrollment_exit_policy(request_key, code, title, description=""):
 
 @frappe.whitelist(methods=["POST"])
 def set_enrollment_exit_policy_version(request_key, policy, effective_from,
-                                       reason, approver_role):
-    """Append an effective-dated enrollment-exit policy version.
+                                       reason, approver_role,
+                                       superseding_owner_decision_reference):
+    """Append a version only with an audited, resolved supersession of D5.
 
-    The version enacts one dismissal approver role from
-    ``effective_from``; a change reason is mandatory; backdated or
-    same-day versions are refused. The superseded version is closed,
-    never rewritten.
+    The version enacts one dismissal approver role from ``effective_from``;
+    both a change reason and a reference that resolves to a DECIDED Course
+    Owner record in the canonical ledger are mandatory. Backdated or same-day
+    versions are refused. The superseded version is closed, never rewritten.
     """
     def work(actor):
         try:
@@ -175,6 +285,8 @@ def set_enrollment_exit_policy_version(request_key, policy, effective_from,
             clean_from = rules.parse_date(effective_from)
             clean_reason = configuration_rules.validate_change_reason(reason)
             clean_role = validate_terms(approver_role)
+            clean_decision_reference = validate_superseding_owner_decision_reference(
+                superseding_owner_decision_reference)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         if not frappe.db.exists("Role", clean_role):
@@ -194,6 +306,7 @@ def set_enrollment_exit_policy_version(request_key, policy, effective_from,
         before = configuration_audit.latest_after_hash(doc.name)
         doc.append("versions", {
             "effective_from": clean_from, "approver_role": clean_role,
+            "superseding_owner_decision_reference": clean_decision_reference,
             "reason": clean_reason, "set_by": actor,
             "set_on": frappe.utils.now_datetime()})
         if current:
@@ -212,7 +325,8 @@ def set_enrollment_exit_policy_version(request_key, policy, effective_from,
         }
 
     payload = {"policy": policy, "effective_from": effective_from,
-               "reason": reason, "approver_role": approver_role}
+               "reason": reason, "approver_role": approver_role,
+               "superseding_owner_decision_reference": superseding_owner_decision_reference}
     return configuration_audit.execute(
         "set_enrollment_exit_policy_version", request_key, payload, work)
 
@@ -422,6 +536,8 @@ def withdraw_enrollment(request_key, program_enrollment, exit_date, reason):
             "requested_on": frappe.utils.now_datetime(),
             "pinned_effective_from": terms["effective_from"],
             "pinned_approver_role": terms["approver_role"],
+            "pinned_superseding_owner_decision_reference": (
+                terms["superseding_owner_decision_reference"]),
             "approved_by": actor,
             "fees_snapshot": _fees_snapshot(pe_name),
             "cancelled_courses": ", ".join(cancelled) if cancelled else "none",
@@ -474,6 +590,8 @@ def request_enrollment_dismissal(request_key, program_enrollment, reason):
             "requested_on": frappe.utils.now_datetime(),
             "pinned_effective_from": terms["effective_from"],
             "pinned_approver_role": terms["approver_role"],
+            "pinned_superseding_owner_decision_reference": (
+                terms["superseding_owner_decision_reference"]),
             "fees_snapshot": _fees_snapshot(pe_name),
             "synthetic": record_synthetic_flag(),
         })
@@ -501,6 +619,12 @@ def approve_enrollment_dismissal(request_key, exit):
     """
     def work(actor):
         req = _pending_exit(_name(exit, "Enrollment exit"))
+        try:
+            validate_superseding_owner_decision_reference(
+                req.pinned_superseding_owner_decision_reference)
+        except ValueError as exc:
+            raise frappe.ValidationError(
+                "This dismissal request has no currently resolved D5 supersession decision and cannot be approved") from exc
         _require_approver(req.pinned_approver_role, actor)
         facts = _locked_enrollment_facts(req.program_enrollment)
         if int(facts.docstatus or 0) != 1:

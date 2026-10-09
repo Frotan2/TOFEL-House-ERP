@@ -38,28 +38,65 @@ once. Its installer is click-through.
 
 1. Download this repository (GitHub **Code → Download ZIP**) and unzip it.
 2. Open `product\windows` and double-click **Install TOEFL House ERP.cmd**.
-   The first build takes 20–60 minutes. When it finishes, it shows your
+   The first build takes 20–60 minutes. When it finishes, it shows the initial
    Administrator password and opens `http://127.0.0.1:8000` in your browser.
+   Administrator is for first-run setup/recovery, not the daily Course Owner
+   login; follow the validation checklist to create a separate native User
+   with the Course Owner role before configuring policy.
 3. Every day after that: **Start TOEFL House ERP.cmd** opens the system and
    **Stop TOEFL House ERP.cmd** closes it.
-   **Backup TOEFL House ERP.cmd** writes a full backup that you can copy to
-   an external drive. **Repair TOEFL House ERP.cmd** does a safe restart and
-   never deletes data.
+   **Backup TOEFL House ERP.cmd** is intended to create and verify an encrypted
+   backup on a separate fixed local drive on this PC; do not run it until the
+   Owner's retention choice is resolved as described below. If explicitly
+   selected, deletion mode can remove older valid sets beyond the keep count;
+   preservation mode keeps all valid sets. No behavior is defaulted, so
+   backup/activation fails closed while the choice is unresolved. **Repair TOEFL House ERP.cmd**
+   does a safe restart and never deletes data.
 
 **Other authorized computers:** the ERP always listens only on the central
 PC (nothing is opened on the public internet). Staff PCs in your Tailscale
 network reach it over that private network — Tailscale installed on each PC
-plus one `tailscale serve` command on the central PC
-(docs/engineering/LAUNCH-RUNBOOK.md, "Multi-user access (central server +
-Tailscale)"). Each person logs in with their own user.
+plus the two path-specific `tailscale serve` routes for web and Socket.IO on
+the central PC (docs/engineering/LAUNCH-RUNBOOK.md, "Multi-user access
+(central server + Tailscale)"). Each person logs in with their own user.
 
 First run step by step: [product/windows/VALIDATION.md](product/windows/VALIDATION.md).
-The TOEFL House workflows stay switched off until the one-time activation:
-run **Backup TOEFL House ERP.cmd**, then **Activate TOEFL House ERP.cmd** and
-type `ACTIVATE`. It refuses without a backup from the last 24 hours, checks
-every safety gate and puts the old settings back if one fails.
-**Deactivate TOEFL House ERP.cmd** undoes it. What the gates are:
-[docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md).
+The TOEFL House workflows stay fail-closed until the Course Owner creates
+and validates an effective-dated Owner policy in the ERP Configuration desk
+using approved values for every required field (reporting review, class
+capacity, tax, transfers/withdrawals, calendar, backup time, retention count
+and behavior, recovery key/custody and quorum). No defaults or placeholders are
+supplied. The Owner provides only an ASCII-armored OpenPGP **public** key,
+generated/exported under a dedicated key-custody procedure; the matching
+private key stays under Owner
+custody outside Frappe and the backup drive. Never paste it into the ERP,
+container, or backup set. **Do not run `Backup TOEFL House ERP.cmd` yet:** the
+Course Owner must explicitly choose to preserve all valid sets or authorize
+deleting older valid sets beyond the keep count. The policy has no default and
+backup/activation fail closed while this choice is unresolved. Wait until the
+Owner's decision and the implementation/documentation are reconciled. The
+intended backup contains three native encrypted database/files artifacts
+plus an OpenPGP-encrypted site-config recovery artifact, is SHA-256/size
+verified, and is
+copied to a separate fixed local drive on the same PC. The unencrypted Frappe
+site-config sidecar is never copied to that drive. The registered daily task
+runs as the interactive Windows user, so that user session and Docker Desktop
+must be available when it runs. Off-site/NAS/second-device/cloud backup is
+future scope, not a current release gate.
+
+After the preservation hold is resolved and a verified backup exists, run
+**Activate TOEFL House ERP.cmd** and type `ACTIVATE`; the Windows host
+revalidates the secondary-drive manifest/artifacts, scheduled task, and live
+Owner policy before changing only the site's operational mode. Do not activate
+while the hold remains. This **does not** grant production release
+authorization: authorization remains
+**REJECT** until the acceptance evidence and Owner/non-engineering gates pass.
+**Deactivate TOEFL House ERP.cmd** returns site mode to REFUSED. For restore,
+GPG/Gpg4win is required on a trusted host to create/export or recover the
+Owner's dedicated key pair and decrypt the site-config artifact with the
+Owner-held private key outside the container; see the canonical
+[launch runbook](docs/engineering/LAUNCH-RUNBOOK.md). CI cannot qualify the
+Owner's real key custody or Windows/Tailscale operation.
 
 ## Developer
 
@@ -70,7 +107,6 @@ product/                  the desktop runtime: Dockerfile, compose, bootstrap, W
 tests/                    unit and contract tests (no site needed)
 tools/native/             real-site lifecycle checks run in CI
 tools/foundation/         pinned-stack install, runtime smoke and dependency-advisory audit run in CI
-tools/operations/         encrypted multi-version backup tool
 docs/                     product, decisions, specs, runbook
 ```
 
@@ -87,7 +123,14 @@ CI (`.github/workflows/`):
 - `owned-suite`: lint, unit tests and Node tests on every push.
 - `native-lifecycle`: installs the pinned stack and runs the real-site lifecycle checks.
 - `foundation-runtime`: hardened install, runtime smoke and the SEC-DEPS-01 advisory audit.
-- `product-image`: builds the desktop image.
+- `product-image`: builds the desktop image and qualifies first boot, a
+  disposable synthetic Owner recovery-key backup/restore, guarded site-mode
+  activation/rollback, browser login, and the loopback/Tailscale-proxy
+  contract. Its Windows runner also tests fresh and deliberately stale
+  CRLF/BOM worktrees through source normalization; that contract check is not
+  a real Windows install/lifecycle proof. CI does not qualify the Owner's
+  Docker Desktop/Task Scheduler/data, actual private-key custody, or a real
+  Tailscale tailnet/WebSocket path.
 
 Pinned versions live in one place:
 [docs/engineering/foundation-version-matrix.json](docs/engineering/foundation-version-matrix.json).
@@ -104,7 +147,7 @@ The Dockerfile, compose file and CI are tested against it.
 | [docs/ROLE-DESKS.md](docs/ROLE-DESKS.md) | Role desks: audiences, data sources, permissions |
 | [docs/PLACEMENT-SPEC.md](docs/PLACEMENT-SPEC.md) | Placement technical specification |
 | [docs/FINANCE-POLICY-APPROVAL.md](docs/FINANCE-POLICY-APPROVAL.md) | Owner approval record for the finance framework |
-| [docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md) | Production activation and rollback |
+| [docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md) | Guarded site-mode lifecycle, backup, restore, and rollback (not release authorization) |
 
 ## Contribution and data policy
 

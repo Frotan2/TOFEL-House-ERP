@@ -1,0 +1,92 @@
+"""Run the product's native backup adapter for a disposable CI site only.
+
+The adapter delegates backup creation and encryption to pinned Frappe. Its
+explicit test-site override is not exposed by product/backup.py's CLI.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+import re
+import sys
+import traceback
+
+ROOT = Path(__file__).resolve().parents[2]
+_SAFE_EXCEPTION_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}\Z")
+
+
+def safe_failure_summary(error: BaseException) -> str:
+    """Expose only a validated class, numeric OS code, and compact frames."""
+    name = type(error).__name__
+    if not _SAFE_EXCEPTION_NAME.fullmatch(name):
+        name = "Exception"
+    details = ["exception type: " + name]
+    code = getattr(error, "errno", None)
+    if type(code) is int and 0 <= code <= 65535:
+        details.append("OS error code: " + str(code))
+    if name == "BackupInputError":
+        safe_code = getattr(error, "safe_code", None)
+        if (isinstance(safe_code, str)
+                and re.fullmatch(
+                    r"gpg-(?:database|public-files|private-files)-(?:probe-error|"
+                    r"symmetric-packet-missing|check-exit-(?:other|\d{1,3}))",
+                    safe_code)):
+            details.append("backup diagnostic code: " + safe_code)
+        safe_category = getattr(error, "safe_category", None)
+        if (isinstance(safe_category, str)
+                and safe_category in {
+                    "probe-error", "no-valid-openpgp-data", "invalid-packet",
+                    "input-missing", "permission-denied", "bad-passphrase",
+                    "invalid-option", "operation-not-permitted", "terminal-unavailable",
+                    "pinentry-unavailable", "agent-unavailable", "unclassified",
+                }):
+            details.append("backup diagnostic category: " + safe_category)
+    if name == "CommandFailedError":
+        # Pinned Frappe stores subprocess stderr in `.err` and stdout in `.out`.
+        # MariaDB/MySQL clients do not use one consistent stream for every
+        # diagnostic; inspect both, but emit only the bounded numeric code.
+        for attribute in ("err", "out"):
+            client_output = getattr(error, attribute, None)
+            if not isinstance(client_output, str):
+                continue
+            match = re.search(
+                r"\b(?:got error|error(?:\s+code)?)\s*(?::|=|#)?\s*(\d{1,5})\b",
+                client_output, re.IGNORECASE)
+            if match:
+                code = int(match.group(1))
+                if 0 < code <= 65535:
+                    details.append("client diagnostic code: " + str(code))
+                    break
+    frames = []
+    try:
+        for frame in traceback.extract_tb(error.__traceback__)[-6:]:
+            if re.fullmatch(r"[A-Za-z0-9_<>.-]{1,128}", frame.name):
+                frames.append(f"{frame.name}:{frame.lineno}")
+    except Exception:
+        frames = []
+    if frames:
+        details.append("frames: " + ",".join(frames))
+    return "; ".join(details)
+
+
+sys.path.insert(0, str(ROOT / "product"))
+import backup  # noqa: E402
+
+
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) != 1 or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}", argv[0]):
+        sys.stderr.write("Synthetic backup site is invalid.\n")
+        return 2
+    try:
+        backup._native_backup(site_name=argv[0], allow_test_site=True)
+    except (Exception, SystemExit) as error:
+        sys.stderr.write(
+            "Native Frappe backup failed; " + safe_failure_summary(error)
+            + "; sensitive diagnostics were withheld.\n")
+        return 1
+    sys.stdout.write("Native Frappe backup adapter completed.\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

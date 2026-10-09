@@ -36,16 +36,22 @@ class ProductRestoreContractTests(unittest.TestCase):
             "PLACEMENT_RESTORE_REPORT", "source_db_credentials_copied"
         ):
             self.assertIn(token, RUNNER)
-        self.assertIn("'--with-public-files'", RUNNER)
-        self.assertIn("'--with-private-files'", RUNNER)
+        self.assertIn("restore_backup_dir.mkdir(parents=True,exist_ok=True)", RUNNER)
+        self.assertIn("shutil.copy2(artifact,restore_backup_dir/artifact.name)", RUNNER)
+        self.assertIn("input_text=restore_payload", RUNNER)
+        self.assertIn("ROOT/'product/restore.py'", RUNNER)
+        self.assertNotIn("'--with-public-files'", RUNNER)
+        self.assertNotIn("'--with-private-files'", RUNNER)
         self.assertIn("assert source_config['db_name'] != restore_config['db_name']", RUNNER)
         self.assertIn("assert source_config.get('db_password') != restore_config.get('db_password')", RUNNER)
         self.assertIn("restore_config['encryption_key'] = source_config['encryption_key']", RUNNER)
 
-    def test_runner_handles_hosted_mysql_client_to_mariadb_backup_compatibility(self):
+    def test_runner_handles_hosted_mysql_client_without_displacing_credential_file_option(self):
         self.assertIn("dump_binary = shutil.which('mysqldump')", RUNNER)
-        self.assertIn("' --column-statistics=0'", RUNNER)
-        self.assertIn("if '--column-statistics' in dump_help", RUNNER)
+        self.assertIn("disable_column_statistics='--column-statistics' in dump_help", RUNNER)
+        self.assertIn("write_mysqldump_wrapper(", RUNNER)
+        self.assertIn("--defaults-extra-file=*|--defaults-file=*", RUNNER)
+        self.assertIn("--column-statistics=0", RUNNER)
         self.assertIn("lab/'tools/bin/mysqldump'", RUNNER)
 
 

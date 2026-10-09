@@ -10,8 +10,14 @@ on:
       - .github/workflows/native-lifecycle.yml
       - apps/**
       - tools/native/**
+      - product/bootstrap.py
+      - product/backup.py
+      - product/restore.py
+      - product/native_gpg.py
+      - product/native_db.py
       - tools/foundation/runner_probe.py
       - docs/engineering/foundation-version-matrix.json
+      - docs/owner-decisions.json
   workflow_dispatch:
 
 permissions:

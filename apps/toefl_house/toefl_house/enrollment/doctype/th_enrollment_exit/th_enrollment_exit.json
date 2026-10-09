@@ -18,6 +18,7 @@
   "section_break_2",
   "pinned_effective_from",
   "pinned_approver_role",
+  "pinned_superseding_owner_decision_reference",
   "column_break_3",
   "status",
   "approved_by",
@@ -105,6 +106,13 @@
    "fieldtype": "Data",
    "label": "Pinned approver role",
    "reqd": 1
+  },
+  {
+   "description": "Immutable policy basis copied from the governing exit-policy version. The referenced separately recorded Owner decision supersedes D5; this snapshot is not itself the decision.",
+   "fieldname": "pinned_superseding_owner_decision_reference",
+   "fieldtype": "Data",
+   "label": "Pinned superseding Owner decision reference",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_3",

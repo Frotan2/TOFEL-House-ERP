@@ -8,7 +8,9 @@ live re-proven facts. Loads the REAL enrollment exits module against
 a scripted frappe stub; hosted CI proves the exit journey.
 """
 import importlib.util
+import json
 import sys
+import tempfile
 import types
 import unittest
 from datetime import date, timedelta
@@ -17,6 +19,7 @@ from types import SimpleNamespace
 
 APP = Path(__file__).resolve().parents[2] / "apps/toefl_house/toefl_house"
 ACTOR = "enrollment.officer@example.com"
+TEST_DECISION_ID = "SYNTHETIC-TEST-OWNER-DECISION-01"
 
 
 class _ValidationError(Exception):
@@ -33,6 +36,27 @@ def _load_real(modname, path):
     sys.modules[modname] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _write_synthetic_owner_decision_ledger(path):
+    """Test-only authorization fixture; never edit the canonical Owner ledger."""
+    path.write_text(json.dumps({
+        "resolved_business_decisions": {
+            TEST_DECISION_ID: {
+                "id": TEST_DECISION_ID,
+                "date": "2026-10-08",
+                "status": "DECIDED",
+                "authority": "Course Owner",
+                "owner_answers": ["Synthetic unit-test authorization only."],
+                "exact_scope": "toefl_house.enrollment.exits",
+                "supersedes": ["D5"],
+                "authorizes_runtime_policy": [
+                    "enrollment_exit.withdrawal",
+                    "enrollment_exit.dismissal",
+                ],
+            }
+        }
+    }), encoding="utf-8")
 
 
 class _Row(dict):
@@ -104,6 +128,7 @@ class EnrollmentExitCommandTests(unittest.TestCase):
                 "effective_from": str(date.today() - timedelta(days=30)),
                 "approver_role": "Academic Manager",
                 "reason": "Owner opens enrollment exits",
+                "superseding_owner_decision_reference": "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01",
                 "set_by": "course.owner@example.com",
                 "set_on": "2026-09-19 12:00:00"})])
         self.enrollments = {
@@ -239,6 +264,10 @@ class EnrollmentExitCommandTests(unittest.TestCase):
         self.exits = _load_real(
             "toefl_house.enrollment.exits",
             APP / "enrollment/exits.py")
+        self._owner_decisions_tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._owner_decisions_tempdir.cleanup)
+        self.exits.OWNER_DECISIONS_PATH = Path(self._owner_decisions_tempdir.name) / "owner-decisions.json"
+        _write_synthetic_owner_decision_ledger(self.exits.OWNER_DECISIONS_PATH)
 
     def _withdraw(self, key="test-key-enrexit-wd01", pe="PE-1",
                   exit_date=None, reason="Student relocates abroad"):
@@ -253,6 +282,8 @@ class EnrollmentExitCommandTests(unittest.TestCase):
                   "requested_on": "2026-09-22 12:00:00",
                   "pinned_effective_from": str(date.today() - timedelta(days=30)),
                   "pinned_approver_role": "Academic Manager",
+                  "pinned_superseding_owner_decision_reference":
+                      "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01",
                   "status": "Requested"}
         fields.update(overrides)
         self.exit_doc = _Doc("EXIT-1", **fields)
@@ -274,6 +305,9 @@ class EnrollmentExitCommandTests(unittest.TestCase):
         self.assertEqual(exit_doc.exit_kind, "Withdrawal")
         self.assertEqual(exit_doc.exit_date, str(date.today()))
         self.assertEqual(exit_doc.pinned_approver_role, "Academic Manager")
+        self.assertEqual(
+            exit_doc.pinned_superseding_owner_decision_reference,
+            "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01")
         self.assertEqual(exit_doc.fees_snapshot, "no Fees on record")
         self.assertEqual(exit_doc.cancelled_courses, "CE-1, CE-2")
         self.assertEqual(exit_doc.requested_by, ACTOR)
@@ -349,6 +383,9 @@ class EnrollmentExitCommandTests(unittest.TestCase):
         exit_doc = self.inserted_exits[0]
         self.assertTrue(exit_doc.inserted)
         self.assertEqual(exit_doc.pinned_approver_role, "Academic Manager")
+        self.assertEqual(
+            exit_doc.pinned_superseding_owner_decision_reference,
+            "D5-SUPERSESSION:SYNTHETIC-TEST-OWNER-DECISION-01")
         self.assertEqual(exit_doc.requested_by, ACTOR)
         self.assertEqual(self.deleted_ces, [])
         self.assertNotIn("PE-1", self.pe_docs)
@@ -398,6 +435,27 @@ class EnrollmentExitCommandTests(unittest.TestCase):
             self.exits.approve_enrollment_dismissal(
                 "test-key-enrexit-ap02", "EXIT-1")
         self.assertIn("approver role", str(ctx.exception))
+
+    def test_legacy_dismissal_without_d5_reference_cannot_be_approved(self):
+        self.actor_roles = {"Enrollment Officer", "Academic Manager"}
+        self._pending_doc(pinned_superseding_owner_decision_reference="")
+        with self.assertRaises(_ValidationError) as ctx:
+            self.exits.approve_enrollment_dismissal(
+                "test-key-enrexit-ap02a", "EXIT-1")
+        self.assertIn("no currently resolved D5 supersession decision", str(ctx.exception))
+        self.assertEqual(self.deleted_ces, [])
+        self.assertFalse(self.pe_docs)
+
+    def test_fabricated_pinned_decision_cannot_authorize_dismissal(self):
+        self.actor_roles = {"Enrollment Officer", "Academic Manager"}
+        self._pending_doc(
+            pinned_superseding_owner_decision_reference="D5-SUPERSESSION:MADE-UP-RECORD")
+        with self.assertRaises(_ValidationError) as ctx:
+            self.exits.approve_enrollment_dismissal(
+                "test-key-enrexit-ap02b", "EXIT-1")
+        self.assertIn("no currently resolved D5 supersession decision", str(ctx.exception))
+        self.assertEqual(self.deleted_ces, [])
+        self.assertFalse(self.pe_docs)
 
     def test_approve_refused_when_not_pending(self):
         self.actor_roles = {"Enrollment Officer", "Academic Manager"}

@@ -12,7 +12,9 @@ verified slice.
 """
 from __future__ import annotations
 
+import codecs
 import json
+import os
 import subprocess
 from pathlib import Path
 import re
@@ -81,6 +83,11 @@ class PinParityContract(unittest.TestCase):
         # Dockerfile COPYs must also be un-ignored, or the COPY has no
         # source file and the build fails before any layer is made.
         ignore = (ROOT / ".dockerignore").read_text()
+        ignore_lines = ignore.splitlines()
+        self.assertIn("!docs/", ignore_lines)
+        self.assertIn("docs/*", ignore_lines,
+                      "only the canonical Owner ledger should enter the build context")
+        self.assertIn("!docs/owner-decisions.json", ignore_lines)
         referenced = set(re.findall(r"/product/([A-Za-z0-9_.]+\.(?:py|sh))", workflow.read_text()))
         self.assertTrue(referenced, "expected /product/ script references in the workflow")
         missing_copy = [name for name in sorted(referenced)
@@ -176,6 +183,19 @@ class DependencyPinContract(unittest.TestCase):
             for key in ("status", "source_version", "runtime_imported_version", "risk"):
                 self.assertNotIn(key, part, f"stale field {key}")
 
+    def test_remaining_unlocked_inputs_are_explicitly_not_claimed_reproducible(self):
+        matrix = json.loads(self.MATRIX.read_text())
+        lock_status = matrix["lock_status"]
+        self.assertTrue(any("python base image" in item
+                            for item in lock_status["tag_pinned"]))
+        self.assertTrue(any("Debian bookworm OS packages" in item
+                            for item in lock_status["not_locked"]))
+        self.assertTrue(any("resolved Python dependency set" in item
+                            for item in lock_status["not_locked"]))
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        self.assertIn("does not turn the", workflow)
+        self.assertIn("bit-for-bit reproducible image", workflow)
+
     def test_upstream_contradictions_are_recorded_not_hidden(self):
         parts = matrix_parts()
         # education: the tag v16.1.0 vs source 16.0.1 mismatch is an upstream
@@ -260,16 +280,68 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("FreeSpace -gt 1073741824", body)
         self.assertIn("DeviceID -ne $sourceDrive", body)
         self.assertIn("encrypt_backup", body)
+        self.assertIn('"/product/backup.py"', body)
+        self.assertNotIn('"backup", "--with-files"', body)
         self.assertIn("database-enc.sql.gz", body)
         self.assertIn("files-enc.tar", body)
         self.assertIn("private-files-enc.tar", body)
         self.assertIn("Get-FileHash", body)
         self.assertIn("SHA256", body)
         self.assertIn("manifest.json", body)
+        self.assertIn("$manifest.source_site -ne $site", body)
+        self.assertIn("function Test-ExactBackupSetFiles", body)
+        self.assertIn("$entries.Count -ne 5", body)
+        self.assertIn("$entry.PSIsContainer", body)
+        self.assertIn("ReparsePoint", body)
+        self.assertIn("only manifest.json and exactly four safe encrypted payload files", body)
+        self.assertIn("A plaintext Frappe site-config sidecar remains in the native backup folder", body)
+        self.assertIn("$expectedTaskUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name", body)
+        self.assertIn("$task.Principal.UserId", body)
+        self.assertIn("$registered.Principal.UserId", body)
+        self.assertIn("-LogonType Interactive", body)
+        self.assertIn("$retentionPreserveAll", body)
+        self.assertIn("$retentionDeleteBeyondKeep", body)
+        self.assertIn("if ([string]$policy.retention_behavior -eq $retentionDeleteBeyondKeep)", body)
+        self.assertIn("Owner selected preservation: no existing backup sets will be deleted.", body)
+        self.assertIn("An explicit Owner backup retention behavior is required", body)
+        self.assertIn("retention_behavior = [string]$policy.retention_behavior", body)
+        policy_gate = body.index("if (-not $policyConfigured)")
+        backup_call = body.index('"/product/backup.py"')
+        retention_cleanup = body.index("Remove-ExpiredBackupSets -Root $backupRoot")
+        task_verification = body.index("The Windows scheduled backup task could not be verified")
+        self.assertLess(policy_gate, backup_call)
+        self.assertLess(task_verification, retention_cleanup)
+        launcher = (PRODUCT / "windows" / "Backup TOEFL House ERP.cmd").read_text()
+        self.assertIn("explicit preserve/delete behavior", launcher)
+        activation_launcher = (PRODUCT / "windows" / "Activate TOEFL House ERP.cmd").read_text()
+        self.assertIn("-VerifyExisting", activation_launcher)
+        self.assertIn("Do not run the backup helper while the preservation decision is unresolved", activation_launcher)
+        self.assertIn("Resolve the Owner retention choice and reconcile the implementation/docs", activation_launcher)
+
+    def test_backup_sidecar_cleanup_is_scoped_and_preserves_preexisting_material(self):
+        body = (PRODUCT / "windows" / "Backup TOEFL House ERP.ps1").read_text()
+        self.assertIn("$preexistingSidecars = @(Get-ChildItem", body)
+        self.assertIn("Pre-existing plaintext Frappe site-config sidecars were found; they are preserved", body)
+        self.assertIn("$siteConfigSidecarPath = $siteConfigSidecar.FullName", body)
+        self.assertIn("Remove-Item -LiteralPath $siteConfigSidecarPath -Force", body)
+        self.assertEqual(body.count("Remove-Item -LiteralPath $siteConfigSidecarPath -Force"), 1)
+        self.assertNotIn("Get-ChildItem -LiteralPath $sourceDir -Filter \"*-site_config_backup*.json\" -File -ErrorAction SilentlyContinue |\n                Remove-Item", body)
+        self.assertNotIn("Get-ChildItem -LiteralPath $backupRoot -Directory -Force -ErrorAction SilentlyContinue |", body[
+            body.index("# Do not recursively clean any existing backup material here."):])
+        self.assertIn("The current run's plaintext Frappe site-config sidecar remains", body)
+        self.assertNotIn("Remove-Item -LiteralPath $recoveryConfigSourcePath", body)
+        verify_at = body.index('throw "Post-write integrity verification failed for')
+        sidecar_remove_at = body.index("Remove-Item -LiteralPath $siteConfigSidecarPath -Force")
+        self.assertGreater(sidecar_remove_at, verify_at,
+                           "only remove this run's sidecar after the committed backup set verifies")
 
     def test_install_generates_password_as_variable_not_literal(self):
         install = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
         self.assertIn("NewGuid", install)  # generated on the owner's PC at install time
+        self.assertIn("icacls data\\secrets /inheritance:r /grant:r", install)
+        self.assertIn("*S-1-5-18:(OI)(CI)F", install)
+        self.assertIn("*S-1-5-32-544:(OI)(CI)F", install)
+        self.assertIn("if errorlevel 1 goto :secretaclfailed", install)
         self.assertIn("MARIADB_ROOT_PASSWORD=%DBPW%", install)
 
     def test_windows_scripts_are_zero_typing_and_self_locating(self):
@@ -288,19 +360,57 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("first-run-credentials.txt", install.lower())
 
 class LineEndingContract(unittest.TestCase):
-    # Both sides of the 2026-09-30 Windows bug class, pinned in git so no
-    # checkout platform can break either one: *.cmd must materialize CRLF
-    # (cmd.exe parses multi-line blocks with CRLF assumptions), and *.sh
-    # must materialize LF. The image entrypoint is exec'd directly by the
-    # kernel, so a CRLF worktree bakes `#!/bin/sh\r` into the image and the
-    # container dies at boot with `exec /product/entrypoint.sh: no such
-    # file or directory` (the kernel looks for an interpreter named
-    # `/bin/sh\r`; observed on a Windows checkout, 2026-10-06).
+    # Linux product inputs and app-tree text must be LF in both Git blobs and
+    # physical worktrees; Windows cmd.exe launchers deliberately remain CRLF.
+    # Git attributes protect fresh checkouts, but do not rewrite an existing
+    # worktree when attributes are added. The installer/Repair normalizer and
+    # the Windows stale-checkout job cover that separate case.
+    # A CRLF entrypoint shebang becomes `/bin/sh\r` and previously caused
+    # `exec /product/entrypoint.sh: no such file or directory` at container boot.
     def test_gitattributes_pins_both_sides(self):
         text = (ROOT / ".gitattributes").read_text()
+        self.assertIn("* text=auto eol=lf", text)
+        self.assertIn("apps/** text=auto eol=lf", text)
+        self.assertIn("product/*.py text eol=lf", text)
         self.assertIn("*.sh text eol=lf", text)
         self.assertIn("*.cmd text eol=crlf", text)
         self.assertIn("*.bat text eol=crlf", text)
+
+    def test_existing_worktree_normalizer_is_wired_before_build_and_repair(self):
+        normalizer_path = PRODUCT / "windows" / "Normalize Product Sources.ps1"
+        self.assertTrue(normalizer_path.is_file(), "existing Windows worktrees need a physical normalizer")
+        normalizer = normalizer_path.read_text()
+        for invariant in ("product\\app.Dockerfile", "product\\docker-compose.yml",
+                          ".dockerignore", r'Replace("`r`n", "`n").Replace("`r", "`n")',
+                          "UTF8Encoding", "WriteAllBytes", "exit 10", "ReparsePoint",
+                          "Repository root is a link/junction", "Add-SourceFiles $path $files",
+                          "Multiline Dockerfile COPY syntax is unsupported"):
+            self.assertIn(invariant, normalizer)
+        self.assertIn("Normalize Product Sources.ps1",
+                      (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text())
+        repair = (PRODUCT / "windows" / "Repair TOEFL House ERP.cmd").read_text()
+        self.assertIn("Normalize Product Sources.ps1", repair)
+        self.assertIn('if "%NORMALIZE_STATUS%"=="10" goto :rebuildimage', repair)
+        self.assertIn("org.toefl-house.source-eol:lf-v1", repair)
+        self.assertIn('LABEL org.toefl-house.source-eol="lf-v1"', DOCKERFILE.read_text())
+        self.assertIn("docker compose build", repair)
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        self.assertIn("windows-worktree-eol:", workflow)
+        self.assertIn("git config core.autocrlf true", workflow)
+        self.assertIn('if ($before -notmatch "w/crlf")', workflow)
+        self.assertIn("$copyMatches.Count -ne $copyLines.Count", workflow)
+        self.assertIn("0xEF, 0xBB, 0xBF", workflow)
+        self.assertIn('if (-not $staleText.Contains("`r`n"))', workflow)
+        self.assertIn("Windows normalized physical-byte EOL contract", workflow)
+        self.assertIn("Windows normalized stale-worktree packaging suite", workflow)
+        self.assertIn(".Replace('" + chr(92) + "', '/')", workflow)
+        self.assertIn("if ($normalizerExit -ne 10)", workflow)
+        self.assertGreaterEqual(workflow.count("if ($LASTEXITCODE -ne 0)"), 2)
+        # The source normalizer must never be given runtime-state paths as
+        # sources; the Dockerfile COPY allowlist is its only traversed tree.
+        self.assertIn("product/data is never", normalizer)
+        self.assertNotIn("docker system prune", repair.lower())
+        self.assertNotIn("volume prune", repair.lower())
 
     def test_no_shell_script_contains_cr_bytes(self):
         # The docker build consumes the worktree, so the worktree bytes are
@@ -324,19 +434,116 @@ class LineEndingContract(unittest.TestCase):
                       (ROOT / ".gitattributes").read_text())
 
     def test_dockerfile_copy_sources_are_cr_free(self):
-        # The container can exec COPYed files directly (shebang). A CRLF
-        # worktree (Windows core.autocrlf=true) breaks every such exec the
-        # same way it broke entrypoint.sh - and it broke activate.py too
-        # (exit 127 in CI, observed when the image was built from a
-        # simulated Windows worktree, 2026-10-06). No COPYed file may
-        # carry a CR byte, wherever it is run from.
+        # Audit the complete Dockerfile COPY allowlist, including app trees:
+        # the build context is the current worktree, while i/lf is the Git
+        # blob/index side. Both must be LF so a fresh Windows checkout and a
+        # stale checkout repaired by the host normalizer build identical bytes.
         text = DOCKERFILE.read_text()
-        for src in re.findall(r"(?m)^COPY\s+(\S+)\s", text):
-            path = ROOT / src
-            if not path.is_file():
-                continue  # directory COPY (apps/): content is data, never exec'd
-            self.assertNotIn(b"\r", path.read_bytes(),
-                             f"{src} must be LF-only (the image may exec it)")
+        copy_rows = re.findall(r"(?m)^COPY\s+(\S+)\s+(\S+)\s*$", text)
+        sources = {source for source, _destination in copy_rows}
+        expected = {
+            "apps/toefl_house", "apps/foundation_security",
+            "docs/owner-decisions.json",
+            "product/bootstrap.py", "product/activate.py", "product/restore.py",
+            "product/backup.py", "product/native_gpg.py", "product/native_db.py",
+            "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
+        }
+        self.assertEqual(sources, expected, "audit any new Dockerfile COPY source")
+        self.assertEqual(len(copy_rows), len(expected), "COPY syntax must stay source/destination only")
+
+        text_suffixes = {
+            ".py", ".sh", ".js", ".json", ".css", ".md", ".txt", ".toml",
+            ".yaml", ".yml", ".html", ".xml", ".csv", ".svg", ".jinja", ".jinja2",
+        }
+        copy_files = set()
+        for source in sources:
+            path = ROOT / source
+            self.assertTrue(path.exists(), f"Dockerfile COPY source missing: {source}")
+            if path.is_dir():
+                for item in path.rglob("*"):
+                    if not item.is_file() or "__pycache__" in item.parts or item.suffix == ".pyc":
+                        continue  # explicitly excluded by .dockerignore
+                    copy_files.add(item)
+            else:
+                copy_files.add(path)
+
+        audited_tracked = []
+        bom_prefixes = (codecs.BOM_UTF8, codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE,
+                        codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)
+        for path in sorted(copy_files):
+            raw = path.read_bytes()
+            self.assertFalse(raw.startswith(bom_prefixes),
+                             f"{path.relative_to(ROOT)} must not have a Unicode BOM")
+            is_text = path.suffix.lower() in text_suffixes
+            if not is_text:
+                try:
+                    raw.decode("utf-8")
+                    is_text = True
+                except UnicodeDecodeError:
+                    is_text = False  # an actual binary asset is not a script
+            if not is_text:
+                continue
+            self.assertNotIn(b"\r", raw,
+                             f"{path.relative_to(ROOT)} must be LF-only in the Docker build context")
+            raw.decode("utf-8")  # reject non-UTF-8 source before Docker can bake it in
+            relative = path.relative_to(ROOT).as_posix()
+            tracked = subprocess.run(
+                ["git", "ls-files", "--error-unmatch", "--", relative],
+                cwd=ROOT, capture_output=True, check=False).returncode == 0
+            if tracked:
+                audited_tracked.append(relative)
+
+        if audited_tracked:
+            result = subprocess.run(
+                ["git", "ls-files", "--eol", "--", *sorted(audited_tracked)],
+                cwd=ROOT, capture_output=True, text=True, check=True).stdout
+            eol_by_path = {}
+            for line in result.splitlines():
+                prefix, rel = line.split("\t", 1)
+                eol_by_path[rel] = prefix.split()
+            for relative in audited_tracked:
+                eol = eol_by_path.get(relative)
+                self.assertIsNotNone(eol, f"git ls-files --eol omitted {relative}")
+                self.assertGreaterEqual(len(eol), 2, f"unexpected git EOL status: {relative}: {eol}")
+                self.assertIn(eol[0], ("i/lf", "i/none"),
+                              f"repository/index blob is not LF: {relative}: {eol}")
+                self.assertIn(eol[1], ("w/lf", "w/none"),
+                              f"physical worktree is not LF: {relative}: {eol}")
+                self.assertIn("eol=lf", eol[2:],
+                              f"Git must pin LF for future checkouts: {relative}: {eol}")
+
+        # The build allowlist and Dockerfile are also read directly by Docker
+        # on Windows. Pin and check their blobs/worktrees, not just scripts.
+        for relative in (".gitattributes", ".dockerignore", "product/app.Dockerfile",
+                         "product/docker-compose.yml"):
+            raw = (ROOT / relative).read_bytes()
+            self.assertFalse(raw.startswith(bom_prefixes),
+                             f"{relative} must not have a Unicode BOM")
+            self.assertNotIn(b"\r", raw, f"{relative} must be LF-only")
+            eol_line = subprocess.run(
+                ["git", "ls-files", "--eol", "--", relative], cwd=ROOT,
+                capture_output=True, text=True, check=True).stdout.strip()
+            prefix = eol_line.split("\t", 1)[0].split()
+            self.assertIn(prefix[0], ("i/lf", "i/none"), relative)
+            self.assertIn(prefix[1], ("w/lf", "w/none"), relative)
+            self.assertIn("eol=lf", prefix[2:], relative)
+
+        # The Docker build also has an in-image fail-closed guard. The host
+        # test above proves context bytes; this contract ensures corrupted
+        # bytes cause a build error instead of being baked into the image.
+        dockerfile = DOCKERFILE.read_text()
+        self.assertIn("LF/BOM contract violation", dockerfile)
+        self.assertIn('startswith(b"#!/bin/sh\\n")', dockerfile)
+        self.assertGreaterEqual(dockerfile.count('startswith(b"#!/usr/bin/env python3\\n")'), 4)
+
+        # Exact kernel-visible interpreter lines prevent a CRLF shebang from
+        # becoming /bin/sh\r or /usr/bin/env python3\r inside Docker.
+        self.assertEqual((PRODUCT / "entrypoint.sh").read_bytes().splitlines(keepends=True)[0],
+                         b"#!/bin/sh\n")
+        for name in ("bootstrap.py", "activate.py", "restore.py", "backup.py", "perf_baseline.py"):
+            self.assertEqual((PRODUCT / name).read_bytes().splitlines(keepends=True)[0],
+                             b"#!/usr/bin/env python3\n", name)
+
 
 
 class CmdParserSafetyContract(unittest.TestCase):
@@ -471,6 +678,10 @@ class RecoveryContract(unittest.TestCase):
             block = service_blocks.get(name, "")
             if "image:" not in block and "build:" not in block:
                 continue  # top-level volumes section
+            if name == "bootstrap":
+                self.assertIn('restart: "no"', block,
+                              "the one-shot initializer must not run detached after web startup")
+                continue
             self.assertIn("restart: unless-stopped", block,
                           f"service {name} must use unless-stopped so a Docker "
                           "Desktop restart recovers it")
@@ -485,7 +696,7 @@ class RecoveryContract(unittest.TestCase):
             text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
             failed = text[text.index(":failed"):]
             self.assertIn("docker compose ps", failed, name)
-            self.assertIn("docker compose logs --tail 5 web", failed, name)
+            self.assertIn("docker compose logs --tail 5 bootstrap web", failed, name)
             self.assertIn("database is not ready", failed, name)
 
     def test_runbook_documents_the_tailnet_multi_user_contract(self):
@@ -499,12 +710,186 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn("no public port", runbook.lower())
         self.assertIn("Restore from backup (operator)", runbook)
 
+    def test_product_first_boot_preserves_failure_diagnostics(self):
+        # Workflow logs are not always reachable from the qualification
+        # environment. Keep the long encrypted lifecycle step wrapped so a
+        # failed command still emits selected output and its non-secret
+        # checkpoint as GitHub annotations, without weakening its exit gate.
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        start = workflow.index("First boot, encrypted backup/restore and guarded site-mode activation")
+        end = workflow.index("Browser UI acceptance", start)
+        step = workflow[start:end]
+        self.assertIn("tools/foundation/annotated_step.py", step)
+        self.assertIn("Product image first-boot failure", step)
+        self.assertIn('checkpoint="public-key site-config recovery and sidecar safety"', step)
+        self.assertIn("TOEFL_FIRST_BOOT", step)
+
+        upgrade_start = workflow.index("Upgrade/rollback rehearsal")
+        upgrade_end = workflow.index("Performance baseline", upgrade_start)
+        upgrade_step = workflow[upgrade_start:upgrade_end]
+        self.assertIn("tools/foundation/annotated_step.py", upgrade_step)
+        self.assertIn("Product upgrade/rollback failure", upgrade_step)
+        self.assertIn('checkpoint="native encrypted database and files restore"', upgrade_step)
+        self.assertIn('site re-activation failed with exit', upgrade_step)
+        self.assertIn("TOEFL_UPGRADE_REHEARSAL", upgrade_step)
+
+    def test_browser_asset_failure_emits_safe_static_route_diagnostics(self):
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        browser_start = workflow.index("Browser UI acceptance (real headless Chromium, real login flow)")
+        browser_end = workflow.index("Multi-user tailnet contract", browser_start)
+        browser = workflow[browser_start:browser_end]
+        self.assertIn("container_asset_http=", browser)
+        self.assertIn("target.is_file()", browser)
+        self.assertIn("static_root_exists=", browser)
+        self.assertIn("::error title=Asset route diagnostic::", browser)
+        self.assertIn("-e PYTHONPATH=/product", browser)
+        self.assertIn("-w /home/frappe/bench/sites", browser)
+        self.assertIn("wsgi_import_frames=", browser)
+        self.assertIn("asset_source_nested_exists=", browser)
+        self.assertIn("asset_source_top_level_exists=", browser)
+        self.assertIn("asset_manifest_matches=", browser)
+        self.assertNotIn("error.err", browser)
+        debug_start = browser.index('asset_debug="$(docker compose exec')
+        debug_end = browser.index('                  exit 1', debug_start)
+        diagnostics = browser[debug_start:debug_end]
+        self.assertNotIn("Password:", diagnostics)
+        self.assertNotIn("site_config.json", diagnostics)
+
+    def test_tailnet_diagnostics_never_emit_session_credentials(self):
+        # A previous qualification annotation included a live synthetic sid and
+        # CSRF token. Retain useful presence/cache summaries only; never log
+        # raw Set-Cookie values, session rows or full sessiondata.
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        login_start = workflow.index("          def login(username, password, host=None):")
+        diagnostic_start = workflow.index("          def session_diag(sid):", login_start)
+        progress_start = workflow.index('          progress("admin password present:', diagnostic_start)
+        login = workflow[login_start:diagnostic_start]
+        diagnostic = workflow[diagnostic_start:progress_start]
+        self.assertIn("cookie_names", login)
+        self.assertNotIn("[c[:40] for c in cookies]", login)
+        self.assertNotIn("text[:300]", login)
+        self.assertNotIn("cookies))", login)
+        self.assertNotIn('print("::error::" + probe.strip()', diagnostic)
+        self.assertNotIn("'db_sessions': rows", diagnostic)
+        self.assertNotIn("'probe_sid': sid", diagnostic)
+        self.assertNotIn("sessiondata': r", diagnostic)
+        self.assertIn("session_data_keys", diagnostic)
+        self.assertIn("session_has_csrf", diagnostic)
+        self.assertIn("Tailnet session diagnostics", diagnostic)
+        self.assertIn("{key: data.get(key) for key in fields}", diagnostic)
+        self.assertNotIn("::error::", diagnostic)
+
+    def test_workflow_and_windows_use_the_safe_native_backup_adapter(self):
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        windows_backup = (PRODUCT / "windows" / "Backup TOEFL House ERP.ps1").read_text()
+        adapter = (PRODUCT / "backup.py").read_text()
+        gpg_transport = (PRODUCT / "native_gpg.py").read_text()
+        db_transport = (PRODUCT / "native_db.py").read_text()
+        self.assertEqual(workflow.count("web /product/backup.py"), 2)
+        self.assertIn('"web", "/product/backup.py"', windows_backup)
+        self.assertIn('"02:30", 3, "Preserve all valid backup sets", recovery_public_key', workflow)
+        self.assertIn('d["retention_behavior"] == "Preserve all valid backup sets"', workflow)
+        self.assertGreaterEqual(workflow.count('"retention_behavior": policy["retention_behavior"]'), 2)
+        self.assertNotIn("backup --with-files", workflow)
+        self.assertNotIn('"backup", "--with-files"', windows_backup)
+        self.assertIn("backups.scheduled_backup(", adapter)
+        self.assertIn("backups.delete_temp_backups = lambda", adapter)
+        self.assertIn("backup_encryption_key", adapter)
+        self.assertIn("--passphrase-fd", gpg_transport)
+        self.assertIn("subprocess.run(arguments", gpg_transport)
+        self.assertIn("safe_mariadb_credential_transport", adapter)
+        self.assertIn("--defaults-extra-file=", db_transport)
+        self.assertIn("os.fchmod(descriptor, 0o600)", db_transport)
+        self.assertIn("os.link(temporary, destination", adapter)
+
+    def test_product_workflow_masks_secrets_and_suppresses_credential_read_output(self):
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        self.assertNotIn("${cred:0:300}", workflow)
+        self.assertNotIn("${cred:0:400}", workflow)
+        self.assertIn("command output suppressed because it may contain credentials", workflow)
+        self.assertNotIn("chmod 777 data/sites data/logs data/secrets", workflow)
+        self.assertIn("chmod 750 data/secrets", workflow)
+        self.assertIn("chmod 640 data/secrets/db.env", workflow)
+        for variable in ("cred_password", "admin_cred", "backup_encryption_key",
+                         "admin_password", "db_password", "admin_pw", "db_root_pw"):
+            self.assertIn('echo "::add-mask::$%s"' % variable, workflow)
+        first_boot_start = workflow.index("First boot, encrypted backup/restore")
+        browser_start = workflow.index("Browser UI acceptance", first_boot_start)
+        first_boot = workflow[first_boot_start:browser_start]
+        restore_use = first_boot.index('RESTORE_DB_ROOT_PASSWORD="$db_password"')
+        self.assertLess(first_boot.index('echo "::add-mask::$admin_password"'), restore_use)
+        self.assertLess(first_boot.index('echo "::add-mask::$db_password"'), restore_use)
+        self.assertIn('web /product/restore.py', first_boot)
+        self.assertIn('python3 - <<\'PY\' | docker compose run', first_boot)
+        for argument in ("--db-root-password", "--admin-password", "--encryption-key"):
+            self.assertNotIn(argument, workflow)
+
+    def test_product_restore_replaces_file_trees_and_checks_both_scopes(self):
+        # Pinned Frappe restore uses tar extraction into existing paths, so a
+        # real snapshot rehearsal must stage the old trees, extract into clean
+        # public/private targets, and prove both restored and post-backup file
+        # state. Keep the human restore ceremony consistent with that behavior.
+        workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
+        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text()
+        self.assertIn('restore_stage="$site_root/private/.ci-restore-files-$GITHUB_RUN_ID"', workflow)
+        self.assertIn('restore_stage="$site/private/.ci-restore-files-upgrade-$GITHUB_RUN_ID"', workflow)
+        self.assertIn('mv "$files_dir" "$restore_stage/$scope-files"', workflow)
+        self.assertIn('product-image-restore-marker.txt', workflow)
+        self.assertIn('upgrade-restore-marker.txt', workflow)
+        self.assertIn('post-backup-upgrade-marker.txt', workflow)
+        self.assertIn("test ! -e \"$1\"", workflow)
+        self.assertIn('restored_file" = "$file_marker"', workflow)
+        self.assertIn('restored_file" = "$upgrade_file_marker"', workflow)
+        self.assertIn('rm -rf -- "$restore_stage"', workflow)
+        self.assertIn("it does not remove files absent from the", runbook)
+        self.assertIn('stage="$site/private/$RESTORE_STAGE_NAME"', runbook)
+        self.assertIn('mv "$files" "$stage/$scope-files"', runbook)
+        self.assertIn("umask 077", runbook)
+        self.assertIn("docker compose exec -T web sh -eu -c 'rm -rf", runbook)
+
+        # Both rehearsals must stage the old trees after quiescing writers and
+        # before the destructive native restore invocation.
+        first_stage = workflow.index('restore_stage="$site_root/private/.ci-restore-files-')
+        first_stop = workflow.rfind("docker compose stop web worker scheduler socketio", 0, first_stage)
+        first_restore = workflow.index("web /product/restore.py", first_stage)
+        first_start = workflow.index("docker compose up -d --no-build", first_restore)
+        self.assertGreaterEqual(first_stop, 0)
+        self.assertLess(first_stop, first_stage)
+        self.assertLess(first_stage, first_restore)
+        self.assertLess(first_restore, first_start)
+        upgrade_stage = workflow.index('restore_stage="$site/private/.ci-restore-files-upgrade-')
+        upgrade_stop = workflow.rfind("docker compose stop web worker scheduler socketio", 0, upgrade_stage)
+        upgrade_restore = workflow.index("web /product/restore.py", upgrade_stage)
+        upgrade_start = workflow.index("docker compose up -d --no-build", upgrade_restore)
+        self.assertGreaterEqual(upgrade_stop, 0)
+        self.assertLess(upgrade_stop, upgrade_stage)
+        self.assertLess(upgrade_stage, upgrade_restore)
+        self.assertLess(upgrade_restore, upgrade_start)
+
 
 class EntrypointContract(unittest.TestCase):
-    def test_entrypoint_running_sequence_is_bootstrap_then_gunicorn(self):
-        text = (PRODUCT / "entrypoint.sh").read_text()
-        self.assertLess(text.index("python3 /product/bootstrap.py"),
-                        text.index("exec /home/frappe/bench/env/bin/gunicorn"))
+    def test_one_shot_bootstrap_finishes_before_web_and_root_secret_is_isolated(self):
+        compose = COMPOSE.read_text()
+        bootstrap = re.search(r"^  bootstrap:\n(.*?)(?=^  [^ \n]+:\n)",
+                              compose, flags=re.M | re.S).group(1)
+        web = re.search(r"^  web:\n(.*?)(?=^  [^ \n]+:\n)",
+                        compose, flags=re.M | re.S).group(1)
+        self.assertIn('entrypoint: ["python3", "/product/bootstrap.py"]', bootstrap)
+        self.assertIn("source: ./data/secrets/db.env", bootstrap)
+        self.assertIn("condition: service_completed_successfully", web)
+        self.assertNotIn("source: ./data/secrets/db.env", web)
+        self.assertNotIn("./data/secrets:/run/secrets", web)
+        self.assertNotIn("./data/secrets/db.env", web)
+        self.assertIn("./data/activation:/run/activation:ro", web)
+        self.assertNotIn("/run/secrets", web)
+
+        entrypoint = (PRODUCT / "entrypoint.sh").read_text()
+        self.assertNotIn("bootstrap.py", entrypoint)
+        self.assertIn("exec /home/frappe/bench/env/bin/gunicorn", entrypoint)
+        bootstrap_source = (PRODUCT / "bootstrap.py").read_text()
+        self.assertIn("input=payload", bootstrap_source)
+        self.assertIn("capture_output=True", bootstrap_source)
+        self.assertNotIn("--db-root-password", bootstrap_source)
 
 
 class BootstrapLogicContract(unittest.TestCase):
@@ -532,7 +917,11 @@ class BootstrapLogicContract(unittest.TestCase):
             (sites / "x.localhost" / "site_config.json").write_text("{}")
             self.assertTrue(bootstrap.site_exists("x.localhost", sites))
             self.assertFalse(bootstrap.assets_present(sites))
-            (sites / "assets" / "js").mkdir(parents=True)
+            assets = sites / "assets"
+            (assets / "js").mkdir(parents=True)
+            (assets / "css").mkdir()
+            self.assertFalse(bootstrap.assets_present(sites))
+            (assets / "assets.json").write_text("{}", encoding="utf-8")
             self.assertTrue(bootstrap.assets_present(sites))
 
     def test_built_assets_are_merged_into_the_static_root(self):
@@ -566,8 +955,12 @@ class BootstrapLogicContract(unittest.TestCase):
             (top / "site.css").write_text("css")
             sites = root / "sites"
             (sites / "assets" / "js").mkdir(parents=True)
-            (sites / "assets" / "assets.json").write_text("{}")
+            (sites / "assets" / "assets.json").write_text(json.dumps({
+                "education.bundle.js": "/assets/education/dist/js/education.bundle.NS2O3ZWO.js",
+            }), encoding="utf-8")
             (sites / "assets" / "education").mkdir(parents=True)
+            self.assertEqual(bootstrap.manifest_assets_missing(sites),
+                             ["education/dist/js/education.bundle.NS2O3ZWO.js"])
             self.assertEqual(sorted(bootstrap.public_assets_missing(sites, apps)),
                              sorted(["education/dist/js/education.bundle.NS2O3ZWO.js",
                                      "education/js/education.bundle.js",
@@ -580,8 +973,11 @@ class BootstrapLogicContract(unittest.TestCase):
             self.assertFalse((sites / "assets" / "education" / "frontend"
                               / "vite-artifact.js").exists(),
                              "the shadow top-level public must not be the sync source")
-            self.assertEqual((sites / "assets" / "assets.json").read_text(), "{}")
+            self.assertEqual(
+                json.loads((sites / "assets" / "assets.json").read_text()),
+                {"education.bundle.js": "/assets/education/dist/js/education.bundle.NS2O3ZWO.js"})
             self.assertEqual(bootstrap.public_assets_missing(sites, apps), [])
+            self.assertEqual(bootstrap.manifest_assets_missing(sites), [])
             # idempotent: a complete volume copies nothing
             self.assertEqual(bootstrap.sync_built_assets(sites, apps), [])
 
@@ -607,8 +1003,53 @@ class BootstrapLogicContract(unittest.TestCase):
             self.assertEqual(bootstrap.public_assets_missing(sites, apps), [])
         body = (PRODUCT / "bootstrap.py").read_text()[
             (PRODUCT / "bootstrap.py").read_text().index("def bootstrap("):]
-        self.assertLess(body.index("sync_built_assets(SITES_DIR)"),
-                        body.index("public_assets_missing(SITES_DIR)"))
+        self.assertIn("ensure_built_assets(SITES_DIR)", body)
+        ensure_body = (PRODUCT / "bootstrap.py").read_text()
+        ensure_body = ensure_body[ensure_body.index("def ensure_built_assets("):
+                                  ensure_body.index("def _credentials_content(")]
+        self.assertLess(ensure_body.index("sync_built_assets(sites_dir, apps_dir)"),
+                        ensure_body.index("public_assets_missing(sites_dir, apps_dir)"))
+        self.assertLess(ensure_body.index("public_assets_missing(sites_dir, apps_dir)"),
+                        ensure_body.index("manifest_assets_missing(sites_dir)"))
+
+    def test_ensure_built_assets_repairs_and_verifies_the_served_tree(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            apps = root / "apps"
+            public = apps / "education" / "education" / "public"
+            bundle = public / "dist" / "js" / "education.bundle.abc123.js"
+            bundle.parent.mkdir(parents=True)
+            bundle.write_text("built bundle", encoding="utf-8")
+            sites = root / "sites"
+            assets = sites / "assets"
+            assets.mkdir(parents=True)
+            (assets / "assets.json").write_text(json.dumps({
+                "education.bundle.js": "/assets/education/dist/js/education.bundle.abc123.js",
+            }), encoding="utf-8")
+            self.assertEqual(bootstrap.ensure_built_assets(sites, apps), ["education"])
+            self.assertEqual((assets / "education" / "dist" / "js"
+                              / "education.bundle.abc123.js").read_text(encoding="utf-8"),
+                             "built bundle")
+            self.assertEqual(bootstrap.public_assets_missing(sites, apps), [])
+            self.assertEqual(bootstrap.manifest_assets_missing(sites), [])
+            self.assertEqual(bootstrap.ensure_built_assets(sites, apps), [])
+
+    def test_web_entrypoint_reconciles_assets_before_serving(self):
+        entrypoint = (PRODUCT / "entrypoint.sh").read_text()
+        self.assertIn("from bootstrap import ensure_web_assets; ensure_web_assets()",
+                      entrypoint)
+        self.assertLess(entrypoint.index("ensure_web_assets; ensure_web_assets()"),
+                        entrypoint.index("exec /home/frappe/bench/env/bin/gunicorn"))
+
+    def test_web_asset_recovery_runs_one_native_build_after_incomplete_tree(self):
+        from unittest.mock import patch
+        with patch.object(bootstrap, "ensure_built_assets",
+                          side_effect=[RuntimeError("incomplete"), ["education"]]) as verify:
+            with patch.object(bootstrap, "run_bench") as build:
+                self.assertEqual(bootstrap.ensure_web_assets(), ["education"])
+        self.assertEqual(verify.call_count, 2)
+        build.assert_called_once_with(["build"], cwd=bootstrap.BENCH_DIR)
 
     def test_empty_bind_mount_is_seeded_before_first_bench_call(self):
         # Regression (product-image run 36750900604): the empty ./data/sites
@@ -689,12 +1130,13 @@ class BootstrapLogicContract(unittest.TestCase):
             body = first.read_text()
             self.assertIn("pw-one", body)
             self.assertNotIn("pw-two", body)  # never rotates silently
-            # The credential file is created inside the Linux product container,
-            # where chmod(0600) is enforced. A Windows host filesystem does not
-            # expose POSIX permission bits through pathlib.chmod(), so the same
-            # assertion is not meaningful when this offline contract suite runs
-            # directly from a Windows checkout.
-            if sys.platform != "win32":
+            if os.name == "nt":
+                # The container creates the credential file atomically with
+                # restrictive permissions before any password bytes are written.
+                source = Path(bootstrap.__file__).read_text(encoding="utf-8")
+                self.assertIn("os.O_EXCL", source)
+                self.assertIn("0o600", source)
+            else:
                 self.assertEqual(oct(first.stat().st_mode & 0o777), "0o600")
 
     def test_root_password_parsing_requires_key_and_value(self):
@@ -718,9 +1160,9 @@ class CmdSyntaxContract(unittest.TestCase):
     time.`):
     1. The installer carried multi-line parenthesized `if ( ... )` blocks.
        cmd parses such blocks with an internal read-line convention built
-       on CRLF: under an LF-only checkout (possible for any clone because
-       no .gitattributes pinned worktree bytes - core.autocrlf=input is a
-       stock Git-for-Windows configuration profile) the block parser folds
+       on CRLF: a stale or ZIP-provided LF checkout can still occur because
+       Git attributes do not retroactively rewrite existing worktrees; the
+       block parser folds
        across the boundary and aborts at the first unbalanced `)` - the
        first such block is the Docker-missing check, which is why every
        reproduction failed "immediately".
@@ -862,13 +1304,15 @@ class OwnerValidationChecklistTests(unittest.TestCase):
         headers = re.findall(r"^## Step (\d+) — (.+)$", text, flags=re.MULTILINE)
         self.assertEqual([int(n) for n, _ in headers], list(range(1, 11)),
                          "exactly ten ordered validation steps required")
-        # DoD order pinned step-by-step: install -> first boot -> login ->
-        # (persistence probe) -> stop -> start -> backup -> repair ->
-        # browser access -> persistence.
-        expected = {1: "install", 2: "first boot", 3: "login", 5: "stop",
-                    6: "start", 7: "backup", 8: "repair",
+        # Owner-machine lifecycle is explicit and ordered: install -> first
+        # boot -> login -> Start -> Stop -> Start again -> Repair -> browser
+        # access -> persistence. Backup/restore are separate, explicitly held
+        # Owner gates rather than being represented as completed lifecycle steps.
+        expected = {1: "install", 2: "first boot", 3: "login", 5: "start",
+                    6: "stop", 7: "start", 8: "repair",
                     9: "browser access", 10: "persistence"}
         titles = {int(n): title.lower() for n, title in headers}
+        self.assertIn("start again", titles[7])
         for step, keyword in expected.items():
             self.assertIn(keyword, titles[step],
                           f"step {step} title must contain '{keyword}' (release-gate order)")
@@ -884,10 +1328,16 @@ class OwnerValidationChecklistTests(unittest.TestCase):
                           f"checklist must explicitly exclude end-user need for: {phrase}")
         self.assertNotIn("```", plain, "no code fences: the end user types nothing")
 
-    def test_every_step_carries_numbered_evidence(self):
+    def test_lifecycle_and_separate_backup_restore_gates_carry_numbered_evidence(self):
         text = self.DOC.read_text(encoding="utf-8")
-        for n in range(1, 11):
-            self.assertIn(f"Evidence {n}", text, f"step {n} lacks a numbered evidence item")
+        for n in range(1, 14):
+            self.assertIn(f"Evidence {n}", text,
+                          f"Owner validation lacks numbered evidence item {n}")
+        self.assertIn("Backup and restore — separate mandatory Owner gate", text)
+        self.assertIn("Task Scheduler Library", text)
+        self.assertIn("Tailscale/private-exposure", text)
+        self.assertIn("WebSocket handshake", text)
+        self.assertIn("UNVERIFIED / HOLD", text)
 
     def test_gate_open_statement_and_single_failure_path(self):
         text = self.DOC.read_text(encoding="utf-8")
@@ -911,8 +1361,8 @@ class DesktopRuntimeReliabilityContract(unittest.TestCase):
 
     def test_non_web_app_services_bypass_product_bootstrap_entrypoint(self):
         # worker/socketio must execute their own long-running process directly.
-        # The image default entrypoint is bootstrap.py and requires web-only
-        # /run/secrets/db.env; inheriting it causes restart crash loops.
+        # The bootstrap service alone mounts /run/bootstrap-secrets/db.env;
+        # inheriting the wrong image entrypoint causes worker restart loops.
         text = COMPOSE.read_text()
         worker = re.search(r"^  worker:\n(.*?)(?=^  \S)", text, flags=re.M | re.S).group(1)
         socketio = re.search(r"^  socketio:\n(.*?)(?=^  \S)", text, flags=re.M | re.S).group(1)
@@ -963,7 +1413,7 @@ class DesktopRuntimeReliabilityContract(unittest.TestCase):
         self.assertIn(":repair", text)
         self.assertIn("if not exist data\\secrets\\db.env goto :nosecret", text)
         self.assertIn("docker compose up -d --no-build", text)
-        self.assertIn("services did not all become ready within 10 minutes", text)
+        self.assertIn("services did not all become ready within 50 minutes", text)
 
     def test_failure_diagnostics_include_all_core_runtime_services(self):
         for name in ("Start", "Repair"):

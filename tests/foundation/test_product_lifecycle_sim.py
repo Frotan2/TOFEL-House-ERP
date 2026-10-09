@@ -67,17 +67,6 @@ if cmd == "set-config" and len(args) >= 4 and args[1] == "--global":
     state.setdefault("global_config", {})[args[2]] = args[3]
     log(sys.argv[1:])
     save()
-elif cmd == "new-site":
-    name = args[1]
-    (BENCH_ROOT / "sites" / name).mkdir(parents=True, exist_ok=True)
-    (BENCH_ROOT / "sites" / name / "site_config.json").write_text(
-        json.dumps({"db_name": "db_" + name.replace(".", "_"), "db_type": "mariadb"}))
-    (BENCH_ROOT / "sites").mkdir(parents=True, exist_ok=True)
-    (BENCH_ROOT / "sites" / "currentsite.txt").write_text(name)
-    state.setdefault("sites", {}).setdefault(name, {"apps": ["frappe"], "migrate_calls": 0})
-    state["current_site_created"] = True
-    log(sys.argv[1:])
-    save()
 elif cmd == "list-apps":
     print(json.dumps({site: state["sites"][site]["apps"]}))
 elif cmd == "install-app":
@@ -98,7 +87,10 @@ elif cmd == "execute":
     log(sys.argv[1:])
     save()
 elif cmd == "build":
-    (BENCH_ROOT / "sites" / "assets" / "js").mkdir(parents=True, exist_ok=True)
+    assets = BENCH_ROOT / "sites" / "assets"
+    (assets / "js").mkdir(parents=True, exist_ok=True)
+    (assets / "css").mkdir(parents=True, exist_ok=True)
+    (assets / "assets.json").write_text("{}")
     state["build_calls"] = state.get("build_calls", 0) + 1
     log(sys.argv[1:])
     save()
@@ -117,6 +109,87 @@ elif cmd == "backup":
 else:
     sys.exit(2)
 """
+
+FAKE_SITE_CREATOR = """#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+
+bench_root = Path(os.environ["SIMULATED_BENCH_ROOT"])
+state_path = Path(os.environ["SIMULATED_STATE_PATH"])
+payload = json.load(sys.stdin)
+site = payload["site"]
+site_dir = bench_root / "sites" / site
+site_dir.mkdir(parents=True, exist_ok=True)
+(site_dir / "site_config.json").write_text(json.dumps({
+    "db_name": "db_" + site.replace(".", "_"), "db_type": "mariadb"
+}))
+common_path = bench_root / "sites" / "common_site_config.json"
+common = json.loads(common_path.read_text())
+if payload.get("set_default_site", True):
+    common["default_site"] = site
+common_path.write_text(json.dumps(common))
+state = json.loads(state_path.read_text())
+state.setdefault("sites", {}).setdefault(site, {"apps": ["frappe"], "migrate_calls": 0})
+state["current_site_created"] = True
+state["site_create_secret_fields_received"] = all(
+    isinstance(payload.get(key), str) and payload[key]
+    for key in ("db_root_password", "admin_password", "db_password")
+)
+state.setdefault("calls", []).append(["new-site", site])
+state_path.write_text(json.dumps(state, indent=2))
+"""
+
+
+class BootstrapSecretHandlingTests(unittest.TestCase):
+    def test_site_creation_credentials_are_stdin_only_and_failure_output_is_withheld(self):
+        root_password = "root-secret-value"
+        admin_password = "admin-secret-value"
+        db_password = "site-db-secret-value"
+        command = mock.Mock(returncode=0, stdout="created", stderr="")
+        with mock.patch.object(bootstrap.subprocess, "run", return_value=command) as run:
+            bootstrap.create_site(
+                SITE, root_password, admin_password, db_password,
+                db_host="127.0.0.1", db_port=13306, set_default_site=False)
+        argv = run.call_args.args[0]
+        input_payload = run.call_args.kwargs["input"]
+        payload = json.loads(input_payload)
+        self.assertEqual(payload["db_host"], "127.0.0.1")
+        self.assertEqual(payload["db_port"], 13306)
+        self.assertFalse(payload["set_default_site"])
+        self.assertTrue(payload["common_site_config_path"].endswith("/sites/common_site_config.json"))
+        for secret in (root_password, admin_password, db_password):
+            self.assertNotIn(secret, argv)
+            self.assertIn(secret, input_payload)
+        self.assertEqual(argv[1], "-c")
+        self.assertEqual(run.call_args.kwargs["capture_output"], True)
+
+        failed = mock.Mock(
+            returncode=1,
+            stdout=f"failed {root_password}",
+            stderr=f"trace contains {admin_password} and {db_password}")
+        with mock.patch.object(bootstrap.subprocess, "run", return_value=failed):
+            with self.assertRaises(RuntimeError) as ctx:
+                bootstrap.create_site(
+                    SITE, root_password, admin_password, db_password)
+        detail = str(ctx.exception)
+        for secret in (root_password, admin_password, db_password):
+            self.assertNotIn(secret, detail)
+        self.assertNotIn("failed root-secret-value", detail)
+        self.assertNotIn("trace contains", detail)
+        self.assertIn("sensitive diagnostics were withheld", detail)
+
+    def test_bench_failure_hides_arguments_and_child_output(self):
+        child_secret = "secret-that-might-be-echoed"
+        failed = mock.Mock(returncode=9, stdout=child_secret, stderr=child_secret)
+        with mock.patch.object(bootstrap.subprocess, "run", return_value=failed):
+            with self.assertRaises(RuntimeError) as ctx:
+                bootstrap.run_bench(
+                    ["--site", SITE, "set-config", "secret-key", child_secret],
+                    cwd=Path("/synthetic/bench"))
+        detail = str(ctx.exception)
+        self.assertEqual(detail, "bench operation failed (exit 9)")
+        self.assertNotIn(child_secret, detail)
+        self.assertNotIn("set-config", detail)
 
 
 def open_listeners(ports=3):
@@ -156,6 +229,11 @@ class ProductLifecycleSim(unittest.TestCase):
         bench_file = fake_bin / "bench"
         bench_file.write_text(FAKE_BENCH)
         bench_file.chmod(0o755)
+        site_creator_script = fake_bin / "site-creator.py"
+        site_creator_script.write_text(FAKE_SITE_CREATOR)
+        site_python = fake_bin / "site-python"
+        site_python.write_text("#!/bin/sh\nexec python3 \"$SIMULATED_SITE_CREATOR\"\n")
+        site_python.chmod(0o755)
         secrets_dir = self.tmp / "secrets"
         secrets_dir.mkdir()
         (secrets_dir / "db.env").write_text("MARIADB_ROOT_PASSWORD=sim-root-password\n")
@@ -169,11 +247,17 @@ class ProductLifecycleSim(unittest.TestCase):
         self.patches = [
             mock.patch.object(bootstrap, "BENCH_DIR", self.bench_root),
             mock.patch.object(bootstrap, "SITES_DIR", self.bench_root / "sites"),
+            mock.patch.object(bootstrap, "ENV_PYTHON", site_python),
             mock.patch.object(bootstrap, "SECRETS_DIR", secrets_dir),
             mock.patch.object(bootstrap, "SITES_SEED", seed),
             mock.patch.object(bootstrap, "SERVICE_ENDPOINTS",
                               tuple(("127.0.0.1", port) for port in self.ports)),
-            mock.patch.dict(os.environ, {"PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", "")}),
+            mock.patch.dict(os.environ, {
+                "PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
+                "SIMULATED_BENCH_ROOT": str(self.bench_root),
+                "SIMULATED_STATE_PATH": str(self.state_path),
+                "SIMULATED_SITE_CREATOR": str(site_creator_script),
+            }),
         ]
         for patch in self.patches:
             patch.start()
@@ -191,16 +275,23 @@ class ProductLifecycleSim(unittest.TestCase):
         summary = bootstrap.bootstrap(SITE, log=lambda _: None)
         self.assertEqual(summary["actions"],
                          ["services-reachable", "sites-seeded", "redis-configured", "site-created",
-                          "installed-erpnext", "installed-education", "installed-payments",
+                          "credentials-written", "installed-erpnext", "installed-education", "installed-payments",
                           "installed-hrms", "installed-foundation_security", "installed-toefl_house",
                           "migrated", "migrate-replayed", "encryption-key-initialized",
-                          "assets-built", "assets-complete", "scheduler-enabled"])
+                          "assets-built", "assets-complete", "assets-manifest-complete",
+                          "scheduler-enabled"])
         state = self.state()
         site_state = state["sites"][SITE]
         self.assertEqual(site_state["apps"],
                          ["frappe", "erpnext", "education", "payments", "hrms",
                           "foundation_security", "toefl_house"])
         self.assertEqual(site_state["migrate_calls"], 2)  # hosted-parity migrate replay
+        self.assertTrue(state["site_create_secret_fields_received"])
+        self.assertNotIn("sim-root-password", " ".join(" ".join(call) for call in state["calls"]))
+        credentials = self.bench_root / "sites" / SITE / "private" / "first-run-credentials.txt"
+        admin_password = next(line.split(": ", 1)[1] for line in credentials.read_text().splitlines()
+                              if line.startswith("Password: "))
+        self.assertNotIn(admin_password, " ".join(" ".join(call) for call in state["calls"]))
         self.assertTrue(state.get("scheduler_enabled"))
         self.assertEqual(state["global_config"]["redis_cache"], "redis://redis-cache:6379")
         self.assertEqual(state["global_config"]["redis_queue"], "redis://redis-queue:6379")
@@ -221,10 +312,62 @@ class ProductLifecycleSim(unittest.TestCase):
             blob = " ".join(call)
             for banned in BANNED_TOKENS:
                 self.assertNotIn(banned, blob)
-        credentials = self.bench_root / "sites" / SITE / "private" / "first-run-credentials.txt"
         body = credentials.read_text()
         self.assertIn("Username: Administrator", body)
         self.assertEqual(oct(credentials.stat().st_mode & 0o777), "0o600")
+
+    def test_retry_after_site_creation_return_failure_recovers_staged_password(self):
+        original_create_site = bootstrap.create_site
+
+        def create_then_fail(*args, **kwargs):
+            original_create_site(*args, **kwargs)
+            raise RuntimeError("synthetic failure after native site creation")
+
+        with mock.patch.object(bootstrap, "create_site", side_effect=create_then_fail):
+            with self.assertRaisesRegex(RuntimeError, "after native site creation"):
+                bootstrap.bootstrap(SITE, log=lambda _: None)
+
+        pending = self.bench_root / "sites" / f".{SITE}.first-run-credentials.pending"
+        credentials = (self.bench_root / "sites" / SITE / "private"
+                       / "first-run-credentials.txt")
+        self.assertTrue(pending.is_file())
+        self.assertEqual(oct(pending.stat().st_mode & 0o777), "0o600")
+        self.assertFalse(credentials.exists())
+        pending_body = pending.read_bytes()
+
+        summary = bootstrap.bootstrap(SITE, log=lambda _: None)
+        self.assertIn("site-present", summary["actions"])
+        self.assertIn("credentials-recovered", summary["actions"])
+        self.assertEqual(credentials.read_bytes(), pending_body)
+        self.assertFalse(pending.exists())
+        self.assertTrue(self.state().get("scheduler_enabled"))
+
+    def test_retry_after_post_creation_failure_keeps_password_and_enables_scheduler(self):
+        original_run_bench = bootstrap.run_bench
+        injected = {"done": False}
+
+        def fail_first_install(arguments, *, cwd):
+            if arguments[:3] == ["--site", SITE, "install-app"] and not injected["done"]:
+                injected["done"] = True
+                raise RuntimeError("synthetic post-site install failure")
+            return original_run_bench(arguments, cwd=cwd)
+
+        with mock.patch.object(bootstrap, "run_bench", side_effect=fail_first_install):
+            with self.assertRaisesRegex(RuntimeError, "synthetic post-site install failure"):
+                bootstrap.bootstrap(SITE, log=lambda _: None)
+
+        credentials = (self.bench_root / "sites" / SITE / "private"
+                       / "first-run-credentials.txt")
+        self.assertTrue(credentials.is_file())
+        self.assertEqual(oct(credentials.stat().st_mode & 0o777), "0o600")
+        original_credentials = credentials.read_bytes()
+        self.assertFalse(self.state().get("scheduler_enabled"))
+
+        summary = bootstrap.bootstrap(SITE, log=lambda _: None)
+        self.assertIn("site-present", summary["actions"])
+        self.assertIn("scheduler-enabled", summary["actions"])
+        self.assertEqual(credentials.read_bytes(), original_credentials)
+        self.assertTrue(self.state().get("scheduler_enabled"))
 
     def test_restart_is_fully_idempotent(self):
         bootstrap.bootstrap(SITE, log=lambda _: None)
@@ -233,7 +376,8 @@ class ProductLifecycleSim(unittest.TestCase):
         self.assertEqual(summary["actions"],
                          ["services-reachable", "sites-seeded", "redis-configured", "site-present", "apps-present",
                           "migrated", "migrate-replayed", "encryption-key-initialized",
-                          "assets-present", "assets-complete"])
+                          "assets-present", "assets-complete", "assets-manifest-complete",
+                          "scheduler-enabled"])
         after = (self.bench_root / "sites" / SITE / "private" / "first-run-credentials.txt").read_bytes()
         self.assertEqual(before, after, "credentials must never rotate silently")
         state = self.state()
