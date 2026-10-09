@@ -17,7 +17,7 @@ import subprocess
 
 _PREFIX = "gpg --yes --passphrase "
 _SAFE_GPG_PREFIX = [
-    "gpg", "--yes", "--passphrase-fd", "0", "--pinentry-mode", "loopback",
+    "gpg", "--batch", "--yes", "--passphrase-fd", "0", "--pinentry-mode", "loopback",
 ]
 
 
@@ -45,7 +45,7 @@ def _safe_gpg_arguments(command: str, passphrase: str) -> list[str]:
     # Remove the secret before tokenization. Any quotes, whitespace, or shell
     # metacharacters in the passphrase are never parsed as command syntax.
     command_without_secret = (
-        "gpg --yes --passphrase-fd 0" + tail[len(passphrase):]
+        "gpg --batch --yes --passphrase-fd 0" + tail[len(passphrase):]
     )
     arguments = shlex.split(command_without_secret, posix=True)
     if arguments[:len(_SAFE_GPG_PREFIX)] != _SAFE_GPG_PREFIX:

@@ -109,7 +109,7 @@ def _gpg_diagnostic_category(output: bytes) -> str:
     return next((category for marker, category in categories if marker in lowered), "unclassified")
 
 
-def _assert_gpg_encrypted(path: Path, role: str) -> None:
+def _assert_gpg_encrypted(path: Path, role: str, encryption_key: str) -> None:
     role_code = {
         "database": "database",
         "public files": "public-files",
@@ -117,7 +117,9 @@ def _assert_gpg_encrypted(path: Path, role: str) -> None:
     }.get(role, "artifact")
     try:
         result = subprocess.run(
-            ["gpg", "--batch", "--list-packets", str(path)],
+            ["gpg", "--batch", "--passphrase-fd", "0", "--pinentry-mode", "loopback",
+             "--list-packets", str(path)],
+            input=(encryption_key + "\n").encode("ascii"),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
@@ -214,7 +216,7 @@ def _verify_and_publish(backup_result, staging_dir: Path, destination_dir: Path,
         expected_name = f"{backup_set}{artifact_suffix}"
         if source.name != expected_name:
             raise BackupInputError(f"native Frappe {role} artifact does not match the backup set")
-        _assert_gpg_encrypted(source, role)
+        _assert_gpg_encrypted(source, role, encryption_key)
         destinations[role] = destination_dir / expected_name
 
     config_source = native_paths["site_config"]

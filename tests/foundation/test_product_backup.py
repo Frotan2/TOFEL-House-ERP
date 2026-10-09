@@ -60,6 +60,7 @@ class NativeGpgTransportTests(unittest.TestCase):
         self.assertEqual(self.utils.execute_in_shell, self.original_execute)
         self.assertEqual(len(self.calls), 2)
         for arguments, kwargs in self.calls:
+            self.assertIn("--batch", arguments)
             self.assertNotIn(self.key, " ".join(arguments))
             self.assertNotIn("--passphrase", arguments)
             self.assertIn("--passphrase-fd", arguments)
@@ -292,9 +293,11 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         packet_calls = [call for call in self.gpg_calls if "--list-packets" in call[0]]
         self.assertEqual(len(encryption_calls), 3)
         self.assertEqual(len(packet_calls), 3)
-        for arguments, _kwargs in packet_calls:
+        for arguments, kwargs in packet_calls:
             self.assertIn("--batch", arguments)
-        for arguments, kwargs in self.gpg_calls:
+            self.assertIn("--passphrase-fd", arguments)
+            self.assertEqual(kwargs["input"], (self.key + "\n").encode("ascii"))
+        for arguments, _kwargs in self.gpg_calls:
             self.assertNotIn(self.key, " ".join(arguments))
             self.assertNotIn("--passphrase", arguments)
         for _arguments, kwargs in encryption_calls:
@@ -306,8 +309,11 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
                 stdout=b"gpg: no valid OpenPGP data found for /private/synthetic-secret",
                 stderr=b"")) as gpg_run:
             with self.assertRaises(self.backup.BackupInputError) as caught:
-                self.backup._assert_gpg_encrypted(self.old_database, "database")
+                self.backup._assert_gpg_encrypted(self.old_database, "database", self.key)
         self.assertIn("--batch", gpg_run.call_args.args[0])
+        self.assertIn("--passphrase-fd", gpg_run.call_args.args[0])
+        self.assertEqual(gpg_run.call_args.kwargs["input"],
+                         (self.key + "\n").encode("ascii"))
         self.assertEqual(caught.exception.safe_code, "gpg-database-check-exit-2")
         self.assertEqual(caught.exception.safe_category, "no-valid-openpgp-data")
         self.assertNotIn("synthetic-secret", str(caught.exception))

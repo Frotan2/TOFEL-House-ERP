@@ -13,7 +13,7 @@ python3 -c 'import sys; sys.path.insert(0, "/product"); from bootstrap import wa
 # Restore and interrupted-build recovery can mutate the shared sites volume
 # after the one-shot bootstrap has completed. Reconcile and verify the served
 # asset tree at every web start before exposing the login page.
-python3 -c 'import sys; sys.path.insert(0, "/product"); from bootstrap import ensure_built_assets; ensure_built_assets()'
+python3 -c 'import sys; sys.path.insert(0, "/product"); from bootstrap import ensure_web_assets; ensure_web_assets()'
 echo "[toefl-house-erp] dependencies and static assets verified; starting web server"
 # frappe.app resolves sites from the sites/ directory (hosted parity: the
 # qualification harness launches gunicorn with cwd=<bench>/sites).

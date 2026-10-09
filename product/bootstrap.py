@@ -480,6 +480,23 @@ def ensure_built_assets(sites_dir: Path = SITES_DIR,
     return synced
 
 
+def ensure_web_assets() -> list[str]:
+    """Repair one incomplete static tree with a native Bench rebuild, then verify.
+
+    Bootstrap normally completes the build before the web service starts. A
+    container restart or interrupted/cold-volume race may still leave a valid
+    manifest with missing hashed files; give the pinned native build one safe,
+    idempotent recovery attempt before failing the web startup closed.
+    """
+    try:
+        return ensure_built_assets()
+    except RuntimeError:
+        print("[toefl-house-erp] static assets incomplete; rebuilding once before web startup",
+              file=sys.stderr, flush=True)
+        run_bench(["build"], cwd=BENCH_DIR)
+        return ensure_built_assets()
+
+
 def _credentials_content(site: str, admin_password: str) -> str:
     return (
         "TOEFL House ERP — first-run Administrator credentials\n"
