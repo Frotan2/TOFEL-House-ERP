@@ -12,17 +12,21 @@ is not a public-edge release gate (see [../PRODUCT.md](../PRODUCT.md) §6).
 **Desktop product (Owner) — PRESERVATION / RESTORE HOLD:** the Owner must
 explicitly choose whether to preserve all valid backup sets or authorize
 deletion of valid older external backup-set directories beyond the keep count.
-The policy has no default: while unresolved, backup and activation remain
-fail-closed. **Do not run `Backup TOEFL House ERP.cmd`, the Windows
-backup/retention helper, restore, cleanup/deletion, or activation. Never restore
-over the existing `toeflhouse.localhost` site or replace/clean its files.** The
-former in-place restore instructions in §7 are withdrawn. No Owner
-backup/restore/activation run has been performed in this review. Sections §7–8
-now contain only read-only checks; they are not authorization to change policy,
-run a helper, or modify the existing site. Any future restore requires a
+The policy has no default. While unresolved, backup, Backup & Recovery policy
+writes, key setup, and operational mode changes remain on hold. **Do not create,
+edit, version, validate, or save a backup policy; generate, recover, test, or
+rotate key material; register or run the backup task; run `Backup TOEFL House
+ERP.cmd`, the Windows backup/retention helper, restore, cleanup/deletion, or
+activation/deactivation. Never restore over the existing `toeflhouse.localhost`
+site or replace/clean its files.** The former in-place restore instructions in
+§7 are withdrawn. No Owner backup/restore/activation run has been performed in
+this review. Sections §7–8 contain only read-only checks; they are the only
+Owner actions currently allowed and do not authorize policy changes, helper
+execution, or modification of the existing site. Any future restore requires a
 separately approved workflow targeting a new disposable site and database.
 
-The Owner-configured local nightly backup time, retention count (at least two),
+**Future configuration only—not authorized under the current hold:** the
+Owner-configured local nightly backup time, retention count (at least two),
 explicit retention behavior, ASCII-armored OpenPGP public recovery key, and
 key-custody requirement are entered through the ERP Configuration desk; no
 schedule or count is supplied by product code. Keep the matching private key
@@ -44,6 +48,14 @@ app's own resolver. Any failed mode verification restores the saved
 to REFUSED. Neither operation changes production authorization.
 
 ## 0. Preconditions (do not proceed unless all hold)
+
+**CURRENT HOLD — do not proceed while retention remains unresolved.** The
+backup, retention-policy, key-custody, activation/deactivation, and restore
+instructions in §§0–5 below are future procedure text only. Do not create or
+modify policy, generate or test keys, register/run a backup task, invoke a
+backup helper, or change site mode. Only the read-only observations in §§7–8
+are currently permitted. Resolving retention alone does not lift this hold;
+implementation/docs review and separate authorization are still required.
 
 1. The supported Windows product is running the current image and the native
    site has completed its migrations.
@@ -78,6 +90,12 @@ to REFUSED. Neither operation changes production authorization.
    script.
 
 ## 1. Create and verify the Owner-configured backup
+
+**HELD — future reference only.** Do not perform these steps while the
+retention hold remains open. In particular, do not create/edit/version/validate/save
+Backup & Recovery policy, provision or test key material, register/run the task,
+or start a backup. The only permitted Owner actions are the read-only checks in
+§§7–8.
 
 1. In the Configuration desk's **Backup & Recovery** section, create the
    Owner policy if absent, then use **Set policy version** and **Validate
@@ -220,11 +238,17 @@ Item remains refused. This setting does not change production authorization.
 
 ## 5. Rollback (deactivation)
 
-Double-click `Deactivate TOEFL House ERP.cmd`. It removes only the operational
-mode keys through `product/activate.py`, saves a private-mode snapshot, and
-verifies that the app resolves to `REFUSED`. A failed verification restores
-the prior configuration. No database migration or ledger is changed, and
-production authorization remains REJECT before and after rollback.
+**HOLD — this is future procedure text, not an action allowed under the
+current backup/retention hold.** Do not change site mode. If the site appears
+to be in an unexpected mode, stop and contact engineering; do not improvise a
+configuration change.
+
+When separately authorized, double-click `Deactivate TOEFL House ERP.cmd`. It
+removes only the operational mode keys through `product/activate.py`, saves a
+private-mode snapshot, and verifies that the app resolves to `REFUSED`. A failed
+verification restores the prior configuration. No database migration or ledger
+is changed, and production authorization remains REJECT before and after
+rollback.
 
 ## 6. Multi-user access (central server + Tailscale)
 

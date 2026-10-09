@@ -7,27 +7,35 @@ exists. A passing owned suite or CI qualification is not, by itself, production
 readiness. **Production authorization remains REJECT.**
 
 **Evidence snapshot (2026-10-09; [PR #14](https://github.com/Frotan2/TOFEL-House-ERP/pull/14) merged as `13482fe285768e43ccadc0d93182a9a14eddf953`):**
-The focused local restore/backup/native-adapter/lifecycle command ran **48 tests,
-OK** after the documentation safety update. The existing advisory-triage test
-module ran **27 tests, OK**, but these check register consistency—not WeasyPrint
-vendor-path coverage. `git diff --check` passed. No full Python suite, Node suite,
-Ruff run, local Docker build, Windows Owner
-operation, or Owner backup/restore was run in this continuation. Hosted on the
-merged commit: Product image [37940397957](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397957),
+The current local worktree's full Python command `python3 -m unittest discover
+-s tests -t .` ran **1,207 tests, OK**, after the latest hold wording and
+packaging-contract assertions; `git diff --check` passed. This local suite is
+not live Frappe/Docker/Owner recovery evidence. The hosted checks on PR #15's
+prior tracked head `58337b6`—before the current local-only hold clarifications—were
+Owned suite [37975034446](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37975034446)
+and [37975039678](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37975039678)
+**PASS** (Ruff static analysis, Python test tree, Node suites), and Product image
+[37975034434](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37975034434)
+**PASS** in both the Windows stale-worktree/EOL and Linux image jobs. No local
+Ruff, Node, or Docker build was run. No Windows Owner operation or Owner
+backup/restore was run.
+
+Hosted on merged commit `13482fe`: Product image
+[37940397957](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397957),
 Native lifecycle [37940397967](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397967),
 and Owned suite [37940397970](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397970)
 **PASS**. Foundation runtime [37940398359](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940398359)
 **FAIL** in both dependency-audit gates: 160 matches across 47 packages and 8
-untriaged identifier matches (7 unique advisories). The prior native restore
-failure is not the current result: the Native lifecycle run now passes and
-restores into a new site/database in an ephemeral Bench. Its result artifact
-could not be retrieved, so this review has no per-run counts or hashes.
+untriaged identifier matches (7 unique advisories). The Native lifecycle run
+passes and restores into a new site/database in an ephemeral Bench, but its
+result artifact could not be retrieved, so this review has no per-run counts or
+hashes.
 
 Owner backup, restore, retention, Windows/Docker Desktop, Task Scheduler,
 Tailscale, and key-custody evidence remain **UNVERIFIED / HOLD**. Preserve the
 existing site, `product/data`, credentials, and backups; do not run the Owner
-backup/retention helper, restore, cleanup/deletion, or activation. Production
-authorization remains **REJECTED**.
+backup/retention helper, edit backup policy, restore, cleanup/deletion, or
+activation. Production authorization remains **REJECTED**.
 
 ## Current gate status
 
@@ -59,7 +67,7 @@ authorization remains **REJECTED**.
 | 10 | P1 | Owner/GM operational visibility and recovery instructions | Preserve truthful live job/service facts and diagnosable repair; provide only non-destructive Owner recovery checks until an isolated restore workflow is qualified | GM Operations desk; `product/windows/VALIDATION.md`; `docs/engineering/LAUNCH-RUNBOOK.md` §§5–8; current Owned suite [37940397970](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397970) | **PARTIAL** — the in-place Owner restore recipe is withdrawn and replaced by read-only checks plus a separate-disposable-site requirement. **UNVERIFIED** — no Owner Windows, backup, or restore evidence. |
 | 11 | P0 | Browser login previously rendered with missing JS bundles, so login did nothing | Keep WSGI static middleware in pinned Frappe order, idempotently synchronize built app assets, and prove real browser login through the current image | `product/wsgi.py`; `product/bootstrap.py`; `tests/foundation/test_product_packaging.py`; Product-image browser/login step; historical [Product image 37658914613](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37658914613); current Product-image run [37940397957](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397957) | **PASS** — Product-image CI `37940397957` passed real Chromium login against its disposable site after asset reconciliation. **UNVERIFIED** — actual Owner Windows sign-in and persisted-data smoke test have not been performed. |
 | 12 | P0 | All guarded Owner-policy commands must be registered to the correct audit authority | Keep all four Owner policy command kinds mapped to `business_policy`, fail closed on missing authority, and test the complete registry | `apps/toefl_house/toefl_house/configuration/audit.py`; `tests/operations/test_owner_operations_policy.py`; static AST audit of all literal audit kinds; current Owned suite; parent [Owned suite 37940397970](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397970) | **PASS in Owned CI** — command/audit/resolver contract tests pass in `37940397970`. **UNVERIFIED** — no live Owner configuration, saved version/audit or runtime qualification. |
-| 13 | P0 | Bootstrap provisions Administrator, not the daily Course Owner | On the real install create a separate native System User with Course Owner role, set credentials, then configure through that account; Administrator remains setup/recovery only | `product/windows/VALIDATION.md` Step 4; README first-run instructions | **UNVERIFIED** — Product-image CI creates a disposable synthetic Course Owner; no actual Owner account creation, role assignment, login or policy configuration evidence exists. |
+| 13 | P0 | Bootstrap provisions Administrator, not the daily Course Owner | When Owner configuration is authorized, use a separate native System User with Course Owner role and keep Administrator setup/recovery-only; while retention is unresolved, do not create, change, validate, or save Backup & Recovery policy | `product/windows/VALIDATION.md` Step 4; README first-run instructions | **UNVERIFIED** — Product-image CI creates a disposable synthetic Course Owner; no actual Owner account creation, role assignment, login or policy configuration evidence exists. |
 | 14 | P0 | Real Owner policy, same-computer separate-drive backup and restore/key custody are not demonstrated; retention behavior requires an explicit Owner choice | Preserve the current site/backups. Until the Owner retention decision and an isolated restore procedure are approved, perform read-only inventory only; never overwrite the existing site, clean up data, or activate | `product/windows/Backup TOEFL House ERP.ps1`; `product/windows/VALIDATION.md` “Backup and restore”; `docs/engineering/LAUNCH-RUNBOOK.md` §§0–1, 7–8; Product image [37940397957](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397957); Native lifecycle [37940397967](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397967) | **UNVERIFIED / HOLD** — the retention choice is unresolved; do not run the helper, backup, restore, cleanup/deletion, or activation. CI synthetic restores are not Owner evidence. Owner drive, key custody, Task Scheduler, and recovery remain unverified. Preserve all existing runtime data and backups; production authorization remains **REJECTED**. |
 
 ## Restore verifier scope audit (2026-10-09)
@@ -127,9 +135,12 @@ existing runtime data or backups.
   loader nevertheless counts these unsupported dispositions as closed. Keep
   production/security approval blocked until the exact vendor paths and
   advisory preconditions are re-triaged; do not claim either finding is
-  confirmed exploitable or mitigated from this evidence. The coordination
-  comment [6086576384](https://github.com/Frotan2/TOFEL-House-ERP/pull/13#issuecomment-6086576384)
-  has no response at the latest check.
+  confirmed exploitable or mitigated from this evidence. Review comment
+  [6086576384](https://github.com/Frotan2/TOFEL-House-ERP/pull/13#issuecomment-6086576384)
+  has no direct response. Later coordination comment
+  [6086997935](https://github.com/Frotan2/TOFEL-House-ERP/pull/13#issuecomment-6086997935)
+  updates CI/restore evidence, but does not address the WeasyPrint or ECharts
+  findings.
 - **Dangling references:** the base register cites
   `tests/foundation/test_sec_deps_triage.py`, which is absent. Open PR #13 adds
   replacement references in an erratum and static tests, but those check

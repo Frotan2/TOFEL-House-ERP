@@ -711,6 +711,17 @@ class RecoveryContract(unittest.TestCase):
 
     def test_runbook_owner_restore_section_is_hold_only(self):
         runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text(encoding="utf-8")
+        pre_start = runbook.index("## 0. Preconditions")
+        pre_end = runbook.index("## 6. Multi-user access", pre_start)
+        future_procedure = " ".join(runbook[pre_start:pre_end].split())
+        future_lower = future_procedure.lower()
+        self.assertIn("current hold — do not proceed", future_lower)
+        self.assertIn("future procedure text only", future_lower)
+        self.assertIn("held — future reference only", future_lower)
+        self.assertIn("do not create/edit/version/validate/save", future_lower)
+        self.assertIn("only the read-only observations in §§7–8 are currently permitted", future_lower)
+        self.assertIn("hold — this is future procedure text", future_lower)
+
         start = runbook.index("## 7. Restore and recovery — HOLD")
         end = runbook.index("## 8. Record read-only status", start)
         held = runbook[start:end]
@@ -1367,6 +1378,10 @@ class OwnerValidationChecklistTests(unittest.TestCase):
         self.assertIn("Evidence 13 — private network and exposure", text)
         self.assertIn("WebSocket handshake", text)
         self.assertIn("UNVERIFIED", text)
+        text_flat = " ".join(text.split())
+        self.assertIn("future prerequisite, currently held", text_flat.lower())
+        self.assertIn("backup & recovery policy setup is currently held", text_flat.lower())
+        self.assertIn("do not create, change, validate, or save that policy while retention remains unresolved", text_flat.lower())
 
         start = text.index("## Backup and restore — Owner PRESERVATION / RESTORE HOLD")
         end = text.index("\n---\n", start)

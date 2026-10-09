@@ -65,11 +65,14 @@ authorization remains **REJECTED**.
 2. **Docker Desktop** installed: https://www.docker.com/products/docker-desktop/
    Its own installer is click-through and sets up WSL2 automatically if the PC
    asks. Restart the PC if it tells you to.
-3. GPG/Gpg4win on a trusted Owner/custodian host is needed to create/export
-   or recover the dedicated OpenPGP key pair. Only the ASCII-armored public
-   key enters ERPNext; the private key and its recovery procedure stay under
-   Owner custody outside Frappe/the container and outside the backup drive.
-   The normal product backup encrypts inside the product container.
+3. **Future prerequisite, currently held:** GPG/Gpg4win on a trusted
+   Owner/custodian host is needed to create/export or recover the dedicated
+   OpenPGP key pair. Do not create, export, recover, test, rotate, or enter key
+   material while the backup/restore hold is active. After the hold is
+   separately cleared, only the ASCII-armored public key enters ERPNext; the
+   private key and recovery procedure stay under Owner custody outside
+   Frappe/the container and outside the backup drive. The normal product
+   backup encrypts inside the product container.
 4. This repository unzipped anywhere (e.g. Desktop): on GitHub use
    **Code → Download ZIP**, then right-click the ZIP → **Extract All…**.
 
@@ -141,8 +144,10 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
   private for setup/recovery. Sign out, sign in as the new Course Owner, open
   **My Profile**, set **Full Name** to `Owner`, and save.
 - **Expected:** the dedicated Course Owner login reaches the desk and the
-  profile save succeeds. This is the account that will configure backup and
-  other Owner policies through the ERP Configuration desk.
+  profile save succeeds. This is the account that will configure other Owner
+  policies through the ERP Configuration desk after any applicable hold is
+  cleared. Backup & Recovery policy setup is currently held; do not create,
+  change, validate, or save that policy while retention remains unresolved.
 - **Evidence 4:** screenshot of the Course Owner account's native role
   assignment and its profile showing **Full Name: Owner**. Do not include a
   password or recovery key. If a separate Course Owner account cannot be
