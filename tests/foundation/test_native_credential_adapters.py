@@ -255,6 +255,18 @@ class NativeProductBackupDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("/private", summary)
         self.assertNotIn("Traceback", summary)
 
+    def test_backup_failure_summary_exposes_only_numeric_mariadb_code(self):
+        adapter = load_tool_module(
+            "native_product_backup_under_test", ROOT / "tools/native/run_product_backup.py")
+        failure_type = type("CommandFailedError", (Exception,), {})
+        error = failure_type("Command failed")
+        error.err = "Got error: 1045: Access denied for user 'synthetic-secret' at /private/db.cnf"
+        summary = adapter.safe_failure_summary(error)
+        self.assertIn("client diagnostic code: 1045", summary)
+        self.assertNotIn("Access denied", summary)
+        self.assertNotIn("synthetic-secret", summary)
+        self.assertNotIn("/private", summary)
+
     def test_backup_failure_summary_never_surfaces_system_exit_text(self):
         adapter = load_tool_module(
             "native_product_backup_under_test", ROOT / "tools/native/run_product_backup.py")

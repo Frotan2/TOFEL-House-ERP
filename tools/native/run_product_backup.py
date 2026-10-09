@@ -23,6 +23,14 @@ def safe_failure_summary(error: BaseException) -> str:
     code = getattr(error, "errno", None)
     if type(code) is int and 0 <= code <= 65535:
         details.append("OS error code: " + str(code))
+    if name == "CommandFailedError":
+        client_error = getattr(error, "err", None)
+        if isinstance(client_error, str):
+            match = re.search(
+                r"\b(?:got error|error(?:\s+code)?)\s*(?::|=|#)?\s*(\d{1,5})\b",
+                client_error, re.IGNORECASE)
+            if match:
+                details.append("client diagnostic code: " + str(int(match.group(1))))
     frames = []
     try:
         for frame in traceback.extract_tb(error.__traceback__)[-6:]:
