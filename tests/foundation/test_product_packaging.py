@@ -703,12 +703,38 @@ class RecoveryContract(unittest.TestCase):
         # The owner deployment (D13/D15) is central server + Tailscale; the
         # runbook is the single place that states the exact supported setup,
         # and the product stays loopback-only underneath it.
-        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text()
+        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text(encoding="utf-8")
         self.assertIn("Multi-user access (central server + Tailscale)", runbook)
         self.assertIn("tailscale serve --bg 8000", runbook)
         self.assertIn("Funnel", runbook)  # the document must warn it stays off
         self.assertIn("no public port", runbook.lower())
-        self.assertIn("Restore from backup (operator)", runbook)
+
+    def test_runbook_owner_restore_section_is_hold_only(self):
+        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text(encoding="utf-8")
+        pre_start = runbook.index("## 0. Preconditions")
+        pre_end = runbook.index("## 6. Multi-user access", pre_start)
+        future_procedure = " ".join(runbook[pre_start:pre_end].split())
+        future_lower = future_procedure.lower()
+        self.assertIn("current hold — do not proceed", future_lower)
+        self.assertIn("future procedure text only", future_lower)
+        self.assertIn("held — future reference only", future_lower)
+        self.assertIn("do not create/edit/version/validate/save", future_lower)
+        self.assertIn("only the read-only observations in §§7–8 are currently permitted", future_lower)
+        self.assertIn("hold — this is future procedure text", future_lower)
+
+        start = runbook.index("## 7. Restore and recovery — HOLD")
+        end = runbook.index("## 8. Record read-only status", start)
+        held = runbook[start:end]
+        held_flat = " ".join(held.split())
+        self.assertIn("Read-only Owner checks while the hold remains", held)
+        self.assertIn("Keep the current site", held)
+        self.assertIn("Do not run `product/restore.py`", held)
+        self.assertIn("unique new Frappe site", held_flat)
+        self.assertIn("distinct database", held_flat)
+        self.assertNotIn("Restore from backup (operator)", runbook)
+        for operation in ('mv "$files"', 'rm -rf --', "docker compose exec -T"):
+            self.assertNotIn(operation, held,
+                             f"Owner hold must not provide a restore/cleanup command: {operation}")
 
     def test_product_first_boot_preserves_failure_diagnostics(self):
         # Workflow logs are not always reachable from the qualification
@@ -824,13 +850,12 @@ class RecoveryContract(unittest.TestCase):
         for argument in ("--db-root-password", "--admin-password", "--encryption-key"):
             self.assertNotIn(argument, workflow)
 
-    def test_product_restore_replaces_file_trees_and_checks_both_scopes(self):
-        # Pinned Frappe restore uses tar extraction into existing paths, so a
-        # real snapshot rehearsal must stage the old trees, extract into clean
-        # public/private targets, and prove both restored and post-backup file
-        # state. Keep the human restore ceremony consistent with that behavior.
+    def test_product_restore_checks_both_scopes_and_owner_runbook_is_held(self):
+        # Destructive staging and tree replacement are permitted only for the
+        # disposable CI site. Owner guidance must remain read-only until a
+        # separately approved isolated target and complete verifier exist.
         workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
-        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text()
+        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text(encoding="utf-8")
         self.assertIn('restore_stage="$site_root/private/.ci-restore-files-$GITHUB_RUN_ID"', workflow)
         self.assertIn('restore_stage="$site/private/.ci-restore-files-upgrade-$GITHUB_RUN_ID"', workflow)
         self.assertIn('mv "$files_dir" "$restore_stage/$scope-files"', workflow)
@@ -841,11 +866,28 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn('restored_file" = "$file_marker"', workflow)
         self.assertIn('restored_file" = "$upgrade_file_marker"', workflow)
         self.assertIn('rm -rf -- "$restore_stage"', workflow)
-        self.assertIn("it does not remove files absent from the", runbook)
-        self.assertIn('stage="$site/private/$RESTORE_STAGE_NAME"', runbook)
-        self.assertIn('mv "$files" "$stage/$scope-files"', runbook)
-        self.assertIn("umask 077", runbook)
-        self.assertIn("docker compose exec -T web sh -eu -c 'rm -rf", runbook)
+
+        start = runbook.index("## 7. Restore and recovery — HOLD")
+        end = runbook.index("## 8. Record read-only status", start)
+        held = runbook[start:end]
+        held_lower = held.lower()
+        held_flat = " ".join(held_lower.split())
+        self.assertIn("keep the current site", held_lower)
+        self.assertIn("do not run `product/restore.py`", held_lower)
+        self.assertIn("read-only owner checks", held_lower)
+        self.assertIn("unique new frappe site", held_flat)
+        self.assertIn("distinct database", held_flat)
+        for criterion in (
+            "use synthetic data", "public/private file content", "record integrity",
+            "frappe file metadata", "filesystem ownership/permissions",
+            "cwd restoration", "explicit failure cases", "persistence after a target restart",
+        ):
+            self.assertIn(criterion, held_flat,
+                          f"future isolated restore requirements lack: {criterion}")
+        self.assertNotIn("Restore from backup (operator)", runbook)
+        for operation in ('mv "$files"', 'rm -rf --', "docker compose exec -T"):
+            self.assertNotIn(operation, held,
+                             f"Owner hold must not provide a restore/cleanup command: {operation}")
 
         # Both rehearsals must stage the old trees after quiescing writers and
         # before the destructive native restore invocation.
@@ -1328,16 +1370,37 @@ class OwnerValidationChecklistTests(unittest.TestCase):
                           f"checklist must explicitly exclude end-user need for: {phrase}")
         self.assertNotIn("```", plain, "no code fences: the end user types nothing")
 
-    def test_lifecycle_and_separate_backup_restore_gates_carry_numbered_evidence(self):
+    def test_lifecycle_evidence_stays_numbered_and_backup_gate_is_hold_only(self):
         text = self.DOC.read_text(encoding="utf-8")
-        for n in range(1, 14):
+        for n in range(1, 11):
             self.assertIn(f"Evidence {n}", text,
-                          f"Owner validation lacks numbered evidence item {n}")
-        self.assertIn("Backup and restore — separate mandatory Owner gate", text)
-        self.assertIn("Task Scheduler Library", text)
-        self.assertIn("Tailscale/private-exposure", text)
+                          f"Owner lifecycle lacks numbered evidence item {n}")
+        self.assertIn("Evidence 13 — private network and exposure", text)
         self.assertIn("WebSocket handshake", text)
-        self.assertIn("UNVERIFIED / HOLD", text)
+        self.assertIn("UNVERIFIED", text)
+        text_flat = " ".join(text.split())
+        self.assertIn("future prerequisite, currently held", text_flat.lower())
+        self.assertIn("backup & recovery policy setup is currently held", text_flat.lower())
+        self.assertIn("do not create, change, validate, or save that policy while retention remains unresolved", text_flat.lower())
+
+        start = text.index("## Backup and restore — Owner PRESERVATION / RESTORE HOLD")
+        end = text.index("\n---\n", start)
+        held = text[start:end]
+        held_flat = " ".join(held.split())
+        self.assertIn("**No backup or restore action is authorized.**", held)
+        self.assertIn("### Read-only checks allowed while the hold remains", held)
+        self.assertIn("separate fixed local drive on this PC", held_flat)
+        self.assertIn("Task Scheduler", held)
+        self.assertIn("new unique Frappe site", held_flat)
+        self.assertIn("distinct database", held_flat)
+        self.assertIn("actual public/private file contents", held_flat)
+        self.assertIn("**Evidence 11–12:**", held)
+        self.assertNotIn("**Evidence 11:**", held)
+        self.assertNotIn("**Evidence 12:**", held)
+        self.assertNotIn("**Action:**", held)
+        self.assertNotIn("docker compose", held.lower())
+        self.assertIn("preservation/restore hold", text.lower())
+        self.assertIn("production authorization remains **REJECTED**", text)
 
     def test_gate_open_statement_and_single_failure_path(self):
         text = self.DOC.read_text(encoding="utf-8")

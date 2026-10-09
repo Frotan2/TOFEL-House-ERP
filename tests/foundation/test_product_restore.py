@@ -343,9 +343,11 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertNotIn("Inappropriate ioctl", stderr.getvalue())
         self.assertNotIn("No such file or directory", stderr.getvalue())
 
-    def test_adapter_uses_stdin_in_product_and_ci_restore_paths(self):
+    def test_product_and_ci_restore_paths_use_safe_adapter_and_owner_runbook_is_held(self):
         workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
         runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text()
+        owner_restore = runbook.split(
+            "## 7. Restore and recovery — HOLD", 1)[1].split("## 8.", 1)[0]
         dockerfile = (ROOT / "product/app.Dockerfile").read_text()
         dockerignore = (ROOT / ".dockerignore").read_text()
         self.assertIn("COPY product/restore.py /product/restore.py", dockerfile)
@@ -357,12 +359,14 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertIn("!product/native_gpg.py", dockerignore)
         self.assertIn("!product/native_db.py", dockerignore)
         self.assertEqual(workflow.count("web /product/restore.py"), 2)
-        self.assertIn("ConvertTo-Json -Compress", runbook)
-        self.assertIn("StandardInput.BaseStream", runbook)
-        self.assertIn("Encoding]::UTF8.GetBytes($restorePayload", runbook)
+        self.assertIn("HOLD", runbook)
+        self.assertIn("isolated disposable Bench", owner_restore)
+        self.assertIn("toeflhouse.localhost", owner_restore)
+        self.assertNotIn("ConvertTo-Json -Compress", owner_restore)
+        self.assertNotIn("StandardInput.BaseStream", owner_restore)
+        self.assertNotIn("docker compose run", owner_restore)
         self.assertIn('config.get("backup_encryption_key")', workflow)
         self.assertNotIn('config.get("encryption_key")', workflow)
-        self.assertIn("$siteConfig.backup_encryption_key", runbook)
         backup_script = (ROOT / "product/windows/Backup TOEFL House ERP.ps1").read_text()
         self.assertIn("$siteConfigObject.backup_encryption_key", backup_script)
         for argument in ("--db-root-password", "--admin-password", "--encryption-key"):
