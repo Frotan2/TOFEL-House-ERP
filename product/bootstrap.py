@@ -135,7 +135,7 @@ _NATIVE_SITE_FRAMES_MARKER = "TOEFL_NATIVE_SITE_FRAMES="
 _NATIVE_EXCEPTION_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}\Z")
 
 _CREATE_SITE_SCRIPT = r'''
-import json, re, sys, traceback
+import json, os, re, sys, traceback
 frappe = None
 initialized = False
 failure = None
@@ -144,7 +144,10 @@ try:
     from frappe.installer import _new_site, update_site_config
     payload = json.load(sys.stdin)
     site = payload["site"]
-    frappe.init(site, new_site=True)
+    # Frappe 16 defaults sites_path='.' even when called from the bench root.
+    # Pass the real sites directory or setup_module_map looks for apps.txt in
+    # the bench root and aborts before native _new_site can start.
+    frappe.init(site, sites_path=os.path.join(os.getcwd(), "sites"), new_site=True)
     initialized = True
     _new_site(
         payload.get("db_name"), site,
@@ -176,9 +179,10 @@ if initialized:
             failure = error
 
 if failure is not None:
-    # Surface only the exception's program-defined type and a numeric OS error
-    # code when available. Its message, path, and traceback may contain
-    # credential-bearing upstream diagnostics and stay captured by the parent.
+    # Surface only the program-defined exception type, numeric OS code, and
+    # bounded frame names/line numbers. Its message, paths, source text, and
+    # full traceback may contain sensitive upstream diagnostics; keep them
+    # captured by the parent.
     name = type(failure).__name__
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name):
         print("TOEFL_NATIVE_SITE_EXCEPTION=" + name, file=sys.stderr, flush=True)

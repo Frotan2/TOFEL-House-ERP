@@ -10,6 +10,7 @@ on:
       - .github/workflows/native-lifecycle.yml
       - apps/**
       - tools/native/**
+      - product/bootstrap.py
       - tools/foundation/runner_probe.py
       - docs/engineering/foundation-version-matrix.json
   workflow_dispatch:

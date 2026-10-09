@@ -9,6 +9,7 @@ on:
       - .github/workflows/foundation-runtime.yml
       - tools/foundation/**
       - tools/native/site_setup.py
+      - product/bootstrap.py
       - tools/native/run_product_backup.py
       - tests/foundation/test_native_credential_adapters.py
       - apps/foundation_security/**

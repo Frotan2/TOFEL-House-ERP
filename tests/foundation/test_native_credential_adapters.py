@@ -9,6 +9,8 @@ import json
 import os
 from pathlib import Path
 import sys
+import tempfile
+import types
 import unittest
 from unittest import mock
 
@@ -114,6 +116,44 @@ class NativeSiteSetupAdapterTests(unittest.TestCase):
 
 
 class NativeSiteCreationDiagnosticsTests(unittest.TestCase):
+    def test_child_initializes_frappe_with_the_bench_sites_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bench = Path(directory)
+            sites = bench / "sites"
+            sites.mkdir()
+            (sites / "apps.txt").write_text("frappe", encoding="utf-8")
+            observed = {}
+            frappe = types.ModuleType("frappe")
+            frappe.__path__ = []
+
+            def init(site, *, sites_path, new_site):
+                observed.update(site=site, sites_path=sites_path, new_site=new_site)
+                self.assertEqual(Path(sites_path), sites)
+                self.assertTrue((Path(sites_path) / "apps.txt").is_file())
+
+            frappe.init = init
+            frappe.destroy = lambda: None
+            installer = types.ModuleType("frappe.installer")
+            installer._new_site = lambda *args, **kwargs: None
+            installer.update_site_config = lambda *args, **kwargs: None
+            payload = {
+                "site": "native-probe.localhost",
+                "db_root_password": "synthetic-root-password",
+                "admin_password": "synthetic-admin-password",
+                "db_password": "synthetic-site-password",
+                "set_default_site": False,
+            }
+            with mock.patch.dict(sys.modules, {
+                    "frappe": frappe, "frappe.installer": installer}):
+                with mock.patch("sys.stdin", io.StringIO(json.dumps(payload))):
+                    with mock.patch("os.getcwd", return_value=str(bench)):
+                        exec(bootstrap._CREATE_SITE_SCRIPT, {})
+            self.assertEqual(observed, {
+                "site": "native-probe.localhost",
+                "sites_path": str(sites),
+                "new_site": True,
+            })
+
     def test_child_failure_marker_exposes_only_safe_type_code_and_frames(self):
         secrets_ = ("synthetic-root-secret", "synthetic-admin-secret",
                     "synthetic-db-secret")
