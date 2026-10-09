@@ -292,6 +292,8 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         packet_calls = [call for call in self.gpg_calls if "--list-packets" in call[0]]
         self.assertEqual(len(encryption_calls), 3)
         self.assertEqual(len(packet_calls), 3)
+        for arguments, _kwargs in packet_calls:
+            self.assertIn("--batch", arguments)
         for arguments, kwargs in self.gpg_calls:
             self.assertNotIn(self.key, " ".join(arguments))
             self.assertNotIn("--passphrase", arguments)
@@ -302,9 +304,10 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         with patch.object(self.backup.subprocess, "run", return_value=types.SimpleNamespace(
                 returncode=2,
                 stdout=b"gpg: no valid OpenPGP data found for /private/synthetic-secret",
-                stderr=b"")):
+                stderr=b"")) as gpg_run:
             with self.assertRaises(self.backup.BackupInputError) as caught:
                 self.backup._assert_gpg_encrypted(self.old_database, "database")
+        self.assertIn("--batch", gpg_run.call_args.args[0])
         self.assertEqual(caught.exception.safe_code, "gpg-database-check-exit-2")
         self.assertEqual(caught.exception.safe_category, "no-valid-openpgp-data")
         self.assertNotIn("synthetic-secret", str(caught.exception))

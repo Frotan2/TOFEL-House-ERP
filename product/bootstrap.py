@@ -456,6 +456,30 @@ def public_assets_missing(sites_dir: Path = SITES_DIR, apps_dir: Path | None = N
     return missing
 
 
+def ensure_built_assets(sites_dir: Path = SITES_DIR,
+                        apps_dir: Path | None = None) -> list[str]:
+    """Idempotently reconcile static assets and fail closed on any 404 risk.
+
+    Bootstrap runs this before its first web start; the web entrypoint repeats
+    it after container restarts so a native restore or interrupted build cannot
+    leave the shared sites volume serving a stale/incomplete asset tree.
+    """
+    synced = sync_built_assets(sites_dir, apps_dir)
+    missing = public_assets_missing(sites_dir, apps_dir)
+    if missing:
+        raise RuntimeError(
+            "served-asset 404s would occur (built app assets missing from the "
+            f"static root): {missing[:8]}{' ...' if len(missing) > 8 else ''}"
+        )
+    missing_manifest = manifest_assets_missing(sites_dir)
+    if missing_manifest:
+        raise RuntimeError(
+            "served-asset 404s would occur (manifest URLs missing from the "
+            f"static root): {missing_manifest[:8]}"
+        )
+    return synced
+
+
 def _credentials_content(site: str, admin_password: str) -> str:
     return (
         "TOEFL House ERP — first-run Administrator credentials\n"
@@ -657,23 +681,10 @@ def bootstrap(site: str = SITE_NAME, *, log=print) -> dict:
     # while sites/assets/assets.json already references them; make the static
     # root physically complete, then prove it: every manifest entry must
     # resolve to an existing file, or this boot fails fast with the names.
-    synced = sync_built_assets(SITES_DIR)
+    synced = ensure_built_assets(SITES_DIR)
     if synced:
         actions.append(f"assets-synced:{len(synced)}")
-    missing_assets = public_assets_missing(SITES_DIR)
-    if missing_assets:
-        raise RuntimeError(
-            "served-asset 404s would occur (built app assets missing from the "
-            f"static root): {missing_assets[:8]}{' ...' if len(missing_assets) > 8 else ''}"
-        )
-    actions.append("assets-complete")
-    missing_manifest_assets = manifest_assets_missing(SITES_DIR)
-    if missing_manifest_assets:
-        raise RuntimeError(
-            "served-asset 404s would occur (manifest URLs missing from the "
-            f"static root): {missing_manifest_assets[:8]}"
-        )
-    actions.append("assets-manifest-complete")
+    actions.extend(["assets-complete", "assets-manifest-complete"])
 
     # This is idempotent and also repairs a first boot that stopped after site
     # creation but before scheduler setup. The password file was already stored

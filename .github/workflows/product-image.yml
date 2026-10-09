@@ -264,7 +264,7 @@ jobs:
           checkpoint="GPG verification of native database and file artifacts"
           for name in "${encrypted_names[@]}"; do
             test -s "$backup_dir/$name" || { echo "::error::required encrypted artifact missing: $name"; exit 1; }
-            packet_output="$(docker compose exec -T web gpg --list-packets "sites/toeflhouse.localhost/private/backups/$name" 2>&1)" || {
+            packet_output="$(docker compose exec -T web gpg --batch --list-packets "sites/toeflhouse.localhost/private/backups/$name" 2>&1)" || {
               echo "::error::GPG packet inspection failed for $name: ${packet_output:0:500}"; exit 1;
             }
             printf '%s\n' "$packet_output" | grep -q ':symkey enc packet:' || {
@@ -595,7 +595,7 @@ jobs:
                   echo "::error::login page asset ${code}: ${asset}"
                   relative_asset="${asset#/assets/}"
                   asset_debug="$(docker compose exec -T -w /home/frappe/bench/sites -e PYTHONPATH=/product web /home/frappe/bench/env/bin/python - "$relative_asset" <<'PY' 2>&1 || true
-          import pathlib, re, sys, urllib.error, urllib.request
+          import json, pathlib, re, sys, urllib.error, urllib.request
           relative = sys.argv[1]
           if (not re.fullmatch(r"[A-Za-z0-9_./-]+", relative)
                   or any(part in {"", ".", ".."} for part in relative.split("/"))):
@@ -628,6 +628,23 @@ jobs:
           print("static_root_is_symlink=" + str(asset_root.is_symlink()).lower())
           print("asset_exists=" + str(target.is_file()).lower())
           print("asset_is_symlink=" + str(target.is_symlink()).lower())
+          parts = relative.split("/")
+          app, app_path = parts[0], parts[1:]
+          app_root = pathlib.Path("/home/frappe/bench/apps") / app
+          public_candidates = (
+              app_root / app / "public" / pathlib.Path(*app_path),
+              app_root / "public" / pathlib.Path(*app_path),
+          )
+          print("asset_source_nested_exists=" + str(public_candidates[0].is_file()).lower())
+          print("asset_source_top_level_exists=" + str(public_candidates[1].is_file()).lower())
+          print("asset_app_root_is_symlink=" + str((asset_root / app).is_symlink()).lower())
+          try:
+              mappings = json.loads((asset_root / "assets.json").read_text(encoding="utf-8"))
+              manifest_matches = (isinstance(mappings, dict)
+                                  and "/assets/" + relative in mappings.values())
+          except (OSError, UnicodeError, json.JSONDecodeError):
+              manifest_matches = False
+          print("asset_manifest_matches=" + str(manifest_matches).lower())
           try:
               with urllib.request.urlopen(
                       "http://127.0.0.1:8000/assets/" + relative, timeout=10) as response:
@@ -640,7 +657,7 @@ jobs:
           )"
                   while IFS= read -r debug_line; do
                     case "$debug_line" in
-                      asset_path=invalid|wsgi_import=*|wsgi_import_errno=*|wsgi_import_frames=*|static_root_exists=*|static_root_is_symlink=*|asset_exists=*|asset_is_symlink=*|container_asset_http=*)
+                      asset_path=invalid|wsgi_import=*|wsgi_import_errno=*|wsgi_import_frames=*|static_root_exists=*|static_root_is_symlink=*|asset_exists=*|asset_is_symlink=*|asset_source_nested_exists=*|asset_source_top_level_exists=*|asset_app_root_is_symlink=*|asset_manifest_matches=*|container_asset_http=*)
                         echo "::error title=Asset route diagnostic::${debug_line}"
                         ;;
                     esac
@@ -1230,7 +1247,7 @@ jobs:
           test -s "$backup_dir/${triple_base}-files-enc.tar"
           test -s "$backup_dir/${triple_base}-private-files-enc.tar"
           for name in "$encrypted_db" "${triple_base}-files-enc.tar" "${triple_base}-private-files-enc.tar"; do
-            packet_output="$(docker compose exec -T web gpg --list-packets "sites/toeflhouse.localhost/private/backups/$name" 2>&1)" || {
+            packet_output="$(docker compose exec -T web gpg --batch --list-packets "sites/toeflhouse.localhost/private/backups/$name" 2>&1)" || {
               echo "::error::GPG could not inspect native backup artifact $name"; exit 1;
             }
             if [[ "$packet_output" != *":symkey enc packet:"* ]]; then

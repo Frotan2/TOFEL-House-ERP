@@ -117,7 +117,7 @@ def _assert_gpg_encrypted(path: Path, role: str) -> None:
     }.get(role, "artifact")
     try:
         result = subprocess.run(
-            ["gpg", "--list-packets", str(path)],
+            ["gpg", "--batch", "--list-packets", str(path)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,

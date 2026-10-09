@@ -745,6 +745,9 @@ class RecoveryContract(unittest.TestCase):
         self.assertIn("-e PYTHONPATH=/product", browser)
         self.assertIn("-w /home/frappe/bench/sites", browser)
         self.assertIn("wsgi_import_frames=", browser)
+        self.assertIn("asset_source_nested_exists=", browser)
+        self.assertIn("asset_source_top_level_exists=", browser)
+        self.assertIn("asset_manifest_matches=", browser)
         self.assertNotIn("error.err", browser)
         debug_start = browser.index('asset_debug="$(docker compose exec')
         debug_end = browser.index('                  exit 1', debug_start)
@@ -1000,8 +1003,44 @@ class BootstrapLogicContract(unittest.TestCase):
             self.assertEqual(bootstrap.public_assets_missing(sites, apps), [])
         body = (PRODUCT / "bootstrap.py").read_text()[
             (PRODUCT / "bootstrap.py").read_text().index("def bootstrap("):]
-        self.assertLess(body.index("sync_built_assets(SITES_DIR)"),
-                        body.index("public_assets_missing(SITES_DIR)"))
+        self.assertIn("ensure_built_assets(SITES_DIR)", body)
+        ensure_body = (PRODUCT / "bootstrap.py").read_text()
+        ensure_body = ensure_body[ensure_body.index("def ensure_built_assets("):
+                                  ensure_body.index("def _credentials_content(")]
+        self.assertLess(ensure_body.index("sync_built_assets(sites_dir, apps_dir)"),
+                        ensure_body.index("public_assets_missing(sites_dir, apps_dir)"))
+        self.assertLess(ensure_body.index("public_assets_missing(sites_dir, apps_dir)"),
+                        ensure_body.index("manifest_assets_missing(sites_dir)"))
+
+    def test_ensure_built_assets_repairs_and_verifies_the_served_tree(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            apps = root / "apps"
+            public = apps / "education" / "education" / "public"
+            bundle = public / "dist" / "js" / "education.bundle.abc123.js"
+            bundle.parent.mkdir(parents=True)
+            bundle.write_text("built bundle", encoding="utf-8")
+            sites = root / "sites"
+            assets = sites / "assets"
+            assets.mkdir(parents=True)
+            (assets / "assets.json").write_text(json.dumps({
+                "education.bundle.js": "/assets/education/dist/js/education.bundle.abc123.js",
+            }), encoding="utf-8")
+            self.assertEqual(bootstrap.ensure_built_assets(sites, apps), ["education"])
+            self.assertEqual((assets / "education" / "dist" / "js"
+                              / "education.bundle.abc123.js").read_text(encoding="utf-8"),
+                             "built bundle")
+            self.assertEqual(bootstrap.public_assets_missing(sites, apps), [])
+            self.assertEqual(bootstrap.manifest_assets_missing(sites), [])
+            self.assertEqual(bootstrap.ensure_built_assets(sites, apps), [])
+
+    def test_web_entrypoint_reconciles_assets_before_serving(self):
+        entrypoint = (PRODUCT / "entrypoint.sh").read_text()
+        self.assertIn("from bootstrap import ensure_built_assets; ensure_built_assets()",
+                      entrypoint)
+        self.assertLess(entrypoint.index("ensure_built_assets; ensure_built_assets()"),
+                        entrypoint.index("exec /home/frappe/bench/env/bin/gunicorn"))
 
     def test_empty_bind_mount_is_seeded_before_first_bench_call(self):
         # Regression (product-image run 36750900604): the empty ./data/sites
