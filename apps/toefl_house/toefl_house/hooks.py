@@ -130,10 +130,11 @@ permission_query_conditions["Student Group"] = "toefl_house.permissions.branch_q
 permission_query_conditions["Student Applicant"] = "toefl_house.permissions.branch_query_student_applicant"
 permission_query_conditions["Program Enrollment"] = "toefl_house.permissions.branch_query_program_enrollment"
 override_whitelisted_methods = {
+    "frappe.integrations.oauth2_logins.login_via_office365": "toefl_house.social_login.login_via_office365",
     "education.education.api.enroll_student": "toefl_house.admission.deny_enroll_student",
-    # WeasyPrint download_pdf/get_html are gated through a safe wrapper in
-    # toefl_house.printing so only beta-builder Print Formats with print
-    # permission can invoke them (GHSA-qr67/4wpm/xphm bucket).
+    # The pinned renderer constructor is guarded for *all* paths by the
+    # hash-bound installation patch. These public helper overrides preserve
+    # the vendor signatures and route through that same guard.
     "frappe.utils.weasyprint.download_pdf": "toefl_house.printing.download_pdf",
     "frappe.utils.weasyprint.get_html": "toefl_house.printing.get_html",
 }

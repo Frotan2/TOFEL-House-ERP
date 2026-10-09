@@ -1,0 +1,228 @@
+{
+  "date": "2026-10-09",
+  "kind": "additive_advisory_delta_no_register_mutation",
+  "basis": "Gate blocker STACK-ADVISORY-UNTRIAGED reported on Foundation runtime run 37902411810 (head a3b45abc9534e722b02866bc5381ced2ba37c3f0, branch arena/abdece6c-tofel-house-erp, check-run 113727794492, annotation 'the set the gate failed on'): exactly 8 matches, py:pyjwt@2.13.0 GHSA-x33g-cr3x-6449, py:pyjwt@2.13.0 PYSEC-2026-4183, py:weasyprint@68.0 GHSA-r543-q48m-4c9j, py:werkzeug@3.1.6 GHSA-g6x2-hccm-hh4m, npm:@vue/server-renderer 1241259, npm:postcss-selector-parser 1241232, npm:prosemirror-view 1241270, npm:source-map-js 1241209. These 8 matches are 7 unique advisories (PYSEC-2026-4183 is the PyPI mirror of GHSA-x33g-cr3x-6449). The run's raw header 'advisory matches=160 in 47 packages' counts all matches (triaged and untriaged); the gate failed only on the 8 above. A full replay on 2026-10-09 (replay-snapshot.json) against the npm bulk feed (npm inventory from the five CI-audited pinned yarn.lock files) and PyPI per-release vulnerabilities (uv-resolved 153-pin Python set, python-pins-replay.txt) reproduces the same 8-match untriaged set exactly and the same 47 groups (40 npm packages + 7 Python package versions). Every advisory in this delta was traced to its trigger condition in the pinned sources; dispositions are reachability proofs or build-time enforcement, never suppression. No dependency was upgraded: every fixed version is outside the exact or compatible-release pins of the pinned upstream stack (see upgrade_blockers).",
+  "pinned_upstream_evidence": {
+    "frappe_commit": "988e54f3c4c291e2077a83809663f123731abe76",
+    "frappe_pyproject_sha256": "75a442bcc2fdf946920bd4352c9719370869c5d943ad11e46e4f552bf301d8a6",
+    "frappe_tags_checked_for_pin_changes": [
+      "v16.33.1",
+      "v16.35.0",
+      "v16.36.1",
+      "v16.49.0",
+      "v16.50.0",
+      "v16.51.0"
+    ],
+    "frappe_tags_pin_result": "PyJWT~=2.13.0, WeasyPrint==68.0, Werkzeug==3.1.6 in every checked tag; no v16 tag lifts them"
+  },
+  "upgrade_blockers": [
+    {
+      "package": "pyjwt",
+      "installed": "2.13.0",
+      "fixed_in_advisory_feed": "2.15.0",
+      "declared_by": "frappe@988e54f3 pyproject: PyJWT~=2.13.0",
+      "same_pin_in_v16_tags": "v16.35.0, v16.36.1, v16.49.0, v16.50.0, v16.51.0",
+      "compatible": false
+    },
+    {
+      "package": "werkzeug",
+      "installed": "3.1.6",
+      "fixed_in_advisory_feed": "3.1.9",
+      "declared_by": "frappe@988e54f3 pyproject: Werkzeug==3.1.6",
+      "same_pin_in_v16_tags": "v16.35.0, v16.36.1, v16.49.0, v16.50.0, v16.51.0",
+      "compatible": false
+    },
+    {
+      "package": "weasyprint",
+      "installed": "68.0",
+      "fixed_in_advisory_feed": "70.0",
+      "declared_by": "frappe@988e54f3 pyproject: WeasyPrint==68.0",
+      "same_pin_in_v16_tags": "v16.35.0, v16.36.1, v16.49.0, v16.50.0, v16.51.0",
+      "compatible": false
+    },
+    {
+      "package": "@vue/server-renderer (via vue)",
+      "installed": "3.3.9 (frappe), 3.4.19 (education frontend)",
+      "fixed_in_advisory_feed": "3.5.42",
+      "declared_by": "frozen yarn.lock chains (vue ^3.3.0 / ^3.2.25)",
+      "compatible": false
+    },
+    {
+      "package": "postcss-selector-parser",
+      "installed": "6.0.10, 6.0.13, 6.0.15",
+      "fixed_in_advisory_feed": "7.1.6 (major)",
+      "declared_by": "frozen yarn.lock chains (tailwindcss 3.4.x, @tailwindcss/typography, @vue/component-compiler-utils)",
+      "compatible": false
+    },
+    {
+      "package": "prosemirror-view",
+      "installed": "1.33.1",
+      "fixed_in_advisory_feed": "1.42.3",
+      "declared_by": "frappe-ui 0.1.31 -> @tiptap/pm 2.2.3 (frozen education frontend yarn.lock)",
+      "compatible": false
+    },
+    {
+      "package": "source-map-js",
+      "installed": "1.0.2",
+      "fixed_in_advisory_feed": "1.2.2",
+      "declared_by": "postcss ranges inside frozen frappe and education yarn.lock",
+      "compatible": false
+    }
+  ],
+  "packages": [
+    {
+      "package": "py:pyjwt@2.13.0",
+      "advisories": [
+        {
+          "id": "GHSA-x33g-cr3x-6449",
+          "aliases": [
+            "CVE-2026-102275",
+            "PYSEC-2026-4183"
+          ],
+          "severity": "medium",
+          "published": "2026-10-05T23:44:03Z",
+          "vulnerable_range": ">= 2.1.0, <= 2.14.0",
+          "first_patched": "2.15.0",
+          "summary": "PyJWT accepts inconsistent OKP x/d JWKs, causing public/private key identity confusion (CWE-345, CWE-348; CVSS 6.5).",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Trigger (GHSA-x33g-cr3x-6449, GitHub Advisory API, fetched 2026-10-09): PyJWT accepts an OKP private JWK whose public 'x' does not match 'd'; OKPAlgorithm.from_jwk() builds the Ed25519/Ed448 private key from 'd' without checking 'x'. An application must import an attacker-influenced OKP JWK (for example a DPoP proof key) through PyJWT's OKP path. Pinned frappe (988e54f3, v16.33.1; every v16 tag through v16.51.0 pins PyJWT~=2.13.0) is the only declaring tree. Its PyJWT call sites, verified at the pin on 2026-10-09: frappe/oauth.py:304 import, :307 HS256 header, :324 jwt.encode(... HS256) with the client secret; :441 import, :446-450 unverified payload read, :467-471 verified decode with algorithms=[\"HS256\"]; frappe/utils/oauth.py:179 import, :200 jwt.decode(token, flow.client_secret, options={\"verify_signature\": False}). None of these lines imports an OKP/JWK key. Symmetric secrets never reach the OKP key-import code, so the key-identity confusion has no input path. Provenance: the repository-wide grep for JWK/JWKS/PyJWK/OKP/Ed25519/DPoP usage in frappe, erpnext, education, hrms, payments and the owned trees was run in session 1 on local clones that were removed by a sandbox reset; it is not re-proven here (README section 7). Separate observation for owner review, not this advisory: frappe/utils/oauth.py:200 reads social-login ID-token claims without signature verification.",
+          "fix_path": "Fix is PyJWT 2.15.0. Blocked upstream: Frappe pins PyJWT~=2.13.0 (compatible release, admits only 2.13.x) in v16.33.1 through v16.51.0; 2.15.0 cannot be installed without violating the declared requirement, and owned code cannot patch the library. Re-triage automatically: test_advisory_delta_2026_10_09 binds this disposition to the pinned frappe pyproject hash in the version matrix."
+        }
+      ]
+    },
+    {
+      "package": "py:weasyprint@68.0",
+      "advisories": [
+        {
+          "id": "GHSA-r543-q48m-4c9j",
+          "aliases": [
+            "CVE-2026-106443"
+          ],
+          "severity": "high",
+          "published": "2026-10-07T18:05:49Z",
+          "vulnerable_range": "<= 69.0",
+          "first_patched": "70.0",
+          "summary": "WeasyPrint: EPS images reach the Ghostscript interpreter resulting in RCE (CWE-20; CVSS 8.8).",
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "Chain required by the advisory (GHSA-r543-q48m-4c9j, GitHub Advisory API, fetched 2026-10-09): WeasyPrint passes fetched image bytes to Pillow; Pillow's EpsImagePlugin renders EPS/PS through Ghostscript. Verified in the Pillow 12.3.0 sdist src/PIL/EpsImagePlugin.py (re-fetched 2026-10-09): lines 46-62 resolve the gs executable (non-Windows branch: subprocess.check_call([\"gs\", \"--version\"]) at line 61, then gs_binary = \"gs\" at line 62, i.e. PATH lookup); line 68 defines Ghostscript(); line 78 raises 'Unable to locate Ghostscript on paths'; line 411 calls Ghostscript from the EPS load path. Condition (b), a Ghostscript executable on PATH, is removed by product/app.Dockerfile line 169: a single-stage RUN guard (the only FROM is line 9) that fails the image build if any gs executable is on PATH, including one pulled in transitively. The explicit apt set (product/app.Dockerfile lines 28-30) names no ghostscript package; transitive absence could not be proven offline (no Debian mirror), so it is enforced at build time. Condition (a), attacker-influenced content reaching WeasyPrint, is limited by Frappe's beta gates on the WeasyPrint branches: frappe/utils/print_utils.py attach_print (ignore_print_permissions set at 146, reset at 173) takes the WeasyPrint branch only when print_format_builder_beta is set (151, 159); frappe/www/printview.py 75-76 likewise. The whitelisted frappe/utils/weasyprint.py download_pdf (10-19) and get_html (22-26) carry no beta check of their own; the owned gate toefl_house/printing.py _gate (27-41), wired by hooks.py 137-138, supplies it. No owned fixture sets print_format_builder_beta (test_no_owned_fixture_enables_print_format_builder_beta). Upstream fixtures were not re-checked. The guard ran inside the Product image build on 48f8422 (run 37922276124, step 'Build application image' succeeded). Residual, not closed by this entry: attach_print and printview reach WeasyPrint for beta formats without the owned gate (an authorization residual, not RCE), and the owned wrapper cannot succeed. It forwards format=, doc= and no_letterhead=, which the pinned vendor signatures (weasyprint.py:11 and :22) do not accept, so every call that passes the gate raises TypeError (fail-closed; a static reading, not an executed test).",
+          "fix_path": "Fix is WeasyPrint 70.0. Blocked upstream: Frappe pins WeasyPrint==68.0 (exact) in v16.33.1 through v16.51.0. Interim control: the build-time Ghostscript guard in product/app.Dockerfile. Permanent options for the owner: a Frappe pin move to WeasyPrint >=70, or disabling beta WeasyPrint rendering for TOEFL House (a product decision; not made here)."
+        }
+      ]
+    },
+    {
+      "package": "py:werkzeug@3.1.6",
+      "advisories": [
+        {
+          "id": "GHSA-g6x2-hccm-hh4m",
+          "aliases": [
+            "CVE-2026-102598"
+          ],
+          "severity": "medium",
+          "published": "2026-10-05T23:48:39Z",
+          "vulnerable_range": "< 3.1.9",
+          "first_patched": "3.1.9",
+          "summary": "Werkzeug safe_join() allows Windows special device names (CWE-67).",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Advisory precondition (GHSA-g6x2-hccm-hh4m, verified 2026-10-09): 'If the application is running on Windows and NTFS, and the requested path ends with a special device name'. The served process is a Linux container: product/app.Dockerfile builds FROM python:${PYTHON_VERSION}-slim-bookworm and starts gunicorn frappe.app:application inside it. The Windows host runs only the Docker launchers (product/windows/Start TOEFL House ERP.cmd: docker compose up -d --no-build). The safe_join path is reached only through SharedDataMiddleware for /assets: product/wsgi.py:31 (verified 2026-10-09) and frappe/app.py:572 at the pin (verified 2026-10-09; bench dev server path). Both execute in the Linux container, whose filesystem namespace does not apply Windows device-name semantics. Residual, not proven: Docker Desktop bind-mounts sites/ from the Windows host (product/docker-compose.yml, data/sites); host-side handling of device names through that mount was not tested. Impact would be availability only.",
+          "fix_path": "Fix is Werkzeug 3.1.9. Blocked upstream: Frappe pins Werkzeug==3.1.6 (exact) in v16.33.1 through v16.51.0. No runtime change is needed while the product remains Linux containers; re-triage on any Windows-native serving path or on evidence that Docker Desktop mounts pass device names to the host."
+        }
+      ]
+    },
+    {
+      "package": "npm:@vue/server-renderer@3.3.9,3.4.19",
+      "advisories": [
+        {
+          "id": "GHSA-g2v6-rqmx-r4w6",
+          "aliases": [
+            "1241259"
+          ],
+          "severity": "high",
+          "published": "2026-10-05T22:50:55Z",
+          "vulnerable_range": "< 3.5.42 (npm bulk 1241259: <3.5.42; the GHSA also lists >= 3.6.0-rc.0, < 3.6.0-rc.6)",
+          "first_patched": "3.5.42",
+          "summary": "@vue/server-renderer: XSS via missing CR in attribute-name blacklist (CWE-79, CWE-116; CVSS 7.2).",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "Trigger (GitHub Advisory API): server-side rendering of v-bind objects whose attribute names are attacker-controlled (ssrRenderAttrs / ssrRenderDynamicAttr). Installed as a dependency of vue: frappe@988e54f3 root production dependency vue 3.3.9 and education/frontend production dependency vue 3.4.19 (yarn.lock chains ROOT -> vue -> @vue/server-renderer). Neither client entry imports it. Session-1 evidence, not re-run after the sandbox reset: no SSR entry in the pinned sources (grep for server-renderer, renderToString, ssrRender, createSSRApp), and the built education SPA (vite 2.9.17, 1587 modules) contains zero occurrences of the server-renderer-only string 'Skipped rendering unsafe attribute name'. Verified 2026-10-09 for HRMS a4768b44: frontend/yarn.lock:2532 and roster/yarn.lock:751 resolve @vue/server-renderer 3.5.13 only as a dependency of vue@^3.5.12 (lock lines 5690 and 2211); code search at the pin finds no 'server-renderer' string in frappe/hrms sources; frappe-ui (code search) has one hit, the test file src/molecules/list/List.ssr.test.ts. Source and lock evidence support NOT_REACHABLE for HRMS; a built-bundle check is pending. The package is installed but not invoked.",
+          "fix_path": "Fix is @vue/server-renderer 3.5.42 (vue 3.5.42 line). Blocked upstream: vue is resolved by the frozen frappe@988e54f3 lockfile (^3.3.0 -> 3.3.9) and by the frozen education@93bc7075 frontend lockfile (^3.2.25 -> 3.4.19). A bump is an upstream frontend refresh, not an owned change; no owned code path invokes SSR."
+        }
+      ]
+    },
+    {
+      "package": "npm:postcss-selector-parser@6.0.10,6.0.13,6.0.15",
+      "advisories": [
+        {
+          "id": "GHSA-rj75-hqrm-r3gf",
+          "aliases": [
+            "CVE-2026-104844",
+            "1241232"
+          ],
+          "severity": "medium",
+          "published": "2026-10-05T22:53:54Z",
+          "vulnerable_range": "< 7.1.6 (npm bulk 1241232: <7.1.6)",
+          "first_patched": "7.1.6",
+          "summary": "PostCSS: quadratic complexity in flat selector parsing allows CPU exhaustion (CWE-400, CWE-407; CVSS 5.9).",
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "Advisory impact (GitHub Advisory API): 'Only consumers that parse untrusted, attacker-supplied selectors synchronously in a request path are exposed ... Ordinary build-time use on trusted sources is not affected.' Consumers in the pinned trees are build tooling over repository-owned CSS: education/frontend tailwindcss 3.4.1 and @tailwindcss/typography 0.5.10 (via frappe-ui) run inside the one-shot vite build; frappe's 6.0.13 comes only through @vue/component-compiler-utils (ROOT -> @vue/component-compiler -> @vue/component-compiler-utils). Session-1 evidence, not re-run: a full-tree grep of frappe@988e54f3 found no source reference to @vue/component-compiler or its utils (the package.json entry alone). No runtime Node file (frappe/realtime requires socket.io, node:http, fs, path and local modules) or Python path imports the parser. Not gated: the HRMS trees also carry postcss-selector-parser 6.0.10/6.0.13/6.1.2 (frontend) and 6.0.10/6.1.0 (roster); their build-time consumers are not verified (README section 7, coverage gap).",
+          "fix_path": "Fix is 7.1.6, a major-version move from 6.x. Blocked upstream: the 6.x consumers (tailwindcss 3.4.x, @tailwindcss/typography, @vue/component-compiler-utils) are pinned by frozen upstream lockfiles. Re-open if any runtime code parses user-supplied selectors."
+        }
+      ]
+    },
+    {
+      "package": "npm:prosemirror-view@1.33.1",
+      "advisories": [
+        {
+          "id": "GHSA-c8x8-7fp4-3x9w",
+          "aliases": [
+            "CVE-2026-104847",
+            "1241270"
+          ],
+          "severity": "high",
+          "published": "2026-10-05T22:36:06Z",
+          "vulnerable_range": "< 1.42.3",
+          "first_patched": "1.42.3",
+          "summary": "ProseMirror has a XSS vulnerability in prosemirror-view's paste handling (CWE-79; advisory: a user pastes attacker-provided HTML into a ProseMirror editor).",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "SCOPE: education/frontend, the CI-gated tree. Chain: frappe-ui@0.1.31 -> @tiptap/pm@2.2.3 -> prosemirror-view@1.33.1 (frozen education lockfile; re-checked 2026-10-09: education/frontend/yarn.lock resolves frappe-ui 0.1.31 only). The module code is present in the shipped education bundle (ProseMirror-* class-name literals in the frappe-ui chunk, because frappe-ui declares no sideEffects field). No editor is constructed in the education SPA, so there is no paste sink: TextEditor is imported only by frappe-ui's barrel; the education sources at 93bc7075 import no TextEditor, TextEditorContent, EditorContent, tiptap or prosemirror symbol; src/main.js registers only Button, Card and Input globally. Session-1 evidence (local build, source reads) and the CI module-graph step (rendered-code-present, no editor instance) agree. Re-open if any education component imports TextEditor. THIS DISPOSITION DOES NOT COVER THE PRODUCT: see product_scope, which records an open release blocker in the HRMS SPA.",
+          "fix_path": "Fix is prosemirror-view 1.42.3. Education: blocked upstream (the frozen education lockfile resolves frappe-ui 0.1.31 -> @tiptap/pm 2.2.3 -> prosemirror-view 1.33.1). Product: see product_scope.release_gate (open; the HRMS SPA is built and served).",
+          "product_scope": {
+            "status": "OPEN_RELEASE_BLOCKER",
+            "not_gated_by_ci": true,
+            "tree": "hrms/frontend at a4768b441cff346def505e27f2a2229ee1e05b9b (prosemirror-view 1.31.3 via frappe-ui TextEditor)",
+            "reachability": "REACHABLE WITH USER INTERACTION. The advisory trigger is a user pasting attacker-supplied HTML into a ProseMirror editor. An authenticated user who can open an HRMS form with a 'Text Editor' field pastes such content into it. The product serves the HRMS SPA, so this path is not dead code.",
+            "evidence": [
+              "hrms/frontend/src/components/FormField.vue:37-38 renders TextEditor for fieldtype 'Text Editor'; :153 imports it from frappe-ui (verified 2026-10-09).",
+              "hrms/frontend/src/components/ExpensesTable.vue:79-84 renders FormField with field.fieldtype (verified 2026-10-09).",
+              "hrms/hrms/hr/doctype/expense_claim_detail/expense_claim_detail.json: field 'description' has fieldtype 'Text Editor' (verified 2026-10-09).",
+              "hrms/hooks.py:83-84 website_route_rules serve the HRMS SPA at /hrms/<path> and the roster at /hr/<path> (verified 2026-10-09).",
+              "hrms/www/hrms.py get_context performs no login check; the SPA is served to any requester and its APIs enforce permissions (verified 2026-10-09).",
+              "esbuild/esbuild.js:511-543 (frappe@988e54f3) runs 'yarn build' for each installed app whose package.json has a build script; frappe/build.py:255 passes --run-build-command for non-cached builds; hrms/package.json build = build-pwa (cd frontend && yarn build) && build-roster (verified 2026-10-09).",
+              "product/bootstrap.py:691-692 runs 'bench build' when assets are absent, so the HRMS SPA is built on first boot (verified 2026-10-09).",
+              "Coverage: the CI frontend audit and module graph scan apps/education/frontend only. hrms/frontend is outside the gate (replay: 149 matches in the HRMS frontend tree; 124 unique)."
+            ],
+            "release_gate": "OPEN. Release is blocked until one of: (a) HRMS frontend moves prosemirror-view to >= 1.42.3 (blocked: the HRMS lockfile is upstream and frozen by policy); (b) the Text Editor is unmounted for HRMS fields (upstream code); (c) the /hrms and /hr website routes are disabled in the product (application behaviour change); or (d) the owner records a risk acceptance with an expiry (requires an explicit loader rule; owner decision)."
+          }
+        }
+      ]
+    },
+    {
+      "package": "npm:source-map-js@1.0.2",
+      "advisories": [
+        {
+          "id": "GHSA-68fv-2mgg-jv7q",
+          "aliases": [
+            "CVE-2026-93749",
+            "1241209"
+          ],
+          "severity": "high",
+          "published": "2026-09-18T18:31:44Z",
+          "vulnerable_range": ">= 1.0.0, < 1.2.2",
+          "first_patched": "1.2.2",
+          "summary": "source-map-js allows event-loop denial of service through indexed source-map section offsets (CWE-1284; CVSS 7.5).",
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "Trigger (GitHub Advisory API): synchronous parsing of an attacker-supplied indexed source map. source-map-js 1.0.2 reaches the education and frappe trees only through postcss 8.4.35 (education/frontend devDependency, consumed by the vite build) and postcss 8.4.31 (frappe root production dependency, consumed by esbuild/esbuild.js through @frappe/esbuild-plugin-postcss2; path verified 2026-10-09 at 988e54f3). Both run at build time over repository-owned sources. Session-1 evidence, not re-run: no runtime Node file imports source-map-js (frappe/realtime requires socket.io, node:http, fs, path and local modules), and the built education bundle contains no source-map consumer. Not gated: the HRMS trees carry source-map-js 1.2.1 and 1.0.2; their build-time-only use is not verified (README section 7, coverage gap).",
+          "fix_path": "Fix is source-map-js 1.2.2. Blocked upstream: the postcss ranges resolve to 1.0.2 inside the frozen frappe and education lockfiles; a bump is an upstream lockfile refresh. Build-time availability-only exposure."
+        }
+      ]
+    }
+  ]
+}

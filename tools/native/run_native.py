@@ -170,6 +170,8 @@ def main():
             run('export-commit-'+name,['git','-C',export,'-c','user.name=Synthetic qualification','-c','user.email=validation@example.test','commit','-m','Exact app export '+os.environ['GITHUB_SHA']])
             bench('get-'+name,'get-app','--soft-link','--skip-assets',str(export))
         stage_owner_decision_ledger(lab)
+        run('guard-all-weasyprint-entrypoints',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_weasyprint.py',benchdir/'apps/frappe'])
+        run('patch-hrms-editor-dependencies',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/hrms'])
         run('pip-check',[lab/'tools/bin/uv','pip','check','--python',benchdir/'env/bin/python'])
         for site in ('placement-test.localhost','placement-second.localhost'):
             create_site('new-'+site,site,dbpw)
@@ -241,7 +243,17 @@ def main():
         for name in ('frappe','erpnext','education','payments','hrms'):
             d=benchdir/'apps'/name
             assert run('final-sha-'+name,['git','-C',d,'rev-parse','HEAD'])==parts[name]['commit']
-            assert not run('unchanged-'+name,['git','-C',d,'diff','--name-only'])
+            changed=run('unchanged-'+name,['git','-C',d,'diff','--name-only']).splitlines()
+            if name=='frappe':
+                # Only the hash-bound renderer guard may differ from the
+                # upstream checkout; all other tracked files must stay pinned.
+                assert changed==['frappe/utils/weasyprint.py'], changed
+                run('verify-final-weasyprint-guard',[benchdir/'env/bin/python',
+                    ROOT/'tools/foundation/secure_weasyprint.py',d,'--verify'])
+            else:
+                assert not changed, (name,changed)
+        run('verify-final-hrms-editor',[benchdir/'env/bin/python',
+            ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/hrms','--verify'])
         report['status']='pass'
     except Exception as exc:
         report['status']='fail';report['failure']=redact(str(exc));print(report['failure'],flush=True)

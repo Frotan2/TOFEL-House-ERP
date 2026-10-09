@@ -32,6 +32,24 @@ class RuntimeDependencyAuditTests(unittest.TestCase):
         self.assertEqual(inventory, {"example": ["1.0.0", "2.0.0"]})
         self.assertEqual([root["status"] for root in roots], ["collected", "missing", "empty", "collected"])
 
+    def test_required_shipped_frontend_must_be_supplied_and_collected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            root = self.node_root(directory / "one", "example", "1.0.0")
+            missing = directory / "absent" / "node_modules"
+            empty = directory / "empty" / "node_modules"
+            empty.mkdir(parents=True)
+            args = argparse.Namespace(node_modules=[root, missing, empty],
+                                      require_node_modules=[missing], image=[])
+            with self.assertRaisesRegex(RuntimeError, "missing or empty"):
+                audit_stack.report_for(args)
+            args.require_node_modules = [empty]
+            with self.assertRaisesRegex(RuntimeError, "missing or empty"):
+                audit_stack.report_for(args)
+            args.require_node_modules = [directory / "not-supplied"]
+            with self.assertRaisesRegex(RuntimeError, "not supplied"):
+                audit_stack.report_for(args)
+
     def test_osv_rejects_response_not_aligned_to_each_requested_package_version(self):
         with patch.object(audit_stack, "post_json", return_value={"results": []}):
             with self.assertRaisesRegex(RuntimeError, "does not match"):

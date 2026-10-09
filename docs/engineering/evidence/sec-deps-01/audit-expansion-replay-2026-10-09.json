@@ -1,0 +1,793 @@
+{
+  "closed_by_existing_triage": 91,
+  "locks_sha256": {
+    "erpnext/banking": "33963765905e6174f7838f42f3f67dffc563c564427cf559378c000db1aa6411",
+    "hrms/frontend": "8aaf33ce7e5756a992d68f07caa1df03d88f3694e085d99adcca047efcf6df7d",
+    "hrms/roster": "b889810608d5bc258d214ed62a0c074b726bb687a0747de05a2d685707baf765"
+  },
+  "open_matches": [
+    {
+      "ghsa": "GHSA-4x5r-pxfx-6jf8",
+      "id": 1123528,
+      "name": "@babel/core",
+      "range": "<=7.29.0",
+      "severity": "low",
+      "versions": [
+        "7.21.8",
+        "7.26.10"
+      ]
+    },
+    {
+      "ghsa": "GHSA-968p-4wvh-cqc8",
+      "id": 1104001,
+      "name": "@babel/helpers",
+      "range": "<7.26.10",
+      "severity": "moderate",
+      "versions": [
+        "7.21.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-fv7c-fp4j-7gwp",
+      "id": 1120258,
+      "name": "@babel/plugin-transform-modules-systemjs",
+      "range": ">=7.12.0 <=7.29.3",
+      "severity": "high",
+      "versions": [
+        "7.20.11"
+      ]
+    },
+    {
+      "ghsa": "GHSA-968p-4wvh-cqc8",
+      "id": 1104000,
+      "name": "@babel/runtime",
+      "range": "<7.26.10",
+      "severity": "moderate",
+      "versions": [
+        "7.21.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-67hx-6x53-jw92",
+      "id": 1117420,
+      "name": "@babel/traverse",
+      "range": "<7.23.2",
+      "severity": "critical",
+      "versions": [
+        "7.21.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-gxm5-99cw-xjw9",
+      "id": 1241276,
+      "name": "@fastify/busboy",
+      "range": "<3.2.2",
+      "severity": "moderate",
+      "versions": [
+        "2.1.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-x8mw-p69m-v3mx",
+      "id": 1240982,
+      "name": "@fastify/busboy",
+      "range": ">=1.0.0 <3.2.1",
+      "severity": "high",
+      "versions": [
+        "2.1.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-5375-pq7m-f5r2",
+      "id": 1120587,
+      "name": "@grpc/grpc-js",
+      "range": "<1.9.16",
+      "severity": "high",
+      "versions": [
+        "1.9.14"
+      ]
+    },
+    {
+      "ghsa": "GHSA-7v5v-9h63-cj86",
+      "id": 1097547,
+      "name": "@grpc/grpc-js",
+      "range": ">=1.9.0 <1.9.15",
+      "severity": "moderate",
+      "versions": [
+        "1.9.14"
+      ]
+    },
+    {
+      "ghsa": "GHSA-99f4-grh7-6pcq",
+      "id": 1120593,
+      "name": "@grpc/grpc-js",
+      "range": "<1.9.16",
+      "severity": "high",
+      "versions": [
+        "1.9.14"
+      ]
+    },
+    {
+      "ghsa": "GHSA-f596-whhp-79r4",
+      "id": 1240625,
+      "name": "@grpc/grpc-js",
+      "range": "<1.13.6",
+      "severity": "low",
+      "versions": [
+        "1.9.14"
+      ]
+    },
+    {
+      "ghsa": "GHSA-m9gg-hp2v-232j",
+      "id": 1240623,
+      "name": "@grpc/grpc-js",
+      "range": "<1.13.6",
+      "severity": "high",
+      "versions": [
+        "1.9.14"
+      ]
+    },
+    {
+      "ghsa": "GHSA-q6x5-8v7m-xcrf",
+      "id": 1118933,
+      "name": "@protobufjs/utf8",
+      "range": "<=1.1.0",
+      "severity": "moderate",
+      "versions": [
+        "1.1.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-2g4f-4pwh-qvx6",
+      "id": 1113714,
+      "name": "ajv",
+      "range": "<6.14.0",
+      "severity": "moderate",
+      "versions": [
+        "6.12.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-2g4f-4pwh-qvx6",
+      "id": 1113715,
+      "name": "ajv",
+      "range": ">=7.0.0-alpha.0 <8.18.0",
+      "severity": "moderate",
+      "versions": [
+        "8.12.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-3pq3-5fj3-cg6v",
+      "id": 1240607,
+      "name": "axios",
+      "range": ">=1.13.0 <1.20.0",
+      "severity": "high",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-44g4-m2mj-wpvx",
+      "id": 1240629,
+      "name": "axios",
+      "range": ">=1.15.0 <1.20.0",
+      "severity": "moderate",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-4hqw-qxg8-jxx2",
+      "id": 1240627,
+      "name": "axios",
+      "range": ">=1.12.0 <1.20.0",
+      "severity": "moderate",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-542g-h47m-68v8",
+      "id": 1240608,
+      "name": "axios",
+      "range": ">=1.13.0 <1.20.0",
+      "severity": "high",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-9fr6-4gfg-395g",
+      "id": 1240601,
+      "name": "axios",
+      "range": ">=1.0.0 <1.20.0",
+      "severity": "moderate",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-c29m-xwm3-cm6r",
+      "id": 1240603,
+      "name": "axios",
+      "range": ">=1.16.1 <1.20.0",
+      "severity": "high",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-j8rh-479h-cp32",
+      "id": 1240626,
+      "name": "axios",
+      "range": ">=1.0.0 <1.20.0",
+      "severity": "moderate",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-m8m8-qj5v-23w3",
+      "id": 1240628,
+      "name": "axios",
+      "range": ">=1.15.2 <1.20.0",
+      "severity": "high",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-mghh-pgcx-3jjj",
+      "id": 1240604,
+      "name": "axios",
+      "range": ">=1.15.0 <1.20.0",
+      "severity": "high",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-r4gj-5m52-g5wh",
+      "id": 1240634,
+      "name": "axios",
+      "range": ">=1.17.0 <1.20.0",
+      "severity": "high",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-vh66-26gq-q6x8",
+      "id": 1240600,
+      "name": "axios",
+      "range": ">=1.7.0 <1.20.0",
+      "severity": "moderate",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-x97p-jq2g-jp4f",
+      "id": 1240605,
+      "name": "axios",
+      "range": ">=1.15.1 <1.20.0",
+      "severity": "high",
+      "versions": [
+        "1.18.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-w5vr-8v7q-w6rv",
+      "id": 1193686,
+      "name": "baseline-browser-mapping",
+      "range": ">=2.0.0 <2.11.0",
+      "severity": "moderate",
+      "versions": [
+        "2.10.40"
+      ]
+    },
+    {
+      "ghsa": "GHSA-737v-mqg7-c878",
+      "id": 1116102,
+      "name": "defu",
+      "range": "<=6.1.4",
+      "severity": "high",
+      "versions": [
+        "6.1.4"
+      ]
+    },
+    {
+      "ghsa": "GHSA-ghr5-ch3p-vcr6",
+      "id": 1098366,
+      "name": "ejs",
+      "range": "<3.1.10",
+      "severity": "moderate",
+      "versions": [
+        "3.1.9"
+      ]
+    },
+    {
+      "ghsa": "GHSA-3wf4-68gx-mph8",
+      "id": 1100557,
+      "name": "firebase",
+      "range": "<10.9.0",
+      "severity": "moderate",
+      "versions": [
+        "10.8.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-25h7-pfq9-p65f",
+      "id": 1114526,
+      "name": "flatted",
+      "range": "<3.4.0",
+      "severity": "high",
+      "versions": [
+        "3.2.7"
+      ]
+    },
+    {
+      "ghsa": "GHSA-rf6f-7fwh-wjgh",
+      "id": 1241196,
+      "name": "flatted",
+      "range": "<=3.4.1",
+      "severity": "high",
+      "versions": [
+        "3.2.7"
+      ]
+    },
+    {
+      "ghsa": "GHSA-r4q5-vmmm-2653",
+      "id": 1116560,
+      "name": "follow-redirects",
+      "range": "<=1.15.11",
+      "severity": "moderate",
+      "versions": [
+        "1.15.11"
+      ]
+    },
+    {
+      "ghsa": "GHSA-2883-xcg3-v3hh",
+      "id": 1193727,
+      "name": "js-yaml",
+      "range": ">=4.0.0 <4.3.2",
+      "severity": "high",
+      "versions": [
+        "4.1.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-52cp-r559-cp3m",
+      "id": 1123911,
+      "name": "js-yaml",
+      "range": ">=4.0.0 <4.3.0",
+      "severity": "high",
+      "versions": [
+        "4.1.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-5p4m-2wfm-xmqj",
+      "id": 1138115,
+      "name": "js-yaml",
+      "range": ">=4.0.0 <4.3.1",
+      "severity": "high",
+      "versions": [
+        "4.1.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-h67p-54hq-rp68",
+      "id": 1121860,
+      "name": "js-yaml",
+      "range": ">=4.0.0 <=4.1.1",
+      "severity": "moderate",
+      "versions": [
+        "4.1.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-mh29-5h37-fv8m",
+      "id": 1112715,
+      "name": "js-yaml",
+      "range": ">=4.0.0 <4.1.1",
+      "severity": "moderate",
+      "versions": [
+        "4.1.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-w9m9-85wc-3x92",
+      "id": 1153170,
+      "name": "postcss-selector-parser",
+      "range": ">=6.1.0 <6.1.3",
+      "severity": "low",
+      "versions": [
+        "6.1.2",
+        "6.1.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-2pr8-phx7-x9h3",
+      "id": 1118924,
+      "name": "protobufjs",
+      "range": "<=7.5.5",
+      "severity": "moderate",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-66ff-xgx4-vchm",
+      "id": 1118641,
+      "name": "protobufjs",
+      "range": "<=7.5.5",
+      "severity": "high",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-685m-2w69-288q",
+      "id": 1118932,
+      "name": "protobufjs",
+      "range": "<=7.5.5",
+      "severity": "high",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-75px-5xx7-5xc7",
+      "id": 1118928,
+      "name": "protobufjs",
+      "range": "<=7.5.5",
+      "severity": "high",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-f38q-mgvj-vph7",
+      "id": 1123492,
+      "name": "protobufjs",
+      "range": "<=7.6.2",
+      "severity": "moderate",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-fx83-v9x8-x52w",
+      "id": 1118926,
+      "name": "protobufjs",
+      "range": "<=7.5.5",
+      "severity": "moderate",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-jggg-4jg4-v7c6",
+      "id": 1119378,
+      "name": "protobufjs",
+      "range": "<=7.5.7",
+      "severity": "moderate",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-jvwf-75h9-cwgg",
+      "id": 1118930,
+      "name": "protobufjs",
+      "range": "<=7.5.5",
+      "severity": "high",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-q6x5-8v7m-xcrf",
+      "id": 1118935,
+      "name": "protobufjs",
+      "range": "<=7.5.5",
+      "severity": "moderate",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-wcpc-wj8m-hjx6",
+      "id": 1123488,
+      "name": "protobufjs",
+      "range": "<=7.6.0",
+      "severity": "high",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-xq3m-2v4x-88gg",
+      "id": 1117571,
+      "name": "protobufjs",
+      "range": "<7.5.5",
+      "severity": "critical",
+      "versions": [
+        "7.2.6"
+      ]
+    },
+    {
+      "ghsa": "GHSA-c2qf-rxjj-qqgw",
+      "id": 1112921,
+      "name": "semver",
+      "range": ">=7.0.0 <7.5.2",
+      "severity": "high",
+      "versions": [
+        "7.5.1"
+      ]
+    },
+    {
+      "ghsa": "GHSA-c2qf-rxjj-qqgw",
+      "id": 1112922,
+      "name": "semver",
+      "range": ">=6.0.0 <6.3.1",
+      "severity": "high",
+      "versions": [
+        "6.3.0"
+      ]
+    },
+    {
+      "ghsa": "GHSA-5c6j-r48x-rmvq",
+      "id": 1113686,
+      "name": "serialize-javascript",
+      "range": "<=7.0.2",
+      "severity": "high",
+      "versions": [
+        "6.0.2"
+      ]
+    },
+    {
+      "ghsa": "GHSA-qj8w-gfj5-8c6v",
+      "id": 1119440,
+      "name": "serialize-javascript",
+      "range": ">=5.0.0 <7.0.5",
+      "severity": "moderate",
+      "versions": [
+        "6.0.2"
+      ]
+    },
+    {
+      "ghsa": "GHSA-cqmj-92xf-r6r9",
+      "id": 1100541,
+      "name": "socket.io-parser",
+      "range": ">=4.0.4 <4.2.3",
+      "severity": "moderate",
+      "versions": [
+        "4.2.2"
+      ]
+    },
+    {
+      "ghsa": "GHSA-2mjp-6q6p-2qxm",
+      "id": 1114594,
+      "name": "undici",
+      "range": "<6.24.0",
+      "severity": "moderate",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-35p6-xmwp-9g52",
+      "id": 1137243,
+      "name": "undici",
+      "range": "<6.27.0",
+      "severity": "low",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-3787-6prv-h9w3",
+      "id": 1114834,
+      "name": "undici",
+      "range": "<=5.28.2",
+      "severity": "low",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-4992-7rv2-5pvq",
+      "id": 1114642,
+      "name": "undici",
+      "range": "<6.24.0",
+      "severity": "moderate",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-8xcm-r25x-g524",
+      "id": 1130716,
+      "name": "undici",
+      "range": "<6.28.0",
+      "severity": "moderate",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-9qxr-qj54-h672",
+      "id": 1109581,
+      "name": "undici",
+      "range": "<5.28.4",
+      "severity": "low",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-c76h-2ccp-4975",
+      "id": 1101610,
+      "name": "undici",
+      "range": ">=4.5.0 <5.28.5",
+      "severity": "moderate",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-cxrh-j4jr-qwg3",
+      "id": 1113069,
+      "name": "undici",
+      "range": "<5.29.0",
+      "severity": "low",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-g8m3-5g58-fq7m",
+      "id": 1121255,
+      "name": "undici",
+      "range": "<6.27.0",
+      "severity": "low",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-g9mf-h72j-4rw9",
+      "id": 1112496,
+      "name": "undici",
+      "range": "<6.23.0",
+      "severity": "moderate",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-m4v8-wqvr-p9f7",
+      "id": 1109583,
+      "name": "undici",
+      "range": "<5.28.4",
+      "severity": "low",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-m8rv-5g2x-5cg5",
+      "id": 1130727,
+      "name": "undici",
+      "range": "<6.28.0",
+      "severity": "moderate",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-p88m-4jfj-68fv",
+      "id": 1121242,
+      "name": "undici",
+      "range": "<6.27.0",
+      "severity": "moderate",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-r53p-7pc4-xj5r",
+      "id": 1240039,
+      "name": "undici",
+      "range": "<6.28.1",
+      "severity": "low",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-v3r7-h72x-cjcm",
+      "id": 1130732,
+      "name": "undici",
+      "range": "<6.28.0",
+      "severity": "moderate",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-v9p9-hfj2-hcw8",
+      "id": 1114640,
+      "name": "undici",
+      "range": "<6.24.0",
+      "severity": "high",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-vrm6-8vpv-qv8q",
+      "id": 1114638,
+      "name": "undici",
+      "range": "<6.24.0",
+      "severity": "high",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-vxpw-j846-p89q",
+      "id": 1121245,
+      "name": "undici",
+      "range": "<6.27.0",
+      "severity": "high",
+      "versions": [
+        "5.26.5"
+      ]
+    },
+    {
+      "ghsa": "GHSA-mp7j-qc5w-4988",
+      "id": 1123482,
+      "name": "websocket-driver",
+      "range": "<0.7.5",
+      "severity": "moderate",
+      "versions": [
+        "0.7.4"
+      ]
+    },
+    {
+      "ghsa": "GHSA-xv26-6w52-cph6",
+      "id": 1123483,
+      "name": "websocket-driver",
+      "range": "<0.7.5",
+      "severity": "critical",
+      "versions": [
+        "0.7.4"
+      ]
+    },
+    {
+      "ghsa": "GHSA-j8xg-fqg3-53r7",
+      "id": 1102444,
+      "name": "word-wrap",
+      "range": "<1.2.4",
+      "severity": "moderate",
+      "versions": [
+        "1.2.3"
+      ]
+    }
+  ],
+  "scope": "Offline union of three pinned upstream Yarn v1 lockfiles. Not an installed-tree CI result. Version set still includes upstream editor versions; remediation replaces installed HRMS copies. Counts are advisory-version matches, not vulnerabilities or exploit proof.",
+  "severity_of_open_matches": {
+    "critical": 3,
+    "high": 29,
+    "low": 10,
+    "moderate": 35
+  },
+  "source": "npm bulk advisory API via registry.npmjs.org (public packages/versions only)",
+  "total_matches_union": 168,
+  "unique_open_ghsa": 73,
+  "untriaged": 77
+}
