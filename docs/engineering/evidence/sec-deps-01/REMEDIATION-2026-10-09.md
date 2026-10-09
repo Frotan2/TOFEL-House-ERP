@@ -48,9 +48,16 @@ not close any finding without a successful installed-image and audit run.
    synthetic site. The existing static/in-memory regression tests are not an
    end-to-end proof of these paths.
 2. Independently disposition/remediate **every** additional advisory in the
-   newly included HRMS frontend/roster and ERPNext banking trees. Do not
-   relabel matches BUILD_ONLY or NOT_REACHABLE without pinned callsite or build
-   evidence. Expect the Foundation gate to fail until this is done.
+   newly included HRMS frontend/roster and ERPNext banking trees. The offline
+   union-lock replay in `audit-expansion-replay-2026-10-09.json` found 168 npm
+   advisory-version entries: 91 closed by the current triage, **77 untriaged**
+   (73 distinct GHSA identifiers; 3 critical, 29 high, 35 moderate, 10 low).
+   This is a public lockfile replay, not the installed-tree result. Several
+   criticals are code-generation/RCE matches; none is dismissed as build-only
+   without callsite analysis. Do not relabel matches BUILD_ONLY or
+   NOT_REACHABLE without pinned callsite or build evidence. The Foundation gate
+   must fail until this is done; a passing earlier head did not scan these
+   trees.
 3. Real Windows installation, encrypted backup, restore (DB plus uploaded
    public/private files), restart and repair on a disposable Windows machine
    with Docker Desktop, including Course Owner login and policy/account

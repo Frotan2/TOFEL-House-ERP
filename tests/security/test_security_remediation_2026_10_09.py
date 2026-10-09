@@ -17,6 +17,17 @@ import secure_weasyprint  # noqa: E402
 
 
 class CoverageWiringTests(unittest.TestCase):
+    def test_public_lock_replay_records_open_findings_without_waiver(self):
+        report = json.loads((ROOT / "docs/engineering/evidence/sec-deps-01/"
+                             "audit-expansion-replay-2026-10-09.json").read_text())
+        self.assertEqual(report["untriaged"], len(report["open_matches"]))
+        self.assertEqual(report["unique_open_ghsa"], len({r["ghsa"] for r in report["open_matches"]}))
+        self.assertEqual(report["total_matches_union"],
+                         report["closed_by_existing_triage"] + report["untriaged"])
+        for row in report["open_matches"]:
+            self.assertTrue(row["versions"])
+            self.assertTrue(row["ghsa"].startswith("GHSA-"))
+
     def test_every_shipped_nested_tree_enters_the_fail_closed_gate(self):
         runtime = (ROOT / "tools/foundation/runtime_install.py").read_text()
         for app, tree in (("education", "frontend"), ("hrms", "frontend"),
