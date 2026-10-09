@@ -45,15 +45,38 @@ def safe_native_site_failure_detail(output: str) -> str | None:
     return matches[0] if len(matches) == 1 else None
 
 
+_RESTORE_COMPONENT = r"(?:[A-Za-z0-9][A-Za-z0-9._+-]{0,200}|<path-withheld>)"
+_RESTORE_FRAME = r"[A-Za-z0-9_<>.-]{1,128}:[1-9][0-9]{0,5}"
+_SAFE_NATIVE_RESTORE_FAILURE = re.compile(
+    r"Native Frappe restore failed; exception type: [A-Za-z_][A-Za-z0-9_]{0,63}"
+    r"(?:; reported exception type: [A-Za-z_][A-Za-z0-9_]{0,63})?"
+    r"(?:; OS error code: (?:0|[1-9][0-9]{0,4}))?"
+    r"(?:; GPG diagnostic category: [a-z][a-z0-9-]{0,63})?"
+    rf"(?:; frames: {_RESTORE_FRAME}(?:,{_RESTORE_FRAME}){{0,5}})?"
+    rf"(?:; reported frames: {_RESTORE_FRAME}(?:,{_RESTORE_FRAME}){{0,5}})?"
+    rf"(?:; reported path: (?:restore-temp|site-data|bench|system-bin|relative):"
+    rf"{_RESTORE_COMPONENT}(?:/{_RESTORE_COMPONENT}){{0,15}})?"
+    r"; Sensitive diagnostics were withheld\. Leave the application writers stopped "
+    r"and inspect logs through the approved secure procedure\.\Z")
+
+
+def safe_native_restore_failure_detail(output: str) -> str | None:
+    """Retain one adapter-generated restore summary with no raw exception text."""
+    matches = [line.strip() for line in (output or "").splitlines()
+               if _SAFE_NATIVE_RESTORE_FAILURE.fullmatch(line.strip())]
+    return matches[0] if len(matches) == 1 else None
+
+
 def hosted_failure_annotations(failure: str, last_failed_check: str | None = None,
-                               safe_site_detail: str | None = None) -> list[str]:
+                               safe_site_detail: str | None = None,
+                               safe_restore_detail: str | None = None) -> list[str]:
     """Single-line ``::error::`` commands for GitHub check annotations.
 
     Job logs and artifact zips EOF from this environment. Annotations are the
     only diagnostic that survives. Multi-line tails are collapsed: a library
     warning dump as an annotation is how the previous blind spot started.
-    Only the exact, validated, message-free native site-creation summary is
-    eligible as supplemental detail.
+    Only exact, validated, message-free native site-creation or restore
+    summaries are eligible as supplemental detail.
     """
     lines: list[str] = []
     if last_failed_check:
@@ -68,6 +91,11 @@ def hosted_failure_annotations(failure: str, last_failed_check: str | None = Non
         lines.append(
             "::error file=tools/foundation/runtime_install.py::native site diagnostic: "
             + safe_site_detail)
+    if (safe_restore_detail
+            and _SAFE_NATIVE_RESTORE_FAILURE.fullmatch(safe_restore_detail)):
+        lines.append(
+            "::error file=tools/foundation/runtime_install.py::native restore diagnostic: "
+            + safe_restore_detail)
     return lines
 
 
@@ -1067,9 +1095,18 @@ def main() -> int:
             if last_failed_check and last_failed_check.startswith("new-"):
                 site_detail = safe_native_site_failure_detail(
                     report.get("failure_output_tail") or "")
+            restore_detail = None
+            if last_failed_check in ("restore-with-files", "hardened-restore-with-files"):
+                restore_log = evidence / (last_failed_check + ".txt")
+                try:
+                    restore_detail = safe_native_restore_failure_detail(
+                        restore_log.read_text())
+                except (OSError, UnicodeError):
+                    pass
             for line in hosted_failure_annotations(
                     report.get("failure") or "runtime_install failed",
-                    last_failed_check, safe_site_detail=site_detail):
+                    last_failed_check, safe_site_detail=site_detail,
+                    safe_restore_detail=restore_detail):
                 print(line, flush=True)
     return 0 if report["status"] == "pass" else 1
 

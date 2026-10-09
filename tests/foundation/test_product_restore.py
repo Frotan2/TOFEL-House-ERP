@@ -82,6 +82,39 @@ class ProductRestoreInputTests(unittest.TestCase):
                     if secret:
                         self.assertNotIn(secret, stdout.getvalue() + stderr.getvalue())
 
+    def test_missing_database_or_file_artifacts_are_rejected_before_native_restore(self):
+        restore = load_restore()
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        site = "toeflhouse.localhost"
+        backup_set = "20261008-test"
+        request = payload(site=site, backup_set=backup_set)
+
+        for missing_role in restore.BACKUP_SUFFIXES:
+            with self.subTest(missing_role=missing_role):
+                restore.SITES_DIR = Path(temp.name) / missing_role
+                backup_dir = restore.SITES_DIR / site / "private" / "backups"
+                backup_dir.mkdir(parents=True)
+                for role, suffix in restore.BACKUP_SUFFIXES.items():
+                    if role != missing_role:
+                        (backup_dir / f"{backup_set}{suffix}").write_bytes(
+                            b"synthetic encrypted fixture")
+
+                with self.assertRaises(restore.RestoreInputError) as caught:
+                    restore._native_restore(
+                        site, backup_set, request["encryption_key"],
+                        request["db_root_password"], request["admin_password"])
+                self.assertIn(missing_role, str(caught.exception))
+
+    def test_restore_failure_paths_outside_known_roots_are_not_reported(self):
+        restore = load_restore()
+        error = FileNotFoundError(2, "No such file or directory", "/private/synthetic-secret")
+        self.assertIsNone(restore._safe_failure_location(error, Path("/tmp/restore-test")))
+        command_error = FileNotFoundError(2, "No such file or directory", "mariadb")
+        self.assertEqual(
+            restore._safe_failure_location(command_error, Path("/tmp/restore-test")),
+            "relative:mariadb")
+
     def test_native_restore_output_and_exceptions_cannot_leak_credentials(self):
         restore = load_restore()
         site = "toeflhouse.localhost"
@@ -143,18 +176,31 @@ class ProductRestoreInputTests(unittest.TestCase):
             print(kwargs["admin_password"])
             print(kwargs["encryption_key"])
             print("gpg: Inappropriate ioctl for device /private/synthetic-private-context")
-            print("FileNotFoundError: [Errno 2] No such file or directory: '/private/synthetic-secret'")
             staged = {}
+            fields_by_role = {
+                "database": "sql_file_path",
+                "public_files": "with_public_files",
+                "private_files": "with_private_files",
+            }
+            roles_by_field = {field: role for role, field in fields_by_role.items()}
             for field in ("sql_file_path", "with_public_files", "with_private_files"):
                 staged_path = Path(kwargs[field])
                 staged[field] = staged_path
+                source, original_bytes = original_artifacts[roles_by_field[field]]
+                self.assertEqual(staged_path.read_bytes(), original_bytes)
                 # Pinned Frappe decrypts/replaces the paths it receives. Simulate
                 # that behavior and prove only disposable copies were passed.
                 staged_path.write_bytes(b"native restore mutated this staged input")
                 self.assertEqual(stat.S_IMODE(staged_path.stat().st_mode), 0o600)
                 self.assertNotEqual(staged_path.parent, backup_dir)
+                self.assertTrue(source.is_file())
             events.append(("staged-inputs", staged))
-            raise SystemExit(1)
+            missing_path = Path(kwargs["sql_file_path"]).parent / "missing-native-restore-input"
+            try:
+                raise FileNotFoundError(2, "No such file or directory", str(missing_path))
+            except FileNotFoundError as native_error:
+                print(f"{type(native_error).__name__}: {native_error}")
+                raise SystemExit(1)
 
         site_commands._restore = native_restore
         utils = types.ModuleType("frappe.utils")
@@ -241,6 +287,11 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertIn("OS error code: 2", stderr.getvalue())
         self.assertIn("GPG diagnostic category: terminal-unavailable", stderr.getvalue())
         self.assertIn("frames:", stderr.getvalue())
+        self.assertRegex(stderr.getvalue(), r"reported frames: native_restore:[0-9]+")
+        self.assertIn(
+            "reported path: restore-temp:artifacts/missing-native-restore-input",
+            stderr.getvalue())
+        self.assertNotIn("/tmp/toefl-house-native-restore-", stderr.getvalue())
         self.assertNotIn("synthetic-private-context", stderr.getvalue())
         self.assertNotIn("synthetic-secret", stderr.getvalue())
         self.assertNotIn("Inappropriate ioctl", stderr.getvalue())

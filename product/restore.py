@@ -53,7 +53,9 @@ class NativeRestoreError(RuntimeError):
 
     def __init__(self, failure_type: str, failure_frames: tuple[str, ...],
                  failure_errno: int | None, failure_category: str,
-                 reported_failure_type: str | None):
+                 reported_failure_type: str | None,
+                 reported_frames: tuple[str, ...] = (),
+                 failure_location: str | None = None):
         self.failure_type = (failure_type if re.fullmatch(
             r"[A-Za-z_][A-Za-z0-9_]{0,63}", failure_type) else "Exception")
         self.failure_frames = tuple(failure_frames[:6])
@@ -61,6 +63,8 @@ class NativeRestoreError(RuntimeError):
                               and 0 <= failure_errno <= 65535 else None)
         self.failure_category = failure_category
         self.reported_failure_type = reported_failure_type
+        self.reported_frames = tuple(reported_frames[:6])
+        self.failure_location = failure_location
         super().__init__("native Frappe restore failed; sensitive diagnostics were withheld")
 
 
@@ -78,25 +82,104 @@ def _captured_os_error_code(output: str) -> int | None:
     return code if code <= 65535 else None
 
 
-def _native_restore_failure(error: BaseException, captured_output: str) -> NativeRestoreError:
-    """Keep only exception class, numeric OS code, safe GPG category and frames."""
-    failure_type = type(error).__name__
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", failure_type):
-        failure_type = "Exception"
+def _exception_chain(error: BaseException) -> tuple[BaseException, ...]:
+    chain = []
+    seen = set()
+    current = error
+    while isinstance(current, BaseException) and id(current) not in seen:
+        seen.add(id(current))
+        chain.append(current)
+        current = current.__cause__ or current.__context__
+    return tuple(chain)
+
+
+def _safe_traceback_frames(error: BaseException) -> tuple[str, ...]:
     frames = []
     for frame in traceback.extract_tb(error.__traceback__)[-6:]:
         if (re.fullmatch(r"[A-Za-z0-9_<>.-]{1,128}", frame.name)
                 and type(frame.lineno) is int and 1 <= frame.lineno <= 999999):
             frames.append(f"{frame.name}:{frame.lineno}")
-    error_number = getattr(error, "errno", None)
-    if type(error_number) is not int or not 0 <= error_number <= 65535:
+    return tuple(frames)
+
+
+def _safe_failure_location(error: BaseException | None,
+                           temporary_root: Path | None) -> str | None:
+    """Map an exception filename to a known disposable/runtime root.
+
+    Absolute host paths, arbitrary path components, and exception messages are
+    never emitted. This retains useful command/artifact context without
+    disclosing user paths or backup contents.
+    """
+    filename = getattr(error, "filename", None)
+    if not isinstance(filename, (str, bytes, os.PathLike)):
+        return None
+    try:
+        raw_path = os.fsdecode(os.fspath(filename))
+    except (TypeError, ValueError):
+        return None
+    if (not raw_path or len(raw_path) > 4096
+            or any(ord(char) < 0x20 or ord(char) == 0x7f for char in raw_path)):
+        return None
+
+    safe_component = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,200}\Z")
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        parts = candidate.parts
+        if (not parts or len(parts) > 16
+                or any(not safe_component.fullmatch(part) for part in parts)):
+            return None
+        return "relative:" + "/".join(parts)
+    candidate = Path(os.path.abspath(candidate))
+    roots = []
+    if temporary_root is not None:
+        roots.append(("restore-temp", Path(os.path.abspath(temporary_root))))
+    roots.extend((
+        ("site-data", Path(os.path.abspath(SITES_DIR))),
+        ("bench", Path(os.path.abspath(BENCH_DIR))),
+        ("system-bin", Path("/usr/bin")),
+        ("system-bin", Path("/bin")),
+        ("system-bin", Path("/usr/sbin")),
+    ))
+    for label, root in roots:
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError:
+            continue
+        parts = relative.parts
+        if (not parts or len(parts) > 16
+                or any(not safe_component.fullmatch(part) for part in parts)):
+            return label + ":<path-withheld>"
+        return label + ":" + "/".join(parts)
+    return None
+
+
+def _native_restore_failure(error: BaseException, captured_output: str,
+                            temporary_root: Path | None = None) -> NativeRestoreError:
+    """Keep only safe exception types, frames, path classes and numeric OS code."""
+    failure_type = type(error).__name__
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", failure_type):
+        failure_type = "Exception"
+    frames = _safe_traceback_frames(error)
+    chain = _exception_chain(error)
+    reported_error = next((candidate for candidate in reversed(chain)
+                           if candidate is not error
+                           and type(candidate).__name__ in _SAFE_CAPTURED_EXCEPTION_TYPES), None)
+    reported_type = (type(reported_error).__name__ if reported_error is not None
+                     else _captured_failure_type(captured_output))
+    reported_frames = (_safe_traceback_frames(reported_error)
+                       if reported_error is not None else ())
+    error_number = next((getattr(candidate, "errno", None)
+                         for candidate in reversed(chain)
+                         if type(getattr(candidate, "errno", None)) is int
+                         and 0 <= getattr(candidate, "errno") <= 65535), None)
+    if error_number is None:
         error_number = _captured_os_error_code(captured_output)
+    failure_location = _safe_failure_location(reported_error, temporary_root)
     gpg_lines = [line for line in captured_output.splitlines()
                  if re.search(r"\bgpg(?:\[[^]]+\])?:", line, re.IGNORECASE)]
     category = safe_gpg_diagnostic_category("\n".join(gpg_lines))
-    reported_type = _captured_failure_type(captured_output)
-    return NativeRestoreError(failure_type, tuple(frames), error_number, category,
-                              reported_type)
+    return NativeRestoreError(failure_type, frames, error_number, category,
+                              reported_type, reported_frames, failure_location)
 
 
 def _read_payload(stdin) -> dict:
@@ -246,6 +329,7 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
 
     initialized = False
     captured = io.StringIO()
+    working_dir = None
     try:
         # Frappe's native decrypt_backup temporarily replaces its input files
         # with plaintext while restoring. Keep that in-place behavior confined
@@ -279,11 +363,13 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
         raise
     except SystemExit as error:
         if error.code not in (None, 0):
-            raise _native_restore_failure(error, captured.getvalue()) from None
+            raise _native_restore_failure(
+                error, captured.getvalue(), working_dir) from None
     except Exception as error:
         # Native restore diagnostics can include command context. Preserve only
-        # an allowlisted class/category and compact frame names/line numbers.
-        raise _native_restore_failure(error, captured.getvalue()) from None
+        # allowlisted classes/frames and a path relative to approved roots.
+        raise _native_restore_failure(
+            error, captured.getvalue(), working_dir) from None
     finally:
         if initialized:
             try:
@@ -322,6 +408,10 @@ def main(stdin=None, stdout=None, stderr=None, argv=None) -> int:
             details.append("GPG diagnostic category: " + error.failure_category)
         if error.failure_frames:
             details.append("frames: " + ",".join(error.failure_frames))
+        if error.reported_frames:
+            details.append("reported frames: " + ",".join(error.reported_frames))
+        if error.failure_location:
+            details.append("reported path: " + error.failure_location)
         details.append("Sensitive diagnostics were withheld")
         stderr.write("; ".join(details) + ". Leave the application writers stopped "
                      "and inspect logs through the approved secure procedure.\n")

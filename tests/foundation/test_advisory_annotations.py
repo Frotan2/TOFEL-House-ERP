@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "foundati
 from runtime_install import (ANNOTATION_MAX_LINES, ANNOTATION_TEXT_LIMIT,  # noqa: E402
                              advisory_finding_annotations,
                              hosted_failure_annotations,
+                             safe_native_restore_failure_detail,
                              safe_native_site_failure_detail)
 
 PREFIX = "::warning file=tools/foundation/runtime_install.py::"
@@ -37,6 +38,28 @@ class AdvisoryAnnotationTests(unittest.TestCase):
                              hosted_failure_annotations(
                                  "new-site: exit 1", "new-site",
                                  safe_site_detail="Native Frappe site creation failed: password was leaked")))
+
+    def test_only_exact_sanitized_native_restore_summary_is_annotated(self):
+        detail = (
+            "Native Frappe restore failed; exception type: SystemExit; "
+            "reported exception type: FileNotFoundError; OS error code: 2; "
+            "frames: _native_restore:267,_restore:276,restore_backup:378; "
+            "reported frames: native_restore:91; "
+            "reported path: restore-temp:artifacts/missing.sql.gz; "
+            "Sensitive diagnostics were withheld. Leave the application writers stopped "
+            "and inspect logs through the approved secure procedure.")
+        output = "raw private traceback\n" + detail + "\n/private/secret-backup"
+        self.assertEqual(safe_native_restore_failure_detail(output), detail)
+        self.assertIsNone(safe_native_restore_failure_detail(output + "\n" + detail))
+        self.assertIsNone(safe_native_restore_failure_detail(
+            detail.replace("restore-temp:artifacts/missing.sql.gz", "/private/secret-backup")))
+
+        lines = hosted_failure_annotations(
+            "restore-with-files: exit 1", "restore-with-files",
+            safe_restore_detail=detail)
+        self.assertTrue(any("native restore diagnostic: " + detail in line for line in lines))
+        self.assertTrue(all("raw private traceback" not in line and
+                            "/private/secret-backup" not in line for line in lines))
 
     def test_public_ids_are_preferred_from_aliases_and_urls(self):
         lines = advisory_finding_annotations(stack(
