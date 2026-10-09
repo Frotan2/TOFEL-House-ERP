@@ -238,16 +238,21 @@ def _native_backup(site_name: str | None = None, *, allow_test_site: bool = Fals
             or (site_name != SUPPORTED_SITE and not allow_test_site)):
         raise BackupInputError("backup site does not match the configured product site")
 
-    import frappe
-    import frappe.utils
-    from frappe.utils import backups
-
+    caller_cwd = Path.cwd()
     initialized = False
     captured = io.StringIO()
-    original_cleanup = backups.delete_temp_backups
     try:
+        os.chdir(SITES_DIR)
+        import frappe
+        import frappe.utils
+        from frappe.utils import backups
+
+        original_cleanup = backups.delete_temp_backups
         with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
-            frappe.init(site_name, sites_path=str(SITES_DIR))
+            # Match Bench's native `frappe_cmd` CWD and `frappe.init(site)`;
+            # BackupGenerator archives the relative site path consumed by
+            # Frappe restore's `tar --strip 2` extraction.
+            frappe.init(site_name)
             initialized = True
             frappe.connect()
             destination_dir = _native_backup_directory(backups, site_name)
@@ -285,12 +290,15 @@ def _native_backup(site_name: str | None = None, *, allow_test_site: bool = Fals
             finally:
                 backups.delete_temp_backups = original_cleanup
     finally:
-        if initialized:
-            try:
-                with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
-                    frappe.destroy()
-            except Exception:
-                pass
+        try:
+            if initialized:
+                try:
+                    with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
+                        frappe.destroy()
+                except Exception:
+                    pass
+        finally:
+            os.chdir(caller_cwd)
 
 
 def main(argv=None, stdout=None, stderr=None) -> int:

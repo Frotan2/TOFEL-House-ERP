@@ -412,9 +412,10 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
         if path.is_symlink() or not valid_path or not valid_file:
             raise RestoreInputError(f"required restore artifact is missing or unsafe: {role}")
 
-    # The pinned Bench `frappe_cmd` changes to bench/sites before running
-    # Frappe's CLI. Mirror that native context for logger and site-path
-    # resolution while retaining this adapter's in-process secret transport.
+    # Bench's pinned `frappe_cmd` changes to bench/sites, and Frappe's native
+    # restore command then calls frappe.init(site) with its default relative
+    # sites_path. Keep both details so logger and file-archive paths match the
+    # CLI's native `--strip 2` extraction semantics.
     caller_cwd = Path.cwd()
     initialized = False
     captured = io.StringIO()
@@ -449,7 +450,7 @@ def _native_restore(site: str, backup_set: str, encryption_key: str,
                         except (OSError, ValueError):
                             pass
                     with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
-                        frappe.init(site, sites_path=str(SITES_DIR))
+                        frappe.init(site)
                         initialized = True
                         with filelock("site_restore", timeout=1):
                             _restore(

@@ -139,7 +139,8 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         frappe = types.ModuleType("frappe")
         frappe.__path__ = []
         frappe.conf = types.SimpleNamespace(db_type="mariadb")
-        frappe.init = lambda name, sites_path: self.events.append(("init", name, sites_path))
+        frappe.init = lambda name, sites_path=".": self.events.append(
+            ("init", name, sites_path, Path.cwd()))
         frappe.connect = lambda: self.events.append(("connect",))
         frappe.destroy = lambda: self.events.append(("destroy",))
         frappe.get_system_settings = lambda name: name == "encrypt_backup"
@@ -255,9 +256,13 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         self.fail("unexpected child process invocation")
 
     def _run_adapter(self):
-        with patch.dict(sys.modules, self.modules):
-            with patch.object(native_gpg.subprocess, "run", side_effect=self.fake_gpg_run):
-                self.backup._native_backup()
+        caller_cwd = Path.cwd()
+        try:
+            with patch.dict(sys.modules, self.modules):
+                with patch.object(native_gpg.subprocess, "run", side_effect=self.fake_gpg_run):
+                    self.backup._native_backup()
+        finally:
+            self.assertEqual(Path.cwd(), caller_cwd)
 
     def test_native_backup_uses_safe_gpg_and_preserves_preexisting_backups(self):
         self._run_adapter()
@@ -265,7 +270,8 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         self.assertEqual(self.old_config.read_bytes(), self.old_config_bytes)
         self.assertEqual(self.backups.delete_temp_backups, self.original_cleanup)
         self.assertNotIn(("native-cleanup-called",), self.events)
-        self.assertEqual(self.events[0][0], "init")
+        self.assertEqual(
+            self.events[0], ("init", self.site, ".", self.sites))
         self.assertIn(("get-backup-encryption-key",), self.events)
         key_index = self.events.index(("get-backup-encryption-key",))
         schedule_index = next(i for i, event in enumerate(self.events)

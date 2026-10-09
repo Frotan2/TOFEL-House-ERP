@@ -170,7 +170,7 @@ class ProductRestoreInputTests(unittest.TestCase):
         frappe = types.ModuleType("frappe")
         frappe.__path__ = []
         frappe.conf = types.SimpleNamespace(db_type="mariadb")
-        frappe.init = lambda name, sites_path: events.append(
+        frappe.init = lambda name, sites_path=".": events.append(
             ("init", name, sites_path, Path.cwd()))
         frappe.destroy = lambda: events.append(("destroy",))
         database = types.ModuleType("frappe.database")
@@ -302,7 +302,7 @@ class ProductRestoreInputTests(unittest.TestCase):
         self.assertIs(frappe.database.get_command, get_database_command)
         self.assertIs(frappe.utils.execute_in_shell, original_execute)
         self.assertEqual(
-            events[0], ("init", site, str(restore.SITES_DIR), restore.SITES_DIR))
+            events[0], ("init", site, ".", restore.SITES_DIR))
         self.assertEqual(Path.cwd(), caller_cwd)
         self.assertEqual(events[1], ("lock", "site_restore", 1))
         native_call = next(event[1] for event in events if event[0] == "restore")

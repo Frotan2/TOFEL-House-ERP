@@ -46,7 +46,7 @@ def _digest(names: list[str]) -> str:
 def _connect(site: str):
     import frappe
 
-    frappe.init(site=site, sites_path=str(Path.cwd()))
+    frappe.init(site=site)
     frappe.connect()
     frappe.set_user("Administrator")
     return frappe
