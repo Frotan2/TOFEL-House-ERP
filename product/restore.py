@@ -41,18 +41,41 @@ class RestoreInputError(ValueError):
     """Invalid or incomplete secret-bearing restore input."""
 
 
+_SAFE_CAPTURED_EXCEPTION_TYPES = (
+    "FileNotFoundError", "PermissionError", "IsADirectoryError", "NotADirectoryError",
+    "CommandFailedError", "CalledProcessError", "OperationalError", "InterfaceError",
+    "SystemExit", "RuntimeError", "ValueError", "OSError",
+)
+
+
 class NativeRestoreError(RuntimeError):
     """Sanitized native-restore failure with allowlisted diagnostic details."""
 
     def __init__(self, failure_type: str, failure_frames: tuple[str, ...],
-                 failure_errno: int | None, failure_category: str):
+                 failure_errno: int | None, failure_category: str,
+                 reported_failure_type: str | None):
         self.failure_type = (failure_type if re.fullmatch(
             r"[A-Za-z_][A-Za-z0-9_]{0,63}", failure_type) else "Exception")
         self.failure_frames = tuple(failure_frames[:6])
         self.failure_errno = (failure_errno if type(failure_errno) is int
                               and 0 <= failure_errno <= 65535 else None)
         self.failure_category = failure_category
+        self.reported_failure_type = reported_failure_type
         super().__init__("native Frappe restore failed; sensitive diagnostics were withheld")
+
+
+def _captured_failure_type(output: str) -> str | None:
+    matches = [name for name in _SAFE_CAPTURED_EXCEPTION_TYPES
+               if re.search(r"\b" + re.escape(name) + r"\b", output)]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _captured_os_error_code(output: str) -> int | None:
+    matches = re.findall(r"\[Errno ([0-9]{1,5})\]", output)
+    if len(matches) != 1:
+        return None
+    code = int(matches[0])
+    return code if code <= 65535 else None
 
 
 def _native_restore_failure(error: BaseException, captured_output: str) -> NativeRestoreError:
@@ -67,9 +90,13 @@ def _native_restore_failure(error: BaseException, captured_output: str) -> Nativ
             frames.append(f"{frame.name}:{frame.lineno}")
     error_number = getattr(error, "errno", None)
     if type(error_number) is not int or not 0 <= error_number <= 65535:
-        error_number = None
-    category = safe_gpg_diagnostic_category(captured_output)
-    return NativeRestoreError(failure_type, tuple(frames), error_number, category)
+        error_number = _captured_os_error_code(captured_output)
+    gpg_lines = [line for line in captured_output.splitlines()
+                 if re.search(r"\bgpg(?:\[[^]]+\])?:", line, re.IGNORECASE)]
+    category = safe_gpg_diagnostic_category("\n".join(gpg_lines))
+    reported_type = _captured_failure_type(captured_output)
+    return NativeRestoreError(failure_type, tuple(frames), error_number, category,
+                              reported_type)
 
 
 def _read_payload(stdin) -> dict:
@@ -286,6 +313,9 @@ def main(stdin=None, stdout=None, stderr=None, argv=None) -> int:
     except NativeRestoreError as error:
         details = ["Native Frappe restore failed",
                    "exception type: " + error.failure_type]
+        if (error.reported_failure_type
+                and error.reported_failure_type != error.failure_type):
+            details.append("reported exception type: " + error.reported_failure_type)
         if error.failure_errno is not None:
             details.append("OS error code: " + str(error.failure_errno))
         if error.failure_category != "unclassified":
