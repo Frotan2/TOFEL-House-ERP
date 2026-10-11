@@ -43,39 +43,45 @@ def main() -> None:
                               "print_format_builder_beta": 1,
                               "format_data": json.dumps({"sections": []})})
         fmt.insert(ignore_permissions=True)
-        # Both whitelisted helper paths and the direct constructor execute the
-        # installed, hash-verified vendor guard against a *real* synthetic doc.
-        preview = get_html("ToDo", todo.name, fmt.name)
-        assert "<html" in preview.lower(), "Authorized preview was not rendered"
-        download_pdf("ToDo", todo.name, fmt.name)
-        pdf = frappe.local.response.filecontent
-        assert isinstance(pdf, bytes) and pdf.startswith(b"%PDF"), "Authorized PDF was not rendered"
-        assert "<html" in PrintFormatGenerator(fmt.name, todo).get_html_preview().lower()
-        assert "<html" in fmt.get_html(todo.name).lower()  # Print Format method path
-        fmt.download_pdf(todo.name)
-        assert frappe.local.response.filecontent.startswith(b"%PDF")
-        # Direct construction cannot bypass authorization even when the doc
-        # carries an ignore_permissions flag, as some internal jobs do.
-        frappe.set_user("Guest")
-        todo.flags.ignore_permissions = True
-        try:
-            PrintFormatGenerator(fmt.name, todo)
-        except frappe.PermissionError:
-            pass
-        else:
-            raise AssertionError("Guest bypassed WeasyPrint constructor guard")
-        todo.flags.ignore_permissions = False
-        for label, call in (("preview", lambda: get_html("ToDo", todo.name, fmt.name)),
-                            ("PDF", lambda: download_pdf("ToDo", todo.name, fmt.name)),
-                            ("Print Format preview", lambda: fmt.get_html(todo.name)),
-                            ("Print Format PDF", lambda: fmt.download_pdf(todo.name))):
+        # Native qualification intentionally installs with --skip-assets. The
+        # print template's include_style() otherwise calls .get() on the absent
+        # asset manifest. Supply only the empty synthetic manifest in this
+        # process; Product-image CI separately builds and checks real assets.
+        frappe.local.preload_assets = {"style": [], "script": []}
+        with patch("frappe.utils.get_assets_json", return_value={}):
+            # Both whitelisted helper paths and the direct constructor execute the
+            # installed, hash-verified vendor guard against a *real* synthetic doc.
+            preview = get_html("ToDo", todo.name, fmt.name)
+            assert "<html" in preview.lower(), "Authorized preview was not rendered"
+            download_pdf("ToDo", todo.name, fmt.name)
+            pdf = frappe.local.response.filecontent
+            assert isinstance(pdf, bytes) and pdf.startswith(b"%PDF"), "Authorized PDF was not rendered"
+            assert "<html" in PrintFormatGenerator(fmt.name, todo).get_html_preview().lower()
+            assert "<html" in fmt.get_html(todo.name).lower()  # Print Format method path
+            fmt.download_pdf(todo.name)
+            assert frappe.local.response.filecontent.startswith(b"%PDF")
+            # Direct construction cannot bypass authorization even when the doc
+            # carries an ignore_permissions flag, as some internal jobs do.
+            frappe.set_user("Guest")
+            todo.flags.ignore_permissions = True
             try:
-                call()
+                PrintFormatGenerator(fmt.name, todo)
             except frappe.PermissionError:
                 pass
             else:
-                raise AssertionError(f"Guest reached {label} WeasyPrint path")
-        frappe.set_user("Administrator")
+                raise AssertionError("Guest bypassed WeasyPrint constructor guard")
+            todo.flags.ignore_permissions = False
+            for label, call in (("preview", lambda: get_html("ToDo", todo.name, fmt.name)),
+                                ("PDF", lambda: download_pdf("ToDo", todo.name, fmt.name)),
+                                ("Print Format preview", lambda: fmt.get_html(todo.name)),
+                                ("Print Format PDF", lambda: fmt.download_pdf(todo.name))):
+                try:
+                    call()
+                except frappe.PermissionError:
+                    pass
+                else:
+                    raise AssertionError(f"Guest reached {label} WeasyPrint path")
+            frappe.set_user("Administrator")
 
         # Exercise the pinned Bench PyJWT/cryptography versions, not only the
         # separate test-only venv. This never requests Microsoft's real JWKS.
@@ -122,4 +128,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        # The hosted job truncates retained logs. Emit only an exception type
+        # and code-frame names/line numbers, never site values or token text.
+        import traceback
+        frames = traceback.extract_tb(exc.__traceback__)[-8:]
+        path = ",".join(f"{Path(frame.filename).name}:{frame.name}:{frame.lineno}" for frame in frames)
+        print(f"SECURITY-SITE-ACCEPTANCE-FAILED {type(exc).__name__} frames={path}", flush=True)
+        raise SystemExit(1) from None

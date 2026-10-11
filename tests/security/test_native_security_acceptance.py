@@ -24,6 +24,12 @@ class SecuritySiteAcceptanceWiring(TestCase):
                      "verify_office365_id_token(wrong", "login_via_office365(",
                      "frappe.db.rollback()"):
             self.assertIn(path, source)
+        # Native uses --skip-assets: include_style() calls .get() on a missing
+        # manifest unless this synthetic-only fixture is set before preview.
+        self.assertIn('patch("frappe.utils.get_assets_json", return_value={})', source)
+        self.assertLess(source.index('patch("frappe.utils.get_assets_json"'),
+                        source.index('preview = get_html("ToDo"'))
+        self.assertIn("SECURITY-SITE-ACCEPTANCE-FAILED", source)
 
     def test_refuses_local_or_non_disposable_site_before_importing_frappe(self):
         spec = importlib.util.spec_from_file_location("native_security_under_test", SCRIPT)

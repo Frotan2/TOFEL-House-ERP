@@ -139,7 +139,17 @@ not close any finding without a successful installed-image and audit run.
    synthetic real-site lifecycle. Both Owned suite runs on `757e8e5`
    (`38149651777`, `38149656124`) passed. None of these is real Windows
    acceptance or an audit pass; Foundation `38149432929` failed as described
-   above.
+   above. A later Native run `38151418984` on `7d85379` failed at the new
+   `security-site-acceptance` command on the **first authorized PDF preview**:
+   Jinja's `print_format.html:10` invokes `include_style`, whose pinned
+   `bundled_asset` calls `.get()` on the missing assets manifest. The Native
+   bench deliberately uses `--skip-assets`; this is a test-fixture omission,
+   not evidence that print authorization was bypassed. The correction supplies
+   an empty, process-local manifest only in that disposable Native acceptance
+   script, while the Product image separately builds and checks actual assets.
+   A regression asserts the fixture precedes preview rendering. The corrected
+   hosted run must pass before claiming site-backed WeasyPrint or Office 365
+   acceptance; no such pass was observed on `7d85379`.
 3. Real Windows installation, encrypted backup, restore (DB plus uploaded
    public/private files), restart and repair on a disposable Windows machine
    with Docker Desktop, including Course Owner login and policy/account
