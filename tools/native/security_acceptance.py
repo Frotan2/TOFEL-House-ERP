@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Synthetic-site acceptance of the installed Office 365 and WeasyPrint seams.
+
+Only run in hosted, throwaway Native benches with explicit synthetic-site flags.
+No real account, configuration, backup, secret, or Microsoft endpoint is used.
+All created documents are rolled back before the process exits.
+"""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import time
+from types import SimpleNamespace
+from unittest.mock import patch
+
+
+def main() -> None:
+    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("CI") != "1":
+        raise RuntimeError("Hosted synthetic runner only")
+    # Do not even open a site connection outside the ephemeral Native bench.
+    runner_temp = os.environ.get("RUNNER_TEMP")
+    if (not runner_temp or Path.cwd().resolve() !=
+            (Path(runner_temp) / "placement-runtime/bench/sites").resolve()):
+        raise RuntimeError("Refusing non-disposable site path")
+    import frappe
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from frappe.utils import oauth
+    from frappe.utils.weasyprint import PrintFormatGenerator, download_pdf, get_html
+    from toefl_house import social_login
+
+    frappe.init(site="placement-test.localhost", sites_path=str(Path.cwd()))
+    frappe.connect()
+    try:
+        if not (frappe.conf.allow_tests == 1 and frappe.conf.toefl_house_synthetic_only == 1):
+            raise RuntimeError("Synthetic-site guard missing")
+        frappe.set_user("Administrator")
+        todo = frappe.get_doc({"doctype": "ToDo", "description": "SYNTHETIC SECURITY PRINT"})
+        todo.insert(ignore_permissions=True)
+        fmt = frappe.get_doc({"doctype": "Print Format", "name": "SYNTHETIC Security PDF",
+                              "doc_type": "ToDo", "standard": "No",
+                              "print_format_builder_beta": 1,
+                              "format_data": json.dumps({"sections": []})})
+        fmt.insert(ignore_permissions=True)
+        # Both whitelisted helper paths and the direct constructor execute the
+        # installed, hash-verified vendor guard against a *real* synthetic doc.
+        preview = get_html("ToDo", todo.name, fmt.name)
+        assert "<html" in preview.lower(), "Authorized preview was not rendered"
+        download_pdf("ToDo", todo.name, fmt.name)
+        pdf = frappe.local.response.filecontent
+        assert isinstance(pdf, bytes) and pdf.startswith(b"%PDF"), "Authorized PDF was not rendered"
+        assert "<html" in PrintFormatGenerator(fmt.name, todo).get_html_preview().lower()
+        assert "<html" in fmt.get_html(todo.name).lower()  # Print Format method path
+        fmt.download_pdf(todo.name)
+        assert frappe.local.response.filecontent.startswith(b"%PDF")
+        # Direct construction cannot bypass authorization even when the doc
+        # carries an ignore_permissions flag, as some internal jobs do.
+        frappe.set_user("Guest")
+        todo.flags.ignore_permissions = True
+        try:
+            PrintFormatGenerator(fmt.name, todo)
+        except frappe.PermissionError:
+            pass
+        else:
+            raise AssertionError("Guest bypassed WeasyPrint constructor guard")
+        todo.flags.ignore_permissions = False
+        for label, call in (("preview", lambda: get_html("ToDo", todo.name, fmt.name)),
+                            ("PDF", lambda: download_pdf("ToDo", todo.name, fmt.name)),
+                            ("Print Format preview", lambda: fmt.get_html(todo.name)),
+                            ("Print Format PDF", lambda: fmt.download_pdf(todo.name))):
+            try:
+                call()
+            except frappe.PermissionError:
+                pass
+            else:
+                raise AssertionError(f"Guest reached {label} WeasyPrint path")
+        frappe.set_user("Administrator")
+
+        # Exercise the pinned Bench PyJWT/cryptography versions, not only the
+        # separate test-only venv. This never requests Microsoft's real JWKS.
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        tid = "12345678-1234-1234-1234-123456789abc"
+        now = int(time.time())
+        claims = {"tid": tid, "iss": f"https://sts.windows.net/{tid}/",
+                  "aud": "synthetic-client", "iat": now, "exp": now + 300,
+                  "email": "synthetic-office@example.test"}
+        signed = jwt.encode(claims, private_key, algorithm="RS256", headers={"kid": "synthetic"})
+        with patch.object(jwt, "PyJWKClient") as jwks:
+            jwks.return_value.get_signing_key_from_jwt.return_value.key = private_key.public_key()
+            assert social_login.verify_office365_id_token(signed, "synthetic-client")["tid"] == tid
+            wrong = jwt.encode(claims, other_key, algorithm="RS256", headers={"kid": "synthetic"})
+            try:
+                social_login.verify_office365_id_token(wrong, "synthetic-client")
+            except jwt.InvalidSignatureError:
+                pass
+            else:
+                raise AssertionError("Office 365 accepted a token with the wrong signature")
+            session = SimpleNamespace(access_token_response=SimpleNamespace(
+                text=json.dumps({"id_token": signed})))
+            flow = SimpleNamespace(get_auth_session=lambda **kwargs: session)
+            calls = []
+            with (patch.object(oauth, "get_oauth2_flow", return_value=flow),
+                  patch.object(oauth, "get_redirect_uri", return_value="https://synthetic.example.test/cb"),
+                  patch.object(oauth, "get_oauth_keys", return_value={"client_id": "synthetic-client"}),
+                  patch.object(oauth, "login_oauth_user", side_effect=lambda *a, **k: calls.append((a, k)))):
+                social_login.login_via_office365("synthetic-code", "synthetic-state")
+                assert len(calls) == 1 and calls[0][1]["state"] == "synthetic-state"
+                session.access_token_response.text = json.dumps({"id_token": wrong})
+                try:
+                    social_login.login_via_office365("synthetic-code", "synthetic-state")
+                except frappe.PermissionError:
+                    pass
+                else:
+                    raise AssertionError("Office 365 callback accepted an invalid signature")
+                assert len(calls) == 1, "Rejected callback established a login"
+        print("Synthetic site: authorized PDF/preview, guarded direct constructor, signed Office 365 callback PASS")
+    finally:
+        frappe.db.rollback()  # discard only this process's synthetic documents
+        frappe.destroy()
+
+
+if __name__ == "__main__":
+    main()

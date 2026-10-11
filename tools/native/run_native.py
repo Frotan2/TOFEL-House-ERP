@@ -181,6 +181,8 @@ def main():
         log=lab/'gunicorn.log';stream=log.open('w')
         server=subprocess.Popen([str(benchdir/'env/bin/gunicorn'),'--bind','127.0.0.1:18000','--workers','2','frappe.app:application'],cwd=benchdir/'sites',env=env,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
         processes.append((server,stream,log))
+        run('security-site-acceptance',
+            [benchdir/'env/bin/python',ROOT/'tools/native/security_acceptance.py'],benchdir/'sites')
         run('native-acceptance',[benchdir/'env/bin/python',ROOT/'tools/native/native_checks.py'],benchdir/'sites')
         # D8-scoped synthetic persistence rehearsal. The product adapter calls
         # pinned Frappe native backup/restore while moving GPG/MariaDB secrets
