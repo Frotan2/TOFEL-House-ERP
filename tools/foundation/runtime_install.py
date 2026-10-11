@@ -204,23 +204,20 @@ def untriaged_advisory_annotations(stack_audit: dict | None) -> list[str]:
     if not items:
         return []
     lines: list[str] = []
-    current = "STACK-ADVISORY-UNTRIAGED (the set the gate failed on): "
-    used = 0
-    capped = False
+    current = f"STACK-ADVISORY-UNTRIAGED (matches={len(items)}; full set): "
+    prefix = "STACK-ADVISORY-UNTRIAGED (cont.): "
     for item in items:
-        piece = item if used == 0 else "," + item
+        # A failed security gate cannot omit the tail of the actionable set.
+        # These are public package names and advisory IDs only, never site data.
+        if len(prefix) + len(item) > ANNOTATION_TEXT_LIMIT:
+            raise ValueError("Advisory package/id pair exceeds annotation limit")
+        piece = item if current.endswith("full set): ") or current == prefix else "," + item
         if len(current) + len(piece) > ANNOTATION_TEXT_LIMIT:
             lines.append(current)
-            if len(lines) >= 3:
-                capped = True
-                break
-            current = "STACK-ADVISORY-UNTRIAGED (cont.): "
-        current += piece
-        used += 1
-    if capped:
-        lines[-1] = lines[-1][:ANNOTATION_TEXT_LIMIT - 40] + f" ... +{len(items) - used} untriaged not shown"
-    elif used:
-        lines.append(current)
+            current = prefix + item
+        else:
+            current += piece
+    lines.append(current)
     return ["::error file=tools/foundation/runtime_install.py::" + line for line in lines]
 
 

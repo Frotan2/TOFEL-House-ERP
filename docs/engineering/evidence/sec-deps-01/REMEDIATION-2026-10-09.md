@@ -64,15 +64,36 @@ not close any finding without a successful installed-image and audit run.
    the three capped failure annotations, and the lock replay lists 77.
    `follow-redirects` / 1116560 is in the replay but not in the visible
    annotation set; this discrepancy is **unreconciled**, not a waiver or a
-   claim that 77 advisories were seen in the installed scan.
+   claim that 77 advisories were seen in the installed scan. A follow-up
+   change emits every untriaged public package/ID pair in bounded failure
+   annotations instead of hiding the tail; the gate still fails on findings.
+
+   Pinned HRMS frontend/roster and ERPNext banking were also installed from
+   frozen locks in a **local disposable source checkout**, with registry URLs
+   rewritten to the npm host without altering package integrity. HRMS's editor
+   patch and all three asset builds succeeded. Production-build JavaScript
+   sourcemaps (87 frontend, 2 roster, 34 banking) show `@firebase/app` in
+   frontend and `socket.io-parser` in frontend **and** roster. These are
+   bundled module-presence observations, not exploit proofs or dispositions.
+   No other replay-open package name was found as a bundled JavaScript module
+   in these three sourcemap sets. This does **not** prove other installed
+   packages safe: build tools can execute at build time, sourcemaps can omit
+   inputs (banking's Tailwind plugin warned of an incomplete map), and the
+   audit must still assess the installed trees. The local banking build used
+   a synthetic throwaway `common_site_config.json`; no site or runtime data
+   was accessed. None of these scratch builds is hosted or Windows acceptance.
+
    Native run `37977729383` on `492019a` reached its final source check and
    failed at `tools/native/run_native.py:246`: `assert not run('unchanged-'+name,
    ['git','-C',d,'diff','--name-only'])`. The owned installer intentionally
    patches pinned Frappe's WeasyPrint file; the old invariant allowed *no*
    tracked modification. Commit `d0d74f7` narrows that invariant to exactly
    `frappe/utils/weasyprint.py` with a verified post-patch SHA-256, and still
-   rejects every other tracked change. Its Native rerun is required; the old
-   run is not a pass.
+   rejects every other tracked change. Native rerun `37979725053` on
+   `d0d74f7` **passed**; final-head Foundation `37980004394` still **failed**
+   at `hosted-full-stack-dependency-audit`. Product image `37980004330` and
+   Owned suite `37980004489`/`37980011858` passed on `b07a275`. These runs
+   predate the annotation and cryptographic-test CI follow-up.
 3. Real Windows installation, encrypted backup, restore (DB plus uploaded
    public/private files), restart and repair on a disposable Windows machine
    with Docker Desktop, including Course Owner login and policy/account

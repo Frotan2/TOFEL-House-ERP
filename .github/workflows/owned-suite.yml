@@ -38,11 +38,24 @@ jobs:
             --require-hashes -r .foundation/lint-requirements.txt
           test "$(.foundation/lint-venv/bin/ruff --version)" = "ruff 0.16.8"
 
+      - name: Install hash-pinned crypto test dependencies
+        # The Office 365 signature regressions MUST execute in the owned suite,
+        # not silently skip because the default runner lacks PyJWT/cryptography.
+        run: |
+          set -euo pipefail
+          python3 tools/foundation/annotated_step.py "Create crypto test venv" -- python3 -m venv .foundation/security-test-venv
+          .foundation/security-test-venv/bin/python -m pip install --quiet \
+            --only-binary=:all: --require-hashes -r tests/security/requirements-ci.txt
+          .foundation/security-test-venv/bin/python -m pip check
+          echo "$GITHUB_WORKSPACE/.foundation/security-test-venv/bin" >> "$GITHUB_PATH"
+
       - name: Static analysis
         run: .foundation/lint-venv/bin/ruff check .
 
       - name: Python test tree
-        run: python3 tools/foundation/annotated_step.py "Python test tree" -- python3 -m unittest discover -s tests -t . -v
+        run: |
+          python3 tools/foundation/annotated_step.py "Crypto test imports" -- python3 -c 'import jwt, cryptography; assert jwt.__version__ == "2.15.0"'
+          python3 tools/foundation/annotated_step.py "Python test tree" -- python3 -m unittest discover -s tests -t . -v
 
       - name: Node suites
         run: |

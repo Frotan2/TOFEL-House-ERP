@@ -36,6 +36,16 @@ class CoverageWiringTests(unittest.TestCase):
         self.assertIn('Missing required built frontend dependency tree:', runtime)
         self.assertIn('if stack_audit["status"] != "pass":', runtime)
 
+    def test_owned_ci_executes_cryptographic_tests_without_optional_skip(self):
+        workflow = (ROOT / ".github/workflows/owned-suite.yml").read_text()
+        pins = (ROOT / "tests/security/requirements-ci.txt").read_text()
+        self.assertIn("--require-hashes -r tests/security/requirements-ci.txt", workflow)
+        self.assertIn("security-test-venv/bin\" >> \"$GITHUB_PATH\"", workflow)
+        self.assertIn('"Crypto test imports" -- python3 -c \'import jwt, cryptography;', workflow)
+        for package in ("PyJWT==2.15.0", "cryptography==50.0.2", "cffi==2.0.0", "pycparser==2.23"):
+            self.assertIn(package, pins)
+        self.assertEqual(pins.count("--hash=sha256:"), 7)
+
     def test_production_remains_rejected_and_login_override_wired(self):
         self.assertEqual(json.loads((ROOT / "docs/owner-decisions.json").read_text())["production_state"], "REJECT")
         hooks = (ROOT / "apps/toefl_house/toefl_house/hooks.py").read_text()
