@@ -45,6 +45,13 @@ class CoverageWiringTests(unittest.TestCase):
             self.assertIn(f"- {path}", workflow)
             self.assertIn(f"COPY {path}", dockerfile)
 
+    def test_native_lifecycle_rebuilds_when_its_security_helpers_change(self):
+        workflow = (ROOT / ".github/workflows/native-lifecycle.yml").read_text()
+        runner = (ROOT / "tools/native/run_native.py").read_text()
+        for helper in ("secure_hrms.py", "secure_weasyprint.py"):
+            self.assertIn(f"- tools/foundation/{helper}", workflow)
+            self.assertIn(f"ROOT/'tools/foundation/{helper}'", runner)
+
     def test_owned_ci_executes_cryptographic_tests_without_optional_skip(self):
         workflow = (ROOT / ".github/workflows/owned-suite.yml").read_text()
         pins = (ROOT / "tests/security/requirements-ci.txt").read_text()
