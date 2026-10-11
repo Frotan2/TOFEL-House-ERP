@@ -42,7 +42,7 @@ class AdvisoryTriageTests(unittest.TestCase):
         for pkg in TRIAGE["packages"]:
             base = pkg["package"]
             if base.startswith("npm:"):
-                name = base.split(":",1)[1].split("@",1)[0]
+                name = t._package_basename(base)
                 npm.setdefault(name, [])
                 for adv in pkg["advisories"]:
                     npm[name].append({"id":adv["id"],"url":"https://example.com/"+adv["id"],
@@ -74,6 +74,30 @@ class AdvisoryTriageTests(unittest.TestCase):
         self.assertIsNotNone(rec)
         self.assertEqual(rec["runtime_disposition"], "MITIGATED")
         self.assertTrue(rec.get("runtime_disposition_evidence"))
+
+    def test_dispositions_are_package_scoped_even_for_duplicate_ids_and_aliases(self):
+        triage = t.load_triage()
+        advisory = "GHSA-r5fr-rjxr-66jc"
+        lodash = t.disposition_for_finding(triage, package="lodash", advisories=[advisory])
+        lodash_es = t.disposition_for_finding(triage, package="lodash-es", advisories=[advisory])
+        self.assertEqual(lodash["package"], "npm:lodash@4.17.21")
+        self.assertEqual(lodash["runtime_disposition"], "BUILD_ONLY")
+        self.assertEqual(lodash_es["package"], "npm:lodash-es@4.17.21")
+        self.assertEqual(lodash_es["runtime_disposition"], "NOT_REACHABLE")
+        # An unrelated package must not borrow that GHSA's closed record.
+        self.assertIsNone(t.disposition_for_finding(triage, package="other", advisories=[advisory]))
+        self.assertEqual(t.triage_npm({"other": [{"id": 999, "url":
+            "https://github.com/advisories/" + advisory}]}, triage)["open"], 1)
+
+    def test_scoped_npm_package_does_not_collapse_to_empty_or_other_scope(self):
+        triage = t.load_triage()
+        advisory = "GHSA-cp6q-959q-f8rh"
+        self.assertEqual(t._package_basename("npm:@tiptap/core@2.2.3"), "@tiptap/core")
+        self.assertEqual(t._package_basename("@tiptap/core"), "@tiptap/core")
+        rec = t.disposition_for_finding(triage, package="@tiptap/core", advisories=[advisory])
+        self.assertEqual(rec["package"], "npm:@tiptap/core@2.2.3")
+        self.assertIsNone(t.disposition_for_finding(
+            triage, package="@tiptap/extension-link", advisories=[advisory]))
 
 
 class AdvisoryDeltaTests(unittest.TestCase):

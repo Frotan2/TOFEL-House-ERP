@@ -50,7 +50,17 @@ not close any finding without a successful installed-image and audit run.
   and ERPNext banking installed trees to the **same** npm triage. Missing/empty
   nested trees fail closed; untriaged/new findings fail the existing gate. The
   audit still does not scan operating-system/container CVEs or every library's
-  exploit path; do not call it a full release security approval.
+  exploit path; do not call it a full release security approval. Dispositions
+  are now matched by **package and advisory ID**, including scoped npm names:
+  a closed advisory for one library cannot lend its evidence to a different
+  library sharing the same GHSA or CVE alias. On a disposable three-tree npm
+  inventory after the HRMS parser fix (165 npm bulk advisory entries, each
+  potentially covering multiple installed versions), this corrected one
+  misattributed evidence record (`vite` / 1120784 previously
+  borrowed `launch-editor` evidence); both recorded dispositions were
+  DEV_ONLY, so this comparison changed **no** pass/fail verdict and left 75
+  untriaged package/ID pairs in that scratch scope. This is not a hosted
+  installed-tree count or independent revalidation of the other dispositions.
 
 ## Unfinished release gates
 
@@ -71,8 +81,14 @@ not close any finding without a successful installed-image and audit run.
    must fail until this is done; a passing earlier head did not scan these
    trees. Hosted Foundation run `37977729365` on `492019a` failed at
    `hosted-full-stack-dependency-audit` (exit 1), with header `advisory
-   matches=235 in 69 packages`; 76 npm package/id pairs are visible across
-   the three capped failure annotations, and the lock replay lists 77.
+   matches=235 in 69 packages`; 76 npm package/ID pairs are visible across
+   its error annotations, and the lock replay lists 77. After the HRMS parser
+   fix, hosted Foundation `38149432929` on `679161e` **failed** at that same
+   audit command: **234 matches in 69 packages; 75 untriaged npm package/ID
+   pairs**. A set-diff of the two check-run annotation sets shows exactly one
+   removed pair, `socket.io-parser` / 1100541; there are no new untriaged
+   pairs in this comparison. This confirms the narrow fix in the installed
+   audit, **not** a passing security gate.
    A follow-up emits every untriaged public package/ID pair in bounded
    failure annotations instead of hiding the tail; the gate still fails.
    Hosted check `114493843583` (Foundation run `38147507770` on `14d4508`)
@@ -116,7 +132,14 @@ not close any finding without a successful installed-image and audit run.
    `d0d74f7` **passed**; final-head Foundation `37980004394` still **failed**
    at `hosted-full-stack-dependency-audit`. Product image `37980004330` and
    Owned suite `37980004489`/`37980011858` passed on `b07a275`. These runs
-   predate the annotation and cryptographic-test CI follow-up.
+   predate the annotation and cryptographic-test CI follow-up. After the
+   HRMS parser patch, Product image `38149503915` (on `6fa8747`) passed
+   application-image build, synthetic first boot/backup/restore, and browser
+   UI acceptance. Native lifecycle `38149651905` (on `757e8e5`) passed its
+   synthetic real-site lifecycle. Both Owned suite runs on `757e8e5`
+   (`38149651777`, `38149656124`) passed. None of these is real Windows
+   acceptance or an audit pass; Foundation `38149432929` failed as described
+   above.
 3. Real Windows installation, encrypted backup, restore (DB plus uploaded
    public/private files), restart and repair on a disposable Windows machine
    with Docker Desktop, including Course Owner login and policy/account
