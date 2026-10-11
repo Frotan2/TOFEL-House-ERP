@@ -59,7 +59,7 @@ activation. Production authorization remains **REJECTED**.
 |---|----------|---------|-----------------|----------|--------|
 | 1 | P0 | Windows restart and failure recovery must be diagnosable | Keep restart policies and plain-language service/log diagnostics; execute the Owner's Windows install/start/stop/restart/recovery checklist | `product/docker-compose.yml`; `product/windows/*.cmd`; `tests/foundation/test_product_packaging.py::RecoveryContract`; `product/windows/VALIDATION.md` (Evidence 1–10); [parent Owned suite 37940397970](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397970) | **UNVERIFIED** — recovery contracts in Owned CI `37940397970` and simulated fresh-worktree normalization in Product-image CI `37940397957` **PASS**. Actual Owner Windows lifecycle evidence is absent. |
 | 2 | P0 | Real central-server + Tailscale multi-user path is unproven | Owner validates two real clients, access control, Tailscale Serve web and `/socket.io` routes, and a real WebSocket upgrade; never expose a public edge | `docs/engineering/LAUNCH-RUNBOOK.md` §6; `product/windows/VALIDATION.md` Evidence 13; Product-image workflow simulates proxy/loopback behavior only; it does **not** run Tailscale Serve or a real tailnet/WebSocket | **UNVERIFIED** — the current Product-image proxy/tailnet contract simulation `37940397957` **PASS**; no real Owner tailnet, two-client, WebSocket, or non-tailnet-denial evidence. |
-| 3 | P0 | Dependency/supply-chain pin contradictions | Maintain one canonical pinned matrix, verify source commits and Node tarball hash, and keep image/probe inputs aligned; independently re-triage every current advisory and shipped frontend path | `docs/engineering/foundation-version-matrix.json`; `product/app.Dockerfile`; `product/docker-compose.yml`; `.github/workflows/product-image.yml`; `tools/foundation/runner_probe.py`; `tests/foundation/test_product_packaging.py::DependencyPinContract`; PR #14 Foundation run [37940398359](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940398359); current PR #13 evidence [#13](https://github.com/Frotan2/TOFEL-House-ERP/pull/13) | **PASS** — static pin contracts and Product-image Compose/Node integrity checks. **FAIL** — PR #14 Foundation audit: 160 matches / 47 packages; 8 untriaged identifier matches / 7 unique advisories. PR #13 remains open at `b07a275`; its current Foundation run [37980004394](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37980004394) fails at `Install and validate the pinned foundation`; the failure annotation names `hosted-full-stack-dependency-audit: exit 1` and reports 235 matches / 69 packages with a non-empty untriaged set. On 2026-10-11, the Actions API listed a non-expired 670,055-byte artifact; `gh run download` returned `EOF`, so its report payload was not inspected. This review relies on the annotations and offline replay. The offline three-lock replay separately has 77 untriaged of 168 advisory-version entries / 73 GHSAs; these counts have different scopes, and a 76-visible-pair vs 77-replay discrepancy remains unreconciled. PR #13 Product image and Owned checks pass; Native passed on preceding code head `d0d74f7`. No advisory is waived or closed by those passes. ECharts remains **BLOCKED** with a contradictory `fix_path`; HRMS ProseMirror remediation is unqualified; WeasyPrint dispositions remain pending. Public-edge exposure remains deferred, but production authorization is **REJECTED**. |
+| 3 | P0 | Dependency/supply-chain pin contradictions | Maintain one canonical pinned matrix, verify source commits and Node tarball hash, and keep image/probe inputs aligned; independently re-triage every current advisory and shipped frontend path | `docs/engineering/foundation-version-matrix.json`; `product/app.Dockerfile`; `product/docker-compose.yml`; `.github/workflows/product-image.yml`; `tools/foundation/runner_probe.py`; `tests/foundation/test_product_packaging.py::DependencyPinContract`; PR #14 Foundation run [37940398359](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940398359); current PR #13 evidence [#13](https://github.com/Frotan2/TOFEL-House-ERP/pull/13) | **PASS** — static pin contracts and Product-image Compose/Node integrity checks. **FAIL** — PR #14 Foundation audit: 160 matches / 47 packages; 8 untriaged identifier matches / 7 unique advisories. PR #13 remains open at head `757e8e5a885ccd6f7f1624c6478d52ab859e4b73`. Native [38149651905](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149651905) and Owned push/PR [38149651777](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149651777) / [38149656124](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149656124) **PASS** on that head. Product image [38149503915](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149503915) **PASS** on its direct parent `6fa87473`, not on the current head. Foundation [38149432929](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149432929) **FAIL** on earlier head `679161e`: `hosted-full-stack-dependency-audit` reports 234 matches / 69 packages and 75 untriaged npm package/ID pairs; no Foundation or Product-image check is attached to `757e8e5`. Comparing the complete Foundation annotations to the 77-entry lock replay finds two replay-only pairs: `socket.io-parser` / 1100541 and `follow-redirects` / 1116560; details and scope limits are below. No advisory is waived or closed by green CI. ECharts remains **BLOCKED** with a contradictory `fix_path`; HRMS editor and WeasyPrint behavior still lack their required functional security regressions. Office 365 email verification remains unenforced: the pinned helper and callback test accept an email-only fallback. Public-edge exposure remains deferred, but production authorization is **REJECTED**. |
 | 4 | P0 | Product-facing administration must state live, separate site-mode and production-authorization facts | Keep the Owner cockpit and Administration control centre truthful; never let operational `PRODUCTION` mode imply release approval | `apps/toefl_house/toefl_house/desk/owner.py`; `administration.py`; `tests/foundation/test_production_state_contract.py`; `README.md`; `docs/PRODUCT.md`; this runbook; current Owned suite | **PASS in Owned CI** — static/contract implementation tests pass. **UNVERIFIED** — no live Owner-site UI check; production authorization remains **REJECTED**. |
 | 5 | P1 | Branch isolation and permissions must cover all owned surfaces | Keep branch scope on native permissions, guarded commands, desk projections and REST/RPC surfaces; unscoped controls and unresolved branch identities must behave as documented | `docs/ROLE-DESKS.md`; `apps/toefl_house/toefl_house/permissions.py`; `tests/foundation/test_app_assembly.py`; `tools/native/native_checks.py`; current Owned suite [37940397970](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397970); Native lifecycle [37940397967](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397967) | **PASS in CI** — current Owned suite and Native lifecycle checks pass. **UNVERIFIED** — actual Owner branch/user setup is outstanding; the CI fixture is synthetic. |
 | 6 | P1 | Teacher compensation operational readiness and daily-user desk gap | Keep the Finance Manager compensation queue actionable while projecting no rate/term/amount and retaining D12 separation of duties | `apps/toefl_house/toefl_house/desk/finance.py`; `apps/toefl_house/toefl_house/public/js/th_role_desks.js`; `tests/desk/test_desk_contract.py`; `tools/native/native_checks.py`; current Owned suite; parent Owned suite [37940397970](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397970) | **PASS in Owned CI** — source/contract tests pass in suite `37940397970`. **UNVERIFIED** — actual Owner-entered compensation values and statutory/payroll decisions remain gated. |
@@ -100,7 +100,7 @@ the existing site and provide read-only checks only. Any later rehearsal must
 target a new isolated disposable site/database and must not clean up or alter
 existing runtime data or backups.
 
-## Security evidence reconciliation (refreshed 2026-10-10)
+## Security evidence reconciliation (refreshed 2026-10-11)
 
 - **160 vs 158 (PR #14):** Foundation CI on merged `13482fe` reported 160
   identifier-level matches in 47 package groups; the replay has 96 npm + 62
@@ -108,18 +108,37 @@ existing runtime data or backups.
   PYSEC-2026-4113. The PyPA YAML aliases both to CVE-2026-49264: two IDs, one
   underlying advisory. PR #14 still had 8 untriaged identifier matches
   representing 7 unique advisories; the Foundation gate failed.
-- **Expanded nested-tree counts (open PR #13):** its offline union of the HRMS
+- **Expanded nested-tree counts (open PR #13):** the offline union of the HRMS
   frontend, HRMS roster and ERPNext banking lockfiles reports 168
   advisory-version entries: 91 matched existing dispositions (not independently
-  revalidated for these newly scanned trees) and 77 untriaged, representing 73
-  distinct GHSAs (3 critical, 29 high, 35 moderate, 10 low). This is not the
-  installed-tree CI result. The current installed-tree audit reports 235
-  advisory matches across 69 packages and fails with a non-empty untriaged set.
-  PR #13's remediation note says 76 npm package/ID pairs are visible across the
-  capped failure annotations; `follow-redirects` / ID 1116560 appears in the
-  77-entry offline replay but not in those visible annotations. The difference
-  is unreconciled: do not force the counts together or treat 77 as the installed
-  audit's exact untriaged count.
+  revalidated for these newly scanned trees) and 77 untriaged across 73 distinct
+  GHSAs (3 critical, 29 high, 35 moderate, 10 low). These are lock-replay
+  counts, not installed-tree results. The latest completed Foundation run
+  [38149432929](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149432929)
+  on earlier PR #13 head `679161e7` **FAILED** after 19m12 at
+  `hosted-full-stack-dependency-audit`: 234 advisory matches across 69 packages
+  and 75 untriaged npm package/ID pairs. All 75 pairs are present in its full
+  failure annotations. The current PR head is `757e8e5`; no Foundation check is
+  attached to that head.
+
+  Comparing the 75 annotated package/ID pairs to all 77 replay rows found no
+  installed-only pair and exactly two replay-only pairs: `socket.io-parser` /
+  1100541 (`GHSA-cqmj-92xf-r6r9`, moderate; replay version 4.2.2) and
+  `follow-redirects` / 1116560 (`GHSA-r4q5-vmmm-2653`, moderate; replay version
+  1.15.11). The earlier Foundation run
+  [38147507770](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38147507770)
+  on `14d4508` had 76 untriaged pairs; compared with that complete annotation
+  set, the sole pair absent from run `38149432929` is `socket.io-parser` /
+  1100541, consistent with the HRMS installed-code patch below. The offline
+  lock replay still resolves the vulnerable 4.2.2 copy, so this patch does not
+  erase the lockfile finding.
+
+  `follow-redirects` remains a separate lock/resolution reproducibility
+  concern, not a waiver. The banking lock pins 1.15.11 for `^1.15.11`, while
+  `axios@1.18.1` requests `^1.16.0` with no frozen resolution. A disposable
+  frozen-Yarn scratch install reported 1.16.1 hoisted from axios, but the
+  hosted installed version was not observed; do not infer it or treat the
+  scratch result as hosted confirmation.
 - **ECharts:** the pinned `frappe`, Education, and HRMS frontend/roster
   lockfiles inspected in PR #13 contain no `echarts` or
   `frappe-ui@0.1.278`; the delta disposition is **BLOCKED**, not
@@ -137,11 +156,25 @@ existing runtime data or backups.
   for `prosemirror-view@1.42.3` and `prosemirror-model@1.25.8`, verifies tarball
   SHA-512 and installed file-tree hashes, and runs before asset build; the
   bootstrap checks the installed code before serving. Product-image run
-  `37980004330` and Native run `37979725053` pass on the patched code path (the
-  Native run is on prior head `d0d74f7`). However, there is no built HRMS editor
+  `38149503915` passed on parent `6fa87473`; Native run `38149651905` passed
+  on current head `757e8e5`. However, there is no built HRMS editor
   interaction/paste-XSS regression, and Foundation still fails on the expanded
   advisory set. The lockfiles remain at the old upstream versions; this is an
   installed-code override, not a lockfile upgrade or closure of the blocker.
+- **HRMS Socket.IO parser:** PR #13's fail-closed HRMS helper installs
+  publisher `socket.io-parser@4.2.7` in frontend and roster, with
+  integrity-pinned nested `debug@4.4.1` and `ms@2.1.3`, and re-verifies
+  installed file trees after build. Its synthetic Node regression exercises
+  the publisher's actual CJS decoder (stubbing only the event emitter), rejects
+  zero/oversized attachment counts and invalid payloads, and accepts a valid
+  packet. Owned runs [38149651777](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149651777)
+  and [38149656124](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149656124)
+  **PASS** on current head `757e8e5`; Product image
+  [38149503915](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149503915)
+  **PASS** on parent `6fa87473`. The current Foundation annotations no longer
+  include `socket.io-parser` / 1100541, while the lock replay still does. These
+  are install/build and decoder-regression results, not live HRMS Socket.IO or
+  editor UI acceptance, and they do not remediate parser copies in other apps.
 - **WeasyPrint aliases and paths:** `GHSA-jf6q-chmf-3h3v` (SSRF) aliases
   `PYSEC-2026-3940`; `GHSA-jhhc-3hcp-qhm5` (CSS injection) aliases
   `PYSEC-2026-3412`. The latter is **not** the SSRF alias. The base register
@@ -153,8 +186,11 @@ existing runtime data or backups.
   its original SHA-256 matches the inspected Frappe source, and every inspected
   direct/helper route constructs that generator. The owned wrappers now match
   the vendor positional signature and enforce target print permission, a
-  matching DocType, and a beta Print Format. Native and Product-image builds
-  pass the patched code, but neither is a functional PDF/preview security
+  matching DocType, and a beta Print Format. Native
+  [38149651905](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149651905)
+  and Product image
+  [38149503915](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149503915)
+  pass the patched code path, but neither is a functional PDF/preview security
   regression; the new remediation note explicitly leaves this qualification
   pending, and the Foundation audit fails. The source patch gates rendering; it
   does not itself demonstrate that attacker-controlled resource fetches are
@@ -166,13 +202,19 @@ existing runtime data or backups.
   this documentation contradiction should be corrected. Keep both WeasyPrint
   findings open for re-triage—neither is confirmed exploitable nor proven
   mitigated by this evidence.
-- **Office 365 follow-up:** PR #13's new callback verifies the Microsoft ID
-  token signature, audience, timestamps, tenant and issuer using a fixed JWKS
-  URL. However, its subsequent `email_verified` gate is ineffective when
-  `oauth.get_email(info)` returns `email`, `upn`, or `unique_name`: any such
-  claim satisfies the `or` even when `email_verified` is absent or false. The
-  callback test itself accepts an `email`-only fixture. Do not claim that email
-  verification is enforced until this is corrected and tested.
+- **Office 365 follow-up:** PR #13's callback verifies the Microsoft ID-token
+  signature, audience, timestamps, tenant and issuer using a fixed JWKS URL,
+  but its email-verification gate is ineffective. In pinned Frappe source,
+  [`get_email`](https://github.com/frappe/frappe/blob/988e54f3c4c291e2077a83809663f123731abe76/frappe/utils/oauth.py#L361-L362)
+  returns `email`, `upn`, or `unique_name` without checking verification. The
+  custom callback accepts `info.get("email_verified") or oauth.get_email(info)`,
+  so a truthy fallback claim passes when `email_verified` is absent or false.
+  The new callback test mocks `get_email` as email-only, stubs verified-token
+  parsing to return `{"email": "owner@example.test"}`, and asserts that login
+  is established. The helper semantics and test therefore confirm this is not
+  merely a theoretical fallback: the test approves an email-only identity.
+  Require a safe verified-identity policy and negative tests for false/missing
+  `email_verified` with fallback claims before claiming email verification.
 - **Dangling references:** the base register names
   `tests/foundation/test_sec_deps_triage.py`, which is absent. PR #13 adds an
   erratum and `tests/security/test_security_remediation_2026_10_09.py`; these
@@ -180,30 +222,33 @@ existing runtime data or backups.
   but do not prove the complete live Frappe call graph, PDF/preview behavior, or
   built HRMS editor behavior. The erratum and remediation note do not change the
   base register's `MITIGATED` labels or close the gate.
-- **PR #13 status (latest refresh):** open head
-  `b07a275e7f302cdb4dc391479c971be3f11b722a`. Product image
-  [37980004330](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37980004330)
-  passed both Windows stale-worktree/EOL and Linux product-image jobs. The
-  Linux job passed first boot/backup-restore, browser login, tailnet contract,
-  upgrade/rollback, and performance checks; its failure-only log step was
-  skipped as expected. Owned suites
-  [37980004489](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37980004489)
-  and [37980011858](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37980011858)
-  **PASS** on that head. Foundation runtime
-  [37980004394](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37980004394)
-  **FAIL** on that head at the full-stack dependency audit (235 matches / 69
-  packages; non-empty untriaged set). Native lifecycle
-  [37979725053](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37979725053)
-  **PASS** on preceding code head `d0d74f7`; no Native check is attached to
-  `b07a275` (its changes are the remediation record and a Dockerfile comment).
-  The earlier Native run [37977729383](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37977729383)
-  failed the old “no tracked source changes” assertion after the intentional
-  renderer patch; `d0d74f7` narrowly allows only the SHA-verified renderer file,
-  and the rerun passed. PR #13 remains open and is not release approval.
-  The earlier review comment
-  [6086576384](https://github.com/Frotan2/TOFEL-House-ERP/pull/13#issuecomment-6086576384)
-  has no direct response; later code addresses some path gaps but leaves the
-  advisory, product, and email-verification findings above unresolved.
+- **PR #13 status (refreshed 2026-10-11):** PR #13 remains **OPEN** at head
+  `757e8e5a885ccd6f7f1624c6478d52ab859e4b73`. Its current check rollup has
+  Native lifecycle [38149651905](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149651905)
+  **PASS** and Owned push/PR runs
+  [38149651777](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149651777)
+  / [38149656124](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149656124)
+  **PASS**. No Product-image or Foundation check is attached to this head.
+  Product image [38149503915](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149503915)
+  **PASS** on direct parent `6fa87473`; both its Linux image job and Windows
+  stale-worktree/EOL job passed. The Linux job validated Compose, Node tarball
+  integrity and base-image digest, built from a fresh simulated Windows
+  worktree, and passed first boot/encrypted backup-restore/guarded site-mode,
+  headless Chromium login, tailnet-contract, upgrade/rollback and performance
+  checks. The only commit from `6fa87473` to `757e8e5` changes
+  `.github/workflows/native-lifecycle.yml` and the security regression-test
+  file, not product runtime files; this is relevant product-code evidence but
+  not a Product-image check on the current head.
+
+  Foundation runtime [38149432929](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149432929)
+  **FAIL** on earlier head `679161e7` at `hosted-full-stack-dependency-audit`
+  after 19m12: 234 matches across 69 packages, with 75 untriaged npm
+  package/ID pairs in complete failure annotations. The run is not on current
+  head `757e8e5`; the audit gate remains failed. The separate offline lock
+  replay still has 77 untriaged entries across 73 GHSAs; the exact two replay-
+  only pairs and their scope are recorded above. These CI successes do not
+  establish Owner-machine acceptance, close the audit gate, or authorize
+  release.
 
 ## Scope decisions (Owner)
 
@@ -222,23 +267,27 @@ existing runtime data or backups.
   packages, with 8 untriaged identifiers / 7 unique advisories. The replay's
   96 npm + 62 PyPI = 158 omits two oauthlib identifiers; `GHSA-hj66-6f7g-4r5v`
   and `PYSEC-2026-4113` alias CVE-2026-49264, so those are two IDs for one
-  underlying advisory. Open PR #13 remains unmerged and not accepted as release
-  evidence. Its latest expanded Foundation run
-  [37980004394](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37980004394)
-  failed with 235 matches / 69 packages and a non-empty untriaged set; its
-  separate offline lock replay has 77 untriaged of 168 advisory-version entries
-  / 73 GHSAs, with a 76-visible-pair versus 77-replay discrepancy still open.
-  ECharts is **BLOCKED** but its `fix_path` still asserts no bundled/reachable
-  component. HRMS ProseMirror has a new integrity-checked installed-code patch
-  to fixed package versions, but its shipped editor path remains an open
-  blocker pending a built-editor regression and clean audit. WeasyPrint's new
-  constructor guard and corrected wrapper signatures address the earlier
-  direct-path/signature gaps, but do not yet prove SSRF mitigation or CSS
-  injection reachability; the base `MITIGATED` statuses remain unverified.
-  The alias mapping is `GHSA-jf6q` / `PYSEC-2026-3940` for SSRF and `GHSA-jhhc`
-  / `PYSEC-2026-3412` for CSS injection. Ghostscript absence remains a separate
+  underlying advisory. Open PR #13 remains unmerged and is not accepted as release evidence. Its
+  latest completed Foundation run
+  [38149432929](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/38149432929)
+  failed on earlier head `679161e7` with 234 matches / 69 packages and 75
+  untriaged npm package/ID pairs; no Foundation check is attached to current
+  head `757e8e5`. The separate offline lock replay has 77 untriaged of 168
+  advisory-version entries / 73 GHSAs. Its two replay-only pairs are
+  `socket.io-parser` / 1100541 (removed from current installed annotations by
+  the HRMS patch, but still present in the lock replay) and
+  `follow-redirects` / 1116560 (an unresolved lock/resolution reproducibility
+  gap); neither is a waiver. ECharts is **BLOCKED** but its `fix_path` still
+  asserts no bundled/reachable component. HRMS ProseMirror and Socket.IO fixes
+  are integrity-checked installed-code patches, not lockfile upgrades or live
+  HRMS editor/Socket.IO acceptance; product paths still need functional
+  regressions. WeasyPrint's constructor guard and corrected wrapper signatures
+  address earlier direct-path/signature gaps but do not prove SSRF mitigation or
+  CSS-injection reachability; base `MITIGATED` statuses remain unverified. The
+  alias mapping is `GHSA-jf6q` / `PYSEC-2026-3940` for SSRF and `GHSA-jhhc` /
+  `PYSEC-2026-3412` for CSS injection. Ghostscript absence remains a separate
   RCE mitigation. Do not waive or close findings on the basis of green Product
-  image, Native, or Owned checks. SEC-DEPS-01 remains relevant to public-edge
+  image, Native or Owned checks. SEC-DEPS-01 remains relevant to public-edge
   exposure; it does not authorize production operation or supersede D15.
 - **D15/SEC-DEPS clarification remains pending:** `docs/owner-decisions.json`
   D15 says production stays REJECT while SEC-DEPS-01 is REJECT, while
