@@ -10,9 +10,20 @@ not close any finding without a successful installed-image and audit run.
 * HRMS: retain the audited upstream commit and frozen lock, then replace **all**
   installed `prosemirror-view` copies in the frontend and roster (including
   nested copies) with 1.42.3 and `prosemirror-model` with 1.25.8, using the npm
-  publisher tarballs with exact SHA-512 integrity. No Text Editor or HRMS route
-  is disabled. The image, Foundation and Native installers apply the change
-  before asset build; the web/bootstrap path verifies installed versions before
+  publisher tarballs with exact SHA-512 integrity. The same fail-closed helper
+  now replaces both HRMS `socket.io-parser` copies with 4.2.7
+  (GHSA-cqmj-92xf-r6r9, GHSA-677m-j7p3-52f9, GHSA-2m8v-j782-fhvr),
+  plus nested, independently integrity-checked
+  `debug` 4.4.1 and `ms` 2.1.3 required by the fixed parser, without changing
+  other consumers. It verifies each patched file tree again after build.
+  A synthetic Node regression rejects zero/oversized binary attachment counts
+  and invalid event payloads while accepting a valid packet. Disposable HRMS
+  frontend and roster asset builds succeeded after this change; the frontend
+  sourcemap's parser sources match the patched installed package byte-for-byte.
+  This does **not** remediate other apps' parser copies or establish a live
+  Socket.IO/HRMS UI acceptance run. No Text Editor or HRMS route is disabled.
+  The image, Foundation and Native installers apply the change before asset
+  build; the web/bootstrap path verifies installed versions before
   serving, and the Foundation runner verifies again after build. A package
   manifest/version check alone is not a built-bundle exploit regression test;
   the built HRMS asset and editor UI still require hosted confirmation.
@@ -62,11 +73,23 @@ not close any finding without a successful installed-image and audit run.
    `hosted-full-stack-dependency-audit` (exit 1), with header `advisory
    matches=235 in 69 packages`; 76 npm package/id pairs are visible across
    the three capped failure annotations, and the lock replay lists 77.
-   `follow-redirects` / 1116560 is in the replay but not in the visible
-   annotation set; this discrepancy is **unreconciled**, not a waiver or a
-   claim that 77 advisories were seen in the installed scan. A follow-up
-   change emits every untriaged public package/ID pair in bounded failure
-   annotations instead of hiding the tail; the gate still fails on findings.
+   A follow-up emits every untriaged public package/ID pair in bounded
+   failure annotations instead of hiding the tail; the gate still fails.
+   Hosted check `114493843583` (Foundation run `38147507770` on `14d4508`)
+   completed with **76 untriaged installed npm package/ID pairs**, all visible
+   in three `STACK-ADVISORY-UNTRIAGED` error annotations. Comparing their
+   exact package/ID pairs to the 77 replay pairs yields only one difference:
+   `follow-redirects` / 1116560 occurs **only in the lockfile replay**.
+   The banking lock pins `follow-redirects@1.15.11` for `^1.15.11`, but its
+   installed `axios@1.18.1` requests `^1.16.0`, for which that lock has no
+   resolution. In a disposable frozen-Yarn scratch install, `yarn why` reports
+   an installed **1.16.1** hoisted from axios; the installed-tree npm query
+   returns no advisory for it. This explains the scratch lock/install delta
+   without claiming that the hosted version was observed; the missing frozen
+   resolution is a separate reproducibility concern to fix, not a waiver.
+   The hosted Foundation command `hosted-full-stack-dependency-audit` still
+   fails with exit 1 on the 76 open pairs. This is distinct from the total
+   **235 advisory-version matches in 69 packages** in the hosted warning.
 
    Pinned HRMS frontend/roster and ERPNext banking were also installed from
    frozen locks in a **local disposable source checkout**, with registry URLs

@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import types
@@ -56,7 +57,9 @@ class CoverageWiringTests(unittest.TestCase):
 class HrmsEditorTests(unittest.TestCase):
     def tree(self, base):
         for tree in ("frontend", "roster"):
-            for name, version in (("prosemirror-view", "1.31.3"), ("prosemirror-model", "1.19.1")):
+            for name, version in (("prosemirror-view", "1.31.3"),
+                                  ("prosemirror-model", "1.19.1"),
+                                  ("socket.io-parser", "4.2.2")):
                 folder = base / tree / "node_modules" / name
                 folder.mkdir(parents=True)
                 (folder / "package.json").write_text(json.dumps({"name": name, "version": version}))
@@ -80,8 +83,19 @@ class HrmsEditorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             nested = self.tree(base)
-            self.assertEqual(secure_hrms.patch(base), {"prosemirror-view": 3, "prosemirror-model": 2})
+            self.assertEqual(secure_hrms.patch(base), {
+                "prosemirror-view": 3, "prosemirror-model": 2, "socket.io-parser": 2})
             self.assertEqual(secure_hrms.verify(base)["prosemirror-view"], 3)
+            for tree in ("frontend", "roster"):
+                parser = base / tree / "node_modules/socket.io-parser"
+                self.assertEqual(json.loads((parser / "package.json").read_text())["version"], "4.2.7")
+                self.assertEqual(secure_hrms.tree_digest(parser, exclude_nested_modules=True),
+                                 secure_hrms.FILE_TREE_SHA256["socket.io-parser"])
+                for dep, (version, _, digest) in secure_hrms.PARSER_DEPENDENCIES.items():
+                    nested_dep = parser / "node_modules" / dep
+                    self.assertEqual(json.loads((nested_dep / "package.json").read_text())["version"],
+                                     version)
+                    self.assertEqual(secure_hrms.tree_digest(nested_dep), digest)
             manifest = json.loads((nested / "package.json").read_text())
             self.assertEqual(manifest["version"], "1.42.3")
             self.assertIn("^1.25.8", manifest["dependencies"]["prosemirror-model"])
@@ -91,6 +105,58 @@ class HrmsEditorTests(unittest.TestCase):
             (nested / "package.json").write_text(json.dumps({"name": "prosemirror-view", "version": "1.31.3"}))
             with self.assertRaisesRegex(ValueError, "Vulnerable prosemirror-view"):
                 secure_hrms.verify(base)
+
+    def test_rejects_reintroduced_vulnerable_socket_parser(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            self.tree(base)
+            secure_hrms.patch(base)
+            parser = base / "frontend/node_modules/socket.io-parser"
+            (parser / "package.json").write_text(json.dumps({
+                "name": "socket.io-parser", "version": "4.2.2"}))
+            with self.assertRaisesRegex(ValueError, "Vulnerable socket.io-parser"):
+                secure_hrms.verify(base)
+
+    def test_rejects_unverified_parser_transitive_dependency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            self.tree(base)
+            secure_hrms.patch(base)
+            debug = base / "frontend/node_modules/socket.io-parser/node_modules/debug"
+            (debug / "package.json").write_text(json.dumps({"name": "debug", "version": "4.3.4"}))
+            with self.assertRaisesRegex(ValueError, "Unverified socket.io-parser dependency: debug"):
+                secure_hrms.verify(base)
+            import shutil
+            shutil.rmtree(debug)
+            with self.assertRaisesRegex(ValueError, "Missing or unexpected socket.io-parser dependencies"):
+                secure_hrms.verify(base)
+
+    def test_pinned_parser_rejects_malformed_and_unbounded_packets(self):
+        # Exercise the *publisher's installed CJS decoder*, not a copied guard.
+        # Stub only the event emitter: parsing/validation and debug/ms are real.
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            self.tree(base)
+            secure_hrms.patch(base)
+            parser = base / "frontend/node_modules/socket.io-parser/build/cjs/index.js"
+            script = r"""
+const assert = require('node:assert/strict');
+const Module = require('node:module');
+const original = Module._load;
+Module._load = function(name, parent, main) {
+  if (name === '@socket.io/component-emitter') return {Emitter: class {}};
+  return original.apply(this, arguments);
+};
+const {Decoder} = require(process.argv[1]);
+const decoder = new Decoder();
+assert.throws(() => decoder.decodeString('50-["event"]'), /Illegal attachments/);
+assert.throws(() => decoder.decodeString('511-["event"]'), /too many attachments/);
+assert.throws(() => decoder.decodeString('2[{}]'), /invalid payload/);
+assert.equal(decoder.decodeString('51-["event",{"_placeholder":true,"num":0}]').attachments, 1);
+"""
+            result = subprocess.run(["node", "-e", script, str(parser)],
+                                    capture_output=True, text=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_rejects_tampered_tarball_before_removing_old_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
