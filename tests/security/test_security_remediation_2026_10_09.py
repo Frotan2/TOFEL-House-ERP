@@ -360,7 +360,14 @@ class Office365Tests(unittest.TestCase):
                 with self.assertRaisesRegex(PermissionError, "identity verification failed") as denied:
                     self.login.login_via_office365("authorization-code", "single-use-state")
                 self.assertNotIn("sensitive data", str(denied.exception))
+                self.assertIsNone(denied.exception.__context__, "validation exception must not leak through traceback context")
             self.assertEqual(len(log), 1, "a rejected token must not establish a login")
+            with patch.object(oauth, "get_oauth2_flow", side_effect=ValueError("provider response with synthetic secret")):
+                with self.assertRaisesRegex(PermissionError, "identity verification failed") as denied:
+                    self.login.login_via_office365("authorization-code", "single-use-state")
+                self.assertNotIn("synthetic secret", str(denied.exception))
+            self.assertEqual(len(log), 1)
+
 
     def test_none_algorithm_and_untrusted_key_url_rejected(self):
         token = self.jwt.encode({"aud": "app-client"}, key="", algorithm="none")

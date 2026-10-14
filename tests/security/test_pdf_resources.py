@@ -5,6 +5,8 @@ import base64
 import importlib.util
 from pathlib import Path
 import tempfile
+import sys
+import types
 import unittest
 from unittest.mock import patch
 
@@ -91,6 +93,46 @@ class PDFResourcesTests(unittest.TestCase):
             self.policy("https://erp.example.test/files/test.png")
         self.assertNotIn("synthetic-sensitive-value", str(caught.exception))
         self.assertNotIn("test.png", str(caught.exception))
+
+    def test_production_factory_binds_attachments_to_target_and_checks_file_permission(self):
+        private = self.root / "private"
+        private.mkdir()
+        (private / "test.png").write_bytes(PNG)
+        doc = types.SimpleNamespace(doctype="ToDo", name="synthetic-target")
+        permissions = []
+        attachment = types.SimpleNamespace(is_private=1, check_permission=lambda action: permissions.append(action))
+        queries = []
+        def lookup(doctype, **kwargs):
+            queries.append((doctype, kwargs))
+            return ["synthetic-file"]
+        frappe = types.SimpleNamespace(
+            get_installed_apps=lambda: [], get_all=lookup,
+            get_doc=lambda *args: attachment,
+            has_permission=lambda *args: True,
+            get_site_path=lambda *args: str(private),
+        )
+        with patch.dict(sys.modules, {"frappe": frappe}):
+            policy = pdf.resource_policy(doc, "https://erp.example.test")
+            self.assertEqual(policy("https://erp.example.test/private/files/test.png")["string"], PNG)
+            self.assertEqual(permissions, ["read"])
+            self.assertEqual(queries[0][1]["filters"], {
+                "file_url": "/private/files/test.png", "attached_to_doctype": "ToDo",
+                "attached_to_name": "synthetic-target",
+            })
+            for result in ([], ["duplicate-one", "duplicate-two"]):
+                with patch.object(frappe, "get_all", return_value=result), patch.object(pdf, "_read_beneath") as read:
+                    with self.assertRaises(pdf.PDFResourceDenied):
+                        policy("https://erp.example.test/private/files/test.png")
+                    read.assert_not_called()
+            with patch.object(frappe, "has_permission", return_value=False), patch.object(pdf, "_read_beneath") as read:
+                with self.assertRaises(pdf.PDFResourceDenied):
+                    policy("https://erp.example.test/private/files/test.png")
+                read.assert_not_called()
+            attachment.is_private = 0
+            with patch.object(pdf, "_read_beneath") as read:
+                with self.assertRaises(pdf.PDFResourceDenied):
+                    policy("https://erp.example.test/private/files/test.png")
+                read.assert_not_called()
 
     def test_every_vendor_html_constructor_and_final_output_guarded(self):
         from tools.foundation.secure_weasyprint import apply_guard

@@ -639,6 +639,20 @@ class ImageRecreationContract(unittest.TestCase):
             self.assertIn(":nosecretfresh", text, name)
             self.assertIn("toefl-house-erp_db-data", text, name)
 
+    def test_installer_checks_existing_storage_before_generating_a_password(self):
+        text = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
+        check = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Test Fresh Installation.ps1"'
+        self.assertIn(check + "\nif errorlevel 1 goto :storagecheckfailed", text)
+        self.assertLess(text.index(check), text.index('[guid]::NewGuid()'))
+        self.assertLess(text.index('if exist data\\secrets\\db.env goto :secretok'), text.index(check))
+        refusal = text.split("\n:storagecheckfailed\n")[1].split("\n:secretaclfailed\n")[0]
+        self.assertIn("exit /b 1", refusal)
+        helper = (PRODUCT / "windows" / "Test Fresh Installation.ps1").read_text()
+        self.assertIn("$LASTEXITCODE -ne 0", helper)
+        self.assertIn("toefl-house-erp_db-data", helper)
+        self.assertIn('run: ./tests/foundation/test_windows_fresh_install.ps1',
+                      (ROOT / ".github/workflows/product-image.yml").read_text())
+
     def test_db_is_not_published_to_the_host(self):
         text = COMPOSE.read_text()
         db_block = re.search(r"^  db:\n((?:    .*\n|\n)+?)(?=^  \S|\Z)",

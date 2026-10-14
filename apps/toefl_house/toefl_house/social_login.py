@@ -65,18 +65,22 @@ def login_via_office365(code: str, state: str):
     from frappe.utils import oauth
     from frappe.integrations.oauth2_logins import decoder_compat
 
-    flow = oauth.get_oauth2_flow("office_365")
-    session = flow.get_auth_session(
-        data={"code": code, "redirect_uri": oauth.get_redirect_uri("office_365"),
-              "grant_type": "authorization_code"}, decoder=decoder_compat,
-    )
-    token = json.loads(session.access_token_response.text)["id_token"]
+    info = None
     try:
+        flow = oauth.get_oauth2_flow("office_365")
+        session = flow.get_auth_session(
+            data={"code": code, "redirect_uri": oauth.get_redirect_uri("office_365"),
+                  "grant_type": "authorization_code"}, decoder=decoder_compat,
+        )
+        token = json.loads(session.access_token_response.text)["id_token"]
         info = verify_office365_id_token(token, oauth.get_oauth_keys("office_365")["client_id"])
-    except Exception as exc:  # noqa: BLE001 - every validation/transport failure denies login
-        # Do not log or echo tokens, keys, provider responses or exception text.
+    except Exception:  # all provider/transport/JSON/validation failures deny login
+        pass
+    if info is None:
+        # Raise outside the except block: a provider exception may contain a
+        # response body, credentials or a token. Do not retain it as traceback
+        # context on the user-facing exception or echo its text to the client.
         frappe.throw(_("Office 365 identity verification failed"), frappe.PermissionError)
-        raise AssertionError("unreachable") from exc
 
     # Never select a local account using email, UPN, or unique_name from the
     # provider. Match the signed subject against an existing Frappe child row.
