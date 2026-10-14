@@ -19,12 +19,16 @@ TENANT_ID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\Z"
 
 
 def verify_office365_id_token(token: str, client_id: str) -> dict:
-    """Verify signature, audience, expiry and the tenant-bound v1 issuer.
+    """Verify signature, audience, expiry, issuer, tenant, and verified email.
 
     The pinned Frappe Office 365 provider uses /common/oauth2/token (v1).
     A v2 token is deliberately not accepted under this v1 configuration.
     Multi-tenant /common has no single configured issuer: the signed `tid`
     must match the exact Microsoft v1 issuer after signature verification.
+    Email-based Frappe account linking is allowed only when the signed token
+    explicitly contains the boolean email_verified=true claim. Missing or
+    false claims fail closed rather than treating the presence of an email
+    address as proof of mailbox ownership.
     """
     import jwt
 
@@ -33,21 +37,29 @@ def verify_office365_id_token(token: str, client_id: str) -> dict:
     if jwt.get_unverified_header(token).get("alg") != "RS256":
         raise ValueError("Unsupported Office 365 signing algorithm")
     key = jwt.PyJWKClient(MICROSOFT_JWKS, timeout=10).get_signing_key_from_jwt(token)
-    claims = jwt.decode(token, key.key, algorithms=["RS256"], audience=client_id,
-                        options={"require": ["exp", "iat", "iss", "aud", "tid"]},
-                        leeway=60)
+    claims = jwt.decode(
+        token,
+        key.key,
+        algorithms=["RS256"],
+        audience=client_id,
+        options={"require": ["exp", "iat", "iss", "aud", "tid", "email_verified"]},
+        leeway=60,
+    )
     tid = claims["tid"]
     if not isinstance(tid, str) or not TENANT_ID.fullmatch(tid):
         raise ValueError("Invalid Office 365 tenant")
     if claims["iss"] != f"https://sts.windows.net/{tid.lower()}/":
         raise ValueError("Office 365 issuer does not match signed tenant")
+    if claims.get("email_verified") is not True:
+        raise ValueError("Office 365 email is not verified")
     return claims
 
 
 @frappe.whitelist(allow_guest=True)
 def login_via_office365(code: str, state: str):
     """Exchange the authorization code as Frappe does, but authenticate only
-    after a verified ID token. Leave its single-use state/login path intact."""
+    after a verified ID token. Leave its single-use state/login path intact.
+    """
     from frappe.utils import oauth
     from frappe.integrations.oauth2_logins import decoder_compat
 
@@ -63,6 +75,6 @@ def login_via_office365(code: str, state: str):
         # Do not log or echo tokens, keys, provider responses or exception text.
         frappe.throw(_("Office 365 identity verification failed"), frappe.PermissionError)
         raise AssertionError("unreachable") from exc
-    if not (info.get("email_verified") or oauth.get_email(info)):
+    if info.get("email_verified") is not True:
         frappe.throw(_("Email not verified with Office 365"), frappe.PermissionError)
     oauth.login_oauth_user(info, provider="office_365", state=state)
