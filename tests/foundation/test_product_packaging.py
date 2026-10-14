@@ -652,6 +652,19 @@ class ImageRecreationContract(unittest.TestCase):
         self.assertIn("toefl-house-erp_db-data", helper)
         self.assertIn('run: ./tests/foundation/test_windows_fresh_install.ps1',
                       (ROOT / ".github/workflows/product-image.yml").read_text())
+        # Regression for hosted Product-image run 38498528731 (Windows job):
+        # the synthetic preflight mocks docker and simulates its failure,
+        # which leaves $global:LASTEXITCODE=1 in the process. The Actions
+        # PowerShell wrapper promotes a trailing non-zero $LASTEXITCODE to
+        # the step exit code, failing an otherwise-passing test. The test
+        # must clear the simulated code on its success path.
+        synthetic = (ROOT / "tests/foundation/test_windows_fresh_install.ps1").read_text()
+        self.assertIn('Assert-Denied "Could not check existing database storage"', synthetic)
+        self.assertIn("$global:LASTEXITCODE = 0", synthetic)
+        self.assertLess(synthetic.index('Assert-Denied "Could not check existing database storage"'),
+                        synthetic.rindex("$global:LASTEXITCODE = 0"))
+        self.assertLess(synthetic.rindex("$global:LASTEXITCODE = 0"),
+                        synthetic.index('Write-Host "PASS:'))
 
     def test_db_is_not_published_to_the_host(self):
         text = COMPOSE.read_text()

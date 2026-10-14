@@ -26,7 +26,12 @@ class SecuritySiteAcceptanceWiring(TestCase):
             self.assertIn(path, source)
         # Native uses --skip-assets: include_style() calls .get() on a missing
         # manifest unless this synthetic-only fixture is set before preview.
-        self.assertIn('patch("frappe.utils.get_assets_json", return_value={})', source)
+        # It must map the bundle to a packaged stylesheet, not return an
+        # empty manifest: the empty manifest makes the template emit the
+        # unresolved "/print_format.bundle.css", which the offline PDF
+        # policy correctly denies (hosted run 38498528739).
+        self.assertIn('synthetic_assets = {"print_format.bundle.css": "/assets/frappe/css/tree.css"}', source)
+        self.assertIn('patch("frappe.utils.get_assets_json", return_value=synthetic_assets)', source)
         self.assertLess(source.index('patch("frappe.utils.get_assets_json"'),
                         source.index('preview = get_html("ToDo"'))
         self.assertIn("SECURITY-SITE-ACCEPTANCE-FAILED", source)

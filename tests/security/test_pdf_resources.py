@@ -62,6 +62,51 @@ class PDFResourcesTests(unittest.TestCase):
         with self.assertRaises(pdf.PDFResourceDenied):
             self.policy.check()
 
+    def test_unresolved_bundle_path_denied_and_poisons_whole_pdf(self):
+        # Regression for hosted Native run 38498528739: with --skip-assets and
+        # an empty asset manifest, Frappe's print template emits the fallback
+        # stylesheet link "/print_format.bundle.css". That is not a packaged
+        # asset URL, so the policy must deny it and check() must refuse the
+        # PDF rather than returning it without its stylesheet.
+        with self.assertRaises(pdf.PDFResourceDenied):
+            self.policy("https://erp.example.test/print_format.bundle.css")
+        with self.assertRaises(pdf.PDFResourceDenied):
+            self.policy.check()
+
+    def test_nested_packaged_bundle_font_and_svg_assets_allowed(self):
+        # A built bundle lives in a nested dist/css directory and its CSS can
+        # in turn reference packaged fonts; packaged SVG images are also
+        # legitimate. Every nested fetch goes through the same policy.
+        bundle = self.asset / "dist" / "css"
+        bundle.mkdir(parents=True)
+        (bundle / "print_format.bundle.abcd1234.css").write_text("p { color: navy }")
+        fonts = self.asset / "css" / "fonts"
+        fonts.mkdir(parents=True)
+        (fonts / "Synthetic.woff2").write_bytes(b"wOF2 synthetic font bytes")
+        (self.asset / "logo.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
+        with patch("socket.getaddrinfo", side_effect=AssertionError("DNS must not be called")):
+            self.assertEqual(
+                self.policy("https://erp.example.test/assets/app/dist/css/print_format.bundle.abcd1234.css")["mime_type"],
+                "text/css")
+            self.assertEqual(
+                self.policy("https://erp.example.test/assets/app/css/fonts/Synthetic.woff2")["mime_type"],
+                "font/woff2")
+            self.assertEqual(
+                self.policy("https://erp.example.test/assets/app/logo.svg")["mime_type"],
+                "image/svg+xml")
+        self.policy.check()
+
+    def test_native_acceptance_maps_bundle_to_a_packaged_stylesheet(self):
+        # The Native harness must not regress to an empty asset manifest: the
+        # real renderer needs a packaged stylesheet to fetch in its
+        # --skip-assets bench, and a legitimate packaged-asset PDF render
+        # (stylesheet/font/SVG) must stay in the acceptance.
+        source = (ROOT / "tools/native/security_acceptance.py").read_text()
+        self.assertIn('"print_format.bundle.css": "/assets/frappe/css/tree.css"', source)
+        self.assertNotIn('patch("frappe.utils.get_assets_json", return_value={})', source)
+        self.assertIn("/assets/frappe/css/fonts/inter/inter.css", source)
+        self.assertIn("/assets/frappe/images/frappe-framework-logo.svg", source)
+
     def test_symlink_file_and_directory_and_missing_resource_fail_closed(self):
         outside = self.root / "secret.css"
         outside.write_text("sensitive")

@@ -45,10 +45,20 @@ def main() -> None:
         fmt.insert(ignore_permissions=True)
         # Native qualification intentionally installs with --skip-assets. The
         # print template's include_style() otherwise calls .get() on the absent
-        # asset manifest. Supply only the empty synthetic manifest in this
-        # process; Product-image CI separately builds and checks real assets.
+        # asset manifest, and with an empty manifest it falls back to the
+        # unresolved root path "/print_format.bundle.css". That path is not a
+        # packaged asset, so the offline PDF policy correctly denies it and
+        # refuses the otherwise-incomplete PDF (hosted run 38498528739:
+        # PDFResourceDenied at the first authorized download_pdf). Map the
+        # bundle name to a stylesheet that is packaged in the pinned Frappe
+        # source tree instead, so the real renderer fetches a real local asset
+        # through the same policy. Do not return an empty manifest here, and
+        # do not teach the policy to tolerate a missing bundle: a genuinely
+        # unavailable stylesheet must still fail closed. Product-image CI
+        # separately builds and checks the real hashed bundle.
         frappe.local.preload_assets = {"style": [], "script": []}
-        with patch("frappe.utils.get_assets_json", return_value={}):
+        synthetic_assets = {"print_format.bundle.css": "/assets/frappe/css/tree.css"}
+        with patch("frappe.utils.get_assets_json", return_value=synthetic_assets):
             # Both whitelisted helper paths and the direct constructor execute the
             # installed, hash-verified vendor guard against a *real* synthetic doc.
             preview = get_html("ToDo", todo.name, fmt.name)
@@ -101,6 +111,27 @@ def main() -> None:
                             pass
                         else:
                             raise AssertionError("PDF overlay bypassed resource policy")
+                network.assert_not_called()
+                dns.assert_not_called()
+                # Legitimate packaged resources must still render through the
+                # same policy, with no network or DNS: a packaged stylesheet
+                # (whose @font-face entries point at packaged font files), a
+                # packaged font used by the text, and a packaged SVG image.
+                generator = PrintFormatGenerator(fmt.name, todo)
+                valid_payload = (
+                    '<html><head><link rel="stylesheet" '
+                    'href="/assets/frappe/css/fonts/inter/inter.css">'
+                    '<style>p { font-family: Inter; }</style></head>'
+                    '<body><p>Valid packaged PDF</p>'
+                    '<img width="50" height="50" src="/assets/frappe/images/frappe-framework-logo.svg">'
+                    '</body></html>'
+                )
+                with (patch.object(generator, "get_main_html", return_value=valid_payload),
+                      patch.object(generator, "get_header_footer_html", return_value=(None, None))):
+                    valid_pdf = generator.render_pdf()
+                assert isinstance(valid_pdf, bytes) and valid_pdf.startswith(b"%PDF"), (
+                    "Legitimate packaged PDF resources were rejected"
+                )
                 network.assert_not_called()
                 dns.assert_not_called()
             # Direct construction cannot bypass authorization even when the doc
