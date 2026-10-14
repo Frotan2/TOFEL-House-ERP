@@ -306,6 +306,7 @@ class EchartsErratumTests(unittest.TestCase):
         self.assertEqual(hits[0]["runtime_disposition"], "BLOCKED")
         self.assertIn("ERRATUM 2026-10-09", hits[0]["runtime_disposition_evidence"])
         self.assertTrue((ROOT / hits[0]["erratum"]).is_file())
+        self.assertNotIn("finding is unreachable in the shipped product", hits[0]["fix_path"])
 
     def test_no_replayed_npm_entry_is_echarts(self):
         self.assertNotIn("echarts", json.dumps(SNAPSHOT["npm_entries"]))
@@ -314,7 +315,6 @@ class EchartsErratumTests(unittest.TestCase):
         rec = t.load_triage()["by_id"].get(t._norm("GHSA-fgmj-fm8m-jvvx"))
         self.assertIsNotNone(rec)
         self.assertNotIn(rec["runtime_disposition"], CLOSED)
-        self.assertNotIn("finding is unreachable in the shipped product", hits[0]["fix_path"])
 
 
 class DanglingReferenceTests(unittest.TestCase):
