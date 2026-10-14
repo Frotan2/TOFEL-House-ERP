@@ -324,7 +324,7 @@ class Office365Tests(unittest.TestCase):
                     self.check(token)
 
     def test_callback_only_authenticates_after_verification_and_preserves_state(self):
-        frappe = sys.modules.get("frappe") or types.ModuleType("frappe")
+        frappe = self.login.frappe
         frappe.PermissionError = PermissionError
         frappe.throw = lambda message, cls: (_ for _ in ()).throw(cls(message))
         frappe._ = lambda message: message
