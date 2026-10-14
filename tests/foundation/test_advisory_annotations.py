@@ -6,6 +6,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "foundation"))
 from runtime_install import (ANNOTATION_MAX_LINES, ANNOTATION_TEXT_LIMIT,  # noqa: E402
                              advisory_finding_annotations,
+                             untriaged_advisory_annotations,
                              hosted_failure_annotations,
                              safe_native_restore_failure_detail,
                              safe_native_site_failure_detail)
@@ -152,6 +153,23 @@ class AdvisoryAnnotationTests(unittest.TestCase):
         text = lines[0]
         self.assertIn("npm:brace-expansion@1.1.11,2.0.1 "
                       "GHSA-6j4f-fj2g-mc7p(high),GHSA-q2hr-2g5m-vwhr(moderate)", text)
+
+    def test_all_untriaged_ids_survive_even_when_more_than_three_lines(self):
+        # The expanded audit had 77 lockfile matches; a three-line cap hid
+        # follow-redirects/1116560. Failed gates must expose every public ID.
+        findings = [{"package": f"package-{i:03d}", "id": 1100000+i}
+                    for i in range(90)]
+        findings.append({"package": "follow-redirects", "id": 1116560})
+        report = {"triage": {"node": {"untriaged": findings}}}
+        lines = untriaged_advisory_annotations(report)
+        self.assertGreater(len(lines), 3)
+        self.assertIn("matches=91; full set", lines[0])
+        self.assertEqual(sum(line.count("npm:") for line in lines), 91)
+        self.assertIn("npm:follow-redirects 1116560", " ".join(lines))
+        prefix = "::error file=tools/foundation/runtime_install.py::"
+        self.assertTrue(all(line.startswith(prefix) and
+                            len(line) - len(prefix) <= ANNOTATION_TEXT_LIMIT for line in lines))
+        self.assertFalse(any("not shown" in line for line in lines))
 
     def test_runtime_emits_annotations_from_its_own_reports(self):
         source = (Path(__file__).resolve().parents[2]

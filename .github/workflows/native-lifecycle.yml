@@ -10,6 +10,9 @@ on:
       - .github/workflows/native-lifecycle.yml
       - apps/**
       - tools/native/**
+      # The native installer executes both security patch helpers before build.
+      - tools/foundation/secure_hrms.py
+      - tools/foundation/secure_weasyprint.py
       - product/bootstrap.py
       - product/backup.py
       - product/restore.py

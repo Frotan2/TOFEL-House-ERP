@@ -106,6 +106,8 @@ COPY product/native_gpg.py /product/native_gpg.py
 COPY product/native_db.py /product/native_db.py
 COPY product/wsgi.py /product/wsgi.py
 COPY product/entrypoint.sh /product/entrypoint.sh
+COPY tools/foundation/secure_weasyprint.py /product/secure_weasyprint.py
+COPY tools/foundation/secure_hrms.py /product/secure_hrms.py
 # The performance baseline (finding 9) runs inside the deployed image:
 # the CI perf step execs it by this exact path. (Every script COPYed
 # here must also be allowlisted in .dockerignore - the build context is
@@ -159,6 +161,20 @@ RUN set -eux; \
     mkdir -p /build/sites-seed; \
     cp sites/apps.txt sites/apps.json sites/common_site_config.json /build/sites-seed/; \
     yarn cache clean; rm -rf /home/frappe/.cache
+# Fail closed if the pinned Frappe renderer drifts; guard its constructor so
+# direct printview/attach_print/Print Format calls cannot bypass the policy.
+# The installer verifies the post-patch source digest before the image can boot.
+RUN python3 /product/secure_weasyprint.py /home/frappe/bench/apps/frappe \
+    && python3 /product/secure_hrms.py /home/frappe/bench/apps/hrms
+# Ghostscript guard (GHSA-r543-q48m-4c9j, WeasyPrint RCE). Pillow's EPS plugin
+# renders EPS/PS bytes by running the `gs` executable found on PATH
+# (PIL/EpsImagePlugin.py), and WeasyPrint hands it attacker-reachable images
+# through beta print formats. The runtime image must never ship Ghostscript:
+# the build fails if a `gs` executable exists on PATH, including one pulled in
+# transitively by an apt dependency. Evidence and scope:
+# docs/engineering/evidence/sec-deps-01/advisory-delta-2026-10-09/README.md
+RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GHSA-r543-q48m-4c9j precondition violated" >&2; exit 1; fi
+
 # The compose bind mount (./data/sites) hides the bench's own sites/ files on a
 # fresh install; bootstrap.py restores them from /build/sites-seed before the
 # first bench call (bench resolves installed apps from sites/apps.txt).

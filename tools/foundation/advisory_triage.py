@@ -48,9 +48,13 @@ NUMERIC_ID_RE = re.compile(r"\b(\d{4,})\b")
 
 
 def _package_basename(pkg: str) -> str:
-    """`npm:ws@8.11.0` -> `ws`, `py:pypdf@6.15.0` -> `pypdf`."""
+    """Drop a version, not the scope in `npm:@scope/name@1.2.3`."""
     if pkg.startswith("npm:") or pkg.startswith("py:"):
         pkg = pkg.split(":", 1)[1]
+    if pkg.startswith("@"):
+        # The first @ is part of the package name; only a second starts
+        # the version. No version may be present in the audit's package key.
+        return pkg.rsplit("@", 1)[0].lower() if "@" in pkg[1:] else pkg.lower()
     return pkg.split("@", 1)[0].lower()
 
 
@@ -148,25 +152,16 @@ def disposition_for_finding(triage: dict[str, Any], *, package: str,
             else:
                 candidates.extend(_extract_ids(aid_s))
     title_ids = _extract_ids(package or "")
-    # Direct id lookup first
-    by_id = triage["by_id"]
-    for c in candidates:
-        if c in by_id:
-            return by_id[c]
-    # Fall back to package-name + any id from the finding matching that
-    # package's advisories.
-    base = _package_basename(package or "")
-    if base in triage["by_package"]:
-        for entry in triage["by_package"][base]:
-            if _norm(entry["id"]) in candidates:
+    # A GHSA can affect multiple packages with *different* evidence and
+    # dispositions. Never close a finding with another package's record just
+    # because its advisory ID (or CVE alias) matches. The by_id index is kept
+    # for collision detection, but it cannot decide package-scoped triage.
+    entries = triage["by_package"].get(_package_basename(package or ""), [])
+    for c in [*candidates, *title_ids]:
+        for entry in entries:
+            if c == _norm(entry["id"]) or c in {
+                    _norm(alias) for alias in entry.get("aliases", []) or []}:
                 return entry
-            for alias in entry.get("aliases", []) or []:
-                if _norm(alias) in candidates:
-                    return entry
-    # Try title-id only (in case finding only carries cve/ghsa in url/title)
-    for c in title_ids:
-        if c in by_id:
-            return by_id[c]
     return None
 
 

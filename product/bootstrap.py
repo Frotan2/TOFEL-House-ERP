@@ -480,6 +480,13 @@ def ensure_built_assets(sites_dir: Path = SITES_DIR,
     return synced
 
 
+def verify_hrms_editor(hrms_dir: Path) -> None:
+    """Fail web/bootstrap startup on a regressed HRMS editor dependency."""
+    from secure_hrms import verify
+
+    verify(hrms_dir)
+
+
 def ensure_web_assets() -> list[str]:
     """Repair one incomplete static tree with a native Bench rebuild, then verify.
 
@@ -488,12 +495,14 @@ def ensure_web_assets() -> list[str]:
     manifest with missing hashed files; give the pinned native build one safe,
     idempotent recovery attempt before failing the web startup closed.
     """
+    verify_hrms_editor(BENCH_DIR / "apps/hrms")
     try:
         return ensure_built_assets()
     except RuntimeError:
         print("[toefl-house-erp] static assets incomplete; rebuilding once before web startup",
               file=sys.stderr, flush=True)
         run_bench(["build"], cwd=BENCH_DIR)
+        verify_hrms_editor(BENCH_DIR / "apps/hrms")
         return ensure_built_assets()
 
 
@@ -688,8 +697,10 @@ def bootstrap(site: str = SITE_NAME, *, log=print) -> dict:
     run_bench(["--site", site, "execute", "frappe.utils.password.get_encryption_key"], cwd=BENCH_DIR)
     actions.append("encryption-key-initialized")
 
+    verify_hrms_editor(BENCH_DIR / "apps/hrms")
     if not assets_present(SITES_DIR):
         run_bench(["build"], cwd=BENCH_DIR)
+        verify_hrms_editor(BENCH_DIR / "apps/hrms")
         actions.append("assets-built")
     else:
         actions.append("assets-present")
