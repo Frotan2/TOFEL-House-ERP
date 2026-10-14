@@ -85,7 +85,13 @@ def main() -> None:
                 '<img src="data:image/svg+xml;base64,PHN2Zy8+">',
                 '<img src="/private/files/unauthorized.png">',
             )
-            with (patch("weasyprint.urls.urlopen", side_effect=AssertionError("Default PDF fetch attempted")) as network,
+            # WeasyPrint 68 (the pinned version) has no weasyprint.urls.urlopen:
+            # its default fetcher is the URLFetcher class (hosted rerun of the
+            # first fix failed here with AttributeError from patch()). Guard
+            # that class's fetch method instead; our policy is a plain callable
+            # and never goes through URLFetcher, so any call to it is a
+            # default-fetch escape.
+            with (patch("weasyprint.urls.URLFetcher.fetch", side_effect=AssertionError("Default PDF fetch attempted")) as network,
                   patch("socket.getaddrinfo", side_effect=AssertionError("PDF DNS attempted")) as dns):
                 for payload in hostile:
                     generator = PrintFormatGenerator(fmt.name, todo)

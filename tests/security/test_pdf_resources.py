@@ -106,6 +106,11 @@ class PDFResourcesTests(unittest.TestCase):
         self.assertNotIn('patch("frappe.utils.get_assets_json", return_value={})', source)
         self.assertIn("/assets/frappe/css/fonts/inter/inter.css", source)
         self.assertIn("/assets/frappe/images/frappe-framework-logo.svg", source)
+        # Pinned WeasyPrint 68 has no weasyprint.urls.urlopen; the default
+        # fetcher to guard is URLFetcher.fetch. Patching the removed name
+        # raises AttributeError before any hostile case runs.
+        self.assertIn('patch("weasyprint.urls.URLFetcher.fetch"', source)
+        self.assertNotIn('patch("weasyprint.urls.urlopen"', source)
 
     def test_symlink_file_and_directory_and_missing_resource_fail_closed(self):
         outside = self.root / "secret.css"
