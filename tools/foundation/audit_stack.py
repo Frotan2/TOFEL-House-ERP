@@ -145,7 +145,9 @@ def osv_pypi_advisories(packages: dict[str, list[str]]) -> dict[str, Any]:
         if not isinstance(results, list) or len(results) != len(batch):
             raise RuntimeError("OSV response does not match submitted Python dependency queries")
         for query, result in zip(batch, results):
-            vulnerabilities = result.get("vulns", []) if isinstance(result, dict) else []
+            if not isinstance(result, dict) or set(result) - {"vulns"}:
+                raise RuntimeError("OSV returned a malformed or incomplete result")
+            vulnerabilities = result.get("vulns", [])
             if not isinstance(vulnerabilities, list):
                 raise RuntimeError("OSV vulnerability response is malformed")
             package = query["package"]["name"]

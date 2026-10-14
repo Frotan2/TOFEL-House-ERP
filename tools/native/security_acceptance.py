@@ -45,10 +45,20 @@ def main() -> None:
         fmt.insert(ignore_permissions=True)
         # Native qualification intentionally installs with --skip-assets. The
         # print template's include_style() otherwise calls .get() on the absent
-        # asset manifest. Supply only the empty synthetic manifest in this
-        # process; Product-image CI separately builds and checks real assets.
+        # asset manifest, and with an empty manifest it falls back to the
+        # unresolved root path "/print_format.bundle.css". That path is not a
+        # packaged asset, so the offline PDF policy correctly denies it and
+        # refuses the otherwise-incomplete PDF (hosted run 38498528739:
+        # PDFResourceDenied at the first authorized download_pdf). Map the
+        # bundle name to a stylesheet that is packaged in the pinned Frappe
+        # source tree instead, so the real renderer fetches a real local asset
+        # through the same policy. Do not return an empty manifest here, and
+        # do not teach the policy to tolerate a missing bundle: a genuinely
+        # unavailable stylesheet must still fail closed. Product-image CI
+        # separately builds and checks the real hashed bundle.
         frappe.local.preload_assets = {"style": [], "script": []}
-        with patch("frappe.utils.get_assets_json", return_value={}):
+        synthetic_assets = {"print_format.bundle.css": "/assets/frappe/css/tree.css"}
+        with patch("frappe.utils.get_assets_json", return_value=synthetic_assets):
             # Both whitelisted helper paths and the direct constructor execute the
             # installed, hash-verified vendor guard against a *real* synthetic doc.
             preview = get_html("ToDo", todo.name, fmt.name)
@@ -60,6 +70,76 @@ def main() -> None:
             assert "<html" in fmt.get_html(todo.name).lower()  # Print Format method path
             fmt.download_pdf(todo.name)
             assert frappe.local.response.filecontent.startswith(b"%PDF")
+            # Execute the *installed* vendor render_pdf path with real WeasyPrint.
+            # No mocked HTML constructor or HTTP server: any default fetch/DNS is
+            # a failure. Main HTML, CSS imports, images, attachments and overlays
+            # must all hit the same offline resource policy.
+            from toefl_house.pdf_resources import PDFResourceDenied
+            hostile = (
+                '<img src="http://127.0.0.1:9/private">',
+                '<img src="http://169.254.169.254/latest/meta-data/">',
+                '<img src="file:///etc/passwd">',
+                '<style>@import url("https://external.example.test/redirect");</style>',
+                '<style>p { background: url("file:///etc/passwd") }</style><p>test</p>',
+                '<link rel="attachment" href="file:///etc/passwd">',
+                '<img src="data:image/svg+xml;base64,PHN2Zy8+">',
+                '<img src="/private/files/unauthorized.png">',
+            )
+            # WeasyPrint 68 (the pinned version) has no weasyprint.urls.urlopen:
+            # its default fetcher is the URLFetcher class (hosted rerun of the
+            # first fix failed here with AttributeError from patch()). Guard
+            # that class's fetch method instead; our policy is a plain callable
+            # and never goes through URLFetcher, so any call to it is a
+            # default-fetch escape.
+            with (patch("weasyprint.urls.URLFetcher.fetch", side_effect=AssertionError("Default PDF fetch attempted")) as network,
+                  patch("socket.getaddrinfo", side_effect=AssertionError("PDF DNS attempted")) as dns):
+                for payload in hostile:
+                    generator = PrintFormatGenerator(fmt.name, todo)
+                    with (patch.object(generator, "get_main_html", return_value=f"<html><body>{payload}</body></html>"),
+                          patch.object(generator, "get_header_footer_html", return_value=(None, None))):
+                        try:
+                            generator.render_pdf()
+                        except PDFResourceDenied:
+                            pass
+                        else:
+                            raise AssertionError("Hostile PDF resource was not rejected")
+                # An external image in each overlay must not escape the policy.
+                for header, footer in (("header", None), (None, "footer")):
+                    generator = PrintFormatGenerator(fmt.name, todo)
+                    def overlay(tag):
+                        return (f'<html><body><{tag}><img src="http://localhost/private"></{tag}></body></html>'
+                                if tag else None)
+                    with (patch.object(generator, "get_main_html", return_value="<html><body><p>Valid PDF</p></body></html>"),
+                          patch.object(generator, "get_header_footer_html", return_value=(overlay(header), overlay(footer)))):
+                        try:
+                            generator.render_pdf()
+                        except PDFResourceDenied:
+                            pass
+                        else:
+                            raise AssertionError("PDF overlay bypassed resource policy")
+                network.assert_not_called()
+                dns.assert_not_called()
+                # Legitimate packaged resources must still render through the
+                # same policy, with no network or DNS: a packaged stylesheet
+                # (whose @font-face entries point at packaged font files), a
+                # packaged font used by the text, and a packaged SVG image.
+                generator = PrintFormatGenerator(fmt.name, todo)
+                valid_payload = (
+                    '<html><head><link rel="stylesheet" '
+                    'href="/assets/frappe/css/fonts/inter/inter.css">'
+                    '<style>p { font-family: Inter; }</style></head>'
+                    '<body><p>Valid packaged PDF</p>'
+                    '<img width="50" height="50" src="/assets/frappe/images/frappe-framework-logo.svg">'
+                    '</body></html>'
+                )
+                with (patch.object(generator, "get_main_html", return_value=valid_payload),
+                      patch.object(generator, "get_header_footer_html", return_value=(None, None))):
+                    valid_pdf = generator.render_pdf()
+                assert isinstance(valid_pdf, bytes) and valid_pdf.startswith(b"%PDF"), (
+                    "Legitimate packaged PDF resources were rejected"
+                )
+                network.assert_not_called()
+                dns.assert_not_called()
             # Direct construction cannot bypass authorization even when the doc
             # carries an ignore_permissions flag, as some internal jobs do.
             frappe.set_user("Guest")

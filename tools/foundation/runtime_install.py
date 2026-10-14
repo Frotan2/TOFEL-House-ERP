@@ -534,6 +534,8 @@ def main() -> int:
             ROOT / "tools/foundation/secure_weasyprint.py", bench_dir / "apps/frappe"])
         run("patch-hrms-editor-dependencies", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/hrms"])
+        run("lock-banking-dependencies", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/erpnext", "--banking"])
         run("security-remediation-regressions", [bench_dir / "env/bin/python", "-m", "unittest",
             "tests.security.test_security_remediation_2026_10_09", "-v"], cwd=ROOT)
         run("python-dependency-check", [lab / "tools/bin/uv", "pip", "check", "--python", bench_dir / "env/bin/python"])
@@ -582,6 +584,8 @@ def main() -> int:
         bench("asset-build", "build", timeout=1800)
         run("verify-hrms-editor-after-build", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/hrms", "--verify"])
+        run("verify-banking-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/erpnext", "--banking", "--verify"])
         # Inventory resolved dependency trees after their actual asset build.
         # Findings remain REJECT evidence rather than a hidden best-effort scan.
         stack_audit_path = evidence / "stack-dependency-audit.json"
@@ -868,6 +872,8 @@ def main() -> int:
         assert browser_lock["packages"]["node_modules/playwright"]["integrity"] == "sha512-vA30H8Nvkq/cPBnNw4Q8TWz1EJyqgpuinBcHET0YVJVFldr8JDNiU9LaWAE1KqSkRYazuaBhTpB5ZzShOezQ6A=="
         report["browser_test_tool"] = {"playwright": "1.58.2", "lock_sha256": hashlib.sha256((browser_dir / "package-lock.json").read_bytes()).hexdigest()}
         run("chromium-install", [browser_dir / "node_modules/.bin/playwright", "install", "--with-deps", "chromium"])
+        run("built-hrms-editor-security", ["node", ROOT / "tools/foundation/hrms_editor_security.mjs",
+            bench_dir / "apps/hrms/frontend", browser_dir / "node_modules/playwright"])
         shutil.copyfile(ROOT / "tools/foundation/runtime_browser.mjs", browser_dir / "check.mjs")
         env["FOUNDATION_BROWSER_REPORT"] = str(evidence / "browser-result.json")
         try:

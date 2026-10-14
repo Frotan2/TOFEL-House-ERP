@@ -77,6 +77,8 @@ rem  Windows run: ") was unexpected at this time."). Instead PowerShell
 rem  writes the one-time password to a temp file and CMD reads it with
 rem  SET /P - no parentheses and no FOR constructs touch CMD's parser.
 if exist data\secrets\db.env goto :secretok
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Test Fresh Installation.ps1"
+if errorlevel 1 goto :storagecheckfailed
 echo  Generating a private database password for this computer...
 powershell -NoProfile -Command "[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N')" > data\secrets\.dbpw.tmp
 set /p DBPW=<data\secrets\.dbpw.tmp
@@ -131,6 +133,12 @@ echo.
 echo  Install finished. From now on use the "Start TOEFL House ERP" shortcut.
 pause
 exit /b 0
+
+:storagecheckfailed
+echo  Installation stopped safely. Existing data was not changed.
+echo  Recover the original database password file before continuing.
+pause
+exit /b 1
 
 :secretaclfailed
 echo.

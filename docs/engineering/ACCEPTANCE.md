@@ -1,3 +1,10 @@
+> **2026-10-14 live-state correction:** PR #13 was already merged at
+> `807d5dca324e32546d8c0b52c255be38aa7b3513`; earlier references below to it being
+> open are historical snapshots. Release remains **NO-GO / REJECT**.
+> Current defect/evidence ledger: [security finalization](evidence/security-finalization-2026-10-14/README.md).
+> New security work requires fresh exact-head hosted qualification and does not
+> waive the real Windows/Owner gates.
+
 # Acceptance ledger
 
 One canonical ledger for final acceptance of TOEFL House ERP as a clean,

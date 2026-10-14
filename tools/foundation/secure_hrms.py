@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Integrity-pinned remediation of installed HRMS client dependencies.
 
-The upstream HRMS source commit/lock remain verifiable and unchanged. Apply to
-*disposable* installed node_modules before asset build; verify again after build.
+Apply reviewed Yarn security locks to disposable HRMS/ERPNext checkouts, then
+verify publisher code for the HRMS editor/parser before and after asset build.
+Original source hashes and explicit overlay hashes remain independently auditable.
 Yarn may nest copies, so a top-level-only replacement is not sufficient.
 """
 from __future__ import annotations
@@ -14,6 +15,7 @@ import io
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import tarfile
 import tempfile
 from urllib.request import urlopen
@@ -149,11 +151,88 @@ def patch(hrms: Path) -> dict[str, int]:
     return verify(hrms)
 
 
+
+def security_lock_files(hrms: Path, *, verify_only: bool = False, banking: bool = False) -> None:
+    """Apply reviewed Yarn-generated manifests/locks to the disposable app only.
+
+    Source hashes must match the pinned upstream or our exact security output.
+    No resolution is performed in CI or on the owner's PC: installs are frozen.
+    """
+    root = Path(__file__).resolve().with_name("banking-locks" if banking else "hrms-locks")
+    manifest = json.loads((root / "manifest.json").read_text())
+    if subprocess.check_output(["yarn", "--version"], text=True).strip() != manifest["yarn_version"]:
+        raise ValueError("Security lockfiles require the pinned Yarn version")
+    pending = []
+    for relative, hashes in manifest["files"].items():
+        path = Path(relative)
+        if path.is_absolute() or ".." in path.parts or len(path.parts) != 2:
+            raise ValueError("Invalid security lockfile path")
+        target = hrms / path
+        content = (root / path).read_bytes()
+        if hashlib.sha256(content).hexdigest() != hashes["security_sha256"]:
+            raise ValueError("Security lockfile integrity failure")
+        current = hashlib.sha256(target.read_bytes()).hexdigest()
+        allowed = {hashes["security_sha256"]} if verify_only else set(hashes.values())
+        if current not in allowed or target.is_symlink() or target.parent.is_symlink():
+            raise ValueError("HRMS manifests drifted; refusing unreviewed dependency graph")
+        pending.append((target, content))
+    if not verify_only:
+        for target, content in pending:
+            target.write_bytes(content)
+        for tree in (("banking",) if banking else ("frontend", "roster")):
+            subprocess.run(["yarn", "install", "--frozen-lockfile", "--non-interactive"],
+                           cwd=hrms / tree, check=True)
+        security_lock_files(hrms, verify_only=True, banking=banking)
+
+
+
+EDITOR_PATH = "src/components/TextEditor/TextEditor.vue"
+EDITOR_ORIGINAL_SHA256 = "59eb76d3a3d067ddbe2954eb0c576ba7aa013530db3e7335231ddd2b27316ca4"
+EDITOR_PATCHED_SHA256 = "462f87ebf5791eefc7029ae82622e0b26e8f1a6525859a9b3780b5c2083d8a74"
+EDITOR_BEFORE = "          let dom = document.createElement('div')\n          dom.innerHTML = markdownToHTML(text)"
+EDITOR_AFTER = "          // Parse in an inert document: image handlers can execute even on a\n          // disconnected element created in the live document, before the\n          // ProseMirror schema has a chance to discard hostile attributes.\n          let dom = new window.DOMParser().parseFromString(\n            markdownToHTML(text), 'text/html',\n          ).body"
+
+
+def secure_markdown_paste(hrms: Path, *, verify_only: bool = False) -> None:
+    """Close pre-schema execution in the pinned Frappe UI Markdown paste path."""
+    copies = installed_copies(hrms, "frappe-ui")
+    if len(copies) < 2:
+        raise ValueError("Missing shipped HRMS Frappe UI editors")
+    pending = []
+    for folder in copies:
+        if json.loads((folder / "package.json").read_text()).get("version") != "0.1.105":
+            raise ValueError("Unreviewed Frappe UI editor version")
+        target = folder / EDITOR_PATH
+        if target.is_symlink():
+            raise ValueError("Symlinked editor source")
+        source = target.read_bytes()
+        digest = hashlib.sha256(source).hexdigest()
+        if digest == EDITOR_PATCHED_SHA256:
+            continue
+        if verify_only or digest != EDITOR_ORIGINAL_SHA256:
+            raise ValueError("Unverified Frappe UI Markdown paste source")
+        text = source.decode()
+        if text.count(EDITOR_BEFORE) != 1:
+            raise ValueError("Markdown parser anchor changed")
+        updated = text.replace(EDITOR_BEFORE, EDITOR_AFTER).encode()
+        if hashlib.sha256(updated).hexdigest() != EDITOR_PATCHED_SHA256:
+            raise ValueError("Unexpected Markdown parser patch output")
+        pending.append((target, updated))
+    for target, content in pending:
+        target.write_bytes(content)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("hrms_app", type=Path)
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--banking", action="store_true", help="Apply ERPNext banking locks instead of HRMS")
     args = parser.parse_args()
+    security_lock_files(args.hrms_app, verify_only=args.verify, banking=args.banking)
+    if args.banking:
+        print("ERPNext banking security locks verified")
+        return
+    secure_markdown_paste(args.hrms_app, verify_only=args.verify)
     print(json.dumps(verify(args.hrms_app) if args.verify else patch(args.hrms_app), sort_keys=True))
 
 

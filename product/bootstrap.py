@@ -482,8 +482,11 @@ def ensure_built_assets(sites_dir: Path = SITES_DIR,
 
 def verify_hrms_editor(hrms_dir: Path) -> None:
     """Fail web/bootstrap startup on a regressed HRMS editor dependency."""
-    from secure_hrms import verify
+    from secure_hrms import verify, secure_markdown_paste, security_lock_files
 
+    security_lock_files(hrms_dir, verify_only=True)
+    security_lock_files(hrms_dir.parent / "erpnext", verify_only=True, banking=True)
+    secure_markdown_paste(hrms_dir, verify_only=True)
     verify(hrms_dir)
 
 

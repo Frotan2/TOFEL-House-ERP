@@ -4,7 +4,9 @@ The pinned Frappe PrintFormatGenerator is guarded at construction by the
 hash-verified installation patch in tools/foundation/secure_weasyprint.py.
 That seam covers printview, attach_print, Print Format methods, and both
 whitelisted helpers, including non-HTTP jobs. No arbitrary HTML or URL is
-passed to the renderer by these wrappers.
+passed to the renderer by these wrappers. The same installation patch binds
+both vendor HTML constructors to pdf_resources.resource_policy; document
+permission alone is not a resource-fetch policy.
 """
 from __future__ import annotations
 

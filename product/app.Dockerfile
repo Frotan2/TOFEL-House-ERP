@@ -108,6 +108,8 @@ COPY product/wsgi.py /product/wsgi.py
 COPY product/entrypoint.sh /product/entrypoint.sh
 COPY tools/foundation/secure_weasyprint.py /product/secure_weasyprint.py
 COPY tools/foundation/secure_hrms.py /product/secure_hrms.py
+COPY tools/foundation/hrms-locks /product/hrms-locks
+COPY tools/foundation/banking-locks /product/banking-locks
 # The performance baseline (finding 9) runs inside the deployed image:
 # the CI perf step execs it by this exact path. (Every script COPYed
 # here must also be allowlisted in .dockerignore - the build context is
@@ -165,7 +167,8 @@ RUN set -eux; \
 # direct printview/attach_print/Print Format calls cannot bypass the policy.
 # The installer verifies the post-patch source digest before the image can boot.
 RUN python3 /product/secure_weasyprint.py /home/frappe/bench/apps/frappe \
-    && python3 /product/secure_hrms.py /home/frappe/bench/apps/hrms
+    && python3 /product/secure_hrms.py /home/frappe/bench/apps/hrms \
+    && python3 /product/secure_hrms.py /home/frappe/bench/apps/erpnext --banking
 # Ghostscript guard (GHSA-r543-q48m-4c9j, WeasyPrint RCE). Pillow's EPS plugin
 # renders EPS/PS bytes by running the `gs` executable found on PATH
 # (PIL/EpsImagePlugin.py), and WeasyPrint hands it attacker-reachable images

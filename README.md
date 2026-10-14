@@ -16,7 +16,7 @@ daily-work desk.
 
 **How it is built:** on the standard open-source ERP stack, used as-is:
 
-| Native (authoritative, pinned, never modified) | TOEFL House-specific (this repository) |
+| Native (authoritative, pinned; reviewed security overlays) | TOEFL House-specific (this repository) |
 | --- | --- |
 | **Frappe** framework: users, roles, permissions, audit | `apps/toefl_house`: placement testing, admission decisions, guarded lifecycle commands, owner-configurable policies, role desks |
 | **ERPNext**: accounting, invoices, payments, pricing | `apps/foundation_security`: deny-by-default security hardening |
@@ -29,6 +29,12 @@ Business values such as prices, salary rates, discounts, thresholds and
 capacities are entered by the owner as configuration and are never coded in.
 
 **Canonical product and architecture description:** [docs/PRODUCT.md](docs/PRODUCT.md).
+
+## Release status
+
+**NO-GO / production authorization REJECT.** PR #13 is merged, but that is not
+release approval. See the [current security defect and qualification ledger](docs/engineering/evidence/security-finalization-2026-10-14/README.md).
+Do not activate real operations based only on unit tests or an image build.
 
 ## Owner: install and daily use (Windows)
 

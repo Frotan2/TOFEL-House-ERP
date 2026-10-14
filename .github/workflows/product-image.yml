@@ -16,6 +16,8 @@ on:
       # to their security checks must rebuild the image on this PR, not merely
       # pass the fast Python suite.
       - tools/foundation/secure_hrms.py
+      - tools/foundation/hrms-locks/**
+      - tools/foundation/banking-locks/**
       - tools/foundation/secure_weasyprint.py
       - product/**
       - apps/**
@@ -1642,6 +1644,9 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+      - name: Refuse credential regeneration over existing synthetic storage
+        shell: powershell
+        run: ./tests/foundation/test_windows_fresh_install.ps1
       - name: Verify fresh checkout and normalize a stale CRLF worktree
         shell: pwsh
         run: |

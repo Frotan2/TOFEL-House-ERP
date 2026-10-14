@@ -448,6 +448,7 @@ class LineEndingContract(unittest.TestCase):
             "product/backup.py", "product/native_gpg.py", "product/native_db.py",
             "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
             "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_hrms.py",
+            "tools/foundation/hrms-locks", "tools/foundation/banking-locks",
         }
         self.assertEqual(sources, expected, "audit any new Dockerfile COPY source")
         self.assertEqual(len(copy_rows), len(expected), "COPY syntax must stay source/destination only")
@@ -637,6 +638,33 @@ class ImageRecreationContract(unittest.TestCase):
             self.assertIn(":nosecret", text, name)
             self.assertIn(":nosecretfresh", text, name)
             self.assertIn("toefl-house-erp_db-data", text, name)
+
+    def test_installer_checks_existing_storage_before_generating_a_password(self):
+        text = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
+        check = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Test Fresh Installation.ps1"'
+        self.assertIn(check + "\nif errorlevel 1 goto :storagecheckfailed", text)
+        self.assertLess(text.index(check), text.index('[guid]::NewGuid()'))
+        self.assertLess(text.index('if exist data\\secrets\\db.env goto :secretok'), text.index(check))
+        refusal = text.split("\n:storagecheckfailed\n")[1].split("\n:secretaclfailed\n")[0]
+        self.assertIn("exit /b 1", refusal)
+        helper = (PRODUCT / "windows" / "Test Fresh Installation.ps1").read_text()
+        self.assertIn("$LASTEXITCODE -ne 0", helper)
+        self.assertIn("toefl-house-erp_db-data", helper)
+        self.assertIn('run: ./tests/foundation/test_windows_fresh_install.ps1',
+                      (ROOT / ".github/workflows/product-image.yml").read_text())
+        # Regression for hosted Product-image run 38498528731 (Windows job):
+        # the synthetic preflight mocks docker and simulates its failure,
+        # which leaves $global:LASTEXITCODE=1 in the process. The Actions
+        # PowerShell wrapper promotes a trailing non-zero $LASTEXITCODE to
+        # the step exit code, failing an otherwise-passing test. The test
+        # must clear the simulated code on its success path.
+        synthetic = (ROOT / "tests/foundation/test_windows_fresh_install.ps1").read_text()
+        self.assertIn('Assert-Denied "Could not check existing database storage"', synthetic)
+        self.assertIn("$global:LASTEXITCODE = 0", synthetic)
+        self.assertLess(synthetic.index('Assert-Denied "Could not check existing database storage"'),
+                        synthetic.rindex("$global:LASTEXITCODE = 0"))
+        self.assertLess(synthetic.rindex("$global:LASTEXITCODE = 0"),
+                        synthetic.index('Write-Host "PASS:'))
 
     def test_db_is_not_published_to_the_host(self):
         text = COMPOSE.read_text()

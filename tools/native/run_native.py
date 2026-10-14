@@ -172,6 +172,7 @@ def main():
         stage_owner_decision_ledger(lab)
         run('guard-all-weasyprint-entrypoints',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_weasyprint.py',benchdir/'apps/frappe'])
         run('patch-hrms-editor-dependencies',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/hrms'])
+        run('lock-banking-dependencies',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/erpnext','--banking'])
         run('pip-check',[lab/'tools/bin/uv','pip','check','--python',benchdir/'env/bin/python'])
         for site in ('placement-test.localhost','placement-second.localhost'):
             create_site('new-'+site,site,dbpw)
@@ -252,6 +253,14 @@ def main():
                 assert changed==['frappe/utils/weasyprint.py'], changed
                 run('verify-final-weasyprint-guard',[benchdir/'env/bin/python',
                     ROOT/'tools/foundation/secure_weasyprint.py',d,'--verify'])
+            elif name in ('hrms', 'erpnext'):
+                # Explicitly reviewed lock overlays, verified byte-for-byte;
+                # no other upstream file may change.
+                expected = (['frontend/package.json', 'frontend/yarn.lock', 'roster/package.json', 'roster/yarn.lock']
+                            if name == 'hrms' else ['banking/yarn.lock'])
+                assert changed == expected, (name, changed)
+                run('verify-security-locks-'+name, [benchdir/'env/bin/python',
+                    ROOT/'tools/foundation/secure_hrms.py',d,'--verify'] + (['--banking'] if name == 'erpnext' else []))
             else:
                 assert not changed, (name,changed)
         run('verify-final-hrms-editor',[benchdir/'env/bin/python',
