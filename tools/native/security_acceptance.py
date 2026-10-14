@@ -91,7 +91,7 @@ def main() -> None:
         now = int(time.time())
         claims = {"tid": tid, "iss": f"https://sts.windows.net/{tid}/",
                   "aud": "synthetic-client", "iat": now, "exp": now + 300,
-                  "email": "synthetic-office@example.test"}
+                  "email": "synthetic-office@example.test", "email_verified": True}
         signed = jwt.encode(claims, private_key, algorithm="RS256", headers={"kid": "synthetic"})
         with patch.object(jwt, "PyJWKClient") as jwks:
             jwks.return_value.get_signing_key_from_jwt.return_value.key = private_key.public_key()
@@ -103,6 +103,7 @@ def main() -> None:
                 pass
             else:
                 raise AssertionError("Office 365 accepted a token with the wrong signature")
+
             session = SimpleNamespace(access_token_response=SimpleNamespace(
                 text=json.dumps({"id_token": signed})))
             flow = SimpleNamespace(get_auth_session=lambda **kwargs: session)
@@ -113,6 +114,25 @@ def main() -> None:
                   patch.object(oauth, "login_oauth_user", side_effect=lambda *a, **k: calls.append((a, k)))):
                 social_login.login_via_office365("synthetic-code", "synthetic-state")
                 assert len(calls) == 1 and calls[0][1]["state"] == "synthetic-state"
+
+                # A valid signature is not sufficient: absent/false email
+                # verification must not reach Frappe's email-based login.
+                unverified_claims = dict(claims)
+                unverified_claims.pop("email_verified")
+                false_claims = dict(claims, email_verified=False)
+                for rejected_claims in (unverified_claims, false_claims):
+                    session.access_token_response.text = json.dumps({
+                        "id_token": jwt.encode(rejected_claims, private_key, algorithm="RS256",
+                                               headers={"kid": "synthetic"})
+                    })
+                    try:
+                        social_login.login_via_office365("synthetic-code", "synthetic-state")
+                    except frappe.PermissionError:
+                        pass
+                    else:
+                        raise AssertionError("Office 365 accepted an unverified email claim")
+                    assert len(calls) == 1, "Unverified email established a login"
+
                 session.access_token_response.text = json.dumps({"id_token": wrong})
                 try:
                     social_login.login_via_office365("synthetic-code", "synthetic-state")
@@ -121,7 +141,7 @@ def main() -> None:
                 else:
                     raise AssertionError("Office 365 callback accepted an invalid signature")
                 assert len(calls) == 1, "Rejected callback established a login"
-        print("Synthetic site: authorized PDF/preview, guarded direct constructor, signed Office 365 callback PASS")
+        print("Synthetic site: authorized PDF/preview, guarded direct constructor, verified Office 365 email callback PASS")
     finally:
         frappe.db.rollback()  # discard only this process's synthetic documents
         frappe.destroy()
