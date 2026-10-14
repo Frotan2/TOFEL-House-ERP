@@ -295,9 +295,10 @@ class Office365Tests(unittest.TestCase):
     def signed(self, **overrides):
         import time
         tid = "12345678-1234-1234-1234-123456789abc"
-        claims = {"tid": tid, "iss": f"https://sts.windows.net/{tid}/",
+        claims = {"tid": tid, "oid": "abcdef12-1234-5678-9abc-def012345678",
+                  "sub": "synthetic-subject", "iss": f"https://sts.windows.net/{tid}/",
                   "aud": "app-client", "iat": int(time.time()), "exp": int(time.time()) + 300,
-                  "email": "owner@example.test"}
+                  "email": "untrusted@example.test"}
         claims.update(overrides)
         return self.jwt.encode(claims, self.key, algorithm="RS256", headers={"kid": "test-key"})
 
@@ -316,7 +317,8 @@ class Office365Tests(unittest.TestCase):
         failures = [parts[0] + "." + tampered + "." + parts[2],
                     self.jwt.encode({"aud": "app-client"}, self.other, algorithm="RS256"),
                     self.signed(aud="other"), self.signed(iss="https://attacker.invalid/"),
-                    self.signed(exp=1), self.signed(tid="common")]
+                    self.signed(exp=1), self.signed(tid="common"), self.signed(sub=None),
+                    self.signed(oid="not-a-guid")]
         for token in failures:
             with self.subTest(token=failures.index(token)):
                 with self.assertRaises(Exception):
@@ -335,6 +337,10 @@ class Office365Tests(unittest.TestCase):
         oauth.get_oauth_keys = lambda provider: {"client_id": "app-client"}
         oauth.get_email = lambda info: info.get("email")
         oauth.login_oauth_user = lambda *args, **kwargs: log.append((args, kwargs))
+        frappe.get_all = lambda *args, **kwargs: [{"parent": "owner@example.test"}]
+        frappe.get_doc = lambda *args, **kwargs: types.SimpleNamespace(
+            name="owner@example.test", enabled=1,
+            get_social_login_userid=lambda provider: "synthetic-subject")
         utils = types.ModuleType("frappe.utils")
         utils.oauth = oauth
         integrations = types.ModuleType("frappe.integrations")
@@ -344,10 +350,12 @@ class Office365Tests(unittest.TestCase):
         with patch.dict(sys.modules, {"frappe": frappe, "frappe.utils": utils,
                                       "frappe.utils.oauth": oauth, "frappe.integrations": integrations,
                                       "frappe.integrations.oauth2_logins": handlers}):
-            with patch.object(self.login, "verify_office365_id_token", return_value={"email": "owner@example.test"}) as check:
+            with patch.object(self.login, "verify_office365_id_token",
+                              return_value={"email": "untrusted@example.test",
+                                            "sub": "synthetic-subject"}) as check:
                 self.login.login_via_office365("authorization-code", "single-use-state")
                 check.assert_called_once_with("token", "app-client")
-            self.assertEqual(log, [(({"email": "owner@example.test"},),
+            self.assertEqual(log, [(({"email": "owner@example.test", "sub": "synthetic-subject"},),
                                     {"provider": "office_365", "state": "single-use-state"})])
             with patch.object(self.login, "verify_office365_id_token", side_effect=ValueError("sensitive data")):
                 with self.assertRaisesRegex(PermissionError, "identity verification failed") as denied:
