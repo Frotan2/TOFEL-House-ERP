@@ -314,6 +314,7 @@ class EchartsErratumTests(unittest.TestCase):
         rec = t.load_triage()["by_id"].get(t._norm("GHSA-fgmj-fm8m-jvvx"))
         self.assertIsNotNone(rec)
         self.assertNotIn(rec["runtime_disposition"], CLOSED)
+        self.assertNotIn("finding is unreachable in the shipped product", hits[0]["fix_path"])
 
 
 class DanglingReferenceTests(unittest.TestCase):
