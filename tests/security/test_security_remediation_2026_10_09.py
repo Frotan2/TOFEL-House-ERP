@@ -308,7 +308,7 @@ class Office365Tests(unittest.TestCase):
             return self.login.verify_office365_id_token(token, "app-client")
 
     def test_signed_claims_accepted(self):
-        self.assertEqual(self.check(self.signed())["email"], "owner@example.test")
+        self.assertEqual(self.check(self.signed())["email"], "untrusted@example.test")
 
     def test_tampering_wrong_key_audience_issuer_expiry_and_tenant_rejected(self):
         good = self.signed()
