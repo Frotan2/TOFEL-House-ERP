@@ -43,6 +43,9 @@ try {
     if ($script:dockerCalls -ne $calls) { throw "Site-file refusal should not query Docker" }
     if ((Get-FileHash $sentinel).Hash -ne $before) { throw "Site data changed" }
     Write-Host "PASS: fresh, existing-volume, Docker-error and existing-site preflight; synthetic data preserved."
+} catch {
+    Write-Output ("::error title=Fresh install synthetic preflight::" + $_.Exception.Message + " at synthetic test line " + $_.InvocationInfo.ScriptLineNumber)
+    throw
 } finally {
     # Only this process's randomly named synthetic directory is ever removed.
     Remove-Item -LiteralPath $root -Recurse -Force

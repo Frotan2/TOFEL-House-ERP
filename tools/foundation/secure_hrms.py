@@ -185,6 +185,43 @@ def security_lock_files(hrms: Path, *, verify_only: bool = False, banking: bool 
         security_lock_files(hrms, verify_only=True, banking=banking)
 
 
+
+EDITOR_PATH = "src/components/TextEditor/TextEditor.vue"
+EDITOR_ORIGINAL_SHA256 = "59eb76d3a3d067ddbe2954eb0c576ba7aa013530db3e7335231ddd2b27316ca4"
+EDITOR_PATCHED_SHA256 = "462f87ebf5791eefc7029ae82622e0b26e8f1a6525859a9b3780b5c2083d8a74"
+EDITOR_BEFORE = "          let dom = document.createElement('div')\n          dom.innerHTML = markdownToHTML(text)"
+EDITOR_AFTER = "          // Parse in an inert document: image handlers can execute even on a\n          // disconnected element created in the live document, before the\n          // ProseMirror schema has a chance to discard hostile attributes.\n          let dom = new window.DOMParser().parseFromString(\n            markdownToHTML(text), 'text/html',\n          ).body"
+
+
+def secure_markdown_paste(hrms: Path, *, verify_only: bool = False) -> None:
+    """Close pre-schema execution in the pinned Frappe UI Markdown paste path."""
+    copies = installed_copies(hrms, "frappe-ui")
+    if len(copies) < 2:
+        raise ValueError("Missing shipped HRMS Frappe UI editors")
+    pending = []
+    for folder in copies:
+        if json.loads((folder / "package.json").read_text()).get("version") != "0.1.105":
+            raise ValueError("Unreviewed Frappe UI editor version")
+        target = folder / EDITOR_PATH
+        if target.is_symlink():
+            raise ValueError("Symlinked editor source")
+        source = target.read_bytes()
+        digest = hashlib.sha256(source).hexdigest()
+        if digest == EDITOR_PATCHED_SHA256:
+            continue
+        if verify_only or digest != EDITOR_ORIGINAL_SHA256:
+            raise ValueError("Unverified Frappe UI Markdown paste source")
+        text = source.decode()
+        if text.count(EDITOR_BEFORE) != 1:
+            raise ValueError("Markdown parser anchor changed")
+        updated = text.replace(EDITOR_BEFORE, EDITOR_AFTER).encode()
+        if hashlib.sha256(updated).hexdigest() != EDITOR_PATCHED_SHA256:
+            raise ValueError("Unexpected Markdown parser patch output")
+        pending.append((target, updated))
+    for target, content in pending:
+        target.write_bytes(content)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("hrms_app", type=Path)
@@ -195,6 +232,7 @@ def main() -> None:
     if args.banking:
         print("ERPNext banking security locks verified")
         return
+    secure_markdown_paste(args.hrms_app, verify_only=args.verify)
     print(json.dumps(verify(args.hrms_app) if args.verify else patch(args.hrms_app), sort_keys=True))
 
 

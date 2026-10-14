@@ -63,6 +63,7 @@ app.mount('#app');
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  page.on('dialog', dialog => dialog.accept());
   await page.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
   await page.goto(origin);
   await page.locator('.ProseMirror').waitFor();
@@ -109,6 +110,18 @@ app.mount('#app');
     }, html);
     await assertSafe();
   }
+  // Frappe UI has a separate Markdown-to-HTML clipboard path. Exercise that
+  // conversion too, not only ProseMirror's ordinary text/html paste handling.
+  for (const html of payloads) {
+    await page.evaluate(() => window.editorTest.importHTML('<p>Markdown paste target</p>'));
+    await page.locator('.ProseMirror').click();
+    await page.evaluate(html => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData('text/plain', '**Markdown**\n\n' + html);
+      document.querySelector('.ProseMirror').dispatchEvent(new ClipboardEvent('paste', {clipboardData, bubbles: true, cancelable: true}));
+    }, html);
+    await assertSafe();
+  }
   await page.evaluate(() => window.editorTest.importHTML('<p><strong>Valid bold</strong> <em>and italic</em></p><ul><li>List item</li></ul>'));
   assert.equal(await page.locator('.ProseMirror strong').textContent(), 'Valid bold');
   assert.equal(await page.locator('.ProseMirror em').textContent(), 'and italic');
@@ -118,7 +131,7 @@ app.mount('#app');
   await page.keyboard.type(' editing works');
   assert.match(await page.evaluate(() => window.editorTest.html()), /editing works/);
   await assertSafe();
-  console.log(JSON.stringify({status: 'pass', payloads: payloads.length, paths: ['import', 'read-only rendering', 'paste'], legitimateEditing: true}));
+  console.log(JSON.stringify({status: 'pass', payloads: payloads.length, paths: ['import', 'read-only rendering', 'paste', 'markdown paste'], legitimateEditing: true}));
 } finally {
   if (browser) await browser.close();
   if (server) await new Promise(resolve => server.close(resolve));
