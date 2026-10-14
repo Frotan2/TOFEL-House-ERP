@@ -158,3 +158,9 @@ not close any finding without a successful installed-image and audit run.
    destructive acceptance against a real site or the operator's backup drive.
 4. Required review and other release criteria remain independent. Keep
    `docs/owner-decisions.json:production_state` at `REJECT`.
+
+## Review follow-up — 2026-10-14
+
+The ECharts record in `advisory-delta-2026-10-03/delta-dispositions.json` remains `BLOCKED`. Its fix-path text previously contradicted that disposition by asserting the component was not bundled and therefore unreachable. That unsupported reachability assertion has been removed; the regression suite now checks that it cannot return. This is an evidence-quality correction only: it does not close the ECharts finding or authorize merge.
+
+The remaining release gates above still apply. In particular, package-specific evidence for the untriaged installed npm advisory pairs, end-to-end WeasyPrint resource-fetch/SSRF controls, built HRMS editor paste-XSS acceptance, and real Windows Owner-machine lifecycle acceptance are not established by this documentation change.
