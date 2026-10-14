@@ -1,0 +1,22 @@
+{
+  "upstream_commit": "a4768b441cff346def505e27f2a2229ee1e05b9b",
+  "yarn_version": "1.22.22",
+  "files": {
+    "frontend/package.json": {
+      "upstream_sha256": "1ed2ee1c3d6b91c788eefc6fbeed45a8843e100cc144c74d11198ca1a339f685",
+      "security_sha256": "e8836c51fe925f2c0ae7217ecd16b861f430d3d83e47b737d86b545284d37b21"
+    },
+    "frontend/yarn.lock": {
+      "upstream_sha256": "8aaf33ce7e5756a992d68f07caa1df03d88f3694e085d99adcca047efcf6df7d",
+      "security_sha256": "ba3adf6f99507e86fef26c40b35612bdb9b9d36975c33a183be04ba416e5c339"
+    },
+    "roster/package.json": {
+      "upstream_sha256": "259ebbb75525cf482546f82fba3de115a7fd542add969b596f522c0d26a71e2c",
+      "security_sha256": "6695ec7bccd9f0ae91e1323891e15cfb04f2ef71d3578a03f121dc99cf348ed0"
+    },
+    "roster/yarn.lock": {
+      "upstream_sha256": "b889810608d5bc258d214ed62a0c074b726bb687a0747de05a2d685707baf765",
+      "security_sha256": "9e109ec71555629df76214200c80564545542514a9d104ed4d2351a2b51db2ea"
+    }
+  }
+}

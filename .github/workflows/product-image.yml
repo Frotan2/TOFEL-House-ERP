@@ -16,6 +16,8 @@ on:
       # to their security checks must rebuild the image on this PR, not merely
       # pass the fast Python suite.
       - tools/foundation/secure_hrms.py
+      - tools/foundation/hrms-locks/**
+      - tools/foundation/banking-locks/**
       - tools/foundation/secure_weasyprint.py
       - product/**
       - apps/**

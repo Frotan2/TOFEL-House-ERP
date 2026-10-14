@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Integrity-pinned remediation of installed HRMS client dependencies.
 
-The upstream HRMS source commit/lock remain verifiable and unchanged. Apply to
-*disposable* installed node_modules before asset build; verify again after build.
+Apply reviewed Yarn security locks to disposable HRMS/ERPNext checkouts, then
+verify publisher code for the HRMS editor/parser before and after asset build.
+Original source hashes and explicit overlay hashes remain independently auditable.
 Yarn may nest copies, so a top-level-only replacement is not sufficient.
 """
 from __future__ import annotations
@@ -14,6 +15,7 @@ import io
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import tarfile
 import tempfile
 from urllib.request import urlopen
@@ -149,11 +151,50 @@ def patch(hrms: Path) -> dict[str, int]:
     return verify(hrms)
 
 
+
+def security_lock_files(hrms: Path, *, verify_only: bool = False, banking: bool = False) -> None:
+    """Apply reviewed Yarn-generated manifests/locks to the disposable app only.
+
+    Source hashes must match the pinned upstream or our exact security output.
+    No resolution is performed in CI or on the owner's PC: installs are frozen.
+    """
+    root = Path(__file__).resolve().with_name("banking-locks" if banking else "hrms-locks")
+    manifest = json.loads((root / "manifest.json").read_text())
+    if subprocess.check_output(["yarn", "--version"], text=True).strip() != manifest["yarn_version"]:
+        raise ValueError("Security lockfiles require the pinned Yarn version")
+    pending = []
+    for relative, hashes in manifest["files"].items():
+        path = Path(relative)
+        if path.is_absolute() or ".." in path.parts or len(path.parts) != 2:
+            raise ValueError("Invalid security lockfile path")
+        target = hrms / path
+        content = (root / path).read_bytes()
+        if hashlib.sha256(content).hexdigest() != hashes["security_sha256"]:
+            raise ValueError("Security lockfile integrity failure")
+        current = hashlib.sha256(target.read_bytes()).hexdigest()
+        allowed = {hashes["security_sha256"]} if verify_only else set(hashes.values())
+        if current not in allowed or target.is_symlink() or target.parent.is_symlink():
+            raise ValueError("HRMS manifests drifted; refusing unreviewed dependency graph")
+        pending.append((target, content))
+    if not verify_only:
+        for target, content in pending:
+            target.write_bytes(content)
+        for tree in (("banking",) if banking else ("frontend", "roster")):
+            subprocess.run(["yarn", "install", "--frozen-lockfile", "--non-interactive"],
+                           cwd=hrms / tree, check=True)
+        security_lock_files(hrms, verify_only=True, banking=banking)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("hrms_app", type=Path)
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--banking", action="store_true", help="Apply ERPNext banking locks instead of HRMS")
     args = parser.parse_args()
+    security_lock_files(args.hrms_app, verify_only=args.verify, banking=args.banking)
+    if args.banking:
+        print("ERPNext banking security locks verified")
+        return
     print(json.dumps(verify(args.hrms_app) if args.verify else patch(args.hrms_app), sort_keys=True))
 
 

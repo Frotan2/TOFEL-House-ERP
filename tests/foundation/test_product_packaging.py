@@ -448,6 +448,7 @@ class LineEndingContract(unittest.TestCase):
             "product/backup.py", "product/native_gpg.py", "product/native_db.py",
             "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
             "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_hrms.py",
+            "tools/foundation/hrms-locks", "tools/foundation/banking-locks",
         }
         self.assertEqual(sources, expected, "audit any new Dockerfile COPY source")
         self.assertEqual(len(copy_rows), len(expected), "COPY syntax must stay source/destination only")

@@ -11,7 +11,7 @@ import hashlib
 from pathlib import Path
 
 PINNED_SHA256 = "0ddfabf43b5678abeb31730cc660c581fd4f305bcfd406852c2ad50688f5159d"
-PATCHED_SHA256 = "c7c50db00fd58f9f7f5e161016798b7a2d3edbc918daed8ff083f05188a06767"
+PATCHED_SHA256 = "92427d72819d42e6319a5002252fc0134aeb79f99b613fdf74b7b00f4762d0c7"
 ANCHOR = "\t\tself.base_url = frappe.utils.get_url()\n"
 GUARD = ("\t\t# TOEFL House: validate every entry to the WeasyPrint renderer.\n"
          "\t\tfrom toefl_house.printing import authorize_weasyprint\n"
@@ -26,6 +26,25 @@ def apply_guard(path: Path) -> None:
     if text.count(ANCHOR) != 1 or text.count("class PrintFormatGenerator:") != 1:
         raise ValueError("WeasyPrint constructor anchor changed")
     updated = text.replace(ANCHOR, GUARD + ANCHOR, 1)
+    replacements = {
+        ANCHOR: ANCHOR + (
+            "\t\tfrom toefl_house.pdf_resources import resource_policy\n"
+            "\t\tself.resource_policy = resource_policy(doc, self.base_url)\n"),
+        "html = HTML(string=main_html, base_url=self.base_url)":
+            "html = HTML(string=main_html, base_url=self.base_url, url_fetcher=self.resource_policy)",
+        "\t\t\tbase_url=self.base_url,\n":
+            "\t\t\tbase_url=self.base_url,\n\t\t\turl_fetcher=self.resource_policy,\n",
+        "\t\treturn main_doc.write_pdf()": (
+            "\t\tpdf = main_doc.write_pdf()\n"
+            "\t\tself.resource_policy.check()\n"
+            "\t\treturn pdf"),
+    }
+    for before, after in replacements.items():
+        if updated.count(before) != 1:
+            raise ValueError("WeasyPrint resource-policy anchor changed")
+        updated = updated.replace(before, after, 1)
+    if hashlib.sha256(updated.encode("utf-8")).hexdigest() != PATCHED_SHA256:
+        raise ValueError("Unexpected WeasyPrint patch output; original left unchanged")
     path.write_bytes(updated.encode("utf-8"))
     verify_guard(path)
 

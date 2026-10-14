@@ -60,6 +60,49 @@ def main() -> None:
             assert "<html" in fmt.get_html(todo.name).lower()  # Print Format method path
             fmt.download_pdf(todo.name)
             assert frappe.local.response.filecontent.startswith(b"%PDF")
+            # Execute the *installed* vendor render_pdf path with real WeasyPrint.
+            # No mocked HTML constructor or HTTP server: any default fetch/DNS is
+            # a failure. Main HTML, CSS imports, images, attachments and overlays
+            # must all hit the same offline resource policy.
+            from toefl_house.pdf_resources import PDFResourceDenied
+            hostile = (
+                '<img src="http://127.0.0.1:9/private">',
+                '<img src="http://169.254.169.254/latest/meta-data/">',
+                '<img src="file:///etc/passwd">',
+                '<style>@import url("https://external.example.test/redirect");</style>',
+                '<style>p { background: url("file:///etc/passwd") }</style><p>test</p>',
+                '<link rel="attachment" href="file:///etc/passwd">',
+                '<img src="data:image/svg+xml;base64,PHN2Zy8+">',
+                '<img src="/private/files/unauthorized.png">',
+            )
+            with (patch("weasyprint.urls.urlopen", side_effect=AssertionError("Default PDF fetch attempted")) as network,
+                  patch("socket.getaddrinfo", side_effect=AssertionError("PDF DNS attempted")) as dns):
+                for payload in hostile:
+                    generator = PrintFormatGenerator(fmt.name, todo)
+                    with (patch.object(generator, "get_main_html", return_value=f"<html><body>{payload}</body></html>"),
+                          patch.object(generator, "get_header_footer_html", return_value=(None, None))):
+                        try:
+                            generator.render_pdf()
+                        except PDFResourceDenied:
+                            pass
+                        else:
+                            raise AssertionError("Hostile PDF resource was not rejected")
+                # An external image in each overlay must not escape the policy.
+                for header, footer in (("header", None), (None, "footer")):
+                    generator = PrintFormatGenerator(fmt.name, todo)
+                    def overlay(tag):
+                        return (f'<html><body><{tag}><img src="http://localhost/private"></{tag}></body></html>'
+                                if tag else None)
+                    with (patch.object(generator, "get_main_html", return_value="<html><body><p>Valid PDF</p></body></html>"),
+                          patch.object(generator, "get_header_footer_html", return_value=(overlay(header), overlay(footer)))):
+                        try:
+                            generator.render_pdf()
+                        except PDFResourceDenied:
+                            pass
+                        else:
+                            raise AssertionError("PDF overlay bypassed resource policy")
+                network.assert_not_called()
+                dns.assert_not_called()
             # Direct construction cannot bypass authorization even when the doc
             # carries an ignore_permissions flag, as some internal jobs do.
             frappe.set_user("Guest")

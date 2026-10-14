@@ -55,6 +55,12 @@ class RuntimeDependencyAuditTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "does not match"):
                 audit_stack.osv_pypi_advisories({"sample": ["1.0"]})
 
+    def test_osv_malformed_results_are_not_treated_as_clean_packages(self):
+        for result in (None, [], "error", {"error": "rate limited"}, {"vulns": None}, {"vulns": [], "next_page_token": "more"}):
+            with self.subTest(result=result), patch.object(audit_stack, "post_json", return_value={"results": [result]}):
+                with self.assertRaises(RuntimeError):
+                    audit_stack.osv_pypi_advisories({"sample": ["1.0"]})
+
     def test_report_preserves_advisory_matches_and_scanner_limit(self):
         with tempfile.TemporaryDirectory() as directory:
             node_root = self.node_root(Path(directory), "example", "1.0.0")
