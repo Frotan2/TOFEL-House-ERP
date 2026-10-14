@@ -117,8 +117,32 @@ three `fix/*` branches are git ancestors of `main` — zero unique commits, so
 their work is preserved in `main` history. `arena/abdece6c-tofel-house-erp`
 has nine non-ancestor docs/test commits; their substance entered `main`
 through merged PRs #14/#15 and later ledgers, but the branch is retained for
-attribution. No documented repository branch-deletion policy exists, so no
-branch was deleted; deletion remains an owner action under that policy.
+attribution. No documented repository branch-deletion policy existed at
+that review, so no branch was deleted then; the Owner later authorized
+deleting the six fully-merged branches (see the session record below).
+
+### Owner decisions recorded 2026-10-14 (this session)
+
+- **Retention behavior: DECIDED (ledger D17)** — delete valid older sets
+  beyond the keep count. README, launch runbook, product docs, owner
+  VALIDATION checklist, the Configuration desk texts and the activation
+  launcher were reconciled from "retention choice unresolved" to this
+  decision. Backup/activation remain fail-closed until the Owner enters the
+  keep count, nightly time, public recovery key and custody terms in Owner
+  Configuration and a verified backup exists; no values were invented.
+- **Owner-machine validation:** the Owner will run
+  `product/windows/VALIDATION.md` on the real PC. Release stays NO-GO until
+  that evidence exists.
+- **Business-policy values** (assessment, refunds, capacity, tax/fees,
+  calendar, transfers/withdrawals): Owner keeps them deferred/unconfigured;
+  affected workflows remain fail-closed with no defaults.
+- **Branch cleanup: executed as authorized.** The six branches verified as
+  git ancestors of `main` with zero unique commits (`arena/1f1c36da`,
+  `arena/8d125fff`, `arena/e650655f`, `fix/product-packaging-windows-bootstrap`,
+  `fix/product-perf-baseline-line-ending`, `fix/windows-permission-contract`)
+  were deleted from the remote on 2026-10-14; their commits remain reachable
+  in `main` history. `arena/abdece6c` is retained for attribution, as are
+  later session branches not covered by that authorization.
 
 ### Issue #12 (Windows line-ending / packaging audit) status
 

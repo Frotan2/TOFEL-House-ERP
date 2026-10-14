@@ -19,8 +19,8 @@ confirms it. If anything differs from the "Expected" lines, stop and report it
 installation/lifecycle, browser login, backup/readability/restore rehearsal,
 Task Scheduler, key-custody ceremony, or Tailscale/private-exposure evidence
 has been supplied. Backup/restore is under a **PRESERVATION / RESTORE HOLD**:
-the Owner's retention choice remains unresolved and the Owner package has no
-qualified isolated restore workflow. Do not run the backup/retention helper,
+The Owner decided the retention behavior on 2026-10-14 (owner decision D17): delete valid older sets beyond the keep count. The Owner package has no
+qualified isolated restore workflow, and no backup policy is configured yet. Do not run the backup/retention helper,
 restore, cleanup/deletion, or activation; never replace the existing site or
 clean up `product/data`. The backup/restore section below contains read-only
 checks only. Production authorization remains **REJECTED**.
@@ -147,7 +147,9 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
   profile save succeeds. This is the account that will configure other Owner
   policies through the ERP Configuration desk after any applicable hold is
   cleared. Backup & Recovery policy setup is currently held; do not create,
-  change, validate, or save that policy while retention remains unresolved.
+  change, validate, or save that policy until the Owner is ready to enter the
+  complete policy (the retention behavior was decided on 2026-10-14, decision
+  D17: delete valid older sets beyond the keep count).
 - **Evidence 4:** screenshot of the Course Owner account's native role
   assignment and its profile showing **Full Name: Owner**. Do not include a
   password or recovery key. If a separate Course Owner account cannot be
@@ -204,16 +206,17 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
 - **Action:** open the Course Owner's **My Profile** again.
 - **Expected:** **Full Name: Owner** is still there after the Stop → Start →
   Repair cycle. The backup step remains intentionally unrun while the
-  preservation hold is active; after the Owner resolves the hold and the
-  implementation/docs agree, repeat this persistence check after the
+  preservation hold is active; after the Owner completes the backup policy
+  and the implementation/docs agree, repeat this persistence check after the
   separately authorized backup run.
 - **Evidence 10:** screenshot of My Profile showing **Owner**. Backup/restore
   and downstream activation evidence remain UNVERIFIED while the hold is open.
 
 ## Backup and restore — Owner PRESERVATION / RESTORE HOLD
 
-**No backup or restore action is authorized.** The Owner's retention choice is
-unresolved. Do not create or change an effective policy, run `Backup TOEFL House
+**No backup or restore action is authorized.** The Owner decided the retention behavior on 2026-10-14 (owner decision D17): delete valid older sets beyond the keep count.
+No complete backup policy is configured yet, and the isolated restore
+workflow is unqualified. Do not create or change an effective policy, run `Backup TOEFL House
 ERP.cmd` or its retention helper, trigger cleanup/deletion, decrypt a backup,
 restore, activate/deactivate, or change the existing site. Preserve the current
 site, `product/data`, all runtime data, credentials, and every existing backup.
@@ -233,8 +236,8 @@ has been withdrawn; do not follow saved copies of it.
    Keep complete paths and backup-set names in Owner-controlled records; share
    only redacted status evidence.
 3. In **Configuration desk → Backup & Recovery**, view—without editing or
-   saving—whether an effective policy exists and whether the retention choice
-   is unset. Do not create a policy version, validate/save changes, or start a
+   saving—whether an effective policy exists and whether the retention
+   behavior and keep count are unset. Do not create a policy version, validate/save changes, or start a
    backup.
 4. If `TOEFL House ERP Backup` already appears in Task Scheduler, view its
    enabled state and last result only. Do not run, edit, enable, disable, or
@@ -297,7 +300,7 @@ gate remains **OPEN**; CI cannot close the Owner-machine gate.
 
 Do not run `Backup TOEFL House ERP.cmd`, `Activate TOEFL House ERP.cmd`, or
 `Deactivate TOEFL House ERP.cmd` under the current hold. A future explicit Owner
-retention decision alone is not authorization: the isolated restore procedure,
+completed backup policy alone is not authorization: the isolated restore procedure,
 verified same-computer backup, actual Owner/deployment evidence, and every
 applicable acceptance gate must be reviewed first, followed by separate
 production authorization. Operational site mode is not release authorization;

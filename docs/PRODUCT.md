@@ -136,7 +136,7 @@ Stop and Repair for daily use; Backup is on the preservation hold below, and
 Activate / Deactivate are the guarded operational site-mode switch and
 rollback. A dedicated native Course Owner user (not the built-in Administrator)
 configures policies in the Configuration desk. Do not run Backup or proceed
-through activation while the retention/preservation hold remains unresolved.
+through activation while the retention/preservation hold remains (no complete backup policy is configured).
 After it is formally resolved and the implementation/docs agree,
 `Activate TOEFL House ERP.cmd` verifies the external backup set, manifest,
 current Owner policy and scheduled task on the Windows host; only then does it
@@ -164,13 +164,12 @@ settings the same way (the site stays ACTIVE rather than half-deactivated).
   exposure. The selected desktop deployment is loopback-only with private
   Tailscale access, so public-edge exposure is not a current launch gate.
 - **Backup** is a current local requirement, but the Windows helper is on a
-  **preservation hold**: the Owner must explicitly select either preservation
-  of all valid sets or authorization to delete valid older sets beyond the
-  keep count. There is no default; backup/activation remain fail-closed while
-  the choice is absent. That decision must be reconciled with the active
+  **preservation hold**: The Owner decided the retention behavior on 2026-10-14 (decision D17): delete valid older sets beyond the keep count.
+  There is no default in the ERP; backup/activation remain fail-closed while
+  the policy is incomplete. That decision must be reconciled with the active
   requirement to preserve existing backups before any helper run. Do not invoke
   the Windows backup/retention helper or proceed through activation while the
-  choice is unresolved. No Windows backup or retention run has been performed
+  policy is incomplete. No Windows backup or retention run has been performed
   in this review. The intended workflow
   creates three native Frappe encrypted database/files artifacts and a fourth
   OpenPGP-encrypted site-config recovery artifact, verifies/copies the four

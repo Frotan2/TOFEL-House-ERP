@@ -1305,12 +1305,12 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertEqual(backup_section["kind"], "queue")
         backup_item = backup_section["items"][0]
         self.assertEqual(backup_item["status"], "Owner configuration required")
-        self.assertIn("explicit retention behavior is configured", backup_item["detail"])
+        self.assertIn("decision D17: delete valid older sets beyond the keep count", backup_item["detail"])
         self.assertIn("backup and activation fail closed", backup_item["detail"])
-        self.assertIn("preserve all valid sets or authorize deletion beyond the keep count",
+        self.assertIn("Owner-approved retention behavior from decision D17",
                       backup_item["next"])
         self.assertIn("no default is supplied", backup_item["next"])
-        self.assertIn("preservation hold", backup_item["stage_definition"])
+        self.assertIn("owner decision D17", backup_item["stage_definition"])
         # Reporting & Metrics is carried by the owner-operations policy.
         metrics = self._section(payload, "reporting-metrics")
         self.assertEqual(metrics["kind"], "queue")

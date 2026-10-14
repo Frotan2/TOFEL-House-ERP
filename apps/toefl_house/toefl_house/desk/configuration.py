@@ -116,7 +116,7 @@ FUTURE_DOMAINS = (
 
 CURRENT_BACKUP_DOMAIN = (
     "Backup & Recovery",
-    "Intended local scope is a verified encrypted backup on a separate local drive. The Windows helper is on preservation hold: the Owner must explicitly choose to preserve all valid sets or authorize deletion of older valid sets beyond the keep count. There is no default; an unset choice blocks backup and activation. Do not run the helper or proceed through activation until the Owner resolves the retention behavior and the implementation/docs agree. Off-site, NAS, second-device and cloud copies remain deferred. Restore and release authorization require separate evidence.",
+    "Intended local scope is a verified encrypted backup on a separate local drive. The Owner decided the retention behavior on 2026-10-14 (owner decision D17): delete valid older sets beyond the keep count. There is no default; an unset or incomplete policy still blocks backup and activation. Do not run the helper or proceed through activation until the Owner has entered the keep count, nightly schedule, public recovery key and custody terms in Owner Configuration and a verified backup exists. Off-site, NAS, second-device and cloud copies remain deferred. Restore and release authorization require separate evidence.",
 )
 
 
@@ -293,11 +293,11 @@ def _owner_policy_item(today, title, body):
                           limit=1)
     if not policy:
         detail = (
-            "No Owner Operations policy exists; no explicit retention behavior is configured, so backup and activation fail closed."
+            "The Owner decided the retention behavior on 2026-10-14 (decision D17: delete valid older sets beyond the keep count), but no policy exists yet, so no retention behavior is configured and backup and activation fail closed."
             if is_backup else
             "No owner policy exists yet; this domain has no governing terms.")
         next_text = (
-            "After receiving the Course Owner's decision, create the policy and explicitly choose to preserve all valid sets or authorize deletion beyond the keep count; no default is supplied. Do not run the backup helper or proceed through activation while this choice is unresolved."
+            "Create the policy and enter the Owner-approved retention behavior from decision D17 together with the keep count; no default is supplied. Do not run the backup helper or proceed through activation until that policy is complete and validated."
             if is_backup else
             "Create TH Owner Operations Policy, then add and validate its first effective-dated version.")
         return {
@@ -327,7 +327,7 @@ def _owner_policy_item(today, title, body):
                       "(used only in the explicit deletion mode); retention behavior: "
                       f"{backup['retention_behavior']}; the configured public recovery key "
                       "encrypts the site-config recovery artifact.")
-            next_text = ("Keep the matching private recovery key under the Owner's separate custody requirement. The retention behavior must be an explicit Course Owner decision. Do not run Backup TOEFL House ERP.cmd or proceed through activation until the Owner resolves the preservation hold described in the launch runbook and the implementation/docs agree.")
+            next_text = ("Keep the matching private recovery key under the Owner's separate custody requirement. The retention behavior must be an explicit Course Owner decision. Do not run Backup TOEFL House ERP.cmd or proceed through activation until the Owner Configuration policy is complete (keep count, nightly schedule, public recovery key, custody terms) and a verified backup exists; see the launch runbook.")
         else:
             status_label = "Owner backup configuration required"
             detail = "Nightly schedule, multi-version retention count, explicit retention behavior (preserve all or authorize deletion beyond the keep count), or ASCII-armored public recovery key is missing or invalid. Backup activation remains refused."
@@ -336,11 +336,13 @@ def _owner_policy_item(today, title, body):
                 "(reporting review, class capacity, tax, transfers/withdrawals, "
                 "calendar, nightly backup, retention count/behavior, public key, custody and "
                 "quorum); no defaults or placeholders. Set an effective-dated "
-                "version and validate it. Explicitly choose to preserve all "
-                "valid sets or authorize deleting older valid sets beyond the "
-                "keep count; there is no default. Do not run Backup TOEFL House "
-                "ERP.cmd or proceed through activation until the Owner resolves "
-                "this choice and the implementation/docs agree; see the launch "
+                "version and validate it. Enter the retention behavior the "
+                "Owner approved on 2026-10-14 (decision D17: delete valid "
+                "older sets beyond the keep count) or the preserve-all "
+                "behavior the Owner later supersedes it with; there is no "
+                "default. Do not run Backup TOEFL House "
+                "ERP.cmd or proceed through activation until the policy is "
+                "complete and the implementation/docs agree; see the launch "
                 "runbook. Keep the matching private "
                 "key outside Frappe and the backup drive."
             )
