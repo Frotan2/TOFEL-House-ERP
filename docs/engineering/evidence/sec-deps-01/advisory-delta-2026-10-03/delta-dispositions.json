@@ -56,7 +56,7 @@
           "summary": "echarts: XSS in Lines series tooltip rendering - with Lines series + tooltip and no user-specified tooltip.formatter, a raw-HTML series.data[i].name reaches an innerHTML sink in tooltip content",
           "runtime_disposition": "BLOCKED",
           "runtime_disposition_evidence": "ERRATUM 2026-10-09 (docs/engineering/evidence/sec-deps-01/ERRATUM-2026-10-09.md): the original NOT_REACHABLE reasoning is WITHDRAWN. It attributed echarts@5.6.0 to frappe-ui@0.1.278, and it stated that the education build excludes ECharts.vue. Verified 2026-10-09 against the pinned lockfiles: frappe@988e54f3 yarn.lock, education@93bc7075 frontend/yarn.lock, hrms@a4768b44 frontend/yarn.lock and roster/yarn.lock contain zero echarts entries and no frappe-ui@0.1.278 (education resolves frappe-ui 0.1.31; HRMS resolves 0.1.105). The 2026-10-09 replay snapshot has zero echarts entries. The disposition is therefore unverified, not NOT_REACHABLE. Re-triage with evidence if echarts appears in any pinned tree.",
-          "fix_path": "echarts >= 6.1.0 via the frappe-ui / official Frappe frontend dependency refresh; EXTERNAL/UPSTREAM BLOCKED posture unchanged. The vulnerable component is not bundled, so the finding is unreachable in the shipped product either way.",
+          "fix_path": "echarts >= 6.1.0 via the frappe-ui / official Frappe frontend dependency refresh; EXTERNAL/UPSTREAM BLOCKED posture unchanged. Do not treat absence from the current lockfile replay as proof of runtime non-reachability; keep this finding blocked until the component identity and every shipped dependency tree are established with reproducible evidence.",
           "erratum": "docs/engineering/evidence/sec-deps-01/ERRATUM-2026-10-09.md"
         }
       ]
