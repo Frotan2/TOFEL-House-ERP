@@ -41,7 +41,7 @@ def verify_office365_id_token(token: str, client_id: str) -> dict:
         key.key,
         algorithms=["RS256"],
         audience=client_id,
-        options={"require": ["exp", "iat", "iss", "aud", "tid", "sub", "oid"]},
+        options={"require": ["exp", "iat", "iss", "aud", "tid", "sub"]},
         leeway=60,
     )
     tid = claims["tid"]
@@ -49,9 +49,6 @@ def verify_office365_id_token(token: str, client_id: str) -> dict:
         raise ValueError("Invalid Office 365 tenant")
     if claims["iss"] != f"https://sts.windows.net/{tid.lower()}/":
         raise ValueError("Office 365 issuer does not match signed tenant")
-    oid = claims["oid"]
-    if not isinstance(oid, str) or not TENANT_ID.fullmatch(oid):
-        raise ValueError("Invalid Office 365 object ID")
     subject = claims["sub"]
     if not isinstance(subject, str) or not subject or len(subject) > 512:
         raise ValueError("Invalid Office 365 subject")
