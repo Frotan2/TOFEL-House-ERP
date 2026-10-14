@@ -88,14 +88,19 @@ def main() -> None:
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         tid = "12345678-1234-1234-1234-123456789abc"
+        oid = "abcdef12-1234-5678-9abc-def012345678"
         now = int(time.time())
-        claims = {"tid": tid, "iss": f"https://sts.windows.net/{tid}/",
+        claims = {"tid": tid, "oid": oid, "sub": "synthetic-subject",
+                  "iss": f"https://sts.windows.net/{tid}/",
                   "aud": "synthetic-client", "iat": now, "exp": now + 300,
-                  "email": "synthetic-office@example.test", "email_verified": True}
+                  # Deliberately unrelated provider email: it must never select
+                  # or auto-link the local account.
+                  "email": "attacker-controlled@example.test"}
         signed = jwt.encode(claims, private_key, algorithm="RS256", headers={"kid": "synthetic"})
         with patch.object(jwt, "PyJWKClient") as jwks:
             jwks.return_value.get_signing_key_from_jwt.return_value.key = private_key.public_key()
-            assert social_login.verify_office365_id_token(signed, "synthetic-client")["tid"] == tid
+            verified = social_login.verify_office365_id_token(signed, "synthetic-client")
+            assert verified["tid"] == tid and verified["oid"] == oid
             wrong = jwt.encode(claims, other_key, algorithm="RS256", headers={"kid": "synthetic"})
             try:
                 social_login.verify_office365_id_token(wrong, "synthetic-client")
@@ -108,30 +113,60 @@ def main() -> None:
                 text=json.dumps({"id_token": signed})))
             flow = SimpleNamespace(get_auth_session=lambda **kwargs: session)
             calls = []
+            linked_user = SimpleNamespace(
+                name="staff@example.test",
+                enabled=1,
+                get_social_login_userid=lambda provider: "synthetic-subject",
+            )
             with (patch.object(oauth, "get_oauth2_flow", return_value=flow),
                   patch.object(oauth, "get_redirect_uri", return_value="https://synthetic.example.test/cb"),
                   patch.object(oauth, "get_oauth_keys", return_value={"client_id": "synthetic-client"}),
-                  patch.object(oauth, "login_oauth_user", side_effect=lambda *a, **k: calls.append((a, k)))):
+                  patch.object(oauth, "login_oauth_user", side_effect=lambda *a, **k: calls.append((a, k))),
+                  patch.object(frappe, "get_all", return_value=[{"parent": "staff@example.test"}]),
+                  patch.object(frappe, "get_doc", return_value=linked_user)):
                 social_login.login_via_office365("synthetic-code", "synthetic-state")
                 assert len(calls) == 1 and calls[0][1]["state"] == "synthetic-state"
+                assert calls[0][0][0]["email"] == "staff@example.test", (
+                    "Provider email was used instead of the pre-linked local account"
+                )
+                assert calls[0][0][0]["email"] != claims["email"]
 
-                # A valid signature is not sufficient: absent/false email
-                # verification must not reach Frappe's email-based login.
-                unverified_claims = dict(claims)
-                unverified_claims.pop("email_verified")
-                false_claims = dict(claims, email_verified=False)
-                for rejected_claims in (unverified_claims, false_claims):
-                    session.access_token_response.text = json.dumps({
-                        "id_token": jwt.encode(rejected_claims, private_key, algorithm="RS256",
-                                               headers={"kid": "synthetic"})
-                    })
+                # A valid signed identity that is not linked must not auto-link
+                # or create a local user based on its email/UPN claim.
+                with patch.object(frappe, "get_all", return_value=[]):
                     try:
                         social_login.login_via_office365("synthetic-code", "synthetic-state")
                     except frappe.PermissionError:
                         pass
                     else:
-                        raise AssertionError("Office 365 accepted an unverified email claim")
-                    assert len(calls) == 1, "Unverified email established a login"
+                        raise AssertionError("Unlinked Office 365 identity was auto-linked")
+                assert len(calls) == 1, "Unlinked identity established a login"
+
+                # Ambiguous duplicate links and disabled local users also fail closed.
+                with patch.object(frappe, "get_all", return_value=[
+                    {"parent": "staff@example.test"}, {"parent": "other@example.test"}
+                ]):
+                    try:
+                        social_login.login_via_office365("synthetic-code", "synthetic-state")
+                    except frappe.PermissionError:
+                        pass
+                    else:
+                        raise AssertionError("Ambiguous Office 365 identity was accepted")
+                assert len(calls) == 1
+
+                disabled_user = SimpleNamespace(
+                    name="staff@example.test",
+                    enabled=0,
+                    get_social_login_userid=lambda provider: "synthetic-subject",
+                )
+                with patch.object(frappe, "get_doc", return_value=disabled_user):
+                    try:
+                        social_login.login_via_office365("synthetic-code", "synthetic-state")
+                    except frappe.PermissionError:
+                        pass
+                    else:
+                        raise AssertionError("Disabled local user authenticated through Office 365")
+                assert len(calls) == 1
 
                 session.access_token_response.text = json.dumps({"id_token": wrong})
                 try:
@@ -141,7 +176,7 @@ def main() -> None:
                 else:
                     raise AssertionError("Office 365 callback accepted an invalid signature")
                 assert len(calls) == 1, "Rejected callback established a login"
-        print("Synthetic site: authorized PDF/preview, guarded direct constructor, verified Office 365 email callback PASS")
+        print("Synthetic site: authorized PDF/preview, guarded direct constructor, identity-bound Office 365 callback PASS")
     finally:
         frappe.db.rollback()  # discard only this process's synthetic documents
         frappe.destroy()
