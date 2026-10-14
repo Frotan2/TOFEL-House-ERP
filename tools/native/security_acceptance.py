@@ -88,9 +88,8 @@ def main() -> None:
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         tid = "12345678-1234-1234-1234-123456789abc"
-        oid = "abcdef12-1234-5678-9abc-def012345678"
         now = int(time.time())
-        claims = {"tid": tid, "oid": oid, "sub": "synthetic-subject",
+        claims = {"tid": tid, "sub": "synthetic-subject",
                   "iss": f"https://sts.windows.net/{tid}/",
                   "aud": "synthetic-client", "iat": now, "exp": now + 300,
                   # Deliberately unrelated provider email: it must never select
@@ -100,7 +99,7 @@ def main() -> None:
         with patch.object(jwt, "PyJWKClient") as jwks:
             jwks.return_value.get_signing_key_from_jwt.return_value.key = private_key.public_key()
             verified = social_login.verify_office365_id_token(signed, "synthetic-client")
-            assert verified["tid"] == tid and verified["oid"] == oid
+            assert verified["tid"] == tid and verified["sub"] == "synthetic-subject"
             wrong = jwt.encode(claims, other_key, algorithm="RS256", headers={"kid": "synthetic"})
             try:
                 social_login.verify_office365_id_token(wrong, "synthetic-client")
