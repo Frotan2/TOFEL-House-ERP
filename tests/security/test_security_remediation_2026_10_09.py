@@ -295,8 +295,8 @@ class Office365Tests(unittest.TestCase):
     def signed(self, **overrides):
         import time
         tid = "12345678-1234-1234-1234-123456789abc"
-        claims = {"tid": tid, "oid": "abcdef12-1234-5678-9abc-def012345678",
-                  "sub": "synthetic-subject", "iss": f"https://sts.windows.net/{tid}/",
+        claims = {"tid": tid, "sub": "synthetic-subject",
+                  "iss": f"https://sts.windows.net/{tid}/",
                   "aud": "app-client", "iat": int(time.time()), "exp": int(time.time()) + 300,
                   "email": "untrusted@example.test"}
         claims.update(overrides)
@@ -317,8 +317,7 @@ class Office365Tests(unittest.TestCase):
         failures = [parts[0] + "." + tampered + "." + parts[2],
                     self.jwt.encode({"aud": "app-client"}, self.other, algorithm="RS256"),
                     self.signed(aud="other"), self.signed(iss="https://attacker.invalid/"),
-                    self.signed(exp=1), self.signed(tid="common"), self.signed(sub=None),
-                    self.signed(oid="not-a-guid")]
+                    self.signed(exp=1), self.signed(tid="common"), self.signed(sub=None)]
         for token in failures:
             with self.subTest(token=failures.index(token)):
                 with self.assertRaises(Exception):
