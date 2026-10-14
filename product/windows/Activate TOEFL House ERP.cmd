@@ -48,8 +48,8 @@ exit /b 1
 :backupmissing
 echo.
 echo  The current encrypted backup, separate local drive, Owner policy or manifest did not verify.
-echo  Operational mode was not changed. Do not run the backup helper while the preservation decision is unresolved.
-echo  Resolve the Owner retention choice and reconcile the implementation/docs before retrying.
+echo  Operational mode was not changed. Do not run the backup helper until the Owner backup policy is complete in ERP Configuration.
+echo  Enter the keep count, nightly time and public recovery key in ERP Configuration (retention behavior was decided by the Owner on 2026-10-14, decision D17), then retry.
 pause
 exit /b 1
 :cancelled

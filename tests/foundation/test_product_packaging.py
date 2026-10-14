@@ -315,8 +315,8 @@ class DesktopContract(unittest.TestCase):
         self.assertIn("explicit preserve/delete behavior", launcher)
         activation_launcher = (PRODUCT / "windows" / "Activate TOEFL House ERP.cmd").read_text()
         self.assertIn("-VerifyExisting", activation_launcher)
-        self.assertIn("Do not run the backup helper while the preservation decision is unresolved", activation_launcher)
-        self.assertIn("Resolve the Owner retention choice and reconcile the implementation/docs", activation_launcher)
+        self.assertIn("Do not run the backup helper until the Owner backup policy is complete in ERP Configuration", activation_launcher)
+        self.assertIn("retention behavior was decided by the Owner on 2026-10-14, decision D17", activation_launcher)
 
     def test_backup_sidecar_cleanup_is_scoped_and_preserves_preexisting_material(self):
         body = (PRODUCT / "windows" / "Backup TOEFL House ERP.ps1").read_text()
@@ -1412,7 +1412,7 @@ class OwnerValidationChecklistTests(unittest.TestCase):
         text_flat = " ".join(text.split())
         self.assertIn("future prerequisite, currently held", text_flat.lower())
         self.assertIn("backup & recovery policy setup is currently held", text_flat.lower())
-        self.assertIn("do not create, change, validate, or save that policy while retention remains unresolved", text_flat.lower())
+        self.assertIn("do not create, change, validate, or save that policy until the owner is ready to enter the complete policy", text_flat.lower())
 
         start = text.index("## Backup and restore — Owner PRESERVATION / RESTORE HOLD")
         end = text.index("\n---\n", start)

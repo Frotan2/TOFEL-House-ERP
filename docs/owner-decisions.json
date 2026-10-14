@@ -417,6 +417,36 @@
         "D8",
         "D8-OPS-AUTHORITY"
       ]
+    },
+    "D17": {
+      "id": "D17",
+      "date": "2026-10-14",
+      "title": "Backup retention behavior",
+      "status": "DECIDED",
+      "authority": "Course Owner",
+      "questions": [
+        "Must every valid backup set be preserved forever, or may older valid sets be deleted beyond an Owner keep count?"
+      ],
+      "owner_answers": [
+        "Delete valid older sets beyond keep count. Owner selection recorded 2026-10-14; the exact runtime value is the Owner Configuration string 'Delete valid older sets beyond keep count'."
+      ],
+      "exact_scope": "Applies only to older backup sets that pass the existing SHA-256/size/manifest verification in the local secondary-drive backup flow. No backup set has been deleted under this decision yet.",
+      "authorizes": [
+        "Recording 'Delete valid older sets beyond keep count' as the Owner-approved backup_retention_behavior when the Owner saves the Owner Operations policy in the ERP Configuration desk.",
+        "Engineering reconciliation of the implementation and docs that previously described the retention behavior as unresolved."
+      ],
+      "does_not_authorize": [
+        "Any backup, deletion, restore or activation before the Owner enters the keep count (backup_retention_versions), nightly schedule time, ASCII-armored public recovery key and custody terms in Owner Configuration and a verified backup exists; backup and activation remain fail-closed until then.",
+        "Inventing the keep count or schedule values; they remain Owner-entered configuration, never defaults or code.",
+        "Production GO by itself; production_state stays REJECT until all gates close."
+      ],
+      "why_owner_only": "Deleting verified backups trades recovery history for disk use; only the Owner can accept that risk.",
+      "supersedes": null,
+      "related": [
+        "D13",
+        "D14",
+        "D8-BACKUP-RECOVERY"
+      ]
     }
   }
 }

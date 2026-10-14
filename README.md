@@ -53,10 +53,9 @@ once. Its installer is click-through.
    **Stop TOEFL House ERP.cmd** closes it.
    **Backup TOEFL House ERP.cmd** is intended to create and verify an encrypted
    backup on a separate fixed local drive on this PC; do not run it until the
-   Owner's retention choice is resolved as described below. If explicitly
-   selected, deletion mode can remove older valid sets beyond the keep count;
-   preservation mode keeps all valid sets. No behavior is defaulted, so
-   backup/activation fails closed while the choice is unresolved. **Repair TOEFL House ERP.cmd**
+   Owner backup policy described below is complete. The Owner decided the retention behavior on 2026-10-14 (owner decision D17): delete valid older sets beyond the keep count.
+   No behavior is defaulted in the ERP, so
+   backup/activation fails closed while the policy is incomplete. **Repair TOEFL House ERP.cmd**
    does a safe restart and never deletes data.
 
 **Other authorized computers:** the ERP always listens only on the central
@@ -76,11 +75,11 @@ supplied. The Owner provides only an ASCII-armored OpenPGP **public** key,
 generated/exported under a dedicated key-custody procedure; the matching
 private key stays under Owner
 custody outside Frappe and the backup drive. Never paste it into the ERP,
-container, or backup set. **Do not run `Backup TOEFL House ERP.cmd` yet:** the
-Course Owner must explicitly choose to preserve all valid sets or authorize
-deleting older valid sets beyond the keep count. The policy has no default and
-backup/activation fail closed while this choice is unresolved. Wait until the
-Owner's decision and the implementation/documentation are reconciled. The
+container, or backup set. **Do not run `Backup TOEFL House ERP.cmd` yet:** The Owner decided the retention behavior on 2026-10-14 (owner decision D17): delete valid older sets beyond the keep count.
+The policy has no default and
+backup/activation fail closed until the Owner enters that behavior together
+with the keep count, backup time, recovery key/custody and quorum in the
+ERP Configuration desk and the policy validates. The
 intended backup contains three native encrypted database/files artifacts
 plus an OpenPGP-encrypted site-config recovery artifact, is SHA-256/size
 verified, and is
@@ -90,7 +89,7 @@ runs as the interactive Windows user, so that user session and Docker Desktop
 must be available when it runs. Off-site/NAS/second-device/cloud backup is
 future scope, not a current release gate.
 
-After the preservation hold is resolved and a verified backup exists, run
+After the Owner backup policy is complete and a verified backup exists, run
 **Activate TOEFL House ERP.cmd** and type `ACTIVATE`; the Windows host
 revalidates the secondary-drive manifest/artifacts, scheduled task, and live
 Owner policy before changing only the site's operational mode. Do not activate
