@@ -6,6 +6,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 RUNNER = (ROOT / "tools/native/run_native.py").read_text(encoding="utf-8")
 HELPER = (ROOT / "tools/native/runtime_restore.py").read_text(encoding="utf-8")
+RUNBOOK = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text(encoding="utf-8")
+OWNER_GUIDE = (ROOT / "product/windows/VALIDATION.md").read_text(encoding="utf-8")
 
 
 class ProductRestoreContractTests(unittest.TestCase):
@@ -53,6 +55,30 @@ class ProductRestoreContractTests(unittest.TestCase):
         self.assertIn("--defaults-extra-file=*|--defaults-file=*", RUNNER)
         self.assertIn("--column-statistics=0", RUNNER)
         self.assertIn("lab/'tools/bin/mysqldump'", RUNNER)
+
+    def test_owner_restore_guidance_is_hold_only_and_targets_no_existing_site(self):
+        runbook_restore = RUNBOOK.split(
+            "## 7. Restore and recovery — HOLD", 1)[1].split("## 8.", 1)[0]
+        owner_restore = OWNER_GUIDE.split(
+            "## Backup and restore — Owner PRESERVATION / RESTORE HOLD", 1)[1].split(
+                "---\n\n## Finishing", 1)[0]
+
+        for section in (runbook_restore, owner_restore):
+            with self.subTest(section="runbook" if section is runbook_restore else "Owner guide"):
+                self.assertIn("authorized", section.lower())
+                self.assertIn("toeflhouse.localhost", section)
+                self.assertIn("new", section.lower())
+                self.assertNotIn("```", section, "Owner restore hold must not publish executable steps")
+                for command in (
+                    "docker compose stop", "docker compose run", "bench restore",
+                    "rm -rf", "Remove-Item", "gpg --decrypt",
+                ):
+                    self.assertNotIn(command, section)
+
+        self.assertIn("isolated disposable Bench", runbook_restore)
+        self.assertIn("isolated disposable Bench", owner_restore)
+        self.assertIn("read-only checks", RUNBOOK)
+        self.assertIn("Read-only checks allowed", OWNER_GUIDE)
 
 
 if __name__ == "__main__":
