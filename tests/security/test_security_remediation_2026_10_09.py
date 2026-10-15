@@ -271,6 +271,9 @@ class WeasyPrintTests(unittest.TestCase):
                                  ("Expense Claim", "EC-1", "beta", "L")])
 
 
+TENANT = "12345678-1234-1234-1234-123456789abc"
+
+
 class Office365Tests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -287,6 +290,10 @@ class Office365Tests(unittest.TestCase):
         frappe.PermissionError = PermissionError
         frappe.throw = lambda message, cls: (_ for _ in ()).throw(cls(message))
         frappe._ = lambda message: message
+        frappe.conf = {"office_365_tenant_id": TENANT}
+        cls.log_records = []
+        frappe.logger = lambda name: types.SimpleNamespace(
+            warning=lambda message, *args: cls.log_records.append(message % args))
         with patch.dict(sys.modules, {"frappe": frappe}):
             spec = importlib.util.spec_from_file_location("tested_social_login", ROOT / "apps/toefl_house/toefl_house/social_login.py")
             cls.login = importlib.util.module_from_spec(spec)
@@ -294,7 +301,7 @@ class Office365Tests(unittest.TestCase):
 
     def signed(self, **overrides):
         import time
-        tid = "12345678-1234-1234-1234-123456789abc"
+        tid = TENANT
         claims = {"tid": tid, "sub": "synthetic-subject",
                   "iss": f"https://sts.windows.net/{tid}/",
                   "aud": "app-client", "iat": int(time.time()), "exp": int(time.time()) + 300,
@@ -305,7 +312,7 @@ class Office365Tests(unittest.TestCase):
     def check(self, token):
         with patch.object(self.jwt, "PyJWKClient") as client:
             client.return_value.get_signing_key_from_jwt.return_value.key = self.key.public_key()
-            return self.login.verify_office365_id_token(token, "app-client")
+            return self.login.verify_office365_id_token(token, "app-client", TENANT)
 
     def test_signed_claims_accepted(self):
         self.assertEqual(self.check(self.signed())["email"], "untrusted@example.test")
@@ -353,7 +360,7 @@ class Office365Tests(unittest.TestCase):
                               return_value={"email": "untrusted@example.test",
                                             "sub": "synthetic-subject"}) as check:
                 self.login.login_via_office365("authorization-code", "single-use-state")
-                check.assert_called_once_with("token", "app-client")
+                check.assert_called_once_with("token", "app-client", TENANT)
             self.assertEqual(log, [(({"email": "owner@example.test", "sub": "synthetic-subject"},),
                                     {"provider": "office_365", "state": "single-use-state"})])
             with patch.object(self.login, "verify_office365_id_token", side_effect=ValueError("sensitive data")):
@@ -369,13 +376,54 @@ class Office365Tests(unittest.TestCase):
             self.assertEqual(len(log), 1)
 
 
+    def test_other_tenant_and_missing_tenant_configuration_fail_closed(self):
+        other = "87654321-4321-4321-4321-cba987654321"
+        foreign = self.signed(tid=other, iss=f"https://sts.windows.net/{other}/")
+        with self.assertRaisesRegex(ValueError, "configured tenant"):
+            self.check(foreign)
+        with self.assertRaisesRegex(ValueError, "Invalid configured Office 365 tenant"):
+            with patch.object(self.jwt, "PyJWKClient"):
+                self.login.verify_office365_id_token(self.signed(), "app-client", "common")
+        frappe = self.login.frappe
+        original = frappe.conf
+        try:
+            frappe.conf = {}
+            with self.assertRaisesRegex(ValueError, "not configured"):
+                self.login.configured_office365_tenant()
+            frappe.conf = {"office_365_tenant_id": "common"}
+            with self.assertRaisesRegex(ValueError, "not configured"):
+                self.login.configured_office365_tenant()
+            frappe.conf = {"office_365_tenant_id": TENANT.upper()}
+            self.assertEqual(self.login.configured_office365_tenant(), TENANT)
+        finally:
+            frappe.conf = original
+
+    def test_denial_audit_records_reason_class_without_secrets(self):
+        oauth = types.ModuleType("frappe.utils.oauth")
+        oauth.get_oauth2_flow = lambda provider: (_ for _ in ()).throw(
+            ValueError("provider body with synthetic-token-value"))
+        oauth.get_redirect_uri = lambda provider: "https://example.test/callback"
+        oauth.get_oauth_keys = lambda provider: {"client_id": "app-client"}
+        utils = types.ModuleType("frappe.utils")
+        utils.oauth = oauth
+        handlers = types.ModuleType("frappe.integrations.oauth2_logins")
+        handlers.decoder_compat = lambda data: data
+        before = len(self.log_records)
+        with patch.dict(sys.modules, {"frappe.utils": utils, "frappe.utils.oauth": oauth,
+                                      "frappe.integrations.oauth2_logins": handlers}):
+            with self.assertRaisesRegex(PermissionError, "identity verification failed"):
+                self.login.login_via_office365("authorization-code", "single-use-state")
+        new = self.log_records[before:]
+        self.assertEqual(new, ["Office 365 sign-in denied: verification:ValueError"])
+        self.assertNotIn("synthetic-token-value", " ".join(new))
+
     def test_none_algorithm_and_untrusted_key_url_rejected(self):
         token = self.jwt.encode({"aud": "app-client"}, key="", algorithm="none")
         with patch.object(self.jwt, "PyJWKClient") as client:
             with self.assertRaisesRegex(ValueError, "algorithm"):
-                self.login.verify_office365_id_token(token, "app-client")
+                self.login.verify_office365_id_token(token, "app-client", TENANT)
             client.assert_not_called()
         with patch.object(self.jwt, "PyJWKClient") as client:
             client.return_value.get_signing_key_from_jwt.return_value.key = self.key.public_key()
-            self.login.verify_office365_id_token(self.signed(), "app-client")
+            self.login.verify_office365_id_token(self.signed(), "app-client", TENANT)
             client.assert_called_once_with(self.login.MICROSOFT_JWKS, timeout=10)
