@@ -10,6 +10,7 @@ from unittest.mock import patch
 class GuardTests(unittest.TestCase):
     def setUp(self):
         self.settings = True
+        self.enabled = 1
         self.shares = []
         self.students = [Obj(name='student-a', customer='customer-a')]
         self.rules = {'Student': [Obj(for_value='student-a', apply_to_all_doctypes=1)],
@@ -18,7 +19,9 @@ class GuardTests(unittest.TestCase):
             if doctype=='DocShare': return self.shares
             return self.students if doctype=='Student' else self.rules[kwargs['filters']['allow']]
         self.frappe = Obj(session=Obj(user='student@example.test'), get_roles=lambda user:['Student'],
-                          PermissionError=PermissionError, conf={'disable_website_cache':1},
+                          PermissionError=PermissionError, AuthenticationError=PermissionError,
+                          conf={'disable_website_cache':1},
+                          get_cached_value=lambda doctype, name, field: self.enabled,
                           get_all=get_all, db=Obj(get_single_value=lambda *args:self.settings, exists=lambda *args:False))
         path=Path(__file__).resolve().parents[2]/'apps/foundation_security/foundation_security/guards.py'
         spec=importlib.util.spec_from_file_location('guard_under_test',path)
@@ -74,6 +77,25 @@ class GuardTests(unittest.TestCase):
     def test_global_share_denied(self):
         self.shares=[Obj(share_doctype='User', share_name='student@example.test', everyone=1)]
         with self.assertRaises(PermissionError): self.guard.validate_student_scope()
+
+    def test_disabled_user_session_revoked_on_every_request(self):
+        # A live cookie session of a user disabled after login must fail closed.
+        self.frappe.request = Obj(method='GET', path='/app')
+        self.frappe.form_dict = {}
+        self.enabled = 0
+        with self.assertRaises(PermissionError): self.guard.validate_request()
+        self.enabled = 1
+        self.guard.validate_user_enabled()
+
+    def test_disabled_user_denied_before_scope_checks(self):
+        self.enabled = 0
+        self.frappe.get_roles = lambda user: (_ for _ in ()).throw(AssertionError('scope evaluated'))
+        with self.assertRaises(PermissionError): self.guard.validate_user_enabled()
+
+    def test_guest_and_missing_user_skip_user_enabled_check(self):
+        for user in ('Guest', None):
+            self.frappe.session.user = user
+            self.guard.validate_user_enabled()
 
     def configure_csrf(self, method, path):
         self.frappe.session.sid='synthetic-session'

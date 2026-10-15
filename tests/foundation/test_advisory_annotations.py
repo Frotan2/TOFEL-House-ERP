@@ -9,7 +9,8 @@ from runtime_install import (ANNOTATION_MAX_LINES, ANNOTATION_TEXT_LIMIT,  # noq
                              untriaged_advisory_annotations,
                              hosted_failure_annotations,
                              safe_native_restore_failure_detail,
-                             safe_native_site_failure_detail)
+                             safe_native_site_failure_detail,
+                             hrms_editor_stage_annotation)
 
 PREFIX = "::warning file=tools/foundation/runtime_install.py::"
 
@@ -180,3 +181,27 @@ class AdvisoryAnnotationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HrmsEditorStageAnnotationTests(unittest.TestCase):
+    def test_stage_line_names_only_stage_and_error_class(self):
+        output = ("built\n{\"status\":\"pass\"}\n"
+                  "HRMS-EDITOR-STAGE-FAILED keyboard-formatting TimeoutError\n"
+                  "  name: 'TimeoutError'\n")
+        self.assertEqual(
+            hrms_editor_stage_annotation(output),
+            "::error file=tools/foundation/hrms_editor_security.mjs::"
+            "built HRMS editor check failed at stage keyboard-formatting (TimeoutError)")
+
+    def test_no_stage_line_yields_no_annotation(self):
+        self.assertIsNone(hrms_editor_stage_annotation("AssertionError: plain output"))
+        self.assertIsNone(hrms_editor_stage_annotation(""))
+        self.assertIsNone(hrms_editor_stage_annotation(None))
+
+    def test_page_content_in_error_text_is_not_echoed(self):
+        output = "HRMS-EDITOR-STAGE-FAILED paste AssertionError <img src=x onerror=alert(1)>"
+        line = hrms_editor_stage_annotation(output)
+        self.assertEqual(line.split("::")[-1], "built HRMS editor check failed at stage paste (AssertionError)")
+        self.assertNotIn("onerror", line)
+        self.assertNotIn("<img", line)
+

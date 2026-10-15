@@ -273,14 +273,24 @@ class ProductScopeTests(unittest.TestCase):
         recs = {adv["id"]: adv for _, adv in _delta_records()}
         return recs["GHSA-c8x8-7fp4-3x9w"]
 
-    def test_c8x8_product_scope_is_an_open_release_blocker(self):
+    def test_c8x8_product_scope_was_an_open_blocker_and_is_mitigated_pending_final_sha(self):
         scope = self._c8x8()["product_scope"]
-        self.assertEqual(scope["status"], "OPEN_RELEASE_BLOCKER")
+        # The 2026-10-09 finding is preserved as history. The 2026-10-15 status
+        # is lab-verified only; the release gate stays open until CI builds the
+        # release SHA and the built-component step passes.
+        self.assertEqual(scope["prior_status_2026_10_09"], "OPEN_RELEASE_BLOCKER")
+        self.assertEqual(scope["status"], "MITIGATED_CI_VERIFIED_PRE_MERGE")
+        self.assertTrue(scope["release_gate"].startswith("OPEN until"))
         self.assertIn("hrms/frontend", scope["tree"])
         self.assertIn("REACHABLE WITH USER INTERACTION", scope["reachability"])
         joined = " ".join(scope["evidence"])
         self.assertIn("FormField.vue:37-38", joined)
         self.assertIn("hooks.py:83-84", joined)
+        verified = scope["lab_verified_2026_10_15"]
+        self.assertIn("secure_hrms.py", verified["mechanism"])
+        self.assertIn("1.42.3", verified["overlay_result"])
+        self.assertIn("hrms_editor_security.mjs", verified["built_component_harness"])
+        self.assertTrue(verified["evidence_record"].endswith("hrms-editor-2026-10-15/README.md"))
 
     def test_no_current_document_says_hrms_is_unbuilt_or_unserved(self):
         for path in (README_PATH, DELTA_DIR / "delta-dispositions.json"):

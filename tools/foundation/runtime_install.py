@@ -28,6 +28,25 @@ EXPORT_BRANCH = "product-export"
 from runtime_encryption_key import restore_key_into_config
 
 
+_HRMS_EDITOR_STAGE_FAILURE = re.compile(
+    r"HRMS-EDITOR-STAGE-FAILED ([a-z-]{1,40}) ([A-Za-z]{1,40})")
+
+
+def hrms_editor_stage_annotation(output: str) -> str | None:
+    """Name the built-HRMS-editor check stage that failed, never page content.
+
+    The harness prints one stage line on failure. Its full output is only in a
+    retained artifact, which hosted runs cannot download, so this line is the
+    sole diagnostic that reaches the check annotations.
+    """
+    matches = list(_HRMS_EDITOR_STAGE_FAILURE.finditer(output or ""))
+    if not matches:
+        return None
+    stage, error = matches[-1].group(1), matches[-1].group(2)
+    return ("::error file=tools/foundation/hrms_editor_security.mjs::"
+            f"built HRMS editor check failed at stage {stage} ({error})")
+
+
 _SAFE_NATIVE_SITE_FAILURE = re.compile(
     r"Native Frappe site creation failed: secure native site creation failed"
     r"(?: \(exit [0-9]{1,4}\))?"
@@ -1132,6 +1151,10 @@ def main() -> int:
                     last_failed_check, safe_site_detail=site_detail,
                     safe_restore_detail=restore_detail):
                 print(line, flush=True)
+            if last_failed_check == "built-hrms-editor-security":
+                stage_line = hrms_editor_stage_annotation(report.get("failure_output_tail") or "")
+                if stage_line:
+                    print(stage_line, flush=True)
     return 0 if report["status"] == "pass" else 1
 
 if __name__ == "__main__":

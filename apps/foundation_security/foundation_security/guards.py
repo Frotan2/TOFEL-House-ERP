@@ -40,7 +40,23 @@ def on_session_creation(login_manager=None):
     validate_student_scope()
 
 
+def validate_user_enabled():
+    """Revoke existing sessions and API/bearer access of disabled users.
+
+    Frappe's Session.resume() and validate_auth() never re-check User.enabled:
+    the check runs only when a session is started. Without this, disabling a
+    user leaves every live cookie session working until it expires. Runs on
+    every authenticated request, so it also covers API keys and bearer tokens.
+    """
+    user = frappe.session.user
+    if user in (None, "Guest"):
+        return
+    if not frappe.get_cached_value("User", user, "enabled"):
+        raise frappe.AuthenticationError("User is disabled")
+
+
 def validate_request():
+    validate_user_enabled()
     validate_student_scope()
     if frappe.session.user in (None, "Guest") or frappe.session.sid in (None, "Guest"):
         return

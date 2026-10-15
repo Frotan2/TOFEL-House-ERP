@@ -18,13 +18,28 @@ MICROSOFT_JWKS = "https://login.microsoftonline.com/common/discovery/keys"
 TENANT_ID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\Z")
 
 
-def verify_office365_id_token(token: str, client_id: str) -> dict:
+def configured_office365_tenant() -> str:
+    """Return the owner-configured Microsoft tenant ID, or fail closed.
+
+    The tenant is a non-secret deployment identifier that the Course Owner must
+    supply in site configuration (`office_365_tenant_id`). Without it the
+    multi-tenant /common authority would accept any Microsoft tenant, so login
+    is refused instead of guessing.
+    """
+    tenant = frappe.conf.get("office_365_tenant_id")
+    if not isinstance(tenant, str) or not TENANT_ID.fullmatch(tenant):
+        raise ValueError("Office 365 tenant is not configured")
+    return tenant.lower()
+
+
+def verify_office365_id_token(token: str, client_id: str, tenant_id: str) -> dict:
     """Verify signature, audience, expiry, issuer, tenant and stable identity.
 
     The pinned Frappe Office 365 provider uses /common/oauth2/token (v1).
     A v2 token is deliberately not accepted under this v1 configuration.
-    Multi-tenant /common has no single configured issuer: the signed `tid`
-    must match the exact Microsoft v1 issuer after signature verification.
+    The JWKS is fetched from the multi-tenant /common keyset, so the signed
+    `tid` must equal the owner-configured `tenant_id` and the issuer must be
+    the exact Microsoft v1 issuer for that tenant after signature verification.
     The Microsoft `sub` is the provider identifier used by Frappe's existing
     Office 365 social-login links. Email/UPN claims are deliberately not trusted
     to identify a local account because Microsoft documents them as mutable.
@@ -33,6 +48,8 @@ def verify_office365_id_token(token: str, client_id: str) -> dict:
 
     if not isinstance(token, str) or len(token) > 16384 or not client_id:
         raise ValueError("Invalid Office 365 ID token")
+    if not isinstance(tenant_id, str) or not TENANT_ID.fullmatch(tenant_id):
+        raise ValueError("Invalid configured Office 365 tenant")
     if jwt.get_unverified_header(token).get("alg") != "RS256":
         raise ValueError("Unsupported Office 365 signing algorithm")
     key = jwt.PyJWKClient(MICROSOFT_JWKS, timeout=10).get_signing_key_from_jwt(token)
@@ -47,12 +64,19 @@ def verify_office365_id_token(token: str, client_id: str) -> dict:
     tid = claims["tid"]
     if not isinstance(tid, str) or not TENANT_ID.fullmatch(tid):
         raise ValueError("Invalid Office 365 tenant")
+    if tid.lower() != tenant_id.lower():
+        raise ValueError("Office 365 tenant is not the configured tenant")
     if claims["iss"] != f"https://sts.windows.net/{tid.lower()}/":
         raise ValueError("Office 365 issuer does not match signed tenant")
     subject = claims["sub"]
     if not isinstance(subject, str) or not subject or len(subject) > 512:
         raise ValueError("Invalid Office 365 subject")
     return claims
+
+
+def _audit_denial(reason: str) -> None:
+    """Record a secret-free denial reason for the Office 365 sign-in path."""
+    frappe.logger("office365_auth").warning("Office 365 sign-in denied: %s", reason)
 
 
 @frappe.whitelist(allow_guest=True)
@@ -73,9 +97,12 @@ def login_via_office365(code: str, state: str):
                   "grant_type": "authorization_code"}, decoder=decoder_compat,
         )
         token = json.loads(session.access_token_response.text)["id_token"]
-        info = verify_office365_id_token(token, oauth.get_oauth_keys("office_365")["client_id"])
-    except Exception:  # all provider/transport/JSON/validation failures deny login
-        pass
+        info = verify_office365_id_token(
+            token, oauth.get_oauth_keys("office_365")["client_id"], configured_office365_tenant()
+        )
+    except Exception as exc:  # all provider/transport/JSON/validation failures deny login
+        # Record only the exception class: messages and bodies may hold tokens.
+        _audit_denial(f"verification:{type(exc).__name__}")
     if info is None:
         # Raise outside the except block: a provider exception may contain a
         # response body, credentials or a token. Do not retain it as traceback
@@ -91,12 +118,14 @@ def login_via_office365(code: str, state: str):
         limit_page_length=2,
     )
     if len(linked_users) != 1:
+        _audit_denial(f"link-count:{len(linked_users)}")
         frappe.throw(
             _("This Office 365 identity is not uniquely linked to a TOEFL House user. Contact the Course Owner."),
             frappe.PermissionError,
         )
     user = frappe.get_doc("User", linked_users[0]["parent"])
     if not user.enabled or user.get_social_login_userid("office_365") != info["sub"]:
+        _audit_denial("link-or-enabled-check")
         frappe.throw(_("Office 365 identity is not authorized for this user"), frappe.PermissionError)
 
     # Frappe's native login helper selects a User by email. Supply the

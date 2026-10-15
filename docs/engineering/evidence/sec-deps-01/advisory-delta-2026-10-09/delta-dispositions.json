@@ -185,7 +185,7 @@
           "runtime_disposition_evidence": "SCOPE: education/frontend, the CI-gated tree. Chain: frappe-ui@0.1.31 -> @tiptap/pm@2.2.3 -> prosemirror-view@1.33.1 (frozen education lockfile; re-checked 2026-10-09: education/frontend/yarn.lock resolves frappe-ui 0.1.31 only). The module code is present in the shipped education bundle (ProseMirror-* class-name literals in the frappe-ui chunk, because frappe-ui declares no sideEffects field). No editor is constructed in the education SPA, so there is no paste sink: TextEditor is imported only by frappe-ui's barrel; the education sources at 93bc7075 import no TextEditor, TextEditorContent, EditorContent, tiptap or prosemirror symbol; src/main.js registers only Button, Card and Input globally. Session-1 evidence (local build, source reads) and the CI module-graph step (rendered-code-present, no editor instance) agree. Re-open if any education component imports TextEditor. THIS DISPOSITION DOES NOT COVER THE PRODUCT: see product_scope, which records an open release blocker in the HRMS SPA.",
           "fix_path": "Fix is prosemirror-view 1.42.3. Education: blocked upstream (the frozen education lockfile resolves frappe-ui 0.1.31 -> @tiptap/pm 2.2.3 -> prosemirror-view 1.33.1). Product: see product_scope.release_gate (open; the HRMS SPA is built and served).",
           "product_scope": {
-            "status": "OPEN_RELEASE_BLOCKER",
+            "status": "MITIGATED_CI_VERIFIED_PRE_MERGE",
             "not_gated_by_ci": true,
             "tree": "hrms/frontend at a4768b441cff346def505e27f2a2229ee1e05b9b (prosemirror-view 1.31.3 via frappe-ui TextEditor)",
             "reachability": "REACHABLE WITH USER INTERACTION. The advisory trigger is a user pasting attacker-supplied HTML into a ProseMirror editor. An authenticated user who can open an HRMS form with a 'Text Editor' field pastes such content into it. The product serves the HRMS SPA, so this path is not dead code.",
@@ -199,7 +199,16 @@
               "product/bootstrap.py:691-692 runs 'bench build' when assets are absent, so the HRMS SPA is built on first boot (verified 2026-10-09).",
               "Coverage: the CI frontend audit and module graph scan apps/education/frontend only. hrms/frontend is outside the gate (replay: 149 matches in the HRMS frontend tree; 124 unique)."
             ],
-            "release_gate": "OPEN. Release is blocked until one of: (a) HRMS frontend moves prosemirror-view to >= 1.42.3 (blocked: the HRMS lockfile is upstream and frozen by policy); (b) the Text Editor is unmounted for HRMS fields (upstream code); (c) the /hrms and /hr website routes are disabled in the product (application behaviour change); or (d) the owner records a risk acceptance with an expiry (requires an explicit loader rule; owner decision)."
+            "release_gate": "OPEN until the Foundation runtime step built-hrms-editor-security passes on the exact final main SHA. It passed on the session-branch head d04eea7 (Foundation run 38669251864, job 116208199819), and the overlay and harness were verified in a local lab on 2026-10-15. An earlier attempt on b817bd3 failed for a harness stage race (Chromium 153), since fixed in d04eea7. The 2026-10-09 record (OPEN_RELEASE_BLOCKER) is kept under prior_status_2026_10_09 and was correct when written: its option (a) said the HRMS lockfile was frozen, which the overlay (secure_hrms.py) now satisfies without changing the upstream lockfile.",
+            "prior_status_2026_10_09": "OPEN_RELEASE_BLOCKER",
+            "lab_verified_2026_10_15": {
+              "mechanism": "tools/foundation/secure_hrms.py PATCHES[\"prosemirror-view\"] = 1.42.3 (publisher-tarball SHA-512 integrity, FILE_TREE_SHA256 code hash). patch() replaces every installed prosemirror-view copy under hrms/frontend and hrms/roster; verify() fails on any copy not 1.42.3. runtime_install.py runs the patch before asset build and verify-hrms-editor-after-build after it, so the built SPA is checked.",
+              "pinned_source": "hrms a4768b441cff346def505e27f2a2229ee1e05b9b, frontend/yarn.lock resolves prosemirror-view 1.31.3 before overlay (reproduced).",
+              "overlay_result": "after secure_hrms.py patch: both prosemirror-view copies 1.42.3; --verify passes (reproduced locally 2026-10-15).",
+              "built_component_harness": "tools/foundation/hrms_editor_security.mjs (real FormField.vue + TextEditor, built with vite, Chromium 131 via playwright-core 1.58.2): PASS on the overlay-patched tree (3 runs); FAIL on the unpatched 1.31.3 tree (javascript: link survives, scriptLinks=1). Also FAIL on the unpatched frappe-ui Markdown paste path (executed=1), which is closed by secure_markdown_paste.",
+              "residual": "education tree remains NOT_REACHABLE (no editor constructed). Re-verify on every HRMS version bump or any lock change; the Foundation runtime gate re-runs verify and the harness on each build.",
+              "evidence_record": "docs/engineering/evidence/hrms-editor-2026-10-15/README.md"
+            }
           }
         }
       ]
