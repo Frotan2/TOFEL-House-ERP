@@ -18,6 +18,7 @@ const { default: vue } = await import(pathToFileURL(requireApp.resolve('@vitejs/
 const { chromium } = await import(pathToFileURL(path.resolve(playwrightArg, 'index.mjs')));
 const temp = await fs.mkdtemp(path.join(frontend, '.security-editor-'));
 let server, browser;
+let stage = 'build';
 try {
   await fs.writeFile(path.join(temp, 'index.html'), '<!doctype html><html><body><div id="app"></div><script type="module" src="./entry.js"></script></body></html>');
   await fs.writeFile(path.join(temp, 'entry.js'), `
@@ -67,6 +68,7 @@ app.mount('#app');
   await page.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
   await page.goto(origin);
   await page.locator('.ProseMirror').waitFor();
+  stage = 'setup';
   const payloads = [
     '<p>kept<script>window.__executed++</script></p>',
     '<img src=x onerror="window.__executed++"><p>kept</p>',
@@ -96,10 +98,12 @@ app.mount('#app');
     assert.deepEqual(errors, [], 'built editor raised an uncaught exception');
   };
   for (const html of payloads) {
+    stage = 'import-and-read-only';
     for (const readOnly of [false, true]) {
       await page.evaluate(({html, readOnly}) => window.editorTest.importHTML(html, readOnly), {html, readOnly});
       await assertSafe();
     }
+    stage = 'paste';
     await page.evaluate(() => window.editorTest.importHTML('<p>paste target</p>'));
     await page.locator('.ProseMirror').click();
     await page.evaluate(html => {
@@ -113,6 +117,7 @@ app.mount('#app');
   // Frappe UI has a separate Markdown-to-HTML clipboard path. Exercise that
   // conversion too, not only ProseMirror's ordinary text/html paste handling.
   for (const html of payloads) {
+    stage = 'markdown-paste';
     await page.evaluate(() => window.editorTest.importHTML('<p>Markdown paste target</p>'));
     await page.locator('.ProseMirror').click();
     await page.evaluate(html => {
@@ -122,6 +127,7 @@ app.mount('#app');
     }, html);
     await assertSafe();
   }
+  stage = 'legitimate-editing';
   await page.evaluate(() => window.editorTest.importHTML('<p><strong>Valid bold</strong> <em>and italic</em></p><ul><li>List item</li></ul>'));
   assert.equal(await page.locator('.ProseMirror strong').textContent(), 'Valid bold');
   assert.equal(await page.locator('.ProseMirror em').textContent(), 'and italic');
@@ -132,14 +138,20 @@ app.mount('#app');
   assert.match(await page.evaluate(() => window.editorTest.html()), /editing works/);
   await assertSafe();
   // Keyboard formatting shortcut on an ordinary selection (Mod-b = bold).
+  stage = 'keyboard-formatting';
   await page.evaluate(() => window.editorTest.importHTML('<p>formatme</p>'));
   await page.locator('.ProseMirror').click();
   await page.keyboard.press('Control+Home');
   await page.keyboard.press('Shift+End');
+  // ProseMirror syncs its selection from the DOM on selectionchange, which
+  // the browser dispatches after the keystroke. Flush two frames before the
+  // shortcut; without this, Chromium 153 + Playwright 1.58 raced and dropped Mod-b.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.keyboard.press('Control+b');
   assert.equal(await page.locator('.ProseMirror strong').textContent(), 'formatme', 'keyboard bold shortcut must still format');
   await assertSafe();
   // Read-only must reject keyboard input and leave the stored content unchanged.
+  stage = 'read-only-keyboard';
   await page.evaluate(() => window.editorTest.importHTML('<p>locked text</p>', true));
   await page.locator('.ProseMirror').click({force: true});
   await page.keyboard.type('ZZTAMPER');
@@ -147,6 +159,7 @@ app.mount('#app');
   assert.doesNotMatch(lockedHtml, /ZZTAMPER/, 'read-only editor accepted keyboard input');
   await assertSafe();
   // Stored-content reload: serialize what the editor holds, reload it as if
+  stage = 'stored-reload';
   // from storage, and require the same safe, legitimate content back.
   await page.evaluate(() => window.editorTest.importHTML('<p><strong>Stored bold</strong> and <em>italic</em></p><ul><li>Kept item</li></ul>'));
   const stored = await page.evaluate(() => window.editorTest.html());
@@ -156,6 +169,10 @@ app.mount('#app');
   assert.equal(await page.locator('.ProseMirror strong').first().textContent(), 'Stored bold');
   assert.equal(await page.locator('.ProseMirror li').textContent(), 'Kept item');
   console.log(JSON.stringify({status: 'pass', payloads: payloads.length, paths: ['import', 'read-only rendering', 'paste', 'markdown paste', 'stored reload', 'read-only keyboard rejection'], legitimateEditing: true, keyboardFormatting: true}));
+} catch (error) {
+  // One line, no page content: the failing stage and the error class only.
+  console.error(`HRMS-EDITOR-STAGE-FAILED ${stage} ${error && error.name ? error.name : 'Error'}`);
+  throw error;
 } finally {
   if (browser) await browser.close();
   if (server) await new Promise(resolve => server.close(resolve));
