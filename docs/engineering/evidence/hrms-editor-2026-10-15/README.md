@@ -1,8 +1,12 @@
 # HRMS editor security acceptance — 2026-10-15
 
-**Status: lab-verified; CI-pending.** These results come from a local lab run on
-2026-10-15. No CI run on any release SHA has yet shown the `built-hrms-editor-security`
-step passing, so the GHSA-c8x8 HRMS release gate stays OPEN until it does.
+**Status: lab-verified, and CI-verified on session head `d04eea7`** (Foundation
+runtime run 38669251864, job 116208199819, step `built-hrms-editor-security` passed).
+The first CI attempt (`b817bd3`, run 38667643650) failed at the `keyboard-formatting`
+stage. Cause: Chromium 153 raced the Mod-b shortcut against the selection flush.
+The harness now flushes two frames before the shortcut. The security assertions were not
+changed. The GHSA-c8x8 HRMS release gate stays OPEN until the same step passes on the
+exact final `main` SHA.
 
 Scope: the **installed, built** HRMS `TextEditor` / `FormField` component
 (frappe-ui 0.1.105 TextEditor, prosemirror-view, Markdown-paste path) at the
