@@ -131,7 +131,31 @@ app.mount('#app');
   await page.keyboard.type(' editing works');
   assert.match(await page.evaluate(() => window.editorTest.html()), /editing works/);
   await assertSafe();
-  console.log(JSON.stringify({status: 'pass', payloads: payloads.length, paths: ['import', 'read-only rendering', 'paste', 'markdown paste'], legitimateEditing: true}));
+  // Keyboard formatting shortcut on an ordinary selection (Mod-b = bold).
+  await page.evaluate(() => window.editorTest.importHTML('<p>formatme</p>'));
+  await page.locator('.ProseMirror').click();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.press('Shift+End');
+  await page.keyboard.press('Control+b');
+  assert.equal(await page.locator('.ProseMirror strong').textContent(), 'formatme', 'keyboard bold shortcut must still format');
+  await assertSafe();
+  // Read-only must reject keyboard input and leave the stored content unchanged.
+  await page.evaluate(() => window.editorTest.importHTML('<p>locked text</p>', true));
+  await page.locator('.ProseMirror').click({force: true});
+  await page.keyboard.type('ZZTAMPER');
+  const lockedHtml = await page.evaluate(() => window.editorTest.html());
+  assert.doesNotMatch(lockedHtml, /ZZTAMPER/, 'read-only editor accepted keyboard input');
+  await assertSafe();
+  // Stored-content reload: serialize what the editor holds, reload it as if
+  // from storage, and require the same safe, legitimate content back.
+  await page.evaluate(() => window.editorTest.importHTML('<p><strong>Stored bold</strong> and <em>italic</em></p><ul><li>Kept item</li></ul>'));
+  const stored = await page.evaluate(() => window.editorTest.html());
+  await page.evaluate(() => window.editorTest.importHTML('<p>placeholder</p>'));
+  await page.evaluate(html => window.editorTest.importHTML(html, false), stored);
+  await assertSafe();
+  assert.equal(await page.locator('.ProseMirror strong').first().textContent(), 'Stored bold');
+  assert.equal(await page.locator('.ProseMirror li').textContent(), 'Kept item');
+  console.log(JSON.stringify({status: 'pass', payloads: payloads.length, paths: ['import', 'read-only rendering', 'paste', 'markdown paste', 'stored reload', 'read-only keyboard rejection'], legitimateEditing: true, keyboardFormatting: true}));
 } finally {
   if (browser) await browser.close();
   if (server) await new Promise(resolve => server.close(resolve));
