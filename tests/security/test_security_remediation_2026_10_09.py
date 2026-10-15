@@ -398,6 +398,53 @@ class Office365Tests(unittest.TestCase):
         finally:
             frappe.conf = original
 
+    def _link_case(self, linked, enabled=1, subject="synthetic-subject"):
+        frappe = self.login.frappe
+        oauth = types.ModuleType("frappe.utils.oauth")
+        oauth.get_oauth2_flow = lambda provider: types.SimpleNamespace(
+            get_auth_session=lambda **kwargs: types.SimpleNamespace(
+                access_token_response=types.SimpleNamespace(text=json.dumps({"id_token": "token"}))))
+        oauth.get_redirect_uri = lambda provider: "https://example.test/callback"
+        oauth.get_oauth_keys = lambda provider: {"client_id": "app-client"}
+        oauth.login_oauth_user = lambda *args, **kwargs: self.sessions.append(args)
+        utils = types.ModuleType("frappe.utils")
+        utils.oauth = oauth
+        handlers = types.ModuleType("frappe.integrations.oauth2_logins")
+        handlers.decoder_compat = lambda data: data
+        self.sessions = []
+        old = (frappe.get_all, frappe.get_doc)
+        frappe.get_all = lambda *a, **k: linked
+        frappe.get_doc = lambda *a, **k: types.SimpleNamespace(
+            name="owner@example.test", enabled=enabled,
+            get_social_login_userid=lambda provider: subject)
+        try:
+            with patch.dict(sys.modules, {"frappe.utils": utils, "frappe.utils.oauth": oauth,
+                                          "frappe.integrations.oauth2_logins": handlers}), \
+                 patch.object(self.login, "verify_office365_id_token",
+                              return_value={"email": "untrusted@example.test", "sub": "synthetic-subject"}):
+                self.login.login_via_office365("authorization-code", "single-use-state")
+        finally:
+            frappe.get_all, frappe.get_doc = old
+        return self.sessions
+
+    def test_identity_shared_by_two_accounts_is_refused_without_session(self):
+        before = len(self.log_records)
+        with self.assertRaisesRegex(PermissionError, "not uniquely linked"):
+            self._link_case([{"parent": "a@example.test"}, {"parent": "b@example.test"}])
+        self.assertEqual(self.log_records[before:], ["Office 365 sign-in denied: link-count:2"])
+
+    def test_unlinked_identity_is_refused_and_never_matched_by_email(self):
+        with self.assertRaisesRegex(PermissionError, "not uniquely linked"):
+            self._link_case([])
+
+    def test_disabled_linked_account_is_refused(self):
+        with self.assertRaisesRegex(PermissionError, "not authorized"):
+            self._link_case([{"parent": "owner@example.test"}], enabled=0)
+
+    def test_linked_enabled_account_is_the_only_one_logged_in(self):
+        sessions = self._link_case([{"parent": "owner@example.test"}])
+        self.assertEqual(sessions, [({"email": "owner@example.test", "sub": "synthetic-subject"},)])
+
     def test_denial_audit_records_reason_class_without_secrets(self):
         oauth = types.ModuleType("frappe.utils.oauth")
         oauth.get_oauth2_flow = lambda provider: (_ for _ in ()).throw(
