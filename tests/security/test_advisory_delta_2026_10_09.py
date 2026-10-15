@@ -273,19 +273,20 @@ class ProductScopeTests(unittest.TestCase):
         recs = {adv["id"]: adv for _, adv in _delta_records()}
         return recs["GHSA-c8x8-7fp4-3x9w"]
 
-    def test_c8x8_product_scope_was_an_open_blocker_and_is_now_verified_mitigated(self):
+    def test_c8x8_product_scope_was_an_open_blocker_and_is_lab_mitigated_pending_ci(self):
         scope = self._c8x8()["product_scope"]
-        # The 2026-10-09 finding is preserved as history; the 2026-10-15
-        # status is backed by the verified overlay and the built-component
-        # harness (see the evidence record it names).
+        # The 2026-10-09 finding is preserved as history. The 2026-10-15 status
+        # is lab-verified only; the release gate stays open until CI builds the
+        # release SHA and the built-component step passes.
         self.assertEqual(scope["prior_status_2026_10_09"], "OPEN_RELEASE_BLOCKER")
-        self.assertEqual(scope["status"], "MITIGATED_VERIFIED_OVERLAY")
+        self.assertEqual(scope["status"], "MITIGATED_LAB_VERIFIED_CI_PENDING")
+        self.assertTrue(scope["release_gate"].startswith("OPEN until"))
         self.assertIn("hrms/frontend", scope["tree"])
         self.assertIn("REACHABLE WITH USER INTERACTION", scope["reachability"])
         joined = " ".join(scope["evidence"])
         self.assertIn("FormField.vue:37-38", joined)
         self.assertIn("hooks.py:83-84", joined)
-        verified = scope["verified_2026_10_15"]
+        verified = scope["lab_verified_2026_10_15"]
         self.assertIn("secure_hrms.py", verified["mechanism"])
         self.assertIn("1.42.3", verified["overlay_result"])
         self.assertIn("hrms_editor_security.mjs", verified["built_component_harness"])

@@ -1,5 +1,9 @@
 # HRMS editor security acceptance — 2026-10-15
 
+**Status: lab-verified; CI-pending.** These results come from a local lab run on
+2026-10-15. No CI run on any release SHA has yet shown the `built-hrms-editor-security`
+step passing, so the GHSA-c8x8 HRMS release gate stays OPEN until it does.
+
 Scope: the **installed, built** HRMS `TextEditor` / `FormField` component
 (frappe-ui 0.1.105 TextEditor, prosemirror-view, Markdown-paste path) at the
 pinned source `frappe/hrms@a4768b441cff346def505e27f2a2229ee1e05b9b`. No mock
