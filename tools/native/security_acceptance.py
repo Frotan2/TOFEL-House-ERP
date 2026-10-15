@@ -178,11 +178,11 @@ def main() -> None:
         signed = jwt.encode(claims, private_key, algorithm="RS256", headers={"kid": "synthetic"})
         with patch.object(jwt, "PyJWKClient") as jwks:
             jwks.return_value.get_signing_key_from_jwt.return_value.key = private_key.public_key()
-            verified = social_login.verify_office365_id_token(signed, "synthetic-client")
+            verified = social_login.verify_office365_id_token(signed, "synthetic-client", tid)
             assert verified["tid"] == tid and verified["sub"] == "synthetic-subject"
             wrong = jwt.encode(claims, other_key, algorithm="RS256", headers={"kid": "synthetic"})
             try:
-                social_login.verify_office365_id_token(wrong, "synthetic-client")
+                social_login.verify_office365_id_token(wrong, "synthetic-client", tid)
             except jwt.InvalidSignatureError:
                 pass
             else:
@@ -197,7 +197,8 @@ def main() -> None:
                 enabled=1,
                 get_social_login_userid=lambda provider: "synthetic-subject",
             )
-            with (patch.object(oauth, "get_oauth2_flow", return_value=flow),
+            with (patch.dict(frappe.conf, {"office_365_tenant_id": tid}),
+                  patch.object(oauth, "get_oauth2_flow", return_value=flow),
                   patch.object(oauth, "get_redirect_uri", return_value="https://synthetic.example.test/cb"),
                   patch.object(oauth, "get_oauth_keys", return_value={"client_id": "synthetic-client"}),
                   patch.object(oauth, "login_oauth_user", side_effect=lambda *a, **k: calls.append((a, k))),
@@ -255,6 +256,32 @@ def main() -> None:
                 else:
                     raise AssertionError("Office 365 callback accepted an invalid signature")
                 assert len(calls) == 1, "Rejected callback established a login"
+
+                # A validly signed token from another tenant must be refused.
+                other_tid = "87654321-4321-4321-4321-cba987654321"
+                other_claims = dict(claims, tid=other_tid, iss=f"https://sts.windows.net/{other_tid}/")
+                session.access_token_response.text = json.dumps({
+                    "id_token": jwt.encode(other_claims, private_key, algorithm="RS256", headers={"kid": "synthetic"})})
+                with patch.dict(frappe.conf, {"office_365_tenant_id": tid}):
+                    try:
+                        social_login.login_via_office365("synthetic-code", "synthetic-state")
+                    except frappe.PermissionError:
+                        pass
+                    else:
+                        raise AssertionError("Office 365 accepted a token from another tenant")
+                assert len(calls) == 1, "Foreign-tenant token established a login"
+
+                # Without an owner-configured tenant every login is refused.
+                session.access_token_response.text = json.dumps({"id_token": signed})
+                with patch.dict(frappe.conf):
+                    frappe.conf.pop("office_365_tenant_id", None)
+                    try:
+                        social_login.login_via_office365("synthetic-code", "synthetic-state")
+                    except frappe.PermissionError:
+                        pass
+                    else:
+                        raise AssertionError("Office 365 login accepted without a configured tenant")
+                assert len(calls) == 1, "Unconfigured tenant established a login"
         print("Synthetic site: authorized PDF/preview, guarded direct constructor, identity-bound Office 365 callback PASS")
     finally:
         frappe.db.rollback()  # discard only this process's synthetic documents
