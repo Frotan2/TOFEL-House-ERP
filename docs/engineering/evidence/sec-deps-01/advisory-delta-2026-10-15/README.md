@@ -34,3 +34,20 @@ for all doctypes. It re-sanitizes only HTML-capable values that are valid JSON a
 The containment is unit-verified (`tests/security/test_html_containment_2026_10_15.py`). It has not
 been run against a live bench, so runtime verification is pending. The gate stays red for GHSA-vhrc
 until a hosted runtime check passes and a reinstatement is recorded.
+
+## Review of the page-level innerHTML sink (2026-10-16)
+
+The remaining review item was `apps/toefl_house/toefl_house/public/js/th_command_pages.js:564`. It is
+the only `innerHTML` sink in the file. It rebuilds the skill `<select>` from `active_skills()` codes.
+
+- **Input source:** `TH Skill` Active codes, returned to readers with an allowed role.
+- **Escaping:** the code is interpolated only through `escapeText`, which escapes `&`, `<`, `>`, `"`, and `'`.
+  It appears in both the `value` attribute and the label. `el.value` is used only for comparison.
+- **Verdict:** no injection path with the current escape. The case is not self-denial. The disposition
+  for this sink is "escaped, no finding". Nothing here depends on GHSA-vhrc.
+- **Regression guard:** `tests/foundation/test_command_pages.cjs` runs the shipped `escapeText` against a hostile
+  code, asserts the exact escaped output, asserts both interpolations are escaped, and fails if any
+  new `innerHTML` sink appears. Mutation check: removing the quote escaping makes the test exit 1 (verified; file restored).
+
+The six register records are covered by the table above. This round added the page-level sink review, which is not a register record. GHSA-vhrc remains BLOCKED. Its
+containment is unit-verified only, so the withdrawal stays until a runtime containment check exists.
