@@ -94,5 +94,30 @@ class UndispositionedWithdrawnAdvisoriesTests(unittest.TestCase):
                 self.assertEqual(rec["source_delta"], "advisory-delta-2026-10-15")
 
 
+class PyPaMirrorTests(unittest.TestCase):
+    """Run 38899033333 (head 61c4c42) surfaced two PyPA mirror ids as untriaged.
+
+    They mirror GHSA ids already dispositioned in the 2026-10-09 delta, with the same range.
+    """
+
+    def _finding(self, package, version, pid, aliases):
+        return {"package": {"name": package, "ecosystem": "PyPI"}, "version": version,
+                "id": pid, "aliases": aliases}
+
+    def test_ci_style_findings_resolve_to_their_mirrored_disposition(self):
+        triage = t.load_triage()
+        cases = [
+            ("weasyprint", "68.0", "PYSEC-2026-4311", ["CVE-2026-106443", "GHSA-r543-q48m-4c9j"],
+             "MITIGATED"),
+            ("werkzeug", "3.1.6", "PYSEC-2026-4312", ["CVE-2026-102598", "GHSA-g6x2-hccm-hh4m"],
+             "NOT_REACHABLE"),
+        ]
+        for package, version, pid, aliases, expected in cases:
+            with self.subTest(pid=pid):
+                res = t.triage_python([self._finding(package, version, pid, aliases)], triage)
+                self.assertEqual(res["untriaged"], [])
+                self.assertEqual(res["findings"][0]["disposition"], expected)
+
+
 if __name__ == "__main__":
     unittest.main()
