@@ -30,6 +30,7 @@ Office365Tests class was previously skipped in local runs for lack of that depen
 
 - `tests/security/test_security_remediation_2026_10_09.py::Office365Tests` (10 tests, executed): signature, algorithm, key URL, tampering, audience, issuer, expiry, tenant, unconfigured tenant, denial log without secrets, callback ordering, shared identity refused, unlinked identity refused, disabled linked account refused, only the linked enabled account logs in.
 - `tests/foundation/test_security_guards.py` (18 tests): disabled user revoked on every request, denied before scope evaluation, Guest and missing user unaffected.
+- `tests/security/test_disabled_user_paths_2026_10_15.py` (3 tests, static): pins the `auth_hooks` wiring and the check order, so the per-request guard covers session, API key and bearer tokens. Traced in pinned Frappe `frappe/auth.py::validate_auth`, which runs `validate_auth_via_hooks()` unconditionally, and `frappe/app.py::application`, which calls `validate_auth()` on every request.
 - Full suite on the session branch: `python3 -m unittest discover -s tests -t .` → 1307 tests OK, 0 skipped (with PyJWT[crypto] installed).
 
 ## Residual risks and owner actions
@@ -39,7 +40,11 @@ Office365Tests class was previously skipped in local runs for lack of that depen
 3. **Live Microsoft tenant test: unverified.** The sandbox cannot reach `login.microsoftonline.com`. A real sign-in with a synthetic test account on the owner's tenant is an owner-machine step (see procedure below). It has not been run.
 4. **Linking is an administrator action.** Creating the `User Social Login` row is a System Manager action. The procedure is part of the owner acceptance package, not a self-service flow.
 
-## Owner procedure (unverified; run on the owner's tenant with a synthetic test user)
+## Owner procedure (unverified)
+
+The full owner-run procedure, with negative tests N1 to N6 and disabled-user revocation, is in [LIVE-TENANT-PROCEDURE.md](LIVE-TENANT-PROCEDURE.md). The summary below is kept for reference.
+
+### Summary (run on the owner's tenant with a synthetic test user)
 
 1. Set `office_365_tenant_id` in site configuration to the tenant GUID.
 2. As System Manager, link one synthetic test user to the Office 365 subject from a single successful sign-in (provider `office_365`, userid = `sub` claim).
