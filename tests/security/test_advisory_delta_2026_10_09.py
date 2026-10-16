@@ -107,7 +107,10 @@ class ReplaySnapshotTests(unittest.TestCase):
         npm_result = t.triage_npm(npm_input, self.triage)
         self.assertEqual(len(npm_result["findings"]), len(SNAPSHOT["npm_entries"]))
         self.assertEqual(npm_result["untriaged"], [])
-        self.assertEqual(npm_result["open"], 0)
+        # Exactly one replayed record is open: GHSA-vhrc, withdrawn to BLOCKED by ERRATUM E6.
+        self.assertEqual(npm_result["open"], 1)
+        open_urls = [f["url"] for f in npm_result["findings"] if not f["pass"]]
+        self.assertEqual(open_urls, ["https://github.com/advisories/GHSA-VHRC-HGRQ-X75R"])
 
         py_findings = []
         for record in SNAPSHOT["pypi_records"]:

@@ -39,12 +39,13 @@ which equals the 47 expected groups.
 
 | Package | Advisory (matched version) | Register disposition | Source |
 |---|---|---|---|
-| `@tiptap/extension-link` | GHSA-VHRC-HGRQ-X75R (low, 2.2.3) | BROWSER_SELF_DENIAL | register (2026-09-23) |
+| `@tiptap/extension-link` | GHSA-VHRC-HGRQ-X75R (low, 2.2.3) | BLOCKED (withdrawn from BROWSER_SELF_DENIAL by ERRATUM E6, 2026-10-15) | register, with delta `advisory-delta-2026-10-15` |
 | `cookie` | GHSA-PXG6-PF52-XH8X (low, 0.4.2) | NOT_REACHABLE | register (2026-09-23) |
 | `yaml` | GHSA-48C2-RRV3-QJMP (moderate, 1.10.2 and 2.3.4) | BUILD_ONLY | register (2026-09-23) |
 
-`@tiptap/extension-link` is one of the four `BROWSER_SELF_DENIAL` dispositions. Its
-review is tracked separately in the BROWSER_SELF_DENIAL section of the security record.
+`@tiptap/extension-link` was one of the BROWSER_SELF_DENIAL records. Review on 2026-10-15 found
+its self-only premise false (ERRATUM E6), so it is now BLOCKED. The hidden group is therefore
+open, and the gate stays red for it until containment is verified at runtime.
 
 ## Change made
 

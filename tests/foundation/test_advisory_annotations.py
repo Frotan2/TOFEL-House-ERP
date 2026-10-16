@@ -288,7 +288,12 @@ class AdvisoryCompleteListTests(unittest.TestCase):
             rec = triage_mod.disposition_for_finding(
                 triage, package=package, advisories=[ghsa], finding_id=ghsa)
             self.assertIsNotNone(rec, package)
-            self.assertIn(rec["runtime_disposition"], triage_mod.CLOSED_DISPOSITIONS)
+            if package == "@tiptap/extension-link":
+                # Withdrawn 2026-10-15 (ERRATUM E6): the BROWSER_SELF_DENIAL premise does not hold.
+                self.assertEqual(rec["runtime_disposition"], "BLOCKED")
+                self.assertEqual(rec["withdrawn_from"], "BROWSER_SELF_DENIAL")
+            else:
+                self.assertIn(rec["runtime_disposition"], triage_mod.CLOSED_DISPOSITIONS)
 
 
 if __name__ == "__main__":
