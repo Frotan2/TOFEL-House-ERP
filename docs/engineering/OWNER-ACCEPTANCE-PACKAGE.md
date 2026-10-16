@@ -1,39 +1,83 @@
 # Owner acceptance package
 
-Status as of 2026-10-15: **NO-GO**. Each item below is an owner-run or owner-decision step. None of them has been executed by the engineering agent. No secret, token, key, password, tenant GUID or real site data belongs in this document or in any issue, commit or log. Record only the evidence listed in each row.
+Status as of 2026-10-16: **NO-GO**.
 
-Reference decisions: `docs/owner-decisions.json` (D12 to D17 recorded; D14 off-site backup is DEFERRED / FUTURE; business-policy values remain unresolved).
+- `main`: `7c847da` (PR #20 merged). Post-merge CI on `7c847da`: all four workflows SUCCESS.
+- Session branch `arena/dff19152-tofel-house-erp`: head `f6b3b46`, open as **PR #21**. It is not merged, so it is not release-ready.
+- Foundation on the session branch stays **red by design** at this head, because GHSA-VHRC-HGRQ-X75R is BLOCKED (see gate G2). The earlier red reason (two untriaged PyPA mirror IDs) is resolved at `391c9ca`.
+- Final release SHA: to be recorded after PR #21 merges and the required checks pass on that exact `main` SHA.
 
-## A. Required owner actions
+Every item below is an owner-run or owner-decision step. Engineering has not executed any of them. No secret, token, key, password, tenant GUID, or real site data belongs in this document, in an issue, a commit, or a log. Return only the evidence listed in each row.
+
+Reference decisions: `docs/owner-decisions.json` (D12 to D17 recorded; D14 off-site backup is DEFERRED / FUTURE; business-policy values unresolved).
+
+## A. Owner actions
 
 | # | Item | Owner action | Evidence to return (no secrets) | Blocks |
 |---|---|---|---|---|
-| A1 | Real Windows and Docker Desktop validation | Run the checklist in `product/windows/VALIDATION.md` on the owner's PC: fresh install, start/stop, reboot persistence, repair/update, Docker unavailable and interrupted-install recovery, launcher behavior. | Pass/fail per step, Windows and Docker versions, `docker compose config` result status, log excerpts with secrets redacted | Issue #12; NO-GO |
-| A2 | Separate backup drive (same PC) | Connect a dedicated drive. Confirm the ERP validates it as a fixed secondary drive and refuses the system drive and removable media. | Validation result, drive type and letter (not serials) | NO-GO |
-| A3 | Keep count and nightly schedule | Set the keep count and nightly time in ERP Configuration (Backup and Recovery). D17 allows deletion of valid older sets beyond the keep count only. | Configured keep count and time, one manual backup, the resulting set list | NO-GO |
-| A4 | Recovery key and private-key custody | Generate the OpenPGP recovery keypair on the owner machine. Publish only the public key to the ERP. Store the private key offline with the agreed custodians. Test one restore into a disposable folder. | Public-key fingerprint, custodian count and quorum policy, restore-rehearsal result (no private key material) | NO-GO |
+| A1 | Windows and Docker validation | Run `product/windows/VALIDATION.md` (steps 1 to 10) on the owner's PC, as its hold permits. Run the isolated procedure in `docs/engineering/evidence/windows-backup-readiness-2026-10-16/PROCEDURE.md` on a separate test machine with synthetic data. | Pass/fail per step (T1 to T10 and checklist steps), Windows and Docker versions, log excerpts with secrets redacted | Issue #12; NO-GO |
+| A2 | Separate backup drive (same PC) | Connect a dedicated drive. Confirm the ERP validates it as a fixed secondary drive and refuses the system drive and removable media. Accept the same-PC risk (README F4). | Validation result, drive type and letter (not serials) | NO-GO |
+| A3 | Keep count and nightly schedule | Set the keep count and nightly time in ERP Configuration (Backup and Recovery). D17 allows deletion of valid older sets beyond the keep count only. **Decide A9 first**, because the native staging folder is not rotated. | Configured keep count and time, one manual backup, the resulting set list | NO-GO |
+| A4 | Recovery key and custody | Generate the OpenPGP recovery keypair on the owner machine. Publish only the public key. Store the private key offline with named custodians. **Name the custodian count and quorum** (README F3). Test one restore into a disposable folder. | Public-key fingerprint, custodian count and quorum policy, restore-rehearsal result (no private key material) | NO-GO |
 | A5 | Tailscale multi-user acceptance | Add two synthetic test accounts on the tailnet. Verify each reaches only its permitted pages and no public exposure exists. | Account roles tested, reachability results per account | NO-GO |
-| A6 | Office 365 tenant pin | Set `office_365_tenant_id` in site configuration to the Entra tenant GUID (non-secret). Then run the owner procedure in `docs/engineering/evidence/microsoft-auth-review-2026-10-15/README.md`. | Denial log line counts and HTTP status codes only | NO-GO if Office 365 login is offered |
-| A7 | Business-policy values | Supply values for deferred academic progression, guardian, tax, refund-term, calendar/transfer and metrics-steward policy, or confirm they stay unconfigured and fail closed. | Written decision per item (decision record, not inferred) | NO-GO for affected features |
-| A8 | Issue #12 closure | After A1 to A5 evidence exists, comment on #12 with the evidence list and close it. (Engineering cannot comment on issues with its current token, HTTP 403.) | Link to this package and the evidence | Closure |
+| A6 | Office 365 tenant pin and live sign-in | Set `office_365_tenant_id` in site configuration to the Entra tenant GUID (non-secret). Then run `docs/engineering/evidence/microsoft-auth-review-2026-10-15/LIVE-TENANT-PROCEDURE.md` (negative cases N1 to N6, disabled-user revocation D1 to D5). Engineering has not run this. | Outcome table only (step, HTTP status, pass/fail, log-line counts) | NO-GO if Office 365 login is offered |
+| A7 | Business-policy values | Record a written decision per item in `docs/engineering/evidence/business-rules-review-2026-10-16/README.md` (the nine owner decisions). Confirm which stay unconfigured and fail closed. Tax, calendar, and transfer fields are **carriers only** and are not enforced (gap G1). | Written decision per item (a decision record, not inferred) | NO-GO for affected features |
+| A8 | Issue #12 closure | After A1 to A5 evidence exists, comment on #12 with the evidence list and close it. Engineering cannot comment on or close #12 (HTTP 403). | Link to this package and the evidence | Closure |
+| A9 | **Native staging folder rotation (new)** | The Windows backup writes a full encrypted native set to `product\data\sites\<site>\private\backups` on every run and never rotates it (README F1). Decide: keep, rotate beyond the keep count (D17), or move native output off the product data volume. | Decision record | **NO-GO for backup retention** |
+| A10 | Same-PC backup acceptance (new) | Acknowledge that the backup drive is on the same PC and that a PC-level loss takes the live site and backups together. Off-site backup is deferred (D14). | Written acknowledgement | NO-GO for backup |
+| A11 | Microsoft authorization code in logs (new) | Decide whether the reverse proxy redacts the `code` query parameter from access logs, or accept the risk (`microsoft-auth-review-2026-10-15/README.md`, residual risk 2). | Decision record; proxy redaction evidence if chosen | Microsoft login |
 
-## B. Repository decisions for the owner
+## B. Repository branch decisions for the owner
 
-| # | Decision | Current state |
+Verified 2026-10-16 after `git fetch --unshallow` (ancestry checks are invalid on a shallow clone).
+
+| # | Branch | Verified state | Recommendation |
+|---|---|---|---|
+| B1 | `arena/68836d1b-tofel-house-erp` (`63862fa`) | Ancestor of `main`. Zero commits not on `main`. Former PR #18 head. | Deletion is **not** in the owner's six-branch authorization. Keep unless the owner authorizes it. |
+| B2 | `arena/abdece6c-tofel-house-erp` (`097193d`) | Not an ancestor of `main`. **Nine** commits not on `main` (PR #13 security evidence and hold docs and tests). | Keep unless the owner confirms each commit is superseded. Do not delete without that confirmation. |
+| B3 | `arena/f99831e4-tofel-house-erp` (`4697e7d`) | Not an ancestor, but `git cherry` shows its one commit's patch is already on `main` (equivalent to PR #19). | Content is on `main`. Deletion needs owner authorization. |
+| B4 | `arena/c9b97074-tofel-house-erp` (`e9b6a6c`) | Ancestor of `main`. Merged via PR #20. | Deletion needs owner authorization. |
+| B5 | `arena/dff19152-tofel-house-erp` (`f6b3b46`) | Session branch, PR #21 open. | Keep until PR #21 merges. |
+
+No branch was deleted in this round. The six earlier deletions are the only authorized ones.
+
+## C. Release gates and evidence (as of `f6b3b46`)
+
+| Gate | Status | Evidence |
 |---|---|---|
-| B1 | Delete `arena/68836d1b-tofel-house-erp` (remote). | Zero unique commits; ancestor of `main`; PR #18 head. Not in the owner's earlier six-branch authorization, so it is kept until explicitly approved. |
-| B2 | Keep or delete `arena/abdece6c-tofel-house-erp`. | Nine commits not on `main` (PR13 security evidence and "hold" docs/tests). Keep unless the owner confirms each commit is superseded. Do not delete without that confirmation. |
-| B3 | Session branch `arena/f99831e4-tofel-house-erp`. | Holds the HRMS evidence commit `4697e7d` (also cherry-picked to the session branch). Keep until the session branch is merged. |
+| Local tests | PASS: 1344 OK, 0 skipped at the reviewed head; `ruff check .` clean | `python3 -m unittest discover -s tests -t .`; `ruff check .` |
+| Owned suite (CI) | Runs at `f6b3b46` (see the run list below). Prior runs at `61c4c42` and `391c9ca` passed. | Actions, owned-suite workflow |
+| Foundation (CI) | **Red by design.** The only non-closed replayed record is GHSA-VHRC-HGRQ-X75R (BLOCKED). Replay: 0 untriaged. The earlier untriaged PyPA mirror IDs are resolved. | `sec-deps-01/gate-replay-2026-10-16/`; run `38901735807` on `391c9ca` |
+| Advisory coverage | 153 identifiers in the CI-style snapshot resolve to 144 register records; 0 untriaged. Record dispositions: NOT_REACHABLE 53, BUILD_ONLY 47, MITIGATED 18, DEV_ONLY 18, BLOCKED 1, BROWSER_SELF_DENIAL 5, INSTALL_ONLY 2 | `advisory-delta-2026-10-09/replay-snapshot.json`; `sec-deps-01/*/delta-dispositions.json` |
+| Product image, Native | Passed at `61c4c42` (`38899033331`, `38899033418`). Re-run at `f6b3b46`. | Actions |
 
-## C. Engineering evidence status (for reference)
+### G1. Advisories (distinct, with disposition)
 
-| Area | Status | Source |
+- **GHSA-fgmj-fm8m-jvvx / CVE-2026-45249 (ECharts `<6.1.0`, medium):** NOT_REACHABLE. No ECharts in any pinned tree (`sec-deps-01/echarts-presence-2026-10-15/`).
+- **Three-package annotation gap** (`@tiptap/extension-link`, `cookie`, `yaml`): covered by the register. The earlier "hidden" rows were writer truncation, not coverage loss (`annotation-gap-2026-10-15/`). The step-summary display on a CI run is still unconfirmed.
+- **PYSEC-2026-4311 (weasyprint 68.0; alias of GHSA-r543-q48m-4c9j):** MITIGATED. The Ghostscript build guard in `product/app.Dockerfile` fails the image if `gs` is on PATH. Fix path: WeasyPrint 70.0, blocked upstream by the Frappe pin (68.0).
+- **PYSEC-2026-4312 (werkzeug 3.1.6; alias of GHSA-g6x2-hccm-hh4m):** NOT_REACHABLE. The Windows NTFS precondition does not hold in Linux containers. Fix path: Werkzeug 3.1.9, blocked upstream by the Frappe pin (3.1.6).
+- **GHSA-gv7w-rqvm-qjhr (esbuild, withdrawn 2026-06-17) and GHSA-8p5q-j9m2-g8wr (lodash, withdrawn 2021-10-01):** BUILD_ONLY.
+- **GHSA-c8x8-7fp4-3x9w (prosemirror-view, high):** MITIGATED_CI_VERIFIED_PRE_MERGE. It must be re-verified on the release SHA.
+- **GHSA-VHRC-HGRQ-X75R (`@tiptap/extension-link` `javascript:` href, XSS):** **BLOCKED**. The earlier self-denial premise was wrong: Frappe's `sanitize_html` JSON short-circuit returns stored values unchanged, so the exposure is cross-user. The Text Editor affected fields are hrms 20, education 5, erpnext 154. Containment is unit-verified only (`html_containment.py`, 11 tests). It stays BLOCKED until a live runtime containment check exists. Gate G2 below.
+- **th_command_pages.js innerHTML sink:** escaped, no finding. Guarded by `tests/foundation/test_command_pages.cjs` (mutation-checked).
+
+### G2. Other gates
+
+| Gate | Status | Evidence |
 |---|---|---|
-| Full test suite | 1307 OK, 0 skipped, local, with PyJWT[crypto] | `python3 -m unittest discover -s tests -t .` |
-| Lint | `ruff check .` clean (ruff 0.16.8, as CI) | owned-suite workflow |
-| HRMS editor, built component | Lab PASS on patched tree; FAIL on controls. CI-pending. | `docs/engineering/evidence/hrms-editor-2026-10-15/README.md` |
-| GHSA-c8x8 (HRMS prosemirror-view) | MITIGATED_LAB_VERIFIED_CI_PENDING; release gate OPEN | `advisory-delta-2026-10-09/delta-dispositions.json` |
-| Microsoft auth review | Fixed tenant pin, denial audit, disabled-user revocation; live tenant test unverified | `docs/engineering/evidence/microsoft-auth-review-2026-10-15/README.md` |
-| Business-rule enforcement review (workstream 5) | Not completed in this round | — |
-| Windows lifecycle | Owner-run only (A1) | `product/windows/VALIDATION.md` |
-| Backup and restore rehearsal | Synthetic CI tests only; real-machine verification is A2 to A4 | — |
+| GHSA-VHRC runtime containment | **OPEN (blocks release)**. Needs a live bench check that stored `javascript:` hrefs are re-sanitized on save, reopen, import, and render. | `advisory-delta-2026-10-15/README.md` |
+| HRMS editor (built component) | Lab PASS on the patched tree (Chromium 131 and 153); the controls fail on the security assertions. **Not cleared:** no logged-in full-form flow, and no server-side sanitization test for stored HTML. | `hrms-editor-2026-10-15/README.md` |
+| Microsoft auth (automated) | PASS: tenant pin, linking, disabled-user refusal, per-request guard. The static wiring test pins the `auth_hooks` order. | `tests/security/test_security_remediation_2026_10_09.py` (`Office365Tests`), `test_disabled_user_paths_2026_10_15.py` |
+| Microsoft auth (live tenant) | **UNVERIFIED.** Engineering has not signed in to any tenant. | `LIVE-TENANT-PROCEDURE.md` (A6) |
+| Business rules | Inventory complete. Enforced where tests exist. Tax, calendar, transfers, and capacity targets are not enforced (G1 in that review). Owner values are missing. | `business-rules-review-2026-10-16/README.md` (A7) |
+| Backup and retention | **Blocked by F1** (native staging not rotated). Integrity is checked at write time only; no restore verification (F2). Key custody and quorum are owner decisions (F3). | `windows-backup-readiness-2026-10-16/README.md` (A3, A4, A9) |
+| Windows lifecycle | **UNVERIFIED on a machine.** Source reviewed; tests need the owner's run. | `windows-backup-readiness-2026-10-16/PROCEDURE.md`; VALIDATION.md |
+| Tailscale multi-user | UNVERIFIED (A5) | - |
+| Issue #12 | OPEN, 0 comments (engineering cannot comment: HTTP 403). | - |
+
+## D. What "GO" needs
+
+GO is allowed only when every mandatory gate above has passing evidence on the final `main` SHA, and the owner-machine checks (A1 to A5, A6, A9, A10) have passed or been decided. Until then the release stays **NO-GO**.
+
+Mandatory engineering items still open: the GHSA-VHRC runtime containment check; the HRMS authenticated-flow and server-side sanitization tests; the state-replay test for the Microsoft callback; and the final-SHA CI on `main` after PR #21 merges.
