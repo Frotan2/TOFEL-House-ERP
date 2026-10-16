@@ -1,0 +1,51 @@
+{
+  "source": "check-run annotations, Foundation runtime job of run 38672481320 (head 7c847da)",
+  "count": 9,
+  "annotations": [
+    {
+      "annotation_level": "warning",
+      "path": "tools/foundation/runtime_install.py",
+      "message": "advisory matches (cont.): npm:colord@2.9.3 GHSA-2wm5-q62r-hmrv(moderate); npm:decode-uri-component@0.2.2 GHSA-vcc3-ghjq-m6fr(moderate); npm:esbuild@0.14.54,0.21.5 GHSA-67mh-4wv8-2f99(moderate); npm:markdown-it@14.0.0,14.3.2 GHSA-253c-mchw-3w2r(moderate),GHSA-38c4-r59v-3vqw(moderate),GHSA-6v5v-wf23-fmfq(moderate); npm:micromatch@4.0.5,4.0.8 GHSA-952p-6rrq-rcjv(moderate); npm:moment@2.29.4 GHSA-4p3w-j4w9-5jqw(moderate); npm:postcss-selector-parser@6.0.10,6.0.13,6.0.15,6.1.4 GHSA-rj75-hqrm-r3gf(moderate); npm:quill@1.3.7,2.0.3 GHSA-4943-9vgg-gr5r(moderate),GHSA-v3m3-f69x-jf25(low); npm:showdown@2.1.0 GHSA-22g5-r2x5-97cx(moderate),GHSA-cr32-g25g-vxjj(moder ... +3 packages not shown"
+    },
+    {
+      "annotation_level": "warning",
+      "path": "tools/foundation/runtime_install.py",
+      "message": "advisory matches (cont.): npm:vite@2.9.17,5.4.21,8.3.4 GHSA-c27g-q93r-2cwf(high),GHSA-fx2h-pf6j-xcff(high),GHSA-356w-63v5-8wf4(moderate),GHSA-4r4m-qw57-chr8(moderate),GHSA-4w7w-66w2-5vf9(moderate),GHSA-64vr-g452-qvp3(moderate),GHSA-859w-5945-r5v3(moderate),GHSA-8jhw-289h-jh2g(moderate),GHSA-9cwx-2883-4wfx(moderate),GHSA-v6wh-96g9-6wx3(moderate),GHSA-vg6x-rcgg-rjx6(moderate),GHSA-x574-m823-4x7w(moderate),GHSA-xcj6-pq6g-qj4x(moderate),GHSA-g4jq-h2w9-997c(low),GHSA-jqfw-vq24-v9c3(low); npm:ws@8.11.0,8.17.1,8.21.3 GHSA-3h5v-q93c-6h6q(high),GHSA-96hv-2xvq-fx4p(high),GHSA-58qx-3vcg-4xpx(moderate); npm:@tiptap/core@2.2.3,2.27.3 GHSA-cp6q-959q-f8rh(moderate)"
+    },
+    {
+      "annotation_level": "warning",
+      "path": "tools/foundation/runtime_install.py",
+      "message": "advisory matches (cont.): npm:postcss@5.2.18,6.0.23,7.0.39,8.4.31,8.4.35,8.5.30 GHSA-6g55-p6wh-862q(high),GHSA-r28c-9q8g-f849(high),GHSA-566m-qj78-rww5(moderate),GHSA-7fh5-64p2-3v2j(moderate),GHSA-fxqj-rqcc-2cmp(moderate),GHSA-qx2v-qp2m-jg93(moderate); npm:prosemirror-view@1.33.1,1.42.3 GHSA-c8x8-7fp4-3x9w(high); npm:rollup@2.77.3,4.64.6 GHSA-gcx4-mw62-g8wm(high),GHSA-mw96-cpmx-2vgc(high); npm:socket.io-parser@4.2.4,4.2.7 GHSA-2m8v-j782-fhvr(high),GHSA-677m-j7p3-52f9(high); npm:source-map-js@1.0.2,1.2.2 GHSA-68fv-2mgg-jv7q(high); npm:svgo@2.8.0 GHSA-2p49-hgcm-8545(high),GHSA-w27v-7q3p-w38r(high),GHSA-xpqw-6gx7-v673(high),GHSA-4vpr-x523-8j87(moderate); npm:tmp@0.2.4 GHSA-ph9p-34f9-6g65(high)"
+    },
+    {
+      "annotation_level": "warning",
+      "path": "tools/foundation/runtime_install.py",
+      "message": "advisory matches (cont.): npm:lodash-es@4.17.21 GHSA-r5fr-rjxr-66jc(high),GHSA-f23m-r3pf-42rh(moderate),GHSA-xxjr-mmjv-4gpg(moderate); npm:lodash@4.17.21,4.18.1 GHSA-r5fr-rjxr-66jc(high),GHSA-f23m-r3pf-42rh(moderate),GHSA-xxjr-mmjv-4gpg(moderate); npm:minimatch@10.2.6,3.1.2,3.1.5,5.1.9,9.0.3 GHSA-23c5-xmqv-rm74(high),GHSA-3ppc-4f35-3m26(high),GHSA-7r86-cg39-jmmj(high); npm:nanoid@3.3.20,3.3.7,3.3.8,5.1.16 GHSA-28wg-ghj8-5hjv(high),GHSA-2v37-7h3g-55p8(high),GHSA-xwg4-73v4-xw9w(high),GHSA-mwcw-c2x4-8c55(moderate); npm:picomatch@2.3.1,2.3.2,4.0.7 GHSA-c2c7-rcm5-vvqj(high),GHSA-3v7f-55p6-f55p(moderate)"
+    },
+    {
+      "annotation_level": "warning",
+      "path": "tools/foundation/runtime_install.py",
+      "message": "advisory matches (cont.): npm:browserslist@4.22.1,4.23.0,4.29.3 GHSA-73wf-gq98-2v4g(high),GHSA-c83g-rgw3-j3cx(high); npm:cross-spawn@7.0.3,7.0.6 GHSA-3xgq-45jj-v275(high); npm:engine.io@6.5.4 GHSA-gr94-w7qr-f4j3(high),GHSA-r635-g3xr-vw7x(high); npm:glob@10.3.10,11.1.0,7.2.3 GHSA-5j98-mcp5-4vw2(high); npm:immutable@4.3.4 GHSA-v56q-mh7h-f735(high),GHSA-wf6x-7x77-mvgw(high),GHSA-xvcm-6775-5m9r(high); npm:json5@0.5.1,2.2.3 GHSA-9c47-m6qq-7p4h(high); npm:launch-editor@2.6.1 GHSA-c27g-q93r-2cwf(high),GHSA-v6wh-96g9-6wx3(moderate); npm:linkify-it@5.0.0,5.0.2 GHSA-22p9-wv53-3rq4(high),GHSA-v245-v573-v5vm(high)"
+    },
+    {
+      "annotation_level": "warning",
+      "path": "tools/foundation/runtime_install.py",
+      "message": "advisory matches (cont.): py:werkzeug@3.1.6 GHSA-g6x2-hccm-hh4m(?); npm:loader-utils@0.2.17,3.2.1 GHSA-76p3-8jx3-jpfq(critical); npm:shell-quote@1.8.1 GHSA-w7jw-789q-3m8p(critical),GHSA-395f-4hp3-45gv(high); npm:@vue/server-renderer@3.3.9,3.4.19,3.5.44 GHSA-g2v6-rqmx-r4w6(high); npm:brace-expansion@1.1.11,1.1.21,2.0.1,2.1.7,5.0.12 GHSA-3jxr-9vmj-r5cp(high),GHSA-6j4f-fj2g-mc7p(high),GHSA-mh99-v99m-4gvg(high),GHSA-qhr7-859c-m2p7(high),GHSA-rgw5-rvv9-x895(high),GHSA-f886-m6hf-6m8v(moderate),GHSA-q2hr-2g5m-vwhr(moderate),GHSA-v6h2-p8h4-qcjw(low); npm:braces@3.0.2,3.0.3 GHSA-grv7-fg5c-xmjg(high),GHSA-vfj7-8cjw-p6xm(high)"
+    },
+    {
+      "annotation_level": "warning",
+      "path": "tools/foundation/runtime_install.py",
+      "message": "advisory matches (cont.): py:pypdf@6.15.0 GHSA-23w6-3w8w-8484(?),GHSA-5jq2-8x83-x246(?),GHSA-763m-79hh-57f2(?),GHSA-fp3h-c4fm-7vvf(?),GHSA-g9cg-prrw-2r8q(?),GHSA-jp53-mhqp-8xcg(?),GHSA-jw7q-gvrg-4vj3(?),GHSA-php9-fj8v-98fj(?),GHSA-qv6h-rv94-w285(?),GHSA-v247-6f48-mgcj(?),GHSA-w23x-9jrw-r45c(?),PYSEC-2026-3910(?),PYSEC-2026-3911(?),PYSEC-2026-3913(?),PYSEC-2026-4153(?),PYSEC-2026-4154(?),PYSEC-2026-4155(?),PYSEC-2026-4156(?),PYSEC-2026-4157(?),PYSEC-2026-4158(?),PYSEC-2026-4159(?),PYSEC-2026-4160(?); py:setuptools@80.9.0 GHSA-h35f-9h28-mq5c(?),PYSEC-2026-3447(?); py:weasyprint@68.0 GHSA-jf6q-chmf-3h3v(?),GHSA-jhhc-3hcp-qhm5(?),GHSA-r543-q48m-4c9j(?),PYSEC-2026-3412(?),PYSEC-2026-3940(?)"
+    },
+    {
+      "annotation_level": "warning",
+      "path": "tools/foundation/runtime_install.py",
+      "message": "advisory matches (cont.): py:pyjwt@2.13.0 GHSA-2gx3-rcp4-g85q(?),GHSA-42vr-xj54-vc7v(?),GHSA-8wjv-2p76-3863(?),GHSA-9j54-fg26-wv3r(?),GHSA-9v7f-9g4p-ffgj(?),GHSA-ffc3-869f-jxw9(?),GHSA-gvp8-978c-rx2q(?),GHSA-hxm8-2xgr-2p9m(?),GHSA-jwrc-g2q2-pq5p(?),GHSA-p4g4-x82p-q773(?),GHSA-r6x4-923q-g947(?),GHSA-w2cx-738m-mc7w(?),GHSA-w6j9-cwv2-h6wq(?),GHSA-x33g-cr3x-6449(?),PYSEC-2026-4140(?),PYSEC-2026-4141(?),PYSEC-2026-4142(?),PYSEC-2026-4143(?),PYSEC-2026-4144(?),PYSEC-2026-4145(?),PYSEC-2026-4146(?),PYSEC-2026-4147(?),PYSEC-2026-4148(?),PYSEC-2026-4149(?),PYSEC-2026-4150(?),PYSEC-2026-4151(?),PYSEC-2026-4152(?),PYSEC-2026-4183(?)"
+    },
+    {
+      "annotation_level": "warning",
+      "path": "tools/foundation/runtime_install.py",
+      "message": "advisory matches=160 in 47 packages: py:oauthlib@3.3.1 GHSA-hj66-6f7g-4r5v(?),GHSA-xpv3-w29h-x7cv(?),PYSEC-2026-4113(?),PYSEC-2026-4114(?); py:pdfkit@1.0.0 GHSA-9g3x-6x24-vf9f(?),PYSEC-2026-2860(?)"
+    }
+  ]
+}

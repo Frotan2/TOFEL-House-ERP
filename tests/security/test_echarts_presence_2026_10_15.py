@@ -7,14 +7,35 @@ that keep the latent route closed. Re-run the reproduction in the evidence
 README when a pinned SHA, a frappe-ui range, or a frozen-install control changes.
 """
 import json
+import subprocess
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE = ROOT / "docs/engineering/evidence/sec-deps-01/echarts-presence-2026-10-15"
 TREE_NAMES = ("erpnext", "education", "payments", "hrms", "frappe")
-SKIP_DIRS = {".git", "docs", "tests", "node_modules", "__pycache__"}
+SKIP_DIRS = {"docs", "tests", "node_modules", "__pycache__"}
 BINARY_SUFFIXES = {".pyc", ".png", ".jpg", ".gz", ".br", ".zip"}
+
+
+def _repository_files():
+    """Shipped code and locks: tracked files (or the working tree) minus docs, tests, and caches.
+
+    Docs and tests name echarts by design (advisory records, fixtures); the tripwire is for shipped trees.
+    """
+    try:
+        out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True,
+                             check=True, timeout=60).stdout
+        listed = [Path(p) for p in out.decode("utf-8", "surrogateescape").split("\0") if p]
+        return [p for p in listed if not any(part in SKIP_DIRS for part in p.parts)]
+    except (OSError, subprocess.SubprocessError):
+        files = []
+        for path in ROOT.rglob("*"):
+            relative = path.relative_to(ROOT)
+            if any(part.startswith(".") or part in SKIP_DIRS for part in relative.parts):
+                continue
+            files.append(relative)
+        return files
 
 
 class EchartsPresenceTests(unittest.TestCase):
@@ -30,11 +51,9 @@ class EchartsPresenceTests(unittest.TestCase):
             self.assertEqual(trees[matches[0]]["source_hits"], 0, name)
 
     def test_repository_tracked_code_has_no_echarts(self):
-        for path in ROOT.rglob("*"):
-            relative = path.relative_to(ROOT)
-            if not path.is_file() or any(part in SKIP_DIRS for part in relative.parts):
-                continue
-            if path.suffix in BINARY_SUFFIXES:
+        for relative in _repository_files():
+            path = ROOT / relative
+            if not path.is_file() or path.suffix in BINARY_SUFFIXES:
                 continue
             try:
                 text = path.read_text(encoding="utf-8", errors="ignore")
