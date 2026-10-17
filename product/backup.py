@@ -35,6 +35,11 @@ BACKUP_SUFFIXES = {
     "private_files": "-private-files-enc.tar",
 }
 CONFIG_MARKER = "-site_config_backup"
+# Must equal apps/toefl_house/.../owner_configuration.py; tests compare the two.
+RETENTION_PRESERVE_ALL = "Preserve all valid backup sets"
+RETENTION_DELETE_BEYOND_KEEP = "Delete valid older sets beyond keep count"
+MIN_RETAINED_SETS = 2
+TIMESTAMPED_SET = re.compile(r"(\d{8}_\d{6})-[^/\\\x00]+\Z")
 BACKUP_SET_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,159}\Z")
 
 
@@ -220,10 +225,122 @@ def _verify_and_publish(backup_result, staging_dir: Path, destination_dir: Path,
     if any(path.exists() or path.is_symlink() for path in destinations.values()):
         raise BackupInputError(
             "refusing to overwrite a pre-existing native Frappe backup set")
-    for role in BACKUP_SUFFIXES:
-        _publish_without_overwrite(native_paths[role], destinations[role])
-    _publish_without_overwrite(native_paths["site_config"], destinations["site_config"])
+    published = []
+    try:
+        for role in BACKUP_SUFFIXES:
+            _publish_without_overwrite(native_paths[role], destinations[role])
+            published.append(destinations[role].name)
+        _publish_without_overwrite(native_paths["site_config"], destinations["site_config"])
+    except BackupInputError:
+        if not published:
+            raise
+        # Owner decision F7: leave what was published, never delete it here, and say
+        # plainly that the set is incomplete. The sidecar is the completion marker and
+        # was not written, so retention never counts or deletes this set automatically.
+        raise BackupInputError(
+            f"native backup set {backup_set} is incomplete: {len(published)} encrypted "
+            "artifact(s) were published without the site-config sidecar and were left in "
+            "the native backup folder for owner cleanup; no sets were deleted",
+            safe_code="native-publish-incomplete") from None
     return backup_set
+
+
+def _complete_native_sets(native_dir: Path) -> dict:
+    """Classify native sets. Only regular, non-symlink files count as present.
+
+    Returns {set_name: {"complete": bool, "timestamp": str|None, "files": [Path...]}}.
+    A set is complete only when all three encrypted artifacts and at least one
+    site-config sidecar are present as regular files.
+    """
+    # Every set has a database artifact. Derive names from that suffix only:
+    # "-files-enc.tar" is also a suffix of "-private-files-enc.tar".
+    database_suffix = BACKUP_SUFFIXES["database"]
+    names = {entry.name[:-len(database_suffix)] for entry in native_dir.iterdir()
+             if entry.name.endswith(database_suffix)}
+    sets = {}
+    for name in sorted(names):
+        match = TIMESTAMPED_SET.fullmatch(name)
+        artifacts = [native_dir / f"{name}{suffix}" for suffix in BACKUP_SUFFIXES.values()]
+        sidecars = [p for p in native_dir.iterdir()
+                    if p.name.startswith(f"{name}{CONFIG_MARKER}") and p.name.endswith(".json")]
+        every = artifacts + sidecars
+        regular = all(p.is_file() and not p.is_symlink() for p in every) and bool(sidecars)
+        sets[name] = {
+            "complete": regular,
+            "timestamp": match.group(1) if match else None,
+            "files": every,
+        }
+    return sets
+
+
+def rotate_native_sets(native_dir: Path, *, keep_count, protect_set: str) -> dict:
+    """Owner D17 for the native folder: keep the newest ``keep_count`` complete sets.
+
+    Fail closed: any problem raises before a single file is removed. Incomplete,
+    symlinked, or non-timestamped sets are preserved and never counted. Each set's
+    site-config sidecar (which holds the backup key) is removed first, so an
+    interrupted deletion leaves an incomplete set that later runs never delete.
+    """
+    if (not isinstance(keep_count, int) or isinstance(keep_count, bool)
+            or keep_count < MIN_RETAINED_SETS):
+        raise BackupInputError("native retention keep count is not a configured value; no sets were deleted",
+                               safe_code="native-retention-keep-count-invalid")
+    if native_dir.is_symlink() or not native_dir.is_dir():
+        raise BackupInputError("native backup folder is unsafe; no sets were deleted",
+                               safe_code="native-retention-folder-unsafe")
+    sets = _complete_native_sets(native_dir)
+    valid = [(info["timestamp"], name) for name, info in sets.items()
+             if info["complete"] and info["timestamp"]]
+    valid.sort(reverse=True)
+    keep = [name for _, name in valid[:keep_count]]
+    if protect_set not in keep:
+        raise BackupInputError(
+            "native retention plan would discard the newly verified backup; no sets were deleted",
+            safe_code="native-retention-would-drop-current")
+    doomed = [name for _, name in valid[keep_count:]]
+    removed = []
+    for name in doomed:
+        info = sets[name]
+        sidecars = [p for p in info["files"] if CONFIG_MARKER in p.name]
+        artifacts = [p for p in info["files"] if CONFIG_MARKER not in p.name]
+        try:
+            for path in sidecars + artifacts:
+                if path.is_symlink() or not path.is_file():
+                    raise OSError
+                path.unlink()
+        except OSError:
+            raise BackupInputError(
+                f"native retention was interrupted while removing {name}; the remaining files are "
+                "an incomplete set for owner cleanup; earlier sets were already removed",
+                safe_code="native-retention-interrupted") from None
+        removed.append(name)
+    return {"kept": keep, "removed": removed}
+
+
+def _current_owner_backup_policy() -> dict:
+    """Read the validated Owner policy from Frappe. Missing or invalid means not configured."""
+    try:
+        from toefl_house.operations import owner_configuration
+    except Exception:
+        return {"configured": False, "status": "NOT CONFIGURED"}
+    return owner_configuration.current_backup_policy()
+
+
+def _apply_native_retention(destination_dir: Path, published_set: str, policy=None) -> str:
+    """Apply the Owner-selected retention to the native folder; default is no deletion."""
+    if policy is None:
+        policy = _current_owner_backup_policy()
+    if not isinstance(policy, dict) or policy.get("configured") is not True:
+        return "not configured; no native sets were deleted"
+    behavior = policy.get("retention_behavior")
+    if behavior == RETENTION_PRESERVE_ALL:
+        return "preserve all valid native sets"
+    if behavior != RETENTION_DELETE_BEYOND_KEEP:
+        return "retention behavior not recognised; no native sets were deleted"
+    result = rotate_native_sets(
+        destination_dir, keep_count=policy.get("retention_versions"), protect_set=published_set)
+    return (f"kept {len(result['kept'])} complete set(s); removed {len(result['removed'])} "
+            "older complete set(s)")
 
 
 def _native_backup(site_name: str | None = None, *, allow_test_site: bool = False) -> None:
@@ -240,6 +357,7 @@ def _native_backup(site_name: str | None = None, *, allow_test_site: bool = Fals
 
     caller_cwd = Path.cwd()
     initialized = False
+    retention_status = None
     captured = io.StringIO()
     try:
         os.chdir(SITES_DIR)
@@ -285,8 +403,9 @@ def _native_backup(site_name: str | None = None, *, allow_test_site: bool = Fals
                                 verbose=False,
                                 backup_path=str(staging_dir),
                             )
-                    _verify_and_publish(
+                    published_set = _verify_and_publish(
                         backup_result, staging_dir, destination_dir, encryption_key)
+                    retention_status = _apply_native_retention(destination_dir, published_set)
             finally:
                 backups.delete_temp_backups = original_cleanup
     finally:
@@ -299,6 +418,7 @@ def _native_backup(site_name: str | None = None, *, allow_test_site: bool = Fals
                     pass
         finally:
             os.chdir(caller_cwd)
+    return retention_status
 
 
 def main(argv=None, stdout=None, stderr=None) -> int:
@@ -311,7 +431,7 @@ def main(argv=None, stdout=None, stderr=None) -> int:
         stderr.write("Backup refused: this adapter accepts no command-line arguments.\n")
         return 2
     try:
-        _native_backup()
+        retention_status = _native_backup()
     except BackupInputError as exc:
         stderr.write(f"Backup refused: {exc}\n")
         return 2
@@ -330,6 +450,7 @@ def main(argv=None, stdout=None, stderr=None) -> int:
     stdout.write(
         "Native Frappe database/files backup completed and GPG encryption verified; "
         "the host recovery-sidecar step remains separate.\n")
+    stdout.write(f"Native retention: {retention_status}\n")
     return 0
 
 

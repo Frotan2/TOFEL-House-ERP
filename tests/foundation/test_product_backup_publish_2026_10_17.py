@@ -5,9 +5,8 @@ installed in the sandbox; the real packet check stays covered by its own suite a
 UNVERIFIED on a real gpg binary. Everything else in `_verify_and_publish` runs for real:
 name checks, the pre-existence guard, the site-config key match, and the no-overwrite link.
 
-`test_partial_publish_leaves_orphan_until_owner_decides_f7` pins CURRENT behaviour. It is not
-an endorsement: when the owner decides how partial sets are handled (F7), this test must be
-updated in the same change as the fix.
+Owner decision F7 (2026-10-17): on a partial publish, leave the published artifacts for owner
+cleanup, report the set as incomplete, and never write the sidecar or delete anything here.
 """
 from __future__ import annotations
 
@@ -82,18 +81,34 @@ class PartialPublishTests(unittest.TestCase):
     def _destination_names(self):
         return sorted(p.name for p in self.destination.iterdir())
 
-    def test_partial_publish_leaves_orphan_until_owner_decides_f7(self):
+    def test_partial_publish_is_reported_incomplete_and_left_for_owner_cleanup(self):
         def fail_second(index, source, destination, original):
             if index == 2:
                 raise BACKUP.BackupInputError("synthetic copy failure on second artifact")
             original(source, destination)
 
-        with self.assertRaises(BACKUP.BackupInputError):
+        with self.assertRaises(BACKUP.BackupInputError) as caught:
             self._run(fail_second)
 
-        # Current behaviour: the first artifact stays, with no sidecar and no rollback.
+        # The error says plainly that the set is incomplete and that nothing was deleted.
+        self.assertEqual(caught.exception.safe_code, "native-publish-incomplete")
+        self.assertIn("incomplete", str(caught.exception))
+        self.assertIn("owner cleanup", str(caught.exception))
+        self.assertIn(SET, str(caught.exception))
+        # The published artifact stays (no silent rollback); the completion sidecar was never written.
         self.assertEqual(self._destination_names(), [self.names["database"]])
-        # The plaintext key sidecar is published last, so it was never written.
+        self.assertNotIn(self.names["site_config"], self._destination_names())
+
+    def test_failure_on_site_config_sidecar_is_also_reported_incomplete(self):
+        def fail_sidecar(index, source, destination, original):
+            if destination.name == self.names["site_config"]:
+                raise BACKUP.BackupInputError("synthetic sidecar failure")
+            original(source, destination)
+
+        with self.assertRaises(BACKUP.BackupInputError) as caught:
+            self._run(fail_sidecar)
+        self.assertEqual(caught.exception.safe_code, "native-publish-incomplete")
+        self.assertEqual(len(self._destination_names()), 3)
         self.assertNotIn(self.names["site_config"], self._destination_names())
 
     def test_failure_on_first_copy_leaves_destination_empty(self):
