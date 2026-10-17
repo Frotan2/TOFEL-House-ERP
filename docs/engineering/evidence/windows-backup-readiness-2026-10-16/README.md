@@ -44,3 +44,13 @@ Deletion ordering is therefore: **verify new set → commit → verify committed
 - Key custody and quorum: **owner decision** (F3; owner action A4).
 - Same-PC drive: **accepted local-only risk** pending owner restatement (F4).
 - Windows lifecycle (install, repair, reboot, interrupted recovery): **UNVERIFIED** until the owner runs PROCEDURE.md on an isolated machine.
+
+## Owner decision options for F2, F1, and F7 (recorded 2026-10-17; nothing applied)
+
+Checked against `product/backup.py` and `product/restore.py` at `ed4f7cd`:
+
+- **F2 (restore integrity).** Publish never persists a digest. `_publish_without_overwrite` compares the temporary copy with the source only at copy time and then discards the hash. Restore (`_stage_restore_artifacts`) hashes the source and its staged copy against each other, not against any recorded digest. So a corrupted or substituted encrypted artifact cannot be detected at restore.
+  - Option A: keep restore out of the release (status quo, "not claimable"). The owner acknowledges that restore is untested.
+  - Option B: publish a per-set digest manifest and make restore fail closed on a missing or mismatched digest. Consequence: backup sets created before the change have no manifest and cannot be restored automatically. The owner must choose refusal or a documented manual path for them. Retention and the PowerShell rotation must also delete the manifest with its set.
+- **F1 (native staging never rotated).** Options: (A) rotate native sets with the same keep count as D17; (B) keep every native set until the owner clears them by hand. Neither can be verified on this sandbox (no PowerShell).
+- **F7 (partial native publish).** Options: (A) on failure, remove the artifacts this run published (never pre-existing ones) and report the failure; (B) leave them and rely on an owner-run orphan cleanup, with the set marked incomplete; (C) keep the current behaviour pinned by `tests/foundation/test_product_backup_publish_2026_10_17.py`, which is not a release-quality choice.
