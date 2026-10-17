@@ -31,8 +31,9 @@ new advisory published after `07117ea4`. The reproduction above shows none.
 - The full audit JSON artifact (`foundation-runtime-39034054581-1`) cannot be downloaded from the sandbox: its
   blob host is not on the allow-list. The full-stack annotation set is incomplete (12 packages not shown).
 - OSV Python findings were not queried directly.
-- The repro inventory is the upstream lockfile, not the rebuilt bench `node_modules`. In this reproduction
-  the two agree on every triaged ID that appears in the annotations.
+- The repro inventory is the upstream lockfile, not the rebuilt bench `node_modules`. It was not compared
+  package-by-package against the CI inventory, so the match is by result (the open entry and the closed set),
+  not by a verified inventory diff.
 
 ## What stays open
 

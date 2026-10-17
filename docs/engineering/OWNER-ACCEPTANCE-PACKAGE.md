@@ -1,10 +1,10 @@
 # Owner acceptance package
 
-Status as of 2026-10-16: **NO-GO**.
+Status as of 2026-10-17: **NO-GO**.
 
 - `main`: `7c847da` (PR #20 merged). Post-merge CI on `7c847da`: all four workflows SUCCESS.
-- Session branch `arena/dff19152-tofel-house-erp`: head `07117ea4`, open as **PR #21**. It is not merged, so it is not release-ready. PR #21 must not be merged while Foundation is red.
-- Foundation on the session branch is **red by design** at this head, because GHSA-VHRC-HGRQ-X75R is BLOCKED (see gate G2). Run `38904598642` on `07117ea4`: `hosted-full-stack-dependency-audit` and `hosted-frontend-advisory-audit` exit 1, with no untriaged finding. The earlier red reasons are resolved: the two PyPA mirror IDs (`391c9ca`), and a transient `get-app-hrms` failure (`f6b3b46`, passed on re-trigger at `07117ea4`).
+- Session branch `arena/dff19152-tofel-house-erp`: engineering head `f59836b` (Owned green there; Foundation red, see below), open as **PR #21**. Evidence commits follow it. The current head is the PR's head: `gh pr view 21`. It is not merged, so it is not release-ready. PR #21 must not be merged while Foundation is red.
+- Foundation on the session branch is **red by design** at `f59836b` (run `39034054581`, failed at `Install and validate the pinned foundation`). Cause reproduced 2026-10-17 (`sec-deps-01/foundation-replay-f59836b-2026-10-17/`): the frontend audit's only open entry is GHSA-VHRC-HGRQ-X75R (BLOCKED), and no untriaged finding appears in the reproduction or the visible annotations. The full artifact cannot be downloaded from the sandbox, so the full-stack audit is confirmed only for the visible annotation IDs. Earlier history: Foundation was red at `07117ea4` for the same reason (run `38904598642`).
 - Final release SHA: to be recorded after PR #21 merges and the required checks pass on that exact `main` SHA.
 
 Every item below is an owner-run or owner-decision step. Engineering has not executed any of them. No secret, token, key, password, tenant GUID, or real site data belongs in this document, in an issue, a commit, or a log. Return only the evidence listed in each row.
@@ -45,9 +45,9 @@ No branch was deleted in this round. The six earlier deletions are the only auth
 
 | Gate | Status | Evidence |
 |---|---|---|
-| Local tests | PASS: 1344 OK, 0 skipped at the reviewed head; `ruff check .` clean | `python3 -m unittest discover -s tests -t .`; `ruff check .` |
-| Owned suite (CI) | PASS at `f6b3b46` (`38904134125` push, `38904142522` pull_request) and at `07117ea4` (runs `38904598078`, `38904605579`). | Actions, owned-suite workflow |
-| Foundation (CI) | **Red by design** at `07117ea4` (run `38904598642`). The only non-closed replayed record is GHSA-VHRC-HGRQ-X75R (BLOCKED). Replay: 0 untriaged. The earlier PyPA mirror IDs are resolved. | `sec-deps-01/gate-replay-2026-10-16/` (run history table) |
+| Local tests | PASS at `f59836b`: 1360 OK, 0 skipped; `ruff check .` clean. Earlier: 1344 OK at `f6b3b46`. | `python3 -m unittest discover -s tests -t .`; `ruff check .` |
+| Owned suite (CI) | PASS at `f59836b` (`39034054544` push, `39034057519` pull_request; every step including `Install hash-pinned crypto test dependencies` and `Python test tree`). PASS at `f6b3b46`
+| Foundation (CI) | **Red by design** at `f59836b` (run `39034054581`), the same cause as `07117ea4` (run `38904598642`). The only open record is GHSA-VHRC-HGRQ-X75R (BLOCKED). | `sec-deps-01/foundation-replay-f59836b-2026-10-17/`. Earlier: `sec-deps-01/gate-replay-2026-10-16/` (run history table) |
 | Advisory coverage | 153 identifiers in the CI-style snapshot resolve to 144 register records; 0 untriaged. Record dispositions: NOT_REACHABLE 53, BUILD_ONLY 47, MITIGATED 18, DEV_ONLY 18, BLOCKED 1, BROWSER_SELF_DENIAL 5, INSTALL_ONLY 2 | `advisory-delta-2026-10-09/replay-snapshot.json`; `sec-deps-01/*/delta-dispositions.json` |
 | Product image, Native | Passed at `61c4c42` (`38899033331`, `38899033418`). Re-run at `f6b3b46`. | Actions |
 
