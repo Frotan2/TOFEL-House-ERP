@@ -28,7 +28,7 @@ Sources: `docs/owner-decisions.json` (`configurable_business_policy`,
 | Domain (owner list) | Configuration location | Backend enforcement | Tests (verified by name or docstring) | Unset / invalid / unauthorized | Status |
 |---|---|---|---|---|---|
 | Assessment and progression | `academic/doctype/th_assessment_policy*` (status and versions only). Numeric grading terms are **not** stored. | Policy shell only. A guard test forbids numeric grading/cutoff constants in any Python module (`test_foundation.py::test_no_owned_python_module_contains_assessment_numeric_policy`). | `test_foundation.py` (progression evidence and target), `test_desk_contract.py` (progression chain) | No numeric rule exists, so none can be applied. Fail-closed by absence. | **Deferred by owner (D4, D5; unresolved inputs).** Not enforceable yet. |
-| Refunds and corrections | `finance/doctype/th_correction_policy*`, `th_adjustment_posting_policy*` | `finance/corrections.py` states it supplies no default term, amount, tax, or refund rule. | `tests/finance/test_corrections.py`, `test_policy.py` (13), `test_containment_hooks.py` | Tested fail-closed for unconfigured corrections. Refund **terms** are not configured. | **Refund-term details deferred.** The mechanism exists; values do not. |
+| Refunds and corrections | `finance/doctype/th_correction_policy*`, `th_adjustment_posting_policy*` | `finance/corrections.py` states it supplies no default term, amount, tax, or refund rule. | `tests/finance/test_corrections.py`, `tests/finance/test_policy.py` (13), `test_containment_hooks.py` | Tested fail-closed for unconfigured corrections. Refund **terms** are not configured. | **Refund-term details deferred.** The mechanism exists; values do not. |
 | Tax | Carried only in `th_owner_operations_policy` (tax field). `desk/configuration.py:108`: "tax terms are a decision carrier only and are NOT a live tax authority until a native finance consumer is explicitly implemented and qualified." | **None.** Not enforced anywhere. Tax is native ERPNext behaviour (`finance/__init__.py:214`). | `test_owner_operations_policy.py` checks storage, not tax computation. | No tax is computed, so no tax can be wrongly applied. Fail-closed by absence. | **Not enforced. Owner decision D6a, "tax not configured yet".** |
 | Fees and billing | `finance/doctype/th_billing_policy*` (versions, bounds, timing, stage thresholds) | `finance/policy.py` plus billing commands gated by the receipted gate. | `tests/finance/test_billing_policy.py` (23, OD-NEW-03/04): `test_governing_read_fails_closed_without_policy_or_version`, `test_retire_is_the_off_switch`, `test_bad_bounds_are_refused`, `test_released_needs_a_decision`, `test_commands_route_through_the_receipted_gate`. `tests/enrollment/test_billing_guards.py` (9, S1). | Unset or invalid billing terms are refused and cannot silently default. | **Mechanism tested.** The owner's fee and discount values are not supplied (A7). |
 | Capacity | `placement/*` allocation policy and owner-operations capacity target field | `tests/placement/test_allocation_policy.py` covers the read-boundary matrix. The owner-operations capacity field is a carrier. | `test_allocation_policy.py` (7), `test_config_policy.py` (22) | Not computed from a capacity target. | **Capacity target deferred (A7).** Not enforced as a limit. |
@@ -61,3 +61,16 @@ No code change was made for G1 to G3. Adding behaviour for a deferred domain wou
 9. **Enrollment changes:** roster-change rules and approval levels (A7).
 
 Until each decision is recorded and a consumer is qualified, the corresponding domain is **not enforced**, and the release stays blocked for any domain the owner expects to run.
+
+## Citation verification (2026-10-17)
+
+Checked against the tree at `f59836b`:
+
+- **Files:** all 21 cited test files exist. `test_policy.py` exists in four packages; the finance row cites `tests/finance/test_policy.py`.
+- **Named tests:** all 5 backticked test names and the two `file::name` references exist (`test_lifecycle.py::test_disabled_owner_holds_no_configuration_authority`, `test_foundation.py::test_no_owned_python_module_contains_assessment_numeric_policy`).
+- **Counts:** all 13 stated counts match a real run of each module (`python3 -m unittest <module>`, `Ran N tests`): 57, 44, 44, 13, 23, 9, 7, 22, 19, 9, 9, 33, 14.
+- **Source citations:** `desk/configuration.py:108` quote matches exactly (two concatenated string literals). `finance/__init__.py:214` is the native-pricing and tax statement. `finance/corrections.py` and `enrollment/exits.py` quotes are present. `test_roster.py` refusal cases exist.
+- **G2 confirmed:** no test name refers to tax, transfer, calendar, or capacity refusal (the only `calendar` match is a date-validity test).
+
+Not verified in this pass: the 'Unset / invalid' column for each domain was not re-derived case by case beyond the named tests. Behaviour claims rest on the test names and the module docstrings, not on a fresh audit of every branch. Tax, calendar, transfer, and capacity values are carriers only, and nothing enforces them (G1).
+
