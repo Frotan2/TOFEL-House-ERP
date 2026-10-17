@@ -44,3 +44,20 @@ The file was restored and verified equal to the original.
 ## Re-run
 
     /tmp/venv/bin/python -m unittest tests.security.test_html_containment_real_sanitizer_2026_10_16 -v
+
+## Save-path order (verified in pinned Frappe, 2026-10-17)
+
+Read from `frappe/frappe@988e54f3`:
+
+- `frappe/model/document.py` `insert()` line 486 and `save()` line 594 call `run_before_save_methods()`, which runs the `validate` doc event (lines 1391 to 1414). Then `_validate()` runs at lines 487 and 597.
+- `_validate()` (line 827) calls `_sanitize_content()` (line 837) for the parent and for each child (line 850), after the `validate` event.
+- So the containment hook runs **before** Frappe's own sanitizer on every save and insert. The JSON short-circuit cannot skip it, because containment calls `sanitize_html(..., always_sanitize=True)` first.
+- `frappe/model/base_document.py` `_sanitize_content()` (line 1307) uses the same skip rules that containment mirrors: `ignore_xss_filter`, `Data`, `Attach*`, `Barcode`, `Code`, and cancelled or non-`allow_on_submit` submitted documents. Containment is stricter on submitted documents, so it does not weaken Frappe's pass.
+- The hook is wired as `doc_events["*"]["validate"]` (`apps/foundation_security/foundation_security/hooks.py`, line 12), so it applies to every doctype.
+
+## Residual exposures (not closed by this record)
+
+1. **Existing stored rows are not contained.** The hook runs only when a document is saved. A hostile value written before this hook was installed remains executable when it is reopened or rendered, until the row is re-saved. Nothing backfills it. Closing it means rewriting owner data, so it needs an owner decision and a bench run (see the owner package). A read-only check to run on a restored copy: find `tabDocField` rows of HTML fieldtypes (`Text Editor`, `Text`, `Small Text`, `Markdown Editor`) without `ignore_xss_filter`, then select rows in each table whose value starts with `"` and contains `<`.
+2. **Writes that skip `validate` are not contained.** `db_set`, `db_update`, `frappe.db.set_value`, and raw SQL do not run document hooks. Frappe's own pass has the same gap. In this repository, product code writes no HTML fields through those paths (`apps/toefl_house/toefl_house/controllers.py` denies `db_set`/`db_update` on native types). The remaining call sites are tests and checks that write non-HTML fields. The gap is reachable only through Frappe's native administrative tools.
+
+GHSA-VHRC-HGRQ-X75R stays **BLOCKED**. A hosted runtime check is still required, and residual 1 must be decided before any reinstatement.
