@@ -61,3 +61,11 @@ Read from `frappe/frappe@988e54f3`:
 2. **Writes that skip `validate` are not contained.** `db_set`, `db_update`, `frappe.db.set_value`, and raw SQL do not run document hooks. Frappe's own pass has the same gap. In this repository, product code writes no HTML fields through those paths (`apps/toefl_house/toefl_house/controllers.py` denies `db_set`/`db_update` on native types). The remaining call sites are tests and checks that write non-HTML fields. The gap is reachable only through Frappe's native administrative tools.
 
 GHSA-VHRC-HGRQ-X75R stays **BLOCKED**. A hosted runtime check is still required, and residual 1 must be decided before any reinstatement.
+
+## Fix path for the education lock (checked 2026-10-17; not applied)
+
+The open entry is in the Frappe Education frontend lock at `frappe/education@93bc7075`, `frontend/yarn.lock`: `@tiptap/extension-link` resolves to **2.2.3**, inside the advisory's vulnerable range (`< 2.10.4`). The HRMS locks under `tools/foundation/hrms-locks/` resolve to 2.27.3 and are patched, so this entry is education-only.
+
+- Patched version: `@tiptap/extension-link` 2.10.4 (GitHub advisory API). Its registry metadata declares peer dependencies `@tiptap/core ^2.7.0` and `@tiptap/pm ^2.7.0`.
+- So the fix is not a single-package overlay. The education TipTap stack (`core`, `pm`, `extension-*`, `starter-kit`, `vue-3`) would have to move together from the 2.2.x line to 2.7 or later, and the editor would need a build and a regression pass.
+- Not attempted in this round. The owner decides between (a) that coordinated upgrade with build and editor verification, or (b) accepting the server-side containment above, with residual 1 (existing rows) and residual 2 (`db_set`, `set_value`, raw SQL) recorded as accepted risk. GHSA-VHRC stays BLOCKED until one of these is decided and the hosted check passes.
