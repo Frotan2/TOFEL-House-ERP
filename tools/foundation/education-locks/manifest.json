@@ -1,0 +1,15 @@
+{
+  "upstream_commit": "93bc7075753369457919720690f80c6d2207b5f2",
+  "yarn_version": "1.22.22",
+  "purpose": "GHSA-vhrc-hgrq-x75r: pin @tiptap/* 2.27.3 (patched extension-link >= 2.10.4) in the Education frontend. Upstream frappe-ui 0.1.31 pins 2.2.3.",
+  "files": {
+    "frontend/package.json": {
+      "upstream_sha256": "c44548c1e7e9f3b6c75209710d0e12018be3a00945167df8f70c45fd537e7cd9",
+      "security_sha256": "3c2cb14de7ac40b1168371887b1210f74d8e6de481a51b634da918af750b9257"
+    },
+    "frontend/yarn.lock": {
+      "upstream_sha256": "10618b30bd7dfd48d6fc5e85d56af3d07562c2c11f62efe0b746a8f95f328072",
+      "security_sha256": "f5424561c553aee32c975635121ca2410cd2445a2903b9784d90076ea97376dc"
+    }
+  }
+}
