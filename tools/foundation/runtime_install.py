@@ -140,15 +140,11 @@ def _advisory_id(finding: dict) -> str:
     return str(first) if first not in (None, "") else "unidentified"
 
 
-def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict | None) -> list[str]:
-    """Compact ``::warning::`` lines naming every advisory match by public id.
+def advisory_group_entries(stack_audit: dict | None, frontend_audit: dict | None) -> tuple[int, list[str]]:
+    """Every advisory group, unbounded: (total matches, ``label name ids`` entries).
 
-    Job logs and artifacts EOF from the recording environment, so SEC-DEPS-01
-    stayed unreadable (roadmap security slice (a)). Annotations survive; this
-    packs "package@version id(severity)" entries into at most
-    ANNOTATION_MAX_LINES single-line annotations, sorted and de-duplicated.
-    Identifiers come only from scanner output. Truncation is stated, never
-    silent. Matches are advisory-version matches, not exploit proof.
+    The annotation writer below is capped by GitHub's annotation budget and says so
+    (``+N packages not shown``). This list is the complete set, for the job summary.
     """
     rank = {"critical": 0, "high": 1, "moderate": 2, "medium": 2, "low": 3}
     groups: dict[tuple[str, str], set[tuple[int, str]]] = {}
@@ -182,6 +178,20 @@ def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict 
     for (kind, name), ids in sorted(groups.items(), key=order):
         label = {"0py": "py", "1npm": "npm", "2fe": "fe"}[kind]
         entries.append(f"{label}:{name} " + ",".join(i for _, i in sorted(ids)))
+    return total, entries
+
+
+def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict | None) -> list[str]:
+    """Compact ``::warning::`` lines naming every advisory match by public id.
+
+    Job logs and artifacts EOF from the recording environment, so SEC-DEPS-01
+    stayed unreadable (roadmap security slice (a)). Annotations survive; this
+    packs "package@version id(severity)" entries into at most
+    ANNOTATION_MAX_LINES single-line annotations, sorted and de-duplicated.
+    Identifiers come only from scanner output. Truncation is stated, never
+    silent. Matches are advisory-version matches, not exploit proof.
+    """
+    total, entries = advisory_group_entries(stack_audit, frontend_audit)
     if not entries:
         return []
     header = f"advisory matches={total} in {len(entries)} packages: "
@@ -203,6 +213,37 @@ def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict 
     if used < len(entries):
         lines[-1] = lines[-1][:ANNOTATION_TEXT_LIMIT - 40] + f" ... +{len(entries) - used} packages not shown"
     return ["::warning file=tools/foundation/runtime_install.py::" + line for line in lines]
+
+
+def advisory_summary_markdown(stack_audit: dict | None, frontend_audit: dict | None) -> str:
+    """Markdown for the GitHub job summary: every advisory group, no annotation budget.
+
+    Annotations keep nine lines of ~700 characters, so on a large advisory set they
+    end in ``+N packages not shown``. A job summary has no such cap and the owner can
+    read it in the run UI when annotation text is cut off. Empty when there are no matches.
+    """
+    total, entries = advisory_group_entries(stack_audit, frontend_audit)
+    if not entries:
+        return ""
+    lines = [
+        "### Advisory matches (complete list)",
+        "",
+        f"{total} advisory matches in {len(entries)} package groups. Matches are advisory-version matches, not exploit proof.",
+        "",
+    ]
+    lines.extend(f"- `{entry}`" for entry in entries)
+    return "\n".join(lines) + "\n"
+
+
+def write_advisory_step_summary(stack_audit: dict | None, frontend_audit: dict | None) -> None:
+    """Append the full advisory list to ``$GITHUB_STEP_SUMMARY`` when running in Actions."""
+    target = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not target:
+        return
+    text = advisory_summary_markdown(stack_audit, frontend_audit)
+    if text:
+        with open(target, "a", encoding="utf-8") as handle:
+            handle.write(text)
 
 
 def untriaged_advisory_annotations(stack_audit: dict | None) -> list[str]:
@@ -555,8 +596,11 @@ def main() -> int:
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/hrms"])
         run("lock-banking-dependencies", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/erpnext", "--banking"])
+        run("patch-education-frontend-dependencies", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_education.py", bench_dir / "apps/education"])
         run("security-remediation-regressions", [bench_dir / "env/bin/python", "-m", "unittest",
-            "tests.security.test_security_remediation_2026_10_09", "-v"], cwd=ROOT)
+            "tests.security.test_security_remediation_2026_10_09",
+            "tests.security.test_education_locks_2026_10_17", "-v"], cwd=ROOT)
         run("python-dependency-check", [lab / "tools/bin/uv", "pip", "check", "--python", bench_dir / "env/bin/python"])
         run("python-resolved-dependencies", [lab / "tools/bin/uv", "pip", "freeze", "--python", bench_dir / "env/bin/python"])
         site = "foundation.localhost"
@@ -605,6 +649,8 @@ def main() -> int:
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/hrms", "--verify"])
         run("verify-banking-after-build", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/erpnext", "--banking", "--verify"])
+        run("verify-education-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_education.py", bench_dir / "apps/education", "--verify"])
         # Inventory resolved dependency trees after their actual asset build.
         # Findings remain REJECT evidence rather than a hidden best-effort scan.
         stack_audit_path = evidence / "stack-dependency-audit.json"
@@ -1128,6 +1174,7 @@ def main() -> int:
                 audits.append(None)
         for line in advisory_finding_annotations(*audits):
             print(line, flush=True)
+        write_advisory_step_summary(*audits)
         for line in untriaged_advisory_annotations(audits[0] if audits else None):
             print(line, flush=True)
         if report.get("status") != "pass":

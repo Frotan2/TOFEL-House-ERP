@@ -107,7 +107,10 @@ class ReplaySnapshotTests(unittest.TestCase):
         npm_result = t.triage_npm(npm_input, self.triage)
         self.assertEqual(len(npm_result["findings"]), len(SNAPSHOT["npm_entries"]))
         self.assertEqual(npm_result["untriaged"], [])
-        self.assertEqual(npm_result["open"], 0)
+        # Exactly one replayed record is open: GHSA-vhrc, withdrawn to BLOCKED by ERRATUM E6.
+        self.assertEqual(npm_result["open"], 1)
+        open_urls = [f["url"] for f in npm_result["findings"] if not f["pass"]]
+        self.assertEqual(open_urls, ["https://github.com/advisories/GHSA-VHRC-HGRQ-X75R"])
 
         py_findings = []
         for record in SNAPSHOT["pypi_records"]:
@@ -306,25 +309,27 @@ class ProductScopeTests(unittest.TestCase):
 
 
 class EchartsErratumTests(unittest.TestCase):
-    """The 2026-10-03 ECharts reasoning cannot be reproduced from any pinned lockfile. It is BLOCKED, not NOT_REACHABLE."""
+    """ECharts was BLOCKED until its presence was established (erratum E2).
 
-    def test_withdrawn_echarts_disposition_is_blocked(self):
+    E5 (2026-10-15) re-triaged it to NOT_REACHABLE on reproducible evidence:
+    echarts is absent from every shipped frozen tree. See
+    tests/security/test_echarts_presence_2026_10_15.py for the tripwire.
+    """
+
+    def test_echarts_disposition_is_not_reachable_with_erratum_e5(self):
         data = json.loads(DELTA_1003.read_text(encoding="utf-8"))
         hits = [adv for pkg in data["packages"] for adv in pkg["advisories"]
                 if adv["id"] == "GHSA-fgmj-fm8m-jvvx"]
         self.assertEqual(len(hits), 1)
-        self.assertEqual(hits[0]["runtime_disposition"], "BLOCKED")
-        self.assertIn("ERRATUM 2026-10-09", hits[0]["runtime_disposition_evidence"])
-        self.assertTrue((ROOT / hits[0]["erratum"]).is_file())
-        self.assertNotIn("finding is unreachable in the shipped product", hits[0]["fix_path"])
+        self.assertEqual(hits[0]["runtime_disposition"], "NOT_REACHABLE")
+        self.assertIn("RE-TRIAGED 2026-10-15", hits[0]["runtime_disposition_evidence"])
+        self.assertIn("PREVIOUS DISPOSITION: BLOCKED", hits[0]["runtime_disposition_evidence"])
+        self.assertIn("E5", (ROOT / hits[0]["erratum"]).read_text(encoding="utf-8"))
 
-    def test_no_replayed_npm_entry_is_echarts(self):
-        self.assertNotIn("echarts", json.dumps(SNAPSHOT["npm_entries"]))
-
-    def test_the_loader_does_not_treat_the_blocked_echarts_entry_as_closed(self):
+    def test_the_loader_treats_the_echarts_entry_as_closed_with_evidence(self):
         rec = t.load_triage()["by_id"].get(t._norm("GHSA-fgmj-fm8m-jvvx"))
         self.assertIsNotNone(rec)
-        self.assertNotIn(rec["runtime_disposition"], CLOSED)
+        self.assertEqual(rec["runtime_disposition"], "NOT_REACHABLE")
 
 
 class DanglingReferenceTests(unittest.TestCase):

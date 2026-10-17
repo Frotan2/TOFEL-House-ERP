@@ -56,9 +56,13 @@ class AdvisoryTriageTests(unittest.TestCase):
         pres = t.triage_python(py, triage)
         self.assertEqual(nres["untriaged"], [], "npm advisories did not all resolve")
         self.assertEqual(pres["untriaged"], [], "python advisories did not all resolve")
-        self.assertEqual(nres["open"], 0)
+        # 2026-10-15: GHSA-vhrc was withdrawn to BLOCKED (ERRATUM E6). It is the only expected open record.
+        still_open = [f["id"] for f in nres["findings"] if not f["pass"]]
+        still_open += [f["id"] for f in pres["findings"] if not f["pass"]]
+        self.assertEqual(still_open, ["GHSA-vhrc-hgrq-x75r"])
+        self.assertEqual(nres["open"], 1)  # the withdrawn GHSA-vhrc is not closed
         self.assertEqual(pres["open"], 0)
-        self.assertEqual(t.overall_status(npm_result=nres, py_result=pres), "pass")
+        self.assertEqual(t.overall_status(npm_result=nres, py_result=pres), "fail")
 
     def test_a_brand_new_advisory_is_a_regression(self):
         triage = t.load_triage()

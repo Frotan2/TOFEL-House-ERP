@@ -96,15 +96,43 @@ def load_triage(path: Path | None = None, *, include_deltas: bool = True) -> dic
         _index_package(by_id, by_pkg, pkg, fail_on_covered=False, source="register")
     deltas: list[str] = []
     merged = 0
+    withdrawals: list[dict[str, Any]] = []
     if include_deltas:
         for delta_path in sorted(path.parent.glob(DELTA_PATTERN)):
             delta_data = json.loads(delta_path.read_text())
             source = delta_path.parent.name
             for pkg in delta_data["packages"]:
                 merged += _index_package(by_id, by_pkg, pkg, fail_on_covered=True, source=source)
+            for item in delta_data.get("withdraws", []) or []:
+                withdrawals.append({**item, "source_delta": source})
             deltas.append(source)
+        for item in withdrawals:
+            _apply_withdrawal(by_id, item)
     return {"by_id": by_id, "by_package": by_pkg, "totals": data.get("totals", {}),
-            "deltas": deltas, "delta_advisories": merged}
+            "deltas": deltas, "delta_advisories": merged, "withdrawals": withdrawals}
+
+
+# A withdrawal can only tighten a covered record. It moves the record to a non-closed
+# disposition and keeps the original, so an invalid closure cannot pass the gate silently.
+WITHDRAWAL_TARGETS = frozenset(("BLOCKED", "OWNER_DECISION_REQUIRED"))
+
+
+def _apply_withdrawal(by_id: dict[str, dict[str, Any]], item: dict[str, Any]) -> None:
+    key = _norm(item.get("id"))
+    record = by_id.get(key)
+    if record is None:
+        raise SystemExit(f"{item.get('source_delta')} withdraws unknown advisory id: {item.get('id')}")
+    if item.get("package") and _package_basename(str(item["package"])) != _package_basename(str(record["package"])):
+        raise SystemExit(f"{item.get('source_delta')} withdraws {item.get('id')} for a different package")
+    target = item.get("to")
+    if target not in WITHDRAWAL_TARGETS:
+        raise SystemExit(f"{item.get('source_delta')} withdraw target must be one of {sorted(WITHDRAWAL_TARGETS)}")
+    if not item.get("erratum") or not item.get("reason"):
+        raise SystemExit(f"{item.get('source_delta')} withdrawal of {item.get('id')} needs erratum and reason")
+    record["withdrawn_from"] = record["runtime_disposition"]
+    record["withdrawn_by"] = {"source_delta": item["source_delta"], "erratum": item["erratum"],
+                              "reason": item["reason"]}
+    record["runtime_disposition"] = target
 
 
 def _extract_ids(text: str) -> list[str]:

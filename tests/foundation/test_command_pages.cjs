@@ -242,4 +242,25 @@ assert.strictEqual(calls[0].args.request_key, calls[1].args.request_key, "retry 
 assert(/^[A-Za-z0-9]{24}$/.test(calls[0].args.request_key), "generated request_key must meet server safe-key shape");
 assert(!dialogs[0].hidden, "RPC error must not close a retryable command dialog");
 
+// BROWSER_SELF_DENIAL review (2026-10-16): innerHTML sinks in the shipped page.
+// The only sink that interpolates server data is the skill <select> rebuild.
+// Its codes come from TH Skill through active_skills(). This block runs the real
+// escapeText from the shipped source against a hostile code, and it fails if a
+// new innerHTML sink appears without review.
+{
+	const sinkLines = source.split("\n").map((line, i) => [line, i]).filter(([line]) => line.includes("innerHTML"));
+	assert.strictEqual(sinkLines.length, 1, "exactly one innerHTML sink must be reviewed; a new sink needs review");
+	const at = sinkLines[0][1];
+	const window = source.split("\n").slice(at, at + 4).join("\n");
+	assert(window.includes("escapeText(c)"), "skill option rebuild must escape its code");
+	assert.strictEqual((window.match(/escapeText\(c\)/g) || []).length, 2, "code must be escaped in both value and label");
+	const fn = source.match(/\tfunction escapeText\(value\) \{[\s\S]*?\n\t\}\n/);
+	assert(fn, "escapeText must be defined in the shipped page");
+	const escapeText = vm.runInNewContext("(" + fn[0].trim().replace(/^function /, "function ") + ")", {});
+	const hostile = `"><img src=x onerror=alert(1)>'&`;
+	const out = escapeText(hostile);
+	assert.strictEqual(out, "&quot;&gt;&lt;img src=x onerror=alert(1)&gt;&#39;&amp;");
+	assert(!/[<>"']/.test(out), "escaped output must carry no raw markup or quote characters");
+}
+
 console.log("D10 native-dialog client smoke OK");

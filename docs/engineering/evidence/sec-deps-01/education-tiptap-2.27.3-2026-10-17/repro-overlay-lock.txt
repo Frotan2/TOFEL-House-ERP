@@ -1,0 +1,5 @@
+== repro_frontend.py against tools/foundation/education-locks/frontend/yarn.lock (overlay) ==
+packages submitted: 265; packages with advisories: 24
+advisory entries: 65; closed: 65; open: 0; untriaged: 0
+dispositions: {'BROWSER_SELF_DENIAL': 5, 'NOT_REACHABLE': 9, 'BUILD_ONLY': 30, 'DEV_ONLY': 16, 'MITIGATED': 5}
+exit 0

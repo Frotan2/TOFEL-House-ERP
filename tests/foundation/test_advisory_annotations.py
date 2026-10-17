@@ -1,11 +1,15 @@
 """SEC-DEPS-01 readable-audit slice: advisory ids must survive as annotations."""
 from pathlib import Path
+import re
 import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "foundation"))
 from runtime_install import (ANNOTATION_MAX_LINES, ANNOTATION_TEXT_LIMIT,  # noqa: E402
                              advisory_finding_annotations,
+                             advisory_group_entries,
+                             advisory_summary_markdown,
+                             write_advisory_step_summary,
                              untriaged_advisory_annotations,
                              hosted_failure_annotations,
                              safe_native_restore_failure_detail,
@@ -177,6 +181,119 @@ class AdvisoryAnnotationTests(unittest.TestCase):
                   / "tools/foundation/runtime_install.py").read_text()
         self.assertIn("advisory_finding_annotations(*audits)", source)
         self.assertIn('"stack-dependency-audit.json", "frontend-advisories.json"', source)
+
+
+REPO = Path(__file__).resolve().parents[2]
+REPLAY = REPO / "docs/engineering/evidence/sec-deps-01/advisory-delta-2026-10-09/replay-snapshot.json"
+GROUP_LABEL_RE = re.compile(r"\b(py|npm|fe):([^\s@;]+)@")
+
+
+def _visible_groups(lines):
+    seen = set()
+    for line in lines:
+        for label, name in GROUP_LABEL_RE.findall(line):
+            seen.add((label, name))
+    return seen
+
+
+class AdvisoryCompleteListTests(unittest.TestCase):
+    """The annotation budget may hide groups, but never silently.
+
+    The 2026-10-14 gap ("47 reported, 44 visible") was the nine-line annotation
+    budget: the writer printed "+3 packages not shown" and the three hidden groups
+    were not otherwise recorded. The complete list is now in the job summary too.
+    """
+
+    def test_budget_never_hides_a_group_silently(self):
+        many = [{"package": f"pkg{i:03d}", "version": "1.0", "id": f"GHSA-{i:04d}-xxxx-yyyy",
+                 "severity": "LOW"} for i in range(400)]
+        audit = stack(py=many)
+        lines = advisory_finding_annotations(audit, None)
+        visible = _visible_groups(lines)
+        hidden = re.search(r"\+(\d+) packages not shown", " ".join(lines))
+        self.assertIsNotNone(hidden)
+        _total, entries = advisory_group_entries(audit, None)
+        self.assertEqual(len(entries), 400)
+        self.assertEqual(len(visible) + int(hidden.group(1)), len(entries))
+
+    def test_summary_lists_every_group_without_truncation(self):
+        many = [{"package": f"pkg{i:03d}", "version": "1.0", "id": f"GHSA-{i:04d}-xxxx-yyyy",
+                 "severity": "LOW"} for i in range(120)]
+        text = advisory_summary_markdown(stack(py=many), None)
+        self.assertEqual(text.count("\n- `"), 120)
+        self.assertNotIn("not shown", text)
+        self.assertIn("120 package groups", text)
+
+    def test_summary_is_empty_without_matches(self):
+        self.assertEqual(advisory_summary_markdown(stack(), None), "")
+
+    def test_summary_is_written_only_inside_actions(self):
+        import os
+        from unittest import mock
+        audit = stack(npm=[{"package": "yaml", "installed_versions": ["1.10.2"],
+                            "id": "GHSA-48C2-RRV3-QJMP", "severity": "moderate"}])
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GITHUB_STEP_SUMMARY", None)
+            write_advisory_step_summary(audit, None)  # no target: must not raise or write
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "summary.md"
+            with mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(target)}):
+                write_advisory_step_summary(audit, None)
+                write_advisory_step_summary(audit, None)  # appends, never overwrites
+            text = target.read_text()
+            self.assertEqual(text.count("npm:yaml@1.10.2"), 2)
+
+    def test_runtime_writes_the_summary_from_its_own_reports(self):
+        source = (REPO / "tools/foundation/runtime_install.py").read_text()
+        self.assertIn("write_advisory_step_summary(*audits)", source)
+
+    def test_replay_snapshot_reconciles_to_ci_group_count(self):
+        import json
+        snap = json.loads(REPLAY.read_text(encoding="utf-8"))
+        npm_groups = {e["package"] for e in snap["npm_entries"]}
+        py_groups = {(r["package"], r["version"]) for r in snap["pypi_records"]}
+        self.assertEqual(len(npm_groups), snap["counts"]["groups_npm_packages"])
+        self.assertEqual(len(py_groups), snap["counts"]["groups_python_package_versions"])
+        self.assertEqual(len(npm_groups) + len(py_groups), snap["counts"]["ci_reported_groups"])
+        self.assertEqual(snap["counts"]["ci_reported_groups"], 47)
+
+    def test_every_replay_group_is_covered_by_the_register(self):
+        import json
+        import advisory_triage as triage_mod
+        snap = json.loads(REPLAY.read_text(encoding="utf-8"))
+        triage = triage_mod.load_triage()
+        for entry in snap["npm_entries"]:
+            rec = triage_mod.disposition_for_finding(
+                triage, package=entry["package"],
+                advisories=[entry["ghsa"], str(entry["numeric_id"])],
+                finding_id=str(entry["numeric_id"]))
+            self.assertIsNotNone(rec, entry["package"] + " " + entry["ghsa"])
+        for record in snap["pypi_records"]:
+            rec = triage_mod.disposition_for_finding(
+                triage, package="py:" + record["package"],
+                advisories=[record["id"]] + list(record.get("aliases") or []),
+                finding_id=record["id"])
+            self.assertIsNotNone(rec, record["package"] + " " + record["id"])
+
+    def test_the_three_hidden_2026_10_14_groups_are_covered(self):
+        import advisory_triage as triage_mod
+        triage = triage_mod.load_triage()
+        expected = {
+            "@tiptap/extension-link": "GHSA-vhrc-hgrq-x75r",
+            "cookie": "GHSA-pxg6-pf52-xh8x",
+            "yaml": "GHSA-48c2-rrv3-qjmp",
+        }
+        for package, ghsa in expected.items():
+            rec = triage_mod.disposition_for_finding(
+                triage, package=package, advisories=[ghsa], finding_id=ghsa)
+            self.assertIsNotNone(rec, package)
+            if package == "@tiptap/extension-link":
+                # Withdrawn 2026-10-15 (ERRATUM E6): the BROWSER_SELF_DENIAL premise does not hold.
+                self.assertEqual(rec["runtime_disposition"], "BLOCKED")
+                self.assertEqual(rec["withdrawn_from"], "BROWSER_SELF_DENIAL")
+            else:
+                self.assertIn(rec["runtime_disposition"], triage_mod.CLOSED_DISPOSITIONS)
 
 
 if __name__ == "__main__":
