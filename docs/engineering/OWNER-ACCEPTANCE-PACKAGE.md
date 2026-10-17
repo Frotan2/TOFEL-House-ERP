@@ -66,7 +66,7 @@ No branch was deleted in this round. The six earlier deletions are the only auth
 
 | Gate | Status | Evidence |
 |---|---|---|
-| GHSA-VHRC runtime containment | **OPEN (blocks release)**. Needs a live bench check that stored `javascript:` hrefs are re-sanitized on save, reopen, import, and render. | `advisory-delta-2026-10-15/README.md` |
+| GHSA-VHRC runtime containment | **OPEN (blocks release)**. Unit check against the real pinned Frappe sanitizer now passes (16 tests, mutation-checked; not a hosted check). Still needs a live bench check that stored `javascript:` hrefs are re-sanitized on save, reopen, import, and render. | `containment-real-sanitizer-2026-10-16/README.md`; `advisory-delta-2026-10-15/README.md` |
 | HRMS editor (built component) | Lab PASS on the patched tree (Chromium 131 and 153); the controls fail on the security assertions. **Not cleared:** no logged-in full-form flow, and no server-side sanitization test for stored HTML. | `hrms-editor-2026-10-15/README.md` |
 | Microsoft auth (automated) | PASS: tenant pin, linking, disabled-user refusal, per-request guard. The static wiring test pins the `auth_hooks` order. | `tests/security/test_security_remediation_2026_10_09.py` (`Office365Tests`), `test_disabled_user_paths_2026_10_15.py` |
 | Microsoft auth (live tenant) | **UNVERIFIED.** Engineering has not signed in to any tenant. OAuth state lifecycle re-verified against the pinned Frappe source (2026-10-16); runtime replay is owner step N7/N8. | `LIVE-TENANT-PROCEDURE.md` (A6) |
