@@ -44,6 +44,8 @@ tenant can verify the live path.
 | N4 | Unlink the synthetic user (delete its `User Social Login` row), attempt sign-in. | Refused. Email or UPN matching does not select the account. |
 | N5 | Link a second user to the same `sub`, attempt sign-in as either user. | Refused for both (shared identity). No session. |
 | N6 | Disable the synthetic user, attempt sign-in. | Refused. |
+| N7 | Replay the **same** callback URL (same `code` and `state`) a second time, in the same browser and in a fresh one. | HTTP 417 "Invalid Request" page. No second session. The state is deleted on first consumption (`consume_oauth_state`). |
+| N8 | Call the callback with a `state` that was never issued (for example, a random 32-character value). | HTTP 417. No session. Log, if any, carries no token. |
 
 ## Disabled-user revocation (the live check of the per-request guard)
 
