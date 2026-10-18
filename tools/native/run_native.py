@@ -185,6 +185,9 @@ def main():
         run('security-site-acceptance',
             [benchdir/'env/bin/python',ROOT/'tools/native/security_acceptance.py'],benchdir/'sites')
         run('native-acceptance',[benchdir/'env/bin/python',ROOT/'tools/native/native_checks.py'],benchdir/'sites')
+        # GHSA-VHRC residual 1 tooling on the real site: save-path containment, read-only audit
+        # classification and output discipline, using synthetic Note rows rolled back at the end.
+        run('stored-html-real-site',[benchdir/'env/bin/python',ROOT/'tools/native/stored_html_check.py'],benchdir/'sites')
         # D8-scoped synthetic persistence rehearsal. The product adapter calls
         # pinned Frappe native backup/restore while moving GPG/MariaDB secrets
         # off child argv. This is not Owner evidence, offsite backup, production

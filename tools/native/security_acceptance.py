@@ -282,7 +282,48 @@ def main() -> None:
                     else:
                         raise AssertionError("Office 365 login accepted without a configured tenant")
                 assert len(calls) == 1, "Unconfigured tenant established a login"
-        print("Synthetic site: authorized PDF/preview, guarded direct constructor, identity-bound Office 365 callback PASS")
+
+                # A11: the authorization code and login state must not reach an Error Log.
+                # Control first: the same request context WITHOUT the wrapper must store them,
+                # so this check is sensitive to the exposure it guards. Then the real wrapper
+                # runs with a failing provider and the stored metadata is read back.
+                from types import SimpleNamespace as _Request
+                from frappe.utils.error import log_error as _log_error
+                code_value, state_value = "SYNTH-A11-CODE-7f3a", "SYNTH-A11-STATE-9c1e"
+                saved_request = getattr(frappe.local, "request", None)
+                saved_form = getattr(frappe.local, "form_dict", None)
+
+                def _snapshot_metadata():
+                    doc = _log_error(title="A11 synthetic snapshot", defer_insert=False)
+                    stored = str(frappe.db.get_value("Error Log", doc.name, "metadata") or "")
+                    frappe.delete_doc("Error Log", doc.name, force=True, ignore_permissions=True)
+                    return stored
+
+                try:
+                    frappe.local.request = _Request(
+                        method="GET", path="/api/method/toefl_house.social_login.login_via_office365",
+                        referrer=None)
+                    frappe.local.form_dict = frappe._dict(code=code_value, state=state_value)
+                    control = _snapshot_metadata()
+                    assert code_value in control and state_value in control, (
+                        "A11 control: the request context did not reproduce the exposure")
+
+                    frappe.local.form_dict = frappe._dict(code=code_value, state=state_value)
+                    with patch.object(oauth, "get_oauth2_flow", side_effect=RuntimeError("synthetic provider failure")):
+                        try:
+                            social_login.login_via_office365(code_value, state_value)
+                        except frappe.PermissionError:
+                            pass
+                        else:
+                            raise AssertionError("A11 control: failing provider was accepted")
+                    redacted = _snapshot_metadata()
+                    assert "method" in redacted and "form_dict" in redacted, "A11: snapshot lacks request metadata"
+                    assert code_value not in redacted and state_value not in redacted, (
+                        "A11: authorization code or state reached Error Log metadata")
+                finally:
+                    frappe.local.request = saved_request
+                    frappe.local.form_dict = saved_form
+        print("Synthetic site: authorized PDF/preview, guarded direct constructor, identity-bound Office 365 callback PASS; A11 callback secrets absent from Error Log PASS")
     finally:
         frappe.db.rollback()  # discard only this process's synthetic documents
         frappe.destroy()

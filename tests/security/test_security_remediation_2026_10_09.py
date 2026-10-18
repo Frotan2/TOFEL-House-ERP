@@ -296,6 +296,8 @@ class Office365Tests(unittest.TestCase):
         frappe.throw = lambda message, cls: (_ for _ in ()).throw(cls(message))
         frappe._ = lambda message: message
         frappe.conf = {"office_365_tenant_id": TENANT}
+        # Real Frappe always has a request-local form; the callback redacts it (A11, 2026-10-18).
+        frappe.local = types.SimpleNamespace(form_dict={})
         cls.log_records = []
         frappe.logger = lambda name: types.SimpleNamespace(
             warning=lambda message, *args: cls.log_records.append(message % args))

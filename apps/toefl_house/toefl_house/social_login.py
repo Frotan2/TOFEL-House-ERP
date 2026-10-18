@@ -79,6 +79,27 @@ def _audit_denial(reason: str) -> None:
     frappe.logger("office365_auth").warning("Office 365 sign-in denied: %s", reason)
 
 
+# The one-time authorization code and the login state arrive as GET parameters.
+# Frappe's error snapshot stores frappe.form_dict verbatim, except keys containing
+# password/secret/token/key/pwd, so `code` and `state` would be written to Error Log
+# metadata if an unexpected server error were logged during this callback.
+CALLBACK_SECRET_FIELDS = ("code", "state")
+
+
+def redact_callback_form() -> None:
+    """Replace the callback's code and state in the request form before anything can log it.
+
+    The wrapper has already bound these values as function arguments, so the
+    redaction does not change the sign-in. It only removes the copies that an
+    error snapshot would otherwise read from frappe.form_dict.
+    """
+    form = getattr(frappe.local, "form_dict", None)
+    if isinstance(form, dict):
+        for name in CALLBACK_SECRET_FIELDS:
+            if name in form:
+                form[name] = "********"
+
+
 @frappe.whitelist(allow_guest=True)
 def login_via_office365(code: str, state: str):
     """Authenticate only an existing local user linked to this stable identity.
@@ -86,6 +107,7 @@ def login_via_office365(code: str, state: str):
     This intentionally refuses first-time email-based auto-linking. An
     administrator must establish the identity link through a trusted process.
     """
+    redact_callback_form()
     from frappe.utils import oauth
     from frappe.integrations.oauth2_logins import decoder_compat
 

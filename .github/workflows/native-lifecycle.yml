@@ -10,6 +10,8 @@ on:
       - .github/workflows/native-lifecycle.yml
       - apps/**
       - tools/native/**
+      - tools/foundation/audit_stored_html.py
+      - apps/foundation_security/**
       # The native installer executes both security patch helpers before build.
       - tools/foundation/secure_hrms.py
       - tools/foundation/hrms-locks/**
