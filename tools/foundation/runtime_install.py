@@ -949,6 +949,13 @@ def main() -> int:
             run("browser-native-portal-isolation", ["node", browser_dir / "check.mjs"], timeout=300)
         except RuntimeError as exc:
             diagnostic_failures.append(str(exc))
+        # 2026-10-18 Desk rendering of a stored hostile HRMS Text Editor value: real login, real Desk
+        # form, reload. Synthetic data only. A failure here fails the job (not a diagnostic).
+        env["FOUNDATION_DESK_FIXTURE"] = str(lab / "desk-render-fixture.json")
+        env["FOUNDATION_DESK_REPORT"] = str(evidence / "desk-render-result.json")
+        run("desk-render-fixture", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_desk_render.py", site], cwd=bench_dir / "sites")
+        shutil.copyfile(ROOT / "tools/foundation/desk_render_check.mjs", browser_dir / "desk.mjs")
+        run("browser-desk-hrms-stored-html", ["node", browser_dir / "desk.mjs"], timeout=600)
         # Restore a backup taken AFTER hardening. No User Permission or singleton
         # re-provisioning is run on the recovered site: those must come from SQL.
         env["FOUNDATION_CAPTURED_SESSION"] = str(lab / "captured-session.json")
