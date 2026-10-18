@@ -41,6 +41,13 @@ class DeskRenderWiringTests(unittest.TestCase):
             self.assertIn(claim, text)
         self.assertIn("process.exitCode = 1", text)
 
+    def test_markup_checks_are_scoped_to_the_description_field_and_require_it(self):
+        text = BROWSER.read_text(encoding="utf-8")
+        self.assertIn(r"""const fieldSelector = '[data-fieldname="description"]';""", text)
+        self.assertIn("requireCondition(state.field_found,", text)
+        self.assertIn("field_javascript_links", text)
+        self.assertIn("page_wide_javascript_links", text)
+
     def test_fixture_creates_one_dedicated_user_and_never_edits_existing_roles(self):
         text = FIXTURE.read_text(encoding="utf-8")
         self.assertIn('USER = "validation-hr-render@example.test"', text)

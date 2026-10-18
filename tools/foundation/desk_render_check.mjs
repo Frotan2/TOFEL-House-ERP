@@ -3,6 +3,8 @@
 // with hostile payloads, and checks the rendered page. Checks run on the first open and after a reload.
 // A positive control runs first: an inline handler inserted through innerHTML must execute on this page.
 // Without that control, "nothing executed" could only mean the detector never saw anything.
+// The markup checks are scoped to the rendered description field, where the stored value appears.
+// Page-wide counts are recorded for diagnosis only, because Desk chrome may carry its own handlers.
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
@@ -11,6 +13,7 @@ const fixture = JSON.parse(fs.readFileSync(process.env.FOUNDATION_DESK_FIXTURE, 
 const output = process.env.FOUNDATION_DESK_REPORT;
 const base = 'http://foundation.localhost:8080';
 const flag = '__synthetic_pwned';
+const fieldSelector = '[data-fieldname="description"]';
 const report = { status: 'running', scope: 'Chromium; Desk form; stored HRMS Text Editor value; synthetic data', checks: [] };
 
 function save() { fs.writeFileSync(output, JSON.stringify(report, null, 2)); }
@@ -63,21 +66,37 @@ try {
     await check('desk-form-' + phase, async () => {
       await page.goto(formUrl, { waitUntil: 'domcontentloaded' });
       if (phase === 'reload') await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => document.body.innerText.includes('SYNTHETIC'), null, { timeout: 90000 });
+      // Prefer the wrapper that holds the synthetic value; fall back to the first wrapper so that a
+      // missing value fails on the explicit assertions below rather than on a selector guess.
+      await page.waitForFunction((sel) => {
+        const all = [...document.querySelectorAll(sel)];
+        return all.some((f) => f.innerText.includes('SYNTHETIC'));
+      }, fieldSelector, { timeout: 90000 });
       await page.waitForTimeout(2000);
-      const state = await page.evaluate((name) => ({
-        executed: window[name] !== undefined,
-        inline_handlers: document.querySelectorAll('[onerror],[onload]').length,
-        javascript_links: [...document.querySelectorAll('a[href]')]
-          .filter((a) => /^\s*javascript:/i.test(a.getAttribute('href') || '')).length,
-        srcdoc_frames: document.querySelectorAll('iframe[srcdoc]').length,
-        formatting_rendered: [...document.querySelectorAll('strong')].some((s) => s.textContent.includes('formatted')),
-      }), flag);
+      const state = await page.evaluate(({ name, sel }) => {
+        const all = [...document.querySelectorAll(sel)];
+        const field = all.find((f) => f.innerText.includes('SYNTHETIC')) || all[0] || null;
+        const scoped = (query) => (field ? field.querySelectorAll(query) : []);
+        return {
+          executed: window[name] !== undefined,
+          field_found: !!field,
+          field_inline_handlers: scoped('[onerror],[onload]').length,
+          field_javascript_links: [...scoped('a[href]')]
+            .filter((a) => /^\s*javascript:/i.test(a.getAttribute('href') || '')).length,
+          field_srcdoc_frames: scoped('iframe[srcdoc]').length,
+          field_formatting_rendered: [...scoped('strong')].some((s) => s.textContent.includes('formatted')),
+          field_outer_html_sample: field ? field.outerHTML.slice(0, 800) : '',
+          page_wide_inline_handlers: document.querySelectorAll('[onerror],[onload]').length,
+          page_wide_javascript_links: [...document.querySelectorAll('a[href]')]
+            .filter((a) => /^\s*javascript:/i.test(a.getAttribute('href') || '')).length,
+        };
+      }, { name: flag, sel: fieldSelector });
       requireCondition(!state.executed, 'a hostile handler executed in the rendered Desk form');
-      requireCondition(state.inline_handlers === 0, 'inline event handler present in the rendered form');
-      requireCondition(state.javascript_links === 0, 'javascript: link present in the rendered form');
-      requireCondition(state.srcdoc_frames === 0, 'srcdoc frame present in the rendered form');
-      requireCondition(state.formatting_rendered, 'legitimate formatting was not rendered');
+      requireCondition(state.field_found, 'description field wrapper not found in the Desk form');
+      requireCondition(state.field_inline_handlers === 0, 'inline event handler present in the rendered description field');
+      requireCondition(state.field_javascript_links === 0, 'javascript: link present in the rendered description field');
+      requireCondition(state.field_srcdoc_frames === 0, 'srcdoc frame present in the rendered description field');
+      requireCondition(state.field_formatting_rendered, 'legitimate formatting was not rendered in the description field');
       requireCondition(dialogs === 0, 'a dialog opened during rendering');
       return { ...state, dialogs };
     });
