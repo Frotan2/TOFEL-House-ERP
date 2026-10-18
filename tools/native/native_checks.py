@@ -1937,13 +1937,14 @@ def main():
         # A disabled user must not continue on any credential type. Each denial follows a positive
         # control with the same credential while the user is enabled, so a credential that never
         # worked cannot pass as a denial. Tokens and keys are generated per run and never printed.
-        cred_email='synthetic-disabled-credential@example.test'
+        # No new User rows are created here: Frappe's throttle_user_creation caps creations per hour
+        # (throttle_user_limit, default 60), and this suite is already close to it. The disabled
+        # account is an existing synthetic fixture user, re-enabled in a finally block.
+        cred_email=users['teacher_unlinked']
         cred_key=frappe.generate_hash(length=15);cred_secret=frappe.generate_hash(length=32)
         cred_tok=frappe.generate_hash(length=40)
         cred_state={}
         def cred_make():
-            frappe.get_doc(dict(doctype='User',email=cred_email,first_name='Synthetic credential',enabled=1,
-                send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],roles=[])).insert(ignore_permissions=True)
             user=frappe.get_doc('User',cred_email);user.api_key=cred_key;user.api_secret=cred_secret;user.save(ignore_permissions=True)
             client=frappe.get_doc(dict(doctype='OAuth Client',app_name='Synthetic disabled-credential gate',scopes='all',
                 default_redirect_uri='http://127.0.0.1:18000/synthetic-callback',redirect_uris='http://127.0.0.1:18000/synthetic-callback',
@@ -1951,7 +1952,7 @@ def main():
             frappe.get_doc(dict(doctype='OAuth Bearer Token',client=client.name,user=cred_email,scopes='all',access_token=cred_tok,
                 refresh_token=frappe.generate_hash(length=40),expires_in=3600,status='Active',
                 expiration_time=frappe.utils.add_to_date(frappe.utils.now_datetime(),hours=1))).insert(ignore_permissions=True)
-            return {'user':cred_email,'credentials':['session','api_key','bearer']}
+            return {'credentials':['session','api_key','bearer']}
         check('disabled-credential-fixtures',cred_make)
         def cred_whoami(**headers):
             return requests.get(base+'/api/method/frappe.auth.get_logged_user',headers=dict({'Host':'placement-test.localhost'},**headers),timeout=30)
@@ -1973,40 +1974,58 @@ def main():
             assert all(v==cred_email for v in resolved.values()),'positive control resolved to another identity'
             return {k:'resolved-to-user' for k in resolved}
         check('disabled-credential-positive-controls',cred_positive_controls)
-        def cred_disable():
-            frappe.db.set_value('User',cred_email,'enabled',0)
+        def cred_set_enabled(value):
+            frappe.db.set_value('User',cred_email,'enabled',value)
             frappe.clear_document_cache('User',cred_email)
             frappe.db.commit()
-            return {'enabled':0}
-        check('disabled-credential-user-disabled',cred_disable)
+            return {'enabled':value}
         def cred_not_continued(response):
             if response.status_code==200:
                 assert response.json().get('message') in ('Guest',None,''),'Disabled user continued as a user'
                 return {'http_status':200,'resolved':'Guest'}
             assert response.status_code in (401,403),f'Unexpected HTTP {response.status_code}'
             return {'http_status':response.status_code}
-        check('disabled-user-session-cookie-not-continued',lambda:cred_not_continued(cred_state['session'].get(base+'/api/method/frappe.auth.get_logged_user',timeout=30)))
-        check('disabled-user-api-key-not-continued',lambda:cred_not_continued(cred_whoami(Authorization='token '+cred_key+':'+cred_secret)))
-        check('disabled-user-bearer-not-continued',lambda:cred_not_continued(cred_whoami(Authorization='Bearer '+cred_tok)))
         def cred_password_login_refused():
             r=requests.post(base+'/api/method/login',headers={'Host':'placement-test.localhost'},
                 json={'usr':cred_email,'pwd':os.environ['PLACEMENT_TEST_PASSWORD']},timeout=30)
             assert r.status_code!=200,'Disabled user obtained a password login'
             return {'http_status':r.status_code}
-        check('disabled-user-password-login-refused',cred_password_login_refused)
-        # Office 365 account linking, real save path: one signed subject, at most one User.
+        check('disabled-credential-user-disabled',lambda:cred_set_enabled(0))
+        try:
+            check('disabled-user-session-cookie-not-continued',lambda:cred_not_continued(cred_state['session'].get(base+'/api/method/frappe.auth.get_logged_user',timeout=30)))
+            check('disabled-user-api-key-not-continued',lambda:cred_not_continued(cred_whoami(Authorization='token '+cred_key+':'+cred_secret)))
+            check('disabled-user-bearer-not-continued',lambda:cred_not_continued(cred_whoami(Authorization='Bearer '+cred_tok)))
+            check('disabled-user-password-login-refused',cred_password_login_refused)
+        finally:
+            cred_set_enabled(1)
+        # Office 365 account linking, real save path, on existing synthetic users. Every write is
+        # rolled back at the end. A denial counts only when the refusal text is the link rule's
+        # text, so a different ValidationError (for example Throttled) cannot pass as a denial.
+        def denied_because(fn,fragment):
+            frappe.db.savepoint('link-denial')
+            try:fn()
+            except (frappe.PermissionError,frappe.ValidationError,frappe.DuplicateEntryError) as exc:
+                assert fragment in str(exc),f'Denied for another reason: {type(exc).__name__}'
+                return {'denied':type(exc).__name__,'rule':fragment}
+            else:raise AssertionError('Expected link denial was accepted')
+            finally:frappe.db.rollback(save_point='link-denial')
         def office365_link_guard():
-            holder='synthetic-link-holder@example.test';candidate='synthetic-link-candidate@example.test'
+            holder_email=users['other'];second_email=users['publisher']
             subject='SYNTHETIC-SUB-'+frappe.generate_hash(length=16)
-            def link_user(email,userids):
-                return frappe.get_doc(dict(doctype='User',email=email,first_name='Synthetic link',enabled=1,
-                    send_welcome_email=0,new_password=os.environ['PLACEMENT_TEST_PASSWORD'],roles=[],
-                    social_logins=[dict(provider='office_365',userid=u,username='synthetic') for u in userids]))
-            link_user(holder,[subject]).insert(ignore_permissions=True)
-            frappe.get_doc('User',holder).save(ignore_permissions=True)
-            second=denied(lambda:link_user(candidate,[subject]).insert(ignore_permissions=True))
-            same_user=denied(lambda:link_user('synthetic-link-dup@example.test',[subject,subject.lower()]).insert(ignore_permissions=True))
-            return {'holder_resave':'allowed','second_user':second,'same_user_duplicate':same_user}
+            try:
+                holder=frappe.get_doc('User',holder_email)
+                holder.append('social_logins',dict(provider='office_365',userid=subject,username='synthetic'))
+                holder.save(ignore_permissions=True)
+                frappe.get_doc('User',holder_email).save(ignore_permissions=True)
+                second=frappe.get_doc('User',second_email)
+                second.append('social_logins',dict(provider='office_365',userid=subject,username='synthetic'))
+                second_result=denied_because(lambda:second.save(ignore_permissions=True),'already linked to another user')
+                dup=frappe.get_doc('User',holder_email)
+                dup.append('social_logins',dict(provider='office_365',userid=subject.lower(),username='synthetic'))
+                dup_result=denied_because(lambda:dup.save(ignore_permissions=True),'more than once')
+            finally:
+                frappe.db.rollback()
+            return {'holder_resave':'allowed','second_user':second_result,'same_user_duplicate':dup_result}
         check('office365-link-save-guard',office365_link_guard)
         url=base+'/api/resource/'+quote(api.ITEM,safe='')+'/'+httpitem['name']
         check('http-direct-crud-mutation-denied',lambda:http_denied(sessions['author'].put(url,json={'status':'Published','flags':{'ignore_permissions':1}},timeout=30)))

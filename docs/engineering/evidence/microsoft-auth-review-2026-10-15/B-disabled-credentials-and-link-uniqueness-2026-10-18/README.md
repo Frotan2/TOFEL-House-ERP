@@ -18,6 +18,8 @@ tenant was used, and no credentials were used.
 - Real-site proof: `tools/native/native_checks.py`, check `office365-link-save-guard`. A real User
   save with a real database lookup must be refused for a second holder and for a duplicate on one
   User, and the holder's own re-save must be allowed. Runs in native-lifecycle CI only.
+- CI history: `39121238351` (`823a532`) FAILED at `native-acceptance` on the throttle (not on the
+  auth rule). Fixed in the next commit. Earlier SUCCESS runs (`7e0f1915`) predate this block.
 
 **Policy-test change (for reviewer attention).** The guard is a `validate`-only integrity hook on
 a non-submittable native doctype. Two repository guards would otherwise fail on it:
@@ -44,11 +46,20 @@ Traced in the pinned Frappe `988e54f3`:
   `tests/security/test_disabled_user_paths_2026_10_15.py`.
 
 Runtime proof added to `tools/native/native_checks.py` (CI only):
-- Synthetic user with a session, an API key and an OAuth bearer token (client scope `all`).
+- Existing synthetic fixture user `teacher_unlinked` (no new User rows) given an API key, plus an
+  OAuth bearer token (client scope `all`), and a session cookie.
+- No new User rows: Frappe's `throttle_user_creation` refuses creation after more than 60 User rows
+  in 60 minutes (`throttle_user_limit`). The first CI run of this block (`39121238351`, SHA
+  `823a532`) failed with `Throttled` from that rule, while creating two new users. The fix does not
+  raise the limit. It removes the new User rows.
+- The disabled state lasts only inside a `try/finally`. The user is re-enabled after the denials.
 - Positive controls first: each credential resolves to the user while enabled. A credential that
   never worked therefore cannot pass as a denial.
 - Then the user is disabled. The session cookie, API key and bearer token must each return 401/403
   or resolve to `Guest`. Password login must not return 200.
+- Save-path link checks run on existing users `other` and `publisher`, inside a savepoint and a
+  final rollback. A denial counts only when the refusal text is the link rule's text, so a
+  `Throttled` or other `ValidationError` cannot pass as a denial.
 
 Note: `validate_user_enabled` treats `Administrator` like any user. Frappe's own login path lets a
 disabled `Administrator` in, so this is stricter. An owner who disables `Administrator` will be
