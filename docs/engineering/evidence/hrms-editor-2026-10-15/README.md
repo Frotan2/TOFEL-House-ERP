@@ -98,7 +98,9 @@ source is `frappe/hrms@a4768b441cff346def505e27f2a2229ee1e05b9b`, `hrms/hr/docty
 Access: the HR User role is granted to one existing fixture user (`teacher_two`) for the run and
 revoked in a `finally` block. No new User rows are created (Frappe `throttle_user_creation`, see the
 B-disabled-credentials evidence README). Markers checked: `onerror`, `onload`, `javascript:`,
-`<script`, `srcdoc`, `<iframe`, `<svg`.
+`<script`, `srcdoc`, `<iframe`. An `<svg>` element is allowed only with no attributes (a regex
+refuses any attribute). Run `39126640529` on `0506bab` failed on a bare `<svg>` marker, which
+was a check error: the sanitizer had removed `onload`, and the empty element is inert.
 
 Limits, stated: the authenticated check does not drive the Desk UI, so the rendering step in a
 browser is not covered by this addendum. The browser harness still covers rendering. The

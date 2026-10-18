@@ -3,6 +3,7 @@ import concurrent.futures
 from datetime import timedelta
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 import time
@@ -2041,12 +2042,15 @@ def main():
             '<svg onload="alert(1)"></svg><p>SYNTHETIC svg</p>',
             '<iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;"></iframe><p>SYNTHETIC frame</p>',
         ]
-        hr_markers=('onerror','onload','javascript:','<script','srcdoc','<iframe','<svg')
+        hr_markers=('onerror','onload','javascript:','<script','srcdoc','<iframe')
+        # An <svg> element is inert only without attributes: any attribute on it is refused.
+        hr_svg_with_attr=re.compile(r'<svg\b[^>]*\s[^>]*>',re.I)
         hr_state={}
         def hr_inert(html):
             low=(html or '').lower()
             found=[m for m in hr_markers if m in low]
             assert not found,f'executable markup survived storage or rendering: {found}'
+            assert not hr_svg_with_attr.search(html or ''),'svg element kept an attribute'
             assert '<strong>formatted</strong>' in (html or '') or 'SYNTHETIC' in (html or ''),'legitimate content was lost'
             return {'executable_markers':0}
         def hr_grant(value):
