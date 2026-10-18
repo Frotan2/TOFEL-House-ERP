@@ -4,7 +4,7 @@
 The raw `audit_stack.py` / `audit_frontend.py` tools flag every public
 advisory-version match. After SEC-DEPS-01, every match has an explicit
 runtime_disposition (MITIGATED / NOT_REACHABLE / BUILD_ONLY / DEV_ONLY /
-INSTALL_ONLY / BROWSER_SELF_DENIAL) recorded in
+INSTALL_ONLY / BROWSER_SELF_DENIAL, the last one open by owner decision) recorded in
 docs/engineering/evidence/sec-deps-01/per-finding-remediation-analysis-2026-09-23.json.
 
 This loader produces a disposition lookup keyed by advisory id (GHSA /
@@ -25,10 +25,14 @@ TRIAGE_JSON = Path(__file__).resolve().parents[2] / \
 
 # Dispositions that count as "closed" (technical mitigation or proof of
 # non-reachability). OWNER_DECISION_REQUIRED / BLOCKED stay failures.
+# BROWSER_SELF_DENIAL is deliberately NOT closed: owner decision OD-2026-10-18-A
+# keeps all BROWSER_SELF_DENIAL records open until a runtime check proves each
+# premise. The 2026-10-18 review found none of the six upheld as written.
 CLOSED_DISPOSITIONS = frozenset((
     "MITIGATED", "NOT_REACHABLE", "BUILD_ONLY", "DEV_ONLY",
-    "INSTALL_ONLY", "BROWSER_SELF_DENIAL",
+    "INSTALL_ONLY",
 ))
+OWNER_OPEN_DISPOSITIONS = frozenset(("BROWSER_SELF_DENIAL",))
 
 # Additive, dated deltas. The 2026-09-23 register is immutable evidence and is
 # never edited. Advisories published later enter ONLY as new dated delta files

@@ -293,7 +293,9 @@ class AdvisoryCompleteListTests(unittest.TestCase):
                 self.assertEqual(rec["runtime_disposition"], "BLOCKED")
                 self.assertEqual(rec["withdrawn_from"], "BROWSER_SELF_DENIAL")
             else:
-                self.assertIn(rec["runtime_disposition"], triage_mod.CLOSED_DISPOSITIONS)
+                # Closed, or BROWSER_SELF_DENIAL (open by owner decision OD-2026-10-18-A).
+                self.assertIn(rec["runtime_disposition"],
+                              triage_mod.CLOSED_DISPOSITIONS | triage_mod.OWNER_OPEN_DISPOSITIONS)
 
 
 if __name__ == "__main__":

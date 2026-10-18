@@ -10,8 +10,8 @@ sends source, site configuration, credentials, backup contents, or files.
 A raw finding is an advisory-version match, not proof of reachability.
 Advisories are triaged against the SEC-DEPS-01 per-finding disposition
 table; matches with an explicit closed disposition (MITIGATED / NOT_REACHABLE
-/ BUILD_ONLY / DEV_ONLY / INSTALL_ONLY / BROWSER_SELF_DENIAL) do not fail
-the audit. New, untriaged advisories exit non-zero so regressions surface
+/ BUILD_ONLY / DEV_ONLY / INSTALL_ONLY) do not fail the audit. BROWSER_SELF_DENIAL
+is not closed (owner decision OD-2026-10-18-A) and fails the audit until proven. New, untriaged advisories exit non-zero so regressions surface
 in CI. Container and OS package CVEs remain out of scope.
 """
 from __future__ import annotations

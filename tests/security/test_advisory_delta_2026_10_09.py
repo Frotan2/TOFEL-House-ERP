@@ -33,7 +33,8 @@ DOCKERFILE = (ROOT / "product" / "app.Dockerfile").read_text()
 PINS = (DELTA_DIR / "python-pins-replay.txt").read_text()
 
 DELTA_NAME = "advisory-delta-2026-10-09"
-CLOSED = {"MITIGATED", "NOT_REACHABLE", "BUILD_ONLY", "DEV_ONLY", "INSTALL_ONLY", "BROWSER_SELF_DENIAL"}
+# Resolved = closed, or BROWSER_SELF_DENIAL (recorded, but open by owner decision OD-2026-10-18-A).
+RESOLVED = {"MITIGATED", "NOT_REACHABLE", "BUILD_ONLY", "DEV_ONLY", "INSTALL_ONLY", "BROWSER_SELF_DENIAL"}
 
 # The eight matches the Foundation runtime gate reported as untriaged (run 37902411810).
 CI_UNTRIAGED = [
@@ -72,7 +73,7 @@ class DeltaCoverageTests(unittest.TestCase):
                 self.assertIsNotNone(record, f"{identifier} not covered by any triage source")
                 self.assertEqual(record.get("source_delta"), DELTA_NAME,
                                  f"{identifier} must be covered by this delta, not an earlier source")
-                self.assertIn(record["runtime_disposition"], CLOSED)
+                self.assertIn(record["runtime_disposition"], RESOLVED)
 
     def test_delta_holds_exactly_the_seven_unique_advisories(self):
         ids = {adv["id"] for _pkg, adv in _delta_records()}
@@ -81,7 +82,7 @@ class DeltaCoverageTests(unittest.TestCase):
     def test_every_delta_advisory_has_evidence_and_fix_path(self):
         for package, adv in _delta_records():
             with self.subTest(package=package, advisory=adv["id"]):
-                self.assertIn(adv["runtime_disposition"], CLOSED)
+                self.assertIn(adv["runtime_disposition"], RESOLVED)
                 self.assertGreaterEqual(len(adv["runtime_disposition_evidence"]), 300)
                 self.assertGreaterEqual(len(adv["fix_path"]), 80)
                 self.assertRegex(adv["published"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
@@ -108,9 +109,12 @@ class ReplaySnapshotTests(unittest.TestCase):
         self.assertEqual(len(npm_result["findings"]), len(SNAPSHOT["npm_entries"]))
         self.assertEqual(npm_result["untriaged"], [])
         # Exactly one replayed record is open: GHSA-vhrc, withdrawn to BLOCKED by ERRATUM E6.
-        self.assertEqual(npm_result["open"], 1)
-        open_urls = [f["url"] for f in npm_result["findings"] if not f["pass"]]
-        self.assertEqual(open_urls, ["https://github.com/advisories/GHSA-VHRC-HGRQ-X75R"])
+        # Open = GHSA-VHRC (BLOCKED) plus the BROWSER_SELF_DENIAL records (owner decision OD-2026-10-18-A).
+        open_findings = [f for f in npm_result["findings"] if not f["pass"]]
+        self.assertEqual(npm_result["open"], len(open_findings))
+        self.assertIn("https://github.com/advisories/GHSA-VHRC-HGRQ-X75R", [f["url"] for f in open_findings])
+        self.assertTrue(all(f["disposition"] in {"BLOCKED", "BROWSER_SELF_DENIAL"} for f in open_findings),
+                        [(f["url"], f["disposition"]) for f in open_findings])
 
         py_findings = []
         for record in SNAPSHOT["pypi_records"]:
@@ -261,7 +265,7 @@ class ReconciliationTests(unittest.TestCase):
             rec = t.load_triage()["by_id"].get(t._norm(aid))
             self.assertIsNotNone(rec, aid)
             self.assertEqual(rec["package"], "py:oauthlib@3.3.1")
-            self.assertIn(rec["runtime_disposition"], CLOSED, aid)
+            self.assertIn(rec["runtime_disposition"], RESOLVED, aid)
 
     def test_readme_states_the_reconciliation(self):
         text = README_PATH.read_text(encoding="utf-8")

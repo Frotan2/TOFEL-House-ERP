@@ -49,3 +49,10 @@ Desk. It does **not** exercise the six records' premises: `markdown-it`, `showdo
 `@tiptap/core`, and `linkify-it` in the Education and HRMS bundles, nor the student or guardian portal.
 Therefore no `BROWSER_SELF_DENIAL` record changes state because of it. Each of the six records
 remains open until a runtime check that drives its own content path is added and passes.
+
+**Gate change (same day, implements OD-2026-10-18-A).** `BROWSER_SELF_DENIAL` was a member of
+`CLOSED_DISPOSITIONS` in `tools/foundation/advisory_triage.py`, so its matches passed the audit. It is
+now an owner-open disposition: `OWNER_OPEN_DISPOSITIONS`, not closed. Each match fails the stack and
+frontend audits until a runtime check proves its premise and the owner records that proof. Pinned by
+`tests/security/test_browser_self_denial_open_2026_10_18.py`. The earlier gate-replay note
+("BROWSER_SELF_DENIAL is a closed disposition in the current policy") describes the 2026-10-16 state only.

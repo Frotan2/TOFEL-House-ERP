@@ -12,7 +12,9 @@ import advisory_triage as t  # noqa: E402
 
 
 TRIAGE = json.loads((ROOT / "docs/engineering/evidence/sec-deps-01/per-finding-remediation-analysis-2026-09-23.json").read_text())
-CLOSED = {"MITIGATED","NOT_REACHABLE","BUILD_ONLY","DEV_ONLY","INSTALL_ONLY","BROWSER_SELF_DENIAL"}
+CLOSED = {"MITIGATED","NOT_REACHABLE","BUILD_ONLY","DEV_ONLY","INSTALL_ONLY"}
+# Owner decision OD-2026-10-18-A: recognised, but NOT closed.
+OWNER_OPEN = {"BROWSER_SELF_DENIAL"}
 
 
 class AdvisoryTriageTests(unittest.TestCase):
@@ -29,7 +31,7 @@ class AdvisoryTriageTests(unittest.TestCase):
         bad = []
         for pkg in TRIAGE["packages"]:
             for adv in pkg["advisories"]:
-                if adv["runtime_disposition"] not in CLOSED | {"OWNER_DECISION_REQUIRED","BLOCKED"}:
+                if adv["runtime_disposition"] not in CLOSED | OWNER_OPEN | {"OWNER_DECISION_REQUIRED","BLOCKED"}:
                     bad.append((pkg["package"], adv["id"], adv["runtime_disposition"]))
         self.assertEqual(bad, [], f"unknown dispositions: {bad}")
 
@@ -56,12 +58,13 @@ class AdvisoryTriageTests(unittest.TestCase):
         pres = t.triage_python(py, triage)
         self.assertEqual(nres["untriaged"], [], "npm advisories did not all resolve")
         self.assertEqual(pres["untriaged"], [], "python advisories did not all resolve")
-        # 2026-10-15: GHSA-vhrc was withdrawn to BLOCKED (ERRATUM E6). It is the only expected open record.
-        still_open = [f["id"] for f in nres["findings"] if not f["pass"]]
-        still_open += [f["id"] for f in pres["findings"] if not f["pass"]]
-        self.assertEqual(still_open, ["GHSA-vhrc-hgrq-x75r"])
-        self.assertEqual(nres["open"], 1)  # the withdrawn GHSA-vhrc is not closed
-        self.assertEqual(pres["open"], 0)
+        # Not closed: GHSA-vhrc (BLOCKED, ERRATUM E6) and every BROWSER_SELF_DENIAL record
+        # (owner decision OD-2026-10-18-A). Nothing else may be open.
+        open_findings = [f for f in nres["findings"] + pres["findings"] if not f["pass"]]
+        self.assertIn("GHSA-vhrc-hgrq-x75r", [f["id"] for f in open_findings])
+        self.assertTrue(all(f["disposition"] in OWNER_OPEN | {"BLOCKED"} for f in open_findings),
+                        [(f["id"], f["disposition"]) for f in open_findings])
+        self.assertEqual(nres["open"] + pres["open"], len(open_findings))
         self.assertEqual(t.overall_status(npm_result=nres, py_result=pres), "fail")
 
     def test_a_brand_new_advisory_is_a_regression(self):
