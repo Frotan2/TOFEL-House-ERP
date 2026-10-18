@@ -18,6 +18,14 @@ const report = { status: 'running', scope: 'Chromium; Desk form; stored HRMS Tex
 
 function save() { fs.writeFileSync(output, JSON.stringify(report, null, 2)); }
 function requireCondition(ok, message) { if (!ok) throw new Error(message); }
+// One line, no page content: the failing stage, the error class, and a short message restricted to a
+// safe character set (our own fixed assertion texts). The runtime turns this line into a check annotation,
+// because hosted job logs and artifacts cannot be downloaded from the validation environment.
+function stageLine(stage, e) {
+  const text = String(e && e.message ? e.message : '').replace(/\s+/g, ' ').replace(/[^A-Za-z0-9 .,:'()=_/-]/g, '').slice(0, 120).trim();
+  const errorName = String(e && e.name ? e.name : 'Error').replace(/[^A-Za-z]/g, '').slice(0, 40) || 'Error';
+  return `DESK-RENDER-STAGE-FAILED ${stage} ${errorName} ${text}`.trimEnd();
+}
 async function check(name, fn) {
   try {
     report.checks.push({ name, status: 'pass', observation: await fn() });
@@ -25,6 +33,7 @@ async function check(name, fn) {
   } catch (e) {
     report.checks.push({ name, status: 'fail', exception: e.name, message: String(e.message).slice(0, 250) });
     save();
+    console.error(stageLine(name, e));
     throw e;
   }
 }
@@ -107,6 +116,7 @@ try {
   report.status = 'fail';
   report.message = String(e.message).slice(0, 250);
   save();
+  if (!report.checks.some((c) => c.status === 'fail')) console.error(stageLine('launch', e));
   process.exitCode = 1;
 } finally {
   if (browser) await browser.close();

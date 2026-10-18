@@ -5,6 +5,7 @@ runner, real Chromium, real Desk). These tests pin the properties that make a gr
 the step is a hard failure, the detector has a positive control, the browser script refuses to run
 outside Actions, and the fixture creates one dedicated user and never edits an existing one.
 """
+import sys
 from pathlib import Path
 import re
 import unittest
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 INSTALL = ROOT / "tools/foundation/runtime_install.py"
 FIXTURE = ROOT / "tools/foundation/runtime_desk_render.py"
 BROWSER = ROOT / "tools/foundation/desk_render_check.mjs"
+sys.path.insert(0, str(ROOT / "tools" / "foundation"))
 
 
 class DeskRenderWiringTests(unittest.TestCase):
@@ -47,6 +49,22 @@ class DeskRenderWiringTests(unittest.TestCase):
         self.assertIn("requireCondition(state.field_found,", text)
         self.assertIn("field_javascript_links", text)
         self.assertIn("page_wide_javascript_links", text)
+
+    def test_stage_line_is_turned_into_an_annotation_and_no_other_output_is(self):
+        import runtime_install
+        line = ("DESK-RENDER-STAGE-FAILED desk-form-first-open TimeoutError "
+                "description field wrapper not found in the Desk form")
+        note = runtime_install.desk_render_stage_annotation("noise\n" + line + "\n")
+        self.assertEqual(
+            note,
+            "::error file=tools/foundation/desk_render_check.mjs::desk render check failed at stage "
+            "desk-form-first-open (TimeoutError: description field wrapper not found in the Desk form)")
+        self.assertIsNone(runtime_install.desk_render_stage_annotation("plain output"))
+        self.assertIsNone(runtime_install.desk_render_stage_annotation(""))
+        self.assertIsNone(runtime_install.desk_render_stage_annotation(None))
+        # Markup in a message is not representable: the producer strips it and the parser refuses it.
+        self.assertIsNone(runtime_install.desk_render_stage_annotation(
+            "DESK-RENDER-STAGE-FAILED desk-login Error <img onerror=alert(1)>"))
 
     def test_fixture_creates_one_dedicated_user_and_never_edits_existing_roles(self):
         text = FIXTURE.read_text(encoding="utf-8")

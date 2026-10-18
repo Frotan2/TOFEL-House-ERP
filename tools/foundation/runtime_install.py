@@ -32,6 +32,26 @@ _HRMS_EDITOR_STAGE_FAILURE = re.compile(
     r"HRMS-EDITOR-STAGE-FAILED ([a-z-]{1,40}) ([A-Za-z]{1,40})")
 
 
+_DESK_RENDER_STAGE_FAILURE = re.compile(
+    r"^DESK-RENDER-STAGE-FAILED ([a-z-]{1,40}) ([A-Za-z]{1,40})(?: ([A-Za-z0-9 .,:'()=_/-]{0,120}))?\s*$",
+    re.MULTILINE)
+
+
+def desk_render_stage_annotation(output: str) -> str | None:
+    """Name the Desk render check stage that failed, from the one stage line only.
+
+    The Desk harness prints a single DESK-RENDER-STAGE-FAILED line with the check name, error class and
+    a fixed-text message. No page content is printed, and the line is the only diagnostic that reaches
+    the check annotations from this environment.
+    """
+    matches = list(_DESK_RENDER_STAGE_FAILURE.finditer(output or ""))
+    if not matches:
+        return None
+    stage, error, detail = matches[-1].group(1), matches[-1].group(2), (matches[-1].group(3) or "").strip()
+    text = f"desk render check failed at stage {stage} ({error}{': ' + detail if detail else ''})"
+    return "::error file=tools/foundation/desk_render_check.mjs::" + text
+
+
 def hrms_editor_stage_annotation(output: str) -> str | None:
     """Name the built-HRMS-editor check stage that failed, never page content.
 
@@ -1213,6 +1233,10 @@ def main() -> int:
                 stage_line = hrms_editor_stage_annotation(report.get("failure_output_tail") or "")
                 if stage_line:
                     print(stage_line, flush=True)
+            if last_failed_check == "browser-desk-hrms-stored-html":
+                desk_line = desk_render_stage_annotation(report.get("failure_output_tail") or "")
+                if desk_line:
+                    print(desk_line, flush=True)
     return 0 if report["status"] == "pass" else 1
 
 if __name__ == "__main__":
