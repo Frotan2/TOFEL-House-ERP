@@ -64,20 +64,39 @@ The Education TipTap overlay (GHSA-VHRC) is **not** changed by this commit. The 
 
 Lockfile change scope: `git diff` of the overlay lock against the upstream lock touches the realtime family only (socket.io, engine.io, ws, socket.io-parser, and the transitive pins they need: cookie 0.7.2, debug 4.4.3, ms 2.1.3, base64id removed, @types/ws 8.18.2 added). Nothing else in the 3,349-line lock moved.
 
-## 5. Not verified here (must be verified before any GO)
+## 5. Hosted verification on `7e0f1915` (2026-10-18)
 
-1. **Hosted build of the product image** with the overlay (`product-image.yml`). `bench get-app` and the overlay step run inside the real image build.
-2. **Hosted native lifecycle** (`native-lifecycle.yml`) and Foundation runtime (`foundation-runtime.yml`): the real `yarn install --frozen-lockfile` of the Frappe root, the post-build verify, and the realtime socket path.
-3. **Owner live test over Tailscale Serve** (`product/windows/VALIDATION.md` Evidence 13): WebSocket handshake HTTP 101 from an authorized staff PC, and a realtime desk update arriving without a refresh. Not run here.
-4. **Frontend bundle.** The Frappe frontend also resolves `socket.io-client` 4.7.2 with `socket.io-parser` 4.2.7 through the same resolution. The browser build has not been exercised.
+| Workflow | Run | Result |
+|---|---|---|
+| Owned suite (push) | `39106323689` | success |
+| Owned suite (pull_request) | `39106326151` | success |
+| Product image (`image` job, incl. Build application image, first boot, browser UI, tailnet contract, upgrade/rollback) | `39106323661` | success |
+| Foundation runtime (`runtime` job; runs `runtime_install.py`, which applies the overlay before `asset-build` and verifies it after) | `39106323632` | success |
+| Native lifecycle (real-site checks) | `39106323646` | success |
 
-## 6. Residuals and follow-ups
+Foundation annotations on this SHA: 158 advisory matches in 44 packages (previously 161 in 46). The `ws` 8.11.0 and `engine.io` root entries no longer appear. The remaining `socket.io-parser` and `ws` entries are in the frontend trees listed in §6 (`browser-self-denial-review-2026-10-18/README.md` §2).
+
+## 6. Not verified here (must be verified before any GO)
+
+1. **Owner live test over Tailscale Serve** (`product/windows/VALIDATION.md` Evidence 13): WebSocket handshake HTTP 101 from an authorized staff PC, and a realtime desk update arriving without a refresh. Not run here. The hosted tailnet contract passed in CI, but CI does not run Tailscale Serve (per `VALIDATION.md`).
+2. **Frontend bundle output.** The Frappe frontend resolves `socket.io-client` 4.7.2 with `socket.io-parser` 4.2.7 through the same resolution. No bundle was inspected.
+
+## 7. Residual copies found in this review (not fixed by this change)
+
+These are separate trees that the Frappe root overlay does not touch. Each needs an owner decision (see `browser-self-denial-review-2026-10-18/README.md` §3):
+
+- **Education frontend** (`tools/foundation/education-locks/frontend/yarn.lock`): `socket.io-parser` 4.2.4 via `socket.io-client`. **This copy is in the Education browser bundle.** GHSA-2m8v and GHSA-677m apply to it. The realtime server fix does not cover it.
+- **Education frontend:** `ws` 8.11.0 via `engine.io-client` (Node transport only; `browser` field excludes it from browser bundles, checked on npm for engine.io-client 6.5.1 and 6.5.3).
+- **Banking frontend** (`tools/foundation/banking-locks/banking/yarn.lock`): `ws` 8.17.1 via `engine.io-client` (same Node-only reach). Its `socket.io-parser` is already 4.2.7.
+- The earlier MITIGATED basis (nginx caps) is **not** valid for these client-side copies, because no nginx sits in front of a browser bundle.
+
+## 8. Residuals and follow-ups
 
 - The register is immutable evidence. The seven IDs keep their 2026-09-23 dispositions. The triage gate (`tools/foundation/advisory_triage.py`) does not check installed versions, so it will keep counting them as closed. The version-based fix is the real remediation, but the gate does not prove it. A follow-up should make the gate fail when a MITIGATED record's package version is below the fixed minimum. That is a strengthening, not a policy relaxation, and needs review before it is merged.
 - The earlier MITIGATED basis (nginx caps) is withdrawn for the product topology. It is still correct for the Foundation/CI runtime, which does run nginx.
 - `engine.io` 6.6.11 and `ws` 8.21.3 are the latest patch lines at the time of this review. A later advisory on those lines needs a new delta record.
 
-## 7. Reproduce
+## 9. Reproduce
 
 ```bash
 # upstream verification (needs GitHub API access)
