@@ -22,8 +22,9 @@ this sandbox, and it was not inspected.
   not contain these plugins.
 - Disposition: **BUILD_ONLY, confirmed by the build path.** Residual: the vulnerable 0.2.17 is
   still installed in the build step. Its input is repository CSS, not network input. Upstream
-  fixes exist (1.4.1 / 2.0.3), but the chain is pinned by `@vue/component-compiler`, so there is
-  no safe lock-level bump here. This is a build-host risk, recorded, not a served-app risk.
+  fixes exist (1.4.1 / 2.0.3). The declared range `^0.2.16` does not admit 1.4.1, so a
+  resolutions override would cross the declared range. That override is not tested here and is
+  not claimed as safe. This is a build-host risk, recorded, not a served-app risk.
 
 ## shell-quote (GHSA-w7jw-789q-3m8p critical, GHSA-395f-4hp3-45gv high)
 
