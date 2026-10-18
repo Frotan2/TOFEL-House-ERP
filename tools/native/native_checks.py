@@ -2002,13 +2002,13 @@ def main():
         # rolled back at the end. A denial counts only when the refusal text is the link rule's
         # text, so a different ValidationError (for example Throttled) cannot pass as a denial.
         def denied_because(fn,fragment):
-            frappe.db.savepoint('link-denial')
+            frappe.db.savepoint('link_denial')
             try:fn()
             except (frappe.PermissionError,frappe.ValidationError,frappe.DuplicateEntryError) as exc:
                 assert fragment in str(exc),f'Denied for another reason: {type(exc).__name__}'
                 return {'denied':type(exc).__name__,'rule':fragment}
             else:raise AssertionError('Expected link denial was accepted')
-            finally:frappe.db.rollback(save_point='link-denial')
+            finally:frappe.db.rollback(save_point='link_denial')
         def office365_link_guard():
             holder_email=users['other'];second_email=users['publisher']
             subject='SYNTHETIC-SUB-'+frappe.generate_hash(length=16)
