@@ -106,3 +106,49 @@ Limits, stated: the authenticated check does not drive the Desk UI, so the rende
 browser is not covered by this addendum. The browser harness still covers rendering. The
 keyboard and paste checks are unchanged. Status: **the check is written and lint-clean; it has not
 run on the new SHA** until the native-lifecycle run for that SHA passes.
+
+## Addendum 2026-10-18b: logged-in Desk rendering of a stored hostile HRMS value
+
+The authenticated checks above do not drive the Desk UI. This addendum adds the missing rendering
+proof as a hard Foundation runtime step, `browser-desk-hrms-stored-html`, which runs after the
+fixture step `desk-render-fixture`.
+
+What it does (synthetic data only, disposable Actions runner):
+
+- `tools/foundation/runtime_desk_render.py` creates one dedicated System User
+  (`validation-hr-render@example.test`, role HR User). It inserts one real `Job Opening Template`
+  whose `description` (Text Editor) carries hostile payloads and one `<strong>formatted</strong>`
+  element. It reads the value back from the database and refuses to continue if any marker remains.
+- `tools/foundation/desk_render_check.mjs` (Playwright 1.58.2, Chromium) logs in through `/login`,
+  runs a **positive control** first (an inline `onerror` inserted through `innerHTML` must execute,
+  or the check is blind), then opens the form on first open and after reload. The markup checks
+  (inline handlers, `javascript:` links, `srcdoc` frames, rendered `<strong>`) run inside the
+  rendered `description` field, which must exist. Page-wide execution, page-wide counts and
+  dialogs are also checked. Results: `desk-render-result.json` in the run artifact.
+
+Runs, in order (all on the Foundation runtime workflow):
+
+| Run | Head | Result | What it showed |
+|---|---|---|---|
+| `39133939250` | `54523d3` | FAILED at `browser-desk-hrms-stored-html` | Step log and artifact could not be downloaded from the validation environment. Cause unknown at that point. |
+| `39134984574` | `48bf058` | FAILED at the same step | Markup checks were scoped to the field (diagnostic change). Same failure. |
+| `39135662696` | `a8b5332` | FAILED at the same step | Stage annotation (added so that the failing stage is visible): `detector-positive-control`, `page.evaluate: Execution context was destroyed, most likely because of a navigation`. |
+| `39136491032` | `5431053` | **SUCCESS**, step `browser-desk-hrms-stored-html` passed | Fix: wait for the URL to leave `/login` and for DOMContentLoaded after login, as the existing browser check does. |
+
+Native-lifecycle authenticated checks (`hrms-editor-*`, above) still refer to `6e58313`. No file
+under `tools/native`, `product` or `apps` changed after that commit; the later commits touch
+`tools/foundation`, tests, and owner documents only.
+
+Limits, stated:
+
+- One payload set, one Chromium build, one role (HR User), one doctype (Job Opening Template).
+- The check proves the sanitised stored value renders inertly in the Desk form on this build. It
+  does not prove other fields, other doctypes, or other entry paths (Data Import, Web Forms).
+- The paste and keyboard editing paths are covered only by the built-component harness
+  (`hrms_editor_security.mjs`), not by this step.
+- The run's detailed `desk-render-result.json` is in the artifact `foundation-runtime-39136491032-1`
+  (retained for the Actions retention period); it was not downloadable from the validation
+  environment, so the step conclusion and the annotation trail above are the recorded evidence.
+
+Status: the rendering step has passed on `5431053`. The HRMS row in the owner package stays open
+until the final-SHA gate runs pass and the owner accepts the limits above.

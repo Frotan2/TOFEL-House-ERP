@@ -36,3 +36,16 @@ Release impact: each item above keeps the release at **NO-GO** until decided. No
 - No bundle output was inspected (no build was run here).
 - No field audit of markdown renderers was run. Nothing was run against the owner's real site.
 - No disposition was changed, and the immutable register was not edited.
+
+## Addendum 2026-10-18: owner decision and what the Desk rendering check does not close
+
+Owner decision (2026-10-18): **keep all six records open** (UNVERIFIED or BLOCKED until a runtime
+check proves each premise). Nothing is closed on paper review. Recorded in `docs/owner-decisions.json`
+as `OD-2026-10-18-A`.
+
+The new Desk rendering step `browser-desk-hrms-stored-html` (passed on `5431053`, run `39136491032`;
+see `hrms-editor-2026-10-15/README.md` addendum 2026-10-18b) covers a stored HRMS Text Editor value in
+Desk. It does **not** exercise the six records' premises: `markdown-it`, `showdown`, `@tiptap/extension-link`,
+`@tiptap/core`, and `linkify-it` in the Education and HRMS bundles, nor the student or guardian portal.
+Therefore no `BROWSER_SELF_DENIAL` record changes state because of it. Each of the six records
+remains open until a runtime check that drives its own content path is added and passes.

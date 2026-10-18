@@ -224,6 +224,24 @@
       "decision": "RESOLVED — MIT",
       "scope": "Product license for the owned code (apps/toefl_house, apps/foundation_security, tools/, tests/).",
       "consequence": "MIT is the owner-selected license dated 2026-09-19. LICENSE, README and both owned app metadata declarations are aligned; the consistency test guards the contract."
+    },
+    {
+      "id": "OD-2026-10-18-A",
+      "decision": "BROWSER_SELF_DENIAL: KEEP ALL SIX RECORDS OPEN",
+      "scope": "The six BROWSER_SELF_DENIAL records in the SEC-DEPS-01 browser self-denial review stay open (UNVERIFIED/BLOCKED) until a runtime check proves them. Nothing is closed on paper review.",
+      "consequence": "Records remain open in the owner package and block GO until runtime evidence on the final SHA exists."
+    },
+    {
+      "id": "OD-2026-10-18-B",
+      "decision": "ADMINISTRATOR DISABLED-USER GUARD: STRICT",
+      "scope": "A disabled Administrator is refused on every credential path. Frappe's own login behaviour is not mirrored.",
+      "consequence": "The guard fails closed. Any path that would accept a disabled Administrator is a defect. Current state: validate_user_enabled applies to Administrator like any user (see the B-disabled-credentials evidence README). Per-path coverage was not re-verified for this decision and remains to be checked."
+    },
+    {
+      "id": "OD-2026-10-18-C",
+      "decision": "LOGGED-IN DESK RENDERING CHECK FOR A STORED HOSTILE HRMS FORM: BUILD NOW",
+      "scope": "Foundation runtime step browser-desk-hrms-stored-html: real login as a dedicated HR User, real Desk form for a Job Opening Template whose Text Editor value carries hostile payloads, first open and reload, with a positive control. Synthetic data only.",
+      "consequence": "Built and passing on the Foundation runtime (run 39136491032, head 5431053). It proves the rendered form only for that payload set and that Chromium build; it does not replace the HRMS owner acceptance."
     }
   ],
   "licensing": {
