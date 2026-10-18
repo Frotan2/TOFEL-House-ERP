@@ -1,15 +1,15 @@
 {
   "upstream_commit": "93bc7075753369457919720690f80c6d2207b5f2",
   "yarn_version": "1.22.22",
-  "purpose": "GHSA-vhrc-hgrq-x75r: pin @tiptap/* 2.27.3 (patched extension-link >= 2.10.4) in the Education frontend. Upstream frappe-ui 0.1.31 pins 2.2.3.",
+  "purpose": "GHSA-vhrc-hgrq-x75r: pin @tiptap/* 2.27.3 (patched extension-link >= 2.10.4) in the Education frontend. Upstream frappe-ui 0.1.31 pins 2.2.3. 2026-10-18: also resolve markdown-it 14.1.1 and linkify-it 5.0.2 (GHSA-38c4-r59v-3vqw, GHSA-22p9-wv53-3rq4, GHSA-v245-v573-v5vm).",
   "files": {
     "frontend/package.json": {
       "upstream_sha256": "c44548c1e7e9f3b6c75209710d0e12018be3a00945167df8f70c45fd537e7cd9",
-      "security_sha256": "3c2cb14de7ac40b1168371887b1210f74d8e6de481a51b634da918af750b9257"
+      "security_sha256": "8b02a7cb3709c5a8717ef7cb96534df90fc09a075a687f69233749a74fce41c8"
     },
     "frontend/yarn.lock": {
       "upstream_sha256": "10618b30bd7dfd48d6fc5e85d56af3d07562c2c11f62efe0b746a8f95f328072",
-      "security_sha256": "f5424561c553aee32c975635121ca2410cd2445a2903b9784d90076ea97376dc"
+      "security_sha256": "f9375dacbf6799d0c39606b10e4b311a74393c2385721a4315ab47d4478626dc"
     }
   }
 }

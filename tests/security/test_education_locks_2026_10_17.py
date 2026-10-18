@@ -112,8 +112,19 @@ class EducationOverlayPinTests(unittest.TestCase):
 
     def test_resolutions_cover_every_tiptap_package_at_patched_version(self):
         names = set(self._lock_tiptap_versions())
-        self.assertEqual(set(self.package["resolutions"]), names)
-        self.assertEqual(set(self.package["resolutions"].values()), {PATCHED})
+        tiptap = {k: v for k, v in self.package["resolutions"].items() if k.startswith("@tiptap/")}
+        self.assertEqual(set(tiptap), names)
+        self.assertEqual(set(tiptap.values()), {PATCHED})
+
+    def test_markdown_it_and_linkify_it_are_pinned_to_patched_versions(self):
+        # 2026-10-18: markdown-it < 14.1.1 (GHSA-38c4-r59v-3vqw); linkify-it <= 5.0.1 (GHSA-22p9-wv53-3rq4)
+        # and <= 5.0.1 (GHSA-v245-v573-v5vm, first patched 5.0.2).
+        self.assertEqual(self.package["resolutions"]["markdown-it"], "14.1.1")
+        self.assertEqual(self.package["resolutions"]["linkify-it"], "5.0.2")
+        lock = (OVERLAY / "frontend/yarn.lock").read_text(encoding="utf-8")
+        self.assertIn("markdown-it@14.1.1, markdown-it@^14.0.0:", lock)
+        self.assertIn("linkify-it@5.0.2, linkify-it@^5.0.0:", lock)
+        self.assertNotIn('version "14.0.0"', lock.split("markdown-it@14.1.1")[1].split("\n\n")[0])
 
     def test_patched_link_version_meets_advisory_minimum(self):
         self.assertGreaterEqual(_tuple(PATCHED), PATCHED_MINIMUM)
