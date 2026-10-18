@@ -43,8 +43,16 @@ unchanged. Only the copies that an error snapshot reads are removed.
   the database, and the test asserts that neither value is present. The control's Error Log row
   is deleted afterwards.
 
-Real-site result: **pending the native-lifecycle run on the commit that carries this change.**
-Record the run ID here only after it passes.
+Real-site result on `6eb0c33`: **native-lifecycle run `39103495463` SUCCESS** (job `117604389584`,
+step `Native lifecycle checks on a real site`). That step runs `security_acceptance.py` (includes the
+A11 block) and `stored_html_check.py`; `run_native.py` raises on any non-zero exit, so both passed.
+The step log is not downloadable from the build sandbox. The exit status is the evidence.
+
+A first attempt, run `39103073497` on `9754578`, FAILED in the A11 block. Cause: the block sat inside
+the existing `patch.object(frappe, "get_doc")` context, so `log_error` resolved the test stub.
+Fixed in `6eb0c33` by moving the block outside the patch context. No assertion was changed.
+Foundation runtime `39103073500` on `9754578` SUCCESS (hosted runtime with the wrapper change;
+161 matches / 46 packages / 10 not shown, identical to the `5afb5c3` run; no `::error::`).
 
 ## Residuals (open)
 
