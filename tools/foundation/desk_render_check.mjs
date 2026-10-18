@@ -56,7 +56,11 @@ try {
       page.locator('.for-login .form-login .btn-login[type=submit]').click(),
     ]);
     requireCondition(response.status() === 200, 'desk login failed');
-    return { login: 'ok', user_role: 'HR User (dedicated fixture user)' };
+    // The login response returns before the browser follows the redirect into Desk. Wait for the
+    // navigation to settle, so no evaluation runs in a context that is about to be replaced.
+    await page.waitForURL((url) => url.pathname !== '/login', { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('domcontentloaded');
+    return { login: 'ok', user_role: 'HR User (dedicated fixture user)', landed_path: new URL(page.url()).pathname };
   });
 
   await check('detector-positive-control', async () => {
