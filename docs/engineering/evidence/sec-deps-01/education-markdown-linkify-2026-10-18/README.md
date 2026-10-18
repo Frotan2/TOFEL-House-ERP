@@ -16,7 +16,7 @@ Scope: two of the five `BROWSER_SELF_DENIAL` records that the owner decision OD-
 
 - `markdown-it` 14.0.0 to 14.1.1 (`integrity sha512-BuU2qnTti9YKgK5N+IeMubp14ZUKUUw7yeJbkjtosvHiP0AZ5c8IAgEMk79D0eC8F23r4Ac/q8cAIFdm2FtyoA==`).
 - `linkify-it` 5.0.0 to 5.0.2 (`integrity sha512-ONTm2jCMAVZjgQa/Fy1kScXsuOoF5NPTsoFBdE1KVIZ2vAh/r9+Bqo+0jINCBYnavTPQZz38QzFTme79ENoN3Q==`).
-- `uc.micro` 2.0.x to 2.1.0, the new dependency required by markdown-it 14.1.1 (`^2.1.0`).
+- `uc.micro@2.1.0` added as a new entry, required by markdown-it 14.1.1 (`^2.1.0`). The existing `uc.micro@^2.0.0` entry stays for other consumers.
 - No other lock entry changed (`diff` of the lock: 23 lines).
 
 ## Why this closes the findings
