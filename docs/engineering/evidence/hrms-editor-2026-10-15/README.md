@@ -78,3 +78,29 @@ patched tree passes. The pre-existing 1.31.3 exposure is therefore
   storage of HTML is a separate review item; this record does not claim it.
 - The education tree remains NOT_REACHABLE for this advisory (no editor is
   constructed there); see `advisory-delta-2026-10-09` `product_scope`.
+
+## Addendum 2026-10-18: server-side and authenticated flow (CI check, not yet run on the new SHA)
+
+The browser harness above proves the built component. It does not prove what the server stores,
+returns, or reopens. The addendum adds `tools/native/native_checks.py` checks
+`hrms-editor-*` on the real site, using the real HRMS doctype **Job Opening Template** (its
+`description` is a Text Editor field; its only mandatory field is `template_title`; the pinned
+source is `frappe/hrms@a4768b441cff346def505e27f2a2229ee1e05b9b`, `hrms/hr/doctype/job_opening_template/job_opening_template.json`).
+
+| Check | What it proves |
+|---|---|
+| `hrms-editor-rest-create-sanitized` | An authenticated HR User POST over REST stores the payload inert (database value and response). Legitimate `<strong>` survives. |
+| `hrms-editor-reopen-sanitized` | A later authenticated GET (reopen) returns inert content with formatting kept. |
+| `hrms-editor-rest-update-sanitized` | A PUT with `javascript:` link, `<svg onload>` and `<iframe srcdoc>` stores nothing executable. |
+| `hrms-editor-server-insert-sanitized` | The server-side insert path (the path Data Import also uses) stores nothing executable. |
+| `hrms-editor-unrelated-role-create-denied` / `-read-denied` | A user with no HR role is refused on create and read (403). |
+
+Access: the HR User role is granted to one existing fixture user (`teacher_two`) for the run and
+revoked in a `finally` block. No new User rows are created (Frappe `throttle_user_creation`, see the
+B-disabled-credentials evidence README). Markers checked: `onerror`, `onload`, `javascript:`,
+`<script`, `srcdoc`, `<iframe`, `<svg`.
+
+Limits, stated: the authenticated check does not drive the Desk UI, so the rendering step in a
+browser is not covered by this addendum. The browser harness still covers rendering. The
+keyboard and paste checks are unchanged. Status: **the check is written and lint-clean; it has not
+run on the new SHA** until the native-lifecycle run for that SHA passes.

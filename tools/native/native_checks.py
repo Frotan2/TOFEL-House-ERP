@@ -2027,6 +2027,75 @@ def main():
                 frappe.db.rollback()
             return {'holder_resave':'allowed','second_user':second_result,'same_user_duplicate':dup_result}
         check('office365-link-save-guard',office365_link_guard)
+        # 2026-10-18 HRMS Text Editor, server side, on a real HRMS doctype (Job Opening Template.description).
+        # The browser harness (tools/foundation/hrms_editor_security.mjs) proves the built component;
+        # this check proves what the server stores, returns and renders for an authenticated user through
+        # the real REST path, the real containment hook, Frappe's own sanitizer and the real permissions.
+        # Synthetic data only. The HR User role is granted to one fixture user for the run and revoked in finally.
+        hr_user=users['teacher_two'];hr_session=sessions['teacher_two'];no_role_session=sessions['outsider']
+        hr_doctype='Job Opening Template';hr_base=base+'/api/resource/'+quote(hr_doctype,safe='')
+        hr_title='SYN-HRMS-EDITOR-'+frappe.generate_hash(length=10)
+        hr_payloads=[
+            '<p>SYNTHETIC <strong>formatted</strong> <em>text</em></p><ul><li>item</li></ul><img src=x onerror="alert(1)">',
+            '<p><a href="javascript:alert(1)">SYNTHETIC link</a></p>',
+            '<svg onload="alert(1)"></svg><p>SYNTHETIC svg</p>',
+            '<iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;"></iframe><p>SYNTHETIC frame</p>',
+        ]
+        hr_markers=('onerror','onload','javascript:','<script','srcdoc','<iframe','<svg')
+        hr_state={}
+        def hr_inert(html):
+            low=(html or '').lower()
+            found=[m for m in hr_markers if m in low]
+            assert not found,f'executable markup survived storage or rendering: {found}'
+            assert '<strong>formatted</strong>' in (html or '') or 'SYNTHETIC' in (html or ''),'legitimate content was lost'
+            return {'executable_markers':0}
+        def hr_grant(value):
+            u=frappe.get_doc('User',hr_user)
+            if value:u.append('roles',{'role':'HR User'})
+            else:u.roles=[r for r in u.roles if r.role!='HR User']
+            u.save(ignore_permissions=True)
+            frappe.clear_cache(user=hr_user)
+            frappe.db.commit()
+            return {'hr_user_role':value}
+        def hr_create():
+            r=hr_session.post(hr_base,json={'template_title':hr_title,'description':hr_payloads[0]},timeout=40)
+            assert r.status_code==200,f'create HTTP {r.status_code}'
+            name=r.json()['data']['name'];hr_state['name']=name
+            stored=frappe.db.get_value(hr_doctype,name,'description')
+            assert '<strong>formatted</strong>' in (stored or ''),'legitimate formatting not stored'
+            hr_inert(r.json()['data'].get('description'))
+            return {'stored':hr_inert(stored),'returned':'inert'}
+        def hr_reopen():
+            r=hr_session.get(hr_base+'/'+quote(hr_state['name'],safe=''),timeout=40)
+            assert r.status_code==200,f'reopen HTTP {r.status_code}'
+            html=r.json()['data']['description']
+            assert '<strong>formatted</strong>' in html,'formatting lost on reopen'
+            return hr_inert(html)
+        def hr_update():
+            r=hr_session.put(hr_base+'/'+quote(hr_state['name'],safe=''),json={'description':hr_payloads[1]+hr_payloads[2]+hr_payloads[3]},timeout=40)
+            assert r.status_code==200,f'update HTTP {r.status_code}'
+            stored=frappe.db.get_value(hr_doctype,hr_state['name'],'description')
+            hr_inert(r.json()['data'].get('description'))
+            return {'stored':hr_inert(stored)}
+        def hr_server_insert():
+            doc=frappe.get_doc({'doctype':hr_doctype,'template_title':hr_title+'-INSERT','description':hr_payloads[0]+hr_payloads[3]})
+            doc.insert(ignore_permissions=True)
+            stored=frappe.db.get_value(hr_doctype,doc.name,'description')
+            return {'stored':hr_inert(stored)}
+        def hr_denied_create():
+            return http_denied(no_role_session.post(hr_base,json={'template_title':hr_title+'-DENY','description':hr_payloads[0]},timeout=40))
+        def hr_denied_read():
+            return http_denied(no_role_session.get(hr_base+'/'+quote(hr_state['name'],safe=''),timeout=40))
+        check('hrms-editor-grant-hr-user-role',lambda:hr_grant(True))
+        try:
+            check('hrms-editor-rest-create-sanitized',hr_create)
+            check('hrms-editor-reopen-sanitized',hr_reopen)
+            check('hrms-editor-rest-update-sanitized',hr_update)
+            check('hrms-editor-server-insert-sanitized',hr_server_insert)
+            check('hrms-editor-unrelated-role-create-denied',hr_denied_create)
+            check('hrms-editor-unrelated-role-read-denied',hr_denied_read)
+        finally:
+            check('hrms-editor-revoke-hr-user-role',lambda:hr_grant(False))
         url=base+'/api/resource/'+quote(api.ITEM,safe='')+'/'+httpitem['name']
         check('http-direct-crud-mutation-denied',lambda:http_denied(sessions['author'].put(url,json={'status':'Published','flags':{'ignore_permissions':1}},timeout=30)))
         check('http-other-author-draft-read-denied',lambda:http_denied(sessions['other'].get(url,timeout=30)))
