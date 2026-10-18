@@ -117,14 +117,16 @@ class EducationOverlayPinTests(unittest.TestCase):
         self.assertEqual(set(tiptap.values()), {PATCHED})
 
     def test_markdown_it_and_linkify_it_are_pinned_to_patched_versions(self):
-        # 2026-10-18: markdown-it < 14.1.1 (GHSA-38c4-r59v-3vqw); linkify-it <= 5.0.1 (GHSA-22p9-wv53-3rq4)
-        # and <= 5.0.1 (GHSA-v245-v573-v5vm, first patched 5.0.2).
-        self.assertEqual(self.package["resolutions"]["markdown-it"], "14.1.1")
+        # 2026-10-18 advisories: markdown-it < 14.1.1 (GHSA-38c4-r59v-3vqw); markdown-it <= 14.1.1
+        # (GHSA-6v5v-wf23-fmfq, first patched 14.2.0) and < 14.3.1 (GHSA-253c-mchw-3w2r, first patched 14.3.1);
+        # linkify-it <= 5.0.1 (GHSA-22p9-wv53-3rq4) and <= 5.0.1 (GHSA-v245-v573-v5vm, first patched 5.0.2).
+        # 14.3.3 is the newest 14.x and has no advisory on the GitHub Advisory API (affects=markdown-it@14.3.3).
+        self.assertEqual(self.package["resolutions"]["markdown-it"], "14.3.3")
         self.assertEqual(self.package["resolutions"]["linkify-it"], "5.0.2")
         lock = (OVERLAY / "frontend/yarn.lock").read_text(encoding="utf-8")
-        self.assertIn("markdown-it@14.1.1, markdown-it@^14.0.0:", lock)
-        self.assertIn("linkify-it@5.0.2, linkify-it@^5.0.0:", lock)
-        self.assertNotIn('version "14.0.0"', lock.split("markdown-it@14.1.1")[1].split("\n\n")[0])
+        self.assertIn("markdown-it@14.3.3, markdown-it@^14.0.0:", lock)
+        self.assertIn("linkify-it@5.0.2, linkify-it@^5.0.2:", lock)
+        self.assertNotIn('version "14.1.1"', lock.split("markdown-it@14.3.3")[1].split("\n\n")[0])
 
     def test_patched_link_version_meets_advisory_minimum(self):
         self.assertGreaterEqual(_tuple(PATCHED), PATCHED_MINIMUM)

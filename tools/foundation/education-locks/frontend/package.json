@@ -69,6 +69,6 @@
     "@tiptap/suggestion": "2.27.3",
     "@tiptap/vue-3": "2.27.3",
     "linkify-it": "5.0.2",
-    "markdown-it": "14.1.1"
+    "markdown-it": "14.3.3"
   }
 }
