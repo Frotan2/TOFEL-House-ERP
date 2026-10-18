@@ -598,6 +598,8 @@ def main() -> int:
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/erpnext", "--banking"])
         run("patch-education-frontend-dependencies", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_education.py", bench_dir / "apps/education"])
+        run("patch-frappe-realtime-dependencies", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_realtime.py", bench_dir / "apps/frappe"])
         run("security-remediation-regressions", [bench_dir / "env/bin/python", "-m", "unittest",
             "tests.security.test_security_remediation_2026_10_09",
             "tests.security.test_education_locks_2026_10_17", "-v"], cwd=ROOT)
@@ -651,6 +653,8 @@ def main() -> int:
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/erpnext", "--banking", "--verify"])
         run("verify-education-after-build", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_education.py", bench_dir / "apps/education", "--verify"])
+        run("verify-frappe-realtime-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_realtime.py", bench_dir / "apps/frappe", "--verify"])
         # Inventory resolved dependency trees after their actual asset build.
         # Findings remain REJECT evidence rather than a hidden best-effort scan.
         stack_audit_path = evidence / "stack-dependency-audit.json"

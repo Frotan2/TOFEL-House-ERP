@@ -17,6 +17,9 @@ on:
       - tools/foundation/hrms-locks/**
       - tools/foundation/banking-locks/**
       - tools/foundation/secure_weasyprint.py
+      # Socket.IO realtime root overlay (GHSA-3h5v/96hv/58qx/2m8v/677m/gr94/r635), executed before build.
+      - tools/foundation/secure_realtime.py
+      - tools/foundation/realtime-locks/**
       - product/bootstrap.py
       - product/backup.py
       - product/restore.py

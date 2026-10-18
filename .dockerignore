@@ -27,5 +27,8 @@ tools/foundation/*
 !tools/foundation/hrms-locks/**
 !tools/foundation/banking-locks/
 !tools/foundation/banking-locks/**
+!tools/foundation/secure_realtime.py
+!tools/foundation/realtime-locks/
+!tools/foundation/realtime-locks/**
 **/__pycache__
 **/*.pyc
