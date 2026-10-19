@@ -260,7 +260,7 @@ def main():
                 # Explicitly reviewed lock overlays, verified byte-for-byte;
                 # no other upstream file may change.
                 expected = (['frontend/package.json', 'frontend/yarn.lock', 'roster/package.json', 'roster/yarn.lock']
-                            if name == 'hrms' else ['banking/yarn.lock'])
+                            if name == 'hrms' else ['banking/package.json', 'banking/yarn.lock'])
                 assert changed == expected, (name, changed)
                 run('verify-security-locks-'+name, [benchdir/'env/bin/python',
                     ROOT/'tools/foundation/secure_hrms.py',d,'--verify'] + (['--banking'] if name == 'erpnext' else []))
