@@ -128,6 +128,18 @@ class EducationOverlayPinTests(unittest.TestCase):
         self.assertIn("linkify-it@5.0.2, linkify-it@^5.0.2:", lock)
         self.assertNotIn('version "14.1.1"', lock.split("markdown-it@14.3.3")[1].split("\n\n")[0])
 
+    def test_socket_io_parser_and_ws_are_pinned_to_patched_versions(self):
+        # 2026-10-19 advisories, verified on the GitHub Advisory API:
+        # socket.io-parser < 4.2.7 (GHSA-2m8v-j782-fhvr, first patched 4.2.7; GHSA-677m-j7p3-52f9, 4.2.6);
+        # ws < 8.21.0 (GHSA-96hv-2xvq-fx4p, 8.21.0), ws < 8.20.1 (GHSA-58qx-3vcg-4xpx), ws < 8.17.1 (GHSA-3h5v-q93c-6h6q).
+        self.assertEqual(self.package["resolutions"]["socket.io-parser"], "4.2.7")
+        self.assertEqual(self.package["resolutions"]["ws"], "8.21.3")
+        lock = (OVERLAY / "frontend/yarn.lock").read_text(encoding="utf-8")
+        self.assertIn("socket.io-parser@4.2.7, socket.io-parser@~4.2.4:", lock)
+        self.assertIn("ws@8.21.3, ws@~8.11.0:", lock)
+        self.assertNotIn('version "4.2.4"', lock.split("socket.io-parser@4.2.7")[1].split("\n\n")[0])
+        self.assertNotIn('version "8.11.0"', lock.split("ws@8.21.3")[1].split("\n\n")[0])
+
     def test_patched_link_version_meets_advisory_minimum(self):
         self.assertGreaterEqual(_tuple(PATCHED), PATCHED_MINIMUM)
         self.assertEqual(self._lock_tiptap_versions()["@tiptap/extension-link"], {PATCHED})

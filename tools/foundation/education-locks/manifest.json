@@ -1,15 +1,15 @@
 {
   "upstream_commit": "93bc7075753369457919720690f80c6d2207b5f2",
   "yarn_version": "1.22.22",
-  "purpose": "GHSA-vhrc-hgrq-x75r: pin @tiptap/* 2.27.3 (patched extension-link >= 2.10.4) in the Education frontend. Upstream frappe-ui 0.1.31 pins 2.2.3. 2026-10-18: also resolve markdown-it 14.3.3 and linkify-it 5.0.2 (GHSA-38c4-r59v-3vqw, GHSA-22p9-wv53-3rq4, GHSA-v245-v573-v5vm).",
+  "purpose": "GHSA-vhrc-hgrq-x75r: pin @tiptap/* 2.27.3 (patched extension-link >= 2.10.4) in the Education frontend. Upstream frappe-ui 0.1.31 pins 2.2.3. 2026-10-18: also resolve markdown-it 14.3.3 and linkify-it 5.0.2 (GHSA-38c4-r59v-3vqw, GHSA-22p9-wv53-3rq4, GHSA-v245-v573-v5vm). 2026-10-19: also resolve socket.io-parser 4.2.7 (GHSA-2m8v-j782-fhvr, GHSA-677m-j7p3-52f9) and ws 8.21.3 (GHSA-3h5v-q93c-6h6q, GHSA-96hv-2xvq-fx4p, GHSA-58qx-3vcg-4xpx) for the Education engine.io-client and socket.io-client residual copies.",
   "files": {
     "frontend/package.json": {
       "upstream_sha256": "c44548c1e7e9f3b6c75209710d0e12018be3a00945167df8f70c45fd537e7cd9",
-      "security_sha256": "88bb66c0dab70642616a10d21d2f261d01b6888614b42cbdb27b93321918bf18"
+      "security_sha256": "713643e41f5e2e4b0028feda186bee976b5c33f48d4d1d9056ee2ef95cad7c2f"
     },
     "frontend/yarn.lock": {
       "upstream_sha256": "10618b30bd7dfd48d6fc5e85d56af3d07562c2c11f62efe0b746a8f95f328072",
-      "security_sha256": "f39f2d4c94e870ec128d6eaf3d711a090a16a4a3b8573eb620919cfc3caa5ba5"
+      "security_sha256": "0b43016c9285f967f6602fbaba989fb864c7f3712bd0ad7ae02d80497d97b998"
     }
   }
 }
