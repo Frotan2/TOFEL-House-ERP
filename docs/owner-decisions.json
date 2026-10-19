@@ -235,7 +235,7 @@
       "id": "OD-2026-10-18-B",
       "decision": "ADMINISTRATOR DISABLED-USER GUARD: STRICT",
       "scope": "A disabled Administrator is refused on every credential path. Frappe's own login behaviour is not mirrored.",
-      "consequence": "The guard fails closed. Any path that would accept a disabled Administrator is a defect. Current state: validate_user_enabled applies to Administrator like any user (see the B-disabled-credentials evidence README). Per-path coverage was not re-verified for this decision and remains to be checked."
+      "consequence": "The guard fails closed. Any path that would accept a disabled Administrator is a defect. Per-path trace (2026-10-19, pinned Frappe 988e54f3, frappe/auth.py): request path - validate_auth() runs validate_auth_via_hooks() on every request, so validate_request -> validate_user_enabled covers cookie sessions, API keys and bearer tokens with no Administrator exemption. Login path - Frappe's own check exempts Administrator (`user.name == \"Administrator\" or user.enabled`), so guards.on_session_creation now calls validate_user_enabled() first (commit 3eaf6a6). Unit-level proof: tests/security/test_administrator_disabled_2026_10_18.py. Live-site proof of login and API-key refusal is still owner or CI work."
     },
     {
       "id": "OD-2026-10-18-C",
