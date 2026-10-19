@@ -43,3 +43,20 @@ The pins used here are at or above every first-patched version:
   same major lines. It is verified only by the Foundation runtime install and audits (the authoritative gate for this change).
 - Polling, WebSocket upgrade, reconnect, and authentication through the deployed route (Tailscale Serve, port 9000) are
   not verified by this change. They are a separate live-route item.
+
+## Foundation result on the head with these changes (`0adf145`)
+
+- Foundation runtime run `39290652924`: **failure** (20m35s). The failing steps were the two restricted-policy
+  advisory audits, `hosted-frontend-advisory-audit` and `hosted-full-stack-dependency-audit` (both exit 1). The run's last failed
+  check was `hosted-frontend-advisory-audit`.
+- The advisory header reports `advisory matches=148 in 40 packages`. The visible match list has no `ws`, `socket.io`,
+  `socket.io-parser` or `engine.io` entries. The earlier `9754578` header reported `161 matches / 46 packages`. This note does not
+  claim that the drop is caused by this change: the full artifact that would show the diff is not downloadable from the sandbox.
+- The failure is not new. Foundation has failed on every head of this branch (`882ec90`, `8742b52`, `3eaf6a6`, `507e5e5`,
+  `94107b7`, `0adf145`). Visible causes include open or untriaged findings in npm dev tooling (vite, esbuild, rollup, postcss,
+  svgo, lodash, minimatch, nanoid and others), Python packages (pyjwt, pypdf, weasyprint, werkzeug, setuptools, oauthlib, pdfkit)
+  and `@tiptap/core` GHSA-cp6q-959q-f8rh and `showdown` GHSA-rmmh-p597-ppvv.
+- `advisory_triage.overall_status` returns `fail` on any untriaged or open finding. The owner's accepted risks
+  (`OD-2026-10-19-A` showdown, not accepted as worded; `OD-2026-10-19-B` @tiptap/core) are still open register records, so
+  the gate cannot pass until those are reviewed. This round did not weaken the gate.
+- Status: the realtime/socket residual is closed at the lock level. The Foundation gate is **not** passing.
