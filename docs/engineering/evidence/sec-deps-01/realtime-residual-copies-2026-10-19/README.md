@@ -60,3 +60,19 @@ The pins used here are at or above every first-patched version:
   (`OD-2026-10-19-A` showdown, not accepted as worded; `OD-2026-10-19-B` @tiptap/core) are still open register records, so
   the gate cannot pass until those are reviewed. This round did not weaken the gate.
 - Status: the realtime/socket residual is closed at the lock level. The Foundation gate is **not** passing.
+
+## Native gate regression found and fixed (`4d9c877`)
+
+- Native lifecycle run `39290653297` on `0adf145` **failed** at `Native lifecycle checks on a real site`. Cause: `tools/native/run_native.py`
+  asserted that the upstream ERPNext tree differs from upstream only in `banking/yarn.lock`. The banking overlay now also changes
+  `banking/package.json` (the `ws` resolution), so the exact-set assertion failed. The log is not downloadable from the sandbox; the cause is
+  established by reading the assertion and by reproducing the overlay locally (below).
+- Fix: the expected set is now `['banking/package.json', 'banking/yarn.lock']`, which matches the reviewed manifest. The assertion stays exact.
+  `secure_hrms --banking --verify` still hash-checks both files. Test `test_native_expected_banking_changes_match_reviewed_manifest` ties the two.
+- Local reproduction: the real `secure_hrms.security_lock_files(..., banking=True)` on the upstream ERPNext `banking/` files at commit
+  `4048fb70` (`package.json` and `yarn.lock` hashes match `upstream_sha256`). `yarn install --frozen-lockfile` passed, `verify_only` passed, and
+  `git diff --name-only` was exactly the two files. The installed `ws` is 8.21.3.
+- Native lifecycle run `39293858728` on `4d9c877`: **success** (native in 8m31s).
+- Foundation run `39293708477` on `95394c2` (the `tools/foundation` and evidence inputs of the final head are identical to `4d9c877`):
+  **failure**, same as before. `advisory matches=148 in 40 packages`. Failing checks: `hosted-frontend-advisory-audit` and
+  `hosted-full-stack-dependency-audit`. The Foundation gate remains the blocker.
