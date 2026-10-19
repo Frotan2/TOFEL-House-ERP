@@ -85,4 +85,4 @@ No branch was deleted in this round. The six earlier deletions are the only auth
 
 GO is allowed only when every mandatory gate above has passing evidence on the final `main` SHA, and the owner-machine checks (A1 to A5, A6, A9, A10) have passed or been decided. Until then the release stays **NO-GO**.
 
-Mandatory engineering items still open: the GHSA-VHRC runtime containment check; the state-replay test for the Microsoft callback; and the final-SHA CI on `main` after PR #21 merges.
+Mandatory engineering items: **state-replay test for the Microsoft callback: done** (`tests/security/test_microsoft_callback_state_replay_2026_10_18.py`, 7 tests; a mutation that stops the state delete fails 2 of them; unit mirror of pinned Frappe `988e54f3`, so the real-site replay on a live bench is still owner or CI work). Still open: the GHSA-VHRC live bench containment check and the two residuals (owner decision on pre-upgrade rows; `db_set`/`set_value`/SQL bypass `validate`); and the final-SHA CI on `main` after PR #21 merges.
