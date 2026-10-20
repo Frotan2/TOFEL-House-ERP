@@ -67,7 +67,7 @@ plus the two path-specific `tailscale serve` routes for web and Socket.IO on
 the central PC (docs/engineering/LAUNCH-RUNBOOK.md, "Multi-user access
 (central server + Tailscale)"). Each person logs in with their own user.
 
-Owner handover (installation, first setup, the eight policies, daily use, backup, troubleshooting, and what remains owner-only): [docs/engineering/HANDOVER-2026-10-20.md](docs/engineering/HANDOVER-2026-10-20.md). Per-policy runtime evidence: [docs/engineering/POLICY-RUNTIME-MATRIX-2026-10-20.md](docs/engineering/POLICY-RUNTIME-MATRIX-2026-10-20.md).
+Owner handover and per-policy runtime evidence are linked below. The handover is currently NO-GO and subordinate to the active preservation/restore hold.
 
 First run step by step: [product/windows/VALIDATION.md](product/windows/VALIDATION.md).
 Owner handover: [docs/engineering/HANDOVER-2026-10-20.md](docs/engineering/HANDOVER-2026-10-20.md).
