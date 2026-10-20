@@ -106,6 +106,72 @@ def _snapshot(frappe):
     return result
 
 
+def _exercise_off_switches(frappe):
+    """Exercise each policy's live resolver and fail-closed switch after restart.
+
+    Every mutation runs in a savepoint and is rolled back; this uses only the
+    disposable restore site and leaves no policy/audit changes behind.
+    """
+    from toefl_house.academic import catalog_linkage
+    from toefl_house.admission import policies as returning
+    from toefl_house.enrollment import exits
+    from toefl_house.finance import policies as billing
+    from toefl_house.teaching import policies as roster
+    from toefl_house.teaching import attendance_corrections as attendance
+    from toefl_house.teaching import adjustment_posting as adjustment
+    from toefl_house.operations import owner_configuration
+
+    controls = {
+        "catalog_linkage": (catalog_linkage, catalog_linkage.set_catalog_linkage_status,
+                            catalog_linkage.governing_linkage_terms),
+        "returning_student": (returning, returning.set_returning_student_policy_status,
+                              returning.governing_returning_mode),
+        "enrollment_exit": (exits, exits.set_enrollment_exit_policy_status,
+                            exits.governing_exit_terms),
+        "billing": (billing, billing.set_billing_policy_status,
+                    billing.governing_billing_terms),
+        "roster_change": (roster, roster.set_roster_change_policy_status,
+                          roster.governing_cutoff_date),
+        "attendance_correction": (attendance, attendance.set_attendance_correction_policy_status,
+                                  attendance.governing_correction_terms),
+        "adjustment_posting": (adjustment, adjustment.set_adjustment_posting_status,
+                               adjustment.governing_posting_terms),
+        "owner_operations": (owner_configuration, owner_configuration.set_owner_operations_policy_status,
+                             owner_configuration.governing_owner_operations),
+    }
+    verified = []
+    for index, (key, (module, set_status, resolver)) in enumerate(controls.items()):
+        rows = frappe.get_all(module.POLICY, fields=["name", "code", "status"], order_by="name asc")
+        if len(rows) != 1:
+            raise AssertionError(f"Expected one singleton policy row for off-switch probe: {key}")
+        row = rows[0]
+        before_terms = _normalize(resolver())
+        savepoint = f"policy_restart_off_{index}"
+        frappe.db.savepoint(savepoint)
+        try:
+            frappe.set_user(OWNER)
+            if row["status"] != "Active":
+                set_status(f"restart_{key}_activate_0001", row["code"], 1)
+                if not resolver():
+                    raise AssertionError(f"Could not activate a governing version for {key}")
+            set_status(f"restart_{key}_retire_0001", row["code"], 0)
+            if resolver():
+                raise AssertionError(f"{key} resolver remained live after retirement")
+            if key == "owner_operations" and owner_configuration.current_backup_policy().get("configured"):
+                raise AssertionError("Owner Operations backup consumer stayed configured after retirement")
+        finally:
+            frappe.db.rollback(save_point=savepoint)
+            frappe.set_user("Administrator")
+        if _normalize(resolver()) != before_terms:
+            raise AssertionError(f"{key} state did not roll back after off-switch probe")
+        if key == "owner_operations":
+            backup = owner_configuration.current_backup_policy()
+            if backup.get("configured") is not True:
+                raise AssertionError("Owner Operations backup consumer did not return after rollback")
+        verified.append(key)
+    return verified
+
+
 def main() -> int:
     if os.environ.get("GITHUB_ACTIONS") != "true":
         raise SystemExit("Hosted disposable runner only")
@@ -136,11 +202,14 @@ def main() -> int:
             changed = [key for key in sorted(set(actual) | set(expected))
                        if actual.get(key) != expected.get(key)]
             raise AssertionError("Policy state/resolvers changed across service restart: " + ", ".join(changed))
+        off_switches = _exercise_off_switches(frappe)
         print(json.dumps({
             "status": "pass",
             "policy_resolvers_verified": sorted(actual),
             "policy_rows": sum(len(value["policies"]) for value in actual.values()),
             "owner_operations_backup_consumer_verified": True,
+            "post_restart_off_switches_verified": off_switches,
+            "off_switch_changes_rolled_back": True,
         }, sort_keys=True))
         return 0
     finally:
