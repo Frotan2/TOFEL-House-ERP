@@ -26,20 +26,28 @@ class ProductRestoreContractTests(unittest.TestCase):
         ):
             self.assertIn(f'"{doctype}"', HELPER)
         self.assertIn('"doctype": "File"', HELPER)
-        self.assertIn('"is_private": 1', HELPER)
-        self.assertIn("private_file_sha256_verified", HELPER)
+        self.assertIn('"private_file": (', HELPER)
+        self.assertIn('"public_file": (', HELPER)
+        self.assertIn('"is_private": is_private', HELPER)
+        self.assertIn("files_verified", HELPER)
+        self.assertIn("storage_uid", HELPER)
+        self.assertIn("storage_gid", HELPER)
         self.assertIn("name_digest", HELPER)
 
     def test_runner_creates_separate_restore_site_and_preserves_non_database_config(self):
         for token in (
             "capture-product-restore-snapshot", "backup-placement-test-with-files",
             "placement-restore.localhost", "restore-placement-test-with-files",
-            "verify-product-restore-snapshot", "PLACEMENT_RESTORE_EXPECTATION",
-            "PLACEMENT_RESTORE_REPORT", "source_db_credentials_copied"
+            "verify-product-restore-snapshot", "verify-product-restore-after-service-restart",
+            "capture-policy-resolvers-before-service-restart",
+            "verify-policy-resolvers-after-service-restart",
+            "PLACEMENT_RESTORE_EXPECTATION", "PLACEMENT_RESTORE_REPORT",
+            "source_db_credentials_copied", "source_backup_hashes_unchanged"
         ):
             self.assertIn(token, RUNNER)
         self.assertIn("restore_backup_dir.mkdir(parents=True,exist_ok=True)", RUNNER)
-        self.assertIn("shutil.copy2(artifact,restore_backup_dir/artifact.name)", RUNNER)
+        self.assertIn("copied=restore_backup_dir/artifact.name", RUNNER)
+        self.assertIn("copy_hashes_verified", RUNNER)
         self.assertIn("input_text=restore_payload", RUNNER)
         self.assertIn("ROOT/'product/restore.py'", RUNNER)
         self.assertNotIn("'--with-public-files'", RUNNER)
