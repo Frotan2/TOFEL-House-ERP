@@ -16,7 +16,7 @@ import hashlib
 import json
 import math
 import re
-from datetime import datetime
+from datetime import datetime, time as _clock_time, timedelta
 
 import frappe
 from toefl_house.academic import rules
@@ -66,6 +66,16 @@ def _int(value, label, minimum=0, maximum=3650):
 
 
 def _backup_schedule_time(value):
+    # A saved Frappe Time field is read back as a timedelta (02:30 -> "2:30:00").
+    # Normalize it before the strict HH:MM check, or a valid 00:00-09:59 schedule
+    # saved by the Owner can never validate.
+    if isinstance(value, timedelta):
+        seconds = int(value.total_seconds())
+        if not 0 <= seconds < 86400:
+            raise ValueError("Nightly backup time is required in 24-hour HH:MM format")
+        value = "%02d:%02d:%02d" % (seconds // 3600, seconds % 3600 // 60, seconds % 60)
+    elif isinstance(value, _clock_time):
+        value = value.strftime("%H:%M:%S")
     text = str(value or "").strip()
     if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?", text):
         raise ValueError("Nightly backup time is required in 24-hour HH:MM format")
