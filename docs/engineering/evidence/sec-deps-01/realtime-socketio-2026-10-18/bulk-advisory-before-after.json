@@ -1,0 +1,104 @@
+{
+  "after_advisories": {},
+  "after_versions": {
+    "engine.io": [
+      "6.6.11"
+    ],
+    "socket.io": [
+      "4.8.4"
+    ],
+    "socket.io-parser": [
+      "4.2.7"
+    ],
+    "ws": [
+      "8.21.3"
+    ]
+  },
+  "before_advisories": {
+    "engine.io": [
+      {
+        "advisory_id": "https://github.com/advisories/GHSA-r635-g3xr-vw7x",
+        "severity": "high",
+        "title": "Socket.IO: Engine.IO Polling Transport Connection Exhaustion",
+        "vulnerable_versions": ">=4.1.0 <6.6.7"
+      },
+      {
+        "advisory_id": "https://github.com/advisories/GHSA-gr94-w7qr-f4j3",
+        "severity": "high",
+        "title": "Socket.IO: Engine.IO WebTransport SID DoS",
+        "vulnerable_versions": ">=6.5.0 <6.6.7"
+      }
+    ],
+    "socket.io-parser": [
+      {
+        "advisory_id": "https://github.com/advisories/GHSA-2m8v-j782-fhvr",
+        "severity": "high",
+        "title": "Socket.IO: Zero-attachment Memory Exhaustion",
+        "vulnerable_versions": ">=4.0.0 <4.2.7"
+      },
+      {
+        "advisory_id": "https://github.com/advisories/GHSA-677m-j7p3-52f9",
+        "severity": "high",
+        "title": "socket.io allows an unbounded number of binary attachments",
+        "vulnerable_versions": ">=4.0.0 <4.2.6"
+      }
+    ],
+    "ws": [
+      {
+        "advisory_id": "https://github.com/advisories/GHSA-3h5v-q93c-6h6q",
+        "severity": "high",
+        "title": "ws affected by a DoS when handling a request with many HTTP headers",
+        "vulnerable_versions": ">=8.0.0 <8.17.1"
+      },
+      {
+        "advisory_id": "https://github.com/advisories/GHSA-58qx-3vcg-4xpx",
+        "severity": "moderate",
+        "title": "ws: Uninitialized memory disclosure",
+        "vulnerable_versions": ">=8.0.0 <8.20.1"
+      },
+      {
+        "advisory_id": "https://github.com/advisories/GHSA-96hv-2xvq-fx4p",
+        "severity": "high",
+        "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks",
+        "vulnerable_versions": ">=8.0.0 <8.21.0"
+      }
+    ]
+  },
+  "before_versions": {
+    "engine.io": [
+      "6.5.4"
+    ],
+    "socket.io": [
+      "4.7.2"
+    ],
+    "socket.io-parser": [
+      "4.2.4"
+    ],
+    "ws": [
+      "8.11.0"
+    ]
+  },
+  "checked_at_utc": "2026-10-18T07:03:36Z",
+  "endpoint": "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk",
+  "smoke_result": {
+    "oversize_1_5MB": "engine closed: transport error",
+    "polling": {
+      "echo": {
+        "echo": "x"
+      },
+      "hello": {
+        "ok": true
+      },
+      "upgraded": "polling"
+    },
+    "websocket": {
+      "echo": {
+        "echo": "x"
+      },
+      "hello": {
+        "ok": true
+      },
+      "upgraded": "websocket"
+    }
+  }
+}

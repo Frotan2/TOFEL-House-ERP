@@ -60,7 +60,12 @@ class CoverageWiringTests(unittest.TestCase):
         self.assertIn('"Crypto test imports" -- python3 -c \'import jwt, cryptography;', workflow)
         for package in ("PyJWT==2.15.0", "cryptography==50.0.2", "cffi==2.0.0", "pycparser==2.23"):
             self.assertIn(package, pins)
-        self.assertEqual(pins.count("--hash=sha256:"), 7)
+        # Count only the crypto pins. The containment pins (nh3 etc.) are asserted in
+        # test_html_containment_real_sanitizer_2026_10_16.RequirementsPinTests.
+        crypto_lines = [line for line in pins.splitlines()
+                        if line.startswith(("PyJWT==", "cryptography==", "cffi==", "pycparser=="))]
+        self.assertEqual(len(crypto_lines), 4)
+        self.assertEqual(sum(line.count("--hash=sha256:") for line in crypto_lines), 7)
 
     def test_production_remains_rejected_and_login_override_wired(self):
         self.assertEqual(json.loads((ROOT / "docs/owner-decisions.json").read_text())["production_state"], "REJECT")
@@ -291,6 +296,8 @@ class Office365Tests(unittest.TestCase):
         frappe.throw = lambda message, cls: (_ for _ in ()).throw(cls(message))
         frappe._ = lambda message: message
         frappe.conf = {"office_365_tenant_id": TENANT}
+        # Real Frappe always has a request-local form; the callback redacts it (A11, 2026-10-18).
+        frappe.local = types.SimpleNamespace(form_dict={})
         cls.log_records = []
         frappe.logger = lambda name: types.SimpleNamespace(
             warning=lambda message, *args: cls.log_records.append(message % args))

@@ -37,6 +37,10 @@ def validate_student_scope():
 
 
 def on_session_creation(login_manager=None):
+    # Login is the one path where Frappe's LoginManager exempts Administrator
+    # (frappe/auth.py: `user.name == "Administrator" or user.enabled`). Refuse a
+    # disabled Administrator here as well; no Frappe mirroring (owner decision 2026-10-18).
+    validate_user_enabled()
     validate_student_scope()
 
 
@@ -48,6 +52,7 @@ def validate_user_enabled():
     user leaves every live cookie session working until it expires. Runs on
     every authenticated request, so it also covers API keys and bearer tokens.
     """
+    # Administrator is deliberately NOT exempt here (strict, owner decision 2026-10-18).
     user = frappe.session.user
     if user in (None, "Guest"):
         return

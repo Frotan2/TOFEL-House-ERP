@@ -5,7 +5,7 @@ Sends package names/versions to npm, not source code or credentials. Do not use 
 private dependencies without approval. Raw advisories are triaged against the
 SEC-DEPS-01 per-finding disposition table: pre-existing matches resolve to their
 recorded disposition (MITIGATED / NOT_REACHABLE / BUILD_ONLY / DEV_ONLY /
-INSTALL_ONLY / BROWSER_SELF_DENIAL) and do not fail the build; genuinely new,
+INSTALL_ONLY) and do not fail the build; BROWSER_SELF_DENIAL is open (owner decision OD-2026-10-18-A); genuinely new,
 untriaged advisories exit non-zero so CI surfaces regressions.
 """
 from __future__ import annotations

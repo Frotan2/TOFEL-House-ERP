@@ -147,6 +147,10 @@ override_whitelisted_methods = {
 # frappe (delete_doc check_permission_and_not_submitted); drafts cannot
 # exist outside commands because insert is denied on validate.
 doc_events = {
+    # Office 365 identity uniqueness (2026-10-18): one signed subject, at most one User.
+    "User": {
+        "validate": "toefl_house.identity_links.validate_office365_links",
+    },
     # Governance configuration: unconditional integrity hooks (the rules bind
     # on every write path, native form included). Distinct from the command
     # containment guards below; sanctioned by tests/finance/test_containment_hooks.

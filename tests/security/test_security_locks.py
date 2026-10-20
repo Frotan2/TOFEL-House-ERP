@@ -34,6 +34,24 @@ class SecurityLocksTests(unittest.TestCase):
                         self.assertEqual(package["resolutions"][name], version)
                     self.assertEqual(package["dependencies"]["frappe-ui"], "0.1.105")
 
+    def test_banking_ws_is_pinned_to_patched_version(self):
+        # 2026-10-19: ws 8.17.1 sits inside GHSA-96hv-2xvq-fx4p (patched 8.21.0) and GHSA-58qx-3vcg-4xpx (patched 8.20.1).
+        root = ROOT / "tools/foundation/banking-locks/banking"
+        package = json.loads((root / "package.json").read_text())
+        self.assertEqual(package["resolutions"]["ws"], "8.21.3")
+        lock = (root / "yarn.lock").read_text(encoding="utf-8")
+        self.assertIn("ws@8.21.3, ws@~8.17.1:", lock)
+        self.assertNotIn('version "8.17.1"', lock.split("ws@8.21.3")[1].split("\n\n")[0])
+
+    def test_native_expected_banking_changes_match_reviewed_manifest(self):
+        # run_native asserts the exact set of upstream ERPNext files changed by the banking overlay.
+        # It must equal the banking manifest, or the native lifecycle gate fails after a reviewed overlay change.
+        manifest = json.loads((ROOT / "tools/foundation/banking-locks/manifest.json").read_text())
+        run_native = (ROOT / "tools/native/run_native.py").read_text(encoding="utf-8")
+        expected = "['banking/package.json', 'banking/yarn.lock']"
+        self.assertIn(expected, run_native)
+        self.assertEqual(sorted(manifest["files"]), sorted(["banking/package.json", "banking/yarn.lock"]))
+
     def test_installed_manifest_drift_fails_before_install_or_any_write(self):
         for banking in (False, True):
             with self.subTest(banking=banking), tempfile.TemporaryDirectory() as tmp:

@@ -224,6 +224,60 @@
       "decision": "RESOLVED — MIT",
       "scope": "Product license for the owned code (apps/toefl_house, apps/foundation_security, tools/, tests/).",
       "consequence": "MIT is the owner-selected license dated 2026-09-19. LICENSE, README and both owned app metadata declarations are aligned; the consistency test guards the contract."
+    },
+    {
+      "id": "OD-2026-10-18-A",
+      "decision": "BROWSER_SELF_DENIAL: KEEP ALL SIX RECORDS OPEN",
+      "scope": "The six BROWSER_SELF_DENIAL records in the SEC-DEPS-01 browser self-denial review stay open (UNVERIFIED/BLOCKED) until a runtime check proves them. Nothing is closed on paper review.",
+      "consequence": "Records remain open in the owner package and block GO until runtime evidence on the final SHA exists."
+    },
+    {
+      "id": "OD-2026-10-18-B",
+      "decision": "ADMINISTRATOR DISABLED-USER GUARD: STRICT",
+      "scope": "A disabled Administrator is refused on every credential path. Frappe's own login behaviour is not mirrored.",
+      "consequence": "The guard fails closed. Any path that would accept a disabled Administrator is a defect. Per-path trace (2026-10-19, pinned Frappe 988e54f3, frappe/auth.py): request path - validate_auth() runs validate_auth_via_hooks() on every request, so validate_request -> validate_user_enabled covers cookie sessions, API keys and bearer tokens with no Administrator exemption. Login path - Frappe's own check exempts Administrator (`user.name == \"Administrator\" or user.enabled`), so guards.on_session_creation now calls validate_user_enabled() first (commit 3eaf6a6). Unit-level proof: tests/security/test_administrator_disabled_2026_10_18.py. Live-site proof of login and API-key refusal is still owner or CI work."
+    },
+    {
+      "id": "OD-2026-10-18-C",
+      "decision": "LOGGED-IN DESK RENDERING CHECK FOR A STORED HOSTILE HRMS FORM: BUILD NOW",
+      "scope": "Foundation runtime step browser-desk-hrms-stored-html: real login as a dedicated HR User, real Desk form for a Job Opening Template whose Text Editor value carries hostile payloads, first open and reload, with a positive control. Synthetic data only.",
+      "consequence": "Built and passing on the Foundation runtime (run 39136491032, head 5431053). It proves the rendered form only for that payload set and that Chromium build; it does not replace the HRMS owner acceptance."
+    },
+    {
+      "id": "OD-2026-10-19-A",
+      "decision": "SHOWDOWN GHSA-rmmh-p597-ppvv: ACCEPT RISK WITH A COMPENSATING CONTROL",
+      "scope": "showdown 2.1.0, GHSA-rmmh-p597-ppvv: a ReDoS (denial of service) in the anchors/link subparser; no patched version. It is NOT an XSS advisory. Import sites at the pinned revisions: frappe/public/js/frappe/utils/tools.js (Desk frappe.markdown, client side, already passes output through sanitize_markdown_html, which is an XSS whitelist and does not stop ReDoS); tools/foundation/education-locks and realtime-locks list it as a dependency; no Education src file imports it (33 files checked at 93bc7075). Frappe realtime sources do not import it (code search, 988e54f3). Owner answer 2026-10-19 was given on a WRONG description (output sanitizer).",
+      "consequence": "NOT ACCEPTED AS WORDED. The earlier compensating control (sanitize showdown output) does not address a ReDoS. Owner must re-confirm the acceptance. Candidate control: cap the markdown input length before showdown in frappe.markdown (override via an app include, tested in the Foundation Desk run). NOT YET IMPLEMENTED. The register record stays open until a reviewed register change."
+    },
+    {
+      "id": "OD-2026-10-19-B",
+      "decision": "@tiptap/core GHSA-cp6q-959q-f8rh: ACCEPT THE 2.27.3 PIN, RISK RECORDED",
+      "scope": "The fix needs @tiptap/core 3.30.4, a major migration. Owner answer 2026-10-19: keep the 2.27.3 pin and record the acceptance.",
+      "consequence": "No migration is scheduled. The advisory stays matched on the Foundation audit, so the gate stays red until the register is reviewed."
+    },
+    {
+      "id": "OD-2026-10-19-C",
+      "decision": "BROWSER_SELF_DENIAL RECORDS: KEEP THE REGISTER UNCHANGED",
+      "scope": "Owner answer 2026-10-19 on whether the three remediated records (GHSA-38c4-r59v-3vqw, GHSA-22p9-wv53-3rq4, GHSA-v245-v573-v5vm) stay BROWSER_SELF_DENIAL: keep them as they are.",
+      "consequence": "The three remediated advisories no longer match the audit on head 5886098 (markdown-it 14.3.3, linkify-it 5.0.2; see sec-deps-01/education-markdown-linkify-2026-10-18). The register is not edited."
+    },
+    {
+      "id": "OD-2026-10-19-D",
+      "decision": "A11 (MICROSOFT AUTHORIZATION CODE IN THE BROWSER URL): OPTION A ACCEPTED",
+      "scope": "Owner answer 2026-10-19: accept the current redirect with a proxy-log check. Option B (form_post) is not taken.",
+      "consequence": "Owner must still check the proxy and access logs, must not enable enable_frappe_logger, and must decide on earlier Error Log rows (clearing them needs owner approval)."
+    },
+    {
+      "id": "OD-2026-10-20-A",
+      "decision": "SHOWDOWN GHSA-rmmh-p597-ppvv: ACCEPTED WITH THE INPUT-CAP COMPENSATING CONTROL (re-confirmed 2026-10-20)",
+      "scope": "Owner answer 2026-10-20 in chat, replacing the 2026-10-19 answer that was given on a wrong description (output sanitizer). Control: frappe.markdown shows input longer than 2000 characters as escaped plain text, before showdown parses it. Implemented by tools/foundation/secure_markdown.py (hash-bound; upstream 99a91f55..., reviewed 8f122bc9...). Measurements: docs/engineering/evidence/sec-deps-01/markdown-cap-2026-10-19/README.md.",
+      "consequence": "The register record for GHSA-rmmh-p597-ppvv stays BROWSER_SELF_DENIAL (open) until a reviewed register change is approved by the owner (proposal in the evidence README; OD-2026-10-18-A and OD-2026-10-19-C say keep those records open). The control bounds parser input; it is not a vendor patch and does not prove every payload is bounded. Long Desk markdown above 2000 characters shows as plain text."
+    },
+    {
+      "id": "OD-2026-10-20-B",
+      "decision": "ADVISORY GATE: AUTHORIZED RESIDUAL RISKS ARE REPORTED AS OWNER_ACCEPTED_RISK (NOT CLOSED), APPLIED 2026-10-20 FOR TWO PAIRS ONLY",
+      "scope": "Owner answer 2026-10-20: accepted risks with a reviewed register entry may count as triaged for the Foundation advisory gate. Applied in tools/foundation/advisory_triage.py (OWNER_ACCEPTED_RISKS) for exactly: showdown GHSA-rmmh-p597-ppvv (under OD-2026-10-20-A) and @tiptap/core GHSA-cp6q-959q-f8rh (under OD-2026-10-19-B). The immutable 2026-09-23 register is not edited.",
+      "consequence": "An accepted finding is visible in every audit report as OWNER_ACCEPTED_RISK. It is not closed, not fixed, and not counted as safe. Every other BROWSER_SELF_DENIAL record stays open (OD-2026-10-18-A, OD-2026-10-19-C). Any new accepted pair needs a new owner decision and a code change in OWNER_ACCEPTED_RISKS."
     }
   ],
   "licensing": {

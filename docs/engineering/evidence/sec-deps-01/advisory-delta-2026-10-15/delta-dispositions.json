@@ -1,0 +1,81 @@
+{
+  "schema": "sec-deps-01-advisory-delta/1",
+  "basis": "2026-10-15 review of BROWSER_SELF_DENIAL records. The register premise for GHSA-vhrc-hgrq-x75r (@tiptap/extension-link javascript: URL XSS) was 'cross-user exploitation requires server persistence which sanitize_html strips'. Frappe 988e54f3 sanitize_html returns input unchanged when is_json(value) is true, so a stored JSON-quoted HTML value bypasses the sanitizer. The premise is invalid and the closure is withdrawn to BLOCKED. Containment: apps/foundation_security/foundation_security/html_containment.py (unit-verified only; runtime verification pending). Also dispositions GHSA-gv7w-rqvm-qjhr (esbuild, Deno module, withdrawn 2026-06-17) and GHSA-8p5q-j9m2-g8wr (lodash, withdrawn 2021-10-01) as BUILD_ONLY. Both were undispositioned in the register. Neither is returned by the npm bulk endpoint for the installed versions on 2026-10-15. Also mirrors PYSEC-2026-4311 (of GHSA-r543, MITIGATED) and PYSEC-2026-4312 (of GHSA-g6x2, NOT_REACHABLE). Both surfaced in Foundation run 38899033333 on head 61c4c42 after the 2026-10-09 triage. This is the same PyPA-mirror pattern as PYSEC-2026-4113 in the 2026-10-02 delta.",
+  "packages": [
+    {
+      "package": "npm:esbuild@0.21.5",
+      "advisories": [
+        {
+          "id": "GHSA-gv7w-rqvm-qjhr",
+          "severity": "high",
+          "summary": "Withdrawn Advisory: esbuild: Missing binary integrity verification in Deno module enables remote code execution via NPM_CONFIG_REGISTRY",
+          "first_patched": "0.28.1",
+          "aliases": [],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "GitHub marks GHSA-gv7w-rqvm-qjhr withdrawn (withdrawn_at 2026-06-17T13:42:24Z), so it is not an active advisory. Its scope is the esbuild Deno module, which the npm install path never ships. esbuild in the pinned trees is a build-time tool (vite and the frontend build), not a runtime component. The npm bulk endpoint on 2026-10-15 did not return this id for the installed esbuild versions (0.21.5, 0.14.54).",
+          "fix_path": "No action for the shipped trees. If the advisory is reinstated, upgrading esbuild to >= 0.28.1 is the fix, and the build-tool path would be re-triaged."
+        }
+      ]
+    },
+    {
+      "package": "npm:lodash@4.17.21",
+      "advisories": [
+        {
+          "id": "GHSA-8p5q-j9m2-g8wr",
+          "severity": "low",
+          "summary": "Withdrawn: Arbitrary code execution in lodash (CVE-2021-41720)",
+          "first_patched": null,
+          "aliases": [
+            "CVE-2021-41720"
+          ],
+          "runtime_disposition": "BUILD_ONLY",
+          "runtime_disposition_evidence": "GitHub marks GHSA-8p5q-j9m2-g8wr withdrawn (withdrawn_at 2021-10-01T22:04:28Z), so it is not an active advisory. The CommonJS lodash in the trees is used only by build tooling (postcss, svgo, tailwind helpers) and is not bundled into the desk or SPA runtime. The desk runtime uses lodash-es, and a grep of shipped frappe, erpnext, education, and hrms sources finds no _.template call (the only template call is Leaflet's L.Util.template in a vendored control). The npm bulk endpoint on 2026-10-15 did not return this id for the installed lodash versions (4.17.21, 4.18.1).",
+          "fix_path": "No action required for the shipped trees. Lodash 4.17.23 or later addresses the active lodash _.template advisories already tracked (GHSA-r5fr-rjxr-66jc)."
+        }
+      ]
+    },
+    {
+      "package": "py:weasyprint@68.0",
+      "advisories": [
+        {
+          "id": "PYSEC-2026-4311",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-r543-q48m-4c9j; PyPI lists CVE-2026-106443)",
+          "published": "surfaced in the 2026-10-15 Foundation run 38899033333 (head 61c4c42), after the 2026-10-09 triage",
+          "vulnerable_range": "< 70.0 (fixed_in 70.0 per pypi.org/pypi/weasyprint/68.0/json); the same range as the mirrored GHSA",
+          "first_patched": "70.0",
+          "summary": "PyPA mirror of GHSA-r543-q48m-4c9j (WeasyPrint EPS/PS image path through Pillow and Ghostscript)",
+          "runtime_disposition": "MITIGATED",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-r543-q48m-4c9j. The loader matches by id, and this PyPA id carries no cross-reference to the triaged GHSA in the feed, so it surfaced as untriaged. The mirrored record's evidence applies unchanged: the same WeasyPrint 68.0 and Pillow EPS path, and the same interim control. product/app.Dockerfile (Ghostscript guard, lines 172-179) fails the image build if a gs executable is on PATH.",
+          "fix_path": "Same as GHSA-r543-q48m-4c9j: WeasyPrint 70.0, blocked upstream by the Frappe pin of WeasyPrint==68.0. Interim control is the Ghostscript guard. Re-triage if the guard is removed."
+        }
+      ]
+    },
+    {
+      "package": "py:werkzeug@3.1.6",
+      "advisories": [
+        {
+          "id": "PYSEC-2026-4312",
+          "aliases": [],
+          "severity": "unrecorded at triage time (PyPA mirror of GHSA-g6x2-hccm-hh4m; PyPI lists CVE-2026-102598)",
+          "published": "surfaced in the 2026-10-15 Foundation run 38899033333 (head 61c4c42), after the 2026-10-09 triage",
+          "vulnerable_range": "< 3.1.9 (fixed_in 3.1.9 per pypi.org/pypi/werkzeug/3.1.6/json); the same range as the mirrored GHSA",
+          "first_patched": "3.1.9",
+          "summary": "PyPA mirror of GHSA-g6x2-hccm-hh4m (Werkzeug safe_join with Windows device names on NTFS)",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "PyPA mirror record of GHSA-g6x2-hccm-hh4m. The mirrored record's precondition applies unchanged: a Windows host running Werkzeug on NTFS. The served process is a Linux container (product/app.Dockerfile, python slim bookworm, gunicorn), so the precondition is not met. The Windows host runs Docker launchers only.",
+          "fix_path": "Same as GHSA-g6x2-hccm-hh4m: Werkzeug 3.1.9, blocked upstream by the Frappe pin of Werkzeug==3.1.6. Re-triage on any Windows-process deployment."
+        }
+      ]
+    }
+  ],
+  "withdraws": [
+    {
+      "id": "GHSA-vhrc-hgrq-x75r",
+      "package": "@tiptap/extension-link",
+      "to": "BLOCKED",
+      "erratum": "docs/engineering/evidence/sec-deps-01/ERRATUM-2026-10-09.md#e6",
+      "reason": "BROWSER_SELF_DENIAL premise invalid: stored cross-user path exists via the sanitize_html is_json short-circuit at Frappe 988e54f3. Containment is unit-verified; runtime verification against a live bench is pending."
+    }
+  ]
+}

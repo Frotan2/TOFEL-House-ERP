@@ -32,6 +32,26 @@ _HRMS_EDITOR_STAGE_FAILURE = re.compile(
     r"HRMS-EDITOR-STAGE-FAILED ([a-z-]{1,40}) ([A-Za-z]{1,40})")
 
 
+_DESK_RENDER_STAGE_FAILURE = re.compile(
+    r"^DESK-RENDER-STAGE-FAILED ([a-z-]{1,40}) ([A-Za-z]{1,40})(?: ([A-Za-z0-9 .,:'()=_/-]{0,120}))?\s*$",
+    re.MULTILINE)
+
+
+def desk_render_stage_annotation(output: str) -> str | None:
+    """Name the Desk render check stage that failed, from the one stage line only.
+
+    The Desk harness prints a single DESK-RENDER-STAGE-FAILED line with the check name, error class and
+    a fixed-text message. No page content is printed, and the line is the only diagnostic that reaches
+    the check annotations from this environment.
+    """
+    matches = list(_DESK_RENDER_STAGE_FAILURE.finditer(output or ""))
+    if not matches:
+        return None
+    stage, error, detail = matches[-1].group(1), matches[-1].group(2), (matches[-1].group(3) or "").strip()
+    text = f"desk render check failed at stage {stage} ({error}{': ' + detail if detail else ''})"
+    return "::error file=tools/foundation/desk_render_check.mjs::" + text
+
+
 def hrms_editor_stage_annotation(output: str) -> str | None:
     """Name the built-HRMS-editor check stage that failed, never page content.
 
@@ -140,15 +160,11 @@ def _advisory_id(finding: dict) -> str:
     return str(first) if first not in (None, "") else "unidentified"
 
 
-def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict | None) -> list[str]:
-    """Compact ``::warning::`` lines naming every advisory match by public id.
+def advisory_group_entries(stack_audit: dict | None, frontend_audit: dict | None) -> tuple[int, list[str]]:
+    """Every advisory group, unbounded: (total matches, ``label name ids`` entries).
 
-    Job logs and artifacts EOF from the recording environment, so SEC-DEPS-01
-    stayed unreadable (roadmap security slice (a)). Annotations survive; this
-    packs "package@version id(severity)" entries into at most
-    ANNOTATION_MAX_LINES single-line annotations, sorted and de-duplicated.
-    Identifiers come only from scanner output. Truncation is stated, never
-    silent. Matches are advisory-version matches, not exploit proof.
+    The annotation writer below is capped by GitHub's annotation budget and says so
+    (``+N packages not shown``). This list is the complete set, for the job summary.
     """
     rank = {"critical": 0, "high": 1, "moderate": 2, "medium": 2, "low": 3}
     groups: dict[tuple[str, str], set[tuple[int, str]]] = {}
@@ -182,6 +198,20 @@ def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict 
     for (kind, name), ids in sorted(groups.items(), key=order):
         label = {"0py": "py", "1npm": "npm", "2fe": "fe"}[kind]
         entries.append(f"{label}:{name} " + ",".join(i for _, i in sorted(ids)))
+    return total, entries
+
+
+def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict | None) -> list[str]:
+    """Compact ``::warning::`` lines naming every advisory match by public id.
+
+    Job logs and artifacts EOF from the recording environment, so SEC-DEPS-01
+    stayed unreadable (roadmap security slice (a)). Annotations survive; this
+    packs "package@version id(severity)" entries into at most
+    ANNOTATION_MAX_LINES single-line annotations, sorted and de-duplicated.
+    Identifiers come only from scanner output. Truncation is stated, never
+    silent. Matches are advisory-version matches, not exploit proof.
+    """
+    total, entries = advisory_group_entries(stack_audit, frontend_audit)
     if not entries:
         return []
     header = f"advisory matches={total} in {len(entries)} packages: "
@@ -203,6 +233,37 @@ def advisory_finding_annotations(stack_audit: dict | None, frontend_audit: dict 
     if used < len(entries):
         lines[-1] = lines[-1][:ANNOTATION_TEXT_LIMIT - 40] + f" ... +{len(entries) - used} packages not shown"
     return ["::warning file=tools/foundation/runtime_install.py::" + line for line in lines]
+
+
+def advisory_summary_markdown(stack_audit: dict | None, frontend_audit: dict | None) -> str:
+    """Markdown for the GitHub job summary: every advisory group, no annotation budget.
+
+    Annotations keep nine lines of ~700 characters, so on a large advisory set they
+    end in ``+N packages not shown``. A job summary has no such cap and the owner can
+    read it in the run UI when annotation text is cut off. Empty when there are no matches.
+    """
+    total, entries = advisory_group_entries(stack_audit, frontend_audit)
+    if not entries:
+        return ""
+    lines = [
+        "### Advisory matches (complete list)",
+        "",
+        f"{total} advisory matches in {len(entries)} package groups. Matches are advisory-version matches, not exploit proof.",
+        "",
+    ]
+    lines.extend(f"- `{entry}`" for entry in entries)
+    return "\n".join(lines) + "\n"
+
+
+def write_advisory_step_summary(stack_audit: dict | None, frontend_audit: dict | None) -> None:
+    """Append the full advisory list to ``$GITHUB_STEP_SUMMARY`` when running in Actions."""
+    target = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not target:
+        return
+    text = advisory_summary_markdown(stack_audit, frontend_audit)
+    if text:
+        with open(target, "a", encoding="utf-8") as handle:
+            handle.write(text)
 
 
 def untriaged_advisory_annotations(stack_audit: dict | None) -> list[str]:
@@ -555,8 +616,15 @@ def main() -> int:
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/hrms"])
         run("lock-banking-dependencies", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/erpnext", "--banking"])
+        run("patch-education-frontend-dependencies", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_education.py", bench_dir / "apps/education"])
+        run("patch-frappe-realtime-dependencies", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_realtime.py", bench_dir / "apps/frappe"])
+        run("patch-frappe-markdown-input-cap", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_markdown.py", bench_dir / "apps/frappe"])
         run("security-remediation-regressions", [bench_dir / "env/bin/python", "-m", "unittest",
-            "tests.security.test_security_remediation_2026_10_09", "-v"], cwd=ROOT)
+            "tests.security.test_security_remediation_2026_10_09",
+            "tests.security.test_education_locks_2026_10_17", "-v"], cwd=ROOT)
         run("python-dependency-check", [lab / "tools/bin/uv", "pip", "check", "--python", bench_dir / "env/bin/python"])
         run("python-resolved-dependencies", [lab / "tools/bin/uv", "pip", "freeze", "--python", bench_dir / "env/bin/python"])
         site = "foundation.localhost"
@@ -605,6 +673,12 @@ def main() -> int:
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/hrms", "--verify"])
         run("verify-banking-after-build", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_hrms.py", bench_dir / "apps/erpnext", "--banking", "--verify"])
+        run("verify-education-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_education.py", bench_dir / "apps/education", "--verify"])
+        run("verify-frappe-realtime-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_realtime.py", bench_dir / "apps/frappe", "--verify"])
+        run("verify-frappe-markdown-input-cap-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_markdown.py", bench_dir / "apps/frappe", "--verify"])
         # Inventory resolved dependency trees after their actual asset build.
         # Findings remain REJECT evidence rather than a hidden best-effort scan.
         stack_audit_path = evidence / "stack-dependency-audit.json"
@@ -899,6 +973,13 @@ def main() -> int:
             run("browser-native-portal-isolation", ["node", browser_dir / "check.mjs"], timeout=300)
         except RuntimeError as exc:
             diagnostic_failures.append(str(exc))
+        # 2026-10-18 Desk rendering of a stored hostile HRMS Text Editor value: real login, real Desk
+        # form, reload. Synthetic data only. A failure here fails the job (not a diagnostic).
+        env["FOUNDATION_DESK_FIXTURE"] = str(lab / "desk-render-fixture.json")
+        env["FOUNDATION_DESK_REPORT"] = str(evidence / "desk-render-result.json")
+        run("desk-render-fixture", [bench_dir / "env/bin/python", ROOT / "tools/foundation/runtime_desk_render.py", site], cwd=bench_dir / "sites")
+        shutil.copyfile(ROOT / "tools/foundation/desk_render_check.mjs", browser_dir / "desk.mjs")
+        run("browser-desk-hrms-stored-html", ["node", browser_dir / "desk.mjs"], timeout=600)
         # Restore a backup taken AFTER hardening. No User Permission or singleton
         # re-provisioning is run on the recovered site: those must come from SQL.
         env["FOUNDATION_CAPTURED_SESSION"] = str(lab / "captured-session.json")
@@ -1128,6 +1209,7 @@ def main() -> int:
                 audits.append(None)
         for line in advisory_finding_annotations(*audits):
             print(line, flush=True)
+        write_advisory_step_summary(*audits)
         for line in untriaged_advisory_annotations(audits[0] if audits else None):
             print(line, flush=True)
         if report.get("status") != "pass":
@@ -1155,6 +1237,10 @@ def main() -> int:
                 stage_line = hrms_editor_stage_annotation(report.get("failure_output_tail") or "")
                 if stage_line:
                     print(stage_line, flush=True)
+            if last_failed_check == "browser-desk-hrms-stored-html":
+                desk_line = desk_render_stage_annotation(report.get("failure_output_tail") or "")
+                if desk_line:
+                    print(desk_line, flush=True)
     return 0 if report["status"] == "pass" else 1
 
 if __name__ == "__main__":

@@ -49,6 +49,13 @@ def load_security_constants():
             sys.modules["frappe"] = previous
 
 
+
+# 2026-10-18: non-submittable native doctypes whose only owned hook is an unconditional
+# validate-family integrity check (toefl_house/identity_links.py). Frappe fires
+# before_cancel and before_update_after_submit only for submittable documents, so they
+# are exempt from the three-seam rule. Adding any doctype here needs the same review.
+UNCONDITIONAL_VALIDATE_ONLY = {"User"}
+
 class AppAssemblyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -244,10 +251,14 @@ class AppAssemblyTests(unittest.TestCase):
         for doctype, handlers in events.items():
             if doctype not in guarded_native:
                 continue
-            if doctype in governance:
+            if doctype in governance or doctype in UNCONDITIONAL_VALIDATE_ONLY:
                 # Governance configuration is non-cancelable and non-submittable;
                 # its hooks are unconditional integrity checks (validate family).
+                # UNCONDITIONAL_VALIDATE_ONLY names other non-submittable integrity
+                # doctypes under the same rule, and each must pin only validate.
                 self.assertIn("validate", handlers, f"{doctype} is missing the validate seam")
+                if doctype in UNCONDITIONAL_VALIDATE_ONLY:
+                    self.assertEqual(set(handlers), {"validate"}, f"{doctype} must stay validate-only")
                 continue
             for seam in seams:
                 self.assertIn(seam, handlers, f"{doctype} is missing the {seam} seam")

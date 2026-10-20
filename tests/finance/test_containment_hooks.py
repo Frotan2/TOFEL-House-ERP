@@ -63,7 +63,10 @@ class ContainmentHookWiringTests(unittest.TestCase):
                             "TH Adjustment Posting Policy",
                             "TH Alerting Policy",
                             "TH Guardian Lifecycle Policy",
-                            "TH Configuration Operation", "TH Configuration Audit Event"}
+                            "TH Configuration Operation", "TH Configuration Audit Event",
+                            # 2026-10-18: unconditional validate-only integrity hook (Office 365 link
+                            # uniqueness, toefl_house/identity_links.py). Not a command guard.
+                            "User"}
         self.assertEqual(extra, allowed_extras,
                          "doc_events changed; update this guard deliberately — the "
                          "only sanctioned extras are the governance configuration "

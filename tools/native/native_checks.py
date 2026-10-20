@@ -3,6 +3,7 @@ import concurrent.futures
 from datetime import timedelta
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 import time
@@ -1933,6 +1934,172 @@ def main():
             try:return http_denied(s.post(base+'/api/method/toefl_house.api.create_draft',json=dict(payload,request_key='http_csrf_fail_001'),timeout=30),csrf=True)
             finally:s.headers['X-Frappe-CSRF-Token']=token
         check('http-csrf-negative-with-positive-control',csrf_negative)
+        # 2026-10-18 credential gate over real HTTP (gunicorn, real auth_hooks, real OAuth validator).
+        # A disabled user must not continue on any credential type. Each denial follows a positive
+        # control with the same credential while the user is enabled, so a credential that never
+        # worked cannot pass as a denial. Tokens and keys are generated per run and never printed.
+        # No new User rows are created here: Frappe's throttle_user_creation caps creations per hour
+        # (throttle_user_limit, default 60), and this suite is already close to it. The disabled
+        # account is an existing synthetic fixture user, re-enabled in a finally block.
+        cred_email=users['teacher_unlinked']
+        cred_key=frappe.generate_hash(length=15);cred_secret=frappe.generate_hash(length=32)
+        cred_tok=frappe.generate_hash(length=40)
+        cred_state={}
+        def cred_make():
+            user=frappe.get_doc('User',cred_email);user.api_key=cred_key;user.api_secret=cred_secret;user.save(ignore_permissions=True)
+            client=frappe.get_doc(dict(doctype='OAuth Client',app_name='Synthetic disabled-credential gate',scopes='all',
+                default_redirect_uri='http://127.0.0.1:18000/synthetic-callback',redirect_uris='http://127.0.0.1:18000/synthetic-callback',
+                grant_type='Authorization Code',response_type='Code')).insert(ignore_permissions=True)
+            frappe.get_doc(dict(doctype='OAuth Bearer Token',client=client.name,user=cred_email,scopes='all',access_token=cred_tok,
+                refresh_token=frappe.generate_hash(length=40),expires_in=3600,status='Active',
+                expiration_time=frappe.utils.add_to_date(frappe.utils.now_datetime(),hours=1))).insert(ignore_permissions=True)
+            return {'credentials':['session','api_key','bearer']}
+        check('disabled-credential-fixtures',cred_make)
+        def cred_whoami(**headers):
+            return requests.get(base+'/api/method/frappe.auth.get_logged_user',headers=dict({'Host':'placement-test.localhost'},**headers),timeout=30)
+        def cred_session():
+            s=requests.Session();s.headers['Host']='placement-test.localhost'
+            r=s.post(base+'/api/method/login',json={'usr':cred_email,'pwd':os.environ['PLACEMENT_TEST_PASSWORD']},timeout=30)
+            assert r.status_code==200,f'session login HTTP {r.status_code}'
+            assert s.cookies.get('sid') not in (None,'','Guest')
+            return s
+        def cred_positive_controls():
+            cred_state['session']=cred_session()
+            seen={'session':cred_state['session'].get(base+'/api/method/frappe.auth.get_logged_user',timeout=30),
+                  'api_key':cred_whoami(Authorization='token '+cred_key+':'+cred_secret),
+                  'bearer':cred_whoami(Authorization='Bearer '+cred_tok)}
+            resolved={}
+            for label,r in seen.items():
+                assert r.status_code==200,f'{label} positive control HTTP {r.status_code}'
+                resolved[label]=r.json().get('message')
+            assert all(v==cred_email for v in resolved.values()),'positive control resolved to another identity'
+            return {k:'resolved-to-user' for k in resolved}
+        check('disabled-credential-positive-controls',cred_positive_controls)
+        def cred_set_enabled(value):
+            frappe.db.set_value('User',cred_email,'enabled',value)
+            frappe.clear_document_cache('User',cred_email)
+            frappe.db.commit()
+            return {'enabled':value}
+        def cred_not_continued(response):
+            if response.status_code==200:
+                assert response.json().get('message') in ('Guest',None,''),'Disabled user continued as a user'
+                return {'http_status':200,'resolved':'Guest'}
+            assert response.status_code in (401,403),f'Unexpected HTTP {response.status_code}'
+            return {'http_status':response.status_code}
+        def cred_password_login_refused():
+            r=requests.post(base+'/api/method/login',headers={'Host':'placement-test.localhost'},
+                json={'usr':cred_email,'pwd':os.environ['PLACEMENT_TEST_PASSWORD']},timeout=30)
+            assert r.status_code!=200,'Disabled user obtained a password login'
+            return {'http_status':r.status_code}
+        check('disabled-credential-user-disabled',lambda:cred_set_enabled(0))
+        try:
+            check('disabled-user-session-cookie-not-continued',lambda:cred_not_continued(cred_state['session'].get(base+'/api/method/frappe.auth.get_logged_user',timeout=30)))
+            check('disabled-user-api-key-not-continued',lambda:cred_not_continued(cred_whoami(Authorization='token '+cred_key+':'+cred_secret)))
+            check('disabled-user-bearer-not-continued',lambda:cred_not_continued(cred_whoami(Authorization='Bearer '+cred_tok)))
+            check('disabled-user-password-login-refused',cred_password_login_refused)
+        finally:
+            cred_set_enabled(1)
+        # Office 365 account linking, real save path, on existing synthetic users. Every write is
+        # rolled back at the end. A denial counts only when the refusal text is the link rule's
+        # text, so a different ValidationError (for example Throttled) cannot pass as a denial.
+        def denied_because(fn,fragment):
+            frappe.db.savepoint('link_denial')
+            try:fn()
+            except (frappe.PermissionError,frappe.ValidationError,frappe.DuplicateEntryError) as exc:
+                assert fragment in str(exc),f'Denied for another reason: {type(exc).__name__}'
+                return {'denied':type(exc).__name__,'rule':fragment}
+            else:raise AssertionError('Expected link denial was accepted')
+            finally:frappe.db.rollback(save_point='link_denial')
+        def office365_link_guard():
+            holder_email=users['other'];second_email=users['publisher']
+            subject='SYNTHETIC-SUB-'+frappe.generate_hash(length=16)
+            try:
+                holder=frappe.get_doc('User',holder_email)
+                holder.append('social_logins',dict(provider='office_365',userid=subject,username='synthetic'))
+                holder.save(ignore_permissions=True)
+                frappe.get_doc('User',holder_email).save(ignore_permissions=True)
+                second=frappe.get_doc('User',second_email)
+                second.append('social_logins',dict(provider='office_365',userid=subject,username='synthetic'))
+                second_result=denied_because(lambda:second.save(ignore_permissions=True),'already linked to another user')
+                dup=frappe.get_doc('User',holder_email)
+                dup.append('social_logins',dict(provider='office_365',userid=subject.lower(),username='synthetic'))
+                dup_result=denied_because(lambda:dup.save(ignore_permissions=True),'more than once')
+            finally:
+                frappe.db.rollback()
+            return {'holder_resave':'allowed','second_user':second_result,'same_user_duplicate':dup_result}
+        check('office365-link-save-guard',office365_link_guard)
+        # 2026-10-18 HRMS Text Editor, server side, on a real HRMS doctype (Job Opening Template.description).
+        # The browser harness (tools/foundation/hrms_editor_security.mjs) proves the built component;
+        # this check proves what the server stores, returns and renders for an authenticated user through
+        # the real REST path, the real containment hook, Frappe's own sanitizer and the real permissions.
+        # Synthetic data only. The HR User role is granted to one fixture user for the run and revoked in finally.
+        hr_user=users['teacher_two'];hr_session=sessions['teacher_two'];no_role_session=sessions['outsider']
+        hr_doctype='Job Opening Template';hr_base=base+'/api/resource/'+quote(hr_doctype,safe='')
+        hr_title='SYN-HRMS-EDITOR-'+frappe.generate_hash(length=10)
+        hr_payloads=[
+            '<p>SYNTHETIC <strong>formatted</strong> <em>text</em></p><ul><li>item</li></ul><img src=x onerror="alert(1)">',
+            '<p><a href="javascript:alert(1)">SYNTHETIC link</a></p>',
+            '<svg onload="alert(1)"></svg><p>SYNTHETIC svg</p>',
+            '<iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;"></iframe><p>SYNTHETIC frame</p>',
+        ]
+        hr_markers=('onerror','onload','javascript:','<script','srcdoc','<iframe')
+        # An <svg> element is inert only without attributes: any attribute on it is refused.
+        hr_svg_with_attr=re.compile(r'<svg\b[^>]*\s[^>]*>',re.I)
+        hr_state={}
+        def hr_inert(html):
+            low=(html or '').lower()
+            found=[m for m in hr_markers if m in low]
+            assert not found,f'executable markup survived storage or rendering: {found}'
+            assert not hr_svg_with_attr.search(html or ''),'svg element kept an attribute'
+            assert '<strong>formatted</strong>' in (html or '') or 'SYNTHETIC' in (html or ''),'legitimate content was lost'
+            return {'executable_markers':0}
+        def hr_grant(value):
+            u=frappe.get_doc('User',hr_user)
+            if value:u.append('roles',{'role':'HR User'})
+            else:u.roles=[r for r in u.roles if r.role!='HR User']
+            u.save(ignore_permissions=True)
+            frappe.clear_cache(user=hr_user)
+            frappe.db.commit()
+            return {'hr_user_role':value}
+        def hr_create():
+            r=hr_session.post(hr_base,json={'template_title':hr_title,'description':hr_payloads[0]},timeout=40)
+            assert r.status_code==200,f'create HTTP {r.status_code}'
+            name=r.json()['data']['name'];hr_state['name']=name
+            stored=frappe.db.get_value(hr_doctype,name,'description')
+            assert '<strong>formatted</strong>' in (stored or ''),'legitimate formatting not stored'
+            hr_inert(r.json()['data'].get('description'))
+            return {'stored':hr_inert(stored),'returned':'inert'}
+        def hr_reopen():
+            r=hr_session.get(hr_base+'/'+quote(hr_state['name'],safe=''),timeout=40)
+            assert r.status_code==200,f'reopen HTTP {r.status_code}'
+            html=r.json()['data']['description']
+            assert '<strong>formatted</strong>' in html,'formatting lost on reopen'
+            return hr_inert(html)
+        def hr_update():
+            r=hr_session.put(hr_base+'/'+quote(hr_state['name'],safe=''),json={'description':hr_payloads[1]+hr_payloads[2]+hr_payloads[3]},timeout=40)
+            assert r.status_code==200,f'update HTTP {r.status_code}'
+            stored=frappe.db.get_value(hr_doctype,hr_state['name'],'description')
+            hr_inert(r.json()['data'].get('description'))
+            return {'stored':hr_inert(stored)}
+        def hr_server_insert():
+            doc=frappe.get_doc({'doctype':hr_doctype,'template_title':hr_title+'-INSERT','description':hr_payloads[0]+hr_payloads[3]})
+            doc.insert(ignore_permissions=True)
+            stored=frappe.db.get_value(hr_doctype,doc.name,'description')
+            return {'stored':hr_inert(stored)}
+        def hr_denied_create():
+            return http_denied(no_role_session.post(hr_base,json={'template_title':hr_title+'-DENY','description':hr_payloads[0]},timeout=40))
+        def hr_denied_read():
+            return http_denied(no_role_session.get(hr_base+'/'+quote(hr_state['name'],safe=''),timeout=40))
+        check('hrms-editor-grant-hr-user-role',lambda:hr_grant(True))
+        try:
+            check('hrms-editor-rest-create-sanitized',hr_create)
+            check('hrms-editor-reopen-sanitized',hr_reopen)
+            check('hrms-editor-rest-update-sanitized',hr_update)
+            check('hrms-editor-server-insert-sanitized',hr_server_insert)
+            check('hrms-editor-unrelated-role-create-denied',hr_denied_create)
+            check('hrms-editor-unrelated-role-read-denied',hr_denied_read)
+        finally:
+            check('hrms-editor-revoke-hr-user-role',lambda:hr_grant(False))
         url=base+'/api/resource/'+quote(api.ITEM,safe='')+'/'+httpitem['name']
         check('http-direct-crud-mutation-denied',lambda:http_denied(sessions['author'].put(url,json={'status':'Published','flags':{'ignore_permissions':1}},timeout=30)))
         check('http-other-author-draft-read-denied',lambda:http_denied(sessions['other'].get(url,timeout=30)))

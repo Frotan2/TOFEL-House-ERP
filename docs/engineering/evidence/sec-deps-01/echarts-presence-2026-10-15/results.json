@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-15",
+  "advisory": "GHSA-fgmj-fm8m-jvvx",
+  "aliases": ["CVE-2026-45249"],
+  "trees": {
+    "erpnext@4048fb70e14d1843956fcdabb7c3cca75a1cbcdd": {"lock_or_manifest_hits": 0, "source_hits": 0},
+    "education@93bc7075753369457919720690f80c6d2207b5f2": {"lock_or_manifest_hits": 0, "source_hits": 0, "frappe_ui_locked": "0.1.31", "frappe_ui_range": "^0.1.17"},
+    "payments@cca07d9f9392e2ea0e521c5975151db9e4b6c321": {"lock_or_manifest_hits": 0, "source_hits": 0},
+    "hrms@a4768b441cff346def505e27f2a2229ee1e05b9b": {"lock_or_manifest_hits": 0, "source_hits": 0, "frappe_ui_locked": "0.1.105", "frappe_ui_range": "0.1.105"},
+    "frappe@988e54f3c4c291e2077a83809663f123731abe76": {"lock_or_manifest_hits": 0, "source_hits": 0}
+  },
+  "repository_tracked_hits": 0,
+  "frappe_ui_0_1_278_declares_echarts": "^5.6.0",
+  "frozen_install_controls": ["product/app.Dockerfile", "tools/foundation/runtime_install.py"],
+  "disposition": "NOT_REACHABLE",
+  "scope": "shipped frozen dependency trees at the pinned SHAs; latent route via unfrozen re-resolution of frappe-ui ^0.1.17"
+}

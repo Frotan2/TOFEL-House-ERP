@@ -33,7 +33,8 @@ DOCKERFILE = (ROOT / "product" / "app.Dockerfile").read_text()
 PINS = (DELTA_DIR / "python-pins-replay.txt").read_text()
 
 DELTA_NAME = "advisory-delta-2026-10-09"
-CLOSED = {"MITIGATED", "NOT_REACHABLE", "BUILD_ONLY", "DEV_ONLY", "INSTALL_ONLY", "BROWSER_SELF_DENIAL"}
+# Resolved = closed, or BROWSER_SELF_DENIAL (recorded, but open by owner decision OD-2026-10-18-A).
+RESOLVED = {"MITIGATED", "NOT_REACHABLE", "BUILD_ONLY", "DEV_ONLY", "INSTALL_ONLY", "BROWSER_SELF_DENIAL"}
 
 # The eight matches the Foundation runtime gate reported as untriaged (run 37902411810).
 CI_UNTRIAGED = [
@@ -72,7 +73,7 @@ class DeltaCoverageTests(unittest.TestCase):
                 self.assertIsNotNone(record, f"{identifier} not covered by any triage source")
                 self.assertEqual(record.get("source_delta"), DELTA_NAME,
                                  f"{identifier} must be covered by this delta, not an earlier source")
-                self.assertIn(record["runtime_disposition"], CLOSED)
+                self.assertIn(record["runtime_disposition"], RESOLVED)
 
     def test_delta_holds_exactly_the_seven_unique_advisories(self):
         ids = {adv["id"] for _pkg, adv in _delta_records()}
@@ -81,7 +82,7 @@ class DeltaCoverageTests(unittest.TestCase):
     def test_every_delta_advisory_has_evidence_and_fix_path(self):
         for package, adv in _delta_records():
             with self.subTest(package=package, advisory=adv["id"]):
-                self.assertIn(adv["runtime_disposition"], CLOSED)
+                self.assertIn(adv["runtime_disposition"], RESOLVED)
                 self.assertGreaterEqual(len(adv["runtime_disposition_evidence"]), 300)
                 self.assertGreaterEqual(len(adv["fix_path"]), 80)
                 self.assertRegex(adv["published"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
@@ -107,7 +108,17 @@ class ReplaySnapshotTests(unittest.TestCase):
         npm_result = t.triage_npm(npm_input, self.triage)
         self.assertEqual(len(npm_result["findings"]), len(SNAPSHOT["npm_entries"]))
         self.assertEqual(npm_result["untriaged"], [])
-        self.assertEqual(npm_result["open"], 0)
+        # Exactly one replayed record is open: GHSA-vhrc, withdrawn to BLOCKED by ERRATUM E6.
+        # Open = GHSA-VHRC (BLOCKED) plus the BROWSER_SELF_DENIAL records (owner decision OD-2026-10-18-A).
+        # The two owner-accepted residuals (OWNER_ACCEPTED_RISK, 2026-10-20) are visible but not open.
+        accepted = [f for f in npm_result["findings"] if f["disposition"] == "OWNER_ACCEPTED_RISK"]
+        self.assertEqual(npm_result["accepted"], len(accepted))
+        open_findings = [f for f in npm_result["findings"]
+                         if not f["pass"] and f["disposition"] != "OWNER_ACCEPTED_RISK"]
+        self.assertEqual(npm_result["open"], len(open_findings))
+        self.assertIn("https://github.com/advisories/GHSA-VHRC-HGRQ-X75R", [f["url"] for f in open_findings])
+        self.assertTrue(all(f["disposition"] in {"BLOCKED", "BROWSER_SELF_DENIAL"} for f in open_findings),
+                        [(f["url"], f["disposition"]) for f in open_findings])
 
         py_findings = []
         for record in SNAPSHOT["pypi_records"]:
@@ -258,7 +269,7 @@ class ReconciliationTests(unittest.TestCase):
             rec = t.load_triage()["by_id"].get(t._norm(aid))
             self.assertIsNotNone(rec, aid)
             self.assertEqual(rec["package"], "py:oauthlib@3.3.1")
-            self.assertIn(rec["runtime_disposition"], CLOSED, aid)
+            self.assertIn(rec["runtime_disposition"], RESOLVED, aid)
 
     def test_readme_states_the_reconciliation(self):
         text = README_PATH.read_text(encoding="utf-8")
@@ -306,25 +317,27 @@ class ProductScopeTests(unittest.TestCase):
 
 
 class EchartsErratumTests(unittest.TestCase):
-    """The 2026-10-03 ECharts reasoning cannot be reproduced from any pinned lockfile. It is BLOCKED, not NOT_REACHABLE."""
+    """ECharts was BLOCKED until its presence was established (erratum E2).
 
-    def test_withdrawn_echarts_disposition_is_blocked(self):
+    E5 (2026-10-15) re-triaged it to NOT_REACHABLE on reproducible evidence:
+    echarts is absent from every shipped frozen tree. See
+    tests/security/test_echarts_presence_2026_10_15.py for the tripwire.
+    """
+
+    def test_echarts_disposition_is_not_reachable_with_erratum_e5(self):
         data = json.loads(DELTA_1003.read_text(encoding="utf-8"))
         hits = [adv for pkg in data["packages"] for adv in pkg["advisories"]
                 if adv["id"] == "GHSA-fgmj-fm8m-jvvx"]
         self.assertEqual(len(hits), 1)
-        self.assertEqual(hits[0]["runtime_disposition"], "BLOCKED")
-        self.assertIn("ERRATUM 2026-10-09", hits[0]["runtime_disposition_evidence"])
-        self.assertTrue((ROOT / hits[0]["erratum"]).is_file())
-        self.assertNotIn("finding is unreachable in the shipped product", hits[0]["fix_path"])
+        self.assertEqual(hits[0]["runtime_disposition"], "NOT_REACHABLE")
+        self.assertIn("RE-TRIAGED 2026-10-15", hits[0]["runtime_disposition_evidence"])
+        self.assertIn("PREVIOUS DISPOSITION: BLOCKED", hits[0]["runtime_disposition_evidence"])
+        self.assertIn("E5", (ROOT / hits[0]["erratum"]).read_text(encoding="utf-8"))
 
-    def test_no_replayed_npm_entry_is_echarts(self):
-        self.assertNotIn("echarts", json.dumps(SNAPSHOT["npm_entries"]))
-
-    def test_the_loader_does_not_treat_the_blocked_echarts_entry_as_closed(self):
+    def test_the_loader_treats_the_echarts_entry_as_closed_with_evidence(self):
         rec = t.load_triage()["by_id"].get(t._norm("GHSA-fgmj-fm8m-jvvx"))
         self.assertIsNotNone(rec)
-        self.assertNotIn(rec["runtime_disposition"], CLOSED)
+        self.assertEqual(rec["runtime_disposition"], "NOT_REACHABLE")
 
 
 class DanglingReferenceTests(unittest.TestCase):
