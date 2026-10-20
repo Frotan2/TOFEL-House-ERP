@@ -52,6 +52,45 @@ def _connect(site: str):
     return frappe
 
 
+def _file_storage_path(frappe, file_doc) -> Path:
+    """Resolve only Frappe's canonical public/private file URL layouts."""
+    file_name = str(file_doc.file_name or "")
+    if not file_name or Path(file_name).name != file_name or file_name in {".", ".."}:
+        raise AssertionError("Synthetic File has an unsafe file name")
+    is_private = int(file_doc.is_private or 0) == 1
+    expected_url = ("/private/files/" if is_private else "/files/") + file_name
+    if file_doc.file_url != expected_url:
+        raise AssertionError("Synthetic File URL does not match its privacy flag")
+    return Path(frappe.get_site_path(
+        "private" if is_private else "public", "files", file_name))
+
+
+def _file_snapshot(frappe, file_doc, marker: bytes) -> dict:
+    path = _file_storage_path(frappe, file_doc)
+    stat = path.stat()
+    content = file_doc.get_content()
+    if isinstance(content, str):
+        content = content.encode()
+    if content != marker:
+        raise AssertionError("Synthetic File content differs immediately after creation")
+    return {
+        "name": file_doc.name,
+        "file_name": file_doc.file_name,
+        "file_url": file_doc.file_url,
+        "is_private": int(file_doc.is_private or 0),
+        "attached_to_doctype": file_doc.attached_to_doctype,
+        "attached_to_name_digest": hashlib.sha256(
+            str(file_doc.attached_to_name).encode()).hexdigest(),
+        "sha256": hashlib.sha256(content).hexdigest(),
+        "storage": {
+            "size": stat.st_size,
+            "mode": stat.st_mode & 0o777,
+            "uid": stat.st_uid,
+            "gid": stat.st_gid,
+        },
+    }
+
+
 def _snapshot(frappe) -> dict:
     doctypes = {}
     for doctype in REPRESENTATIVE_DOCTYPES:
@@ -60,28 +99,34 @@ def _snapshot(frappe) -> dict:
             raise AssertionError(f"Expected synthetic {doctype} record before backup")
         doctypes[doctype] = {"count": len(names), "name_digest": _digest(names)}
 
-    # File bytes are deliberately generated only in this disposable site. The
-    # marker is attached to a real guarded decision, goes through Frappe file
-    # storage, and lets the restore verifier prove the private bytes survived.
+    # Both markers are generated only in the disposable CI site. Their
+    # content, File metadata, storage location, permissions and ownership are
+    # recorded before the native backup; the restore target must reproduce
+    # them exactly without touching the source site.
     decision = frappe.get_all("TH Placement Decision", pluck="name", order_by="name asc", limit=1)[0]
-    marker = b"Synthetic TOEFL House product backup restore marker; not production data."
-    filename = "synthetic-product-restore-marker-" + os.environ["GITHUB_RUN_ID"] + ".txt"
-    file_doc = frappe.get_doc({
-        "doctype": "File", "file_name": filename, "is_private": 1,
-        "attached_to_doctype": "TH Placement Decision", "attached_to_name": decision,
-        "content": marker,
-    }).insert()
+    attached_digest = hashlib.sha256(decision.encode()).hexdigest()
+    run_id = os.environ["GITHUB_RUN_ID"]
+    markers = {
+        "private_file": (b"Synthetic private restore marker; not production data.", 1),
+        "public_file": (b"Synthetic public restore marker; not production data.", 0),
+    }
+    files = {}
+    for role, (marker, is_private) in markers.items():
+        filename = f"synthetic-product-restore-{role}-{run_id}.txt"
+        file_doc = frappe.get_doc({
+            "doctype": "File", "file_name": filename, "is_private": is_private,
+            "attached_to_doctype": "TH Placement Decision", "attached_to_name": decision,
+            "content": marker,
+        }).insert()
+        files[role] = _file_snapshot(frappe, file_doc, marker)
+        if files[role]["attached_to_name_digest"] != attached_digest:
+            raise AssertionError("Synthetic File attachment metadata was not stored")
     frappe.db.commit()
     return {
-        "scope": "Disposable synthetic TOEFL House record and private-file restore only; not production DR",
+        "scope": "Disposable synthetic TOEFL House records plus public/private file integrity, metadata and filesystem attributes; not production DR",
         "status": "captured",
         "doctypes": doctypes,
-        "private_file": {
-            "name": file_doc.name,
-            "attached_to_doctype": "TH Placement Decision",
-            "attached_to_name_digest": hashlib.sha256(decision.encode()).hexdigest(),
-            "sha256": hashlib.sha256(marker).hexdigest(),
-        },
+        "files": files,
     }
 
 
@@ -96,23 +141,47 @@ def _verify(frappe, expected: dict) -> dict:
             raise AssertionError(f"Restored {doctype} does not match source snapshot")
         verified[doctype] = actual["count"]
 
-    file_expected = expected["private_file"]
-    file_doc = frappe.get_doc("File", file_expected["name"])
-    if not file_doc.is_private or file_doc.attached_to_doctype != file_expected["attached_to_doctype"]:
-        raise AssertionError("Restored private file metadata differs from the captured file")
-    attached_digest = hashlib.sha256(file_doc.attached_to_name.encode()).hexdigest()
-    if attached_digest != file_expected["attached_to_name_digest"]:
-        raise AssertionError("Restored private file points at a different decision")
-    content = file_doc.get_content()
-    if isinstance(content, str):
-        content = content.encode()
-    content_digest = hashlib.sha256(content).hexdigest()
-    if content_digest != file_expected["sha256"]:
-        raise AssertionError("Restored private file content digest differs")
+    verified_files = {}
+    for role, file_expected in expected["files"].items():
+        file_doc = frappe.get_doc("File", file_expected["name"])
+        if (file_doc.file_name != file_expected["file_name"]
+                or file_doc.file_url != file_expected["file_url"]
+                or int(file_doc.is_private or 0) != file_expected["is_private"]
+                or file_doc.attached_to_doctype != file_expected["attached_to_doctype"]):
+            raise AssertionError(f"Restored {role} File metadata differs from the captured file")
+        attached_digest = hashlib.sha256(
+            str(file_doc.attached_to_name).encode()).hexdigest()
+        if attached_digest != file_expected["attached_to_name_digest"]:
+            raise AssertionError(f"Restored {role} File points at a different record")
+        content = file_doc.get_content()
+        if isinstance(content, str):
+            content = content.encode()
+        if hashlib.sha256(content).hexdigest() != file_expected["sha256"]:
+            raise AssertionError(f"Restored {role} file content digest differs")
+        path = _file_storage_path(frappe, file_doc)
+        stat = path.stat()
+        actual_storage = {
+            "size": stat.st_size,
+            "mode": stat.st_mode & 0o777,
+            "uid": stat.st_uid,
+            "gid": stat.st_gid,
+        }
+        if actual_storage != file_expected["storage"]:
+            raise AssertionError(
+                f"Restored {role} filesystem size/mode/uid/gid differs from source")
+        verified_files[role] = {
+            "content_sha256_verified": True,
+            "metadata_verified": True,
+            "storage_size": stat.st_size,
+            "storage_mode_octal": format(stat.st_mode & 0o777, "04o"),
+            "storage_uid": stat.st_uid,
+            "storage_gid": stat.st_gid,
+        }
     return {
         "scope": expected["scope"], "status": "pass",
         "doctypes_verified": verified,
-        "private_file_sha256_verified": True,
+        "files_verified": verified_files,
+        "source_snapshot_is_synthetic": True,
     }
 
 
