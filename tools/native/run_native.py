@@ -10,7 +10,9 @@ import shutil
 import signal
 import subprocess
 import time
+import http.cookiejar
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -306,21 +308,32 @@ def main():
             cwd=benchdir/'sites', env=env, stdout=restart_stream,
             stderr=subprocess.STDOUT, start_new_session=True)
         processes.append((server, restart_stream, restart_log))
+        jar = http.cookiejar.CookieJar()
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(jar))
+        login_form = urllib.parse.urlencode(
+            {"usr": "Administrator", "pwd": adminpw}).encode("utf-8")
         response_status = None
         last_http_error = None
         for _ in range(60):
             try:
-                # The site root is served by Frappe for the Host-resolved site
-                # once gunicorn is back; it needs no whitelisted API method and
-                # no session, unlike frappe.auth.get_logged_user (403: not
-                # whitelisted). urlopen follows the / -> /login redirect.
+                # A real login (JSON API, no asset rendering) confirms the
+                # restored site is serving and its session/auth path works.
+                # Page rendering pulls skipped assets (500 via bundled_asset)
+                # and get_logged_user requires an established session, so log
+                # in as Administrator on the Host-resolved restore site.
                 request = urllib.request.Request(
-                    'http://127.0.0.1:18000/', headers={'Host': restore_site})
-                with urllib.request.urlopen(request, timeout=5) as response:
+                    "http://127.0.0.1:18000/api/method/login",
+                    data=login_form, headers={"Host": restore_site})
+                with opener.open(request, timeout=5) as response:
+                    body = json.loads(
+                        response.read().decode("utf-8", "replace"))
                     response_status = response.status
-                    if response_status == 200:
+                    if (response.status == 200
+                            and body.get("message") == "Logged In"):
                         break
-                    last_http_error = f'HTTP {response_status}'
+                    last_http_error = "HTTP %s %s" % (
+                        response.status, body.get("message"))
             except urllib.error.HTTPError as exc:
                 body = exc.read(1000).decode('utf-8', errors='replace').replace('\\n', ' ')[:300]
                 last_http_error = f'HTTP {exc.code}: {body}'
