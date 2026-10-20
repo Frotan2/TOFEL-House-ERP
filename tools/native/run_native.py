@@ -292,7 +292,7 @@ def main():
         for _ in range(60):
             try:
                 request = urllib.request.Request(
-                    'http://127.0.0.1:18000/api/method/frappe.ping',
+                    'http://127.0.0.1:18000/api/method/frappe.auth.get_logged_user',
                     headers={'Host': restore_site})
                 with urllib.request.urlopen(request, timeout=5) as response:
                     response_status = response.status
