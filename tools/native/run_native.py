@@ -10,6 +10,8 @@ import shutil
 import signal
 import subprocess
 import time
+import urllib.error
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPORT_BRANCH = 'product-export'
@@ -244,6 +246,68 @@ def main():
         product_restore=evidence/'product-restore-result.json';env['PLACEMENT_RESTORE_REPORT']=str(product_restore)
         run('verify-product-restore-snapshot',[benchdir/'env/bin/python',ROOT/'tools/native/runtime_restore.py','verify',restore_site],benchdir/'sites')
         report['product_restore']=json.loads(product_restore.read_text())
+
+        # Native Frappe restore must not alter the preserved source backup set.
+        for label, artifact in (('database', database), ('private_files', private_files),
+                                ('public_files', public_files)):
+            actual_hash = hashlib.sha256(artifact.read_bytes()).hexdigest()
+            expected_hash = report['product_backup'][label]['sha256']
+            if actual_hash != expected_hash:
+                raise RuntimeError(f'Native restore modified the preserved source {label} backup')
+
+        # A direct Python verifier is not enough: restart the actual web service,
+        # route a request to the distinct restore site, and repeat the integrity
+        # checks after the service restart.
+        old_server, old_stream, old_log = processes.pop()
+        try:
+            os.killpg(old_server.pid, signal.SIGTERM)
+            old_server.wait(timeout=20)
+        except ProcessLookupError:
+            pass
+        except subprocess.TimeoutExpired:
+            os.killpg(old_server.pid, signal.SIGKILL)
+            old_server.wait(timeout=10)
+        old_stream.close()
+        (evidence/'gunicorn-before-restore-restart.txt').write_text(redact(old_log.read_text()))
+        restart_log = lab/'gunicorn-after-restore-restart.log'
+        restart_stream = restart_log.open('w')
+        server = subprocess.Popen(
+            [str(benchdir/'env/bin/gunicorn'), '--bind', '127.0.0.1:18000',
+             '--workers', '2', 'frappe.app:application'],
+            cwd=benchdir/'sites', env=env, stdout=restart_stream,
+            stderr=subprocess.STDOUT, start_new_session=True)
+        processes.append((server, restart_stream, restart_log))
+        response_status = None
+        last_http_error = None
+        for _ in range(60):
+            try:
+                request = urllib.request.Request(
+                    'http://127.0.0.1:18000/api/method/frappe.ping',
+                    headers={'Host': restore_site})
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    response_status = response.status
+                    if response_status == 200:
+                        break
+                    last_http_error = f'HTTP {response_status}'
+            except (OSError, urllib.error.URLError) as exc:
+                last_http_error = type(exc).__name__
+            time.sleep(2)
+        if response_status != 200:
+            raise RuntimeError(
+                'Restored site did not answer its health request after web-service restart: '
+                + str(last_http_error))
+        restarted_restore = evidence/'product-restore-after-restart.json'
+        env['PLACEMENT_RESTORE_REPORT'] = str(restarted_restore)
+        run('verify-product-restore-after-service-restart',
+            [benchdir/'env/bin/python', ROOT/'tools/native/runtime_restore.py',
+             'verify', restore_site], benchdir/'sites')
+        report['product_restore_after_restart'] = json.loads(restarted_restore.read_text())
+        report['product_restore_restart'] = {
+            'web_service_restarted': True,
+            'restore_site_http_status': response_status,
+            'source_backup_hashes_unchanged': True,
+            'target_site': restore_site,
+        }
         report['runtime_complete']=True
         report['installed_apps']=bench('list-apps','--site','placement-test.localhost','list-apps','--format','json')
         for name in ('frappe','erpnext','education','payments','hrms'):
