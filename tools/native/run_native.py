@@ -255,6 +255,16 @@ def main():
             if actual_hash != expected_hash:
                 raise RuntimeError(f'Native restore modified the preserved source {label} backup')
 
+        # Capture all eight owner-policy records and live resolver outputs on
+        # the disposable restore target. Owner Operations gets a synthetic,
+        # validated public-key policy here (after the backup exercise) so it
+        # cannot affect the backup key/custody path used above.
+        policy_expectation = lab/'policy-restart-expectation.json'
+        env['PLACEMENT_POLICY_RESTART_EXPECTATION'] = str(policy_expectation)
+        run('capture-policy-resolvers-before-service-restart',
+            [benchdir/'env/bin/python', ROOT/'tools/native/policy_restart_check.py',
+             'capture', restore_site], benchdir/'sites')
+
         # A direct Python verifier is not enough: restart the actual web service,
         # route a request to the distinct restore site, and repeat the integrity
         # checks after the service restart.
@@ -302,6 +312,18 @@ def main():
             [benchdir/'env/bin/python', ROOT/'tools/native/runtime_restore.py',
              'verify', restore_site], benchdir/'sites')
         report['product_restore_after_restart'] = json.loads(restarted_restore.read_text())
+        run('verify-policy-resolvers-after-service-restart',
+            [benchdir/'env/bin/python', ROOT/'tools/native/policy_restart_check.py',
+             'verify', restore_site], benchdir/'sites')
+        report['policy_restart_check'] = {
+            'status': 'pass',
+            'policy_resolvers': [
+                'catalog_linkage', 'returning_student', 'enrollment_exit', 'billing',
+                'roster_change', 'attendance_correction', 'adjustment_posting',
+                'owner_operations',
+            ],
+            'owner_operations_backup_consumer_verified': True,
+        }
         report['product_restore_restart'] = {
             'web_service_restarted': True,
             'restore_site_http_status': response_status,
