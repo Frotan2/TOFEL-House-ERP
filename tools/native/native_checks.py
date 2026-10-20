@@ -1582,7 +1582,8 @@ def main():
                 val=_ocfg.validate_owner_operations_policy('ops_life_validate_01',code)
                 assert val['version_count']==1 and val['status']=='Active',val
                 live=_ocfg.governing_owner_operations()
-                assert live and str(live['backup_schedule_time'])[:5]=='02:30',live
+                # governing terms carry the database value (a timedelta); normalize as the consumer does
+                assert live and _ocfg._backup_schedule_time(live['backup_schedule_time'])=='02:30',live
                 cur=_ocfg.current_backup_policy()
                 assert cur['configured'] is True and cur['status']=='CONFIGURED',cur
                 assert cur['schedule_time']=='02:30' and cur['retention_versions']==7,cur
