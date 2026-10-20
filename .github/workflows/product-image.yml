@@ -12,6 +12,12 @@ on:
       - .gitattributes
       - .dockerignore
       - tests/foundation/test_product_packaging.py
+      - tests/foundation/test_native_restore_rehearsal.py
+      # The native restore rehearsal must also keep the actual desktop image
+      # build green; changes to the disposable runner cannot silently skip it.
+      - tools/native/runtime_restore.py
+      - tools/native/run_native.py
+      - tools/native/policy_restart_check.py
       # The Dockerfile COPYs these helpers into the production image. A change
       # to their security checks must rebuild the image on this PR, not merely
       # pass the fast Python suite.
