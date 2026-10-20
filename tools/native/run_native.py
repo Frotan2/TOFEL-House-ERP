@@ -221,7 +221,26 @@ def main():
         create_site('new-placement-restore-site',restore_site,restorepw)
         restore_backup_dir=benchdir/'sites'/restore_site/'private/backups'
         restore_backup_dir.mkdir(parents=True,exist_ok=True)
-        for artifact in (database,public_files,private_files):shutil.copy2(artifact,restore_backup_dir/artifact.name)
+        source_artifacts=(database,public_files,private_files)
+        source_bytes=sum(artifact.stat().st_size for artifact in source_artifacts)
+        required_free_bytes=max(1024**3,source_bytes*5)
+        free_bytes=shutil.disk_usage(restore_backup_dir).free
+        if free_bytes < required_free_bytes:
+            raise RuntimeError('Insufficient free space for isolated restore rehearsal; target was not populated')
+        for artifact in source_artifacts:
+            copied=restore_backup_dir/artifact.name
+            shutil.copy2(artifact,copied)
+            source_hash=hashlib.sha256(artifact.read_bytes()).hexdigest()
+            copied_hash=hashlib.sha256(copied.read_bytes()).hexdigest()
+            if copied.stat().st_size != artifact.stat().st_size or copied_hash != source_hash:
+                raise RuntimeError('Isolated restore artifact copy failed size/hash verification')
+        report['restore_preflight']={
+            'target_site':restore_site,
+            'source_artifact_bytes':source_bytes,
+            'free_bytes_before_copy':free_bytes,
+            'required_free_bytes':required_free_bytes,
+            'copy_hashes_verified':True,
+        }
         for name in ('erpnext','education','payments','hrms','foundation_security','toefl_house'):bench('install-'+restore_site+'-'+name,'--site',restore_site,'install-app',name)
         for key in ('allow_tests','toefl_house_synthetic_only','disable_website_cache'):bench('enable-'+restore_site+'-'+key,'--site',restore_site,'set-config',key,'1','--parse')
         restore_payload=json.dumps({'site':restore_site,'backup_set':backup_set,
