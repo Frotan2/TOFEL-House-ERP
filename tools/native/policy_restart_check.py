@@ -148,12 +148,20 @@ def _exercise_off_switches(frappe):
         before_terms = _normalize(resolver())
         savepoint = f"policy_restart_off_{index}"
         frappe.db.savepoint(savepoint)
+        off_switch_result = "retirement fail-closed verified"
         try:
             frappe.set_user(OWNER)
             if row["status"] != "Active":
                 set_status(f"restart_{key}_activate_0001", row["code"], 1)
-                if not resolver():
-                    raise AssertionError(f"Could not activate a governing version for {key}")
+            live_terms = resolver()
+            # D5 intentionally keeps enrollment exits closed in the canonical
+            # Owner decision ledger. Do not claim its policy off-switch was
+            # exercised when no effective terms can resolve even while Active.
+            d5_closed = key == "enrollment_exit" and not live_terms
+            if not live_terms and not d5_closed:
+                raise AssertionError(f"Could not resolve effective terms for {key} before off-switch")
+            if d5_closed:
+                off_switch_result = "D5 remains fail-closed; no live terms to switch off"
             set_status(f"restart_{key}_retire_0001", row["code"], 0)
             if resolver():
                 raise AssertionError(f"{key} resolver remained live after retirement")
@@ -168,7 +176,7 @@ def _exercise_off_switches(frappe):
             backup = owner_configuration.current_backup_policy()
             if backup.get("configured") is not True:
                 raise AssertionError("Owner Operations backup consumer did not return after rollback")
-        verified.append(key)
+        verified.append({"policy": key, "result": off_switch_result})
     return verified
 
 
