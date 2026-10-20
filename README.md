@@ -1,5 +1,7 @@
 # TOEFL House ERP
 
+> **CURRENT RELEASE HOLD — READ BEFORE SETUP.** The Windows validation checklist and launch runbook explicitly prohibit editing/validating the backup policy, running backup or restore, or activating the site while the preservation/restore hold is open. This hold overrides older setup wording elsewhere in this README. Do not configure owner policies or run backup, restore, activation, deactivation, cleanup, or retention until engineering publishes an approved isolated-restore procedure and explicitly clears the hold. Production authorization remains **REJECTED**.
+
 The Course Management ERP for the **TOEFL House** language institute. The
 GitHub repository name is `TOFEL-House-ERP`.
 
@@ -68,42 +70,10 @@ the central PC (docs/engineering/LAUNCH-RUNBOOK.md, "Multi-user access
 Owner handover (installation, first setup, the eight policies, daily use, backup, troubleshooting, and what remains owner-only): [docs/engineering/HANDOVER-2026-10-20.md](docs/engineering/HANDOVER-2026-10-20.md). Per-policy runtime evidence: [docs/engineering/POLICY-RUNTIME-MATRIX-2026-10-20.md](docs/engineering/POLICY-RUNTIME-MATRIX-2026-10-20.md).
 
 First run step by step: [product/windows/VALIDATION.md](product/windows/VALIDATION.md).
-The TOEFL House workflows stay fail-closed until the Course Owner creates
-and validates an effective-dated Owner policy in the ERP Configuration desk
-using approved values for every required field (reporting review, class
-capacity, tax, transfers/withdrawals, calendar, backup time, retention count
-and behavior, recovery key/custody and quorum). No defaults or placeholders are
-supplied. The Owner provides only an ASCII-armored OpenPGP **public** key,
-generated/exported under a dedicated key-custody procedure; the matching
-private key stays under Owner
-custody outside Frappe and the backup drive. Never paste it into the ERP,
-container, or backup set. **Do not run `Backup TOEFL House ERP.cmd` yet:** The Owner decided the retention behavior on 2026-10-14 (owner decision D17): delete valid older sets beyond the keep count.
-The policy has no default and
-backup/activation fail closed until the Owner enters that behavior together
-with the keep count, backup time, recovery key/custody and quorum in the
-ERP Configuration desk and the policy validates. The
-intended backup contains three native encrypted database/files artifacts
-plus an OpenPGP-encrypted site-config recovery artifact, is SHA-256/size
-verified, and is
-copied to a separate fixed local drive on the same PC. The unencrypted Frappe
-site-config sidecar is never copied to that drive. The registered daily task
-runs as the interactive Windows user, so that user session and Docker Desktop
-must be available when it runs. Off-site/NAS/second-device/cloud backup is
-future scope, not a current release gate.
+Owner handover: [docs/engineering/HANDOVER-2026-10-20.md](docs/engineering/HANDOVER-2026-10-20.md).
+Per-policy runtime evidence: [docs/engineering/POLICY-RUNTIME-MATRIX-2026-10-20.md](docs/engineering/POLICY-RUNTIME-MATRIX-2026-10-20.md).
 
-After the Owner backup policy is complete and a verified backup exists, run
-**Activate TOEFL House ERP.cmd** and type `ACTIVATE`; the Windows host
-revalidates the secondary-drive manifest/artifacts, scheduled task, and live
-Owner policy before changing only the site's operational mode. Do not activate
-while the hold remains. This **does not** grant production release
-authorization: authorization remains
-**REJECT** until the acceptance evidence and Owner/non-engineering gates pass.
-**Deactivate TOEFL House ERP.cmd** returns site mode to REFUSED. For restore,
-GPG/Gpg4win is required on a trusted host to create/export or recover the
-Owner's dedicated key pair and decrypt the site-config artifact with the
-Owner-held private key outside the container; see the canonical
-[launch runbook](docs/engineering/LAUNCH-RUNBOOK.md). CI cannot qualify the
-Owner's real key custody or Windows/Tailscale operation.
+**Current preservation/restore hold:** the documents describe the intended policy fields and backup architecture, but that is not permission to configure them or run the helpers. Until engineering qualifies an isolated restore workflow, reconciles the implementation with the Owner's retention decision, and explicitly clears the hold, only the read-only checks in `product/windows/VALIDATION.md` are allowed. Do not edit or validate a policy; do not run Backup, Restore, Activate, Deactivate, retention cleanup, or any command that mutates the existing site or backup sets. Preserve `product/data`, runtime credentials, and all existing backups. Do not improvise a restore or treat CI as Owner-machine evidence. Production authorization remains **REJECTED**.
 
 ## Developer
 
