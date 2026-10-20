@@ -134,7 +134,9 @@ class NativeRestartWiringTests(unittest.TestCase):
         self.assertIn("shutil.disk_usage(restore_backup_dir).free", text)
         self.assertIn("copy_hashes_verified", text)
         self.assertIn("Isolated restore artifact copy failed size/hash verification", text)
-        self.assertIn("urllib.request.urlopen", text)
+        # The restored-site health probe is an authenticated login API
+        # request (no asset rendering, no get_logged_user-without-session).
+        self.assertIn("api/method/login", text)
 
     def test_all_eight_policy_resolvers_are_compared_across_restart(self):
         text = (ROOT / "tools/native/policy_restart_check.py").read_text(encoding="utf-8")
