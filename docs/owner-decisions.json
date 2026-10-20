@@ -266,6 +266,18 @@
       "decision": "A11 (MICROSOFT AUTHORIZATION CODE IN THE BROWSER URL): OPTION A ACCEPTED",
       "scope": "Owner answer 2026-10-19: accept the current redirect with a proxy-log check. Option B (form_post) is not taken.",
       "consequence": "Owner must still check the proxy and access logs, must not enable enable_frappe_logger, and must decide on earlier Error Log rows (clearing them needs owner approval)."
+    },
+    {
+      "id": "OD-2026-10-20-A",
+      "decision": "SHOWDOWN GHSA-rmmh-p597-ppvv: ACCEPTED WITH THE INPUT-CAP COMPENSATING CONTROL (re-confirmed 2026-10-20)",
+      "scope": "Owner answer 2026-10-20 in chat, replacing the 2026-10-19 answer that was given on a wrong description (output sanitizer). Control: frappe.markdown shows input longer than 2000 characters as escaped plain text, before showdown parses it. Implemented by tools/foundation/secure_markdown.py (hash-bound; upstream 99a91f55..., reviewed 8f122bc9...). Measurements: docs/engineering/evidence/sec-deps-01/markdown-cap-2026-10-19/README.md.",
+      "consequence": "The register record for GHSA-rmmh-p597-ppvv stays BROWSER_SELF_DENIAL (open) until a reviewed register change is approved by the owner (proposal in the evidence README; OD-2026-10-18-A and OD-2026-10-19-C say keep those records open). The control bounds parser input; it is not a vendor patch and does not prove every payload is bounded. Long Desk markdown above 2000 characters shows as plain text."
+    },
+    {
+      "id": "OD-2026-10-20-B",
+      "decision": "ADVISORY GATE: ACCEPTED RISKS WITH A REVIEWED REGISTER ENTRY MAY COUNT AS TRIAGED (policy answer 2026-10-20; not yet implemented)",
+      "scope": "Owner answer 2026-10-20 to the question whether accepted risks with a reviewed register entry should count as triaged for the Foundation advisory gate: yes, via a reviewed register change that cites the owner decision ID. The gate still fails on any untriaged finding or any finding without a recorded disposition.",
+      "consequence": "Not applied in this change. Applying it to BROWSER_SELF_DENIAL records (for example @tiptap/core GHSA-cp6q-959q-f8rh, OD-2026-10-19-B) conflicts with OD-2026-10-19-C (register unchanged) and OD-2026-10-18-A (keep open). The owner must state whether that record may move; until then the Foundation gate stays red on it."
     }
   ],
   "licensing": {

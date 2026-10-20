@@ -114,6 +114,7 @@ COPY tools/foundation/banking-locks /product/banking-locks
 # 96hv, 58qx, 2m8v, 677m, gr94, r635). Applied to the disposable Frappe checkout below;
 # see docs/engineering/evidence/sec-deps-01/realtime-socketio-2026-10-18/README.md.
 COPY tools/foundation/secure_realtime.py /product/secure_realtime.py
+COPY tools/foundation/secure_markdown.py /product/secure_markdown.py
 COPY tools/foundation/realtime-locks /product/realtime-locks
 # The performance baseline (finding 9) runs inside the deployed image:
 # the CI perf step execs it by this exact path. (Every script COPYed
@@ -177,6 +178,7 @@ RUN python3 /product/secure_weasyprint.py /home/frappe/bench/apps/frappe \
 # Frozen overlay, then fail-closed verification of every installed copy of engine.io
 # (>= 6.6.7), ws (>= 8.21.0) and socket.io-parser (>= 4.2.7). Any drift aborts the build.
 RUN python3 /product/secure_realtime.py /home/frappe/bench/apps/frappe
+RUN python3 /product/secure_markdown.py /home/frappe/bench/apps/frappe
 # Ghostscript guard (GHSA-r543-q48m-4c9j, WeasyPrint RCE). Pillow's EPS plugin
 # renders EPS/PS bytes by running the `gs` executable found on PATH
 # (PIL/EpsImagePlugin.py), and WeasyPrint hands it attacker-reachable images

@@ -30,5 +30,6 @@ tools/foundation/*
 !tools/foundation/secure_realtime.py
 !tools/foundation/realtime-locks/
 !tools/foundation/realtime-locks/**
+!tools/foundation/secure_markdown.py
 **/__pycache__
 **/*.pyc
