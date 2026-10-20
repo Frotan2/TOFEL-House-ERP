@@ -1552,7 +1552,7 @@ def main():
                       backup_recovery_public_key=key_block,custody_requirement='SYN custody probe',recovery_quorum=2)
             code='SYN-OPS-PROBE'
             today_=str(frappe.utils.today())
-            VERSIONS='Owner Operations Policy Version'
+            VERSIONS='TH Owner Operations Policy Version'
             def set_version(rk,values):
                 return _ocfg.set_owner_operations_policy_version(rk,code,today_,'SYN owner ops probe',*[values[k] for k in order])
             def refused_invalid(fn):
