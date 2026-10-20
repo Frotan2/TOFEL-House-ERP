@@ -46,7 +46,8 @@ class ProductRestoreContractTests(unittest.TestCase):
         ):
             self.assertIn(token, RUNNER)
         self.assertIn("restore_backup_dir.mkdir(parents=True,exist_ok=True)", RUNNER)
-        self.assertIn("shutil.copy2(artifact,restore_backup_dir/artifact.name)", RUNNER)
+        self.assertIn("copied=restore_backup_dir/artifact.name", RUNNER)
+        self.assertIn("copy_hashes_verified", RUNNER)
         self.assertIn("input_text=restore_payload", RUNNER)
         self.assertIn("ROOT/'product/restore.py'", RUNNER)
         self.assertNotIn("'--with-public-files'", RUNNER)
