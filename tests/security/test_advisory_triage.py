@@ -60,7 +60,14 @@ class AdvisoryTriageTests(unittest.TestCase):
         self.assertEqual(pres["untriaged"], [], "python advisories did not all resolve")
         # Not closed: GHSA-vhrc (BLOCKED, ERRATUM E6) and every BROWSER_SELF_DENIAL record
         # (owner decision OD-2026-10-18-A). Nothing else may be open.
-        open_findings = [f for f in nres["findings"] + pres["findings"] if not f["pass"]]
+        # Owner-accepted residuals (OWNER_ACCEPTED_RISK, OD-2026-10-20-A and OD-2026-10-19-B) are visible
+        # but are not "open" for the gate. Everything else that is not closed is open.
+        accepted_findings = [f for f in nres["findings"] + pres["findings"]
+                             if f["disposition"] == "OWNER_ACCEPTED_RISK"]
+        self.assertEqual(sorted(f["id"] for f in accepted_findings),
+                         ["GHSA-cp6q-959q-f8rh", "GHSA-rmmh-p597-ppvv"])
+        open_findings = [f for f in nres["findings"] + pres["findings"]
+                         if not f["pass"] and f["disposition"] != "OWNER_ACCEPTED_RISK"]
         self.assertIn("GHSA-vhrc-hgrq-x75r", [f["id"] for f in open_findings])
         self.assertTrue(all(f["disposition"] in OWNER_OPEN | {"BLOCKED"} for f in open_findings),
                         [(f["id"], f["disposition"]) for f in open_findings])

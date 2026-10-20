@@ -197,6 +197,45 @@ def disposition_for_finding(triage: dict[str, Any], *, package: str,
     return None
 
 
+# Owner-accepted residual risks. Each entry is one (package, advisory id) pair and the owner decision that
+# authorizes it. The override applies only when that decision exists in docs/owner-decisions.json and says ACCEPT.
+# The finding stays visible and is reported as OWNER_ACCEPTED_RISK. It is NOT closed and NOT fixed; the reason
+# is a residual the owner accepted. The 2026-09-23 register is never edited.
+ACCEPTED_DISPOSITION = "OWNER_ACCEPTED_RISK"
+OWNER_ACCEPTED_RISKS: dict[tuple[str, str], str] = {
+    # showdown <=2.1.0 ReDoS. No patched version. Compensating control: input cap (secure_markdown.py).
+    ("showdown", "GHSARMMHP597PPVV"): "OD-2026-10-20-A",
+    # @tiptap/core 2.27.3 mergeAttributes prototype issue. Fixed only in 3.30.4 (major upgrade, not taken).
+    ("@tiptap/core", "GHSACP6Q959QF8RH"): "OD-2026-10-19-B",
+}
+OWNER_DECISIONS_PATH = Path(__file__).resolve().parents[2] / "docs/owner-decisions.json"
+
+
+def _owner_accepts(decision_id: str) -> bool:
+    try:
+        decisions = json.loads(OWNER_DECISIONS_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    for entry in decisions.get("domain_gate_decisions", []):
+        if entry.get("id") == decision_id:
+            return "ACCEPT" in str(entry.get("decision", "")).upper()
+    return False
+
+
+def owner_accepted_override(rec: dict[str, Any], package: str) -> dict[str, Any]:
+    """Return rec unchanged, or a copy marked OWNER_ACCEPTED_RISK for an authorized pair only."""
+    if rec.get("runtime_disposition") not in OWNER_OPEN_DISPOSITIONS:
+        return rec
+    key = (_package_basename(package), _norm(rec.get("id")))
+    decision = OWNER_ACCEPTED_RISKS.get(key)
+    if not decision or not _owner_accepts(decision):
+        return rec
+    return {**rec, "runtime_disposition": ACCEPTED_DISPOSITION,
+            "runtime_disposition_evidence": (
+                f"Owner-accepted residual risk under {decision}. Register record (immutable) still reads "
+                f"{rec.get('runtime_disposition')}. Not closed, not fixed. " + str(rec.get("runtime_disposition_evidence") or ""))}
+
+
 def triage_npm(advisories: dict, triage: dict[str, Any] | None = None) -> dict:
     """Apply triage to a raw npm advisory response.
 
@@ -208,6 +247,7 @@ def triage_npm(advisories: dict, triage: dict[str, Any] | None = None) -> dict:
     findings: list[dict] = []
     untriaged: list[dict] = []
     closed = 0
+    accepted = 0
     for pkg, matches in (advisories or {}).items():
         for adv in matches:
             ids = [str(adv.get("id"))]
@@ -217,6 +257,8 @@ def triage_npm(advisories: dict, triage: dict[str, Any] | None = None) -> dict:
             ids.extend(_extract_ids(title))
             rec = disposition_for_finding(triage, package=pkg, advisories=ids,
                                           finding_id=str(adv.get("id")))
+            if rec is not None:
+                rec = owner_accepted_override(rec, pkg)
             out = {"package": pkg, "id": adv.get("id"), "url": url,
                    "title": title, "severity": adv.get("severity")}
             if rec is None:
@@ -229,10 +271,12 @@ def triage_npm(advisories: dict, triage: dict[str, Any] | None = None) -> dict:
                 out["pass"] = rec["runtime_disposition"] in CLOSED_DISPOSITIONS
                 if out["pass"]:
                     closed += 1
+                elif rec["runtime_disposition"] == ACCEPTED_DISPOSITION:
+                    accepted += 1
             findings.append(out)
     return {"findings": findings, "untriaged": untriaged,
-            "closed": closed,
-            "open": len(findings) - closed}
+            "closed": closed, "accepted": accepted,
+            "open": len(findings) - closed - accepted}
 
 
 def triage_python(findings: list[dict], triage: dict[str, Any] | None = None) -> dict:
@@ -244,6 +288,7 @@ def triage_python(findings: list[dict], triage: dict[str, Any] | None = None) ->
     out_findings: list[dict] = []
     untriaged: list[dict] = []
     closed = 0
+    accepted = 0
     for f in findings or []:
         if not isinstance(f, dict):
             continue
@@ -254,6 +299,8 @@ def triage_python(findings: list[dict], triage: dict[str, Any] | None = None) ->
             triage, package="py:" + pkg,
             advisories=[str(x) for x in ids if x],
             finding_id=f.get("id"))
+        if rec is not None:
+            rec = owner_accepted_override(rec, "py:" + pkg)
         out = {"package": pkg, "id": f.get("id"), "version": f.get("version"),
                "aliases": f.get("aliases", []), "summary": f.get("summary")}
         if rec is None:
@@ -266,10 +313,12 @@ def triage_python(findings: list[dict], triage: dict[str, Any] | None = None) ->
             out["pass"] = rec["runtime_disposition"] in CLOSED_DISPOSITIONS
             if out["pass"]:
                 closed += 1
+            elif rec["runtime_disposition"] == ACCEPTED_DISPOSITION:
+                accepted += 1
         out_findings.append(out)
     return {"findings": out_findings, "untriaged": untriaged,
-            "closed": closed,
-            "open": len(out_findings) - closed}
+            "closed": closed, "accepted": accepted,
+            "open": len(out_findings) - closed - accepted}
 
 
 def overall_status(*, npm_result: dict | None = None,

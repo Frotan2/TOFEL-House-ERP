@@ -110,7 +110,11 @@ class ReplaySnapshotTests(unittest.TestCase):
         self.assertEqual(npm_result["untriaged"], [])
         # Exactly one replayed record is open: GHSA-vhrc, withdrawn to BLOCKED by ERRATUM E6.
         # Open = GHSA-VHRC (BLOCKED) plus the BROWSER_SELF_DENIAL records (owner decision OD-2026-10-18-A).
-        open_findings = [f for f in npm_result["findings"] if not f["pass"]]
+        # The two owner-accepted residuals (OWNER_ACCEPTED_RISK, 2026-10-20) are visible but not open.
+        accepted = [f for f in npm_result["findings"] if f["disposition"] == "OWNER_ACCEPTED_RISK"]
+        self.assertEqual(npm_result["accepted"], len(accepted))
+        open_findings = [f for f in npm_result["findings"]
+                         if not f["pass"] and f["disposition"] != "OWNER_ACCEPTED_RISK"]
         self.assertEqual(npm_result["open"], len(open_findings))
         self.assertIn("https://github.com/advisories/GHSA-VHRC-HGRQ-X75R", [f["url"] for f in open_findings])
         self.assertTrue(all(f["disposition"] in {"BLOCKED", "BROWSER_SELF_DENIAL"} for f in open_findings),
