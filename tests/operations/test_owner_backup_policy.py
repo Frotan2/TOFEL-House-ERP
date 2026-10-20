@@ -4,7 +4,7 @@ import base64
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import datetime, time as _clock_time, timedelta
 from pathlib import Path
 import unittest
 from types import SimpleNamespace
@@ -38,6 +38,8 @@ def load_policy_helpers():
     ast.fix_missing_locations(module)
     namespace = {
         "datetime": datetime,
+        "timedelta": timedelta,
+        "_clock_time": _clock_time,
         "base64": base64,
         "hashlib": hashlib,
         "json": json,

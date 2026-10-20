@@ -1435,6 +1435,173 @@ def main():
         check('enrollment-withdrawn-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_withdraw_key_0001',dec6['name']))))
         check('enrollment-rejected-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_reject_key_000001',dec7['name']))))
         check('enrollment-expired-denied',lambda:denied(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('enr_expire_key_000001',dec8['name']))))
+        def policy_authority_matrix():
+            """Owner-only configuration for the eight owner-configurable policies.
+
+            The Course Owner creates one policy shell per policy inside a single
+            savepoint (positive control). Every other actor, including the senior
+            operating roles and the Administrator account, must be refused by the
+            business_policy authority gate for create, version and status. That
+            gate runs before any argument is validated, so the refusal is
+            authorization evidence and not an input error. The savepoint is rolled
+            back, so no synthetic policy outlives this check.
+            """
+            from toefl_house.academic import catalog_linkage as _linkm
+            from toefl_house.admission import policies as _admp
+            from toefl_house.enrollment import exits as _enrx
+            from toefl_house.finance import policies as _billp
+            from toefl_house.operations import owner_configuration as _ocfg
+            from toefl_house.teaching import adjustment_posting as _adjp
+            from toefl_house.teaching import attendance_corrections as _teac
+            from toefl_house.teaching import policies as _teap
+            today_=str(frappe.utils.today())
+            # (label, table, create, set_version, set_status, version_args_after_policy)
+            P=[
+                ('owner_operations','TH Owner Operations Policy',_ocfg.create_owner_operations_policy,
+                 _ocfg.set_owner_operations_policy_version,_ocfg.set_owner_operations_policy_status,
+                 (today_,'SYN refusal probe',1,1,0,0,0,0,0,1,'02:00',1,'Keep','','Custody',1)),
+                ('catalog_linkage','TH Catalog Linkage Policy',_linkm.create_catalog_linkage_policy,
+                 _linkm.set_catalog_linkage_version,_linkm.set_catalog_linkage_status,
+                 (today_,'SYN refusal probe','Advisory')),
+                ('returning_student','TH Returning Student Policy',_admp.create_returning_student_policy,
+                 _admp.set_returning_student_policy_version,_admp.set_returning_student_policy_status,
+                 (today_,'SYN refusal probe','Advisory')),
+                ('enrollment_exit','TH Enrollment Exit Policy',_enrx.create_enrollment_exit_policy,
+                 _enrx.set_enrollment_exit_policy_version,_enrx.set_enrollment_exit_policy_status,
+                 (today_,'SYN refusal probe','Academic Manager','D5-SUPERSESSION:SYNTHETIC-REFUSAL')),
+                ('billing','TH Billing Policy',_billp.create_billing_policy,
+                 _billp.set_billing_policy_version,_billp.set_billing_policy_status,
+                 (today_,'SYN refusal probe',7,7,'released')),
+                ('roster_change','TH Roster Change Policy',_teap.create_roster_change_policy,
+                 _teap.set_roster_change_policy_version,_teap.set_roster_change_policy_status,
+                 (today_,'SYN refusal probe',today_)),
+                ('attendance_correction','TH Attendance Correction Policy',_teac.create_attendance_correction_policy,
+                 _teac.set_attendance_correction_policy_version,_teac.set_attendance_correction_policy_status,
+                 (today_,'SYN refusal probe','Academic Manager',1)),
+                ('adjustment_posting','TH Adjustment Posting Policy',_adjp.create_adjustment_posting_policy,
+                 _adjp.set_adjustment_posting_version,_adjp.set_adjustment_posting_status,
+                 (today_,'SYN refusal probe',0)),
+            ]
+            tables=sorted({row[1] for row in P})
+            before={t:frappe.db.count(t) for t in tables}
+            ACTORS=['general_manager','academic_manager','finance_manager','enrollment_officer',
+                    'finance_officer','teaching_scheduler','attendance_recorder','receptionist',
+                    'teacher_one','outsider','Administrator']
+            def refused(fn):
+                frappe.db.savepoint('pam_deny')
+                try:fn()
+                except frappe.PermissionError as exc:
+                    assert 'Course Owner' in str(exc),str(exc)
+                    return 'PermissionError'
+                else:raise AssertionError('business_policy gate accepted a non-owner')
+                finally:frappe.db.rollback(save_point='pam_deny')
+            frappe.db.savepoint('pam_shell')
+            try:
+                shells={}
+                codes={}
+                frappe.set_user(users['course_owner'])
+                for label,table,create,_setv,_sets,_args in P:
+                    code='SYN-PAM-'+label.upper().replace('_','-')[:20]
+                    shells[label]=create('pam_%s_create_0001'%label[:10],code,'SYN refusal probe','')['name']
+                    codes[label]=code
+                    assert frappe.db.exists(table,shells[label]),(table,shells[label])
+                counts={}
+                for actor in ACTORS:
+                    user='Administrator' if actor=='Administrator' else users[actor]
+                    if actor!='Administrator':
+                        assert 'Course Owner' not in frappe.get_roles(user),(actor,'holds Course Owner')
+                    frappe.set_user(user)
+                    n=0
+                    for label,table,create,setv,sets,args in P:
+                        pol=codes[label]
+                        assert refused(lambda:create('pam_%s_deny_%s'%(actor[:6],label[:6]),'SYN-PAM-DENY-'+label.upper().replace('_','-')[:16],'SYN refusal probe',''))=='PermissionError'
+                        assert refused(lambda:setv('pam_%s_vdeny_%s'%(actor[:5],label[:5]),pol,*args))=='PermissionError'
+                        assert refused(lambda:sets('pam_%s_sdeny_%s'%(actor[:5],label[:5]),pol,0))=='PermissionError'
+                        n+=3
+                    counts[actor]=n
+                frappe.set_user(users['course_owner'])
+                for t in tables:
+                    assert frappe.db.count(t)==before[t]+sum(1 for r in P if r[1]==t),(t,before[t],frappe.db.count(t))
+            finally:
+                frappe.db.rollback(save_point='pam_shell')
+                frappe.set_user('Administrator')
+            for t in tables:
+                assert frappe.db.count(t)==before[t],('shell leaked',t,before[t],frappe.db.count(t))
+            assert all(v==24 for v in counts.values()),counts
+            return {'policies':[r[0] for r in P],'actors':ACTORS,'refusals_per_actor':24,'refused_total':24*len(ACTORS)}
+        check('policy-owner-only-authority-matrix',policy_authority_matrix)
+
+        def owner_operations_lifecycle():
+            """Owner Operations Policy: validated-snapshot gate and fail-closed off-switch.
+
+            Runs in one savepoint as the Course Owner. A saved but unvalidated
+            version must not resolve as live policy; validation makes it live; an
+            invalid version is refused and leaves the version table unchanged;
+            retiring the policy fails closed again. Each command leaves a receipt.
+            """
+            from toefl_house.operations import owner_configuration as _ocfg
+            order=['reporting_review_days','capacity_target','tax_enabled','tax_rate','tax_inclusive',
+                   'transfer_allowed','withdrawal_allowed','calendar_notice_days','backup_schedule_time',
+                   'backup_retention_versions','backup_retention_behavior','backup_recovery_public_key',
+                   'custody_requirement','recovery_quorum']
+            key_block='-----BEGIN PGP PUBLIC KEY BLOCK-----\nSYNTHETIC-RUNTIME-PROBE-NOT-A-KEY\n-----END PGP PUBLIC KEY BLOCK-----'
+            good=dict(reporting_review_days=30,capacity_target=12,tax_enabled=0,tax_rate=0,tax_inclusive=0,
+                      transfer_allowed=0,withdrawal_allowed=0,calendar_notice_days=14,
+                      backup_schedule_time='02:30',backup_retention_versions=7,
+                      backup_retention_behavior=_ocfg.RETENTION_DELETE_BEYOND_KEEP,
+                      backup_recovery_public_key=key_block,custody_requirement='SYN custody probe',recovery_quorum=2)
+            code='SYN-OPS-PROBE'
+            today_=str(frappe.utils.today())
+            VERSIONS='TH Owner Operations Policy Version'
+            def set_version(rk,values):
+                return _ocfg.set_owner_operations_policy_version(rk,code,today_,'SYN owner ops probe',*[values[k] for k in order])
+            def refused_invalid(fn):
+                frappe.db.savepoint('ops_bad')
+                try:fn()
+                except frappe.ValidationError as exc:return str(exc)
+                else:raise AssertionError('invalid owner operations version was accepted')
+                finally:frappe.db.rollback(save_point='ops_bad')
+            frappe.db.savepoint('ops_life')
+            try:
+                frappe.set_user(users['course_owner'])
+                assert _ocfg.governing_owner_operations()=={},'terms resolved with no policy'
+                assert _ocfg.current_backup_policy()['configured'] is False
+                pol=_ocfg.create_owner_operations_policy('ops_life_create_0001',code,'SYN owner ops probe','')
+                assert pol['name'] and pol['version_count']==0,pol
+                assert _ocfg.governing_owner_operations()=={},'empty policy resolved terms'
+                v1=set_version('ops_life_version_0001',good)
+                assert v1['version_count']==1,v1
+                assert _ocfg.governing_owner_operations()=={},'saved-but-unvalidated version resolved as live policy'
+                assert _ocfg.current_backup_policy()['configured'] is False
+                n_versions=frappe.db.count(VERSIONS)
+                reason=refused_invalid(lambda:set_version('ops_life_bad_000001',dict(good,backup_retention_behavior='Keep forever')))
+                assert 'retention behavior' in reason.lower() or 'backup retention' in reason.lower(),reason
+                reason2=refused_invalid(lambda:set_version('ops_life_bad_000002',dict(good,backup_schedule_time='25:99')))
+                assert 'HH:MM' in reason2,reason2
+                assert frappe.db.count(VERSIONS)==n_versions,'refused version was written'
+                val=_ocfg.validate_owner_operations_policy('ops_life_validate_01',code)
+                assert val['version_count']==1 and val['status']=='Active',val
+                live=_ocfg.governing_owner_operations()
+                # governing terms carry the database value (a timedelta); normalize as the consumer does
+                assert live and _ocfg._backup_schedule_time(live['backup_schedule_time'])=='02:30',live
+                cur=_ocfg.current_backup_policy()
+                assert cur['configured'] is True and cur['status']=='CONFIGURED',cur
+                assert cur['schedule_time']=='02:30' and cur['retention_versions']==7,cur
+                assert cur['retention_behavior']==_ocfg.RETENTION_DELETE_BEYOND_KEEP,cur
+                off=_ocfg.set_owner_operations_policy_status('ops_life_retire_0001',code,0)
+                assert off['status']=='Retired',off
+                assert _ocfg.governing_owner_operations()=={},'retired policy still resolves terms'
+                assert _ocfg.current_backup_policy()['configured'] is False
+                kinds=set(frappe.db.get_all('TH Configuration Operation',filters={'actor':users['course_owner']},pluck='kind'))
+                need={'create_owner_operations_policy','set_owner_operations_policy_version',
+                      'validate_owner_operations_policy','set_owner_operations_policy_status'}
+                assert need<=kinds,sorted(kinds)
+                return {'policy':pol['name'],'versions_written':1,'refused_invalid':2,
+                        'receipts':sorted(need)}
+            finally:
+                frappe.db.rollback(save_point='ops_life')
+                frappe.set_user('Administrator')
+        check('owner-operations-lifecycle-validated-gate-off-switch',owner_operations_lifecycle)
         from toefl_house.academic import catalog_linkage as linkm
         check('enrollment-linkage-unconfigured-denied',lambda:unavailable(lambda:as_user('enrollment_officer',lambda:enr.enroll_in_program('s12_nopolicy_0000001',dec['name'])),'No active catalog linkage policy'))
         def linkage_fixture():
