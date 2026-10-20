@@ -131,6 +131,9 @@ class NativeRestartWiringTests(unittest.TestCase):
         self.assertIn("placement-restore.localhost", text)
         self.assertIn("verify-product-restore-after-service-restart", text)
         self.assertIn("source_backup_hashes_unchanged", text)
+        self.assertIn("shutil.disk_usage(restore_backup_dir).free", text)
+        self.assertIn("copy_hashes_verified", text)
+        self.assertIn("Isolated restore artifact copy failed size/hash verification", text)
         self.assertIn("urllib.request.urlopen", text)
 
     def test_all_eight_policy_resolvers_are_compared_across_restart(self):
