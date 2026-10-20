@@ -1,11 +1,11 @@
 # Release status (2026-10-20)
 
-**Status: NOT DELIVERED.** `main` is the single release line and every automated gate is green. Four required items are not verified: a per-policy runtime matrix, the Windows lifecycle, the owner's backup destination, and the Microsoft live sign-in. The product is not yet ready for daily use.
+> **Current-state note (2026-10-20):** `main` is now at `d999ca9` (PR #30 merged; commit `969e93b` content). All four CI gates are **green on the exact final commit**: Native lifecycle integration `39437595961`, Product image `39437590114`, Owned suite `39437590101`, Foundation runtime `39402382165`. Local unit suite 1493 tests OK; ruff clean. The native-lifecycle restart-persistence defect is fixed. This document below is a **historical snapshot** referencing pre-merge commits (`bae5def`, PR #21); the authoritative current report is `docs/engineering/RELEASE-ACCEPTANCE.md`. Engineering-complete and CI-qualified; **owner/deployment-verified: NO** — see the owner-only actions in the acceptance report.
 
 ## Final release
 
-- `main`: `bae5def` (merge of PR #21 from `arena/dff19152-tofel-house-erp`, head `3748017`). The merge tree equals the tested head (zero diff).
-- PR #21 merged 2026-10-20T07:51:07Z.
+- `main`: `d999ca9` (merge of PR #30 from `arena/6fb481a1-tofel-house-erp`). Content head `969e93b`. All four CI gates green on the exact final commit.
+- PR #30 merged 2026-10-20. PR #29 closed as superseded.
 
 ## CI on `main` (`bae5def`)
 
