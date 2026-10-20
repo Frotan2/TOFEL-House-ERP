@@ -118,10 +118,9 @@ class NativeRestoreRehearsalTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "File URL"):
             RUNTIME_RESTORE._verify(self.frappe, self._expected())
 
-    def test_verifier_rejects_changed_filesystem_permissions(self):
+    def test_verifier_rejects_filesystem_permission_mismatch(self):
         expected = self._expected()
-        original_mode = self.private_path.stat().st_mode & 0o777
-        self.private_path.chmod(original_mode ^ 0o100)
+        expected["files"]["private_file"]["storage"]["mode"] ^= 0o100
         with self.assertRaisesRegex(AssertionError, "size/mode/uid/gid"):
             RUNTIME_RESTORE._verify(self.frappe, expected)
 
