@@ -10,6 +10,8 @@ import shutil
 import signal
 import subprocess
 import time
+import urllib.error
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPORT_BRANCH = 'product-export'
@@ -219,7 +221,26 @@ def main():
         create_site('new-placement-restore-site',restore_site,restorepw)
         restore_backup_dir=benchdir/'sites'/restore_site/'private/backups'
         restore_backup_dir.mkdir(parents=True,exist_ok=True)
-        for artifact in (database,public_files,private_files):shutil.copy2(artifact,restore_backup_dir/artifact.name)
+        source_artifacts=(database,public_files,private_files)
+        source_bytes=sum(artifact.stat().st_size for artifact in source_artifacts)
+        required_free_bytes=max(1024**3,source_bytes*5)
+        free_bytes=shutil.disk_usage(restore_backup_dir).free
+        if free_bytes < required_free_bytes:
+            raise RuntimeError('Insufficient free space for isolated restore rehearsal; target was not populated')
+        for artifact in source_artifacts:
+            copied=restore_backup_dir/artifact.name
+            shutil.copy2(artifact,copied)
+            source_hash=hashlib.sha256(artifact.read_bytes()).hexdigest()
+            copied_hash=hashlib.sha256(copied.read_bytes()).hexdigest()
+            if copied.stat().st_size != artifact.stat().st_size or copied_hash != source_hash:
+                raise RuntimeError('Isolated restore artifact copy failed size/hash verification')
+        report['restore_preflight']={
+            'target_site':restore_site,
+            'source_artifact_bytes':source_bytes,
+            'free_bytes_before_copy':free_bytes,
+            'required_free_bytes':required_free_bytes,
+            'copy_hashes_verified':True,
+        }
         for name in ('erpnext','education','payments','hrms','foundation_security','toefl_house'):bench('install-'+restore_site+'-'+name,'--site',restore_site,'install-app',name)
         for key in ('allow_tests','toefl_house_synthetic_only','disable_website_cache'):bench('enable-'+restore_site+'-'+key,'--site',restore_site,'set-config',key,'1','--parse')
         restore_payload=json.dumps({'site':restore_site,'backup_set':backup_set,
@@ -244,6 +265,103 @@ def main():
         product_restore=evidence/'product-restore-result.json';env['PLACEMENT_RESTORE_REPORT']=str(product_restore)
         run('verify-product-restore-snapshot',[benchdir/'env/bin/python',ROOT/'tools/native/runtime_restore.py','verify',restore_site],benchdir/'sites')
         report['product_restore']=json.loads(product_restore.read_text())
+
+        # Native Frappe restore must not alter the preserved source backup set.
+        for label, artifact in (('database', database), ('private_files', private_files),
+                                ('public_files', public_files)):
+            actual_hash = hashlib.sha256(artifact.read_bytes()).hexdigest()
+            expected_hash = report['product_backup'][label]['sha256']
+            if actual_hash != expected_hash:
+                raise RuntimeError(f'Native restore modified the preserved source {label} backup')
+
+        # Capture all eight owner-policy records and live resolver outputs on
+        # the disposable restore target. Owner Operations gets a synthetic,
+        # validated public-key policy here (after the backup exercise) so it
+        # cannot affect the backup key/custody path used above.
+        policy_expectation = lab/'policy-restart-expectation.json'
+        env['PLACEMENT_POLICY_RESTART_EXPECTATION'] = str(policy_expectation)
+        run('capture-policy-resolvers-before-service-restart',
+            [benchdir/'env/bin/python', ROOT/'tools/native/policy_restart_check.py',
+             'capture', restore_site], benchdir/'sites')
+
+        # A direct Python verifier is not enough: restart the actual web service,
+        # route a request to the distinct restore site, and repeat the integrity
+        # checks after the service restart.
+        old_server, old_stream, old_log = processes.pop()
+        try:
+            os.killpg(old_server.pid, signal.SIGTERM)
+            old_server.wait(timeout=20)
+        except ProcessLookupError:
+            pass
+        except subprocess.TimeoutExpired:
+            os.killpg(old_server.pid, signal.SIGKILL)
+            old_server.wait(timeout=10)
+        old_stream.close()
+        (evidence/'gunicorn-before-restore-restart.txt').write_text(redact(old_log.read_text()))
+        restart_log = lab/'gunicorn-after-restore-restart.log'
+        restart_stream = restart_log.open('w')
+        server = subprocess.Popen(
+            [str(benchdir/'env/bin/gunicorn'), '--bind', '127.0.0.1:18000',
+             '--workers', '2', 'frappe.app:application'],
+            cwd=benchdir/'sites', env=env, stdout=restart_stream,
+            stderr=subprocess.STDOUT, start_new_session=True)
+        processes.append((server, restart_stream, restart_log))
+        response_status = None
+        last_http_error = None
+        for _ in range(60):
+            try:
+                # The site root is served by Frappe for the Host-resolved site
+                # once gunicorn is back; it needs no whitelisted API method and
+                # no session, unlike frappe.auth.get_logged_user (403: not
+                # whitelisted). urlopen follows the / -> /login redirect.
+                request = urllib.request.Request(
+                    'http://127.0.0.1:18000/', headers={'Host': restore_site})
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    response_status = response.status
+                    if response_status == 200:
+                        break
+                    last_http_error = f'HTTP {response_status}'
+            except urllib.error.HTTPError as exc:
+                body = exc.read(1000).decode('utf-8', errors='replace').replace('\\n', ' ')[:300]
+                last_http_error = f'HTTP {exc.code}: {body}'
+                if exc.code < 500:
+                    break
+            except (OSError, urllib.error.URLError) as exc:
+                last_http_error = type(exc).__name__
+            time.sleep(2)
+        if response_status != 200:
+            try:
+                restart_stream.flush()
+                restart_tail = redact(restart_log.read_text(errors='replace')[-2500:])
+            except OSError:
+                restart_tail = '[restart log unavailable]'
+            raise RuntimeError(
+                'Restored site did not answer its health request after web-service restart: '
+                + str(last_http_error) + '\\n--- restarted Gunicorn log tail ---\\n' + restart_tail)
+        restarted_restore = evidence/'product-restore-after-restart.json'
+        env['PLACEMENT_RESTORE_REPORT'] = str(restarted_restore)
+        run('verify-product-restore-after-service-restart',
+            [benchdir/'env/bin/python', ROOT/'tools/native/runtime_restore.py',
+             'verify', restore_site], benchdir/'sites')
+        report['product_restore_after_restart'] = json.loads(restarted_restore.read_text())
+        run('verify-policy-resolvers-after-service-restart',
+            [benchdir/'env/bin/python', ROOT/'tools/native/policy_restart_check.py',
+             'verify', restore_site], benchdir/'sites')
+        report['policy_restart_check'] = {
+            'status': 'pass',
+            'policy_resolvers': [
+                'catalog_linkage', 'returning_student', 'enrollment_exit', 'billing',
+                'roster_change', 'attendance_correction', 'adjustment_posting',
+                'owner_operations',
+            ],
+            'owner_operations_backup_consumer_verified': True,
+        }
+        report['product_restore_restart'] = {
+            'web_service_restarted': True,
+            'restore_site_http_status': response_status,
+            'source_backup_hashes_unchanged': True,
+            'target_site': restore_site,
+        }
         report['runtime_complete']=True
         report['installed_apps']=bench('list-apps','--site','placement-test.localhost','list-apps','--format','json')
         for name in ('frappe','erpnext','education','payments','hrms'):
