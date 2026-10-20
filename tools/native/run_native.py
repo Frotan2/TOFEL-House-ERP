@@ -318,13 +318,23 @@ def main():
                     if response_status == 200:
                         break
                     last_http_error = f'HTTP {response_status}'
+            except urllib.error.HTTPError as exc:
+                body = exc.read(1000).decode('utf-8', errors='replace').replace('\\n', ' ')[:300]
+                last_http_error = f'HTTP {exc.code}: {body}'
+                if exc.code < 500:
+                    break
             except (OSError, urllib.error.URLError) as exc:
                 last_http_error = type(exc).__name__
             time.sleep(2)
         if response_status != 200:
+            try:
+                restart_stream.flush()
+                restart_tail = redact(restart_log.read_text(errors='replace')[-2500:])
+            except OSError:
+                restart_tail = '[restart log unavailable]'
             raise RuntimeError(
                 'Restored site did not answer its health request after web-service restart: '
-                + str(last_http_error))
+                + str(last_http_error) + '\\n--- restarted Gunicorn log tail ---\\n' + restart_tail)
         restarted_restore = evidence/'product-restore-after-restart.json'
         env['PLACEMENT_RESTORE_REPORT'] = str(restarted_restore)
         run('verify-product-restore-after-service-restart',
