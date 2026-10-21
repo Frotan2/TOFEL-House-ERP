@@ -516,3 +516,18 @@ against Frappe v16.33.1 source (`frappe/model/sync.py::remove_orphan_doctypes`) 
 and 600+ synthetic scenarios in 11m29s with 0 errors. Owned suite run `35317973780` passed
 in 20s.
 
+
+## Discount scope and full waivers (2026-10-21)
+
+Ordinary discounts may be at most 50%. Full 100% waivers are distinct exceptional
+Course Owner decisions: an active full-waiver rule must name exactly one native
+Student and provide a meaningful Owner reason. Retired historical rules can
+still be retired, while broad historical full-waiver rules are **never** applied
+when issuing new tuition fees. Rules may optionally target one specific Student.
+
+A TH Discount Rule program scope points to the TH Academic Program **family**.
+Tuition billing first resolves the native enrolled level's family; an unknown
+family never matches a family-scoped discount. The single-best-rule/no-stacking
+policy remains unchanged. Named-student authorization and recorded reason do
+not independently verify family/employee eligibility; the institution must
+verify supporting evidence before the Course Owner approves a 100% waiver.

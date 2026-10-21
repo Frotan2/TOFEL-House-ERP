@@ -54,7 +54,7 @@ FEE_PLAN_FIELDS = ["name", "program", "academic_year", "company",
                    "receivable_account", "docstatus", "total_amount"]
 FEE_ROW_FIELDS = ["name", "parent", "parenttype", "fees_category", "amount", "idx"]
 DISCOUNT_RULE_FIELDS = ["name", "code", "title", "discount_percentage", "precedence",
-                        "status", "fee_category", "program", "description", "modified",
+                        "status", "fee_category", "program", "student", "description", "modified",
                         "modified_by"]
 ASSESSMENT_POLICY_FIELDS = ["name", "family", "code", "title", "status",
                             "description", "modified"]
@@ -479,6 +479,10 @@ def work():
             scope_bits.append(f"Fee: {rule['fee_category']}")
         if rule.get("program"):
             scope_bits.append(f"Program: {rule['program']}")
+        if rule.get("student"):
+            scope_bits.append(f"Student: {rule['student']}")
+        if float(rule.get("discount_percentage") or 0) == 100 and not rule.get("student"):
+            scope_bits.append("BLOCKED: historic unrestricted full waiver")
         scope_label = " · ".join(scope_bits) if scope_bits else "Institution-wide"
         changed_by = rule.get("modified_by") or ""
         item = {
