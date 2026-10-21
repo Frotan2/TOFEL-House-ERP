@@ -88,3 +88,4 @@ jobs:
           & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File 'product/windows/Verify Package Image.ps1' -Archive $tar -Checksum $sha
           if ($LASTEXITCODE -eq 0) { throw "Tampered image was accepted." }
           Write-Host "Package allowlist, valid checksum and corruption rejection passed."
+          exit 0
