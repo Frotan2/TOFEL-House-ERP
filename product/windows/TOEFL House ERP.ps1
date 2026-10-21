@@ -1,3 +1,4 @@
+param([switch]$SmokeTest)
 # TOEFL House ERP - Windows graphical launcher.
 # A customer uses the root .vbs shortcut; no console, Git or typed commands.
 # Supports Windows PowerShell 5.1 and the existing guarded CMD lifecycle.
@@ -215,6 +216,14 @@ $form.Add_FormClosing({
         }
     }
 })
+if ($SmokeTest) {
+    if ($install.Text -ne "Install" -or $open.Text -ne "Open / Start" -or
+        $repair.Text -ne "Repair" -or $stop.Text -ne "Stop") {
+        throw "Graphical lifecycle actions were not initialized."
+    }
+    Write-Host "Windows GUI controls initialized without displaying a desktop window."
+    exit 0
+}
 Set-Busy $false
 $timer.Start()
 [void]$form.ShowDialog()
