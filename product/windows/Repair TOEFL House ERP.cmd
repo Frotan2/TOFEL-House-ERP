@@ -23,11 +23,12 @@ if exist "release\toefl-house-erp-app.tar" goto :packageimage
 echo  Checking product source line endings before repair...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Normalize Product Sources.ps1"
 set "NORMALIZE_STATUS=%ERRORLEVEL%"
-if "%NORMALIZE_STATUS%"=="0" goto :checkimage
+if "%NORMALIZE_STATUS%"=="0" goto :rebuildimage
 if "%NORMALIZE_STATUS%"=="10" goto :rebuildimage
 goto :sourcefailed
-:checkimage
-echo [TH_STAGE] Rebuilding from current source to repair outdated or broken application images...
+:rebuildimage
+rem Rebuild even when the prior image has an LF label: source code may be newer.
+echo [TH_STAGE] Rebuilding the application from current source for repair...
 docker compose build
 if errorlevel 1 goto :failed
 goto :sourcesready
@@ -35,16 +36,12 @@ goto :sourcesready
 echo [TH_STAGE] Verifying the packaged application image...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1"
 if errorlevel 1 goto :failed
-echo [TH_STAGE] Reloading the verified packaged image for safe repair...
+echo [TH_STAGE] Loading the verified application image for repair...
 docker load -i "release\toefl-house-erp-app.tar"
 if errorlevel 1 goto :failed
 docker image inspect toefl-house-erp-app:local >nul 2>nul
 if errorlevel 1 goto :failed
-:sourcesready
-:rebuildimage
-echo  Source endings changed or the installed image lacks the LF contract; rebuilding safely.
-docker compose build
-if errorlevel 1 goto :failed
+goto :sourcesready
 :sourcesready
 echo [TH_STAGE] Restarting application services without removing database volumes...
 docker compose down
