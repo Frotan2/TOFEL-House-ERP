@@ -54,6 +54,14 @@ jobs:
             > "%~3" echo SYNTHETIC_IMAGE_FOR_TESTING
             exit /b 0
           )
+          if "%~1"=="volume" exit /b 0
+          if "%~1"=="load" exit /b 0
+          if "%~1"=="compose" exit /b 0
+          if "%~1"=="inspect" (
+            if "%~3"=="{{.State.Status}}" echo running & exit /b 0
+            echo healthy
+            exit /b 0
+          )
           exit /b 1
           '@
           [System.IO.File]::WriteAllText((Join-Path $fakeDir 'docker.cmd'), $fakeDocker)
@@ -80,6 +88,24 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
             throw "Customer package included private application data."
           }
+          # Exercise the customer-facing CMD paths without real Docker or databases.
+          $fakeCurl = "@echo off" + [Environment]::NewLine + "exit /b 0" + [Environment]::NewLine
+          [System.IO.File]::WriteAllText((Join-Path $fakeDir 'curl.cmd'), $fakeCurl)
+          $env:TH_GUI_MODE = '1'
+          foreach ($task in @('Install', 'Start', 'Stop', 'Repair')) {
+            $script = Join-Path $kit ("product/windows/" + $task + " TOEFL House ERP.cmd")
+            $output = @(& $script 2>&1)
+            if ($LASTEXITCODE -ne 0) {
+              throw ("Headless " + $task + " failed: " + ($output | Out-String))
+            }
+            if (($output | Out-String) -match 'Username: Administrator|Password: ') {
+              throw "Headless execution leaked the initial Administrator credentials."
+            }
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $kit 'product/data/secrets/db.env') -PathType Leaf)) {
+            throw "Headless synthetic install did not generate its local credential file."
+          }
+          Write-Host "Headless installer, start, stop and repair routes passed with fake Docker."
           $tar = Join-Path $kit 'product/release/toefl-house-erp-app.tar'
           $sha = "$tar.sha256"
           & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File 'product/windows/Verify Package Image.ps1' -Archive $tar -Checksum $sha
