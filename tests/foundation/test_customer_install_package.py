@@ -49,6 +49,13 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("Request a complete package from your provider", GUI)
         self.assertIn("if ($answer -ne [System.Windows.Forms.DialogResult]::Yes)", GUI)
 
+    def test_customer_can_open_error_diagnostics_without_terminal(self):
+        self.assertIn("View Details", GUI)
+        self.assertIn("$script:stdoutPath", GUI)
+        self.assertIn("$script:stderrPath", GUI)
+        self.assertIn("$errorLog.Length -gt 0", GUI)
+        self.assertIn('Start-Process -FilePath "notepad.exe"', GUI)
+
     def test_headless_wrapper_never_pauses_or_echoes_first_run_password(self):
         for label, script in (
             ("install", INSTALL), ("repair", REPAIR),
