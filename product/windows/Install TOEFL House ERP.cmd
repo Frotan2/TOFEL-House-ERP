@@ -52,6 +52,7 @@ echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :dockerup
 
+if exist "release\toefl-house-erp-app.tar" goto :sourcesready
 echo  Checking product source line endings before the image build...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Normalize Product Sources.ps1"
 set "NORMALIZE_STATUS=%ERRORLEVEL%"
@@ -89,14 +90,32 @@ if not defined DBPW goto :failed
 attrib +h data\secrets >nul 2>nul
 
 echo.
-echo  Building TOEFL House ERP for the first time. Please keep this window open.
+if exist "release\toefl-house-erp-app.tar" goto :packagedimage
+goto :sourcebuild
+:packagedimage
+echo [TH_STAGE] Verifying the supplied application image...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1"
+if errorlevel 1 goto :failed
+echo [TH_STAGE] Loading the ready-to-run application. This can take several minutes.
+docker load -i "release\toefl-house-erp-app.tar"
+if errorlevel 1 goto :failed
+docker image inspect toefl-house-erp-app:local >nul 2>nul
+if errorlevel 1 goto :failed
+echo [TH_STAGE] Starting TOEFL House ERP...
+docker compose up -d --no-build
+if errorlevel 1 goto :failed
+goto :waitboot
+:sourcebuild
+echo [TH_STAGE] Building the application from source. A customer package avoids this long step.
 docker compose build
 if errorlevel 1 goto :failed
-
+echo [TH_STAGE] Starting TOEFL House ERP...
 docker compose up -d
 if errorlevel 1 goto :failed
+:waitboot
 
 echo.
+echo [TH_STAGE] Preparing the first ERP site, database, and services...
 echo  First launch is finishing inside the app - site setup and data install.
 echo  You can watch progress in Docker Desktop, or simply wait for the browser.
 set READY_TRIES=300
@@ -119,6 +138,7 @@ echo  The first run did not finish within 50 minutes.
 goto :failed
 :ready
 
+if defined TH_GUI_MODE goto :nowelcome
 if not exist data\sites\toeflhouse.localhost\private\first-run-credentials.txt goto :nowelcome
 echo.
 echo  --------------------------------------------------------------
@@ -128,30 +148,31 @@ type data\sites\toeflhouse.localhost\private\first-run-credentials.txt
 echo  --------------------------------------------------------------
 :nowelcome
 
-start "" "http://127.0.0.1:8000/"
+echo [TH_STAGE] TOEFL House ERP is ready.
+if not defined TH_GUI_MODE start "" "http://127.0.0.1:8000/"
 echo.
 echo  Install finished. From now on use the "Start TOEFL House ERP" shortcut.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 0
 
 :storagecheckfailed
 echo  Installation stopped safely. Existing data was not changed.
 echo  Recover the original database password file before continuing.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1
 
 :secretaclfailed
 echo.
 echo  Windows could not restrict access to the local secrets and activation receipt folders.
 echo  No database password was generated. Check this account's local permissions and try again.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1
 
 :sourcefailed
 echo.
 echo  Product source files could not be safely normalized. No product data was changed.
 echo  Send a photo of this window and the product source folder to support.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1
 
 :failed
@@ -168,5 +189,5 @@ echo  photo of this window plus the data\logs folder to TOEFL House
 echo  support.
 echo  ------------------------------------------------------------------
 :pause
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1

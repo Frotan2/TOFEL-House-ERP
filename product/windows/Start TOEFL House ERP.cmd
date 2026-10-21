@@ -27,7 +27,7 @@ if not exist data\secrets\db.env goto :nosecret
 if not exist data\activation mkdir data\activation
 icacls data\activation /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
 if errorlevel 1 goto :failed
-echo  Starting TOEFL House ERP...
+echo [TH_STAGE] Starting the installed TOEFL House ERP...
 docker compose up -d --no-build
 if errorlevel 1 goto :failed
 echo  Waiting until TOEFL House ERP answers...
@@ -48,9 +48,10 @@ if READY_TRIES GTR 0 goto :waitready
 echo  TOEFL House ERP services did not all become ready within 10 minutes.
 goto :failed
 :ready
-start "" "http://127.0.0.1:8000/"
+echo [TH_STAGE] TOEFL House ERP is ready.
+if not defined TH_GUI_MODE start "" "http://127.0.0.1:8000/"
 echo  TOEFL House ERP is open in your browser. You may close this window.
-timeout /t 6 >nul
+if not defined TH_GUI_MODE timeout /t 6 >nul
 exit /b 0
 :nosecret
 docker volume inspect toefl-house-erp_db-data >nul 2>nul
@@ -60,13 +61,13 @@ echo  on this PC.
 echo  Do NOT run the installer: it would write a new password that does not
 echo  match the existing database. Contact TOEFL House support, or restore
 echo  from your last backup.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1
 :nosecretfresh
 echo  The database password file is missing.
 echo  Double-click "Install TOEFL House ERP.cmd" to create it. No database
 echo  exists yet, so the installer only creates the missing file.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1
 :failed
 echo.
@@ -90,5 +91,5 @@ echo.
 echo  In all of these cases: double-click "Repair TOEFL House ERP.cmd" and wait.
 echo  If the same problem repeats, send a photo of this window plus the
 echo  data\logs folder to TOEFL House support.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1

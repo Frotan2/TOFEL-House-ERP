@@ -1,0 +1,90 @@
+name: Windows customer package smoke
+
+on:
+  push:
+    paths:
+      - "TOEFL House ERP.vbs"
+      - "product/windows/**"
+      - "tests/foundation/test_customer_install_package.py"
+      - ".github/workflows/windows-customer-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  customer-package:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Parse all customer PowerShell launchers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $paths = @(
+            'product/windows/TOEFL House ERP.ps1',
+            'product/windows/Run TOEFL House ERP.ps1',
+            'product/windows/Verify Package Image.ps1',
+            'product/windows/Prepare Customer Package.ps1',
+            'product/windows/Test Fresh Installation.ps1'
+          )
+          foreach ($path in $paths) {
+            $tokens = $null
+            $problems = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $env:GITHUB_WORKSPACE $path), [ref]$tokens, [ref]$problems)
+            if ($problems.Count -gt 0) {
+              throw ("PowerShell syntax error in " + $path + ": " + ($problems | Out-String))
+            }
+          }
+          Write-Host "Customer PowerShell scripts parsed successfully."
+      - name: Exercise clean offline package with a synthetic image
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fakeDir = Join-Path $env:RUNNER_TEMP "Fake Docker"
+          New-Item -ItemType Directory -Path $fakeDir -Force | Out-Null
+          $fakeDocker = @'
+          @echo off
+          if "%~1"=="info" exit /b 0
+          if "%~1"=="image" echo {"org.toefl-house.source-eol":"lf-v1"} & exit /b 0
+          if "%~1"=="save" (
+            > "%~3" echo SYNTHETIC_IMAGE_FOR_TESTING
+            exit /b 0
+          )
+          exit /b 1
+          '@
+          [System.IO.File]::WriteAllText((Join-Path $fakeDir 'docker.cmd'), $fakeDocker)
+          $env:PATH = "$fakeDir;$env:PATH"
+          $target = Join-Path $env:RUNNER_TEMP "Customer Kits"
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "product/windows/Prepare Customer Package.ps1" -Destination $target
+          if ($LASTEXITCODE -ne 0) { throw "Synthetic package creation failed." }
+          $kits = @(Get-ChildItem -LiteralPath $target -Directory)
+          if ($kits.Count -ne 1) { throw "Expected exactly one customer package." }
+          $kit = $kits[0].FullName
+          foreach ($relative in @(
+            'TOEFL House ERP.vbs',
+            'product/docker-compose.yml',
+            'product/windows/TOEFL House ERP.ps1',
+            'product/release/toefl-house-erp-app.tar',
+            'product/release/toefl-house-erp-app.tar.sha256',
+            'READ ME FIRST.txt'
+          )) {
+            if (-not (Test-Path -LiteralPath (Join-Path $kit $relative) -PathType Leaf)) {
+              throw "Package missing $relative"
+            }
+          }
+          if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
+            throw "Customer package included private application data."
+          }
+          $tar = Join-Path $kit 'product/release/toefl-house-erp-app.tar'
+          $sha = "$tar.sha256"
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File 'product/windows/Verify Package Image.ps1' -Archive $tar -Checksum $sha
+          if ($LASTEXITCODE -ne 0) { throw "Valid synthetic package was rejected." }
+          Add-Content -LiteralPath $tar -Value 'TAMPERED'
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File 'product/windows/Verify Package Image.ps1' -Archive $tar -Checksum $sha
+          if ($LASTEXITCODE -eq 0) { throw "Tampered image was accepted." }
+          Write-Host "Package allowlist, valid checksum and corruption rejection passed."

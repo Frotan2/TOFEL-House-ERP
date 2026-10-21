@@ -59,6 +59,17 @@ authorization remains **REJECTED**.
 
 ---
 
+### Graphical customer-package path (engineering candidate; NOT a release approval)
+
+For a **fresh** Windows customer machine, the provider may prepare a package
+containing a prebuilt application image (not an existing customer's data).
+The new `TOEFL House ERP.vbs` launches a graphical Install / Open / Stop /
+Repair window. See [Customer delivery](../../docs/CUSTOMER-DELIVERY.md).
+The customer still installs Docker Desktop/WSL 2 using the official installer;
+a clean Windows GUI + real Docker acceptance run is still **UNVERIFIED**.
+The existing preservation/restore hold and production REJECT remain in force.
+Do not distribute the package as an approved product yet.
+
 ## Before you start (once)
 
 1. A 64-bit **Windows 10 or 11** PC with internet and ~30 GB free disk.

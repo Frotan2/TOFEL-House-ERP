@@ -40,6 +40,15 @@ Do not activate real operations based only on unit tests or an image build.
 
 ## Owner: install and daily use (Windows)
 
+**Customer-ready distribution path (engineering candidate):** A provider can now
+prepare a clean image-inclusive folder and customers can use the graphical
+`TOEFL House ERP.vbs` launcher instead of Git or terminal commands. The Docker
+Desktop/WSL prerequisite still requires its own Windows installation, and
+neither the GUI nor the package lifts the current production/backup holds.
+Full preparation, acceptance criteria and limitations:
+[Customer delivery](docs/CUSTOMER-DELIVERY.md). The source-checkout commands
+below are maintained for developers and diagnosis, not commercial onboarding.
+
 You need a 64-bit Windows 10/11 PC with internet and
 [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed
 once. Its installer is click-through.

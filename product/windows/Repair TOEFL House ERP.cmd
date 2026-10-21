@@ -12,13 +12,14 @@ if errorlevel 1 goto :daemondown
 goto :repair
 :daemondown
 echo  Docker Desktop is not running. Please start it, wait a minute, then run this again.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1
 :repair
 if not exist data\secrets\db.env goto :nosecret
 if not exist data\activation mkdir data\activation
 icacls data\activation /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
 if errorlevel 1 goto :failed
+if exist "release\toefl-house-erp-app.tar" goto :packageimage
 echo  Checking product source line endings before repair...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Normalize Product Sources.ps1"
 set "NORMALIZE_STATUS=%ERRORLEVEL%"
@@ -26,19 +27,32 @@ if "%NORMALIZE_STATUS%"=="0" goto :checkimage
 if "%NORMALIZE_STATUS%"=="10" goto :rebuildimage
 goto :sourcefailed
 :checkimage
-docker image inspect toefl-house-erp-app:local --format "{{.Config.Labels}}" 2>nul | findstr /l /c:"org.toefl-house.source-eol:lf-v1" >nul
-if errorlevel 1 goto :rebuildimage
+echo [TH_STAGE] Rebuilding from current source to repair outdated or broken application images...
+docker compose build
+if errorlevel 1 goto :failed
 goto :sourcesready
+:packageimage
+echo [TH_STAGE] Verifying the packaged application image...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1"
+if errorlevel 1 goto :failed
+echo [TH_STAGE] Reloading the verified packaged image for safe repair...
+docker load -i "release\toefl-house-erp-app.tar"
+if errorlevel 1 goto :failed
+docker image inspect toefl-house-erp-app:local >nul 2>nul
+if errorlevel 1 goto :failed
+:sourcesready
 :rebuildimage
 echo  Source endings changed or the installed image lacks the LF contract; rebuilding safely.
 docker compose build
 if errorlevel 1 goto :failed
 :sourcesready
+echo [TH_STAGE] Restarting application services without removing database volumes...
 docker compose down
 docker compose up -d db redis-queue redis-cache
 timeout /t 10 /nobreak >nul
 docker compose up -d --no-build
 if errorlevel 1 goto :failed
+echo [TH_STAGE] Waiting for database and application health checks...
 echo  Waiting until TOEFL House ERP answers after repair...
 set READY_TRIES=300
 :waitready
@@ -58,8 +72,9 @@ echo  TOEFL House ERP services did not all become ready within 50 minutes.
 goto :failed
 :ready
 echo  Repair complete. Starting TOEFL House ERP in your browser...
-start "" "http://127.0.0.1:8000/"
-pause
+echo [TH_STAGE] ERP repair completed successfully.
+if not defined TH_GUI_MODE start "" "http://127.0.0.1:8000/"
+if not defined TH_GUI_MODE pause
 exit /b 0
 :nosecret
 docker volume inspect toefl-house-erp_db-data >nul 2>nul
@@ -69,19 +84,19 @@ echo  on this PC.
 echo  Do NOT run the installer: it would write a new password that does not
 echo  match the existing database. Contact TOEFL House support, or restore
 echo  from your last backup.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1
 :nosecretfresh
 echo  The database password file is missing.
 echo  Double-click "Install TOEFL House ERP.cmd" to create it. No database
 echo  exists yet, so the installer only creates the missing file.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1
 :sourcefailed
 echo.
 echo  Product source files could not be safely normalized. Runtime data was not changed.
 echo  Resolve the source check and run Repair again.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1
 
 :failed
@@ -105,5 +120,5 @@ echo                                         lines above show why it stops.
 echo.
 echo  Try this Repair script once more. If it repeats, contact TOEFL House
 echo  support with a photo of this window plus the contents of the data\logs folder.
-pause
+if not defined TH_GUI_MODE pause
 exit /b 1
