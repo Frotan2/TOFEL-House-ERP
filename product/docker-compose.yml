@@ -19,6 +19,7 @@ services:
   bootstrap:
     image: toefl-house-erp-app:local
     container_name: toefl-house-erp-bootstrap
+    user: root
     depends_on:
       db:
         condition: service_healthy
@@ -28,7 +29,9 @@ services:
         condition: service_healthy
     # The one-shot initializer alone can read the MariaDB root password.
     # Web/worker/scheduler/socketio never receive db.env or the DB root secret.
-    entrypoint: ["python3", "/product/bootstrap.py"]
+    # Runs as root only to chown Windows bind mounts; drops to frappe inside
+    # the entrypoint before any bench/gunicorn work.
+    entrypoint: ["/product/entrypoint.sh", "bootstrap"]
     volumes:
       - ./data/sites:/home/frappe/bench/sites
       - ./data/logs:/home/frappe/bench/logs
@@ -50,6 +53,7 @@ services:
         NODE_TARBALL_SHA256: "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6"
     image: toefl-house-erp-app:local
     container_name: toefl-house-erp-web
+    user: root
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -61,7 +65,9 @@ services:
         condition: service_healthy
     # The bootstrap service completes all privileged initialization before the
     # web process starts; this long-lived service never sees the DB root file.
-    entrypoint: ["/product/entrypoint.sh"]
+    # Runs as root only to chown Windows bind mounts; drops to frappe inside
+    # the entrypoint before any bench/gunicorn work.
+    entrypoint: ["/product/entrypoint.sh", "web"]
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -81,6 +87,7 @@ services:
   worker:
     image: toefl-house-erp-app:local
     container_name: toefl-house-erp-worker
+    user: root
     # Start only after web is healthy (bootstrap and migrations have completed);
     # unless-stopped also recovers the worker after transient service failures.
     depends_on:
@@ -88,8 +95,10 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
-    entrypoint: ["/build/tools/bin/bench"]
-    command: ["worker", "--queue", "short,default,long"]
+    # Runs as root only to chown Windows bind mounts; drops to frappe inside
+    # the entrypoint before any bench work. The full bench command is baked
+    # into the entrypoint; no compose command override is needed.
+    entrypoint: ["/product/entrypoint.sh", "worker"]
     working_dir: /home/frappe/bench
     volumes:
       - ./data/sites:/home/frappe/bench/sites
@@ -99,12 +108,15 @@ services:
   scheduler:
     image: toefl-house-erp-app:local
     container_name: toefl-house-erp-scheduler
+    user: root
     depends_on:
       web:
         condition: service_healthy
       db:
         condition: service_healthy
-    entrypoint: ["/bin/sh", "-c", "exec /build/tools/bin/bench --site toeflhouse.localhost schedule"]
+    # Runs as root only to chown Windows bind mounts; drops to frappe inside
+    # the entrypoint before any bench work.
+    entrypoint: ["/product/entrypoint.sh", "scheduler"]
     working_dir: /home/frappe/bench
     volumes:
       - ./data/sites:/home/frappe/bench/sites
@@ -114,13 +126,15 @@ services:
   socketio:
     image: toefl-house-erp-app:local
     container_name: toefl-house-erp-socketio
+    user: root
     depends_on:
       web:
         condition: service_healthy
       db:
         condition: service_healthy
-    entrypoint: ["node"]
-    command: ["apps/frappe/socketio.js"]
+    # Runs as root only to chown Windows bind mounts; drops to frappe inside
+    # the entrypoint before any node work.
+    entrypoint: ["/product/entrypoint.sh", "socketio"]
     working_dir: /home/frappe/bench
     ports:
       - "127.0.0.1:9000:9000"

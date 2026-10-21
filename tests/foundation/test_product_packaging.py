@@ -943,14 +943,40 @@ class RecoveryContract(unittest.TestCase):
 
 
 class EntrypointContract(unittest.TestCase):
-    def test_one_shot_bootstrap_finishes_before_web_and_root_secret_is_isolated(self):
+    def test_all_app_services_use_the_universal_entrypoint_with_root_init(self):
         compose = COMPOSE.read_text()
+        entrypoint_text = (PRODUCT / "entrypoint.sh").read_text()
+
+        # Every app service runs as root (to chown Windows bind mounts) and
+        # uses the universal entrypoint with its service name argument.
+        for svc in ("bootstrap", "web", "worker", "scheduler", "socketio"):
+            block = re.search(rf"^  {svc}:\n(.*?)(?=^  [^ \n]+:\n)",
+                              compose, flags=re.M | re.S).group(1)
+            self.assertIn("user: root", block, f"{svc} must run as root for bind-mount chown")
+            self.assertIn(f'entrypoint: ["/product/entrypoint.sh", "{svc}"]', block,
+                          f"{svc} must use the universal entrypoint")
+
+        # The entrypoint chowns bind-mounted directories as root, then drops
+        # to frappe for all service work. It never runs bench/gunicorn/node
+        # as root.
+        self.assertIn("chown -R frappe:frappe /home/frappe/bench/sites /home/frappe/bench/logs",
+                      entrypoint_text)
+        self.assertIn("su -s /bin/sh frappe -c", entrypoint_text)
+        # No actual chmod 0777 command (comments explaining why not are fine).
+        self.assertNotRegex(entrypoint_text,
+                            r"(?m)^[^#\n]*chmod\s+0?777")
+        self.assertIn("exec run_frappe 'python3 /product/bootstrap.py'", entrypoint_text)
+        self.assertIn("exec /home/frappe/bench/env/bin/gunicorn", entrypoint_text)
+
+        # Bootstrap remains a one-shot: restart "no", db.env secret isolated.
         bootstrap = re.search(r"^  bootstrap:\n(.*?)(?=^  [^ \n]+:\n)",
                               compose, flags=re.M | re.S).group(1)
+        self.assertIn('restart: "no"', bootstrap)
+        self.assertIn("source: ./data/secrets/db.env", bootstrap)
+
+        # Web depends on successful bootstrap; never sees db.env.
         web = re.search(r"^  web:\n(.*?)(?=^  [^ \n]+:\n)",
                         compose, flags=re.M | re.S).group(1)
-        self.assertIn('entrypoint: ["python3", "/product/bootstrap.py"]', bootstrap)
-        self.assertIn("source: ./data/secrets/db.env", bootstrap)
         self.assertIn("condition: service_completed_successfully", web)
         self.assertNotIn("source: ./data/secrets/db.env", web)
         self.assertNotIn("./data/secrets:/run/secrets", web)
@@ -958,9 +984,7 @@ class EntrypointContract(unittest.TestCase):
         self.assertIn("./data/activation:/run/activation:ro", web)
         self.assertNotIn("/run/secrets", web)
 
-        entrypoint = (PRODUCT / "entrypoint.sh").read_text()
-        self.assertNotIn("bootstrap.py", entrypoint)
-        self.assertIn("exec /home/frappe/bench/env/bin/gunicorn", entrypoint)
+        # bootstrap.py still drives site creation with stdin-delivered secrets.
         bootstrap_source = (PRODUCT / "bootstrap.py").read_text()
         self.assertIn("input=payload", bootstrap_source)
         self.assertIn("capture_output=True", bootstrap_source)
@@ -1457,17 +1481,33 @@ class DesktopRuntimeReliabilityContract(unittest.TestCase):
     Docker daemon check.
     """
 
-    def test_non_web_app_services_bypass_product_bootstrap_entrypoint(self):
-        # worker/socketio must execute their own long-running process directly.
-        # The bootstrap service alone mounts /run/bootstrap-secrets/db.env;
-        # inheriting the wrong image entrypoint causes worker restart loops.
+    def test_non_web_app_services_use_universal_entrypoint_with_service_args(self):
+        # worker/scheduler/socketio use the universal entrypoint with their
+        # service name argument. Each drops to frappe inside the entrypoint
+        # before executing its long-running process. The bootstrap service
+        # alone mounts /run/bootstrap-secrets/db.env; no other service
+        # inherits it.
         text = COMPOSE.read_text()
-        worker = re.search(r"^  worker:\n(.*?)(?=^  \S)", text, flags=re.M | re.S).group(1)
-        socketio = re.search(r"^  socketio:\n(.*?)(?=^  \S)", text, flags=re.M | re.S).group(1)
-        self.assertIn('entrypoint: ["/build/tools/bin/bench"]', worker)
-        self.assertIn('command: ["worker", "--queue", "short,default,long"]', worker)
-        self.assertIn('entrypoint: ["node"]', socketio)
-        self.assertIn('command: ["apps/frappe/socketio.js"]', socketio)
+        for svc in ("worker", "scheduler", "socketio"):
+            block = re.search(rf"^  {svc}:\n(.*?)(?=^  \S)", text, flags=re.M | re.S)
+            self.assertIsNotNone(block, svc)
+            body = block.group(1)
+            self.assertIn('entrypoint: ["/product/entrypoint.sh", "%s"]' % svc, body, svc)
+
+        entrypoint_text = (PRODUCT / "entrypoint.sh").read_text()
+        # Each service case runs its own long-running process as frappe.
+        self.assertIn("/build/tools/bin/bench --site toeflhouse.localhost worker", entrypoint_text)
+        self.assertIn("/build/tools/bin/bench --site toeflhouse.localhost schedule", entrypoint_text)
+        self.assertIn("node apps/frappe/socketio.js", entrypoint_text)
+
+        # Only bootstrap mounts the db.env secret.
+        bootstrap = re.search(r"^  bootstrap:\n(.*?)(?=^  [^ \n]+:\n)",
+                              text, flags=re.M | re.S).group(1)
+        self.assertIn("source: ./data/secrets/db.env", bootstrap)
+        for other in ("web", "worker", "scheduler", "socketio"):
+            block = re.search(rf"^  {other}:\n(.*?)(?=^  [^ \n]+:\n)",
+                              text, flags=re.M | re.S).group(1)
+            self.assertNotIn("source: ./data/secrets/db.env", block, other)
 
     def test_core_services_wait_for_web_health(self):
         text = COMPOSE.read_text()
