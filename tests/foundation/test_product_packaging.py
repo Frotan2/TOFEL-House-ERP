@@ -965,7 +965,8 @@ class EntrypointContract(unittest.TestCase):
         # No actual chmod 0777 command (comments explaining why not are fine).
         self.assertNotRegex(entrypoint_text,
                             r"(?m)^[^#\n]*chmod\s+0?777")
-        self.assertIn("exec run_frappe 'python3 /product/bootstrap.py'", entrypoint_text)
+        self.assertIn("exec su -s /bin/sh frappe -c 'python3 /product/bootstrap.py'", entrypoint_text)
+        self.assertNotIn("exec run_frappe '", entrypoint_text)
         self.assertIn("exec /home/frappe/bench/env/bin/gunicorn", entrypoint_text)
 
         # Bootstrap remains a one-shot: restart "no", db.env secret isolated.

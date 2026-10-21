@@ -23,8 +23,9 @@ SERVICE="${1:-web}"
 # data to every local account on the Windows host.
 chown -R frappe:frappe /home/frappe/bench/sites /home/frappe/bench/logs 2>/dev/null || true
 
-# Drop to the frappe user for all service execution. su -s /bin/sh keeps the
-# process as a direct child of the entrypoint so signals propagate cleanly.
+# Drop to the frappe user for all service execution. Preparation commands use
+# run_frappe; final service commands must `exec su` directly. POSIX sh cannot
+# exec a shell function (`exec run_frappe` fails with exit code 127).
 # Root is only used for the chown above; nothing after this point runs as root.
 run_frappe() {
     su -s /bin/sh frappe -c "$*"
@@ -35,7 +36,7 @@ case "$SERVICE" in
         # One-shot site initialization: waits for services, seeds sites/,
         # creates the site, installs apps, migrates, builds assets, enables
         # scheduler. Runs once as a Compose one-shot (restart: "no").
-        exec run_frappe 'python3 /product/bootstrap.py'
+        exec su -s /bin/sh frappe -c 'python3 /product/bootstrap.py'
         ;;
     web)
         # Wait for database and Redis, then reconcile static assets after any
@@ -43,19 +44,19 @@ case "$SERVICE" in
         # /home/frappe/bench/sites so frappe.app resolves sites from there.
         run_frappe 'python3 -c "import sys; sys.path.insert(0, \"/product\"); from bootstrap import wait_for_endpoints; wait_for_endpoints()"'
         run_frappe 'python3 -c "import sys; sys.path.insert(0, \"/product\"); from bootstrap import ensure_web_assets; ensure_web_assets()"'
-        exec run_frappe 'cd /home/frappe/bench/sites && exec /home/frappe/bench/env/bin/gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 --pythonpath /product wsgi:application'
+        exec su -s /bin/sh frappe -c 'cd /home/frappe/bench/sites && exec /home/frappe/bench/env/bin/gunicorn --bind 0.0.0.0:8000 --workers 2 --timeout 120 --pythonpath /product wsgi:application'
         ;;
     worker)
         # Background job worker. Runs after web is healthy.
-        exec run_frappe '/build/tools/bin/bench --site toeflhouse.localhost worker --queue short,default,long'
+        exec su -s /bin/sh frappe -c '/build/tools/bin/bench --site toeflhouse.localhost worker --queue short,default,long'
         ;;
     scheduler)
         # Scheduled jobs scheduler. Runs after web is healthy.
-        exec run_frappe '/build/tools/bin/bench --site toeflhouse.localhost schedule'
+        exec su -s /bin/sh frappe -c '/build/tools/bin/bench --site toeflhouse.localhost schedule'
         ;;
     socketio)
         # Socket.IO realtime server. Runs after web is healthy.
-        exec run_frappe 'node apps/frappe/socketio.js'
+        exec su -s /bin/sh frappe -c 'node apps/frappe/socketio.js'
         ;;
     *)
         echo "Unknown service: $SERVICE" >&2
