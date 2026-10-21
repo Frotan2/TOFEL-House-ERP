@@ -171,12 +171,20 @@ $credentials.Add_Click({
     }
 })
 $logButton.Add_Click({
+    [System.Windows.Forms.MessageBox]::Show(
+        "The diagnostics folder contains operation details that may be private. Share files only with trusted TOEFL House support.",
+        "Private diagnostics", [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+    # Docker, PowerShell and Compose can report failure only on stderr. Show
+    # both output files rather than hiding the actual failure from support.
     if (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf) {
-        [System.Windows.Forms.MessageBox]::Show(
-            "Diagnostics may contain private operational details. Share only with trusted support.",
-            "Private diagnostics", [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
         Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $script:stdoutPath + '"')
+    }
+    if (Test-Path -LiteralPath $script:stderrPath -PathType Leaf) {
+        $errorLog = Get-Item -LiteralPath $script:stderrPath
+        if ($errorLog.Length -gt 0) {
+            Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $script:stderrPath + '"')
+        }
     }
 })
 
