@@ -95,7 +95,10 @@ jobs:
           foreach ($task in @('Install', 'Start', 'Stop', 'Repair')) {
             $script = Join-Path $kit ("product/windows/" + $task + " TOEFL House ERP.cmd")
             $output = @(& $script 2>&1)
-            if ($LASTEXITCODE -ne 0) {
+            $taskExit = $LASTEXITCODE
+            $stageSummary = @($output | Where-Object { $_ -match '^\[TH_STAGE\]' })
+            Write-Host ("Synthetic " + $task + " exit=" + $taskExit + " stageCount=" + $stageSummary.Count)
+            if ($taskExit -ne 0) {
               throw ("Headless " + $task + " failed: " + ($output | Out-String))
             }
             if (($output | Out-String) -match 'Username: Administrator|Password: ') {
@@ -103,6 +106,11 @@ jobs:
             }
           }
           if (-not (Test-Path -LiteralPath (Join-Path $kit 'product/data/secrets/db.env') -PathType Leaf)) {
+            $productData = Join-Path $kit 'product/data'
+            Write-Host ("Diagnostic: kit product data directory exists=" + (Test-Path -LiteralPath $productData))
+            if (Test-Path -LiteralPath $productData) {
+              Get-ChildItem -LiteralPath $productData -Recurse -Force | ForEach-Object { Write-Host ("Diagnostic path: " + $_.FullName) }
+            }
             throw "Headless synthetic install did not generate its local credential file."
           }
           Write-Host "Headless installer, start, stop and repair routes passed with fake Docker."
