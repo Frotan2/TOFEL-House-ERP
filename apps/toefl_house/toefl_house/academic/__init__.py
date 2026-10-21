@@ -638,7 +638,7 @@ def _discount_rule_doc(code, for_update=False):
 
 @frappe.whitelist(methods=["POST"])
 def create_discount_rule(request_key, code, title, discount_percentage,
-                         precedence=1, fee_category="", program="", description=""):
+                         precedence=1, fee_category="", program="", description="", student=""):
     """Define a centralized discount rule under OD-CP-1 Policy A.
 
     Single discount per charge line; explicit configured precedence resolves
@@ -649,12 +649,16 @@ def create_discount_rule(request_key, code, title, discount_percentage,
             validate_request_key(request_key)
             clean_code = rules.validate_code(code)
             clean_title = rules.validate_title(title, "Discount rule title")
-            clean_percent = rules.validate_discount_percentage(discount_percentage)
             clean_precedence = rules.validate_precedence(precedence)
             clean_description = rules.validate_reason(description)
+            clean_student = rules.validate_title(student, "Student") if student else ""
+            clean_percent = rules.validate_discount_award(
+                discount_percentage, clean_student, clean_description)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
 
+        if clean_student and not frappe.db.exists("Student", clean_student):
+            raise frappe.ValidationError("Discount beneficiary Student does not exist")
         if frappe.db.exists(DISCOUNT_RULE, clean_code):
             raise frappe.ValidationError(f"Discount rule {clean_code} already exists")
 
@@ -676,7 +680,8 @@ def create_discount_rule(request_key, code, title, discount_percentage,
             "doctype": DISCOUNT_RULE, "code": clean_code, "title": clean_title,
             "discount_percentage": clean_percent, "precedence": clean_precedence,
             "status": "Active", "fee_category": clean_category or None,
-            "program": clean_program or None, "description": clean_description,
+            "program": clean_program or None, "student": clean_student or None,
+            "description": clean_description,
         })
         doc.insert(ignore_permissions=True)
         result = {
@@ -684,7 +689,7 @@ def create_discount_rule(request_key, code, title, discount_percentage,
             "discount_percentage": float(doc.discount_percentage),
             "precedence": int(doc.precedence), "status": doc.status,
             "fee_category": doc.fee_category or "",
-            "program": doc.program or "",
+            "program": doc.program or "", "student": doc.student or "",
         }
         return result, {
             "target": doc.name,
@@ -697,7 +702,7 @@ def create_discount_rule(request_key, code, title, discount_percentage,
         {"code": code, "title": title,
          "discount_percentage": discount_percentage, "precedence": precedence,
          "fee_category": fee_category, "program": program,
-         "description": description}, work)
+         "description": description, "student": student}, work)
 
 
 @frappe.whitelist(methods=["POST"])

@@ -239,6 +239,14 @@ class DiscountRuleTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=repr(bad)):
                 rules.validate_discount_percentage(bad)
 
+    def test_documented_full_waiver_is_student_scoped(self):
+        with self.assertRaises(ValueError):
+            rules.validate_discount_award(100, "", "Reason for waiver")
+        with self.assertRaises(ValueError):
+            rules.validate_discount_award(100, "STUDENT", "")
+        self.assertEqual(rules.validate_discount_award(
+            100, "STUDENT", "Owner verified relationship"), 100)
+
     def test_precedence_validation(self):
         self.assertEqual(rules.validate_precedence(1), 1)
         self.assertEqual(rules.validate_precedence("10"), 10)

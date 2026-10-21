@@ -14,7 +14,9 @@ class THDiscountRule(Document):
 def validate(doc, method=None):
     rules.validate_code(doc.code or "")
     rules.validate_title(doc.title or "", "Discount rule title")
-    rules.validate_discount_percentage(doc.discount_percentage)
+    rules.validate_discount_award(
+        doc.discount_percentage, doc.get("student") or "",
+        doc.get("description") or "", active=doc.status == "Active")
     rules.validate_precedence(doc.precedence)
     if doc.status not in ("Active", "Retired"):
         frappe.throw(_("Status must be Active or Retired"))

@@ -15,6 +15,7 @@
   "column_break_2",
   "fee_category",
   "program",
+  "student",
   "section_break_1",
   "description"
  ],
@@ -87,6 +88,13 @@
    "in_list_view": 1,
    "label": "Program Family",
    "options": "TH Academic Program"
+  },
+  {
+   "fieldname": "student",
+   "fieldtype": "Link",
+   "options": "Student",
+   "label": "Eligible Student",
+   "description": "Required for 100% waivers; identifies exactly one beneficiary of a recorded Owner decision."
   },
   {
    "fieldname": "section_break_1",

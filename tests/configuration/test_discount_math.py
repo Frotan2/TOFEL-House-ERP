@@ -71,6 +71,40 @@ class ResolverRowShapeTests(unittest.TestCase):
             "X-1")
 
 
+class StudentEligibilityTests(unittest.TestCase):
+    def test_bounded_ordinary_discount_and_documented_full_waiver(self):
+        self.assertEqual(rules.validate_discount_award(50), 50)
+        with self.assertRaisesRegex(ValueError, "cannot exceed 50%"):
+            rules.validate_discount_award(75)
+        with self.assertRaises(ValueError):
+            rules.validate_discount_award(100)
+        with self.assertRaises(ValueError):
+            rules.validate_discount_award(100, "STU-1")
+        self.assertEqual(rules.validate_discount_award(
+            100, "STU-1", "Verified staff dependent"), 100)
+
+    def test_waiver_never_leaks_to_other_students_or_programs(self):
+        rule = dict(code="FULL", status="Active", discount_percentage=100,
+                    precedence=10, student="STU-1", program="GE")
+        self.assertIsNone(rules.resolve_charge_discount([rule], program="GE", student="STU-2"))
+        self.assertIsNone(rules.resolve_charge_discount([rule], program="EAP", student="STU-1"))
+        self.assertIsNone(rules.resolve_charge_discount([rule], student="STU-1"))
+        self.assertEqual(rules.resolve_charge_discount(
+            [rule], program="GE", student="STU-1")["rule_code"], "FULL")
+
+    def test_legacy_global_waiver_and_75_percent_cannot_bill(self):
+        for pct in (75, 100):
+            rule = dict(code="OLD", status="Active", discount_percentage=pct,
+                        precedence=10)
+            self.assertIsNone(rules.resolve_charge_discount([rule], student="STU-1"))
+
+    def test_unresolved_family_never_matches_family_scoped_discount(self):
+        rule = dict(code="GEN", status="Active", discount_percentage=10,
+                    precedence=10, program="GEN")
+        self.assertIsNone(rules.resolve_charge_discount([rule]))
+        self.assertIsNotNone(rules.resolve_charge_discount([rule], program="GEN"))
+
+
 class FinanceCommandShapeTests(unittest.TestCase):
     def test_issue_tuition_bills_the_net_amount(self):
         src = FINANCE.read_text(encoding="utf-8")
@@ -90,6 +124,12 @@ class FinanceCommandShapeTests(unittest.TestCase):
         fetch = src[src.index('frappe.db.get_all("TH Discount Rule"'):]
         fields = fetch[fetch.index("fields=["):fetch.index("]")]
         self.assertIn('"status"', fields)
+
+    def test_finance_resolves_level_family_and_eligible_student(self):
+        src = FINANCE.read_text(encoding="utf-8")
+        self.assertIn('{"native_program": pe.program}', src)
+        self.assertIn('program=discount_family, student=pe.student', src)
+        self.assertIn('"student", "status"', src)
 
     def test_no_native_fee_discount_field_claim(self):
         """The helper docstring must keep recording WHY amount carries the

@@ -130,13 +130,18 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
                                            filters={"status": "Active"},
                                            fields=["code", "title", "discount_percentage",
                                                    "precedence", "fee_category", "program",
-                                                   "status"])
+                                                   "student", "status"])
+        # TH Discount Rule.program is a family; native Program Enrollment.program
+        # is a specific level. Only compare scopes from the same authority.
+        discount_family = frappe.db.get_value(
+            "TH Program Level", {"native_program": pe.program}, "family")
         applied_discounts = []
         fee_components = []
         for c in components:
             comp_row = dict(fees_category=c.fees_category, amount=c.amount)
             winner = rules.resolve_charge_discount(
-                discount_rules, fee_category=c.fees_category, program=pe.program)
+                discount_rules, fee_category=c.fees_category,
+                program=discount_family, student=pe.student)
             if winner:
                 gross = float(c.amount)
                 # Native Fees sums component amounts into grand_total and

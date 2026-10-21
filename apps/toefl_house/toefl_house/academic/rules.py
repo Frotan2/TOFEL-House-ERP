@@ -301,6 +301,25 @@ def validate_discount_percentage(value):
     return val
 
 
+def validate_discount_award(percentage, student="", description="", active=True):
+    """Ordinary discounts stop at 50%; a full waiver is student-specific.
+
+    Retiring historical rules remains possible; the billing resolver refuses
+    legacy broad waivers and obsolete 51–99% discounts.
+    """
+    value = validate_discount_percentage(percentage)
+    if not active:
+        return value
+    if 50 < value < 100:
+        raise ValueError("Ordinary discounts cannot exceed 50%; only a documented 100% waiver is exceptional")
+    if value == 100:
+        if not isinstance(student, str) or not student.strip():
+            raise ValueError("A 100% waiver requires an identified Student")
+        if not isinstance(description, str) or len(description.strip()) < 8:
+            raise ValueError("A 100% waiver requires a documented Owner reason")
+    return value
+
+
 def validate_precedence(value):
     """Explicit configured precedence: whole number (higher value = higher precedence)."""
     if isinstance(value, str) and value.strip().isdigit():
@@ -328,7 +347,7 @@ def apply_charge_discount(gross, discount_percentage):
     return round(g - (g * percent / 100.0), 2)
 
 
-def resolve_charge_discount(rules_list, fee_category=None, program=None):
+def resolve_charge_discount(rules_list, fee_category=None, program=None, student=None):
     """Resolve eligible discount rules under OD-CP-1 Policy A (Single Discount Per Charge).
 
     A charge line may receive zero or one discount only. Discounts must never stack.
@@ -341,10 +360,16 @@ def resolve_charge_discount(rules_list, fee_category=None, program=None):
         if rule.get("status") != "Active":
             continue
         rule_cat = rule.get("fee_category")
-        if rule_cat and fee_category and rule_cat != fee_category:
+        if rule_cat and rule_cat != fee_category:
             continue
         rule_prog = rule.get("program")
-        if rule_prog and program and rule_prog != program:
+        if rule_prog and rule_prog != program:
+            continue
+        beneficiary = rule.get("student")
+        if beneficiary and beneficiary != student:
+            continue
+        percent = float(rule.get("discount_percentage") or 0)
+        if 50 < percent < 100 or (percent == 100 and not beneficiary):
             continue
         eligible.append(rule)
 

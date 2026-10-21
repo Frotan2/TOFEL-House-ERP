@@ -4526,7 +4526,8 @@ def main():
             # the 100% boundary is the owner's cap, inclusive; retire it again
             # immediately so it never participates in an issuance
             as_user('course_owner',lambda:acm.create_discount_rule(
-                'odcp-guard-pct-max-00001','SYN-DISC-P100','SYN full waiver boundary',100))
+                'odcp-guard-pct-max-00001','SYN-DISC-P100','SYN full waiver boundary',100,
+                1,'','','Owner-verified synthetic waiver',second['student']))
             as_user('course_owner',lambda:acm.set_discount_rule_status(
                 'odcp-retire-p100-000001','SYN-DISC-P100',0))
             return {'non_owner_write_denied':True,'percentage_bounds_denied':True,
