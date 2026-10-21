@@ -44,7 +44,7 @@ echo  Starting it now - this can take a minute...
 start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 set DAEMON_TRIES=60
 :waitdaemon
-timeout /t 5 /nobreak >nul
+powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5" >nul 2>nul
 docker info >nul 2>nul && goto :dockerup
 set /a DAEMON_TRIES-=1
 if DAEMON_TRIES GTR 0 goto :waitdaemon
@@ -120,7 +120,7 @@ echo  First launch is finishing inside the app - site setup and data install.
 echo  You can watch progress in Docker Desktop, or simply wait for the browser.
 set READY_TRIES=300
 :waitready
-timeout /t 10 /nobreak >nul
+powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 10" >nul 2>nul
 curl --fail --silent http://127.0.0.1:8000/ >nul 2>nul || goto :preparing
 docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-web 2>nul | findstr /x /c:"healthy" >nul || goto :preparing
 docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-db 2>nul | findstr /x /c:"healthy" >nul || goto :preparing

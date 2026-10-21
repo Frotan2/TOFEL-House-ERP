@@ -12,7 +12,7 @@ docker compose down
 if errorlevel 1 goto :downfailed
 echo [TH_STAGE] TOEFL House ERP has stopped.
 echo  TOEFL House ERP has stopped. You may close this window.
-if not defined TH_GUI_MODE timeout /t 5 >nul
+if not defined TH_GUI_MODE powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5" >nul 2>nul
 exit /b 0
 :downfailed
 echo  Could not stop cleanly. If the problem repeats, use the Repair script.

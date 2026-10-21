@@ -46,14 +46,14 @@ goto :sourcesready
 echo [TH_STAGE] Restarting application services without removing database volumes...
 docker compose down
 docker compose up -d db redis-queue redis-cache
-timeout /t 10 /nobreak >nul
+powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 10" >nul 2>nul
 docker compose up -d --no-build
 if errorlevel 1 goto :failed
 echo [TH_STAGE] Waiting for database and application health checks...
 echo  Waiting until TOEFL House ERP answers after repair...
 set READY_TRIES=300
 :waitready
-timeout /t 10 /nobreak >nul
+powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 10" >nul 2>nul
 docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-web 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
 docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-db 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
 docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-queue 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices

@@ -50,6 +50,14 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("first-run-credentials.txt", INSTALL)
         self.assertIn("View Administrator Login", GUI)
 
+    def test_hidden_launcher_waits_without_interactive_timeout(self):
+        # Windows timeout.exe refuses redirected/noninteractive stdin.
+        # PowerShell Start-Sleep works from the hidden GUI worker too.
+        for name, script in (("Install", INSTALL), ("Start", START),
+                             ("Repair", REPAIR)):
+            self.assertNotIn("timeout /t", script, name)
+            self.assertIn("Start-Sleep -Seconds", script, name)
+
     def test_customer_package_verifies_before_import_or_boot(self):
         self.assertIn('if exist "release\\toefl-house-erp-app.tar" goto :packagedimage', INSTALL)
         self.assertIn("Verify Package Image.ps1", INSTALL)

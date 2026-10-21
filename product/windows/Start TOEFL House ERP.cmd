@@ -16,7 +16,7 @@ echo  Starting Docker Desktop - this can take a minute...
 start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 set DAEMON_TRIES=60
 :waitdaemon
-timeout /t 5 /nobreak >nul
+powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5" >nul 2>nul
 docker info >nul 2>nul && goto :up
 set /a DAEMON_TRIES-=1
 if DAEMON_TRIES GTR 0 goto :waitdaemon
@@ -33,7 +33,7 @@ if errorlevel 1 goto :failed
 echo  Waiting until TOEFL House ERP answers...
 set READY_TRIES=60
 :waitready
-timeout /t 10 /nobreak >nul
+powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 10" >nul 2>nul
 docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-web 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
 docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-db 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
 docker inspect --format "{{.State.Health.Status}}" toefl-house-erp-redis-queue 2>nul | findstr /x /c:"healthy" >nul || goto :waitservices
@@ -51,7 +51,7 @@ goto :failed
 echo [TH_STAGE] TOEFL House ERP is ready.
 if not defined TH_GUI_MODE start "" "http://127.0.0.1:8000/"
 echo  TOEFL House ERP is open in your browser. You may close this window.
-if not defined TH_GUI_MODE timeout /t 6 >nul
+if not defined TH_GUI_MODE powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 6" >nul 2>nul
 exit /b 0
 :nosecret
 docker volume inspect toefl-house-erp_db-data >nul 2>nul
