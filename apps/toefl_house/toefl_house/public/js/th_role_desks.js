@@ -601,8 +601,8 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "precedence", label: "Precedence (higher wins)", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "fee_category", label: "Fee type (optional)", fieldtype: "Data" },
 			{ fieldname: "program", label: "Program family (optional)", fieldtype: "Data" },
-			{ fieldname: "student", label: "Eligible Student (required for 100% waiver)", fieldtype: "Link", options: "Student" },
 			{ fieldname: "description", label: "Description / Owner justification (required for 100% waiver)", fieldtype: "Small Text" },
+			{ fieldname: "student", label: "Eligible Student (required for 100% waiver)", fieldtype: "Link", options: "Student" },
 		],
 		"toefl_house.academic.set_discount_rule_status": [
 			{ fieldname: "code", label: "Rule code", fieldtype: "Data", reqd: 1 },
