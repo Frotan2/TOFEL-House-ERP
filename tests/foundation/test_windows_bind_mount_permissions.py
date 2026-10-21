@@ -78,7 +78,8 @@ class WindowsBindMountPermissionContract(unittest.TestCase):
         """After chown, the entrypoint must drop to frappe via su."""
         self.assertIn("su -s /bin/sh frappe -c", self.entrypoint)
         # bench/gunicorn/node are never invoked as root
-        self.assertIn("exec run_frappe 'python3 /product/bootstrap.py'", self.entrypoint)
+        self.assertIn("exec su -s /bin/sh frappe -c 'python3 /product/bootstrap.py'", self.entrypoint)
+        self.assertNotIn("exec run_frappe '", self.entrypoint)
         self.assertIn("exec /home/frappe/bench/env/bin/gunicorn", self.entrypoint)
 
     def test_entrypoint_passes_service_name_argument(self):
