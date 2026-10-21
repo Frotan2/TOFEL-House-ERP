@@ -113,9 +113,19 @@ function Start-LauncherAction([string]$action) {
         return
     }
     if ($action -eq "Install" -and -not (Test-Path -LiteralPath (Join-Path $productRoot "release\toefl-house-erp-app.tar"))) {
+        # A provider package has no Docker build context. A missing image must
+        # stop with a clear message instead of triggering a doomed source build.
+        if (-not (Test-Path -LiteralPath (Join-Path $productRoot "app.Dockerfile") -PathType Leaf)) {
+            $status.Text = "This customer package is incomplete. Ask your provider for a complete TOEFL House ERP installer."
+            [System.Windows.Forms.MessageBox]::Show(
+                "The prebuilt application image is missing. No installation was started, and your existing ERP data was not changed. Request a complete package from your provider.",
+                "Incomplete customer package", [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+            return
+        }
         $answer = [System.Windows.Forms.MessageBox]::Show(
-            "No prebuilt application package was found. Building from source can take a long time and needs an internet connection. Continue?",
-            "Source installation", [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            "This is a developer source checkout, not a customer package. Building from source can take a long time and needs an internet connection. Continue?",
+            "Developer source installation", [System.Windows.Forms.MessageBoxButtons]::YesNo,
             [System.Windows.Forms.MessageBoxIcon]::Question)
         if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
     }
