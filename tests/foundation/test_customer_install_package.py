@@ -40,6 +40,15 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("ValidateSet", WORKER)
         self.assertNotIn("Invoke-Expression", GUI + WORKER)
 
+    def test_incomplete_customer_folder_never_attempts_source_build(self):
+        # Customer packages deliberately omit app.Dockerfile and all source.
+        # Their GUI must refuse a missing archive rather than enter a Docker
+        # build path that can never succeed on the customer's computer.
+        self.assertIn('Join-Path $productRoot "app.Dockerfile"', GUI)
+        self.assertIn('"Incomplete customer package"', GUI)
+        self.assertIn("Request a complete package from your provider", GUI)
+        self.assertIn("if ($answer -ne [System.Windows.Forms.DialogResult]::Yes)", GUI)
+
     def test_headless_wrapper_never_pauses_or_echoes_first_run_password(self):
         for label, script in (
             ("install", INSTALL), ("repair", REPAIR),
