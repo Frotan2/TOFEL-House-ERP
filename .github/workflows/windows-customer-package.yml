@@ -98,6 +98,10 @@ jobs:
             $taskExit = $LASTEXITCODE
             $stageSummary = @($output | Where-Object { $_ -match '^\[TH_STAGE\]' })
             Write-Host ("Synthetic " + $task + " exit=" + $taskExit + " stageCount=" + $stageSummary.Count)
+            if ($stageSummary.Count -eq 0) {
+              $safeMessages = @($output | Where-Object { $_ -match 'Docker Desktop|Windows could not|missing|failed|could not|site|install|script|data|database' } | Select-Object -First 8)
+              foreach ($line in $safeMessages) { Write-Host ("Synthetic diagnostic: " + (($line -replace 'MARIADB_ROOT_PASSWORD=.*', 'MARIADB_ROOT_PASSWORD=[REDACTED]') -replace 'Password:.*', 'Password:[REDACTED]')) }
+            }
             if ($taskExit -ne 0) {
               throw ("Headless " + $task + " failed: " + ($output | Out-String))
             }
