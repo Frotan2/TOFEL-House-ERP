@@ -46,25 +46,36 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $fakeDir = Join-Path $env:RUNNER_TEMP "Fake Docker"
           New-Item -ItemType Directory -Path $fakeDir -Force | Out-Null
+          # A real .exe is required: invoking a .cmd from another .cmd without
+          # CALL transfers control out of the parent and is not a valid Docker mock.
           $fakeDocker = @'
-          @echo off
-          if "%~1"=="info" exit /b 0
-          if "%~1"=="image" echo {"org.toefl-house.source-eol":"lf-v1"} & exit /b 0
-          if "%~1"=="save" (
-            > "%~3" echo SYNTHETIC_IMAGE_FOR_TESTING
-            exit /b 0
-          )
-          if "%~1"=="volume" exit /b 0
-          if "%~1"=="load" exit /b 0
-          if "%~1"=="compose" exit /b 0
-          if "%~1"=="inspect" (
-            if "%~3"=="{{.State.Status}}" echo running & exit /b 0
-            echo healthy
-            exit /b 0
-          )
-          exit /b 1
+          using System;
+          using System.IO;
+          public class FakeDocker {
+              public static int Main(string[] args) {
+                  if (args.Length == 0) return 1;
+                  if (args[0] == "info") return 0;
+                  if (args[0] == "volume") return 0;
+                  if (args[0] == "load") return 0;
+                  if (args[0] == "compose") return 0;
+                  if (args[0] == "image") {
+                      Console.WriteLine("{\"org.toefl-house.source-eol\":\"lf-v1\"}");
+                      return 0;
+                  }
+                  if (args[0] == "save" && args.Length >= 3) {
+                      File.WriteAllText(args[2], "SYNTHETIC_IMAGE_FOR_TESTING");
+                      return 0;
+                  }
+                  if (args[0] == "inspect") {
+                      Console.WriteLine(args.Length >= 3 && args[2].Contains("State.Status")
+                          ? "running" : "healthy");
+                      return 0;
+                  }
+                  return 1;
+              }
+          }
           '@
-          [System.IO.File]::WriteAllText((Join-Path $fakeDir 'docker.cmd'), $fakeDocker)
+          Add-Type -TypeDefinition $fakeDocker -OutputAssembly (Join-Path $fakeDir 'docker.exe') -OutputType ConsoleApplication
           $env:PATH = "$fakeDir;$env:PATH"
           $target = Join-Path $env:RUNNER_TEMP "Customer Kits"
           New-Item -ItemType Directory -Path $target -Force | Out-Null
@@ -89,8 +100,8 @@ jobs:
             throw "Customer package included private application data."
           }
           # Exercise the customer-facing CMD paths without real Docker or databases.
-          $fakeCurl = "@echo off" + [Environment]::NewLine + "exit /b 0" + [Environment]::NewLine
-          [System.IO.File]::WriteAllText((Join-Path $fakeDir 'curl.cmd'), $fakeCurl)
+          $fakeCurl = 'public class FakeCurl { public static int Main(string[] args) { return 0; } }'
+          Add-Type -TypeDefinition $fakeCurl -OutputAssembly (Join-Path $fakeDir 'curl.exe') -OutputType ConsoleApplication
           $env:TH_GUI_MODE = '1'
           foreach ($task in @('Install', 'Start', 'Stop', 'Repair')) {
             $script = Join-Path $kit ("product/windows/" + $task + " TOEFL House ERP.cmd")
