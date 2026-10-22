@@ -25,9 +25,12 @@ clone a repository, type commands or build Frappe from source.
    not a removable drive, cloud-synchronized folder or network share.
    Double-click **TOEFL House ERP.vbs**. This opens the Windows GUI without
    a terminal or PowerShell commands.
-3. Select **Install**. The launcher verifies the image checksum, imports the
-   prebuilt application, generates a private local database password on the
-   first installation, initializes the site and waits for health checks.
+3. Select **Install**. The launcher verifies the image checksum **before**
+   creating any local database credentials or application data. It generates a
+   private local database password for a genuinely fresh installation, imports
+   the verified prebuilt image, initializes the site and waits for health
+   checks. If previous Frappe site files exist under another site name, it
+   preserves them and refuses to create a replacement database password.
    It then opens the ERP in the browser.
 4. Select **View Administrator Login** to open the local, private first-run
    credentials file. Change the initial password and create a separate

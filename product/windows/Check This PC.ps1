@@ -104,7 +104,9 @@ if ($dockerReady) {
         # Existence only. Never inspect volume contents or print a data path.
         & $dockerExe volume inspect "toefl-house-erp_db-data" *> $null
         $dbVolumePresent = ($LASTEXITCODE -eq 0)
-        $dbVolumeVerified = $true
+        # An inspect failure may mean "not found" OR an API/permission error.
+        # Without verified absence, never report this computer as fresh.
+        $dbVolumeVerified = $dbVolumePresent
     } catch {
         $dbVolumeVerified = $false
     }

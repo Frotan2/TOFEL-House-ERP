@@ -88,6 +88,8 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('Get-PSDrive', CHECK_PC)
         self.assertIn('DriveType]::Fixed', CHECK_PC)
         self.assertIn('volume inspect "toefl-house-erp_db-data"', CHECK_PC)
+        self.assertIn("$dbVolumeVerified = $dbVolumePresent", CHECK_PC)
+        self.assertNotIn("$dbVolumeVerified = $true", CHECK_PC)
         self.assertIn('sites\\toeflhouse.localhost', CHECK_PC)
         self.assertIn("Get-ChildItem -LiteralPath $sitesRoot -Force", CHECK_PC)
         self.assertIn('secrets\\db.env', CHECK_PC)
