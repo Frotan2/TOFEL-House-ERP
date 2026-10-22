@@ -4,19 +4,20 @@
   "files": {
     "frontend/package.json": {
       "upstream_sha256": "1ed2ee1c3d6b91c788eefc6fbeed45a8843e100cc144c74d11198ca1a339f685",
-      "security_sha256": "e8836c51fe925f2c0ae7217ecd16b861f430d3d83e47b737d86b545284d37b21"
+      "security_sha256": "ae9ab750977aea6a4aeeacfa9003f56d1cd4c321d9495ee6e488937b1ede5d68"
     },
     "frontend/yarn.lock": {
       "upstream_sha256": "8aaf33ce7e5756a992d68f07caa1df03d88f3694e085d99adcca047efcf6df7d",
-      "security_sha256": "ba3adf6f99507e86fef26c40b35612bdb9b9d36975c33a183be04ba416e5c339"
+      "security_sha256": "32c7dd13a7b76ffe4280d6a0e66f621156b69002bb6e2883f245e1abb7cbc1f0"
     },
     "roster/package.json": {
       "upstream_sha256": "259ebbb75525cf482546f82fba3de115a7fd542add969b596f522c0d26a71e2c",
-      "security_sha256": "6695ec7bccd9f0ae91e1323891e15cfb04f2ef71d3578a03f121dc99cf348ed0"
+      "security_sha256": "4134690374c301b56c734fc5d705794ae5cf15a9472dc45aacebb5497f6604aa"
     },
     "roster/yarn.lock": {
       "upstream_sha256": "b889810608d5bc258d214ed62a0c074b726bb687a0747de05a2d685707baf765",
-      "security_sha256": "9e109ec71555629df76214200c80564545542514a9d104ed4d2351a2b51db2ea"
+      "security_sha256": "b3a68571aac06b5dcc1c76030db07f1e5e04b6cc2cb0c67812a1f5e15725dbde"
     }
-  }
+  },
+  "purpose": "HRMS frontend/roster security locks. 2026-10-22: pin markdown-it 14.3.3 (fixes GHSA-vfgh-jcmw-g37q and GHSA-gfr2-rv44-r23c) in both shipped HRMS browser builds."
 }

@@ -37,6 +37,7 @@
   "resolutions": {
     "prosemirror-model": "1.25.8",
     "prosemirror-view": "1.42.3",
+    "markdown-it": "14.3.3",
     "socket.io-parser": "4.2.7",
     "@grpc/grpc-js": "1.13.7",
     "undici": "6.29.0",
