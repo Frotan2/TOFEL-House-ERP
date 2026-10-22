@@ -144,6 +144,12 @@ def _snapshot(frappe) -> dict:
 def _verify(frappe, expected: dict) -> dict:
     if expected.get("status") != "captured":
         raise AssertionError("Restore expectation was not created by this capture helper")
+    expected_doctypes=expected.get("doctypes")
+    expected_files=expected.get("files")
+    if not isinstance(expected_doctypes,dict) or set(expected_doctypes)!=set(REPRESENTATIVE_DOCTYPES):
+        raise AssertionError("Restore expectation has incomplete representative DocType coverage")
+    if not isinstance(expected_files,dict) or set(expected_files)!={"public_file","private_file"}:
+        raise AssertionError("Restore expectation must contain both public and private file roles")
     verified = {}
     for doctype, source in expected["doctypes"].items():
         names = frappe.get_all(doctype, pluck="name", order_by="name asc")

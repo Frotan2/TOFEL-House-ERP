@@ -88,12 +88,13 @@ class NativeRestoreRehearsalTests(unittest.TestCase):
             "status": "captured",
             "scope": "synthetic test",
             "doctypes": {
-                "TH Test": {
+                doctype: {
                     "count": 1,
                     "name_digest": RUNTIME_RESTORE._digest(["SYN-ROW-1"]),
                     "row_digest": RUNTIME_RESTORE._row_digest(
                         [{"name":"SYN-ROW-1","synthetic_value":"preserved"}]),
                 }
+                for doctype in RUNTIME_RESTORE.REPRESENTATIVE_DOCTYPES
             },
             "files": {
                 "public_file": self._file_expected(
@@ -110,6 +111,16 @@ class NativeRestoreRehearsalTests(unittest.TestCase):
         self.assertTrue(all(
             item["content_sha256_verified"] and item["metadata_verified"]
             for item in result["files_verified"].values()))
+
+    def test_verifier_rejects_truncated_expectation_before_comparing_data(self):
+        expected=self._expected()
+        expected["doctypes"].pop(next(iter(expected["doctypes"])))
+        with self.assertRaisesRegex(AssertionError, "incomplete representative DocType"):
+            RUNTIME_RESTORE._verify(self.frappe,expected)
+        expected=self._expected()
+        expected["files"].pop("public_file")
+        with self.assertRaisesRegex(AssertionError, "both public and private"):
+            RUNTIME_RESTORE._verify(self.frappe,expected)
 
     def test_verifier_rejects_changed_public_file_bytes(self):
         expected = self._expected()
