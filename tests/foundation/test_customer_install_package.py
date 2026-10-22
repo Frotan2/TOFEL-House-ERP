@@ -106,15 +106,15 @@ class CustomerInstallerContract(unittest.TestCase):
         # as Install. A missing Docker volume alone is NOT evidence of a fresh
         # machine when site files remain or Docker storage cannot be queried.
         for name, script in (("Start", START), ("Repair", REPAIR)):
-            missing_secret = script.split(":nosecret\\n", 1)[1].split(
-                ":nosecretblocked\\n", 1
+            missing_secret = script.split(":nosecret\n", 1)[1].split(
+                ":nosecretblocked\n", 1
             )[0]
             self.assertIn("Test Fresh Installation.ps1", missing_secret, name)
             self.assertIn("if errorlevel 1 goto :nosecretblocked", missing_secret, name)
             self.assertNotIn("No database exists yet", script, name)
             self.assertIn("Do NOT reinstall, delete data", script, name)
         preflight = (WINDOWS / "Test Fresh Installation.ps1").read_text()
-        self.assertIn("data\\\\sites\\\\toeflhouse.localhost", preflight)
+        self.assertIn(r"data\sites\toeflhouse.localhost", preflight)
         self.assertIn('docker volume ls --filter "name=toefl-house-erp_db-data"', preflight)
         self.assertIn("Could not check existing database storage", preflight)
 
