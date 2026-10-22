@@ -84,7 +84,7 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('"product/windows/Check This PC.ps1"', PACKAGER)
         self.assertIn('"Check"', WORKER)
         self.assertIn('Read-only PC check', CHECK_PC)
-        self.assertIn('Production authorization: NOT VERIFIED', CHECK_PC)
+        self.assertIn('Result "Production authorization" "NOT VERIFIED"', CHECK_PC)
         self.assertIn('Get-PSDrive', CHECK_PC)
         self.assertNotIn("Remove-Item", CHECK_PC)
         self.assertNotIn("docker compose up", CHECK_PC)
