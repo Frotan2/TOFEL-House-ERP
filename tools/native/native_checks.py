@@ -4471,7 +4471,11 @@ def main():
                 as_user('course_owner',lambda:acm.create_program(
                     'odcp-family-evening-0001','SYN-PROG-EVENING','SYN Evening (non-matching)'))
             if not frappe.db.exists('TH Program Level','SYN-ODCP-LEVEL'):
-                frappe.set_user(users['course_owner'])
+                # Test-fixture setup only: link the pre-existing native Program
+                # under Administrator so the acceptance test exercises Finance's
+                # family resolver without widening Course Owner form permissions.
+                # Controller validation still runs on insert.
+                frappe.set_user('Administrator')
                 frappe.get_doc(dict(
                     doctype='TH Program Level',
                     family='SYN-PROGRAM-GENERAL',
@@ -4488,7 +4492,7 @@ def main():
                         set_by=users['course_owner'],
                         set_on=frappe.utils.now_datetime(),
                     )],
-                )).insert()
+                )).insert(ignore_permissions=True)
             frappe.set_user('Administrator')
             comp=frappe.get_doc('Company','TOEFL House')
             fs2=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
