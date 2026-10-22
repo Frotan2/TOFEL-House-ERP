@@ -1,0 +1,15 @@
+{
+  "source_run": 39597802134,
+  "source_artifact": "foundation-runtime-39597802134-1",
+  "artifact_file": "runtime-evidence/frontend_graph-result.json",
+  "artifact_file_sha256": "79f7d1ba34e351d403cae22f4458138a0babfe71e6989a948cecdb7c8d896957",
+  "status": "pass",
+  "scope": "Production build module inclusion only; not a vulnerability waiver or exploit proof",
+  "package_count": 79,
+  "absent_packages": [
+    "launch-editor",
+    "vite",
+    "markdown-it"
+  ],
+  "interpretation": "Absence from the production bundle is supporting evidence only. DEV_ONLY disposition also depends on the product runtime not starting Vite/launch-editor development or editor-launch middleware."
+}

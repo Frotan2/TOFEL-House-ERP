@@ -1,0 +1,77 @@
+{
+  "schema": "sec-deps-01-advisory-delta/1",
+  "basis": "2026-10-22 review of newly surfaced npm advisory records from Foundation runtime 39597802134. Pillow findings are remediated separately by the reviewed Pillow 13 uplift. HRMS markdown-it is upgraded to 14.3.3. This delta covers only launch-editor/Vite records whose vulnerable behavior is confined to development/editor-launch paths that the shipped appliance does not start.",
+  "packages": [
+    {
+      "package": "npm:launch-editor@2.6.1",
+      "advisories": [
+        {
+          "id": "1242627",
+          "aliases": [],
+          "severity": "moderate",
+          "summary": "GHSA-698v-4r3x-3vcv: launch-editor escapeCmdArgs() omits % escaping on Windows",
+          "first_patched": "2.14.2",
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "The pinned Frappe tree contains launch-editor 2.6.1 as a tooling dependency, but the TOEFL House production runtime never starts launch-editor or editor-launch middleware. Foundation runtime 39597802134 production module graph (frontend_graph-result.json SHA-256 79f7d1ba34e351d403cae22f4458138a0babfe71e6989a948cecdb7c8d896957) contains neither launch-editor nor vite. GitHub's advisory requires Windows plus launch-editor invocation; the served application process runs inside the Linux product container and the Windows host only launches Docker.",
+          "fix_path": "No shipped-runtime change required. Re-triage if any production process starts launch-editor/editor middleware or if application execution moves onto a Windows Node process."
+        },
+        {
+          "id": "1242656",
+          "aliases": [],
+          "severity": "moderate",
+          "summary": "GHSA-r825-w8mm-5pxw: launch-editor editor CLI flag misinterpretation",
+          "first_patched": "2.14.2",
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "The vulnerable operation requires launchEditor/launch-editor-middleware to open attacker-influenced paths in an editor. TOEFL House production starts neither path; its production bundle graph in Foundation runtime 39597802134 excludes launch-editor and vite. The package is retained only in the pinned upstream development/build dependency tree.",
+          "fix_path": "No shipped-runtime change required. Re-triage if an editor-launch endpoint is enabled in production."
+        },
+        {
+          "id": "1242663",
+          "aliases": [],
+          "severity": "high",
+          "summary": "GHSA-587h-7wmj-h5pm: launch-editor fs.existsSync() bypass on Windows",
+          "first_patched": "2.14.2",
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "GitHub states that only applications running the vulnerable editor-launch path on Windows are affected. TOEFL House application processes run in Linux containers and do not start launch-editor middleware. Foundation runtime 39597802134 production module graph excludes launch-editor and vite.",
+          "fix_path": "No shipped-runtime change required. Re-triage on any Windows Node runtime or production editor-launch endpoint."
+        }
+      ]
+    },
+    {
+      "package": "npm:vite@2.9.17,5.4.21,8.3.4",
+      "advisories": [
+        {
+          "id": "1242622",
+          "aliases": [],
+          "severity": "moderate",
+          "summary": "GHSA-698v-4r3x-3vcv as surfaced through Vite's launch-editor development path",
+          "first_patched": "Vite 6.4.4 / fixed release in each maintained line",
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "The finding is inherited from Vite's launch-editor development/editor-opening path. TOEFL House uses Vite to build upstream SPA assets but never starts the Vite development server in production. Foundation runtime 39597802134 production module graph excludes vite and launch-editor; the Windows host does not run the Node application runtime.",
+          "fix_path": "Upgrade upstream build trees when their pinned releases move; re-triage if Vite dev/preview/editor middleware is ever enabled in production."
+        },
+        {
+          "id": "1242651",
+          "aliases": [],
+          "severity": "moderate",
+          "summary": "GHSA-r825-w8mm-5pxw as surfaced through Vite's launch-editor development path",
+          "first_patched": "Vite 6.4.4 / fixed release in each maintained line",
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "The vulnerable behavior is editor CLI invocation through launch-editor. Production neither starts Vite's development server nor exposes an editor-launch route. Foundation runtime 39597802134 production module graph excludes vite and launch-editor.",
+          "fix_path": "Upgrade with upstream pins; re-triage if a production Vite/editor-launch process is introduced."
+        },
+        {
+          "id": "1242658",
+          "aliases": [],
+          "severity": "high",
+          "summary": "GHSA-587h-7wmj-h5pm as surfaced through Vite's launch-editor development path",
+          "first_patched": "Vite 6.4.4 / fixed release in each maintained line",
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "The advisory's vulnerable editor-launch path is not a shipped server path: Vite is build/dev tooling only, the production module graph from run 39597802134 excludes vite and launch-editor, and the application runtime is Linux-containerized rather than a Windows Vite process.",
+          "fix_path": "Upgrade with upstream pins; re-triage if Vite editor middleware is exposed or runtime moves to Windows Node."
+        }
+      ]
+    }
+  ],
+  "withdraws": []
+}
