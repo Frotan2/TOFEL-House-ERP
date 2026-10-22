@@ -150,6 +150,24 @@ jobs:
             throw "Headless synthetic install did not generate its local credential file."
           }
           Write-Host "Headless installer, start, stop and repair routes passed with fake Docker."
+          # Simulate a lost credential file after synthetic installation. The
+          # read-only check must catch it without viewing password contents.
+          $credential = Join-Path $kit 'product/data/secrets/db.env'
+          $heldCredential = "$credential.synthetic-hold"
+          if (Test-Path -LiteralPath $heldCredential) {
+            throw "Unexpected synthetic credential hold file."
+          }
+          Move-Item -LiteralPath $credential -Destination $heldCredential
+          try {
+            $blockedCheck = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $checkScript 2>&1)
+            if ($LASTEXITCODE -ne 0) { throw "Read-only missing-credential check failed." }
+            if (($blockedCheck -join "`n") -notmatch 'BLOCKED: existing site/database but credential file missing') {
+              throw "Read-only check failed to warn about preserved data and missing credentials."
+            }
+          } finally {
+            Move-Item -LiteralPath $heldCredential -Destination $credential
+          }
+          Write-Host "Missing-credential preservation check passed."
           $tar = Join-Path $kit 'product/release/toefl-house-erp-app.tar'
           $sha = "$tar.sha256"
           & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File 'product/windows/Verify Package Image.ps1' -Archive $tar -Checksum $sha

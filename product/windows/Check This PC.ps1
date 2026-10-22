@@ -20,12 +20,32 @@ if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
 try {
     $drive = Get-PSDrive -Name ((Get-Location).Drive.Name) -PSProvider FileSystem -ErrorAction Stop
     if ($drive.Free -is [ValueType] -and $drive.Free -ge 0) {
-        Result "Current drive free space" ([math]::Round($drive.Free / 1GB, 1).ToString() + " GiB (informational)")
+        $freeGiB = [math]::Round($drive.Free / 1GB, 1)
+        if ($drive.Free -lt 30GB) {
+            Result "Current drive free space" ($freeGiB.ToString() + " GiB; below the documented ~30 GiB installation guideline")
+        } else {
+            Result "Current drive free space" ($freeGiB.ToString() + " GiB (informational)")
+        }
     } else {
         Result "Current drive free space" "Not available"
     }
 } catch {
     Result "Current drive free space" "Not available"
+}
+
+try {
+    # A distinct letter can still be a partition of the same physical disk:
+    # this is discovery, never evidence of an approved backup destination.
+    $fixedDrives = @([System.IO.DriveInfo]::GetDrives() | Where-Object {
+        $_.DriveType -eq [System.IO.DriveType]::Fixed -and $_.IsReady
+    })
+    if ($fixedDrives.Count -ge 2) {
+        Result "Potential local backup volume" "Multiple fixed volumes visible; physical independence and write/recovery checks NOT VERIFIED"
+    } else {
+        Result "Potential local backup volume" "No second fixed volume observed; actual backup drive NOT VERIFIED"
+    }
+} catch {
+    Result "Potential local backup volume" "Cannot inventory; actual backup drive NOT VERIFIED"
 }
 
 $dockerCommand = Get-Command docker -ErrorAction SilentlyContinue
@@ -35,13 +55,16 @@ if (-not $dockerCommand) {
         $dockerCommand = $candidate
     }
 }
+$dockerReady = $false
+$dockerExe = $null
 if (-not $dockerCommand) {
     Result "Docker Desktop" "Docker CLI not found (prerequisite missing)"
 } else {
     try {
-        $executable = if ($dockerCommand -is [string]) { $dockerCommand } else { $dockerCommand.Source }
-        & $executable info *> $null
+        $dockerExe = if ($dockerCommand -is [string]) { $dockerCommand } else { $dockerCommand.Source }
+        & $dockerExe info *> $null
         if ($LASTEXITCODE -eq 0) {
+            $dockerReady = $true
             Result "Docker Desktop" "Docker engine responding"
         } else {
             Result "Docker Desktop" "Installed, but engine not responding"
@@ -60,10 +83,34 @@ if (Test-Path -LiteralPath (Join-Path $productRoot "release\toefl-house-erp-app.
     Result "Installation material" "Prebuilt image missing; incomplete customer package"
 }
 
-if (Test-Path -LiteralPath (Join-Path $productRoot "data") -PathType Container) {
+$dataRoot = Join-Path $productRoot "data"
+$sitePresent = Test-Path -LiteralPath (Join-Path $dataRoot "sites\toeflhouse.localhost") -PathType Container
+$secretPresent = Test-Path -LiteralPath (Join-Path $dataRoot "secrets\db.env") -PathType Leaf
+$dbVolumePresent = $false
+$dbVolumeVerified = $false
+if ($dockerReady) {
+    try {
+        # Existence only. Never inspect volume contents or print a data path.
+        & $dockerExe volume inspect "toefl-house-erp_db-data" *> $null
+        $dbVolumePresent = ($LASTEXITCODE -eq 0)
+        $dbVolumeVerified = $true
+    } catch {
+        $dbVolumeVerified = $false
+    }
+}
+if (Test-Path -LiteralPath $dataRoot -PathType Container) {
     Result "Existing local site data" "Present - must be preserved"
 } else {
     Result "Existing local site data" "No local site-data folder observed"
+}
+if (-not $secretPresent -and ($sitePresent -or $dbVolumePresent)) {
+    Result "Database credential safety" "BLOCKED: existing site/database but credential file missing. Do NOT reinstall, repair, delete or regenerate credentials."
+} elseif ($secretPresent) {
+    Result "Database credential safety" "Local credential file present (contents not read; database match NOT VERIFIED)"
+} elseif (-not $dbVolumeVerified) {
+    Result "Database credential safety" "No credential file; database volume could not be ruled out. Do NOT assume a fresh installation."
+} else {
+    Result "Database credential safety" "No credential file or existing site/database observed (informational, not permission to install)"
 }
 
 try {
