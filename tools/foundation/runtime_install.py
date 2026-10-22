@@ -610,6 +610,17 @@ def main() -> int:
                     raise RuntimeError("Upstream input modified during install: " + name + "/" + relative)
             installed_shas[name] = sha
         report["source_revisions"] = installed_shas
+        run("patch-frappe-pillow-13", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_pillow.py", bench_dir / "apps/frappe"])
+        run("install-pillow-13", [lab / "tools/bin/uv", "pip", "install",
+            "--python", bench_dir / "env/bin/python", "--no-deps", "--upgrade",
+            "Pillow==13.0.0"])
+        run("refresh-frappe-pillow-metadata", [lab / "tools/bin/uv", "pip", "install",
+            "--python", bench_dir / "env/bin/python", "--no-deps", "--reinstall",
+            "--editable", bench_dir / "apps/frappe"])
+        run("verify-frappe-pillow-13", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_pillow.py", bench_dir / "apps/frappe",
+            "--verify"])
         run("guard-all-weasyprint-entrypoints", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_weasyprint.py", bench_dir / "apps/frappe"])
         run("patch-hrms-editor-dependencies", [bench_dir / "env/bin/python",
@@ -624,7 +635,8 @@ def main() -> int:
             ROOT / "tools/foundation/secure_markdown.py", bench_dir / "apps/frappe"])
         run("security-remediation-regressions", [bench_dir / "env/bin/python", "-m", "unittest",
             "tests.security.test_security_remediation_2026_10_09",
-            "tests.security.test_education_locks_2026_10_17", "-v"], cwd=ROOT)
+            "tests.security.test_education_locks_2026_10_17",
+            "tests.security.test_pillow_upgrade_2026_10_22", "-v"], cwd=ROOT)
         run("python-dependency-check", [lab / "tools/bin/uv", "pip", "check", "--python", bench_dir / "env/bin/python"])
         run("python-resolved-dependencies", [lab / "tools/bin/uv", "pip", "freeze", "--python", bench_dir / "env/bin/python"])
         site = "foundation.localhost"

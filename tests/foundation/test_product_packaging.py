@@ -449,7 +449,8 @@ class LineEndingContract(unittest.TestCase):
             "product/bootstrap.py", "product/activate.py", "product/restore.py",
             "product/backup.py", "product/native_gpg.py", "product/native_db.py",
             "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
-            "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_hrms.py",
+            "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_pillow.py",
+            "tools/foundation/secure_hrms.py",
             "tools/foundation/hrms-locks", "tools/foundation/banking-locks",
             # Socket.IO realtime overlay (GHSA-3h5v/96hv/58qx/2m8v/677m/gr94/r635), reviewed 2026-10-18.
             "tools/foundation/secure_realtime.py", "tools/foundation/realtime-locks",
