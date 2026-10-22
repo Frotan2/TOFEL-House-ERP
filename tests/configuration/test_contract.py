@@ -339,6 +339,14 @@ class DoctypeContractTests(unittest.TestCase):
                                 f"{name}.{identity} must be set-once")
             self.assertTrue(fields["code"].get("unique"), f"{name}.code must be unique")
 
+    def test_program_level_controller_refuses_duplicate_native_anchor(self):
+        source = (self.DOC / "th_program_level" / "th_program_level.py").read_text(
+            encoding="utf-8")
+        self.assertIn('filters={"native_program": doc.native_program}', source)
+        self.assertIn('fields=["name"]', source)
+        self.assertIn("limit_page_length=2", source)
+        self.assertIn("already linked to another", source)
+
     def test_no_role_may_delete_configuration(self):
         for name in ("th_academic_program", "th_program_level", "th_discount_rule"):
             doc = self._load(name)

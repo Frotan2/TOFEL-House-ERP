@@ -28,6 +28,37 @@ PLACEMENT_FEE_ITEM = "SYN-PLACEMENT-FEE"
 PLACEMENT_FEE_ITEM_CONF_KEY = "toefl_house_placement_fee_item"
 
 
+def _discount_family_for_native_program(native_program):
+    """Resolve one native Program to at most one academic program family.
+
+    Family-scoped discount rules are safe only when the control-plane link is
+    unambiguous. Legacy or manually-corrupted duplicate links must stop billing
+    instead of letting a database lookup silently pick whichever row arrives
+    first. An unlinked native Program remains outside family-scoped discounts;
+    globally-scoped rules can still apply.
+    """
+    links = frappe.db.get_all(
+        "TH Program Level",
+        filters={"native_program": native_program},
+        fields=["name", "family"],
+        limit_page_length=2,
+    )
+    if len(links) > 1:
+        raise frappe.ValidationError(
+            f"Program {native_program} is linked to more than one academic level; "
+            "repair Academic Setup before billing"
+        )
+    if not links:
+        return None
+    family = links[0].get("family")
+    if not family or not frappe.db.exists("TH Academic Program", family):
+        raise frappe.ValidationError(
+            f"Program {native_program} points to an unknown academic program family; "
+            "repair Academic Setup before billing"
+        )
+    return family
+
+
 def _placement_fee_item():
     """Resolve the configured native Item code for the placement fee.
 
@@ -132,9 +163,9 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
                                                    "precedence", "fee_category", "program",
                                                    "student", "status"])
         # TH Discount Rule.program is a family; native Program Enrollment.program
-        # is a specific level. Only compare scopes from the same authority.
-        discount_family = frappe.db.get_value(
-            "TH Program Level", {"native_program": pe.program}, "family")
+        # is a specific level. Resolve that authority link fail-closed: duplicate
+        # links can otherwise select an arbitrary family and misprice tuition.
+        discount_family = _discount_family_for_native_program(pe.program)
         applied_discounts = []
         fee_components = []
         for c in components:

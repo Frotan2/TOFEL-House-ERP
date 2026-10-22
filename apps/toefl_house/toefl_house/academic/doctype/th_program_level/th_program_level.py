@@ -44,7 +44,19 @@ def _assert_versions_monotone(doc):
 
 
 def before_save(doc, method=None):
-    """Sibling sequence uniqueness (needs the database)."""
+    """Sibling sequence and native-Program anchor uniqueness (database-backed)."""
+    if doc.native_program:
+        linked = frappe.db.get_all(
+            "TH Program Level",
+            filters={"native_program": doc.native_program},
+            fields=["name"],
+            limit_page_length=2,
+        )
+        if any(row.get("name") != doc.name for row in linked):
+            frappe.throw(_(
+                f"Native program {doc.native_program} is already linked to another "
+                "academic level"
+            ))
     siblings = frappe.db.get_all(
         "TH Program Level",
         filters={"family": doc.family, "name": ("!=", doc.name)},

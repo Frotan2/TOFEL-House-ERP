@@ -96,6 +96,15 @@ class FinanceContainmentWiringTests(unittest.TestCase):
         self.assertEqual(source.count("price_list_rate"), 1)
         self.assertNotIn("4000", source)
 
+    def test_family_scoped_discounts_refuse_ambiguous_program_links(self):
+        source = FINANCE.read_text(encoding="utf-8")
+        self.assertIn("def _discount_family_for_native_program", source)
+        self.assertIn('fields=["name", "family"]', source)
+        self.assertIn("limit_page_length=2", source)
+        self.assertIn("linked to more than one academic level", source)
+        self.assertIn("points to an unknown academic program family", source)
+        self.assertIn("_discount_family_for_native_program(pe.program)", source)
+
     def test_issue_commands_lock_the_billable_row_before_the_duplicate_check(self):
         """Two concurrent distinct keys must not both pass the exists() check."""
         source = FINANCE.read_text(encoding="utf-8")
