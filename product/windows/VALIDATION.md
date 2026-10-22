@@ -288,15 +288,18 @@ restore command or treat CI as Owner-machine evidence.
   backup/restore, browser login, restart persistence, upgrade/rollback,
   performance checks and the Windows stale-worktree EOL-normalization job.
 - Native lifecycle run
-  [39437595961](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39437595961)
-  passed an isolated restore into the new `placement-restore.localhost` site
-  and a distinct database inside an ephemeral Bench. The retained verifier
-  checks 14 representative DocTypes, public **and** private File blobs and
-  Frappe File metadata, file size/mode/UID/GID, encrypted-artifact hashes,
-  and restored-site HTTP/login behavior after a real Gunicorn service restart.
-  The same run re-read all eight owner-policy resolvers after restart and
-  exercised their off-switch/fail-closed behavior inside rollback-confined
-  synthetic fixtures.
+  [39836321651](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39836321651)
+  passed on code head `1f84aee9`. It restores into the new
+  `placement-restore.localhost` site, a distinct database and a separate
+  mini-Bench/site-data root outside the source Bench. The verifier checks all 14
+  representative DocTypes by count, name digest and full row-value digest;
+  public **and** private File blobs and Frappe File metadata; file
+  size/mode/UID/GID; encrypted source-artifact hashes; and restored-site
+  HTTP/login behavior after a real Gunicorn restart. A second target proves a
+  wrong backup key fails closed, leaves source site/backup hashes unchanged,
+  cleans native temporary restore staging and confines cleanup to that
+  disposable failure target. The same run re-read all eight owner-policy
+  resolvers after restart and exercised their off-switch/fail-closed behavior.
 - These are engineering qualifications only. They do **not** qualify Docker
   Desktop or Task Scheduler on the Owner's PC, the Owner's same-computer backup
   drive, key custody, retention execution, real Tailscale devices, or production

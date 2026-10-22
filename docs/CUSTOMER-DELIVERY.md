@@ -84,7 +84,7 @@ future authorized workflows but are excluded from customer packages.
 | Docker app image startup in disposable Linux CI | Product image workflow; not equivalent to customer Windows |
 | Windows script syntax, synthetic image packaging and tamper rejection | Windows customer package workflow |
 | Source installation, existing-site checks, no-discard lifecycle | Owned tests and source contract checks |
-| Isolated synthetic restore to a new site/database + post-restart verification | **QUALIFIED IN HOSTED CI; NOT OWNER-MACHINE AUTHORIZATION** |
+| Isolated synthetic restore to a new site/database/site-data root + wrong-key failure + post-restart verification | **QUALIFIED IN HOSTED CI — run 39836321651; NOT OWNER-MACHINE AUTHORIZATION** |
 | Owner-policy persistence across a real hosted service restart | **QUALIFIED IN HOSTED CI FOR ALL EIGHT POLICIES** |
 | Real clean Windows installation with Docker Desktop and WSL 2 | **NOT YET QUALIFIED** |
 | Prebuilt multi-GB image import on a real customer PC | **NOT YET QUALIFIED** |

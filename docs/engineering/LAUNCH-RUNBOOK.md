@@ -372,15 +372,18 @@ evidence or authorization; do not improvise a restore on the operational PC.
   restart persistence, upgrade/rollback, performance baseline, and the Windows
   stale-worktree EOL-normalization contract.
 - Native lifecycle run
-  [39437595961](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39437595961)
-  passed after creating `placement-restore.localhost` with a separate database
-  inside an ephemeral Bench. Its retained verifier checks 14 representative
-  synthetic DocTypes, public and private File content plus File metadata,
-  encrypted-artifact hashes, filesystem size/mode/UID/GID, and restored-site
-  HTTP/login behavior after a real Gunicorn restart. It also verifies all eight
-  owner-configurable policy resolvers before and after restart and exercises
-  their off-switch/fail-closed behavior within rollback-confined synthetic
-  fixtures.
+  [39836321651](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39836321651)
+  passed on code head `1f84aee9`. It restores encrypted disposable copies into
+  `placement-restore.localhost` with a distinct database and an isolated
+  mini-Bench/site-data root outside the source Bench. The verifier checks 14
+  representative synthetic DocTypes by count, name digest and full row-value
+  digest; public and private File content/metadata; encrypted source-artifact
+  hashes; filesystem size/mode/UID/GID; and HTTP/login behavior after a real
+  Gunicorn restart. A second isolated target deliberately uses a wrong backup
+  key and must fail; temporary restore staging is cleaned, source site/backup
+  hashes remain unchanged, and cleanup is confined to that disposable failure
+  target. The same run verifies all eight owner-policy resolvers before and
+  after restart and their off-switch/fail-closed behavior.
 - These workflows qualify the engineering mechanism, not the Owner machine.
   Windows/Docker Desktop, Task Scheduler, the Owner backup drive, key custody,
   retention execution, real devices and production recovery remain unqualified.
