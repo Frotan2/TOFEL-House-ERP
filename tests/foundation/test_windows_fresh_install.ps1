@@ -41,6 +41,24 @@ try {
     # the simulated native exit code explicitly; this does not invoke the
     # mocked docker command, so the site-file call count below is unaffected.
     $global:LASTEXITCODE = 0
+    # Guard a site with an alternate name, even when the canonical site is absent.
+    $otherSite = Join-Path $root "data/sites/previous-course.localhost"
+    New-Item -ItemType Directory -Path $otherSite -Force | Out-Null
+    $otherSentinel = Join-Path $otherSite "student-records.synthetic"
+    [System.IO.File]::WriteAllText($otherSentinel, "PRESERVE ALT SITE")
+    $otherHash = (Get-FileHash $otherSentinel).Hash
+    $calls = $script:dockerCalls
+    Assert-Denied "Existing site files"
+    if ($script:dockerCalls -ne $calls) { throw "Alternate site refusal queried Docker" }
+    if ((Get-FileHash $otherSentinel).Hash -ne $otherHash) { throw "Alternate site data changed" }
+    Remove-Item -LiteralPath $otherSite -Recurse -Force
+    # Even common Frappe configuration without a site directory must block.
+    $commonFile = Join-Path $root "data/sites/common_site_config.json"
+    [System.IO.File]::WriteAllText($commonFile, "SYNTHETIC COMMON SITE CONFIG")
+    $calls = $script:dockerCalls
+    Assert-Denied "Existing site files"
+    if ($script:dockerCalls -ne $calls) { throw "Common site-file refusal queried Docker" }
+    Remove-Item -LiteralPath $commonFile -Force
     $site = Join-Path $root "data/sites/toeflhouse.localhost"
     New-Item -ItemType Directory -Path $site -Force | Out-Null
     $sentinel = Join-Path $site "synthetic.txt"

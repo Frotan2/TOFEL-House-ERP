@@ -4,8 +4,14 @@
 $ErrorActionPreference = "Stop"
 
 function Test-FreshInstallation([string]$ProductRoot) {
-    if (Test-Path -LiteralPath (Join-Path $ProductRoot "data\sites\toeflhouse.localhost")) {
-        throw "Existing site files were found, but the database password file is missing. Stop and recover the original credentials; no password was generated."
+    # Other site names and partially initialized Frappe files are preserved too.
+    # Inventory names only; never read or change any site data.
+    $sitesRoot = Join-Path $ProductRoot "data\sites"
+    if (Test-Path -LiteralPath $sitesRoot) {
+        $entries = @(Get-ChildItem -LiteralPath $sitesRoot -Force -ErrorAction Stop | Select-Object -First 1)
+        if ($entries.Count -gt 0) {
+            throw "Existing site files were found, but the database password file is missing. Stop and recover the original credentials; no password was generated."
+        }
     }
     $volumes = @(& docker volume ls --filter "name=toefl-house-erp_db-data" --format "{{.Name}}" 2>$null)
     if ($LASTEXITCODE -ne 0) {

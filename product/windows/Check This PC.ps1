@@ -85,6 +85,17 @@ if (Test-Path -LiteralPath (Join-Path $productRoot "release\toefl-house-erp-app.
 
 $dataRoot = Join-Path $productRoot "data"
 $sitePresent = Test-Path -LiteralPath (Join-Path $dataRoot "sites\toeflhouse.localhost") -PathType Container
+$sitesRoot = Join-Path $dataRoot "sites"
+$siteInventoryVerified = $true
+if (Test-Path -LiteralPath $sitesRoot) {
+    try {
+        # A renamed or partly initialized site is still customer data.
+        # Existence only: never read contents or private credentials.
+        $sitePresent = $sitePresent -or (@(Get-ChildItem -LiteralPath $sitesRoot -Force -ErrorAction Stop | Select-Object -First 1).Count -gt 0)
+    } catch {
+        $siteInventoryVerified = $false
+    }
+}
 $secretPresent = Test-Path -LiteralPath (Join-Path $dataRoot "secrets\db.env") -PathType Leaf
 $dbVolumePresent = $false
 $dbVolumeVerified = $false
@@ -107,8 +118,8 @@ if (-not $secretPresent -and ($sitePresent -or $dbVolumePresent)) {
     Result "Database credential safety" "BLOCKED: existing site/database but credential file missing. Do NOT reinstall, repair, delete or regenerate credentials."
 } elseif ($secretPresent) {
     Result "Database credential safety" "Local credential file present (contents not read; database match NOT VERIFIED)"
-} elseif (-not $dbVolumeVerified) {
-    Result "Database credential safety" "No credential file; database volume could not be ruled out. Do NOT assume a fresh installation."
+} elseif (-not $dbVolumeVerified -or -not $siteInventoryVerified) {
+    Result "Database credential safety" "No credential file; local site or database storage could not be ruled out. Do NOT assume a fresh installation."
 } else {
     Result "Database credential safety" "No credential file or existing site/database observed (informational, not permission to install)"
 }

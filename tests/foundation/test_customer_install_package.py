@@ -89,6 +89,7 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('DriveType]::Fixed', CHECK_PC)
         self.assertIn('volume inspect "toefl-house-erp_db-data"', CHECK_PC)
         self.assertIn('sites\\toeflhouse.localhost', CHECK_PC)
+        self.assertIn("Get-ChildItem -LiteralPath $sitesRoot -Force", CHECK_PC)
         self.assertIn('secrets\\db.env', CHECK_PC)
         self.assertIn('BLOCKED: existing site/database but credential file missing', CHECK_PC)
         self.assertIn('Do NOT assume a fresh installation', CHECK_PC)
@@ -114,13 +115,17 @@ class CustomerInstallerContract(unittest.TestCase):
             self.assertNotIn("No database exists yet", script, name)
             self.assertIn("Do NOT reinstall, delete data", script, name)
         preflight = (WINDOWS / "Test Fresh Installation.ps1").read_text()
-        self.assertIn(r"data\sites\toeflhouse.localhost", preflight)
+        self.assertIn(r"data\sites", preflight)
+        self.assertIn("Get-ChildItem -LiteralPath $sitesRoot -Force", preflight)
         self.assertIn('docker volume ls --filter "name=toefl-house-erp_db-data"', preflight)
         self.assertIn("Could not check existing database storage", preflight)
 
     def test_customer_package_verifies_before_import_or_boot(self):
         self.assertIn('if exist "release\\toefl-house-erp-app.tar" goto :packagedimage', INSTALL)
         self.assertIn("Verify Package Image.ps1", INSTALL)
+        self.assertIn(":packageinvalid", INSTALL)
+        self.assertLess(INSTALL.index("Checking package integrity before local installation"),
+                        INSTALL.index("if not exist data\\secrets mkdir data\\secrets"))
         self.assertIn('docker load -i "release\\toefl-house-erp-app.tar"', INSTALL)
         self.assertIn("docker compose up -d --no-build", INSTALL)
         self.assertLess(INSTALL.index("Verify Package Image.ps1"),

@@ -52,6 +52,12 @@ echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :dockerup
 
+rem Reject a corrupt kit BEFORE local credential creation or ACL changes.
+if not exist "release\toefl-house-erp-app.tar" goto :checksources
+echo [TH_STAGE] Checking package integrity before local installation...
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1"
+if errorlevel 1 goto :packageinvalid
+:checksources
 if exist "release\toefl-house-erp-app.tar" goto :sourcesready
 echo  Checking product source line endings before the image build...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Normalize Product Sources.ps1"
@@ -154,6 +160,12 @@ echo.
 echo  Install finished. From now on use the "Start TOEFL House ERP" shortcut.
 if not defined TH_GUI_MODE pause
 exit /b 0
+
+:packageinvalid
+echo  Package integrity verification failed before credential setup.
+echo  Do NOT install from this package. Request a complete trusted copy.
+if not defined TH_GUI_MODE pause
+exit /b 1
 
 :storagecheckfailed
 echo  Installation stopped safely. Existing data was not changed.

@@ -106,6 +106,22 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
             throw "Customer package included private application data."
           }
+          # A corrupt first-run kit must be rejected before creating local data.
+          # Use a separate synthetic copy so the valid package stays unchanged.
+          $damagedKit = Join-Path $env:RUNNER_TEMP "Damaged Customer Kit"
+          Copy-Item -LiteralPath $kit -Destination $damagedKit -Recurse -ErrorAction Stop
+          $damagedArchive = Join-Path $damagedKit 'product/release/toefl-house-erp-app.tar'
+          [System.IO.File]::AppendAllText($damagedArchive, "SYNTHETIC_CORRUPTION")
+          $env:TH_GUI_MODE = '1'
+          $damagedInstall = Join-Path $damagedKit 'product/windows/Install TOEFL House ERP.cmd'
+          $rejectedOutput = @(& $damagedInstall 2>&1)
+          if ($LASTEXITCODE -eq 0) { throw "Damaged kit was accepted by installer." }
+          if (Test-Path -LiteralPath (Join-Path $damagedKit 'product/data')) {
+            throw "Damaged kit modified local ERP data before integrity verification."
+          }
+          if (($rejectedOutput -join [Environment]::NewLine) -notmatch 'Package integrity verification failed') {
+            throw "Damaged kit refusal did not explain its cause."
+          }
           # Check This PC must be runnable with an empty package and must
           # not create site files, secrets, Docker volumes or backups.
           if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
