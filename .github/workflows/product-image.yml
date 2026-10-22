@@ -17,6 +17,7 @@ on:
       # build green; changes to the disposable runner cannot silently skip it.
       - tools/native/runtime_restore.py
       - tools/native/run_native.py
+      - tools/native/migrate_restore_site.py
       - tools/native/policy_restart_check.py
       # The Dockerfile COPYs these helpers into the production image. A change
       # to their security checks must rebuild the image on this PR, not merely

@@ -161,6 +161,8 @@ class NativeRestartWiringTests(unittest.TestCase):
         # The restored-site health probe is an authenticated login API
         # request (no asset rendering, no get_logged_user-without-session).
         self.assertIn("api/method/login", text)
+        workflow=(ROOT/".github/workflows/product-image.yml").read_text(encoding="utf-8")
+        self.assertIn("- tools/native/migrate_restore_site.py",workflow)
 
     def test_isolated_restore_migration_is_runner_only_and_root_bound(self):
         helper=(ROOT/"tools/native/migrate_restore_site.py").read_text(encoding="utf-8")
