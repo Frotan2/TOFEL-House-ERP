@@ -148,8 +148,10 @@ def main():
         target=lab/name
         source_sites=(benchdir/'sites').resolve()
         sites=target/'sites'
+        logs=target/'logs'
         target.mkdir(mode=0o700)
         sites.mkdir(mode=0o700)
+        logs.mkdir(mode=0o700)
         resolved=sites.resolve()
         if (resolved==source_sites or source_sites in resolved.parents
                 or resolved in source_sites.parents):
@@ -287,6 +289,9 @@ def main():
             'isolated_site_data_root':True,
             'source_sites_root_mounted':False,
         }
+        source_config_file=benchdir/'sites'/'placement-test.localhost'/'site_config.json'
+        source_config_hash=hashlib.sha256(source_config_file.read_bytes()).hexdigest()
+        source_config=json.loads(source_config_file.read_text())
         restore_payload=json.dumps({'site':restore_site,'backup_set':backup_set,
                                     'encryption_key':backup_encryption_key,
                                     'db_root_password':rootpw,'admin_password':adminpw})
@@ -294,9 +299,6 @@ def main():
             [benchdir/'env/bin/python',ROOT/'product/restore.py'],cwd=restore_bench,
             input_text=restore_payload,
             env_overrides={'BENCH_DIR':str(restore_bench),'SITE_NAME':restore_site})
-        source_config_file=benchdir/'sites'/'placement-test.localhost'/'site_config.json'
-        source_config_hash=hashlib.sha256(source_config_file.read_bytes()).hexdigest()
-        source_config=json.loads(source_config_file.read_text())
         restore_config_file=restore_sites/restore_site/'site_config.json'
         restore_config=json.loads(restore_config_file.read_text())
         assert source_config['db_name'] != restore_config['db_name']
