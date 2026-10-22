@@ -1,6 +1,6 @@
 {
   "schema": "sec-deps-01-advisory-delta/1",
-  "basis": "2026-10-22 review of newly surfaced npm advisory records from Foundation runtime 39597802134. Pillow findings are remediated separately by the reviewed Pillow 13 uplift. HRMS markdown-it is upgraded to 14.3.3. This delta covers only launch-editor/Vite records whose vulnerable behavior is confined to development/editor-launch paths that the shipped appliance does not start.",
+  "basis": "2026-10-22 review of newly surfaced npm advisory records from Foundation runtime runs 39597802134 and 39829102419. Pillow/GitPython/PyJWT/pypdf findings are remediated separately by the reviewed Frappe Python security uplift. HRMS markdown-it is upgraded to 14.3.3. This delta covers only launch-editor/Vite records whose vulnerable behavior is confined to development/editor-launch/dev-server paths that the shipped appliance does not start.",
   "packages": [
     {
       "package": "npm:launch-editor@2.6.1",
@@ -69,6 +69,32 @@
           "runtime_disposition": "DEV_ONLY",
           "runtime_disposition_evidence": "The advisory's vulnerable editor-launch path is not a shipped server path: Vite is build/dev tooling only, the production module graph from run 39597802134 excludes vite and launch-editor, and the application runtime is Linux-containerized rather than a Windows Vite process.",
           "fix_path": "Upgrade with upstream pins; re-triage if Vite editor middleware is exposed or runtime moves to Windows Node."
+        },
+        {
+          "id": "1242724",
+          "aliases": [
+            "GHSA-9jrq-w75r-8gcw",
+            "CVE-2026-112945"
+          ],
+          "severity": "low",
+          "summary": "Vite cross-origin script execution through custom development middleware",
+          "first_patched": "6.4.4 / 7.3.7 / 8.1.6 / 8.2.4 / 8.3.3",
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "Foundation runtime 39829102419 returned npm advisory 1242724 (GHSA-9jrq-w75r-8gcw). GitHub states the vulnerable path requires a Vite development server using custom/middleware-mode HTML transformation with an unchanged browser request URL. TOEFL House production does not start a Vite dev/preview/custom-middleware server; the same run's production frontend module graph (frontend_graph-result.json SHA-256 8abd22e33e5cf2d51fe3b23f506eaa8a3c5b77a713f169ee5100b891c4ef5203) excludes vite and launch-editor.",
+          "fix_path": "Upgrade upstream build trees when their pinned releases move; re-triage immediately if Vite custom middleware or any Vite development/preview server is introduced in production."
+        },
+        {
+          "id": "1242730",
+          "aliases": [
+            "GHSA-rq7h-c2jc-7f22",
+            "CVE-2026-112946"
+          ],
+          "severity": "moderate",
+          "summary": "Vite dev server may expose files outside server.fs.allow on non-Windows hosts",
+          "first_patched": "6.4.4 / 7.3.7 / 8.1.6 / 8.2.4 / 8.3.3",
+          "runtime_disposition": "DEV_ONLY",
+          "runtime_disposition_evidence": "Foundation runtime 39829102419 returned npm advisory 1242730 (GHSA-rq7h-c2jc-7f22). GitHub states exploitation requires a network-exposed Vite development server plus a matching imported project path. TOEFL House production serves prebuilt assets through Frappe and never exposes a Vite development server; the same run's production module graph excludes vite and launch-editor.",
+          "fix_path": "Upgrade upstream build trees when their pinned releases move; re-triage immediately if a Vite development server is ever network-exposed in production."
         }
       ]
     }

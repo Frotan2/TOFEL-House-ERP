@@ -1,15 +1,31 @@
 {
-  "source_run": 39597802134,
-  "source_artifact": "foundation-runtime-39597802134-1",
+  "source_run": 39829102419,
+  "source_artifact": "foundation-runtime-39829102419-1",
+  "source_artifact_id": 12449413937,
+  "source_artifact_digest": "sha256:fadae46b05dcfb1a1ad64c927b88bd078fc9e67d541fc5caba6bf90f0fa51d72",
+  "advisory_artifact_file": "runtime-evidence/frontend-advisories.json",
+  "advisory_artifact_file_sha256": "a39f446facc88f8409df2b185d7cebc89b71871cb8297426896336ed8765614d",
   "artifact_file": "runtime-evidence/frontend_graph-result.json",
-  "artifact_file_sha256": "79f7d1ba34e351d403cae22f4458138a0babfe71e6989a948cecdb7c8d896957",
+  "artifact_file_sha256": "8abd22e33e5cf2d51fe3b23f506eaa8a3c5b77a713f169ee5100b891c4ef5203",
   "status": "pass",
   "scope": "Production build module inclusion only; not a vulnerability waiver or exploit proof",
-  "package_count": 79,
+  "package_count": 84,
   "absent_packages": [
     "launch-editor",
     "vite",
     "markdown-it"
   ],
-  "interpretation": "Absence from the production bundle is supporting evidence only. DEV_ONLY disposition also depends on the product runtime not starting Vite/launch-editor development or editor-launch middleware."
+  "newly_mapped_advisories": [
+    {
+      "npm_id": 1242724,
+      "ghsa": "GHSA-9jrq-w75r-8gcw",
+      "severity": "low"
+    },
+    {
+      "npm_id": 1242730,
+      "ghsa": "GHSA-rq7h-c2jc-7f22",
+      "severity": "moderate"
+    }
+  ],
+  "interpretation": "Absence from the production bundle is supporting evidence only. DEV_ONLY disposition depends on the stronger runtime fact that the appliance never starts Vite dev/preview/custom middleware or launch-editor paths."
 }
