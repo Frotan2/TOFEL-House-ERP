@@ -106,10 +106,15 @@ def main():
                   commit=os.environ['GITHUB_SHA'], run_id=os.environ['GITHUB_RUN_ID'], run_attempt=os.environ['GITHUB_RUN_ATTEMPT'],
                   status='running', checks=[], production='REJECT', runtime_complete=False)
     processes=[]
+    site_roots=[benchdir/'sites']
     def redact(text):
         values=list(secrets_)
-        for f in benchdir.glob('sites/*/site_config.json'):
-            data=json.loads(f.read_text());values.extend(str(v) for k,v in data.items() if any(x in k.lower() for x in ['password','secret','encryption_key']) and v)
+        for root in site_roots:
+            for f in root.glob('*/site_config.json'):
+                try:data=json.loads(f.read_text())
+                except (OSError,json.JSONDecodeError):continue
+                values.extend(str(v) for k,v in data.items()
+                              if any(x in k.lower() for x in ['password','secret','encryption_key']) and v)
         for v in values:text=text.replace(v,'[REDACTED]')
         return text
     def run(label,args,cwd=None,timeout=1200,input_text=None,env_overrides=None):
@@ -130,14 +135,40 @@ def main():
             raise RuntimeError(f'{label} failed (exit {p.returncode}); see retained log\n--- {label} log tail ---\n{tail}')
         return p.stdout.strip()
     def bench(label,*args):return run(label,[lab/'tools/bin/bench',*args],benchdir)
-    def create_site(label,site,site_db_password,set_default=False):
+    def create_site(label,site,site_db_password,set_default=False,bench_root=None):
+        target_bench=Path(bench_root or benchdir)
         payload=json.dumps({'site':site,'db_root_password':rootpw,
                             'admin_password':adminpw,'db_password':site_db_password,
                             'db_host':'127.0.0.1','db_port':13306,
                             'set_default_site':set_default})
         return run(label,[py,ROOT/'tools/native/site_setup.py'],input_text=payload,
-                   env_overrides={'SITE_BENCH_DIR':str(benchdir),
+                   env_overrides={'SITE_BENCH_DIR':str(target_bench),
                                   'SITE_PYTHON':str(benchdir/'env/bin/python')})
+    def isolated_bench(name):
+        target=lab/name
+        source_sites=(benchdir/'sites').resolve()
+        sites=target/'sites'
+        target.mkdir(mode=0o700)
+        sites.mkdir(mode=0o700)
+        resolved=sites.resolve()
+        if (resolved==source_sites or source_sites in resolved.parents
+                or resolved in source_sites.parents):
+            raise RuntimeError('Isolated restore root overlaps the source Bench sites root')
+        for registry in ('apps.txt','apps.json','common_site_config.json'):
+            source=benchdir/'sites'/registry
+            destination=sites/registry
+            if source.is_symlink() or not source.is_file():
+                raise RuntimeError('Source Bench registry is missing or unsafe: '+registry)
+            if registry=='common_site_config.json':
+                config=json.loads(source.read_text())
+                config.pop('default_site',None)
+                destination.write_text(json.dumps(config,indent=2)+'\n')
+            else:
+                shutil.copy2(source,destination)
+            if destination.is_symlink() or not destination.is_file():
+                raise RuntimeError('Isolated restore registry was not copied safely: '+registry)
+        site_roots.append(sites)
+        return target,sites
     def product_backup(label,site):
         return run(label,[benchdir/'env/bin/python',ROOT/'tools/native/run_product_backup.py',site],
                    cwd=benchdir/'sites',
@@ -230,15 +261,16 @@ def main():
         report['product_backup']={label:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for label,p in
                                   (('database',database),('private_files',private_files),('public_files',public_files))}
         restore_site='placement-restore.localhost'
-        create_site('new-placement-restore-site',restore_site,restorepw)
-        restore_backup_dir=benchdir/'sites'/restore_site/'private/backups'
-        restore_backup_dir.mkdir(parents=True,exist_ok=True)
+        restore_bench,restore_sites=isolated_bench('isolated-restore-bench')
         source_artifacts=(database,public_files,private_files)
         source_bytes=sum(artifact.stat().st_size for artifact in source_artifacts)
         required_free_bytes=max(1024**3,source_bytes*5)
-        free_bytes=shutil.disk_usage(restore_backup_dir).free
+        free_bytes=shutil.disk_usage(restore_sites).free
         if free_bytes < required_free_bytes:
-            raise RuntimeError('Insufficient free space for isolated restore rehearsal; target was not populated')
+            raise RuntimeError('Insufficient free space for isolated restore rehearsal; target site was not created')
+        create_site('new-placement-restore-site',restore_site,restorepw,bench_root=restore_bench)
+        restore_backup_dir=restore_sites/restore_site/'private/backups'
+        restore_backup_dir.mkdir(parents=True,exist_ok=True)
         for artifact in source_artifacts:
             copied=restore_backup_dir/artifact.name
             shutil.copy2(artifact,copied)
@@ -252,18 +284,20 @@ def main():
             'free_bytes_before_copy':free_bytes,
             'required_free_bytes':required_free_bytes,
             'copy_hashes_verified':True,
+            'isolated_site_data_root':True,
+            'source_sites_root_mounted':False,
         }
-        for name in ('erpnext','education','payments','hrms','foundation_security','toefl_house'):bench('install-'+restore_site+'-'+name,'--site',restore_site,'install-app',name)
-        for key in ('allow_tests','toefl_house_synthetic_only','disable_website_cache'):bench('enable-'+restore_site+'-'+key,'--site',restore_site,'set-config',key,'1','--parse')
         restore_payload=json.dumps({'site':restore_site,'backup_set':backup_set,
                                     'encryption_key':backup_encryption_key,
                                     'db_root_password':rootpw,'admin_password':adminpw})
         run('restore-placement-test-with-files',
-            [benchdir/'env/bin/python',ROOT/'product/restore.py'],cwd=benchdir,
+            [benchdir/'env/bin/python',ROOT/'product/restore.py'],cwd=restore_bench,
             input_text=restore_payload,
-            env_overrides={'BENCH_DIR':str(benchdir),'SITE_NAME':restore_site})
-        source_config=json.loads((benchdir/'sites'/'placement-test.localhost'/'site_config.json').read_text())
-        restore_config_file=benchdir/'sites'/restore_site/'site_config.json'
+            env_overrides={'BENCH_DIR':str(restore_bench),'SITE_NAME':restore_site})
+        source_config_file=benchdir/'sites'/'placement-test.localhost'/'site_config.json'
+        source_config_hash=hashlib.sha256(source_config_file.read_bytes()).hexdigest()
+        source_config=json.loads(source_config_file.read_text())
+        restore_config_file=restore_sites/restore_site/'site_config.json'
         restore_config=json.loads(restore_config_file.read_text())
         assert source_config['db_name'] != restore_config['db_name']
         assert source_config.get('db_password') != restore_config.get('db_password')
@@ -271,11 +305,21 @@ def main():
         restore_config['encryption_key'] = source_config['encryption_key']
         for key in ('allow_tests','toefl_house_synthetic_only','disable_website_cache'):restore_config[key]=source_config[key]
         restore_config_file.write_text(json.dumps(restore_config,indent=2)+'\n');restore_config_file.chmod(0o600)
-        report['product_restore_context']={'separate_database':True,'source_db_credentials_copied':False,
-                                           'site_encryption_key_restored':True,'site':restore_site}
-        bench('migrate-placement-restore-site','--site',restore_site,'migrate')
+        report['product_restore_context']={
+            'separate_database':True,'source_db_credentials_copied':False,
+            'site_encryption_key_restored':True,'site':restore_site,
+            'isolated_site_data_root':True,'restore_root_outside_source_bench':True,
+        }
+        run('migrate-placement-restore-site',
+            [benchdir/'env/bin/python',ROOT/'tools/native/migrate_restore_site.py',restore_site],
+            cwd=restore_sites,
+            env_overrides={'PLACEMENT_RESTORE_SITES_ROOT':str(restore_sites)})
+        if hashlib.sha256(source_config_file.read_bytes()).hexdigest()!=source_config_hash:
+            raise RuntimeError('Isolated restore changed the source site configuration')
         product_restore=evidence/'product-restore-result.json';env['PLACEMENT_RESTORE_REPORT']=str(product_restore)
-        run('verify-product-restore-snapshot',[benchdir/'env/bin/python',ROOT/'tools/native/runtime_restore.py','verify',restore_site],benchdir/'sites')
+        run('verify-product-restore-snapshot',
+            [benchdir/'env/bin/python',ROOT/'tools/native/runtime_restore.py','verify',restore_site],
+            restore_sites)
         report['product_restore']=json.loads(product_restore.read_text())
 
         # Native Frappe restore must not alter the preserved source backup set.
@@ -294,7 +338,7 @@ def main():
         env['PLACEMENT_POLICY_RESTART_EXPECTATION'] = str(policy_expectation)
         run('capture-policy-resolvers-before-service-restart',
             [benchdir/'env/bin/python', ROOT/'tools/native/policy_restart_check.py',
-             'capture', restore_site], benchdir/'sites')
+             'capture', restore_site], restore_sites)
 
         # A direct Python verifier is not enough: restart the actual web service,
         # route a request to the distinct restore site, and repeat the integrity
@@ -315,7 +359,7 @@ def main():
         server = subprocess.Popen(
             [str(benchdir/'env/bin/gunicorn'), '--bind', '127.0.0.1:18000',
              '--workers', '2', 'frappe.app:application'],
-            cwd=benchdir/'sites', env=env, stdout=restart_stream,
+            cwd=restore_sites, env=env, stdout=restart_stream,
             stderr=subprocess.STDOUT, start_new_session=True)
         processes.append((server, restart_stream, restart_log))
         jar = http.cookiejar.CookieJar()
@@ -365,11 +409,11 @@ def main():
         env['PLACEMENT_RESTORE_REPORT'] = str(restarted_restore)
         run('verify-product-restore-after-service-restart',
             [benchdir/'env/bin/python', ROOT/'tools/native/runtime_restore.py',
-             'verify', restore_site], benchdir/'sites')
+             'verify', restore_site], restore_sites)
         report['product_restore_after_restart'] = json.loads(restarted_restore.read_text())
         run('verify-policy-resolvers-after-service-restart',
             [benchdir/'env/bin/python', ROOT/'tools/native/policy_restart_check.py',
-             'verify', restore_site], benchdir/'sites')
+             'verify', restore_site], restore_sites)
         report['policy_restart_check'] = {
             'status': 'pass',
             'policy_resolvers': [

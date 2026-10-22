@@ -24,7 +24,9 @@ class FakeFrappe:
         return str(self.root.joinpath(*parts))
 
     def get_all(self, doctype, **kwargs):
-        return ["SYN-ROW-1"]
+        if kwargs.get("pluck")=="name":
+            return ["SYN-ROW-1"]
+        return [{"name":"SYN-ROW-1","synthetic_value":"preserved"}]
 
     def get_doc(self, doctype, name):
         return self.docs[name]
@@ -89,6 +91,8 @@ class NativeRestoreRehearsalTests(unittest.TestCase):
                 "TH Test": {
                     "count": 1,
                     "name_digest": RUNTIME_RESTORE._digest(["SYN-ROW-1"]),
+                    "row_digest": RUNTIME_RESTORE._row_digest(
+                        [{"name":"SYN-ROW-1","synthetic_value":"preserved"}]),
                 }
             },
             "files": {
@@ -134,9 +138,21 @@ class NativeRestartWiringTests(unittest.TestCase):
         self.assertIn("shutil.disk_usage(restore_backup_dir).free", text)
         self.assertIn("copy_hashes_verified", text)
         self.assertIn("Isolated restore artifact copy failed size/hash verification", text)
+        self.assertIn("isolated-restore-bench", text)
+        self.assertIn("'isolated_site_data_root':True", text)
+        self.assertIn("'source_sites_root_mounted':False", text)
+        self.assertIn("cwd=restore_sites", text)
+        self.assertIn("'BENCH_DIR':str(restore_bench)", text)
         # The restored-site health probe is an authenticated login API
         # request (no asset rendering, no get_logged_user-without-session).
         self.assertIn("api/method/login", text)
+
+    def test_isolated_restore_migration_is_runner_only_and_root_bound(self):
+        helper=(ROOT/"tools/native/migrate_restore_site.py").read_text(encoding="utf-8")
+        self.assertIn('GITHUB_ACTIONS',helper)
+        self.assertIn('PLACEMENT_RESTORE_SITES_ROOT',helper)
+        self.assertIn('Path.cwd().resolve(strict=True)!=root',helper)
+        self.assertIn('SiteMigration().run(site=RESTORE_SITE)',helper)
 
     def test_all_eight_policy_resolvers_are_compared_across_restart(self):
         text = (ROOT / "tools/native/policy_restart_check.py").read_text(encoding="utf-8")

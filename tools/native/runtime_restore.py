@@ -4,8 +4,9 @@
 This helper is deliberately restricted to the disposable GitHub runner and the
 source/restore sites created by ``run_native.py``. It never accepts a production
 site, prints no credentials or document contents, and records only counts and
-SHA-256 digests of synthetic record names. It does not establish an offsite
-backup policy, recovery objective, or production restore guarantee.
+SHA-256 digests of synthetic record names and full row values. It does not
+establish an offsite backup policy, recovery objective, or production restore
+guarantee.
 """
 from __future__ import annotations
 
@@ -41,6 +42,11 @@ REPRESENTATIVE_DOCTYPES = (
 
 def _digest(names: list[str]) -> str:
     return hashlib.sha256("\0".join(sorted(names)).encode()).hexdigest()
+
+
+def _row_digest(rows) -> str:
+    payload=json.dumps(rows,sort_keys=True,separators=(",",":"),default=str)
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def _connect(site: str):
@@ -97,7 +103,12 @@ def _snapshot(frappe) -> dict:
         names = frappe.get_all(doctype, pluck="name", order_by="name asc")
         if not names:
             raise AssertionError(f"Expected synthetic {doctype} record before backup")
-        doctypes[doctype] = {"count": len(names), "name_digest": _digest(names)}
+        rows=frappe.get_all(doctype,fields=["*"],order_by="name asc")
+        doctypes[doctype] = {
+            "count": len(names),
+            "name_digest": _digest(names),
+            "row_digest": _row_digest(rows),
+        }
 
     # Both markers are generated only in the disposable CI site. Their
     # content, File metadata, storage location, permissions and ownership are
@@ -136,7 +147,12 @@ def _verify(frappe, expected: dict) -> dict:
     verified = {}
     for doctype, source in expected["doctypes"].items():
         names = frappe.get_all(doctype, pluck="name", order_by="name asc")
-        actual = {"count": len(names), "name_digest": _digest(names)}
+        rows=frappe.get_all(doctype,fields=["*"],order_by="name asc")
+        actual = {
+            "count": len(names),
+            "name_digest": _digest(names),
+            "row_digest": _row_digest(rows),
+        }
         if actual != source:
             raise AssertionError(f"Restored {doctype} does not match source snapshot")
         verified[doctype] = actual["count"]
