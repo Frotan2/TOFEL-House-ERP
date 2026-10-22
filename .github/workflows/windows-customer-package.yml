@@ -114,8 +114,18 @@ jobs:
           [System.IO.File]::AppendAllText($damagedArchive, "SYNTHETIC_CORRUPTION")
           $env:TH_GUI_MODE = '1'
           $damagedInstall = Join-Path $damagedKit 'product/windows/Install TOEFL House ERP.cmd'
-          $rejectedOutput = @(& $damagedInstall 2>&1)
-          if ($LASTEXITCODE -eq 0) { throw "Damaged kit was accepted by installer." }
+          # A correctly rejected package emits stderr. Windows PowerShell
+          # 5.1 wraps native stderr in a NativeCommandError when the CI
+          # preference is Stop. Capture the EXPECTED refusal, then restore Stop.
+          $previousPreference = $ErrorActionPreference
+          try {
+            $ErrorActionPreference = 'Continue'
+            $rejectedOutput = @(& $damagedInstall 2>&1)
+            $rejectedExit = $LASTEXITCODE
+          } finally {
+            $ErrorActionPreference = $previousPreference
+          }
+          if ($rejectedExit -eq 0) { throw "Damaged kit was accepted by installer." }
           if (Test-Path -LiteralPath (Join-Path $damagedKit 'product/data')) {
             throw "Damaged kit modified local ERP data before integrity verification."
           }
