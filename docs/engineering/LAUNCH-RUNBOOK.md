@@ -15,8 +15,8 @@ the configured keep count. That decision does **not** supply the remaining
 deployment values or authorize execution. The complete Owner backup policy,
 backup schedule/keep count, key-custody ceremony, real Windows backup-drive
 evidence and Owner-machine restore evidence are still incomplete. Therefore
-backup, Backup & Recovery policy writes, key setup, and operational mode changes
-remain on hold. **Do not create, edit, version, validate, or save a backup policy;
+backup, Owner-policy writes, key setup, and operational mode changes remain on
+hold. **Do not create, edit, version, validate, or save Owner policies;
 generate, recover, test, or rotate key material; register or run the backup task;
 run `Backup TOEFL House ERP.cmd`, the Windows backup/retention helper, restore,
 cleanup/deletion, or activation/deactivation. Never restore over the existing

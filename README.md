@@ -94,9 +94,10 @@ permission to configure or execute the Owner backup/recovery path. Until the
 complete Owner backup policy, real separate local backup drive, Task Scheduler,
 key-custody ceremony, Owner recovery rehearsal and explicit authorization are
 completed, only the read-only checks in `product/windows/VALIDATION.md` are
-allowed. Do not edit or validate the effective Backup & Recovery policy; do not
-run Backup, Restore, Activate, Deactivate, retention cleanup, or any command
-that mutates the existing site or backup sets. Preserve `product/data`,
+allowed. **Do not edit or validate policies while this release hold is active.**
+In particular, do not edit or validate the effective Backup & Recovery policy;
+do not run Backup, Restore, Activate, Deactivate, retention cleanup, or any
+command that mutates the existing site or backup sets. Preserve `product/data`,
 runtime credentials, and all existing backups. Do not improvise a restore or
 treat CI as Owner-machine evidence. Production authorization remains
 **REJECTED**.
