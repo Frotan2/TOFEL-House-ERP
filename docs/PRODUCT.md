@@ -176,13 +176,13 @@ settings the same way (the site stays ACTIVE rather than half-deactivated).
   artifacts plus manifest to a separate fixed local drive on the same
   computer, and checks Owner policy, Task Scheduler, hashes and retention.
   The unencrypted native site-config sidecar is never copied to the external
-  backup set. Owned Product-image CI uses a disposable synthetic Owner key and
-  a loop-backed separate filesystem to qualify artifact encryption/recovery,
-  copy/return and restore into clean public/private file trees when that
-  workflow passes (pinned Frappe restore otherwise overlays files without
-  removing post-backup extras); it cannot qualify a real Windows drive,
-  PowerShell/GPG installation, Task Scheduler, Owner key custody or the actual
-  restore ceremony. Off-site/NAS/second-device/cloud backup is
+  backup set. Hosted Product-image and Native lifecycle qualification now use
+  disposable synthetic Owner keys and isolated filesystems to prove artifact
+  encryption/recovery, clean public/private file restoration, preserved source
+  artifacts, a separate restore site/database/site-data root, failure cleanup
+  and post-restart verification. Those hosted checks cannot qualify a real
+  Windows drive, PowerShell/GPG installation, Task Scheduler, Owner key custody
+  or the actual Owner restore ceremony. Off-site/NAS/second-device/cloud backup is
   explicitly deferred future scope and is not a current release gate.
 - **Production authorization remains REJECT.** The operational site-mode
   transition to PRODUCTION is a guarded mechanism, not release/launch approval.

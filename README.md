@@ -1,6 +1,6 @@
 # TOEFL House ERP
 
-> **CURRENT RELEASE HOLD — READ BEFORE SETUP.** The Windows validation checklist and launch runbook explicitly prohibit editing/validating the backup policy, running backup or restore, or activating the site while the preservation/restore hold is open. This hold overrides older setup wording elsewhere in this README. Do not configure owner policies or run backup, restore, activation, deactivation, cleanup, or retention until engineering publishes an approved isolated-restore procedure and explicitly clears the hold. Production authorization remains **REJECTED**.
+> **CURRENT RELEASE HOLD — READ BEFORE SETUP.** Hosted engineering has now qualified and published the isolated synthetic restore mechanism, but that does **not** authorize Owner-machine backup/restore. The Windows validation checklist and launch runbook still prohibit editing/validating the effective Backup & Recovery policy, running Owner backup or restore, or activating the site until the remaining Owner Windows backup-drive, Task Scheduler, key-custody and recovery gates are explicitly completed. Preserve the existing site, `product/data`, credentials and backups. Production authorization remains **REJECTED**.
 
 The Course Management ERP for the **TOEFL House** language institute. The
 GitHub repository name is `TOFEL-House-ERP`.
@@ -34,9 +34,15 @@ capacities are entered by the owner as configuration and are never coded in.
 
 ## Release status
 
-**NO-GO / production authorization REJECT.** PR #13 is merged, but that is not
-release approval. See the [current security defect and qualification ledger](docs/engineering/evidence/security-finalization-2026-10-14/README.md).
-Do not activate real operations based only on unit tests or an image build.
+**NO-GO / production authorization REJECT.** Current hosted engineering gates
+for the owned suite, product image and isolated native restore are green on the
+latest runtime code line; the exact Foundation security rerun
+[39835655629](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39835655629)
+is still a separate fail-closed gate, and the real Owner Windows lifecycle /
+recovery acceptance remains open as GitHub issue #12. Do not activate real
+operations based only on hosted CI. See the
+[current engineering qualification note](docs/engineering/QUALIFICATION-NOTE-2026-10-22.md)
+and [restore release note](docs/engineering/RESTORE-QUALIFICATION-RELEASE-2026-10-22.md).
 
 ## Owner: install and daily use (Windows)
 
@@ -82,7 +88,18 @@ First run step by step: [product/windows/VALIDATION.md](product/windows/VALIDATI
 Owner handover: [docs/engineering/HANDOVER-2026-10-20.md](docs/engineering/HANDOVER-2026-10-20.md).
 Per-policy runtime evidence: [docs/engineering/POLICY-RUNTIME-MATRIX-2026-10-20.md](docs/engineering/POLICY-RUNTIME-MATRIX-2026-10-20.md).
 
-**Current preservation/restore hold:** the documents describe intended policy fields and backup architecture, but that is not permission to configure them or run helpers. Until engineering qualifies an isolated restore workflow, reconciles the implementation with the Owner's retention decision, and explicitly clears the hold, only the read-only checks in `product/windows/VALIDATION.md` are allowed. Do not edit or validate policies; do not run Backup, Restore, Activate, Deactivate, retention cleanup, or any command that mutates the existing site or backup sets. Preserve `product/data`, runtime credentials, and all existing backups. Do not improvise a restore or treat CI as Owner-machine evidence. Production authorization remains **REJECTED**.
+**Current preservation/restore hold:** engineering qualification of the isolated
+synthetic restore is complete and D17 is reconciled, but that is still not
+permission to configure or execute the Owner backup/recovery path. Until the
+complete Owner backup policy, real separate local backup drive, Task Scheduler,
+key-custody ceremony, Owner recovery rehearsal and explicit authorization are
+completed, only the read-only checks in `product/windows/VALIDATION.md` are
+allowed. Do not edit or validate the effective Backup & Recovery policy; do not
+run Backup, Restore, Activate, Deactivate, retention cleanup, or any command
+that mutates the existing site or backup sets. Preserve `product/data`,
+runtime credentials, and all existing backups. Do not improvise a restore or
+treat CI as Owner-machine evidence. Production authorization remains
+**REJECTED**.
 
 ## Developer
 

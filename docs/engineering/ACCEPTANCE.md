@@ -1,3 +1,22 @@
+> **2026-10-22 current-state snapshot:** current `main` contains the published
+> isolated-restore engineering release and only one open release issue:
+> [#12 — real Owner Windows lifecycle and recovery acceptance](https://github.com/Frotan2/TOFEL-House-ERP/issues/12).
+> Runtime code head `1f84aee987ac77b3d93ee6202731d8489e99b912` passed
+> Owned suite [39836321833](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39836321833),
+> Product image [39836321829](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39836321829),
+> and Native lifecycle [39836321651](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39836321651).
+> Issue #25 (isolated restore) and #26 (owner-policy restart persistence) are
+> closed with evidence. Foundation security run
+> [39835655629](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39835655629)
+> is the current exact security rerun and remains fail-closed until it completes.
+> Production authorization remains **NO-GO / REJECT** because hosted CI does
+> not replace the real Owner Windows, backup-drive, Task Scheduler, key-custody,
+> recovery and real-device Tailscale gates.
+>
+> Sections below retain older evidence snapshots for audit history; where they
+> conflict with this snapshot or later qualification notes, they are historical
+> rather than current release status.
+
 > **2026-10-14 live-state correction:** PR #13 was already merged at
 > `807d5dca324e32546d8c0b52c255be38aa7b3513`; earlier references below to it being
 > open are historical snapshots. Release remains **NO-GO / REJECT**.
