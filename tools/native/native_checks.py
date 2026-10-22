@@ -4451,9 +4451,11 @@ def main():
         from toefl_house import academic as acm
         def odcp_fixtures():
             # Second Fee Structure (two lines) so per-line resolution is
-            # observable in one issuance; a family-coded TH Academic Program
-            # anchors the program-scoped rule experiments (literal scope
-            # matching; family-wide expansion stays an open owner question).
+            # observable in one issuance. The family-scoped rule is exercised
+            # only after the native Program used by Admission/Enrollment is
+            # explicitly anchored to that TH Academic Program through a real
+            # TH Program Level. This mirrors the production authority chain
+            # used by Finance; no implicit name matching is accepted.
             frappe.set_user('Administrator')
             if not frappe.db.exists('Item','SYN-Books'):
                 frappe.get_doc(dict(doctype='Item',item_code='SYN-Books',
@@ -4468,6 +4470,25 @@ def main():
             if not frappe.db.exists('TH Academic Program','SYN-PROG-EVENING'):
                 as_user('course_owner',lambda:acm.create_program(
                     'odcp-family-evening-0001','SYN-PROG-EVENING','SYN Evening (non-matching)'))
+            if not frappe.db.exists('TH Program Level','SYN-ODCP-LEVEL'):
+                frappe.set_user(users['course_owner'])
+                frappe.get_doc(dict(
+                    doctype='TH Program Level',
+                    family='SYN-PROGRAM-GENERAL',
+                    code='SYN-ODCP-LEVEL',
+                    title='SYN ODCP linked level',
+                    sequence=1,
+                    status='Active',
+                    native_program=cat['program'],
+                    durations=[dict(
+                        duration_value=1,
+                        duration_unit='Month',
+                        effective_from='2026-01-01',
+                        reason='Synthetic discount-family scope fixture',
+                        set_by=users['course_owner'],
+                        set_on=frappe.utils.now_datetime(),
+                    )],
+                )).insert()
             frappe.set_user('Administrator')
             comp=frappe.get_doc('Company','TOEFL House')
             fs2=frappe.get_doc(dict(doctype='Fee Structure',naming_series='EDU-FST-.YYYY.-',
