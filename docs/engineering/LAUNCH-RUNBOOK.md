@@ -345,7 +345,7 @@ No shell, PowerShell, Docker, Bench, GPG, or restore command is part of these
 checks. Never share private keys, passwords, decrypted site configuration, raw
 backup contents, or unredacted screenshots.
 
-### Required target for any future restore test (not currently available to the Owner)
+### Isolated restore target (qualified in CI; not authorized on the Owner PC)
 
 A later engineering-approved restore rehearsal must use a unique new Frappe
 site and a distinct database inside an isolated disposable Bench/site-data
@@ -354,29 +354,32 @@ that site's database or files, or the existing `product/data` volume. The test
 must use synthetic data and verify authentic public/private file content,
 record integrity, Frappe file metadata, filesystem ownership/permissions, CWD
 restoration, explicit failure cases, and persistence after a target restart.
-No cleanup of the existing site or existing backup is allowed. The current Owner
-package does not provide a qualified isolated restore workflow, so do not
-improvise one or run a restore. CI synthetic results are not Owner-machine
-evidence or authorization.
+No cleanup of the existing site or existing backup is allowed. The hosted
+native-lifecycle workflow now provides a qualified **engineering** isolated
+restore target, but the Owner package intentionally exposes no restore command
+while the real-machine hold remains. CI synthetic results are not Owner-machine
+evidence or authorization; do not improvise a restore on the operational PC.
 
 ### Current CI evidence boundary
 
 - Product-image run
-  [37940397957](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397957)
-  passed its synthetic encrypted restore into the same disposable product
-  site, including public/private marker checks after the CI redeploy/restore.
-  This is not a clean-target Owner rehearsal.
+  [39597802206](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39597802206)
+  passed the disposable image lifecycle: encrypted backup/restore, browser UI,
+  restart persistence, upgrade/rollback, performance baseline, and the Windows
+  stale-worktree EOL-normalization contract.
 - Native lifecycle run
-  [37940397967](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397967)
-  passed after creating `placement-restore.localhost` and a separate database
-  inside an ephemeral Bench. Its verifier checks 14 synthetic DocTypes by
-  count/name digest and one private file's content hash and selected attachment
-  metadata. It does not verify a public marker, filesystem mode/UID/GID or file
-  owner, and it does not restart the restored site before rechecking the
-  snapshot. The retained result artifact could not be retrieved in this review,
-  so per-run counts and hashes are unavailable.
-- Neither workflow qualifies Windows, Docker Desktop, Task Scheduler, the
-  Owner backup drive, key custody, complete backup policy, or production recovery.
+  [39437595961](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39437595961)
+  passed after creating `placement-restore.localhost` with a separate database
+  inside an ephemeral Bench. Its retained verifier checks 14 representative
+  synthetic DocTypes, public and private File content plus File metadata,
+  encrypted-artifact hashes, filesystem size/mode/UID/GID, and restored-site
+  HTTP/login behavior after a real Gunicorn restart. It also verifies all eight
+  owner-configurable policy resolvers before and after restart and exercises
+  their off-switch/fail-closed behavior within rollback-confined synthetic
+  fixtures.
+- These workflows qualify the engineering mechanism, not the Owner machine.
+  Windows/Docker Desktop, Task Scheduler, the Owner backup drive, key custody,
+  retention execution, real devices and production recovery remain unqualified.
 
 ## 8. Record read-only status (not a restore rehearsal)
 

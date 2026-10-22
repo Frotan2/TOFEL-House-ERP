@@ -226,10 +226,13 @@ Do not skip or reorder steps — later steps prove earlier ones survived.
 ## Backup and restore — Owner PRESERVATION / RESTORE HOLD
 
 **No backup or restore action is authorized.** The Owner decided the retention behavior on 2026-10-14 (owner decision D17): delete valid older sets beyond the keep count.
-No complete backup policy is configured yet, and the isolated restore
-workflow is unqualified. Do not create or change an effective policy, run `Backup TOEFL House
-ERP.cmd` or its retention helper, trigger cleanup/deletion, decrypt a backup,
-restore, activate/deactivate, or change the existing site. Preserve the current
+No complete Owner-machine backup policy is configured yet. The isolated
+**synthetic** restore workflow is now qualified in hosted CI, but the Owner's
+actual Windows backup/restore path, backup drive, key custody and recovery
+procedure are still unqualified. Do not create or change an effective policy,
+run `Backup TOEFL House ERP.cmd` or its retention helper, trigger
+cleanup/deletion, decrypt a backup, restore, activate/deactivate, or change the
+existing site. Preserve the current
 site, `product/data`, all runtime data, credentials, and every existing backup.
 The former in-place restore procedure in
 [`docs/engineering/LAUNCH-RUNBOOK.md` §7](../../docs/engineering/LAUNCH-RUNBOOK.md)
@@ -258,7 +261,7 @@ These checks use no command line and do not inspect backup contents. Never send
 private keys, passwords, decrypted site configuration, raw backups, or
 unredacted screenshots.
 
-### Future restore target (not currently available on the Owner PC)
+### Isolated restore target (qualified in CI; not authorized on the Owner PC)
 
 Any later engineering-approved rehearsal must target a **new unique Frappe site
 and distinct database in an isolated disposable Bench/site-data root**, after a
@@ -267,27 +270,32 @@ file trees, or the existing `product/data` volume. Use synthetic data only and
 verify actual public/private file contents, record integrity, Frappe File
 metadata, filesystem ownership/permissions, CWD restoration, failure paths, and
 snapshot persistence after restarting the target. Do not clean up or alter the
-existing site or any existing backup. The current Owner package has no qualified
-isolated restore runner; do not improvise a restore command or treat CI as
-Owner evidence.
+existing site or any existing backup. Engineering now has a qualified hosted
+isolated-target runner (`tools/native/runtime_restore.py` through the
+native-lifecycle workflow), but it is deliberately **not** an Owner package
+command and does not authorize recovery on the Owner PC. Do not improvise a
+restore command or treat CI as Owner-machine evidence.
 
 ### CI evidence boundary
 
 - Product-image run
-  [37940397957](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397957)
-  passed its synthetic encrypted restore into the same disposable CI site and
-  checked public/private markers after redeploy/restore. It does not restore to
-  a separate target site.
+  [39597802206](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39597802206)
+  passed the disposable product-image lifecycle, including encrypted
+  backup/restore, browser login, restart persistence, upgrade/rollback,
+  performance checks and the Windows stale-worktree EOL-normalization job.
 - Native lifecycle run
-  [37940397967](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/37940397967)
-  passed after creating a separate restore site and database in an ephemeral
-  Bench. It checks 14 DocTypes by count/name digest and a private File's content
-  hash and selected attachment metadata. Public-file integrity, filesystem
-  owner/mode/UID/GID, and a post-restore target restart are not established.
-  The result artifact was not retrievable in this review, so exact per-run
-  counts/hashes are unavailable.
-- Neither run qualifies Windows, Docker Desktop, Task Scheduler, the Owner's
-  same-computer backup drive, retention choice, key custody, or production
+  [39437595961](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39437595961)
+  passed an isolated restore into the new `placement-restore.localhost` site
+  and a distinct database inside an ephemeral Bench. The retained verifier
+  checks 14 representative DocTypes, public **and** private File blobs and
+  Frappe File metadata, file size/mode/UID/GID, encrypted-artifact hashes,
+  and restored-site HTTP/login behavior after a real Gunicorn service restart.
+  The same run re-read all eight owner-policy resolvers after restart and
+  exercised their off-switch/fail-closed behavior inside rollback-confined
+  synthetic fixtures.
+- These are engineering qualifications only. They do **not** qualify Docker
+  Desktop or Task Scheduler on the Owner's PC, the Owner's same-computer backup
+  drive, key custody, retention execution, real Tailscale devices, or production
   recovery.
 
 **Evidence 11–12:** do not report backup or restore as passed and do not send a
