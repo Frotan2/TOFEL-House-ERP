@@ -1,3 +1,14 @@
+> **2026-10-22 superseding status note:** this report is the accepted historical
+> release record for the 2026-10-20 `d999ca9` line. It is **not** the current
+> final-SHA status. Current release truth is in `docs/engineering/ACCEPTANCE.md`
+> plus `QUALIFICATION-NOTE-2026-10-22.md`. Runtime code head `1f84aee9`
+> passed Owned suite 39836321833, Product image 39836321829 and Native lifecycle
+> 39836321651; isolated restore issue #25 and policy-restart issue #26 are closed.
+> Real Owner Windows lifecycle/recovery issue #12 remains open, and Foundation
+> security run 39835655629 is the current fail-closed security rerun until it
+> completes. Production authorization remains **REJECTED**. Sections below are
+> retained as historical evidence for the older release line.
+>
 # TOEFL House ERP — release acceptance report
 
 **Release:** `main` @ `d999ca9` (merge of PR #30, branch `arena/6fb481a1-tofel-house-erp`)
