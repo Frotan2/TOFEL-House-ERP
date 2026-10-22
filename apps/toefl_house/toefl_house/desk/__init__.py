@@ -294,7 +294,7 @@ PROJECTION_FIELDS = {
     ],
     ("setup", "TH Discount Rule"): [
         "name", "code", "title", "discount_percentage", "precedence",
-        "status", "fee_category", "program", "description", "modified",
+        "status", "fee_category", "program", "student", "description", "modified",
         "modified_by",
     ],
     # D1 configuration plane: assessment policies, their effective-dated
