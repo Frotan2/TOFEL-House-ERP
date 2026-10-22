@@ -100,6 +100,24 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertNotIn("Backup TOEFL House ERP", CHECK_PC)
         self.assertNotIn("first-run-credentials.txt", CHECK_PC)
 
+
+    def test_start_and_repair_fail_closed_when_db_credentials_are_missing(self):
+        # Both daily workflows must defer to the same on-disk safety preflight
+        # as Install. A missing Docker volume alone is NOT evidence of a fresh
+        # machine when site files remain or Docker storage cannot be queried.
+        for name, script in (("Start", START), ("Repair", REPAIR)):
+            missing_secret = script.split(":nosecret\\n", 1)[1].split(
+                ":nosecretblocked\\n", 1
+            )[0]
+            self.assertIn("Test Fresh Installation.ps1", missing_secret, name)
+            self.assertIn("if errorlevel 1 goto :nosecretblocked", missing_secret, name)
+            self.assertNotIn("No database exists yet", script, name)
+            self.assertIn("Do NOT reinstall, delete data", script, name)
+        preflight = (WINDOWS / "Test Fresh Installation.ps1").read_text()
+        self.assertIn("data\\\\sites\\\\toeflhouse.localhost", preflight)
+        self.assertIn('docker volume ls --filter "name=toefl-house-erp_db-data"', preflight)
+        self.assertIn("Could not check existing database storage", preflight)
+
     def test_customer_package_verifies_before_import_or_boot(self):
         self.assertIn('if exist "release\\toefl-house-erp-app.tar" goto :packagedimage', INSTALL)
         self.assertIn("Verify Package Image.ps1", INSTALL)

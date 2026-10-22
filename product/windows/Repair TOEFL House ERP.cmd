@@ -74,19 +74,20 @@ if not defined TH_GUI_MODE start "" "http://127.0.0.1:8000/"
 if not defined TH_GUI_MODE pause
 exit /b 0
 :nosecret
-docker volume inspect toefl-house-erp_db-data >nul 2>nul
-if errorlevel 1 goto :nosecretfresh
-echo  The database password file is missing, but a database already exists
-echo  on this PC.
-echo  Do NOT run the installer: it would write a new password that does not
-echo  match the existing database. Contact TOEFL House support, or restore
-echo  from your last backup.
+echo [TH_STAGE] Checking if old site or database data must be preserved...
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Fresh Installation.ps1"
+if errorlevel 1 goto :nosecretblocked
+echo  The database password file is missing.
+echo  No existing TOEFL House site or named database volume was found by the
+echo  storage preflight. This is NOT proof that old data cannot exist elsewhere.
+echo  Only on a genuinely new computer, use "Install TOEFL House ERP.cmd".
+echo  If this computer was used for ERP before, stop and contact support.
 if not defined TH_GUI_MODE pause
 exit /b 1
-:nosecretfresh
-echo  The database password file is missing.
-echo  Double-click "Install TOEFL House ERP.cmd" to create it. No database
-echo  exists yet, so the installer only creates the missing file.
+:nosecretblocked
+echo  Missing database credentials with existing or unverified site/storage.
+echo  Do NOT reinstall, delete data or create a replacement database password.
+echo  Recover the original credentials or contact TOEFL House support.
 if not defined TH_GUI_MODE pause
 exit /b 1
 :sourcefailed
