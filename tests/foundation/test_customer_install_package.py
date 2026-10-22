@@ -106,8 +106,8 @@ class CustomerInstallerContract(unittest.TestCase):
         # as Install. A missing Docker volume alone is NOT evidence of a fresh
         # machine when site files remain or Docker storage cannot be queried.
         for name, script in (("Start", START), ("Repair", REPAIR)):
-            missing_secret = script.split(":nosecret\n", 1)[1].split(
-                ":nosecretblocked\n", 1
+            missing_secret = script.split("\n:nosecret\n", 1)[1].split(
+                "\n:nosecretblocked\n", 1
             )[0]
             self.assertIn("Test Fresh Installation.ps1", missing_secret, name)
             self.assertIn("if errorlevel 1 goto :nosecretblocked", missing_secret, name)

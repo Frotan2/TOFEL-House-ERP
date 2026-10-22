@@ -643,8 +643,10 @@ class ImageRecreationContract(unittest.TestCase):
             text = (PRODUCT / "windows" / f"{name} TOEFL House ERP.cmd").read_text()
             self.assertIn("db.env", text, name)
             self.assertIn(":nosecret", text, name)
-            self.assertIn(":nosecretfresh", text, name)
-            self.assertIn("toefl-house-erp_db-data", text, name)
+            self.assertIn(":nosecretblocked", text, name)
+            self.assertIn("Test Fresh Installation.ps1", text, name)
+            self.assertIn("if errorlevel 1 goto :nosecretblocked", text, name)
+            self.assertIn("Do NOT reinstall, delete data", text, name)
 
     def test_installer_checks_existing_storage_before_generating_a_password(self):
         text = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
