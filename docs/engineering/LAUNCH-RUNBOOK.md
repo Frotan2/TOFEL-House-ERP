@@ -9,26 +9,30 @@ without this mode switch. Do not expose the service to the public internet
 while SEC-DEPS-01 is open; the selected local-server + Tailscale deployment
 is not a public-edge release gate (see [../PRODUCT.md](../PRODUCT.md) §6).
 
-**Desktop product (Owner) — PRESERVATION / RESTORE HOLD:** the Owner must
-explicitly choose whether to preserve all valid backup sets or authorize
-deletion of valid older external backup-set directories beyond the keep count.
-The policy has no default. While unresolved, backup, Backup & Recovery policy
-writes, key setup, and operational mode changes remain on hold. **Do not create,
-edit, version, validate, or save a backup policy; generate, recover, test, or
-rotate key material; register or run the backup task; run `Backup TOEFL House
-ERP.cmd`, the Windows backup/retention helper, restore, cleanup/deletion, or
-activation/deactivation. Never restore over the existing `toeflhouse.localhost`
-site or replace/clean its files.** The former in-place restore instructions in
-§7 are withdrawn. No Owner backup/restore/activation run has been performed in
-this review. Sections §7–8 contain only read-only checks; they are the only
-Owner actions currently allowed and do not authorize policy changes, helper
-execution, or modification of the existing site. Any future restore requires a
-separately approved workflow targeting a new disposable site and database.
+**Desktop product (Owner) — PRESERVATION / RESTORE HOLD:** Owner decision D17
+already selected the retention behavior: delete valid older backup sets beyond
+the configured keep count. That decision does **not** supply the remaining
+deployment values or authorize execution. The complete Owner backup policy,
+backup schedule/keep count, key-custody ceremony, real Windows backup-drive
+evidence and Owner-machine restore evidence are still incomplete. Therefore
+backup, Backup & Recovery policy writes, key setup, and operational mode changes
+remain on hold. **Do not create, edit, version, validate, or save a backup policy;
+generate, recover, test, or rotate key material; register or run the backup task;
+run `Backup TOEFL House ERP.cmd`, the Windows backup/retention helper, restore,
+cleanup/deletion, or activation/deactivation. Never restore over the existing
+`toeflhouse.localhost` site or replace/clean its files.** The former in-place
+restore instructions in §7 are withdrawn. No Owner backup/restore/activation run
+has been performed in this review. Sections §7–8 contain only read-only checks;
+they are the only Owner actions currently allowed and do not authorize policy
+changes, helper execution, or modification of the existing site. Engineering
+restore qualification uses a separate disposable site, database and site-data
+root; it is not an Owner-machine restore authorization.
 
 **Future configuration only—not authorized under the current hold:** the
 Owner-configured local nightly backup time, retention count (at least two),
-explicit retention behavior, ASCII-armored OpenPGP public recovery key, and
-key-custody requirement are entered through the ERP Configuration desk; no
+ASCII-armored OpenPGP public recovery key, and key-custody requirement are
+entered through the ERP Configuration desk; the already-selected D17 retention
+behavior is consumed from Owner configuration rather than hard-coded. No
 schedule or count is supplied by product code. Keep the matching private key
 outside Frappe and the backup drive.
 When the preservation hold is formally resolved, the helper is intended to

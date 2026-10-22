@@ -18,12 +18,16 @@ confirms it. If anything differs from the "Expected" lines, stop and report it
 **Validation status (2026-10-09):** **UNVERIFIED** — no actual Windows Owner
 installation/lifecycle, browser login, backup/readability/restore rehearsal,
 Task Scheduler, key-custody ceremony, or Tailscale/private-exposure evidence
-has been supplied. Backup/restore is under a **PRESERVATION / RESTORE HOLD**:
-The Owner decided the retention behavior on 2026-10-14 (owner decision D17): delete valid older sets beyond the keep count. The Owner package has no
-qualified isolated restore workflow, and no backup policy is configured yet. Do not run the backup/retention helper,
-restore, cleanup/deletion, or activation; never replace the existing site or
-clean up `product/data`. The backup/restore section below contains read-only
-checks only. Production authorization remains **REJECTED**.
+has been supplied. Backup/restore is under a **PRESERVATION / RESTORE HOLD**.
+The Owner decided the retention behavior on 2026-10-14 (owner decision D17):
+delete valid older sets beyond the keep count. Hosted engineering now has a
+qualified isolated synthetic restore mechanism, but the Owner package
+intentionally exposes no Owner restore command while the real-machine recovery
+gate remains open. The complete Owner backup policy and actual Windows
+backup/restore evidence are still unqualified. Do not run the backup/retention
+helper, restore, cleanup/deletion, or activation; never replace the existing
+site or clean up `product/data`. The backup/restore section below contains
+read-only Owner checks only. Production authorization remains **REJECTED**.
 
 **Hosted CI snapshot (2026-10-09; merged head `13482fe285768e43ccadc0d93182a9a14eddf953`):**
 
