@@ -18,6 +18,7 @@ START = (WINDOWS / "Start TOEFL House ERP.cmd").read_text()
 STOP = (WINDOWS / "Stop TOEFL House ERP.cmd").read_text()
 GUI = (WINDOWS / "TOEFL House ERP.ps1").read_text()
 WORKER = (WINDOWS / "Run TOEFL House ERP.ps1").read_text()
+CHECK_PC = (WINDOWS / "Check This PC.ps1").read_text()
 VERIFY = (WINDOWS / "Verify Package Image.ps1").read_text()
 PACKAGER = (WINDOWS / "Prepare Customer Package.ps1").read_text()
 SHORTCUT = (ROOT / "TOEFL House ERP.vbs").read_text()
@@ -31,7 +32,8 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("param([switch]$SmokeTest)", GUI)
         self.assertIn("Windows GUI controls initialized", GUI)
         for button in ('"Install"', '"Open / Start"', '"Repair"', '"Stop"',
-                       '"Get Docker Desktop"', '"View Administrator Login"'):
+                       '"Get Docker Desktop"', '"View Administrator Login"',
+                       '"Check This PC"'):
             self.assertIn(button, GUI)
         self.assertIn('"http://127.0.0.1:8000/"', GUI)
         self.assertIn('$script:process', GUI)
@@ -67,6 +69,8 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("if defined TH_GUI_MODE goto :nowelcome", INSTALL)
         self.assertIn("first-run-credentials.txt", INSTALL)
         self.assertIn("View Administrator Login", GUI)
+        self.assertIn('$action -ne "Check"', GUI)
+        self.assertIn('Start-LauncherAction "Check"', GUI)
 
     def test_hidden_launcher_waits_without_interactive_timeout(self):
         # Windows timeout.exe refuses redirected/noninteractive stdin.
@@ -75,6 +79,20 @@ class CustomerInstallerContract(unittest.TestCase):
                              ("Repair", REPAIR)):
             self.assertNotIn("timeout /t", script, name)
             self.assertIn("Start-Sleep -Seconds", script, name)
+
+    def test_read_only_pc_check_is_packaged_and_never_mutates_existing_data(self):
+        self.assertIn('"product/windows/Check This PC.ps1"', PACKAGER)
+        self.assertIn('"Check"', WORKER)
+        self.assertIn('Read-only PC check', CHECK_PC)
+        self.assertIn('Production authorization: NOT VERIFIED', CHECK_PC)
+        self.assertIn('Get-PSDrive', CHECK_PC)
+        self.assertNotIn("Remove-Item", CHECK_PC)
+        self.assertNotIn("docker compose up", CHECK_PC)
+        self.assertNotIn("docker compose down", CHECK_PC)
+        self.assertNotIn("docker volume rm", CHECK_PC)
+        self.assertNotIn("docker load", CHECK_PC)
+        self.assertNotIn("Backup TOEFL House ERP", CHECK_PC)
+        self.assertNotIn("first-run-credentials.txt", CHECK_PC)
 
     def test_customer_package_verifies_before_import_or_boot(self):
         self.assertIn('if exist "release\\toefl-house-erp-app.tar" goto :packagedimage', INSTALL)

@@ -34,7 +34,11 @@ clone a repository, type commands or build Frappe from source.
    native **Course Owner** account for normal administration. Do not email
    or photograph the credentials. Owner policies and real-operation mode
    remain subject to the documented release hold.
-5. On later days, open the same GUI and click **Open / Start**. Use **Stop**
+5. Select **Check This PC** for a read-only technical report. The report
+   checks Windows, Docker availability, local disk space and loopback login
+   reachability without touching the existing site, backup, secrets or Docker
+   volumes. It does not qualify backup/recovery, Tailscale or production use.
+6. On later days, open the same GUI and click **Open / Start**. Use **Stop**
    to shut down services safely, or **Repair** for an interrupted installation.
    The window stays open during active operations. Logs are kept under the
    current Windows user's LocalAppData; sharing them requires care because

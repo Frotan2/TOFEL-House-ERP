@@ -27,6 +27,7 @@ jobs:
           $paths = @(
             'product/windows/TOEFL House ERP.ps1',
             'product/windows/Run TOEFL House ERP.ps1',
+            'product/windows/Check This PC.ps1',
             'product/windows/Verify Package Image.ps1',
             'product/windows/Prepare Customer Package.ps1',
             'product/windows/Test Fresh Installation.ps1'
@@ -93,6 +94,7 @@ jobs:
             'TOEFL House ERP.vbs',
             'product/docker-compose.yml',
             'product/windows/TOEFL House ERP.ps1',
+            'product/windows/Check This PC.ps1',
             'product/release/toefl-house-erp-app.tar',
             'product/release/toefl-house-erp-app.tar.sha256',
             'READ ME FIRST.txt'
@@ -103,6 +105,20 @@ jobs:
           }
           if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
             throw "Customer package included private application data."
+          }
+          # Check This PC must be runnable with an empty package and must
+          # not create site files, secrets, Docker volumes or backups.
+          if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
+            throw "Unexpected customer data before read-only PC check."
+          }
+          $checkScript = Join-Path $kit 'product/windows/Check This PC.ps1'
+          $checkOutput = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $checkScript 2>&1)
+          if ($LASTEXITCODE -ne 0) { throw "Read-only PC check failed." }
+          if (($checkOutput -join "`n") -notmatch 'Production authorization: NOT VERIFIED') {
+            throw "Read-only PC check omitted release hold notice."
+          }
+          if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
+            throw "Read-only PC check unexpectedly changed customer data."
           }
           # Exercise the customer-facing CMD paths without real Docker or databases.
           $fakeCurl = 'public class FakeCurl { public static int Main(string[] args) { return 0; } }'

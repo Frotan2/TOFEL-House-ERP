@@ -22,8 +22,8 @@ $script:stderrPath = ""
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "TOEFL House ERP"
 $form.StartPosition = "CenterScreen"
-$form.ClientSize = New-Object System.Drawing.Size(720, 428)
-$form.MinimumSize = New-Object System.Drawing.Size(736, 467)
+$form.ClientSize = New-Object System.Drawing.Size(720, 488)
+$form.MinimumSize = New-Object System.Drawing.Size(736, 527)
 $form.MaximizeBox = $false
 $form.FormBorderStyle = "FixedDialog"
 $form.BackColor = [System.Drawing.Color]::FromArgb(247, 249, 252)
@@ -75,17 +75,18 @@ $stop = New-LauncherButton "Stop" 495 229 145
 $dockerButton = New-LauncherButton "Get Docker Desktop" 30 285 205
 $credentials = New-LauncherButton "View Administrator Login" 248 285 222
 $logButton = New-LauncherButton "View Details" 485 285 155
+$checkButton = New-LauncherButton "Check This PC" 30 339 165
 
 $disclaimer = New-Object System.Windows.Forms.Label
 $disclaimer.Text = "Docker Desktop must be installed once. Real business use requires owner configuration and release approval."
 $disclaimer.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $disclaimer.ForeColor = [System.Drawing.Color]::FromArgb(96, 105, 119)
-$disclaimer.Location = New-Object System.Drawing.Point(30, 344)
+$disclaimer.Location = New-Object System.Drawing.Point(30, 400)
 $disclaimer.Size = New-Object System.Drawing.Size(655, 47)
 $form.Controls.Add($disclaimer)
 
 function Set-Busy([bool]$busy) {
-    foreach ($button in @($install, $open, $repair, $stop, $dockerButton)) {
+    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton)) {
         $button.Enabled = -not $busy
     }
     $credentials.Enabled = (-not $busy) -and (Test-Path -LiteralPath $credentialFile -PathType Leaf)
@@ -108,7 +109,7 @@ function Test-DockerClient {
 
 function Start-LauncherAction([string]$action) {
     if ($null -ne $script:process) { return }
-    if (-not (Test-DockerClient)) {
+    if ($action -ne "Check" -and -not (Test-DockerClient)) {
         $status.Text = "Docker Desktop is not installed. Click 'Get Docker Desktop', finish its Windows installer, then return here."
         return
     }
@@ -161,6 +162,7 @@ $install.Add_Click({ Start-LauncherAction "Install" })
 $open.Add_Click({ Start-LauncherAction "Start" })
 $repair.Add_Click({ Start-LauncherAction "Repair" })
 $stop.Add_Click({ Start-LauncherAction "Stop" })
+$checkButton.Add_Click({ Start-LauncherAction "Check" })
 $dockerButton.Add_Click({
     [System.Diagnostics.Process]::Start("https://www.docker.com/products/docker-desktop/") | Out-Null
     $status.Text = "Install Docker Desktop for Windows, complete WSL 2 setup if prompted, and restart Windows if required. Reopen this app."
@@ -210,6 +212,11 @@ $timer.Add_Tick({
         if ($exitCode -eq 0) {
             if ($completedAction -eq "Stop") {
                 $status.Text = "TOEFL House ERP has stopped safely. Your data remains stored."
+            } elseif ($completedAction -eq "Check") {
+                $status.Text = "Read-only PC check completed. This is not release approval. See View Details."
+                if (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf) {
+                    Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $script:stdoutPath + '"')
+                }
             } else {
                 $status.Text = "TOEFL House ERP is ready. Opening in your browser."
                 [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
@@ -236,7 +243,8 @@ $form.Add_FormClosing({
 })
 if ($SmokeTest) {
     if ($install.Text -ne "Install" -or $open.Text -ne "Open / Start" -or
-        $repair.Text -ne "Repair" -or $stop.Text -ne "Stop") {
+        $repair.Text -ne "Repair" -or $stop.Text -ne "Stop" -or
+        $checkButton.Text -ne "Check This PC") {
         throw "Graphical lifecycle actions were not initialized."
     }
     Write-Host "Windows GUI controls initialized without displaying a desktop window."

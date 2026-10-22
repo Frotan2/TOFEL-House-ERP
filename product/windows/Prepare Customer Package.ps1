@@ -53,6 +53,7 @@ try {
         "product/docker-compose.yml",
         "product/windows/TOEFL House ERP.ps1",
         "product/windows/Run TOEFL House ERP.ps1",
+        "product/windows/Check This PC.ps1",
         "product/windows/Verify Package Image.ps1",
         "product/windows/Install TOEFL House ERP.cmd",
         "product/windows/Start TOEFL House ERP.cmd",
@@ -104,7 +105,9 @@ TOEFL HOUSE ERP - CUSTOMER INSTALLATION
    Git download or source-code build are required on this computer.
 4. When ready, use Open / Start to access http://127.0.0.1:8000/
    View Administrator Login only on the trusted main computer.
-5. Future days: double-click the same launcher and choose Open / Start.
+5. Select Check This PC for a read-only technical summary. It does not
+   perform backup, restore or production authorization.
+6. Future days: double-click the same launcher and choose Open / Start.
    Use Stop to shut down services, Repair for a failed/incomplete setup.
 
 Never delete product\data: it contains site files, secrets and runtime state.
