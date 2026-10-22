@@ -22,7 +22,7 @@ tools/*
 !tools/foundation/
 tools/foundation/*
 !tools/foundation/secure_weasyprint.py
-!tools/foundation/secure_pillow.py
+!tools/foundation/secure_frappe_python.py
 !tools/foundation/secure_hrms.py
 !tools/foundation/hrms-locks/
 !tools/foundation/hrms-locks/**

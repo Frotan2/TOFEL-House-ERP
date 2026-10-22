@@ -610,16 +610,16 @@ def main() -> int:
                     raise RuntimeError("Upstream input modified during install: " + name + "/" + relative)
             installed_shas[name] = sha
         report["source_revisions"] = installed_shas
-        run("patch-frappe-pillow-13", [bench_dir / "env/bin/python",
-            ROOT / "tools/foundation/secure_pillow.py", bench_dir / "apps/frappe"])
-        run("install-pillow-13", [lab / "tools/bin/uv", "pip", "install",
+        run("patch-frappe-python-security-deps", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_frappe_python.py", bench_dir / "apps/frappe"])
+        run("install-frappe-python-security-deps", [lab / "tools/bin/uv", "pip", "install",
             "--python", bench_dir / "env/bin/python", "--no-deps", "--upgrade",
-            "Pillow==13.0.0"])
-        run("refresh-frappe-pillow-metadata", [lab / "tools/bin/uv", "pip", "install",
+            "GitPython==3.2.1", "Pillow==13.0.0", "PyJWT==2.15.1", "pypdf==6.21.2"])
+        run("refresh-frappe-security-metadata", [lab / "tools/bin/uv", "pip", "install",
             "--python", bench_dir / "env/bin/python", "--no-deps", "--reinstall",
             "--editable", bench_dir / "apps/frappe"])
-        run("verify-frappe-pillow-13", [bench_dir / "env/bin/python",
-            ROOT / "tools/foundation/secure_pillow.py", bench_dir / "apps/frappe",
+        run("verify-frappe-python-security-deps", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/secure_frappe_python.py", bench_dir / "apps/frappe",
             "--verify"])
         run("guard-all-weasyprint-entrypoints", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_weasyprint.py", bench_dir / "apps/frappe"])
@@ -636,7 +636,7 @@ def main() -> int:
         run("security-remediation-regressions", [bench_dir / "env/bin/python", "-m", "unittest",
             "tests.security.test_security_remediation_2026_10_09",
             "tests.security.test_education_locks_2026_10_17",
-            "tests.security.test_pillow_upgrade_2026_10_22", "-v"], cwd=ROOT)
+            "tests.security.test_frappe_python_security_2026_10_22", "-v"], cwd=ROOT)
         run("python-dependency-check", [lab / "tools/bin/uv", "pip", "check", "--python", bench_dir / "env/bin/python"])
         run("python-resolved-dependencies", [lab / "tools/bin/uv", "pip", "freeze", "--python", bench_dir / "env/bin/python"])
         site = "foundation.localhost"

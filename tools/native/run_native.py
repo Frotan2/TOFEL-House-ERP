@@ -167,15 +167,16 @@ def main():
         run('bench-init',benchinit)
         for key,value in {'redis_cache':'redis://127.0.0.1:12379','redis_queue':'redis://127.0.0.1:11379','redis_socketio':'redis://127.0.0.1:11379'}.items():bench('config-'+key,'set-config','--global',key,value)
         for name in ('erpnext','education','payments','hrms'):bench('get-'+name,'get-app','--skip-assets',str(sources/name))
-        run('patch-frappe-pillow-13',[benchdir/'env/bin/python',
-            ROOT/'tools/foundation/secure_pillow.py',benchdir/'apps/frappe'])
-        run('install-pillow-13',[lab/'tools/bin/uv','pip','install','--python',
-            benchdir/'env/bin/python','--no-deps','--upgrade','Pillow==13.0.0'])
-        run('refresh-frappe-pillow-metadata',[lab/'tools/bin/uv','pip','install','--python',
+        run('patch-frappe-python-security-deps',[benchdir/'env/bin/python',
+            ROOT/'tools/foundation/secure_frappe_python.py',benchdir/'apps/frappe'])
+        run('install-frappe-python-security-deps',[lab/'tools/bin/uv','pip','install','--python',
+            benchdir/'env/bin/python','--no-deps','--upgrade','GitPython==3.2.1',
+            'Pillow==13.0.0','PyJWT==2.15.1','pypdf==6.21.2'])
+        run('refresh-frappe-security-metadata',[lab/'tools/bin/uv','pip','install','--python',
             benchdir/'env/bin/python','--no-deps','--reinstall','--editable',
             benchdir/'apps/frappe'])
-        run('verify-frappe-pillow-13',[benchdir/'env/bin/python',
-            ROOT/'tools/foundation/secure_pillow.py',benchdir/'apps/frappe','--verify'])
+        run('verify-frappe-python-security-deps',[benchdir/'env/bin/python',
+            ROOT/'tools/foundation/secure_frappe_python.py',benchdir/'apps/frappe','--verify'])
         for name in ('foundation_security','toefl_house'):
             export=lab/'owned'/name;shutil.copytree(ROOT/'apps'/name,export,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
             run('export-init-'+name,['git','init','--initial-branch',EXPORT_BRANCH,export])
@@ -396,6 +397,8 @@ def main():
                 assert changed==['frappe/utils/weasyprint.py', 'pyproject.toml'], changed
                 run('verify-final-weasyprint-guard',[benchdir/'env/bin/python',
                     ROOT/'tools/foundation/secure_weasyprint.py',d,'--verify'])
+                run('verify-final-frappe-python-security',[benchdir/'env/bin/python',
+                    ROOT/'tools/foundation/secure_frappe_python.py',d,'--verify'])
             elif name in ('hrms', 'erpnext'):
                 # Explicitly reviewed lock overlays, verified byte-for-byte;
                 # no other upstream file may change.

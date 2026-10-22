@@ -107,7 +107,7 @@ COPY product/native_db.py /product/native_db.py
 COPY product/wsgi.py /product/wsgi.py
 COPY product/entrypoint.sh /product/entrypoint.sh
 COPY tools/foundation/secure_weasyprint.py /product/secure_weasyprint.py
-COPY tools/foundation/secure_pillow.py /product/secure_pillow.py
+COPY tools/foundation/secure_frappe_python.py /product/secure_frappe_python.py
 COPY tools/foundation/secure_hrms.py /product/secure_hrms.py
 COPY tools/foundation/hrms-locks /product/hrms-locks
 COPY tools/foundation/banking-locks /product/banking-locks
@@ -166,10 +166,11 @@ RUN set -eux; \
     done; \
     bench get-app --skip-assets /build/owned/foundation_security; \
     bench get-app --skip-assets /build/owned/toefl_house; \
-    python3 /product/secure_pillow.py /home/frappe/bench/apps/frappe; \
-    /build/tools/bin/uv pip install --python /home/frappe/bench/env/bin/python --no-deps --upgrade "Pillow==13.0.0"; \
+    python3 /product/secure_frappe_python.py /home/frappe/bench/apps/frappe; \
+    /build/tools/bin/uv pip install --python /home/frappe/bench/env/bin/python --no-deps --upgrade \
+      "GitPython==3.2.1" "Pillow==13.0.0" "PyJWT==2.15.1" "pypdf==6.21.2"; \
     /build/tools/bin/uv pip install --python /home/frappe/bench/env/bin/python --no-deps --reinstall --editable /home/frappe/bench/apps/frappe; \
-    /home/frappe/bench/env/bin/python /product/secure_pillow.py /home/frappe/bench/apps/frappe --verify; \
+    /home/frappe/bench/env/bin/python /product/secure_frappe_python.py /home/frappe/bench/apps/frappe --verify; \
     uv pip check --python /home/frappe/bench/env/bin/python; \
     mkdir -p /build/sites-seed; \
     cp sites/apps.txt sites/apps.json sites/common_site_config.json /build/sites-seed/; \
