@@ -127,7 +127,8 @@ class FinanceCommandShapeTests(unittest.TestCase):
 
     def test_finance_resolves_level_family_and_eligible_student(self):
         src = FINANCE.read_text(encoding="utf-8")
-        self.assertIn('{"native_program": pe.program}', src)
+        self.assertIn('filters={"native_program": native_program}', src)
+        self.assertIn("_discount_family_for_native_program(pe.program)", src)
         self.assertIn('program=discount_family, student=pe.student', src)
         self.assertIn('"student", "status"', src)
 
