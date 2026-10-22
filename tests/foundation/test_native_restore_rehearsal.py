@@ -143,6 +143,10 @@ class NativeRestartWiringTests(unittest.TestCase):
         self.assertIn("'source_sites_root_mounted':False", text)
         self.assertIn("cwd=restore_sites", text)
         self.assertIn("'BENCH_DIR':str(restore_bench)", text)
+        self.assertIn("isolated-restore-failure-bench", text)
+        self.assertIn("restore-wrong-key-must-fail", text)
+        self.assertIn("'cleanup_confined_to_failure_target':True", text)
+        self.assertIn("temp_after!=temp_before", text)
         # The restored-site health probe is an authenticated login API
         # request (no asset rendering, no get_logged_user-without-session).
         self.assertIn("api/method/login", text)

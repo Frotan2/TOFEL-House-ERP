@@ -81,8 +81,8 @@ def main():
     matrix = json.loads((ROOT / 'docs/engineering/foundation-version-matrix.json').read_text())
     parts = {p['name']:p for p in matrix['components']}
     py = Path(os.environ['RUNNER_TEMP']) / 'foundation-runner-probe/python/bin/python3'
-    secrets_ = [secrets.token_urlsafe(32) for _ in range(5)]
-    rootpw, adminpw, dbpw, userpw, restorepw = secrets_
+    secrets_ = [secrets.token_urlsafe(32) for _ in range(7)]
+    rootpw, adminpw, dbpw, userpw, restorepw, failurepw, wrong_backup_key = secrets_
     for s in secrets_:print('::add-mask::'+s, flush=True)
     secretfile = lab/'db-password';secretfile.write_text(rootpw);secretfile.chmod(0o600)
     # The hosted image can supply a MySQL client while this qualification pins
@@ -134,6 +134,20 @@ def main():
             tail=redact(p.stdout+p.stderr).strip()[-2500:]
             raise RuntimeError(f'{label} failed (exit {p.returncode}); see retained log\n--- {label} log tail ---\n{tail}')
         return p.stdout.strip()
+    def run_refusal(label,args,cwd=None,timeout=1200,input_text=None,env_overrides=None):
+        started=time.monotonic();print(label,flush=True)
+        child_env=dict(env);child_env.update(env_overrides or {})
+        options=dict(cwd=cwd or lab,env=child_env,text=True,capture_output=True,timeout=timeout)
+        if input_text is not None:options['input']=input_text
+        p=subprocess.run([str(a) for a in args],**options)
+        safe_output=redact(p.stdout+p.stderr)
+        (evidence/(label+'.txt')).write_text(safe_output)
+        report['checks'].append(dict(name=label,exit_code=p.returncode,
+                                     seconds=round(time.monotonic()-started,3),
+                                     expected_failure=True))
+        if p.returncode==0:
+            raise RuntimeError(label+' unexpectedly succeeded; fail-closed restore proof failed')
+        return p.returncode
     def bench(label,*args):return run(label,[lab/'tools/bin/bench',*args],benchdir)
     def create_site(label,site,site_db_password,set_default=False,bench_root=None):
         target_bench=Path(bench_root or benchdir)
@@ -262,11 +276,61 @@ def main():
             raise RuntimeError('Native site-config sidecar did not preserve backup_encryption_key')
         report['product_backup']={label:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for label,p in
                                   (('database',database),('private_files',private_files),('public_files',public_files))}
-        restore_site='placement-restore.localhost'
-        restore_bench,restore_sites=isolated_bench('isolated-restore-bench')
         source_artifacts=(database,public_files,private_files)
         source_bytes=sum(artifact.stat().st_size for artifact in source_artifacts)
         required_free_bytes=max(1024**3,source_bytes*5)
+        source_config_file=benchdir/'sites'/'placement-test.localhost'/'site_config.json'
+        source_config_hash=hashlib.sha256(source_config_file.read_bytes()).hexdigest()
+        source_config=json.loads(source_config_file.read_text())
+
+        # Negative rehearsal: use a second, distinct target root and database,
+        # provide a deliberately wrong backup key, and require the native adapter
+        # to fail without mutating the preserved source or leaking a staging dir.
+        failure_site='placement-restore-failure.localhost'
+        failure_bench,failure_sites=isolated_bench('isolated-restore-failure-bench')
+        failure_free=shutil.disk_usage(failure_sites).free
+        if failure_free < required_free_bytes:
+            raise RuntimeError('Insufficient free space for isolated restore failure rehearsal')
+        create_site('new-placement-restore-failure-site',failure_site,failurepw,
+                    bench_root=failure_bench)
+        failure_backup_dir=failure_sites/failure_site/'private/backups'
+        failure_backup_dir.mkdir(parents=True,exist_ok=True)
+        for artifact in source_artifacts:
+            copied=failure_backup_dir/artifact.name
+            shutil.copy2(artifact,copied)
+            if (copied.stat().st_size!=artifact.stat().st_size
+                    or hashlib.sha256(copied.read_bytes()).hexdigest()!=
+                       hashlib.sha256(artifact.read_bytes()).hexdigest()):
+                raise RuntimeError('Failure-rehearsal artifact copy did not verify')
+        temp_before={p.name for p in Path('/tmp').glob('toefl-house-native-restore-*')}
+        failure_payload=json.dumps({
+            'site':failure_site,'backup_set':backup_set,'encryption_key':wrong_backup_key,
+            'db_root_password':rootpw,'admin_password':adminpw})
+        failure_rc=run_refusal('restore-wrong-key-must-fail',
+            [benchdir/'env/bin/python',ROOT/'product/restore.py'],cwd=failure_bench,
+            input_text=failure_payload,
+            env_overrides={'BENCH_DIR':str(failure_bench),'SITE_NAME':failure_site})
+        temp_after={p.name for p in Path('/tmp').glob('toefl-house-native-restore-*')}
+        if temp_after!=temp_before:
+            raise RuntimeError('Failed restore left disposable native staging material behind')
+        if hashlib.sha256(source_config_file.read_bytes()).hexdigest()!=source_config_hash:
+            raise RuntimeError('Failed isolated restore changed the source site configuration')
+        for label,artifact in (('database',database),('private_files',private_files),
+                               ('public_files',public_files)):
+            if hashlib.sha256(artifact.read_bytes()).hexdigest()!=report['product_backup'][label]['sha256']:
+                raise RuntimeError('Failed isolated restore modified preserved source backup material')
+        shutil.rmtree(failure_bench)
+        if failure_bench.exists():
+            raise RuntimeError('Failure-rehearsal cleanup escaped its disposable target contract')
+        report['restore_failure_rehearsal']={
+            'status':'pass','wrong_key_refused':True,'restore_exit_code':failure_rc,
+            'temporary_stage_cleaned':True,'source_backup_hashes_unchanged':True,
+            'source_site_config_unchanged':True,'cleanup_confined_to_failure_target':True,
+            'isolated_site_data_root':True,
+        }
+
+        restore_site='placement-restore.localhost'
+        restore_bench,restore_sites=isolated_bench('isolated-restore-bench')
         free_bytes=shutil.disk_usage(restore_sites).free
         if free_bytes < required_free_bytes:
             raise RuntimeError('Insufficient free space for isolated restore rehearsal; target site was not created')
@@ -289,9 +353,6 @@ def main():
             'isolated_site_data_root':True,
             'source_sites_root_mounted':False,
         }
-        source_config_file=benchdir/'sites'/'placement-test.localhost'/'site_config.json'
-        source_config_hash=hashlib.sha256(source_config_file.read_bytes()).hexdigest()
-        source_config=json.loads(source_config_file.read_text())
         restore_payload=json.dumps({'site':restore_site,'backup_set':backup_set,
                                     'encryption_key':backup_encryption_key,
                                     'db_root_password':rootpw,'admin_password':adminpw})

@@ -54,6 +54,10 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+      - name: Isolated restore safety contracts
+        run: |
+          python3 tools/foundation/annotated_step.py "Isolated restore safety contracts" -- python3 -m unittest -q \
+            tests.foundation.test_product_restore tests.foundation.test_native_restore_rehearsal
       - name: Validate compose file
         # db.env is generated per machine by the Windows installer; CI uses a
         # throwaway value only to let compose resolve the env_file.
