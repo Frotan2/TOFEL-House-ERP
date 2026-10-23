@@ -31,7 +31,8 @@ jobs:
             'product/windows/Check This PC.ps1',
             'product/windows/Verify Package Image.ps1',
             'product/windows/Prepare Customer Package.ps1',
-            'product/windows/Test Fresh Installation.ps1'
+            'product/windows/Test Fresh Installation.ps1',
+            'product/windows/Test Existing Installation.ps1'
           )
           foreach ($path in $paths) {
             $tokens = $null
@@ -62,7 +63,15 @@ jobs:
               public static int Main(string[] args) {
                   if (args.Length == 0) return 1;
                   if (args[0] == "info") return 0;
-                  if (args[0] == "volume") return 0;
+                  if (args[0] == "volume") {
+                      bool present = Environment.GetEnvironmentVariable("TH_SYNTHETIC_VOLUME_EXISTS") == "1";
+                      if (args.Length > 1 && args[1] == "ls") {
+                          if (present) Console.WriteLine("toefl-house-erp_db-data");
+                          return 0;
+                      }
+                      if (args.Length > 1 && args[1] == "inspect") return present ? 0 : 1;
+                      return 1;
+                  }
                   if (args[0] == "load") return 0;
                   if (args[0] == "compose") return 0;
                   if (args[0] == "image") {
@@ -84,6 +93,7 @@ jobs:
           '@
           Add-Type -TypeDefinition $fakeDocker -OutputAssembly (Join-Path $fakeDir 'docker.exe') -OutputType ConsoleApplication
           $env:PATH = "$fakeDir;$env:PATH"
+          $env:TH_SYNTHETIC_VOLUME_EXISTS = '0'
           $target = Join-Path $env:RUNNER_TEMP "Customer Kits"
           New-Item -ItemType Directory -Path $target -Force | Out-Null
           & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "product/windows/Prepare Customer Package.ps1" -Destination $target
@@ -96,6 +106,7 @@ jobs:
             'product/docker-compose.yml',
             'product/windows/TOEFL House ERP.ps1',
             'product/windows/Check This PC.ps1',
+            'product/windows/Test Existing Installation.ps1',
             'product/windows/OWNER ACCEPTANCE GUIDE.txt',
             'product/windows/DAILY USE GUIDE.txt',
             'product/release/toefl-house-erp-app.tar',
@@ -162,6 +173,14 @@ jobs:
           Add-Type -TypeDefinition $fakeCurl -OutputAssembly (Join-Path $fakeDir 'curl.exe') -OutputType ConsoleApplication
           $env:TH_GUI_MODE = '1'
           foreach ($task in @('Install', 'Start', 'Stop', 'Repair')) {
+            if ($task -eq 'Start') {
+              # Fake Docker cannot create Frappe data. Model the successful
+              # completed synthetic Install's site and named volume explicitly.
+              $syntheticSite = Join-Path $kit 'product/data/sites/toeflhouse.localhost'
+              New-Item -ItemType Directory -Path $syntheticSite -Force | Out-Null
+              [System.IO.File]::WriteAllText((Join-Path $syntheticSite 'site_config.json'), '{}')
+              $env:TH_SYNTHETIC_VOLUME_EXISTS = '1'
+            }
             $script = Join-Path $kit ("product/windows/" + $task + " TOEFL House ERP.cmd")
             $output = @(& $script 2>&1)
             $taskExit = $LASTEXITCODE
@@ -187,6 +206,26 @@ jobs:
             throw "Headless synthetic install did not generate its local credential file."
           }
           Write-Host "Headless installer, start, stop and repair routes passed with fake Docker."
+          # A missing database volume with credentials + site config present
+          # must NOT allow Compose to create an empty replacement database.
+          $env:TH_SYNTHETIC_VOLUME_EXISTS = '0'
+          $blockedStart = Join-Path $kit 'product/windows/Start TOEFL House ERP.cmd'
+          $previousPreference = $ErrorActionPreference
+          try {
+            $ErrorActionPreference = 'Continue'
+            $lostVolumeOutput = @(& $blockedStart 2>&1)
+            $lostVolumeExit = $LASTEXITCODE
+          } finally {
+            $ErrorActionPreference = $previousPreference
+            $env:TH_SYNTHETIC_VOLUME_EXISTS = '1'
+          }
+          if ($lostVolumeExit -eq 0 -or ($lostVolumeOutput -join "`n") -notmatch 'BLOCKED TO PRESERVE DATA') {
+            throw "Start accepted a missing database volume; data preservation guard failed."
+          }
+          if (($lostVolumeOutput -join "`n") -match 'Starting the installed TOEFL House ERP') {
+            throw "Start reached Docker Compose despite a missing database volume."
+          }
+          Write-Host "Missing native database volume was refused without a start attempt."
           # Simulate a lost credential file after synthetic installation. The
           # read-only check must catch it without viewing password contents.
           $credential = Join-Path $kit 'product/data/secrets/db.env'
