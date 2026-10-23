@@ -1471,10 +1471,16 @@ class OwnerValidationChecklistTests(unittest.TestCase):
         text = self.DOC.read_text(encoding="utf-8")
         self.assertIn("OPEN", text)
         self.assertIn("If something fails", text)
-        # Exactly one end-user recovery path: the Repair script; no other .cmd
-        # fallback may be prescribed on failure.
+        # An existing Owner PC under preservation HOLD must not be told
+        # to run Repair, reinstall, or share raw logs. Any synthetic test-PC
+        # Repair attempt requires support authorization, not a blind retry.
         tail = text[text.index("## If something fails"):]
-        self.assertIn("Repair TOEFL House ERP.cmd", tail)
+        self.assertIn("On an existing Owner PC", tail)
+        self.assertIn("On the separate, disposable synthetic acceptance PC only", tail)
+        self.assertIn("Copy Safe Support Status", tail)
+        self.assertIn("Contact support before", tail)
+        self.assertIn("Never send", tail)
+        self.assertNotIn("double-click `Repair TOEFL House ERP.cmd`", tail)
         self.assertNotIn("Install TOEFL House ERP.cmd", tail)
 
 
