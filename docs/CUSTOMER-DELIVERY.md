@@ -48,10 +48,22 @@ clone a repository, type commands or build Frappe from source.
    backup, secrets or Docker volumes. It does not qualify backup/recovery,
    Tailscale, publisher trust or production use.
 6. On later days, open the same GUI and click **Open / Start**. Use **Stop**
-   to shut down services safely, or **Repair** for an interrupted installation.
-   The window stays open during active operations. Logs are kept under the
-   current Windows user's LocalAppData; sharing them requires care because
-   diagnostics may contain private technical information.
+   to shut down services safely. **Do not use Install again** on an existing
+   site; the launcher now refuses a repeated installation. **Repair** is only
+   for a provider-authorized recovery attempt on an intact existing site, not
+   a data restore or a fix for a missing database. The window stays open
+   during active operations.
+
+**Preservation gate for existing installations:** Start and Repair now check
+that `db.env`, the Frappe site's `site_config.json`, and the exact named
+Docker database volume are present and accessible **before** running Compose.
+If anything is missing or unverifiable, they refuse to run rather than risk
+creating a new empty database volume. This is an existence check, **not**
+proof that records or backups are healthy. Do not replace credentials,
+reinstall, recreate a volume, or bypass the refusal. Use the GUI's
+**Check This PC → Copy Safe Support Status** to share only the fixed, safe
+summary with trusted support. Logs are kept locally under LocalAppData; do
+**not** email or zip entire raw logs, student records, secrets or backups.
 
 **Important:** The customer cannot move an installed ERP merely by copying
 the delivery folder. The database lives in a Docker named volume while site
