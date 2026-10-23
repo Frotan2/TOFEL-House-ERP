@@ -222,6 +222,28 @@ jobs:
             throw "Repeated Install did not refuse the existing Frappe site."
           }
           Write-Host "Repeated Install was refused safely."
+          # Partial-install protection: credentials alone must prevent Install
+          # even when the synthetic Frappe site config is temporarily absent.
+          $siteConfig = Join-Path $kit 'product/data/sites/toeflhouse.localhost/site_config.json'
+          $heldSiteConfig = "$siteConfig.synthetic-hold"
+          Move-Item -LiteralPath $siteConfig -Destination $heldSiteConfig
+          try {
+            $previousPreference = $ErrorActionPreference
+            try {
+              $ErrorActionPreference = 'Continue'
+              $partialInstallOutput = @(& $repeatInstall 2>&1)
+              $partialInstallExit = $LASTEXITCODE
+            } finally {
+              $ErrorActionPreference = $previousPreference
+            }
+            if ($partialInstallExit -eq 0 -or
+                ($partialInstallOutput -join "`n") -notmatch 'no installation attempted') {
+              throw "Partial install with preserved credentials was treated as a fresh install."
+            }
+          } finally {
+            Move-Item -LiteralPath $heldSiteConfig -Destination $siteConfig
+          }
+          Write-Host "Partial install with preserved credentials was refused safely."
           # A missing database volume with credentials + site config present
           # must NOT allow Compose to create an empty replacement database.
           $env:TH_SYNTHETIC_VOLUME_EXISTS = '0'
