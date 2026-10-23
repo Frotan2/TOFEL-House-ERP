@@ -232,8 +232,8 @@ Passing CI does not close #12 or #35 and does not authorize production.
 ## Follow-up gates on 2026-10-23
 
 At `2104d13d722c36184e29a1db6303240424b5dcde`, the owned suite (1,663
-tests, 9 skips), Windows package smoke, and Foundation runtime completed
-successfully. The product image built and its first-boot encrypted
+tests, 9 skips) and Windows package smoke completed successfully. Foundation
+runtime is still running. The product image built and its first-boot encrypted
 backup/restore check passed, but authenticated Chromium role-desk acceptance
 failed on post-login JavaScript exceptions (`undefined.show`); package
 assembly and publication were correctly skipped. The native lifecycle run
@@ -241,10 +241,15 @@ also failed while submitting the newly added native cash-refund Payment
 Entry: ERPNext reported an unbalanced voucher (difference -1200 AFN). Thus
 the 638-check native suite and the role desks are not qualified at that SHA.
 
-The follow-up diagnostic revision records the browser exception stack and,
-on native refund failure, the generated Payment Entry's amounts, accounts,
+The follow-up diagnostic revision records, on native refund failure, the
+generated Payment Entry's amounts, accounts,
 references, and return balance. Its focused contract tests pass (36 passed,
 1 skipped); Python compilation and `git diff --check` pass. Ruff is unavailable
 in the local Windows Python environment. These diagnostics are not a product
 fix or release evidence; both CI failures remain blockers pending a successful
-rerun. Production remains **REJECT**.
+rerun. The captured refund is a 600 AFN customer Pay entry with a -600 AFN
+Sales Invoice reference; ERPNext rejects the resulting GL as unbalanced by
+1,200 AFN. Product acceptance fails in the initial Administrator desk shell
+before role-desk qualification. The current log lacks exception stacks; a
+follow-up change now retains them for the next fresh-site run. Production
+remains **REJECT**.

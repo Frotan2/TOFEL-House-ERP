@@ -904,7 +904,9 @@ jobs:
               browser = p.chromium.launch(headless=True)
               page = browser.new_page(viewport={"width": 1440, "height": 900})
               page.on("console", lambda m: console_errors.append(m.text) if m.type == "error" else None)
-              page.on("pageerror", lambda e: page_errors.append(str(e)))
+              page.on("pageerror", lambda e: page_errors.append({
+                  "message": str(e), "stack": e.stack or "",
+              }))
               page.on("requestfailed", lambda r: failed_requests.append(f"{r.url} {r.failure}"))
               page.goto("http://127.0.0.1:8000/", wait_until="domcontentloaded", timeout=120_000)
               # Frappe v16 login form fields (frappe/www/login.html at the
