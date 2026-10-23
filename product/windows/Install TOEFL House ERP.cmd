@@ -24,8 +24,10 @@ rem  plain top-level call.
 rem ============================================================
 title Installing TOEFL House ERP
 cd /d "%~dp0.."
-rem A completed Frappe site is already installed. Install must never be used
-rem as a daily restart, source upgrade or recovery action on that site.
+rem Any prior local credentials or site config indicate an attempted
+rem installation. Even an incomplete attempt may have preserved database data;
+rem never treat it as a fresh install and never recreate a missing volume.
+if exist "data\secrets\db.env" goto :alreadyinstalled
 if exist "data\sites\toeflhouse.localhost\site_config.json" goto :alreadyinstalled
 
 where docker >nul 2>nul
@@ -166,9 +168,11 @@ exit /b 0
 
 :alreadyinstalled
 echo [TH_STAGE] Existing TOEFL House ERP site detected - no installation attempted.
-echo  This computer already has an ERP site. Use Open / Start in the
-echo  TOEFL House ERP Windows application for normal daily work.
-echo  Never run Install over an existing site. If it cannot start,
+echo  This computer has ERP site files or previously created credentials.
+echo  If setup is complete, use Open / Start for daily work.
+echo  If setup was interrupted, STOP and contact trusted support.
+echo  Never run Install over existing or partially initialized storage.
+echo  If the system cannot start,
 echo  choose Check This PC and share only Copy Safe Support Status with support.
 if not defined TH_GUI_MODE pause
 exit /b 1
