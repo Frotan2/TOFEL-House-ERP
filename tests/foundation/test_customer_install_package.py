@@ -189,9 +189,12 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('$_ .Trim()'.replace(' ', ''), EXISTING_PREFLIGHT)
         self.assertIn("docker volume inspect $volumeName", EXISTING_PREFLIGHT)
         self.assertIn("could create an empty replacement", EXISTING_PREFLIGHT)
+        # Scan executable statements, not explanatory comments.
+        statements = "\n".join(line for line in EXISTING_PREFLIGHT.splitlines()
+                               if not line.lstrip().startswith("#"))
         for forbidden in ("docker compose up", "docker compose down",
                           "docker volume create", "Remove-Item", "Set-Content"):
-            self.assertNotIn(forbidden, EXISTING_PREFLIGHT)
+            self.assertNotIn(forbidden, statements)
         for name, script in (("Start", START), ("Repair", REPAIR)):
             self.assertIn("Test Existing Installation.ps1", script, name)
             self.assertIn("if errorlevel 1 goto :datapreservationhold", script, name)
