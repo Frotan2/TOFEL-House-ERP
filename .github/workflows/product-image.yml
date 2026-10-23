@@ -7,6 +7,8 @@ name: Product image
 # This is not production authorization or real Windows/Owner key-custody proof.
 on:
   push:
+    tags:
+      - "v*"
     paths:
       - .github/workflows/product-image.yml
       - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
@@ -39,10 +41,13 @@ on:
       - docs/engineering/LAUNCH-RUNBOOK.md
       - docs/PRODUCT.md
       - docs/owner-decisions.json
+      - tools/release/create_customer_package.py
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  id-token: write
+  attestations: write
 
 concurrency:
   group: product-image-${{ github.ref }}
@@ -138,7 +143,13 @@ jobs:
             head -1 "$f" | grep -q $'\r$'
           done
           echo "::notice title=Fresh Windows checkout::all copied text sources and build-control files are LF; .cmd launchers are CRLF"
-          docker build --build-arg NODE_TARBALL_SHA256="${NODE_TARBALL_SHA256}" -f product/app.Dockerfile -t toefl-house-erp-app:ci -t toefl-house-erp-app:local /tmp/win-worktree
+          release_version="ci-${GITHUB_SHA:0:12}"
+          echo "TOEFL_HOUSE_RELEASE_VERSION=${release_version}" >> "$GITHUB_ENV"
+          docker build \
+            --build-arg NODE_TARBALL_SHA256="${NODE_TARBALL_SHA256}" \
+            --build-arg TOEFL_HOUSE_SOURCE_REVISION="${GITHUB_SHA}" \
+            --build-arg TOEFL_HOUSE_RELEASE_VERSION="${release_version}" \
+            -f product/app.Dockerfile -t toefl-house-erp-app:ci -t toefl-house-erp-app:local /tmp/win-worktree
           # Inspect the actual image bytes. entrypoint.sh is exec'd by the
           # kernel; the Python entrypoints are invoked directly by wrappers.
           in_image=$(docker run --rm --entrypoint sh toefl-house-erp-app:ci -c 'head -c 10 /product/entrypoint.sh | od -An -tx1 | tr -d " \n"')
@@ -1636,6 +1647,52 @@ jobs:
                   print("::notice title=Baseline %s::%s" % (name, s.get("skipped", s.get("error", ""))))
           print("::notice title=Performance baseline::measured, not policy (no owner capacity target exists)")
           EOF
+      - name: Assemble verified customer package
+        if: success()
+        run: |
+          set -euo pipefail
+          package_root="$RUNNER_TEMP/toefl-house-customer-package"
+          image_archive="$RUNNER_TEMP/toefl-house-erp-app.tar"
+          image_labels="$RUNNER_TEMP/toefl-house-image-labels.json"
+          docker save --output "$image_archive" toefl-house-erp-app:ci
+          docker image inspect toefl-house-erp-app:ci --format '{{json .Config.Labels}}' > "$image_labels"
+          python3 tools/foundation/annotated_step.py "Customer package assembly" -- python3 tools/release/create_customer_package.py \
+            --output "$package_root" \
+            --image-archive "$image_archive" \
+            --image-labels "$image_labels" \
+            --version "$TOEFL_HOUSE_RELEASE_VERSION" \
+            --source-revision "$GITHUB_SHA" \
+            --provider-attestation "GitHub Actions artifact attestation"
+          test -s "$package_root"/*.zip
+          echo "::notice title=Customer package::version $TOEFL_HOUSE_RELEASE_VERSION; image archive, checksum, manifest and allowlisted GUI included"
+      - name: Attest customer package provenance
+        if: success()
+        uses: actions/attest-build-provenance@520d128f165991a6c774bcb264f323e3d70747f4 # v2.2.0
+        with:
+          subject-path: '${{ runner.temp }}/toefl-house-customer-package/*.zip'
+      - name: Publish customer package artifact
+        if: success()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: TOEFL-House-ERP-Customer-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}
+          path: |
+            ${{ runner.temp }}/toefl-house-customer-package/*.zip
+            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/release-manifest.json
+            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/release-manifest.json.sha256
+          if-no-files-found: error
+          compression-level: 0
+      - name: Publish tagged customer release
+        if: success() && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          zip_path=$(find "$RUNNER_TEMP/toefl-house-customer-package" -maxdepth 1 -type f -name '*.zip' -print -quit)
+          test -n "$zip_path"
+          gh release create "$GITHUB_REF_NAME" "$zip_path" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "TOEFL House ERP $GITHUB_REF_NAME" \
+            --notes "Provider-built customer package. Verify the included release manifest and GitHub artifact attestation. This is a TEST PACKAGE - NO REAL DATA; production authorization remains REJECT until Owner acceptance gates pass."
       - name: Stack logs on failure
         if: failure()
         working-directory: product

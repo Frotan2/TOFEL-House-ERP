@@ -259,7 +259,11 @@ class BehaviourTests(unittest.TestCase):
         cls.stubs = stubs
         cls.sites = cls.tmp / "sites"
         cls.sites.mkdir()
-        cls.probe_script = cls.probe.replace(SITES, str(cls.sites))
+        # The probe is executed as Python source. A Windows path injected
+        # with backslashes would turn ``\U``/``\t`` sequences into Python
+        # escapes before the actual probe can run. POSIX spelling is valid on
+        # Windows Python and keeps this contract host-independent.
+        cls.probe_script = cls.probe.replace(SITES, cls.sites.as_posix())
 
     @classmethod
     def tearDownClass(cls):

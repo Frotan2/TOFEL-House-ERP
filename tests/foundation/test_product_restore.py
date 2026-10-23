@@ -3,6 +3,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import shlex
 import stat
@@ -107,6 +108,8 @@ class ProductRestoreInputTests(unittest.TestCase):
                         request["db_root_password"], request["admin_password"])
                 self.assertIn(missing_role, str(caught.exception))
 
+    @unittest.skipUnless(os.name == "posix",
+                         "relative POSIX runtime paths are exercised in Linux CI")
     def test_restore_failure_paths_outside_known_roots_are_not_reported(self):
         restore = load_restore()
         error = FileNotFoundError(2, "No such file or directory", "/private/synthetic-secret")
@@ -151,6 +154,8 @@ class ProductRestoreInputTests(unittest.TestCase):
                 ("bench-parent:logs", "missing"))
             self.assertEqual(restore._safe_restore_context(), ("bench", "missing"))
 
+    @unittest.skipUnless(os.name == "posix",
+                         "native restore uses Linux /tmp and POSIX file semantics")
     def test_native_restore_output_and_exceptions_cannot_leak_credentials(self):
         restore = load_restore()
         site = "toeflhouse.localhost"
@@ -345,7 +350,7 @@ class ProductRestoreInputTests(unittest.TestCase):
 
     def test_product_and_ci_restore_paths_use_safe_adapter_and_owner_runbook_is_held(self):
         workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
-        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text()
+        runbook = (ROOT / "docs/engineering/LAUNCH-RUNBOOK.md").read_text(encoding="utf-8")
         owner_restore = runbook.split(
             "## 7. Restore and recovery — HOLD", 1)[1].split("## 8.", 1)[0]
         dockerfile = (ROOT / "product/app.Dockerfile").read_text()

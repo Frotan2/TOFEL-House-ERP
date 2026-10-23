@@ -79,23 +79,33 @@ toefl-house-erp-app:local, open
 product/windows/Prepare Customer Package.ps1 in Windows PowerShell, or run
 it with a chosen Destination path. The provider-side utility:
 
-- Confirms Docker is running and the image includes the Linux LF-source
-  contract label.
+- Confirms Docker is running and the image includes the Linux LF-source,
+  exact source-revision, and exact release-version labels.
 - Copies only the explicitly allowed Windows GUI, Owner readiness guide,
   lifecycle scripts and Compose configuration. It never copies source repositories, Docker data,
   administrator credentials, active site files, activation receipts or backups.
 - Uses docker save to write product/release/toefl-house-erp-app.tar, and writes
-  a SHA-256 checksum next to it. It verifies the archive again after export.
-- Creates a new, timestamped customer folder and an English quick-start
-  readme. It does not overwrite an existing package. An interrupted/failed
-  package must be discarded by the provider after inspection, not delivered.
+  an archive checksum, release manifest, dependency-matrix hash, and manifest
+  checksum. It verifies the bound archive before delivery.
+- Creates a new, versioned customer folder and an English quick-start readme.
+  It does not overwrite an existing package. An interrupted/failed package
+  must be discarded by the provider after inspection, not delivered.
 
-The SHA-256 file catches corruption and casual package damage. It does **not**
-authenticate the author: a malicious party able to replace both tar and hash
-can replace the image. Before commercial distribution, introduce a signed
-release manifest, controlled versioning and publisher identity verification.
-The packaged image must also be bound to an independently checked, approved
-source revision; the current LF label alone does not prove that.
+The provider/CI implementation is also available as
+`tools/release/create_customer_package.py`. The Product image workflow uses
+it after the real image and all hosted qualification steps pass, creates a ZIP,
+attests that ZIP with GitHub's build-provenance service, uploads the versioned
+artifact, and publishes a GitHub Release asset only for an explicit `v*` tag.
+The ZIP is the customer download; the included manifest binds the exact source
+revision, image labels, image hash, and dependency matrix. Verify the
+attestation separately. A package that has only a bare tar/hash pair is not a
+verified customer release.
+
+The SHA-256 and manifest sidecars catch corruption and bind the package
+contents. They do **not** replace the provider/GitHub attestation: a malicious
+party able to replace both an archive and its local hash could otherwise
+replace the image. The Windows verifier checks the manifest and image hash
+before import; it never treats those checks alone as production approval.
 
 The customer GUI intentionally offers **no** Backup, Restore, Activate,
 Deactivate or production bypass controls while the relevant holds apply.

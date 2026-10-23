@@ -9,6 +9,7 @@ REJECT regardless of operational site mode.
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import time
@@ -139,6 +140,8 @@ class ActivationFlow(unittest.TestCase):
             self.act.activate(SITE, log=lambda *_: None)
         self.assertNotIn(self.act.ACTIVE_KEY, self.config())
 
+    @unittest.skipUnless(os.name == "posix",
+                         "POSIX mode bits are enforced inside the Linux product container")
     def test_activation_passes_original_mode_mirror_fixture_and_mixed_flag_gates(self):
         self.fresh_backup()
         self.act.activate(SITE, log=lambda *_: None)
@@ -269,6 +272,8 @@ class ActivationFlow(unittest.TestCase):
             self.act.require_confirm(SITE, None)
         self.act.require_confirm(SITE, SITE)
 
+    @unittest.skipUnless(os.name == "posix",
+                         "POSIX mode bits are enforced inside the Linux product container")
     def test_quick_site_config_snapshots_are_unique_and_private(self):
         first = self.act.backup_config(SITE)
         second = self.act.backup_config(SITE)

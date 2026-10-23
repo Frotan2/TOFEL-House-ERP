@@ -12,19 +12,27 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 WINDOWS = ROOT / "product" / "windows"
-INSTALL = (WINDOWS / "Install TOEFL House ERP.cmd").read_text()
-REPAIR = (WINDOWS / "Repair TOEFL House ERP.cmd").read_text()
-START = (WINDOWS / "Start TOEFL House ERP.cmd").read_text()
-STOP = (WINDOWS / "Stop TOEFL House ERP.cmd").read_text()
-GUI = (WINDOWS / "TOEFL House ERP.ps1").read_text()
-WORKER = (WINDOWS / "Run TOEFL House ERP.ps1").read_text()
-CHECK_PC = (WINDOWS / "Check This PC.ps1").read_text()
-EXISTING_PREFLIGHT = (WINDOWS / "Test Existing Installation.ps1").read_text()
-VERIFY = (WINDOWS / "Verify Package Image.ps1").read_text()
-PACKAGER = (WINDOWS / "Prepare Customer Package.ps1").read_text()
-SHORTCUT = (ROOT / "TOEFL House ERP.vbs").read_text()
-OWNER_GUIDE = (WINDOWS / "OWNER ACCEPTANCE GUIDE.txt").read_text()
-DAILY_GUIDE = (WINDOWS / "DAILY USE GUIDE.txt").read_text()
+
+
+def read_utf8(path: Path) -> str:
+    # Windows Python otherwise uses the process ANSI code page. The shipped
+    # Dari guide is UTF-8 and must be testable on the same host customers use.
+    return path.read_text(encoding="utf-8")
+
+
+INSTALL = read_utf8(WINDOWS / "Install TOEFL House ERP.cmd")
+REPAIR = read_utf8(WINDOWS / "Repair TOEFL House ERP.cmd")
+START = read_utf8(WINDOWS / "Start TOEFL House ERP.cmd")
+STOP = read_utf8(WINDOWS / "Stop TOEFL House ERP.cmd")
+GUI = read_utf8(WINDOWS / "TOEFL House ERP.ps1")
+WORKER = read_utf8(WINDOWS / "Run TOEFL House ERP.ps1")
+CHECK_PC = read_utf8(WINDOWS / "Check This PC.ps1")
+EXISTING_PREFLIGHT = read_utf8(WINDOWS / "Test Existing Installation.ps1")
+VERIFY = read_utf8(WINDOWS / "Verify Package Image.ps1")
+PACKAGER = read_utf8(WINDOWS / "Prepare Customer Package.ps1")
+SHORTCUT = read_utf8(ROOT / "TOEFL House ERP.vbs")
+OWNER_GUIDE = read_utf8(WINDOWS / "OWNER ACCEPTANCE GUIDE.txt")
+DAILY_GUIDE = read_utf8(WINDOWS / "DAILY USE GUIDE.txt")
 
 
 class CustomerInstallerContract(unittest.TestCase):

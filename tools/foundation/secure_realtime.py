@@ -90,7 +90,10 @@ def verify_installed_realtime(frappe: Path) -> dict:
             if data.get("name") != name:
                 continue
             version = data["version"]
-            versions[str(manifest_path.relative_to(frappe))] = version
+            # Reports are consumed by CI annotations and release evidence,
+            # which use the container's canonical POSIX path spelling even
+            # when a Windows host runs the contract tests.
+            versions[manifest_path.relative_to(frappe).as_posix()] = version
             if _version_tuple(version) < _version_tuple(minimum):
                 raise ValueError(f"Vulnerable {name} {version} remains in the Frappe root (minimum {minimum})")
         if not versions:

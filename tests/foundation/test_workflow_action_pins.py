@@ -30,6 +30,7 @@ NODE24_PINS = {
     "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09": ("actions/checkout", "v5.1.0"),
     "b7c566a772e6b6bfb58ed0dc250532a479d7789f": ("actions/upload-artifact", "v6.0.0"),
     "249970729cb0ef3589644e2896645e5dc5ba9c38": ("actions/setup-node", "v6.5.0"),
+    "520d128f165991a6c774bcb264f323e3d70747f4": ("actions/attest-build-provenance", "v2.2.0"),
 }
 
 # Pins that declare node20 and must never come back. Kept as literals on purpose:

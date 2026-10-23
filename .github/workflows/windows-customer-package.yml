@@ -75,7 +75,9 @@ jobs:
                   if (args[0] == "load") return 0;
                   if (args[0] == "compose") return 0;
                   if (args[0] == "image") {
-                      Console.WriteLine("{\"org.toefl-house.source-eol\":\"lf-v1\"}");
+                      string revision = Environment.GetEnvironmentVariable("TH_SYNTHETIC_REVISION") ?? "";
+                      string version = Environment.GetEnvironmentVariable("TH_SYNTHETIC_VERSION") ?? "";
+                      Console.WriteLine("{\"org.toefl-house.source-eol\":\"lf-v1\",\"org.toefl-house.source-revision\":\"" + revision + "\",\"org.toefl-house.release-version\":\"" + version + "\"}");
                       return 0;
                   }
                   if (args[0] == "save" && args.Length >= 3) {
@@ -94,9 +96,11 @@ jobs:
           Add-Type -TypeDefinition $fakeDocker -OutputAssembly (Join-Path $fakeDir 'docker.exe') -OutputType ConsoleApplication
           $env:PATH = "$fakeDir;$env:PATH"
           $env:TH_SYNTHETIC_VOLUME_EXISTS = '0'
+          $env:TH_SYNTHETIC_REVISION = ('a' * 40)
+          $env:TH_SYNTHETIC_VERSION = 'ci-windows-package'
           $target = Join-Path $env:RUNNER_TEMP "Customer Kits"
           New-Item -ItemType Directory -Path $target -Force | Out-Null
-          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "product/windows/Prepare Customer Package.ps1" -Destination $target
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "product/windows/Prepare Customer Package.ps1" -Destination $target -Version $env:TH_SYNTHETIC_VERSION -SourceRevision $env:TH_SYNTHETIC_REVISION
           if ($LASTEXITCODE -ne 0) { throw "Synthetic package creation failed." }
           $kits = @(Get-ChildItem -LiteralPath $target -Directory)
           if ($kits.Count -ne 1) { throw "Expected exactly one customer package." }
@@ -111,6 +115,8 @@ jobs:
             'product/windows/DAILY USE GUIDE.txt',
             'product/release/toefl-house-erp-app.tar',
             'product/release/toefl-house-erp-app.tar.sha256',
+            'product/release/release-manifest.json',
+            'product/release/release-manifest.json.sha256',
             'READ ME FIRST.txt'
           )) {
             if (-not (Test-Path -LiteralPath (Join-Path $kit $relative) -PathType Leaf)) {

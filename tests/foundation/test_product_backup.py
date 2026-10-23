@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import os
 import json
 from pathlib import Path
 import shlex
@@ -264,6 +265,8 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
         finally:
             self.assertEqual(Path.cwd(), caller_cwd)
 
+    @unittest.skipUnless(os.name == "posix",
+                         "native backup file modes are enforced inside the Linux product container")
     def test_native_backup_uses_safe_gpg_and_preserves_preexisting_backups(self):
         self._run_adapter()
         self.assertEqual(self.old_database.read_bytes(), self.old_database_bytes)
@@ -336,6 +339,8 @@ class NativeFrappeBackupAdapterTests(unittest.TestCase):
                 self.assertIn("sensitive diagnostics were withheld", stderr.getvalue())
                 self.assertIn("Existing backup material was preserved", stderr.getvalue())
 
+    @unittest.skipUnless(os.name == "posix",
+                         "native backup file modes are enforced inside the Linux product container")
     def test_unverified_native_backup_does_not_replace_or_delete_old_backups(self):
         self.fail_packet_verification = True
         with self.assertRaises(self.backup.BackupInputError) as caught:

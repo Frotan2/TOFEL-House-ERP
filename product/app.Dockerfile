@@ -128,7 +128,11 @@ COPY product/perf_baseline.py /product/perf_baseline.py
 # The Windows preflight normalizes existing worktrees before docker build;
 # this independent in-image check makes bypassing that preflight fail closed.
 RUN python3 -c 'from pathlib import Path; import codecs; suffixes={".py",".sh",".js",".json",".css",".md",".txt",".toml",".yaml",".yml",".html",".xml",".csv",".svg",".jinja",".jinja2"}; roots=(Path("/build/owned"),Path("/product")); files=[p for root in roots for p in root.rglob("*") if p.is_file() and p.suffix.lower() in suffixes]; bom=(codecs.BOM_UTF8,codecs.BOM_UTF16_LE,codecs.BOM_UTF16_BE,codecs.BOM_UTF32_LE,codecs.BOM_UTF32_BE); bad=[str(p) for p in files if b"\r" in p.read_bytes() or p.read_bytes().startswith(bom)]; [print("LF/BOM contract violation: "+p) for p in bad]; assert Path("/product/entrypoint.sh").read_bytes().startswith(b"#!/bin/sh\n"), "entrypoint shebang is not LF"; assert Path("/product/activate.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "activate shebang is not LF"; assert Path("/product/bootstrap.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "bootstrap shebang is not LF"; assert Path("/product/restore.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "restore shebang is not LF"; assert Path("/product/backup.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "backup shebang is not LF"; assert Path("/product/perf_baseline.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "performance shebang is not LF"; raise SystemExit(bool(bad))'
-LABEL org.toefl-house.source-eol="lf-v1"
+ARG TOEFL_HOUSE_SOURCE_REVISION=unversioned
+ARG TOEFL_HOUSE_RELEASE_VERSION=unversioned
+LABEL org.toefl-house.source-eol="lf-v1" \
+      org.toefl-house.source-revision="${TOEFL_HOUSE_SOURCE_REVISION}" \
+      org.toefl-house.release-version="${TOEFL_HOUSE_RELEASE_VERSION}"
 RUN chmod +x /product/entrypoint.sh /product/activate.py
 
 # Local bench: frappe from the pinned source (not re-resolved), then the rest.

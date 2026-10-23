@@ -34,29 +34,19 @@ capacities are entered by the owner as configuration and are never coded in.
 
 ## Release status
 
-**NO-GO / production authorization REJECT.** The current engineering
-candidate includes working hosted native business workflows, book commerce,
-and a guarded Windows customer installer. These results are NOT proof of
-release readiness on a customer's actual computer:
+**NO-GO / production authorization REJECT.** Hosted engineering has qualified
+substantial native workflows and the guarded Windows source/package paths, but
+there is no verified exact-head customer download or real Owner/customer
+machine acceptance in this checkout. The provider/CI packaging path now
+builds and labels the exact image, emits a versioned manifest/checksum package,
+attests it, and can publish a tagged release; it must still execute in CI
+before an artifact exists.
 
-- Native Frappe/MariaDB business acceptance, including book stock, invoice,
-  payment, return and a converted student's book purchase: hosted
-  [run 39893520229](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39893520229)
-  **PASS** at the business-code revision `62e9d107`.
-- Owned source suite and customer-package Windows smoke on the current
-  installer change line: [run 39902481737](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39902481737)
-  and [run 39902481771](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39902481771)
-  **PASS** at `5868ab5d`.
-- The heavy product-image, fresh Windows test PC, actual Owner backup drive
-  and isolated recovery, and real staff Tailscale/device gates must be
-  independently checked. A completed green simulation never counts as a
-  real Owner-machine acceptance.
-
-Tracked remaining release gates: [Owner Windows and recovery #12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12)
-and [hands-on book cashier acceptance #35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35).
-Keep real student and financial data out of unapproved installations. See the
-[customer delivery guide](docs/CUSTOMER-DELIVERY.md), [hosted acceptance note](docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md)
-and [restore release note](docs/engineering/RESTORE-QUALIFICATION-RELEASE-2026-10-22.md).
+The remaining release gates are [Owner Windows and recovery #12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
+[hands-on book cashier acceptance #35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35),
+and [prebuilt customer package #36](https://github.com/Frotan2/TOFEL-House-ERP/issues/36).
+See the [current audit/release record](docs/engineering/RELEASE-STATUS-2026-10-23.md),
+[customer delivery guide](docs/CUSTOMER-DELIVERY.md), and [hosted acceptance note](docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md).
 
 ## Owner: install and daily use (Windows)
 

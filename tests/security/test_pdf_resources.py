@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import sys
@@ -32,6 +33,8 @@ class PDFResourcesTests(unittest.TestCase):
         self.policy = pdf.ResourcePolicy(base_url="https://erp.example.test", assets={"/assets/app/": self.asset},
                                          attachment_reader=reader)
 
+    @unittest.skipUnless(os.name == "posix",
+                         "resource reads use Linux openat/O_NOFOLLOW semantics")
     def test_local_assets_and_authorized_images_without_network(self):
         with patch("socket.getaddrinfo", side_effect=AssertionError("DNS must not be called")):
             self.assertEqual(self.policy("https://erp.example.test/assets/app/print.css?v=123")["mime_type"], "text/css")
@@ -73,6 +76,8 @@ class PDFResourcesTests(unittest.TestCase):
         with self.assertRaises(pdf.PDFResourceDenied):
             self.policy.check()
 
+    @unittest.skipUnless(os.name == "posix",
+                         "resource reads use Linux openat/O_NOFOLLOW semantics")
     def test_nested_packaged_bundle_font_and_svg_assets_allowed(self):
         # A built bundle lives in a nested dist/css directory and its CSS can
         # in turn reference packaged fonts; packaged SVG images are also
@@ -112,6 +117,8 @@ class PDFResourcesTests(unittest.TestCase):
         self.assertIn('patch("weasyprint.urls.URLFetcher.fetch"', source)
         self.assertNotIn('patch("weasyprint.urls.urlopen"', source)
 
+    @unittest.skipUnless(os.name == "posix",
+                         "symlink and openat policy is exercised on Linux")
     def test_symlink_file_and_directory_and_missing_resource_fail_closed(self):
         outside = self.root / "secret.css"
         outside.write_text("sensitive")
@@ -123,6 +130,8 @@ class PDFResourcesTests(unittest.TestCase):
         with self.assertRaises(pdf.PDFResourceDenied):
             self.policy.check()
 
+    @unittest.skipUnless(os.name == "posix",
+                         "resource reads use Linux openat/O_NOFOLLOW semantics")
     def test_resource_count_and_byte_budgets(self):
         with patch.object(pdf, "MAX_RESOURCES", 1):
             self.policy("https://erp.example.test/assets/app/print.css")
@@ -144,6 +153,8 @@ class PDFResourcesTests(unittest.TestCase):
         self.assertNotIn("synthetic-sensitive-value", str(caught.exception))
         self.assertNotIn("test.png", str(caught.exception))
 
+    @unittest.skipUnless(os.name == "posix",
+                         "attachment reads use Linux openat/O_NOFOLLOW semantics")
     def test_production_factory_binds_attachments_to_target_and_checks_file_permission(self):
         private = self.root / "private"
         private.mkdir()

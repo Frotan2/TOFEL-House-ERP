@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import os
 from pathlib import Path
 import re
 import sys
@@ -98,6 +99,8 @@ class RetentionTests(unittest.TestCase):
         self.assertTrue((self.folder / f"{orphan}{BACKUP.BACKUP_SUFFIXES['database']}").exists())
         self.assertNotIn(orphan, result["removed"])
 
+    @unittest.skipUnless(os.name == "posix",
+                         "symlink policy is exercised on the Linux product filesystem")
     def test_symlinked_artifact_makes_set_incomplete_and_is_never_followed(self):
         outside = Path(self._tmp.name) / "outside-secret.txt"
         outside.write_text("must survive")

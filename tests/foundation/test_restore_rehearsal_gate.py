@@ -214,7 +214,9 @@ class RestoreGateBehaviourContract(unittest.TestCase):
             self.db_path.unlink()
 
     def _run(self, body: str, marker: str, fail: str = "") -> tuple[int, str]:
-        script = body.replace(SITES, str(self.sites))
+        # Keep the generated Python source valid on Windows; backslashes in a
+        # literal can be interpreted as unicode/control escapes.
+        script = body.replace(SITES, self.sites.as_posix())
         env = {
             **os.environ,
             "PYTHONPATH": str(self.tmp / "stubs"),
@@ -226,11 +228,10 @@ class RestoreGateBehaviourContract(unittest.TestCase):
         return done.returncode, done.stdout + done.stderr
 
     def _gate_passes(self, pattern: str, output: str) -> bool:
-        path = self.tmp / "probe-output.txt"
-        path.write_text(output, encoding="utf-8")
-        result = subprocess.run(["grep", "-q", pattern, str(path)], check=False,
-                                stderr=subprocess.DEVNULL)
-        return result.returncode == 0
+        # ``grep`` is not a Windows runtime dependency. The workflow gate is
+        # an anchored regular expression, so Python's multiline search is the
+        # equivalent assertion and is available on every supported host.
+        return re.search(pattern, output, re.MULTILINE) is not None
 
     def _rows(self) -> list[str]:
         return json.loads(self.db_path.read_text(encoding="utf-8")) if self.db_path.exists() else []

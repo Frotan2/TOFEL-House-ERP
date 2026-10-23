@@ -317,14 +317,16 @@ def build_proxy_conf(lab, bench_dir):
     portless, $foundation_site has already returned 444 for unknown hosts,
     and X-Frappe-Site-Name is derived from that map.
     """
-    return f"""pid {lab}/nginx.pid;
-error_log {lab}/nginx-error.log;
+    lab_path = Path(lab).as_posix()
+    bench_path = Path(bench_dir).as_posix()
+    return f"""pid {lab_path}/nginx.pid;
+error_log {lab_path}/nginx-error.log;
 events {{ worker_connections 128; }}
 http {{
  include /etc/nginx/mime.types;
  access_log off;
- client_body_temp_path {lab}/nginx-body;
- proxy_temp_path {lab}/nginx-proxy;
+ client_body_temp_path {lab_path}/nginx-body;
+ proxy_temp_path {lab_path}/nginx-proxy;
  # SEC-DEPS-01: tight header / body limits drop the ws 8.11 header-count
  # crash (GHSA-3h5v-q93c-6h6q) and oversize requests at the proxy before
  # they reach node. These mirror the pinned bench template defaults.
@@ -336,7 +338,7 @@ http {{
  server {{
   listen 127.0.0.1:8080;
   if ($foundation_site = '') {{ return 444; }}
-  location /assets/ {{ alias {bench_dir}/sites/assets/; }}
+  location /assets/ {{ alias {bench_path}/sites/assets/; }}
   location / {{
    proxy_set_header Host $http_host;
    proxy_set_header X-Frappe-Site-Name $foundation_site;

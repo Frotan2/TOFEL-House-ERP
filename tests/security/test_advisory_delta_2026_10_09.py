@@ -14,6 +14,7 @@ The delta closes the eight matches that failed the STACK-ADVISORY-UNTRIAGED gate
   after the last install step and its shell logic is executed here.
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -208,6 +209,8 @@ class GhostscriptGuardTests(unittest.TestCase):
             if "apt-get" in line or "apt " in line:
                 self.assertNotIn("ghostscript", line.lower())
 
+    @unittest.skipUnless(os.name == "posix",
+                         "the Dockerfile guard is POSIX shell syntax and runs in Linux image CI")
     def test_guard_command_passes_without_gs_and_fails_with_gs(self):
         command = self._guard_line()[len("RUN "):]
         with tempfile.TemporaryDirectory() as empty_dir:

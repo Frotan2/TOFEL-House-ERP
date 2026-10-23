@@ -220,6 +220,12 @@ def open_listeners(ports=3):
 class ProductLifecycleSim(unittest.TestCase):
     maxDiff = None
 
+    @classmethod
+    def setUpClass(cls):
+        if os.name != "posix":
+            raise unittest.SkipTest(
+                "the lifecycle simulator launches POSIX shebang helpers; Linux CI covers it")
+
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="product-lifecycle-"))
         self.bench_root = self.tmp / "benchroot"

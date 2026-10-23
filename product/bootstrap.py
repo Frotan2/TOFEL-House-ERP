@@ -300,7 +300,10 @@ def create_site(site: str, root_password: str, admin_password: str,
         "db_port": db_port,
         "mariadb_user_host_login_scope": mariadb_user_host_login_scope,
         "set_default_site": set_default_site,
-        "common_site_config_path": str(BENCH_DIR / "sites" / "common_site_config.json"),
+        # This value is consumed by the Linux container-side helper and is
+        # also recorded in sanitized diagnostics. Keep the container path in
+        # canonical POSIX form even when the unit harness runs on Windows.
+        "common_site_config_path": (BENCH_DIR / "sites" / "common_site_config.json").as_posix(),
     })
     try:
         result = subprocess.run(

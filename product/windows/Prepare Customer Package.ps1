@@ -1,7 +1,11 @@
 # Provider-side packaging: create a clean, customer-facing folder.
 # Requires a verified, locally built app image; never copies site data.
 # A checksum protects against accidental corruption, not publisher impersonation.
-param([string]$Destination = "")
+param(
+    [string]$Destination = "",
+    [string]$Version = "",
+    [string]$SourceRevision = ""
+)
 $ErrorActionPreference = "Stop"
 
 try {
@@ -37,6 +41,20 @@ try {
     $labels = $labelsJson | ConvertFrom-Json
     if ($labels.'org.toefl-house.source-eol' -ne "lf-v1") {
         throw "The application image lacks the mandatory Linux source-line-ending contract."
+    }
+    if (-not $SourceRevision) {
+        $SourceRevision = (& git -C $repositoryRoot rev-parse HEAD 2>$null).Trim()
+    }
+    if ($SourceRevision -notmatch '^[0-9a-fA-F]{40}$') {
+        throw "Provide a full source commit SHA; the package must be bound to an exact revision."
+    }
+    if (-not $Version) { $Version = "local-" + $SourceRevision.Substring(0, 12) }
+    if ($Version -notmatch '^[A-Za-z0-9][A-Za-z0-9._+\-]{0,95}$') {
+        throw "Package version contains unsupported characters."
+    }
+    if ($labels.'org.toefl-house.source-revision' -ne $SourceRevision -or
+        $labels.'org.toefl-house.release-version' -ne $Version) {
+        throw "The image identity does not match the requested source revision and package version. Rebuild the image with those labels."
     }
 
     $packageName = "TOEFL-House-ERP-Customer-" + (Get-Date -Format "yyyyMMdd-HHmmss")
@@ -89,15 +107,55 @@ try {
     }
     $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     [System.IO.File]::WriteAllText(
-        $checksum, $hash + [Environment]::NewLine,
+        $checksum, $hash + "  toefl-house-erp-app.tar" + [Environment]::NewLine,
+        [System.Text.UTF8Encoding]::new($false))
+    $matrixPath = Join-Path $repositoryRoot "docs\engineering\foundation-version-matrix.json"
+    $matrixHash = (Get-FileHash -LiteralPath $matrixPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $matrix = Get-Content -LiteralPath $matrixPath -Raw | ConvertFrom-Json
+    $dependencies = @($matrix.components | ForEach-Object {
+        $row = [ordered]@{ name = $_.name }
+        foreach ($key in @("selected_version", "commit", "digest", "tarball_sha256")) {
+            if ($null -ne $_.$key) { $row[$key] = $_.$key }
+        }
+        [pscustomobject]$row
+    })
+    $manifest = [ordered]@{
+        schema_version = 1
+        product = "TOEFL House ERP"
+        version = $Version
+        release_status = "TEST PACKAGE - NO REAL DATA"
+        production_authorization = "REJECT"
+        source_revision = $SourceRevision
+        image = [ordered]@{
+            tag = "toefl-house-erp-app:customer"
+            archive = "product/release/toefl-house-erp-app.tar"
+            sha256 = $hash
+            size_bytes = (Get-Item -LiteralPath $archive).Length
+            labels = $labels
+        }
+        dependency_matrix_sha256 = $matrixHash
+        dependencies = $dependencies
+        provider_attestation = [ordered]@{
+            type = "Local provider package; attach an external signed or GitHub-attested release record before delivery"
+            required_for_delivery = $true
+        }
+        generated_utc = (Get-Date).ToUniversalTime().ToString("o")
+    }
+    $manifestPath = Join-Path $releaseDir "release-manifest.json"
+    $manifestText = $manifest | ConvertTo-Json -Depth 12
+    [System.IO.File]::WriteAllText($manifestPath, $manifestText + [Environment]::NewLine,
+        [System.Text.UTF8Encoding]::new($false))
+    $manifestHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    [System.IO.File]::WriteAllText((Join-Path $releaseDir "release-manifest.json.sha256"),
+        $manifestHash + "  release-manifest.json" + [Environment]::NewLine,
         [System.Text.UTF8Encoding]::new($false))
     & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $packageRoot "product\windows\Verify Package Image.ps1")
     if ($LASTEXITCODE -ne 0) {
         throw "The exported image failed post-packaging verification."
     }
 
-    $instructions = @'
-TOEFL HOUSE ERP - CUSTOMER INSTALLATION
+    $instructions = @"
+TOEFL HOUSE ERP - CUSTOMER INSTALLATION ($Version)
 
 1. On the Windows 10/11 (64-bit) main computer, install Docker Desktop from
    https://www.docker.com/products/docker-desktop/ and finish WSL 2 setup.
@@ -119,18 +177,24 @@ Never delete product\data: it contains site files, secrets and runtime state.
 The database is stored in a named local Docker volume. Moving this package
 to another computer does NOT transfer the database or existing student data.
 
+The provider release manifest is in product\release\release-manifest.json.
+It binds this package to source revision $SourceRevision, the prebuilt image,
+and the dependency matrix. Keep the separately issued provider/GitHub
+attestation with this package; a bare checksum detects corruption but does
+not identify the publisher.
+
 IMPORTANT: This is a packaging workflow, not authorization to use real
 student or financial records. Follow the current release, policy and backup
 holds; verify a clean Windows installation and recovery before delivery.
-The SHA-256 sidecar detects corruption but does not authenticate the publisher.
-'@
+Production authorization remains REJECT until the Owner gates are closed.
+"@
     [System.IO.File]::WriteAllText(
         (Join-Path $packageRoot "READ ME FIRST.txt"), $instructions,
         [System.Text.UTF8Encoding]::new($false))
     if (Test-Path -LiteralPath (Join-Path $packageRoot "product\data")) {
         throw "The customer package unexpectedly contains product data."
     }
-    Write-Host "Customer package created (do not deliver until release gates pass): $packageRoot"
+    Write-Host "Customer package created (version $Version; do not deliver until release gates pass): $packageRoot"
     exit 0
 } catch {
     [Console]::Error.WriteLine("Customer packaging failed safely: " + $_.Exception.Message)
