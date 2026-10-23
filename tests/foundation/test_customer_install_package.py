@@ -22,6 +22,7 @@ CHECK_PC = (WINDOWS / "Check This PC.ps1").read_text()
 VERIFY = (WINDOWS / "Verify Package Image.ps1").read_text()
 PACKAGER = (WINDOWS / "Prepare Customer Package.ps1").read_text()
 SHORTCUT = (ROOT / "TOEFL House ERP.vbs").read_text()
+OWNER_GUIDE = (WINDOWS / "OWNER ACCEPTANCE GUIDE.txt").read_text()
 
 
 class CustomerInstallerContract(unittest.TestCase):
@@ -33,7 +34,7 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("Windows GUI controls initialized", GUI)
         for button in ('"Install"', '"Open / Start"', '"Repair"', '"Stop"',
                        '"Get Docker Desktop"', '"View Administrator Login"',
-                       '"Check This PC"'):
+                       '"Check This PC"', '"Owner Readiness Guide"'):
             self.assertIn(button, GUI)
         self.assertIn('"http://127.0.0.1:8000/"', GUI)
         self.assertIn('$script:process', GUI)
@@ -82,6 +83,14 @@ class CustomerInstallerContract(unittest.TestCase):
 
     def test_read_only_pc_check_is_packaged_and_never_mutates_existing_data(self):
         self.assertIn('"product/windows/Check This PC.ps1"', PACKAGER)
+        self.assertIn('"product/windows/OWNER ACCEPTANCE GUIDE.txt"', PACKAGER)
+        self.assertIn('$guideButton.Add_Click', GUI)
+        self.assertIn('$guideFile = Join-Path $PSScriptRoot "OWNER ACCEPTANCE GUIDE.txt"', GUI)
+        for phrase in ("ENGINEERING CANDIDATE ONLY", "FRESH DISPOSABLE WINDOWS TEST PC",
+                       "PRESERVATION", "DO NOT", "NO-GO", "REJECTED", "real student",
+                       "Check This PC", "synthetic records"):
+            self.assertIn(phrase.lower(), OWNER_GUIDE.lower(), phrase)
+        self.assertNotIn("MARIADB_ROOT_PASSWORD=", OWNER_GUIDE)
         self.assertIn('"Check"', WORKER)
         self.assertIn('Read-only PC check', CHECK_PC)
         self.assertIn('Result "Production authorization" "NOT VERIFIED"', CHECK_PC)

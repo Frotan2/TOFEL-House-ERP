@@ -95,6 +95,7 @@ jobs:
             'product/docker-compose.yml',
             'product/windows/TOEFL House ERP.ps1',
             'product/windows/Check This PC.ps1',
+            'product/windows/OWNER ACCEPTANCE GUIDE.txt',
             'product/release/toefl-house-erp-app.tar',
             'product/release/toefl-house-erp-app.tar.sha256',
             'READ ME FIRST.txt'
@@ -105,6 +106,10 @@ jobs:
           }
           if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
             throw "Customer package included private application data."
+          }
+          $ownerGuide = [System.IO.File]::ReadAllText((Join-Path $kit 'product/windows/OWNER ACCEPTANCE GUIDE.txt'))
+          if ($ownerGuide -notmatch 'RELEASE DECISION: NO-GO' -or $ownerGuide -notmatch 'PRESERVATION') {
+            throw "Customer kit omitted its Owner hold and safe first-check guidance."
           }
           # A corrupt first-run kit must be rejected before creating local data.
           # Use a separate synthetic copy so the valid package stays unchanged.

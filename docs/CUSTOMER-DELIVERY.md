@@ -37,7 +37,10 @@ clone a repository, type commands or build Frappe from source.
    native **Course Owner** account for normal administration. Do not email
    or photograph the credentials. Owner policies and real-operation mode
    remain subject to the documented release hold.
-5. Select **Check This PC** for a read-only technical report. The report
+5. Select **Owner Readiness Guide** to read a no-command, read-only first-check
+   and a separate synthetic Windows test checklist directly from the GUI.
+   This does not lift the backup/restore hold or authorize production.
+   Select **Check This PC** for a read-only technical report. The report
    checks Windows, Docker availability, local disk space, possible fixed local
    backup volumes, the presence (never contents) of database storage and its
    credential file, and localhost reachability. It warns if a database/site
@@ -66,8 +69,8 @@ it with a chosen Destination path. The provider-side utility:
 
 - Confirms Docker is running and the image includes the Linux LF-source
   contract label.
-- Copies only the explicitly allowed Windows GUI, lifecycle scripts and
-  Compose configuration. It never copies source repositories, Docker data,
+- Copies only the explicitly allowed Windows GUI, Owner readiness guide,
+  lifecycle scripts and Compose configuration. It never copies source repositories, Docker data,
   administrator credentials, active site files, activation receipts or backups.
 - Uses docker save to write product/release/toefl-house-erp-app.tar, and writes
   a SHA-256 checksum next to it. It verifies the archive again after export.

@@ -10,6 +10,7 @@ Add-Type -AssemblyName System.Drawing
 $productRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $worker = Join-Path $PSScriptRoot "Run TOEFL House ERP.ps1"
 $credentialFile = Join-Path $productRoot "data\sites\toeflhouse.localhost\private\first-run-credentials.txt"
+$guideFile = Join-Path $PSScriptRoot "OWNER ACCEPTANCE GUIDE.txt"
 $logDirectory = Join-Path $env:LOCALAPPDATA "TOEFL House ERP\Launcher"
 $desktopExe = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
 $dockerCli = Join-Path $env:ProgramFiles "Docker\Docker\resources\bin\docker.exe"
@@ -76,6 +77,7 @@ $dockerButton = New-LauncherButton "Get Docker Desktop" 30 285 205
 $credentials = New-LauncherButton "View Administrator Login" 248 285 222
 $logButton = New-LauncherButton "View Details" 485 285 155
 $checkButton = New-LauncherButton "Check This PC" 30 339 165
+$guideButton = New-LauncherButton "Owner Readiness Guide" 205 339 235
 
 $disclaimer = New-Object System.Windows.Forms.Label
 $disclaimer.Text = "Docker Desktop must be installed once. Real business use requires owner configuration and release approval."
@@ -86,10 +88,11 @@ $disclaimer.Size = New-Object System.Drawing.Size(655, 47)
 $form.Controls.Add($disclaimer)
 
 function Set-Busy([bool]$busy) {
-    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton)) {
+    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton)) {
         $button.Enabled = -not $busy
     }
     $credentials.Enabled = (-not $busy) -and (Test-Path -LiteralPath $credentialFile -PathType Leaf)
+    $guideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $guideFile -PathType Leaf)
     $logButton.Enabled = ((-not $busy) -and [bool]$script:stdoutPath -and (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf))
     if ($busy) {
         $progress.Style = [System.Windows.Forms.ProgressBarStyle]::Marquee
@@ -163,6 +166,14 @@ $open.Add_Click({ Start-LauncherAction "Start" })
 $repair.Add_Click({ Start-LauncherAction "Repair" })
 $stop.Add_Click({ Start-LauncherAction "Stop" })
 $checkButton.Add_Click({ Start-LauncherAction "Check" })
+$guideButton.Add_Click({
+    # No data mutation or production operation: only open the local text guide.
+    if (Test-Path -LiteralPath $guideFile -PathType Leaf) {
+        Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $guideFile + '"')
+    } else {
+        $status.Text = "Owner readiness guide missing; ask your provider for a complete package."
+    }
+})
 $dockerButton.Add_Click({
     [System.Diagnostics.Process]::Start("https://www.docker.com/products/docker-desktop/") | Out-Null
     $status.Text = "Install Docker Desktop for Windows, complete WSL 2 setup if prompted, and restart Windows if required. Reopen this app."
@@ -244,7 +255,9 @@ $form.Add_FormClosing({
 if ($SmokeTest) {
     if ($install.Text -ne "Install" -or $open.Text -ne "Open / Start" -or
         $repair.Text -ne "Repair" -or $stop.Text -ne "Stop" -or
-        $checkButton.Text -ne "Check This PC") {
+        $checkButton.Text -ne "Check This PC" -or
+        $guideButton.Text -ne "Owner Readiness Guide" -or
+        -not (Test-Path -LiteralPath $guideFile -PathType Leaf)) {
         throw "Graphical lifecycle actions were not initialized."
     }
     Write-Host "Windows GUI controls initialized without displaying a desktop window."

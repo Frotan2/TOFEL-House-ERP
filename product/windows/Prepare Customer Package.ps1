@@ -54,6 +54,7 @@ try {
         "product/windows/TOEFL House ERP.ps1",
         "product/windows/Run TOEFL House ERP.ps1",
         "product/windows/Check This PC.ps1",
+        "product/windows/OWNER ACCEPTANCE GUIDE.txt",
         "product/windows/Verify Package Image.ps1",
         "product/windows/Install TOEFL House ERP.cmd",
         "product/windows/Start TOEFL House ERP.cmd",
@@ -107,6 +108,7 @@ TOEFL HOUSE ERP - CUSTOMER INSTALLATION
    View Administrator Login only on the trusted main computer.
 5. Select Check This PC for a read-only technical summary. It does not
    perform backup, restore or production authorization.
+   Select Owner Readiness Guide to open safe tests and explicit HOLD warnings.
 6. Future days: double-click the same launcher and choose Open / Start.
    Use Stop to shut down services, Repair for a failed/incomplete setup.
 

@@ -1,0 +1,81 @@
+TOEFL HOUSE ERP - OWNER READINESS GUIDE
+=======================================
+ENGINEERING CANDIDATE ONLY - NOT APPROVED FOR LIVE STUDENTS OR FINANCES
+
+This guide helps you test and report what works on a REAL Windows PC.
+Opening this guide does not install, activate, backup or restore anything.
+The product is NOT approved for real student, staff, payroll or financial data.
+
+IMPORTANT FIRST - PRESERVE ALL EXISTING DATA
+--------------------------------------------
+If this computer has ever held TOEFL House ERP data:
+  * Do not reinstall, reset or replace the database password.
+  * Do not delete product\data, Docker volumes, secrets, or existing backups.
+  * Do not run backup, restore, cleanup, retention or activation commands.
+  * Do not change Owner backup policies or create/test recovery keys.
+  * Use "Check This PC" for a READ-ONLY report, then contact engineering
+    before proceeding with any installation, repair or lifecycle test.
+  * If an existing site/database is detected but its db.env file is missing,
+    STOP. Recover the original credentials through authorized support.
+
+SAFE FIRST CHECK ON THE EXISTING OWNER PC
+-----------------------------------------
+[ ] 1. Open "TOEFL House ERP.vbs".
+[ ] 2. Click "Check This PC". Docker does not need to be running for this check.
+[ ] 3. Read the report. This is diagnostic information, NOT release approval.
+[ ] 4. Record Windows version, Docker response, disk space, any existing
+        data/credential safety warning, and the localhost result.
+[ ] 5. If a report says BLOCKED or NOT VERIFIED, keep that status unchanged.
+        Do not bypass it or reinstall merely to remove the warning.
+[ ] 6. Share only redacted observations with trusted engineering support.
+        Do not send passwords, private keys, raw backups or raw logs.
+
+FRESH DISPOSABLE WINDOWS TEST PC ONLY - SYNTHETIC DATA
+-----------------------------------------------------
+Use a SEPARATE clean test PC with no previous customer data, Windows 10/11
+64-bit, enough disk space, and Docker Desktop with WSL 2. Docker may require
+administrator permission and a reboot. Obtain the prebuilt image package
+from the trusted provider.
+
+[ ] 7. Extract the COMPLETE customer kit to a local, non-synced drive.
+[ ] 8. Open the GUI, click "Check This PC", and record the result.
+[ ] 9. Click "Install"; confirm a login page at http://127.0.0.1:8000.
+[ ] 10. Use "View Administrator Login" privately on this test computer.
+         Never photograph, email or publish the initial password.
+[ ] 11. Log in, change that password and verify the actual Owner desk.
+[ ] 12. Create only SYNTHETIC records: course, student, enrollment,
+         fee and attendance. Do not include real names or personal data.
+[ ] 13. Click Stop then Open / Start. Confirm the practice records persist.
+[ ] 14. Reboot Windows, then Open / Start and log in; inspect the same records.
+         Restart persistence does NOT prove hardware-failure recovery.
+[ ] 15. On this DISPOSABLE synthetic test PC only, exercise Repair and verify
+         the records remain unchanged after logging in again.
+[ ] 16. Capture redacted evidence and any failure step; ordinary customers
+         must never need Git, PowerShell or developer commands for daily use.
+
+STILL UNVERIFIED - NOT PERMITTED BY THIS GUIDE
+----------------------------------------------
+[ ] A. Owner backup drive and Task Scheduler checks - HOLD.
+[ ] B. Recovery-key custody and authorized isolated Owner restore - HOLD.
+[ ] C. Real multi-device Tailscale staff access/exposure - OPEN.
+[ ] D. Security review and production authorization - REJECTED / NO-GO.
+
+Do NOT perform A or B while the PRESERVATION / RESTORE HOLD remains.
+Do NOT restore over the original site. Real-device networking requires a
+separately reviewed procedure; do not expose a public port.
+
+WHAT TO SHARE - AND WHAT NEVER TO SHARE
+---------------------------------------
+After removing private information, share GUI state, login screen WITHOUT a
+password, "Check This PC" outcome, synthetic record persistence results and
+the step number for failures.
+
+NEVER send Administrator credentials, db.env, private recovery keys, real
+student information, unredacted site configuration, raw backups or raw logs.
+
+RELEASE DECISION: NO-GO until real-machine tests and Owner release gates
+are independently verified and explicitly approved. Green GitHub tests, a
+successful login or this guide do NOT authorize real-world operation.
+
+For engineering, the detailed original criteria are in
+product/windows/VALIDATION.md and GitHub issue #12 in the source repository.
