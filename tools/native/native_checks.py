@@ -3200,7 +3200,8 @@ def main():
                     name='Material Receipt',purpose='Material Receipt',
                     is_standard=1)).insert()
             entry=frappe.get_doc(dict(doctype='Stock Entry',
-                stock_entry_type='Material Receipt',company=fin['company'],
+                stock_entry_type='Material Receipt',purpose='Material Receipt',
+                company=fin['company'],
                 items=[dict(item_code=code,qty=12,t_warehouse=wh,basic_rate=175)]))
             entry.insert()
             entry.submit()
