@@ -64,9 +64,15 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('$script:lastCheckPath = $script:stdoutPath', GUI)
         self.assertIn('$copyStatusButton.Enabled', GUI)
         self.assertIn("Clipboard]::SetText", GUI)
-        self.assertIn("Never copy stdout verbatim", GUI)
+        self.assertIn("arbitrary diagnostic", GUI)
         self.assertIn("NOT approval to use real student", GUI)
         self.assertIn("Run Check This PC first", GUI)
+        self.assertIn('    $script:lastCheckPath = ""', GUI)
+        self.assertIn('$permitted[$key] -cnotcontains $value', GUI)
+        self.assertIn('$seen.Count -ne $permitted.Count', GUI)
+        self.assertIn('Not a complete read-only check', GUI)
+        self.assertIn('Read-only observation. NOT approval to use real student', GUI)
+        self.assertNotIn('$Matches[2]', GUI)
         self.assertNotIn("Clipboard]::SetText((Get-Content", GUI)
 
     def test_repair_requires_explicit_yes_with_safe_no_default(self):

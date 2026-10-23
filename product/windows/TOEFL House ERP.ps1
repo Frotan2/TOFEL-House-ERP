@@ -118,6 +118,9 @@ function Test-DockerClient {
 
 function Start-LauncherAction([string]$action) {
     if ($null -ne $script:process) { return }
+    # Any attempted lifecycle action invalidates the previous PC check.
+    $script:lastCheckPath = ""
+    Set-Busy $false
     if ($action -ne "Check" -and -not (Test-DockerClient)) {
         $status.Text = "Docker Desktop is not installed. Click 'Get Docker Desktop', finish its Windows installer, then return here."
         return
@@ -210,20 +213,54 @@ $copyStatusButton.Add_Click({
         $status.Text = "Run Check This PC first to prepare a safe support summary."
         return
     }
-    $allow = '^(Windows|Docker Desktop|Existing local site data|Database credential safety|Local browser endpoint|Owner backup/restore|Actual Tailscale staff access|Production authorization): (.+)$'
-    $safe = @("TOEFL House ERP - Safe Support Status",
-              "Read-only observation. NOT approval to use real student or financial data.")
-    foreach ($line in (Get-Content -LiteralPath $script:lastCheckPath -ErrorAction Stop)) {
-        if ($line -match $allow -and $Matches[2].Length -le 220) {
-            $safe += ($Matches[1] + ": " + $Matches[2])
+    # Whitelist exact status VALUES as well as names. An arbitrary diagnostic
+    # or altered local log must never be sent to the owner's clipboard.
+    $permitted = [ordered]@{
+        "Windows" = @("Not detected", "64-bit detected", "Unsupported 32-bit system")
+        "Docker Desktop" = @("Docker CLI not found (prerequisite missing)",
+            "Docker engine responding", "Installed, but engine not responding",
+            "Cannot verify engine")
+        "Existing local site data" = @("Present - must be preserved",
+            "No local site-data folder observed")
+        "Database credential safety" = @(
+            "BLOCKED: existing site/database but credential file missing. Do NOT reinstall, repair, delete or regenerate credentials.",
+            "Local credential file present (contents not read; database match NOT VERIFIED)",
+            "No credential file; local site or database storage could not be ruled out. Do NOT assume a fresh installation.",
+            "No credential file or existing site/database observed (informational, not permission to install)")
+        "Local browser endpoint" = @("Responding; authenticated login not verified",
+            "Not verified", "Not responding or not yet installed")
+        "Owner backup/restore" = @("HOLD - not tested by this check")
+        "Actual Tailscale staff access" = @("NOT VERIFIED")
+        "Production authorization" = @("NOT VERIFIED")
+    }
+    try {
+        $lines = @(Get-Content -LiteralPath $script:lastCheckPath -ErrorAction Stop)
+        if ($lines -cnotcontains "TOEFL HOUSE ERP - READ-ONLY TECHNICAL CHECK" -or
+            $lines -cnotcontains "End of read-only PC check.") {
+            throw "Not a complete read-only check"
         }
+        $seen = @{}
+        foreach ($line in $lines) {
+            foreach ($key in $permitted.Keys) {
+                $prefix = $key + ": "
+                if (-not $line.StartsWith($prefix, [System.StringComparison]::Ordinal)) { continue }
+                $value = $line.Substring($prefix.Length)
+                if ($permitted[$key] -cnotcontains $value -or $seen.ContainsKey($key)) {
+                    throw ("Invalid or repeated category: " + $key)
+                }
+                $seen[$key] = $value
+                break
+            }
+        }
+        if ($seen.Count -ne $permitted.Count) { throw "Incomplete machine status" }
+        $safe = @("TOEFL House ERP - Safe Support Status",
+                  "Read-only observation. NOT approval to use real student or financial data.")
+        foreach ($key in $permitted.Keys) { $safe += ($key + ": " + $seen[$key]) }
+        [System.Windows.Forms.Clipboard]::SetText(($safe -join [Environment]::NewLine))
+        $status.Text = "Safe status copied. Paste it to trusted support; no passwords or raw logs."
+    } catch {
+        $status.Text = "Cannot verify a safe summary. Run Check This PC again."
     }
-    if ($safe.Count -lt 4) {
-        $status.Text = "Support summary incomplete. Run Check This PC again."
-        return
-    }
-    [System.Windows.Forms.Clipboard]::SetText(($safe -join [Environment]::NewLine))
-    $status.Text = "Safe status copied. Paste it to trusted support; no passwords or raw logs."
 })
 $dockerButton.Add_Click({
     [System.Diagnostics.Process]::Start("https://www.docker.com/products/docker-desktop/") | Out-Null
