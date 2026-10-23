@@ -215,7 +215,7 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertLess(INSTALL.index(guard), INSTALL.index("where docker"))
         self.assertIn(":alreadyinstalled", INSTALL)
         self.assertIn("no installation attempted", INSTALL)
-        self.assertIn("Use Open / Start", INSTALL)
+        self.assertIn("use open / start", INSTALL.lower())
         self.assertIn("Copy Safe Support Status", INSTALL)
         self.assertNotIn("data\\logs folder to TOEFL House", INSTALL)
 
