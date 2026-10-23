@@ -3192,6 +3192,13 @@ def main():
             if not wh:
                 wh=frappe.get_doc(dict(doctype='Warehouse',
                     warehouse_name='SYN Book Shop',company=fin['company'])).insert().name
+            # The hosted synthetic site intentionally skips ERPNext's Setup
+            # Wizard, which normally seeds standard Stock Entry Type masters.
+            # Seed the native type, not a bypass of stock validation.
+            if not frappe.db.exists('Stock Entry Type','Material Receipt'):
+                frappe.get_doc(dict(doctype='Stock Entry Type',
+                    name='Material Receipt',purpose='Material Receipt',
+                    is_standard=1)).insert()
             entry=frappe.get_doc(dict(doctype='Stock Entry',
                 stock_entry_type='Material Receipt',company=fin['company'],
                 items=[dict(item_code=code,qty=12,t_warehouse=wh,basic_rate=175)]))
