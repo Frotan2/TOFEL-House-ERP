@@ -3737,9 +3737,42 @@ def main():
             assert abs(float(credit.outstanding_amount) + book_context['amount']) < 0.005, credit.outstanding_amount
             def post():
                 refund = get_payment_entry('Sales Invoice', credit.name, bank_account=cash_account)
-                assert refund.payment_type == 'Pay' and refund.paid_from == cash_account
+                # Keep safe builder diagnostics in the synthetic CI trace. A bad
+                # native reference can otherwise surface only as an opaque GL
+                # imbalance at submit time.
+                assert refund.payment_type == 'Pay' and refund.paid_from == cash_account, {
+                    'payment_type': refund.payment_type, 'paid_from': refund.paid_from,
+                    'paid_to': refund.paid_to, 'paid_amount': refund.paid_amount,
+                    'received_amount': refund.received_amount,
+                    'references': [dict(reference_doctype=row.reference_doctype,
+                        reference_name=row.reference_name, total_amount=row.total_amount,
+                        outstanding_amount=row.outstanding_amount,
+                        allocated_amount=row.allocated_amount) for row in refund.references],
+                    'return': {'grand_total': credit.grand_total,
+                        'outstanding_amount': credit.outstanding_amount,
+                        'update_outstanding_for_self': credit.get('update_outstanding_for_self')},
+                }
                 refund.insert()
-                refund.submit()
+                try:
+                    refund.submit()
+                except Exception as exc:
+                    raise AssertionError({
+                        'submit_error': type(exc).__name__,
+                        'payment_type': refund.payment_type,
+                        'paid_from': refund.paid_from, 'paid_to': refund.paid_to,
+                        'paid_amount': refund.paid_amount,
+                        'received_amount': refund.received_amount,
+                        'base_paid_amount': refund.base_paid_amount,
+                        'base_received_amount': refund.base_received_amount,
+                        'difference_amount': refund.difference_amount,
+                        'references': [dict(reference_doctype=row.reference_doctype,
+                            reference_name=row.reference_name, total_amount=row.total_amount,
+                            outstanding_amount=row.outstanding_amount,
+                            allocated_amount=row.allocated_amount) for row in refund.references],
+                        'return': {'grand_total': credit.grand_total,
+                            'outstanding_amount': credit.outstanding_amount,
+                            'update_outstanding_for_self': credit.get('update_outstanding_for_self')},
+                    }) from exc
                 return refund.name
             book_documents['refund'] = as_user('book_seller', post)
             book_stages['refund'] = native_book_state(frappe, book_context)

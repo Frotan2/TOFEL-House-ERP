@@ -103,7 +103,9 @@ def qualify(base_url: str, destination: Path):
                     context = browser.new_context(viewport={"width": 1440, "height": 1000})
                     page = context.new_page()
                     errors, failed_assets = [], []
-                    page.on("pageerror", lambda error: errors.append(str(error)))
+                    page.on("pageerror", lambda error: errors.append({
+                        "message": str(error), "stack": error.stack or "",
+                    }))
 
                     def check_response(response):
                         path = urlsplit(response.url).path
