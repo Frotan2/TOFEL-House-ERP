@@ -112,7 +112,9 @@ const registryBlock = deskInit.split("DESKS = {")[1].split("\n}\n")[0];
 for (const [slug, shape] of Object.entries(EXPECTED)) {
 	assert(registryBlock.includes(`"${slug}"`), `${slug} missing from the Python DESKS registry`);
 	assert(registryBlock.includes(`"${shape.roles[0]}"`), `${slug} audience missing from DESKS`);
-	const pagePath = path.join(APP, "operations/page", slug, `${slug}.json`);
+	// Frappe Page.load_assets() uses scrub(Page.name), not the URL slug.
+	const pageSourceName = slug.replace(/-/g, "_");
+	const pagePath = path.join(APP, "operations/page", pageSourceName, `${pageSourceName}.json`);
 	const page = JSON.parse(fs.readFileSync(pagePath, "utf8"));
 	assert.strictEqual(page.doctype, "Page", slug);
 	assert.strictEqual(page.module, "Operations", slug);
