@@ -90,6 +90,16 @@ class FinanceContainmentWiringTests(unittest.TestCase):
                        'if _native_book_sale_allowed(doc):'):
             self.assertIn(clause, source)
 
+    def test_finance_book_shop_links_are_only_for_authorized_staff(self):
+        source = (ROOT / "apps/toefl_house/toefl_house/desk/finance.py").read_text()
+        self.assertIn('{"Finance Manager", "Finance Officer", "Accounts User"}.issubset(roles)', source)
+        self.assertIn('frappe.get_roles(frappe.session.user)', source)
+        self.assertIn('"book-shop", "Book sales and stock", "links"', source)
+        self.assertIn('] + book_shop,', source)
+        for path in ('List/Item', 'List/Bin', 'List/Stock Entry',
+                     'List/Sales Invoice', 'List/Payment Entry'):
+            self.assertIn('"' + path + '"', source)
+
     def test_finance_kinds_map_to_finance_officer(self):
         source = SECURITY.read_text(encoding="utf-8")
         self.assertIn('"issue_tuition_fees": "Finance Officer"', source)

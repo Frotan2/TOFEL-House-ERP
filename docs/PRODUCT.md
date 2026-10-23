@@ -151,7 +151,10 @@ The native ERPNext book shop uses **Item Group** (the owner creates `Books`),
 stock-enabled and sales-enabled **Item**, **Warehouse**, **Stock Entry**,
 **Sales Invoice**, **Payment Entry** and the native stock/general ledgers.
 Only Finance Officer users who also hold native Accounts User invoice creation
-permission can use normal stock-updating book invoices. Book and service lines
+permission can use normal stock-updating book invoices. A Finance Manager who
+also has Finance Officer and Accounts User receives **Book sales and stock**
+shortcuts in the Finance desk to native Item, Bin, Stock Entry, Sales Invoice
+and Payment Entry screens; links never grant document permissions. Book and service lines
 may never be mixed; the placement/tuition command protections remain.
 A student/customer who has been admitted may buy a textbook without creating
 a tuition charge. The owner configures the items, prices, stock and warehouse

@@ -152,7 +152,7 @@ def main():
                          # compensation actions are server-embeddable.
                          'finance_officer':['Finance Officer','Accounts User','Finance Manager'],
                          'finance_auditor':['Finance Auditor'],
-                          'book_seller':['Finance Officer','Accounts User'],
+                          'book_seller':['Finance Officer','Accounts User','Finance Manager'],
                           'book_unauthorized':['Accounts User'],
                          # A13 web-seam containment probe: native Accounts
                          # User only; never revoked, so the REST probes below

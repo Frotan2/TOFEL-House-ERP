@@ -640,6 +640,23 @@ def work():
         "waiting_since": row.get("effective_start"),
     } for row in assignments]
 
+    # Link to the native ERPNext sales/stock UI; never mint document rights.
+    roles = set(frappe.get_roles(frappe.session.user))
+    book_shop = []
+    if {"Finance Manager", "Finance Officer", "Accounts User"}.issubset(roles):
+        book_shop = [section(
+            "book-shop", "Book sales and stock", "links",
+            items=[
+                {"title": "Book items and prices", "slug": "List/Item"},
+                {"title": "Warehouse stock", "slug": "List/Bin"},
+                {"title": "Receive book stock", "slug": "List/Stock Entry"},
+                {"title": "Sell books / sales invoices", "slug": "List/Sales Invoice"},
+                {"title": "Record a customer payment", "slug": "List/Payment Entry"},
+            ],
+            empty_title="No book-shop shortcuts",
+            empty_body="Book sales need stock items in the native Books item group.",
+        )]
+
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
@@ -676,7 +693,7 @@ def work():
                     items=_compensation_items(contracts, instructors),
                     empty_title="No teaching compensation work yet",
                     empty_body="No active teaching contract or instructor on file; the queue appears as soon as contracts are recorded or payroll instructors exist."),
-        ],
+        ] + book_shop,
     }
 
 
