@@ -16,6 +16,9 @@ if not defined TH_GUI_MODE pause
 exit /b 1
 :repair
 if not exist data\secrets\db.env goto :nosecret
+echo [TH_STAGE] Verifying preserved site and database before repair...
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Existing Installation.ps1"
+if errorlevel 1 goto :datapreservationhold
 if not exist data\activation mkdir data\activation
 icacls data\activation /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
 if errorlevel 1 goto :failed
@@ -90,6 +93,12 @@ echo  Do NOT reinstall, delete data or create a replacement database password.
 echo  Recover the original credentials or contact TOEFL House support.
 if not defined TH_GUI_MODE pause
 exit /b 1
+:datapreservationhold
+echo  Repair was blocked to protect the existing site or database.
+echo  Do NOT reinstall, delete Docker volumes or regenerate passwords.
+echo  Ask trusted support. Use Check This PC and Copy Safe Support Status.
+if not defined TH_GUI_MODE pause
+exit /b 1
 :sourcefailed
 echo.
 echo  Product source files could not be safely normalized. Runtime data was not changed.
@@ -116,7 +125,8 @@ echo    web "Restarting" or exiting          the app stops right after starting.
 echo    web restart count above 1            the app is crash-looping; the log
 echo                                         lines above show why it stops.
 echo.
-echo  Try this Repair script once more. If it repeats, contact TOEFL House
-echo  support with a photo of this window plus the contents of the data\logs folder.
+echo  Stop here. Contact trusted TOEFL House support.
+echo  Use Check This PC and Copy Safe Support Status; do not share raw
+echo  logs, personal data, passwords, site configuration or backups.
 if not defined TH_GUI_MODE pause
 exit /b 1
