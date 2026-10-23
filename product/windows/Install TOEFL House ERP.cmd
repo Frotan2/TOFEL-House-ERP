@@ -195,10 +195,11 @@ docker compose ps
 echo  Last lines of the application log:
 docker compose logs --tail 5 bootstrap web worker scheduler socketio 2>&1
 echo.
-echo  Double-click "Repair TOEFL House ERP.cmd"; it restarts the system
-echo  and finishes the unfinished setup safely. If it repeats, send a
-echo  photo of this window plus the data\logs folder to TOEFL House
-echo  support.
+echo  Stop here and contact authorized TOEFL House support.
+echo  A partially initialized installation must be diagnosed before any
+echo  Repair or retry. In the Windows launcher, choose Check This PC,
+echo  then Copy Safe Support Status. Do not send raw log folders,
+echo  passwords, student records, site files or backups.
 echo  ------------------------------------------------------------------
 :pause
 if not defined TH_GUI_MODE pause
