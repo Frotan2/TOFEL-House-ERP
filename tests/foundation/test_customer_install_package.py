@@ -19,6 +19,7 @@ STOP = (WINDOWS / "Stop TOEFL House ERP.cmd").read_text()
 GUI = (WINDOWS / "TOEFL House ERP.ps1").read_text()
 WORKER = (WINDOWS / "Run TOEFL House ERP.ps1").read_text()
 CHECK_PC = (WINDOWS / "Check This PC.ps1").read_text()
+EXISTING_PREFLIGHT = (WINDOWS / "Test Existing Installation.ps1").read_text()
 VERIFY = (WINDOWS / "Verify Package Image.ps1").read_text()
 PACKAGER = (WINDOWS / "Prepare Customer Package.ps1").read_text()
 SHORTCUT = (ROOT / "TOEFL House ERP.vbs").read_text()
@@ -177,6 +178,30 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("Get-ChildItem -LiteralPath $sitesRoot -Force", preflight)
         self.assertIn('docker volume ls --filter "name=toefl-house-erp_db-data"', preflight)
         self.assertIn("Could not check existing database storage", preflight)
+
+    def test_existing_site_and_db_volume_required_before_start_or_repair(self):
+        # Without this guard docker compose up can silently create a fresh
+        # empty named database volume while original Frappe site files remain.
+        self.assertIn('"product/windows/Test Existing Installation.ps1"', PACKAGER)
+        self.assertIn("site_config.json", EXISTING_PREFLIGHT)
+        self.assertIn("db.env", EXISTING_PREFLIGHT)
+        self.assertIn('docker volume ls --filter "name=$volumeName"', EXISTING_PREFLIGHT)
+        self.assertIn('$_ .Trim()'.replace(' ', ''), EXISTING_PREFLIGHT)
+        self.assertIn("docker volume inspect $volumeName", EXISTING_PREFLIGHT)
+        self.assertIn("could create an empty replacement", EXISTING_PREFLIGHT)
+        for forbidden in ("docker compose up", "docker compose down",
+                          "docker volume create", "Remove-Item", "Set-Content"):
+            self.assertNotIn(forbidden, EXISTING_PREFLIGHT)
+        for name, script in (("Start", START), ("Repair", REPAIR)):
+            self.assertIn("Test Existing Installation.ps1", script, name)
+            self.assertIn("if errorlevel 1 goto :datapreservationhold", script, name)
+            self.assertLess(script.index("Test Existing Installation.ps1"),
+                            script.index("docker compose up -d"), name)
+            self.assertIn(":datapreservationhold", script, name)
+            self.assertIn("Copy Safe Support Status", script, name)
+            self.assertNotIn("send a photo of this window plus the", script.lower(), name)
+        self.assertLess(REPAIR.index("Test Existing Installation.ps1"),
+                        REPAIR.index("docker compose down"))
 
     def test_customer_package_verifies_before_import_or_boot(self):
         self.assertIn('if exist "release\\toefl-house-erp-app.tar" goto :packagedimage', INSTALL)
