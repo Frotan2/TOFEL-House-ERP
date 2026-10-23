@@ -85,6 +85,8 @@ if (Test-Path -LiteralPath (Join-Path $productRoot "release\toefl-house-erp-app.
 
 $dataRoot = Join-Path $productRoot "data"
 $sitePresent = Test-Path -LiteralPath (Join-Path $dataRoot "sites\toeflhouse.localhost") -PathType Container
+# A parent folder alone is not an operational Frappe site.
+$siteConfigPresent = Test-Path -LiteralPath (Join-Path $dataRoot "sites\toeflhouse.localhost\site_config.json") -PathType Leaf
 $sitesRoot = Join-Path $dataRoot "sites"
 $siteInventoryVerified = $true
 if (Test-Path -LiteralPath $sitesRoot) {
@@ -118,6 +120,12 @@ if (Test-Path -LiteralPath $dataRoot -PathType Container) {
 }
 if (-not $secretPresent -and ($sitePresent -or $dbVolumePresent)) {
     Result "Database credential safety" "BLOCKED: existing site/database but credential file missing. Do NOT reinstall, repair, delete or regenerate credentials."
+} elseif ($secretPresent -and -not $siteConfigPresent) {
+    Result "Database credential safety" "BLOCKED: credentials exist but site configuration is missing. Do NOT install, start or repair."
+} elseif ($secretPresent -and -not $dbVolumeVerified) {
+    # A stopped Docker engine, missing volume and Docker API denial all need
+    # the same safe response: no Start/Repair or credentials reset until checked.
+    Result "Database credential safety" "NOT VERIFIED: credentials exist but the database volume could not be confirmed. Start Docker Desktop and check again; do NOT reinstall."
 } elseif ($secretPresent) {
     Result "Database credential safety" "Local credential file present (contents not read; database match NOT VERIFIED)"
 } elseif (-not $dbVolumeVerified -or -not $siteInventoryVerified) {
