@@ -51,6 +51,8 @@ def main():
            'enrollment_officer':'synthetic-enrollment-officer@example.test',
            'enrollment_auditor':'synthetic-enrollment-auditor@example.test',
            'candidate9':'synthetic-candidate9@example.test',
+           'book_seller':'synthetic-book-seller@example.test',
+           'book_unauthorized':'synthetic-book-unauthorized@example.test',
            'branch_candidate_a':'synthetic-branch-candidate-a@example.test',
            'branch_candidate_b':'synthetic-branch-candidate-b@example.test',
            'teaching_scheduler':'synthetic-teaching-scheduler@example.test',
@@ -150,6 +152,8 @@ def main():
                          # compensation actions are server-embeddable.
                          'finance_officer':['Finance Officer','Accounts User','Finance Manager'],
                          'finance_auditor':['Finance Auditor'],
+                          'book_seller':['Finance Officer','Accounts User'],
+                          'book_unauthorized':['Accounts User'],
                          # A13 web-seam containment probe: native Accounts
                          # User only; never revoked, so the REST probes below
                          # exercise the guard layer, not a permission denial.
@@ -3169,6 +3173,90 @@ def main():
             return {'fees_billed':after['Fees'],'placement_invoices':after['Sales Invoice'],
                     'gl_voucher_types':sorted(vouchers),'academic_and_payroll_untouched':True}
         check('finance-write-containment',finance_containment)
+        # Book shop: real native stock, Sales Invoice, GL and customer records.
+        # This separate synthetic section runs only AFTER the earlier billing
+        # fixture containment counts. It does not touch Owner customer data.
+        def book_catalog():
+            frappe.set_user('Administrator')
+            if not frappe.db.exists('Item Group','Books'):
+                frappe.get_doc(dict(doctype='Item Group',item_group_name='Books',
+                    parent_item_group='All Item Groups')).insert()
+            code='SYN-BOOK-STOCK'
+            if not frappe.db.exists('Item',code):
+                frappe.get_doc(dict(doctype='Item',item_code=code,
+                    item_name='SYN Textbook',item_group='Books',
+                    stock_uom='Nos',is_stock_item=1,is_sales_item=1,
+                    is_purchase_item=1)).insert()
+            wh=frappe.db.get_value('Warehouse',{'warehouse_name':'SYN Book Shop',
+                'company':fin['company']},'name')
+            if not wh:
+                wh=frappe.get_doc(dict(doctype='Warehouse',
+                    warehouse_name='SYN Book Shop',company=fin['company'])).insert().name
+            entry=frappe.get_doc(dict(doctype='Stock Entry',
+                stock_entry_type='Material Receipt',company=fin['company'],
+                items=[dict(item_code=code,qty=12,t_warehouse=wh,basic_rate=175)]))
+            entry.insert()
+            entry.submit()
+            qty=frappe.db.get_value('Bin',{'item_code':code,'warehouse':wh},'actual_qty')
+            assert float(qty)>=12,(qty,wh)
+            return dict(item=code,warehouse=wh,before_qty=float(qty),
+                        stock_receipt=entry.name)
+        books=check('book-native-stock-catalog-and-receipt',traced(book_catalog))
+        def book_doc(item_code='SYN-BOOK-STOCK',customer=None,qty=2):
+            return frappe.get_doc(dict(doctype='Sales Invoice',
+                customer=customer or fin['payer'],company=fin['company'],
+                posting_date=pf_post,due_date=pf_due,
+                update_stock=1,is_pos=0,selling_price_list=fin['price_list'],
+                items=[dict(item_code=item_code,qty=qty,
+                    rate=300,warehouse=books['warehouse'])]))
+        def unauthorized_book():
+            doc=book_doc()
+            return denied(lambda:as_user('book_unauthorized',
+                lambda:doc.insert(ignore_permissions=True)))
+        check('book-native-unauthorized-role-denied',unauthorized_book)
+        def mixed_book():
+            doc=book_doc()
+            doc.append('items',dict(item_code=fin['placement_item'],qty=1,
+                rate=4000,warehouse=books['warehouse']))
+            return denied(lambda:as_user('book_seller',
+                lambda:doc.insert(ignore_permissions=True)))
+        check('book-native-mixed-service-invoice-denied',mixed_book)
+        def book_without_stock():
+            doc=book_doc()
+            doc.update_stock=0
+            return denied(lambda:as_user('book_seller',
+                lambda:doc.insert(ignore_permissions=True)))
+        check('book-native-no-stock-update-denied',book_without_stock)
+        def book_sale_positive():
+            doc=book_doc()
+            as_user('book_seller',lambda:doc.insert())
+            as_user('book_seller',lambda:doc.submit())
+            assert int(doc.docstatus)==1 and float(doc.grand_total)>0
+            qty=frappe.db.get_value('Bin',{'item_code':books['item'],
+                'warehouse':books['warehouse']},'actual_qty')
+            assert abs(float(qty)-(books['before_qty']-2))<0.001,(qty,books)
+            assert frappe.db.count('Stock Ledger Entry',
+                {'voucher_type':'Sales Invoice','voucher_no':doc.name})>0
+            assert frappe.db.count('GL Entry',
+                {'voucher_type':'Sales Invoice','voucher_no':doc.name})>0
+            return dict(invoice=doc.name,before_qty=books['before_qty'],
+                after_qty=float(qty),amount=float(doc.grand_total))
+        book_sale=check('book-native-sale-posts-invoice-stock-and-ledger',traced(book_sale_positive))
+        def book_for_converted_student():
+            customer=frappe.db.get_value('Student',second['student'],'customer')
+            assert customer,'Converted student has no linked native customer'
+            doc=book_doc(customer=customer,qty=1)
+            as_user('book_seller',lambda:doc.insert())
+            as_user('book_seller',lambda:doc.submit())
+            assert int(doc.docstatus)==1
+            return dict(invoice=doc.name,buyer='converted-student',
+                stock_book_purchase=True)
+        check('book-native-converted-student-can-buy-only-books',traced(book_for_converted_student))
+        def placement_item_denied():
+            doc=book_doc(item_code=fin['placement_item'])
+            return denied(lambda:as_user('book_seller',
+                lambda:doc.insert(ignore_permissions=True)))
+        check('book-native-placement-item-still-denied',placement_item_denied)
         # ---- A13 containment: native bypass-route negative proofs. Pinned
         # frappe (988e54f3c4c2, document.py run_before_save_methods):
         # "validate" fires only for save/submit; cancel runs "before_cancel"

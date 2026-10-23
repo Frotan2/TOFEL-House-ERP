@@ -39,6 +39,13 @@ REQUIRED_JOURNEYS = {
     "finance": (
         "finance-tuition-happy-path",
         "finance-placement-happy-path",
+        "book-native-stock-catalog-and-receipt",
+        "book-native-unauthorized-role-denied",
+        "book-native-mixed-service-invoice-denied",
+        "book-native-no-stock-update-denied",
+        "book-native-sale-posts-invoice-stock-and-ledger",
+        "book-native-converted-student-can-buy-only-books",
+        "book-native-placement-item-still-denied",
     ),
     "desks_and_branch_permissions": (
         "role-desk-hosted-qualification",

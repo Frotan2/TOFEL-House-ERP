@@ -145,6 +145,24 @@ business-policy mirror checks. Any failed site-mode verification restores the
 previous settings. A failed deactivation verification restores the previous
 settings the same way (the site stays ACTIVE rather than half-deactivated).
 
+### Native stock-book sales (engineering candidate)
+
+The native ERPNext book shop uses **Item Group** (the owner creates `Books`),
+stock-enabled and sales-enabled **Item**, **Warehouse**, **Stock Entry**,
+**Sales Invoice**, **Payment Entry** and the native stock/general ledgers.
+Only Finance Officer users who also hold native Accounts User invoice creation
+permission can use normal stock-updating book invoices. Book and service lines
+may never be mixed; the placement/tuition command protections remain.
+A student/customer who has been admitted may buy a textbook without creating
+a tuition charge. The owner configures the items, prices, stock and warehouse
+in native ERPNext screens; no artificial product price or TH book ledger exists.
+
+Synthetic integration now tests book-stock receipt and invoice stock/GL posting,
+unprivileged and mixed-item denial, stock-update enforcement, and a
+converted-student sale. Native payments, refunds/returns, end-user book UI,
+actual role assignment, and Owner Windows acceptance remain independent
+requirements before issue #35 may close.
+
 ## 6. Current state and open items
 
 - The implemented lifecycle above is covered by the owned unit suite and by the

@@ -15,6 +15,17 @@ The workflows below are triggered together by this controlled acceptance revisio
 | Product image | Docker Compose, real image build, synthetic first boot, restore/restart/rollback and proxy safety contracts | Docker Desktop/WSL2 on Owner PC |
 | Windows customer package smoke | Windows host GUI initialization, synthetic installer/launcher, damaged-image refusal, package allowlist | Real Docker Desktop, multi-GB image import and reboot on customer Windows |
 
+## Books business gate (not yet production approval)
+
+Native stock-book invoices now require both Finance Officer and Accounts User,
+genuine Books Item Group stock Items, warehouse, `update_stock=1`, and no
+placement-case link. A full synthetic native test must prove stock receipt,
+invoice stock/GL posting, unauthorized/mixed/service invoice refusal and
+a purchase by an enrolled student's customer. The hosted evidence verifier
+fails closed unless each of those test receipts actually passed. This is not
+yet evidence of a native Payment Entry, item return/refund or a receptionist
+workflow. Real Owner operations remain prohibited.
+
 ## Required Owner and operational gates (not remotely executed)
 
 1. Preserve the current operational installation and every existing backup and password. Only **Check This PC** may be used under the Owner preservation/restore hold.
