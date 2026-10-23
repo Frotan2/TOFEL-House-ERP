@@ -166,7 +166,21 @@ function Start-LauncherAction([string]$action) {
 
 $install.Add_Click({ Start-LauncherAction "Install" })
 $open.Add_Click({ Start-LauncherAction "Start" })
-$repair.Add_Click({ Start-LauncherAction "Repair" })
+$repair.Add_Click({
+    # Repair is not a routine daily action. Prevent accidental one-click
+    # mutation on a machine with an existing site; default is "No".
+    $answer = [System.Windows.Forms.MessageBox]::Show(
+        "Repair is for a problem with an installation and should be done only with TOEFL House support. It may update application files. It is NOT a backup or data recovery. Do not use it to fix missing student records. Continue with Repair?",
+        "Confirm repair with support",
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Warning,
+        [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+    if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) {
+        Start-LauncherAction "Repair"
+    } else {
+        $status.Text = "Repair cancelled. Your installed data was not changed."
+    }
+})
 $stop.Add_Click({ Start-LauncherAction "Stop" })
 $checkButton.Add_Click({ Start-LauncherAction "Check" })
 $guideButton.Add_Click({

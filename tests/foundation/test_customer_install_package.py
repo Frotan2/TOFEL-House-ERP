@@ -58,6 +58,18 @@ class CustomerInstallerContract(unittest.TestCase):
             self.assertNotIn(forbidden.lower(), DAILY_GUIDE.lower())
         self.assertNotIn('Start-LauncherAction "Activate"', GUI)
 
+    def test_repair_requires_explicit_yes_with_safe_no_default(self):
+        self.assertIn('Confirm repair with support', GUI)
+        self.assertIn('MessageBoxDefaultButton]::Button2', GUI)
+        self.assertIn('Repair cancelled. Your installed data was not changed.', GUI)
+        self.assertIn('Start-LauncherAction "Repair"', GUI)
+        self.assertNotIn('$repair.Add_Click({ Start-LauncherAction "Repair" })', GUI)
+
+    def test_daily_guide_includes_dari_staff_instructions(self):
+        for word in ("صاحب کورس", "ریسپشنیست", "شاگرد", "حاضری",
+                     "فروش کتاب", "شهریه", "پشتیبانی"):
+            self.assertIn(word, DAILY_GUIDE)
+
     def test_incomplete_customer_folder_never_attempts_source_build(self):
         # Customer packages deliberately omit app.Dockerfile and all source.
         # Their GUI must refuse a missing archive rather than enter a Docker
