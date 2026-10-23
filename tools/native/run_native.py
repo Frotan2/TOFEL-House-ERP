@@ -232,6 +232,7 @@ def main():
             bench('get-'+name,'get-app','--soft-link','--skip-assets',str(export))
         stage_owner_decision_ledger(lab)
         run('guard-all-weasyprint-entrypoints',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_weasyprint.py',benchdir/'apps/frappe'])
+        run('fix-setup-sidebar-lifecycle',[benchdir/'env/bin/python',ROOT/'tools/foundation/fix_setup_sidebar.py',benchdir/'apps/frappe'])
         run('patch-hrms-editor-dependencies',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/hrms'])
         run('lock-banking-dependencies',[benchdir/'env/bin/python',ROOT/'tools/foundation/secure_hrms.py',benchdir/'apps/erpnext','--banking'])
         run('pip-check',[lab/'tools/bin/uv','pip','check','--python',benchdir/'env/bin/python'])
@@ -515,7 +516,9 @@ def main():
             if name=='frappe':
                 # Only the hash-bound renderer guard may differ from the
                 # upstream checkout; all other tracked files must stay pinned.
-                assert changed==['frappe/utils/weasyprint.py', 'pyproject.toml'], changed
+                assert changed==['frappe/public/js/frappe/ui/sidebar/sidebar.js', 'frappe/utils/weasyprint.py', 'pyproject.toml'], changed
+                run('verify-final-setup-sidebar',[benchdir/'env/bin/python',
+                    ROOT/'tools/foundation/fix_setup_sidebar.py',d,'--verify'])
                 run('verify-final-weasyprint-guard',[benchdir/'env/bin/python',
                     ROOT/'tools/foundation/secure_weasyprint.py',d,'--verify'])
                 run('verify-final-frappe-python-security',[benchdir/'env/bin/python',

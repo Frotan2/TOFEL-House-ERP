@@ -38,6 +38,7 @@ on:
       - tools/foundation/realtime-locks/**
       # Desk markdown input cap (showdown GHSA-rmmh-p597-ppvv), executed in the image build.
       - tools/foundation/secure_markdown.py
+      - tools/foundation/fix_setup_sidebar.py
       - product/**
       - apps/**
       - docs/engineering/foundation-version-matrix.json
@@ -953,6 +954,8 @@ jobs:
               page.wait_for_timeout(5_000)                      # let the desk shell render
               assert page.url.startswith("http://127.0.0.1:8000/desk"), page.url
               assert page.query_selector("#login_password") is None, "login form still present after login"
+              page.locator(".setup-wizard-slide:visible").wait_for(state="visible", timeout=30_000)
+              assert page.evaluate("!frappe.boot.setup_complete && frappe.wizard.page_name === 'setup-wizard'"), "fresh native setup wizard did not initialize"
               assert len(page.inner_text("body").strip()) > 200, "desk rendered no content"
               assert not page_errors, ("post-login JavaScript exceptions", page_errors)
               page.screenshot(path=str(shot))

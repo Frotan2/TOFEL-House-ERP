@@ -232,8 +232,8 @@ Passing CI does not close #12 or #35 and does not authorize production.
 ## Follow-up gates on 2026-10-23
 
 At `2104d13d722c36184e29a1db6303240424b5dcde`, the owned suite (1,663
-tests, 9 skips) and Windows package smoke completed successfully. Foundation
-runtime is still running. The product image built and its first-boot encrypted
+tests, 9 skips), Windows package smoke, and Foundation runtime completed
+successfully. The product image built and its first-boot encrypted
 backup/restore check passed, but authenticated Chromium role-desk acceptance
 failed on post-login JavaScript exceptions (`undefined.show`); package
 assembly and publication were correctly skipped. The native lifecycle run
@@ -253,3 +253,14 @@ Sales Invoice reference; ERPNext rejects the resulting GL as unbalanced by
 before role-desk qualification. The current log lacks exception stacks; a
 follow-up change now retains them for the next fresh-site run. Production
 remains **REJECT**.
+
+The retained Chromium stack from run `39986220588` at `57763a8` identifies
+`frappe.ui.Sidebar.toggle`, called by `Container.change_to`. At pinned Frappe
+`988e54f3`, the constructor intentionally returns before creating its wrapper
+when setup is incomplete, but toggle dereferences the wrapper unconditionally.
+The reviewed source/output-digest fix applies the same setup lifecycle condition
+to toggle before provider asset compilation. A Node regression executes the
+actual pinned source, reproduces the original crash, verifies both toggle
+directions after the fix and after setup, and confirms unexpected missing DOM
+after setup still raises. Local focused verification: 92 tests passed; Ruff
+0.16.8 and diff integrity passed. Real Chromium rerun remains required.

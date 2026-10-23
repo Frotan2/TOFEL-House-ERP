@@ -456,6 +456,8 @@ class LineEndingContract(unittest.TestCase):
             "tools/foundation/secure_realtime.py", "tools/foundation/realtime-locks",
             # Desk markdown input cap (showdown GHSA-rmmh-p597-ppvv), reviewed 2026-10-19.
             "tools/foundation/secure_markdown.py",
+            # Setup wizard lacks sidebar DOM until native setup completes.
+            "tools/foundation/fix_setup_sidebar.py",
         }
         self.assertEqual(sources, expected, "audit any new Dockerfile COPY source")
         self.assertEqual(len(copy_rows), len(expected), "COPY syntax must stay source/destination only")

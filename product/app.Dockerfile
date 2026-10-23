@@ -4,7 +4,7 @@
 # guarded by tests/foundation/test_product_packaging.py: the build breaks out of
 # contract the moment this file and the matrix disagree. Sources are fetched
 # commit-pinned and rev-parse verified exactly like the hosted qualification
-# runners; upstream code is never patched.
+# runners; reviewed fixes are applied with source and output digest checks.
 ARG PYTHON_VERSION=3.14.7
 FROM python:${PYTHON_VERSION}-slim-bookworm AS product-base
 
@@ -118,6 +118,7 @@ COPY tools/foundation/banking-locks /product/banking-locks
 # see docs/engineering/evidence/sec-deps-01/realtime-socketio-2026-10-18/README.md.
 COPY tools/foundation/secure_realtime.py /product/secure_realtime.py
 COPY tools/foundation/secure_markdown.py /product/secure_markdown.py
+COPY tools/foundation/fix_setup_sidebar.py /product/fix_setup_sidebar.py
 COPY tools/foundation/realtime-locks /product/realtime-locks
 # The performance baseline (finding 9) runs inside the deployed image:
 # the CI perf step execs it by this exact path. (Every script COPYed
@@ -186,6 +187,7 @@ RUN python3 /product/secure_weasyprint.py /home/frappe/bench/apps/frappe \
 # (>= 6.6.7), ws (>= 8.21.0) and socket.io-parser (>= 4.2.7). Any drift aborts the build.
 RUN python3 /product/secure_realtime.py /home/frappe/bench/apps/frappe
 RUN python3 /product/secure_markdown.py /home/frappe/bench/apps/frappe
+RUN python3 /product/fix_setup_sidebar.py /home/frappe/bench/apps/frappe
 # Compile all browser bundles on the provider. Customer startup restores this
 # seed and verifies the manifest; it never invokes a frontend compiler.
 RUN cd /home/frappe/bench && bench build \

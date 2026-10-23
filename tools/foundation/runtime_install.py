@@ -635,6 +635,8 @@ def main() -> int:
             ROOT / "tools/foundation/secure_realtime.py", bench_dir / "apps/frappe"])
         run("patch-frappe-markdown-input-cap", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_markdown.py", bench_dir / "apps/frappe"])
+        run("fix-setup-sidebar-lifecycle", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/fix_setup_sidebar.py", bench_dir / "apps/frappe"])
         run("security-remediation-regressions", [bench_dir / "env/bin/python", "-m", "unittest",
             "tests.security.test_security_remediation_2026_10_09",
             "tests.security.test_education_locks_2026_10_17",
@@ -693,6 +695,8 @@ def main() -> int:
             ROOT / "tools/foundation/secure_realtime.py", bench_dir / "apps/frappe", "--verify"])
         run("verify-frappe-markdown-input-cap-after-build", [bench_dir / "env/bin/python",
             ROOT / "tools/foundation/secure_markdown.py", bench_dir / "apps/frappe", "--verify"])
+        run("verify-setup-sidebar-lifecycle-after-build", [bench_dir / "env/bin/python",
+            ROOT / "tools/foundation/fix_setup_sidebar.py", bench_dir / "apps/frappe", "--verify"])
         # Inventory resolved dependency trees after their actual asset build.
         # Findings remain REJECT evidence rather than a hidden best-effort scan.
         stack_audit_path = evidence / "stack-dependency-audit.json"
