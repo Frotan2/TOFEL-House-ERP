@@ -33,16 +33,16 @@ FILE_TREE_SHA256 = {
     # Recomputed from the SHA-512-integrity-verified npm archives on
     # 2026-10-23. The previous values described older archive contents and
     # rejected the current immutable publisher tarballs before patching.
-    "prosemirror-view": "e4327f21cf106395625aa1873ea895dc139de75e1e6e910057e99dd59517b542",
-    "prosemirror-model": "83649a013f5f475b13bbbeac6d259d9dbafc1ffff3b3766383e378bfa98848c3",
-    "socket.io-parser": "462590725b693a293b3ae7a012b5da69db5844ffa5e5452391ae5d1a64c64de4",
+    "prosemirror-view": "dcf389324798cd44ba0dfb99484c867d8926af48245c185f27893816ed601b49",
+    "prosemirror-model": "769a68d022eb80af04f98ecfea0767ec573eb24952290658b5699ee07c8a844f",
+    "socket.io-parser": "053e6f8dcc424388a8ac27d8d7262c87d29bc80d3f5898805a03e67dc57a079c",
 }
 # Parser 4.2.7 requires debug ~4.4.1 and debug requires ms ^2.1.3. The frozen
 # upstream install has debug 4.3.4 and ms 2.1.2. Nest only these two verified
 # transitive dependencies under the parser; do not change other consumers.
 PARSER_DEPENDENCIES = {
     "debug": ("4.4.1", "KcKCqiftBJcZr++7ykoDIEwSa3XWowTfNPo92BYxjXiyYEVrUQh2aLyhxBCwww+heortUFxEJYcRzosstTEBYQ==",
-              "3b65e5d839a03fa5802a43d640dc45fb43680cbcb2d84d98c40bce07a8965f0f"),
+              "f967bf4602f684cc8b2841996f94c580c63bea59cf4be7d04176b2d73ff659ec"),
     "ms": ("2.1.3", "6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==",
            "43ec4600f61993ecf77328010aedcc47a095217e91539695c3d90f72d13de2df"),
 }
@@ -50,7 +50,10 @@ PARSER_DEPENDENCIES = {
 
 def tree_digest(folder: Path, *, exclude_nested_modules: bool = False) -> str:
     digest = hashlib.sha256()
-    files = sorted(p for p in folder.rglob("*") if p.is_file() or p.is_symlink())
+    files = sorted(
+        (p for p in folder.rglob("*") if p.is_file() or p.is_symlink()),
+        key=lambda p: p.relative_to(folder).as_posix(),
+    )
     if not files or any(p.is_symlink() for p in files):
         raise ValueError("Missing or symlinked dependency package files")
     for path in files:
