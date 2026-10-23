@@ -34,14 +34,28 @@ capacities are entered by the owner as configuration and are never coded in.
 
 ## Release status
 
-**NO-GO / production authorization REJECT.** Current hosted engineering gates
-for the owned suite, product image and isolated native restore are green on the
-latest runtime code line; the exact Foundation security rerun
-[39835655629](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39835655629)
-is still a separate fail-closed gate, and the real Owner Windows lifecycle /
-recovery acceptance remains open as GitHub issue #12. Do not activate real
-operations based only on hosted CI. See the
-[current engineering qualification note](docs/engineering/QUALIFICATION-NOTE-2026-10-22.md)
+**NO-GO / production authorization REJECT.** The current engineering
+candidate includes working hosted native business workflows, book commerce,
+and a guarded Windows customer installer. These results are NOT proof of
+release readiness on a customer's actual computer:
+
+- Native Frappe/MariaDB business acceptance, including book stock, invoice,
+  payment, return and a converted student's book purchase: hosted
+  [run 39893520229](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39893520229)
+  **PASS** at the business-code revision `62e9d107`.
+- Owned source suite and customer-package Windows smoke on the current
+  installer change line: [run 39902481737](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39902481737)
+  and [run 39902481771](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39902481771)
+  **PASS** at `5868ab5d`.
+- The heavy product-image, fresh Windows test PC, actual Owner backup drive
+  and isolated recovery, and real staff Tailscale/device gates must be
+  independently checked. A completed green simulation never counts as a
+  real Owner-machine acceptance.
+
+Tracked remaining release gates: [Owner Windows and recovery #12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12)
+and [hands-on book cashier acceptance #35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35).
+Keep real student and financial data out of unapproved installations. See the
+[customer delivery guide](docs/CUSTOMER-DELIVERY.md), [hosted acceptance note](docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md)
 and [restore release note](docs/engineering/RESTORE-QUALIFICATION-RELEASE-2026-10-22.md).
 
 ## Owner: install and daily use (Windows)
