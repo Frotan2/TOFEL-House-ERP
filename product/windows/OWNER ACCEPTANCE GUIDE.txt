@@ -53,6 +53,45 @@ from the trusted provider.
 [ ] 16. Capture redacted evidence and any failure step; ordinary customers
          must never need Git, PowerShell or developer commands for daily use.
 
+BOOK SHOP PRACTICE - DISPOSABLE TEST PC ONLY
+-------------------------------------------
+These actions use ONLY invented student/customer identities and test books.
+Do NOT perform them on a computer with existing Owner student or cash data.
+
+[ ] 17. An administrator configures the native Company, cash account and
+         selling Price List with compatible currencies (for example AFN).
+         Do not override a currency mismatch or invent an exchange rate.
+[ ] 18. Create the native Item Group "Books" and a practice book Item marked
+         both Stock Item and Sales Item. Configure a native selling Item Price.
+         The price/master-data staff need ERPNext's own master-data roles.
+[ ] 19. Stock staff with native Stock User rights receive practice copies
+         into a Warehouse using Stock Entry -> Material Receipt. Note the
+         resulting Bin / Stock Ledger stock quantity.
+[ ] 20. Finance staff with Finance Manager + Finance Officer + Accounts User
+         open their Finance desk. Only native screens they can actually use
+         should appear under Book sales and stock. Missing stock or price
+         links mean the account lacks the native permission; do not bypass it.
+[ ] 21. From native Sales Invoice select the practice customer and a Books
+         item only. Enable Update Stock, select the stocked Warehouse, verify
+         currency and price, then submit. Confirm stock quantity decreases
+         and a native receivable / general-ledger entry is posted.
+[ ] 22. From native Payment Entry receive the invoice payment into a
+         configured practice cash account. Confirm the original invoice's
+         outstanding amount becomes zero. Never use real money.
+[ ] 23. Create the native Sales Return / Credit Note against that invoice.
+         Confirm returned copies are restored to stock. Verify that an
+         actual cash refund, if needed, is recorded separately with native
+         payment records - a credit note alone is NOT a cash refund.
+[ ] 24. Attempt a separate practice purchase by a converted synthetic
+         student/customer. Currency MUST match the configured Company and
+         Price List. This must not create or bypass a placement/tuition fee.
+[ ] 25. Check that a user without Finance Officer permission cannot sell,
+         and that a Sales Invoice mixing Books and placement/service items
+         is refused. Report any failure without altering real data.
+
+Keep proof of these book-commerce steps redacted. They are manual end-user
+qualification gates, not proof that the entire product is release-ready.
+
 STILL UNVERIFIED - NOT PERMITTED BY THIS GUIDE
 ----------------------------------------------
 [ ] A. Owner backup drive and Task Scheduler checks - HOLD.

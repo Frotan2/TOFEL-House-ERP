@@ -88,7 +88,10 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn('$guideFile = Join-Path $PSScriptRoot "OWNER ACCEPTANCE GUIDE.txt"', GUI)
         for phrase in ("ENGINEERING CANDIDATE ONLY", "FRESH DISPOSABLE WINDOWS TEST PC",
                        "PRESERVATION", "DO NOT", "NO-GO", "REJECTED", "real student",
-                       "Check This PC", "synthetic records"):
+                       "Check This PC", "synthetic records",
+                       "BOOK SHOP PRACTICE", "Item Group", "Update Stock",
+                       "Payment Entry", "Credit Note", "converted synthetic",
+                       "not a cash refund"):
             self.assertIn(phrase.lower(), OWNER_GUIDE.lower(), phrase)
         self.assertNotIn("MARIADB_ROOT_PASSWORD=", OWNER_GUIDE)
         self.assertIn('"Check"', WORKER)
