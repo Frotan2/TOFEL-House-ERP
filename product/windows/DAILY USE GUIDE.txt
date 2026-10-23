@@ -141,3 +141,15 @@ Restore روی معلومات اصلی تا تأیید رسمی ممنوع اس�
 رمز ورود، معلومات شاگردان و اسناد خصوصی را نفرستید.
 
 مسئولیت اصلاح مشکلات نرم‌افزار با سازنده است، نه صاحب کورس.
+
+
+8. SAFE SUPPORT STATUS / وضعیت کوتاه پشتیبانی
+----------------------------------------------
+First choose "Check This PC". When it finishes, choose
+"Copy Safe Support Status". You may paste the short result to trusted
+TOEFL House support. It contains only generic readiness observations,
+not passwords, actual student records or private operation logs.
+
+نخست دکمهٔ Check This PC و بعد Copy Safe Support Status را انتخاب کنید.
+نتیجهٔ کوتاه را فقط با مسئول پشتیبانی شریک سازید.
+رمز ورود، اسناد شاگردان یا گزارش خام را نفرستید.

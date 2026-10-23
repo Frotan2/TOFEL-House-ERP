@@ -35,7 +35,8 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("Windows GUI controls initialized", GUI)
         for button in ('"Install"', '"Open / Start"', '"Repair"', '"Stop"',
                        '"Get Docker Desktop"', '"View Administrator Login"',
-                       '"Check This PC"', '"Owner Readiness Guide"', '"How to Use"'):
+                       '"Check This PC"', '"Owner Readiness Guide"', '"How to Use"',
+                       '"Copy Safe Support Status"'):
             self.assertIn(button, GUI)
         self.assertIn('"http://127.0.0.1:8000/"', GUI)
         self.assertIn('$script:process', GUI)
@@ -57,6 +58,16 @@ class CustomerInstallerContract(unittest.TestCase):
                           "MARIADB_ROOT_PASSWORD="):
             self.assertNotIn(forbidden.lower(), DAILY_GUIDE.lower())
         self.assertNotIn('Start-LauncherAction "Activate"', GUI)
+
+    def test_safe_status_is_read_only_and_privacy_filtered(self):
+        self.assertIn('$copyStatusButton.Add_Click', GUI)
+        self.assertIn('$script:lastCheckPath = $script:stdoutPath', GUI)
+        self.assertIn('$copyStatusButton.Enabled', GUI)
+        self.assertIn("Clipboard]::SetText", GUI)
+        self.assertIn("Never copy stdout verbatim", GUI)
+        self.assertIn("NOT approval to use real student", GUI)
+        self.assertIn("Run Check This PC first", GUI)
+        self.assertNotIn("Clipboard]::SetText((Get-Content", GUI)
 
     def test_repair_requires_explicit_yes_with_safe_no_default(self):
         self.assertIn('Confirm repair with support', GUI)

@@ -276,6 +276,7 @@ $timer.Add_Tick({
                 $status.Text = "TOEFL House ERP has stopped safely. Your data remains stored."
             } elseif ($completedAction -eq "Check") {
                 $script:lastCheckPath = $script:stdoutPath
+                Set-Busy $false
                 $status.Text = "Read-only PC check completed. This is not release approval. See View Details."
                 if (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf) {
                     Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $script:stdoutPath + '"')

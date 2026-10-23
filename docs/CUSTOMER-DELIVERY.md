@@ -151,3 +151,11 @@ It explains the Owner, Reception, Academic, Teacher and Finance routines and
 how the native ERPNext stock-book workflow works without developer commands.
 It does **not** grant access, activate production, or replace the separate
 Owner Readiness Guide and real Windows/customer recovery approval.
+
+### Safe support status for nontechnical users
+
+After the read-only **Check This PC** succeeds, the Windows launcher enables
+**Copy Safe Support Status**. This copies only whitelisted machine readiness
+status lines, not raw Docker/PowerShell logs, secrets or student records.
+It does not approve live use, authorize backup/restore or connect to a
+support service without the owner's direct action.
