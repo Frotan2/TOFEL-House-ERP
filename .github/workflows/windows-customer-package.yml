@@ -206,6 +206,22 @@ jobs:
             throw "Headless synthetic install did not generate its local credential file."
           }
           Write-Host "Headless installer, start, stop and repair routes passed with fake Docker."
+          # Accidental Install on an already completed site must refuse before
+          # regenerating credentials, importing an image or invoking Compose.
+          $repeatInstall = Join-Path $kit 'product/windows/Install TOEFL House ERP.cmd'
+          $previousPreference = $ErrorActionPreference
+          try {
+            $ErrorActionPreference = 'Continue'
+            $alreadyInstalledOutput = @(& $repeatInstall 2>&1)
+            $alreadyInstalledExit = $LASTEXITCODE
+          } finally {
+            $ErrorActionPreference = $previousPreference
+          }
+          if ($alreadyInstalledExit -eq 0 -or
+              ($alreadyInstalledOutput -join "`n") -notmatch 'no installation attempted') {
+            throw "Repeated Install did not refuse the existing Frappe site."
+          }
+          Write-Host "Repeated Install was refused safely."
           # A missing database volume with credentials + site config present
           # must NOT allow Compose to create an empty replacement database.
           $env:TH_SYNTHETIC_VOLUME_EXISTS = '0'
