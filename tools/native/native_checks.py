@@ -3241,7 +3241,7 @@ def main():
                 {'voucher_type':'Sales Invoice','voucher_no':doc.name})>0
             return dict(invoice=doc.name,before_qty=books['before_qty'],
                 after_qty=float(qty),amount=float(doc.grand_total))
-        book_sale=check('book-native-sale-posts-invoice-stock-and-ledger',traced(book_sale_positive))
+        check('book-native-sale-posts-invoice-stock-and-ledger',traced(book_sale_positive))
         def book_for_converted_student():
             customer=frappe.db.get_value('Student',second['student'],'customer')
             assert customer,'Converted student has no linked native customer'
