@@ -77,6 +77,19 @@ class FinanceContainmentWiringTests(unittest.TestCase):
             self.assertIn("finance_command_active", names, name)
             self.assertTrue(any(isinstance(n, ast.Raise) for n in ast.walk(node)), name)
 
+    def test_native_book_sale_is_stock_only_and_role_checked(self):
+        source = FINANCE.read_text(encoding="utf-8")
+        for clause in ('def _native_book_sale_allowed(doc):',
+                       'item.item_group != "Books"',
+                       'int(item.is_stock_item or 0) != 1',
+                       'int(item.is_sales_item or 0) != 1',
+                       'getattr(doc, "update_stock", 0)',
+                       'getattr(doc, "th_placement_case", None)',
+                       '"Finance Officer", "Accounts User"',
+                       'frappe.has_permission(INVOICE, "create", user=user)',
+                       'if _native_book_sale_allowed(doc):'):
+            self.assertIn(clause, source)
+
     def test_finance_kinds_map_to_finance_officer(self):
         source = SECURITY.read_text(encoding="utf-8")
         self.assertIn('"issue_tuition_fees": "Finance Officer"', source)

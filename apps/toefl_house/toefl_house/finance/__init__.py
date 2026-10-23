@@ -85,15 +85,78 @@ def guard_fees(doc, method=None):
     raise frappe.ValidationError("Fees requires an authorized finance command")
 
 
+def _native_book_sale_allowed(doc):
+    """Constrain native invoice UI to stock-only textbook sales.
+
+    Normal placement invoices and corrections still require their guarded
+    finance command context. Item master data, not client-supplied labels,
+    determines whether each invoice line is a book.
+    """
+    user = frappe.session.user
+    if not user or user in ("Guest", "Administrator"):
+        return False
+    if not {"Finance Officer", "Accounts User"}.issubset(set(frappe.get_roles(user))):
+        return False
+    # Never trust ignore_permissions on an incoming native request.
+    if not frappe.has_permission(INVOICE, "create", user=user):
+        return False
+    if getattr(doc, "th_placement_case", None):
+        return False
+    if int(getattr(doc, "update_stock", 0) or 0) != 1:
+        return False
+    if not getattr(doc, "company", None) or not getattr(doc, "customer", None):
+        return False
+    is_return = int(getattr(doc, "is_return", 0) or 0) == 1
+    original = getattr(doc, "return_against", None)
+    if is_return:
+        if not original:
+            return False
+        source = frappe.db.get_value(
+            INVOICE, original,
+            ["docstatus", "customer", "company", "update_stock", "th_placement_case"],
+            as_dict=True,
+        )
+        if (not source or int(source.docstatus or 0) != 1
+                or source.customer != doc.customer or source.company != doc.company
+                or int(source.update_stock or 0) != 1 or source.th_placement_case):
+            return False
+    elif original:
+        return False
+    items = getattr(doc, "items", None)
+    if not items:
+        return False
+    for row in items:
+        code = getattr(row, "item_code", None)
+        if not code or not getattr(row, "warehouse", None):
+            return False
+        item = frappe.db.get_value(
+            "Item", code,
+            ["item_group", "is_stock_item", "is_sales_item", "disabled"],
+            as_dict=True,
+        )
+        if (not item or item.item_group != "Books"
+                or int(item.is_stock_item or 0) != 1
+                or int(item.is_sales_item or 0) != 1
+                or int(item.disabled or 0) != 0):
+            return False
+    return True
+
+
 def guard_sales_invoice(doc, method=None):
     # The enrollment slice's premature-billing guard stays in force unchanged;
     # the finance containment guard is chained after it (one handler per
     # doctype/method per app).
-    deny_premature_invoice(doc, method)
     require_operational()
     if finance_command_active(INVOICE):
+        deny_premature_invoice(doc, method)
         return
-    raise frappe.ValidationError("Sales Invoice requires an authorized finance command")
+    # Stock-only native book sales cannot impersonate a placement/tuition
+    # charge, and remain governed by native accounting and stock validations.
+    if _native_book_sale_allowed(doc):
+        return
+    deny_premature_invoice(doc, method)
+    raise frappe.ValidationError(
+        "Sales Invoice requires an authorized finance command or a stock-book invoice")
 
 
 @frappe.whitelist(methods=["POST"])
