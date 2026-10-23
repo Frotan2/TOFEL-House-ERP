@@ -225,6 +225,8 @@ $copyStatusButton.Add_Click({
         "Database credential safety" = @(
             "BLOCKED: existing site/database but credential file missing. Do NOT reinstall, repair, delete or regenerate credentials.",
             "Local credential file present (contents not read; database match NOT VERIFIED)",
+            "BLOCKED: credentials exist but site configuration is missing. Do NOT install, start or repair.",
+            "NOT VERIFIED: credentials exist but the database volume could not be confirmed. Start Docker Desktop and check again; do NOT reinstall.",
             "No credential file; local site or database storage could not be ruled out. Do NOT assume a fresh installation.",
             "No credential file or existing site/database observed (informational, not permission to install)")
         "Local browser endpoint" = @("Responding; authenticated login not verified",
