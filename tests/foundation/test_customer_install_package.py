@@ -208,7 +208,10 @@ class CustomerInstallerContract(unittest.TestCase):
 
     def test_install_refuses_existing_site_before_creating_or_loading_data(self):
         guard = 'if exist "data\\sites\\toeflhouse.localhost\\site_config.json" goto :alreadyinstalled'
+        prior_credentials = 'if exist "data\\secrets\\db.env" goto :alreadyinstalled'
         self.assertIn(guard, INSTALL)
+        self.assertIn(prior_credentials, INSTALL)
+        self.assertLess(INSTALL.index(prior_credentials), INSTALL.index("where docker"))
         self.assertLess(INSTALL.index(guard), INSTALL.index("where docker"))
         self.assertIn(":alreadyinstalled", INSTALL)
         self.assertIn("no installation attempted", INSTALL)
