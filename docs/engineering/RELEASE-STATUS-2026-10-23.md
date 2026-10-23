@@ -40,6 +40,13 @@ For source revision `b171902abb7bb61b31b27d54279cf72dd70d5eed`:
   artifact attestation or provider signature. Real Windows Docker Desktop/
   WSL2 hardware acceptance remains unverified.
 
+The evidence-record commit `96f6257` is documentation-only. A replacement
+image build for that newer documentation head was attempted with the unchanged
+Node SHA gate and failed three times inside Docker BuildKit; the same URL bytes
+and SHA passed on the host and in a disposable `docker run` container. The
+verified image/package above remains bound to `b171902`; no relabelled or
+unverified replacement is claimed.
+
 The canonical release blockers are GitHub issues [#12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
 [#35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35), and
 [#36](https://github.com/Frotan2/TOFEL-House-ERP/issues/36):

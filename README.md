@@ -50,6 +50,9 @@ restocking, and GL path. The local test ZIP is
 `TOEFL-House-ERP-Customer-ci-b171902abb7b.zip` (SHA-256
 `47e4cec35374229ea50d68fd41418310833d10f17ee8b331d7b12c6abefe7b99`), marked
 `TEST PACKAGE - NO REAL DATA`; it is not a published customer download.
+The package is bound to the application revision named above; a later
+documentation-only evidence commit is not being relabelled into that image
+after the provider BuildKit checksum gate rejected its replacement build.
 
 The remaining release gates are [Owner Windows and recovery #12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
 [hands-on book cashier acceptance #35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35),
