@@ -4979,11 +4979,34 @@ def main():
             unl=desk_get('teacher_unlinked','teacher.work')
             assert unl['desk']=='th-teacher-desk' and desk_sections(unl)=={'classes','today'}
             assert 'No instructor link on this login' in json.dumps(unl)
-            # plain-language promise (U5): no raw doctype plumbing in payloads
+            # Native ERPNext book-shop routes are explicit navigation,
+            # not leaked backend jargon in the staff's operational facts.
+            # They must be checked separately instead of weakening U5's
+            # no-raw-DocType rule for the rest of every desk response.
+            assert 'book-shop' not in desk_sections(fin),(
+                'audience-only Finance Manager must not receive acting shortcuts')
+            shop=next((s for s in finoff['sections'] if s['id']=='book-shop'),None)
+            assert shop and shop['kind']=='links',(
+                'acting finance staff must see their native book-shop links',shop)
+            routes={entry['slug'] for entry in shop['items']}
+            assert {'List/Sales Invoice','List/Payment Entry'}<=routes,routes
+            assert routes<={
+                'List/Item','List/Item Price','List/Bin','List/Stock Entry',
+                'List/Sales Invoice','List/Payment Entry',
+            },routes
+            assert not routes.intersection({
+                'List/Bin','List/Stock Entry','List/Item Price',
+            }),('cashier obtained stock/master shortcuts without native rights',routes)
+            # Plain-language U5 remains strict for every non-navigation
+            # section; don't make an arbitrary exception for raw doctypes
+            # in student, money, compensation or correction fact projections.
             for name,payload in (('reception',rec),('academic',aca),('finance',fin),
                                  ('finance-officer',finoff),
                                  ('operations',ops),('owner',own),('setup',setu),('teacher',tea)):
-                text=json.dumps(payload)
+                operational_sections=[
+                    sec for sec in payload['sections'] if sec['id']!='book-shop'
+                ]
+                text=json.dumps(operational_sections)
                 for word in BANNED_PLUMBING:
                     assert word not in text,(name,word)
             # registry: server-decided, per audience
