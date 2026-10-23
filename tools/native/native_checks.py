@@ -1,6 +1,7 @@
 """Real native DB/controller/HTTP acceptance on isolated synthetic sites only."""
 import concurrent.futures
 from datetime import timedelta
+import hashlib
 import json
 import os
 import re
@@ -10,6 +11,63 @@ import time
 import traceback
 from unittest.mock import patch
 from urllib.parse import quote
+
+
+ROLE_PAGE_API = '/api/method/frappe.desk.desk_page.getpage'
+ROLE_PAGE_CSS = '/assets/toefl_house/css/th_design_system.css'
+ROLE_PAGE_CASES = {
+    'th-reception-desk': ('receptionist', 'toefl_house.desk.reception.work'),
+    'th-academic-desk': ('academic_manager', 'toefl_house.desk.academic.work'),
+    'th-finance-desk': ('finance_manager', 'toefl_house.desk.finance.work'),
+    'th-operations-desk': ('general_manager', 'toefl_house.desk.operations.work'),
+    'th-owner-cockpit': ('course_owner', 'toefl_house.desk.owner.cockpit'),
+    'th-academic-setup': ('course_owner', 'toefl_house.desk.setup.work'),
+    'th-teacher-desk': ('teacher_one', 'toefl_house.desk.teacher.work'),
+    'th-configuration': ('course_owner', 'toefl_house.desk.configuration.work'),
+}
+
+
+def role_page_identity(session, base, expected_user):
+    response = session.get(base + '/api/method/frappe.auth.get_logged_user', timeout=30, allow_redirects=False)
+    assert response.status_code == 200, ('Page API identity', response.status_code)
+    assert response.json().get('message') == expected_user, ('Page API identity mismatch', expected_user)
+
+
+def role_page_api_observation(session, base, page_name, user):
+    """Qualify the HTTP getpage wrapper, including its top-level docs/assets."""
+    response = session.get(base + ROLE_PAGE_API, params={'name': page_name},
+                           headers={'Accept': 'application/json'}, timeout=30, allow_redirects=False)
+    assert response.status_code == 200, (page_name, user, response.status_code, response.text[:300])
+    payload = response.json()
+    assert not any(payload.get(key) for key in ('exc_type', 'exception', 'exc')), (page_name, 'Page API exception')
+    docs = payload.get('docs')
+    assert isinstance(docs, list) and len(docs) == 1, (page_name, 'getpage must return top-level docs')
+    page = docs[0]
+    assert isinstance(page, dict), (page_name, 'invalid Page document')
+    assert page.get('doctype') == 'Page' and page.get('name') == page_name, (page_name, 'wrong Page returned')
+    assert page.get('page_name') == page_name, (page_name, 'wrong page_name returned')
+    script = page.get('script')
+    assert isinstance(script, str) and script.strip(), (page_name, 'empty Page script')
+    for marker in ('toefl_house.role_desks', 'frappe.pages', 'on_page_load',
+                   page_name, ROLE_PAGE_CASES[page_name][1], ROLE_PAGE_CSS):
+        assert marker in script, (page_name, 'missing Page script marker', marker)
+    return {'method': 'GET', 'endpoint': ROLE_PAGE_API, 'page': page_name, 'user': user,
+            'http_status': response.status_code,
+            'docs': [{key: page[key] for key in ('doctype', 'name', 'page_name', 'script')}]}
+
+
+def role_page_css_observation(session, base, user, expected_css):
+    response = session.get(base.rstrip('/') + ROLE_PAGE_CSS, timeout=30, allow_redirects=False)
+    assert response.status_code == 200, ('role Page CSS', response.status_code, response.text[:200])
+    content_type = response.headers.get('Content-Type', '').split(';', 1)[0].strip().lower()
+    assert content_type == 'text/css', ('role Page CSS content type', content_type)
+    assert response.content == expected_css, 'Delivered CSS differs from the installed app asset'
+    body = response.content.decode('utf-8')
+    assert all(selector in body for selector in ('.th-page', '.th-section')), 'Missing role Page CSS selectors'
+    assert '<html' not in body.lower() and '<!doctype' not in body.lower(), 'HTML returned instead of CSS'
+    return {'method': 'GET', 'endpoint': ROLE_PAGE_CSS, 'user': user, 'http_status': response.status_code,
+            'content_type': content_type, 'body': body, 'sha256': hashlib.sha256(response.content).hexdigest(),
+            'installed_sha256': hashlib.sha256(expected_css).hexdigest()}
 
 
 def main():
@@ -5292,6 +5350,71 @@ def main():
             frappe.db.commit()
             return observed
         check('role-desk-hosted-qualification',traced(desk_qualification))
+        # Separate receipts preserve the projection checks above while proving
+        # the browser-facing getpage HTTP wrapper for every native role Page.
+        def qualify_role_page(page_name):
+            label = ROLE_PAGE_CASES[page_name][0]
+            with login(label) as session:
+                role_page_identity(session, base, users[label])
+                return role_page_api_observation(session, base, page_name, users[label])
+        check('role-page-api-th-reception-desk', lambda: qualify_role_page('th-reception-desk'))
+        check('role-page-api-th-academic-desk', lambda: qualify_role_page('th-academic-desk'))
+        check('role-page-api-th-finance-desk', lambda: qualify_role_page('th-finance-desk'))
+        check('role-page-api-th-operations-desk', lambda: qualify_role_page('th-operations-desk'))
+        check('role-page-api-th-owner-cockpit', lambda: qualify_role_page('th-owner-cockpit'))
+        check('role-page-api-th-academic-setup', lambda: qualify_role_page('th-academic-setup'))
+        check('role-page-api-th-teacher-desk', lambda: qualify_role_page('th-teacher-desk'))
+        check('role-page-api-th-configuration', lambda: qualify_role_page('th-configuration'))
+
+        def role_page_authorization():
+            controls, denials = [], []
+            labels = tuple(dict.fromkeys(case[0] for case in ROLE_PAGE_CASES.values())) + ('outsider', 'Guest')
+            for label in labels:
+                user = 'Guest' if label == 'Guest' else users[label]
+                session = requests.Session() if label == 'Guest' else login(label)
+                with session:
+                    session.headers['Host'] = 'placement-test.localhost'
+                    if label != 'Guest':
+                        role_page_identity(session, base, user)
+                    for page_name, (audience, _) in ROLE_PAGE_CASES.items():
+                        if audience == label:
+                            observed = role_page_api_observation(session, base, page_name, user)
+                            controls.append({'page': page_name, 'user': user, 'http_status': 200,
+                                             'returned_page': observed['docs'][0]['name']})
+                            continue
+                        response = session.get(base + ROLE_PAGE_API, params={'name': page_name},
+                                               headers={'Accept': 'application/json'}, timeout=30, allow_redirects=False)
+                        payload = response.json()
+                        # A missing route, CSRF error or asset exception is not
+                        # evidence that the Page audience gate worked.
+                        assert response.status_code == 403 and payload.get('exc_type') == 'PermissionError', (
+                            page_name, user, response.status_code, payload.get('exc_type'))
+                        assert not payload.get('docs') and not payload.get('script'), (page_name, user, 'denied assets leaked')
+                        denials.append({'page': page_name, 'user': user, 'http_status': response.status_code,
+                                        'exc_type': payload['exc_type'], 'docs': payload.get('docs') or []})
+            # Acting roles and an unlinked Instructor must still load their
+            # authorized Page shell; projection identity is a separate check.
+            for label, page_name in (('academic_scheduler', 'th-academic-desk'),
+                                     ('finance_officer', 'th-finance-desk'),
+                                     ('teacher_two', 'th-teacher-desk'),
+                                     ('teacher_unlinked', 'th-teacher-desk')):
+                with login(label) as session:
+                    role_page_identity(session, base, users[label])
+                    observed = role_page_api_observation(session, base, page_name, users[label])
+                    controls.append({'page': page_name, 'user': users[label], 'http_status': 200,
+                                     'returned_page': observed['docs'][0]['name']})
+            return {'method': 'GET', 'endpoint': ROLE_PAGE_API, 'controls': controls, 'denials': denials}
+        check('role-page-api-authorization', traced(role_page_authorization))
+
+        def role_page_css_delivery():
+            # Gunicorn alone does not serve /assets. An assembled-image static
+            # frontend may be supplied explicitly; there is no local-file fallback.
+            asset_base = os.environ.get('PLACEMENT_ASSET_BASE_URL', base)
+            expected_css = Path(frappe.get_app_path('toefl_house', 'public', 'css', 'th_design_system.css')).read_bytes()
+            with login('course_owner') as session:
+                role_page_identity(session, base, users['course_owner'])
+                return role_page_css_observation(session, asset_base, users['course_owner'], expected_css)
+        check('role-page-css-delivery', traced(role_page_css_delivery))
         # ---- Branch isolation: the multi-branch operating rule (P1). ----
         # A staff user who carries a native User Permission on Branch is
         # scoped to that branch on every surface: the desk projection, the

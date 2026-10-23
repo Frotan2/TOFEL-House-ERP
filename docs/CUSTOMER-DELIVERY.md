@@ -12,6 +12,9 @@ The customer receives a dedicated **TOEFL-House-ERP-Customer-...** folder
 prepared by the provider. The provider has already built the application
 image and included it in the delivery, so the customer does not use Git,
 clone a repository, type commands or build Frappe from source.
+The provider also compiles the browser bundles. Startup restores the compiled
+manifest and assets from the image; first boot still installs native database
+records and runs migrations, which must be timed during customer acceptance.
 
 1. Use a compatible 64-bit Windows 10/11 computer with enough free disk space
    for Docker Desktop, the application image, the database and backups.
@@ -100,6 +103,14 @@ The ZIP is the customer download; the included manifest binds the exact source
 revision, image labels, image hash, and dependency matrix. Verify the
 attestation separately. A package that has only a bare tar/hash pair is not a
 verified customer release.
+
+Both packagers require the selected checkout HEAD and clean customer inputs
+to match the requested revision. The saved archive, manifest, imported tag,
+and Compose image all use `toefl-house-erp-app:local`. Verification reads the
+actual archive config before import and checks the loaded image's identity
+before startup. The manifest checksum is mandatory. CI refuses a ZIP at or
+above GitHub's 2 GiB per-file release limit; the runtime image excludes build
+checkouts and intermediate build layers to keep the single download viable.
 
 The SHA-256 and manifest sidecars catch corruption and bind the package
 contents. They do **not** replace the provider/GitHub attestation: a malicious

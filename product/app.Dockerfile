@@ -6,7 +6,7 @@
 # commit-pinned and rev-parse verified exactly like the hosted qualification
 # runners; upstream code is never patched.
 ARG PYTHON_VERSION=3.14.7
-FROM python:${PYTHON_VERSION}-slim-bookworm
+FROM python:${PYTHON_VERSION}-slim-bookworm AS product-base
 
 ARG NODE_VERSION=24.21.0
 ARG YARN_VERSION=1.22.22
@@ -62,6 +62,8 @@ ENV PATH=/build/tools/bin:$PATH
 RUN python -m venv /build/tools \
     && /build/tools/bin/pip install --no-cache-dir \
       "frappe-bench==${BENCH_VERSION}" "uv==${UV_VERSION}"
+
+FROM product-base AS builder
 
 # Commit-pinned upstream source checkouts (same fetch/verify sequence as
 # tools/foundation/runtime_install.py and tools/native/run_native.py).
@@ -128,11 +130,6 @@ COPY product/perf_baseline.py /product/perf_baseline.py
 # The Windows preflight normalizes existing worktrees before docker build;
 # this independent in-image check makes bypassing that preflight fail closed.
 RUN python3 -c 'from pathlib import Path; import codecs; suffixes={".py",".sh",".js",".json",".css",".md",".txt",".toml",".yaml",".yml",".html",".xml",".csv",".svg",".jinja",".jinja2"}; roots=(Path("/build/owned"),Path("/product")); files=[p for root in roots for p in root.rglob("*") if p.is_file() and p.suffix.lower() in suffixes]; bom=(codecs.BOM_UTF8,codecs.BOM_UTF16_LE,codecs.BOM_UTF16_BE,codecs.BOM_UTF32_LE,codecs.BOM_UTF32_BE); bad=[str(p) for p in files if b"\r" in p.read_bytes() or p.read_bytes().startswith(bom)]; [print("LF/BOM contract violation: "+p) for p in bad]; assert Path("/product/entrypoint.sh").read_bytes().startswith(b"#!/bin/sh\n"), "entrypoint shebang is not LF"; assert Path("/product/activate.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "activate shebang is not LF"; assert Path("/product/bootstrap.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "bootstrap shebang is not LF"; assert Path("/product/restore.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "restore shebang is not LF"; assert Path("/product/backup.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "backup shebang is not LF"; assert Path("/product/perf_baseline.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "performance shebang is not LF"; raise SystemExit(bool(bad))'
-ARG TOEFL_HOUSE_SOURCE_REVISION=unversioned
-ARG TOEFL_HOUSE_RELEASE_VERSION=unversioned
-LABEL org.toefl-house.source-eol="lf-v1" \
-      org.toefl-house.source-revision="${TOEFL_HOUSE_SOURCE_REVISION}" \
-      org.toefl-house.release-version="${TOEFL_HOUSE_RELEASE_VERSION}"
 RUN chmod +x /product/entrypoint.sh /product/activate.py
 
 # Local bench: frappe from the pinned source (not re-resolved), then the rest.
@@ -198,6 +195,24 @@ RUN python3 /product/secure_markdown.py /home/frappe/bench/apps/frappe
 # docs/engineering/evidence/sec-deps-01/advisory-delta-2026-10-09/README.md
 RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GHSA-r543-q48m-4c9j precondition violated" >&2; exit 1; fi
 
+# Compile all browser bundles on the provider. Customer startup restores this
+# seed and verifies the manifest; it never invokes a frontend compiler.
+RUN cd /home/frappe/bench && bench build \
+    && /home/frappe/bench/env/bin/python -c 'import sys; sys.path.insert(0, "/product"); from bootstrap import export_prebuilt_assets; export_prebuilt_assets()' \
+    && yarn cache clean && rm -rf /home/frappe/.cache
+
+# Copy only installed runtime trees. Build checkouts and intermediate chown /
+# package-install layers otherwise inflate docker save beyond release limits.
+# The common base retains native backup/print tools and the verified Node
+# runtime used by Socket.IO; no runtime dependency is stripped here.
+FROM product-base AS runtime
+RUN useradd --create-home --home-dir /home/frappe --shell /bin/bash frappe
+COPY --from=builder --chown=frappe:frappe /home/frappe/bench /home/frappe/bench
+COPY --from=builder /product /product
+COPY --from=builder /build/sites-seed /build/sites-seed
+COPY --from=builder /build/assets-seed /build/assets-seed
+USER frappe
+
 # The compose bind mount (./data/sites) hides the bench's own sites/ files on a
 # fresh install; bootstrap.py restores them from /build/sites-seed before the
 # first bench call (bench resolves installed apps from sites/apps.txt).
@@ -205,6 +220,11 @@ RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GH
 # created them: they are first-build-only footprint, never runtime state.
 
 ENV BENCH_DIR=/home/frappe/bench
+ARG TOEFL_HOUSE_SOURCE_REVISION=unversioned
+ARG TOEFL_HOUSE_RELEASE_VERSION=unversioned
+LABEL org.toefl-house.source-eol="lf-v1" \
+      org.toefl-house.source-revision="${TOEFL_HOUSE_SOURCE_REVISION}" \
+      org.toefl-house.release-version="${TOEFL_HOUSE_RELEASE_VERSION}"
 WORKDIR /home/frappe/bench
 EXPOSE 8000 9000
 ENTRYPOINT ["/product/entrypoint.sh"]

@@ -74,14 +74,14 @@ jobs:
                   }
                   if (args[0] == "load") return 0;
                   if (args[0] == "compose") return 0;
-                  if (args[0] == "image") {
-                      string revision = Environment.GetEnvironmentVariable("TH_SYNTHETIC_REVISION") ?? "";
-                      string version = Environment.GetEnvironmentVariable("TH_SYNTHETIC_VERSION") ?? "";
-                      Console.WriteLine("{\"org.toefl-house.source-eol\":\"lf-v1\",\"org.toefl-house.source-revision\":\"" + revision + "\",\"org.toefl-house.release-version\":\"" + version + "\"}");
+                  if (args[0] == "image" && args.Length >= 3 && args[1] == "inspect") {
+                      if (args[2] != "toefl-house-erp-app:local") return 1;
+                      Console.WriteLine(Environment.GetEnvironmentVariable("TH_SYNTHETIC_INSPECT_JSON"));
                       return 0;
                   }
-                  if (args[0] == "save" && args.Length >= 3) {
-                      File.WriteAllText(args[2], "SYNTHETIC_IMAGE_FOR_TESTING");
+                  if (args[0] == "save" && args.Length == 4 && args[1] == "--output") {
+                      if (args[3] != "toefl-house-erp-app:local") return 1;
+                      File.Copy(Environment.GetEnvironmentVariable("TH_SYNTHETIC_IMAGE_ARCHIVE"), args[2]);
                       return 0;
                   }
                   if (args[0] == "inspect") {
@@ -96,8 +96,24 @@ jobs:
           Add-Type -TypeDefinition $fakeDocker -OutputAssembly (Join-Path $fakeDir 'docker.exe') -OutputType ConsoleApplication
           $env:PATH = "$fakeDir;$env:PATH"
           $env:TH_SYNTHETIC_VOLUME_EXISTS = '0'
-          $env:TH_SYNTHETIC_REVISION = ('a' * 40)
+          $env:TH_SYNTHETIC_REVISION = (& git --no-optional-locks rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic source revision could not be read.' }
           $env:TH_SYNTHETIC_VERSION = 'ci-windows-package'
+          $env:TH_SYNTHETIC_IMAGE_ARCHIVE = Join-Path $env:RUNNER_TEMP 'synthetic-docker-save.tar'
+          $labels = [ordered]@{
+            'org.toefl-house.source-eol' = 'lf-v1'
+            'org.toefl-house.source-revision' = $env:TH_SYNTHETIC_REVISION
+            'org.toefl-house.release-version' = $env:TH_SYNTHETIC_VERSION
+          }
+          $env:TH_SYNTHETIC_LABELS = $labels | ConvertTo-Json -Compress
+          $configDigest = (& python -c "from pathlib import Path; import json, os; from tests.foundation.test_customer_package_manifest import write_image_archive; print(write_image_archive(Path(os.environ['TH_SYNTHETIC_IMAGE_ARCHIVE']), json.loads(os.environ['TH_SYNTHETIC_LABELS'])))").Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic Docker archive creation failed.' }
+          $env:TH_SYNTHETIC_INSPECT_JSON = [ordered]@{
+            # Containerd-backed Docker can expose a manifest digest as .Id.
+            Id = 'sha256:' + ('c' * 64)
+            RepoTags = @('toefl-house-erp-app:local')
+            Config = @{ Labels = $labels }
+          } | ConvertTo-Json -Depth 6 -Compress
           $target = Join-Path $env:RUNNER_TEMP "Customer Kits"
           New-Item -ItemType Directory -Path $target -Force | Out-Null
           & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "product/windows/Prepare Customer Package.ps1" -Destination $target -Version $env:TH_SYNTHETIC_VERSION -SourceRevision $env:TH_SYNTHETIC_REVISION
@@ -300,10 +316,51 @@ jobs:
           Write-Host "Missing-credential preservation check passed."
           $tar = Join-Path $kit 'product/release/toefl-house-erp-app.tar'
           $sha = "$tar.sha256"
-          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File 'product/windows/Verify Package Image.ps1' -Archive $tar -Checksum $sha
-          if ($LASTEXITCODE -ne 0) { throw "Valid synthetic package was rejected." }
+          $manifest = Join-Path $kit 'product/release/release-manifest.json'
+          function Assert-PackageVerification {
+            param([bool]$ShouldPass, [switch]$Loaded)
+            $verifyArgs = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+              '-File', 'product/windows/Verify Package Image.ps1', '-Archive', $tar,
+              '-Checksum', $sha, '-Manifest', $manifest)
+            if ($Loaded) { $verifyArgs += '-VerifyLoadedImage' }
+            $previousPreference = $ErrorActionPreference
+            try {
+              $ErrorActionPreference = 'Continue'
+              $verifyOutput = @(& powershell.exe @verifyArgs 2>&1)
+              $verifyExit = $LASTEXITCODE
+            } finally { $ErrorActionPreference = $previousPreference }
+            if (($verifyExit -eq 0) -ne $ShouldPass) {
+              throw ('Unexpected package verification result: ' + ($verifyOutput | Out-String))
+            }
+          }
+          Assert-PackageVerification $true
+          Assert-PackageVerification $true -Loaded
+          $originalManifest = [System.IO.File]::ReadAllBytes($manifest)
+          try {
+            [System.IO.File]::AppendAllText($manifest, ' ')
+            Assert-PackageVerification $false
+            Assert-PackageVerification $false -Loaded
+          } finally { [System.IO.File]::WriteAllBytes($manifest, $originalManifest) }
+          $manifestChecksum = "$manifest.sha256"
+          $originalManifestChecksum = [System.IO.File]::ReadAllBytes($manifestChecksum)
+          try {
+            Remove-Item -LiteralPath $manifestChecksum
+            Assert-PackageVerification $false
+            [System.IO.File]::WriteAllText($manifestChecksum, 'not-a-digest')
+            Assert-PackageVerification $false
+          } finally { [System.IO.File]::WriteAllBytes($manifestChecksum, $originalManifestChecksum) }
+          $originalInspect = $env:TH_SYNTHETIC_INSPECT_JSON
+          try {
+            $wrongImage = $originalInspect | ConvertFrom-Json
+            $wrongImage.Id = 'sha256:' + ('0' * 64)
+            $env:TH_SYNTHETIC_INSPECT_JSON = $wrongImage | ConvertTo-Json -Depth 6 -Compress
+            Assert-PackageVerification $true -Loaded
+            $wrongImage = $originalInspect | ConvertFrom-Json
+            $wrongImage.Config.Labels.'org.toefl-house.source-revision' = 'b' * 40
+            $env:TH_SYNTHETIC_INSPECT_JSON = $wrongImage | ConvertTo-Json -Depth 6 -Compress
+            Assert-PackageVerification $false -Loaded
+          } finally { $env:TH_SYNTHETIC_INSPECT_JSON = $originalInspect }
           Add-Content -LiteralPath $tar -Value 'TAMPERED'
-          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File 'product/windows/Verify Package Image.ps1' -Archive $tar -Checksum $sha
-          if ($LASTEXITCODE -eq 0) { throw "Tampered image was accepted." }
-          Write-Host "Package allowlist, valid checksum and corruption rejection passed."
+          Assert-PackageVerification $false
+          Write-Host "Package allowlist, manifest/image integrity and loaded identity checks passed."
           exit 0

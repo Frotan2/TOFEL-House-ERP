@@ -153,6 +153,9 @@ services:
     # Digest pinned: MariaDB 11.8.9 (see foundation-version-matrix.json).
     image: mariadb@sha256:2d2f4095530294735a857cfe22bb101e19b0849b416911c796ec4aa81b164a62
     container_name: toefl-house-erp-db
+    # MariaDB needs time to flush Windows-backed storage before normal Stop.
+    # Docker's 10-second default forced SIGKILL in the disposable rehearsal.
+    stop_grace_period: 2m
     env_file:
       - ./data/secrets/db.env
     environment:

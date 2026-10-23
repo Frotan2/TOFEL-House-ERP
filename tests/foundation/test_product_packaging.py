@@ -1147,16 +1147,17 @@ class BootstrapLogicContract(unittest.TestCase):
         self.assertLess(entrypoint.index("ensure_web_assets; ensure_web_assets()"),
                         entrypoint.index("exec /home/frappe/bench/env/bin/gunicorn"))
 
-    def test_web_asset_recovery_runs_one_native_build_after_incomplete_tree(self):
+    def test_web_asset_recovery_restores_provider_seed_without_compilation(self):
         from unittest.mock import patch
-        with patch.object(bootstrap, "ensure_built_assets",
-                          side_effect=[RuntimeError("incomplete"), ["education"]]) as verify:
+        with patch.object(bootstrap, "ensure_built_assets", return_value=["education"]) as verify:
             with patch.object(bootstrap, "run_bench") as build, \
+                 patch.object(bootstrap, "restore_prebuilt_assets") as restore, \
                  patch.object(bootstrap, "verify_hrms_editor") as security:
                 self.assertEqual(bootstrap.ensure_web_assets(), ["education"])
-                self.assertEqual(security.call_count, 2)
-        self.assertEqual(verify.call_count, 2)
-        build.assert_called_once_with(["build"], cwd=bootstrap.BENCH_DIR)
+                security.assert_called_once()
+                restore.assert_called_once()
+        verify.assert_called_once()
+        build.assert_not_called()
 
     def test_empty_bind_mount_is_seeded_before_first_bench_call(self):
         # Regression (product-image run 36750900604): the empty ./data/sites

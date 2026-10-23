@@ -23,11 +23,9 @@ Steps, in order (mirrors the operator/hosted sequence):
 6. Migrate (twice, hosted-parity; the second replay verifies idempotence).
 7. Initialize the native site encryption key (the same lazy native mechanism
    the app's own after_install hook uses) so every later backup carries it.
-8. Build assets when the sites/assets tree is absent (first boot only; the
-   build context bakes no sites tree, the bind-mounted host dir starts empty),
-   then merge every app's public/ tree into sites/assets/<app>/ whenever
-   anything from a build is missing (first boot, crashed mid-build volume, or
-   a recreated container from an updated image). `bench build` leaves the
+8. Restore the provider-built asset manifest into the persistent sites volume,
+   then merge every app's compiled public/ tree into sites/assets/<app>/ when
+   missing. The customer never compiles assets. Provider `bench build` leaves the
    built per-app bundles in the app's public/dist/ while the
    sites/assets/assets.json manifest already references them — without this
    sync the static root 404s on the hashed bundles and login silently breaks.
@@ -70,6 +68,7 @@ REDIS_URLS = {
 }
 SERVICE_ENDPOINTS = (("db", 3306), ("redis-queue", 6379), ("redis-cache", 6379))
 SITES_SEED = Path(os.environ.get("SITES_SEED", "/build/sites-seed"))
+ASSETS_SEED = Path(os.environ.get("ASSETS_SEED", "/build/assets-seed"))
 # Image-derived app registry: always refreshed so an updated image's apps are
 # visible. common_site_config.json holds runtime settings: seeded only once.
 SEED_REFRESHED = ("apps.txt", "apps.json")
@@ -493,23 +492,76 @@ def verify_hrms_editor(hrms_dir: Path) -> None:
     verify(hrms_dir)
 
 
-def ensure_web_assets() -> list[str]:
-    """Repair one incomplete static tree with a native Bench rebuild, then verify.
+def export_prebuilt_assets(sites_dir: Path = SITES_DIR,
+                          apps_dir: Path | None = None,
+                          seed_dir: Path = ASSETS_SEED) -> None:
+    """Provider build only: save manifests/global assets, without duplicate apps.
 
-    Bootstrap normally completes the build before the web service starts. A
-    container restart or interrupted/cold-volume race may still leave a valid
-    manifest with missing hashed files; give the pinned native build one safe,
-    idempotent recovery attempt before failing the web startup closed.
+    Per-app compiled bundles remain in each app's public directory and are
+    restored by ensure_built_assets. No site database/configuration is exported.
     """
+    apps_dir = apps_dir or BENCH_DIR / "apps"
+    if not assets_present(sites_dir):
+        raise RuntimeError("provider asset build is incomplete")
+    ensure_built_assets(sites_dir, apps_dir)
+    seed_dir.mkdir(parents=True, exist_ok=False)
+    app_names = {path.name for path in apps_dir.iterdir() if path.is_dir()}
+    for entry in (sites_dir / "assets").iterdir():
+        if entry.name in app_names:
+            continue
+        if entry.is_symlink():
+            raise RuntimeError("provider global assets may not contain links")
+        target = seed_dir / entry.name
+        if entry.is_dir():
+            shutil.copytree(entry, target)
+        elif entry.is_file():
+            shutil.copy2(entry, target)
+
+
+def restore_prebuilt_assets(sites_dir: Path = SITES_DIR,
+                            seed_dir: Path = ASSETS_SEED,
+                            apps_dir: Path | None = None) -> None:
+    """Refresh provider manifests without changing any site, secret or database."""
+    if not ((seed_dir / "assets.json").is_file()
+            and (seed_dir / "js").is_dir()
+            and (seed_dir / "css").is_dir()):
+        raise RuntimeError("prebuilt assets are missing; obtain a complete provider image")
+    assets = sites_dir / "assets"
+    if assets.is_symlink():
+        raise RuntimeError("served assets root may not be a link")
+    assets.mkdir(parents=True, exist_ok=True)
+    for entry in seed_dir.iterdir():
+        target = assets / entry.name
+        if entry.is_symlink() or target.is_symlink():
+            raise RuntimeError("global asset seed or target may not be a link")
+        if entry.is_dir():
+            shutil.copytree(entry, target, dirs_exist_ok=True)
+        elif entry.is_file():
+            shutil.copy2(entry, target)
+    # Match native bench setup_assets: app aliases point at the compiled
+    # public trees in the image. This avoids copying whole node_modules trees
+    # through Windows file sharing during first boot. Existing physical trees
+    # are preserved and reconciled by ensure_built_assets below.
+    apps_dir = apps_dir or BENCH_DIR / "apps"
+    if apps_dir.is_dir():
+        for app in sorted(path for path in apps_dir.iterdir() if path.is_dir()):
+            public = _app_public(app)
+            target = assets / app.name
+            if public is None or target.exists() or target.is_symlink():
+                continue
+            try:
+                target.symlink_to(public.resolve(), target_is_directory=True)
+            except OSError:
+                # Non-Linux test hosts can deny symlink creation. The existing
+                # verified public-tree reconciliation remains the fallback.
+                pass
+
+
+def ensure_web_assets() -> list[str]:
+    """Recover from the immutable provider assets before serving requests."""
     verify_hrms_editor(BENCH_DIR / "apps/hrms")
-    try:
-        return ensure_built_assets()
-    except RuntimeError:
-        print("[toefl-house-erp] static assets incomplete; rebuilding once before web startup",
-              file=sys.stderr, flush=True)
-        run_bench(["build"], cwd=BENCH_DIR)
-        verify_hrms_editor(BENCH_DIR / "apps/hrms")
-        return ensure_built_assets()
+    restore_prebuilt_assets()
+    return ensure_built_assets()
 
 
 def _credentials_content(site: str, admin_password: str) -> str:
@@ -704,12 +756,10 @@ def bootstrap(site: str = SITE_NAME, *, log=print) -> dict:
     actions.append("encryption-key-initialized")
 
     verify_hrms_editor(BENCH_DIR / "apps/hrms")
+    restore_prebuilt_assets()
     if not assets_present(SITES_DIR):
-        run_bench(["build"], cwd=BENCH_DIR)
-        verify_hrms_editor(BENCH_DIR / "apps/hrms")
-        actions.append("assets-built")
-    else:
-        actions.append("assets-present")
+        raise RuntimeError("provider assets could not be restored")
+    actions.append("assets-prebuilt")
 
     # `bench build` leaves the built per-app bundles in the app's public/ tree
     # while sites/assets/assets.json already references them; make the static

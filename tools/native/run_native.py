@@ -240,8 +240,13 @@ def main():
             for name in ('erpnext','education','payments','hrms','foundation_security','toefl_house'):bench('install-'+site+'-'+name,'--site',site,'install-app',name)
             for key in ('allow_tests','toefl_house_synthetic_only','disable_website_cache'):bench('enable-'+site+'-'+key,'--site',site,'set-config',key,'1','--parse')
             bench('migrate-'+site,'--site',site,'migrate');bench('migrate-replay-'+site,'--site',site,'migrate')
+        run('setup-native-static-assets',
+            [benchdir/'env/bin/python', ROOT/'tools/native/native_wsgi.py', '--setup-assets', 'placement-test.localhost'],
+            benchdir/'sites')
         log=lab/'gunicorn.log';stream=log.open('w')
-        server=subprocess.Popen([str(benchdir/'env/bin/gunicorn'),'--bind','127.0.0.1:18000','--workers','2','frappe.app:application'],cwd=benchdir/'sites',env=env,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
+        server=subprocess.Popen([str(benchdir/'env/bin/gunicorn'),'--bind','127.0.0.1:18000','--workers','2',
+                                 '--pythonpath',str(ROOT/'tools/native'),'native_wsgi:application'],
+                                cwd=benchdir/'sites',env=env,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
         processes.append((server,stream,log))
         run('security-site-acceptance',
             [benchdir/'env/bin/python',ROOT/'tools/native/security_acceptance.py'],benchdir/'sites')
@@ -423,11 +428,14 @@ def main():
             old_server.wait(timeout=10)
         old_stream.close()
         (evidence/'gunicorn-before-restore-restart.txt').write_text(redact(old_log.read_text()))
+        run('setup-restored-native-static-assets',
+            [benchdir/'env/bin/python', ROOT/'tools/native/native_wsgi.py', '--setup-assets', restore_site],
+            restore_sites)
         restart_log = lab/'gunicorn-after-restore-restart.log'
         restart_stream = restart_log.open('w')
         server = subprocess.Popen(
             [str(benchdir/'env/bin/gunicorn'), '--bind', '127.0.0.1:18000',
-             '--workers', '2', 'frappe.app:application'],
+             '--workers', '2', '--pythonpath', str(ROOT/'tools/native'), 'native_wsgi:application'],
             cwd=restore_sites, env=env, stdout=restart_stream,
             stderr=subprocess.STDOUT, start_new_session=True)
         processes.append((server, restart_stream, restart_log))

@@ -3,7 +3,7 @@
 ## Decision
 
 **NO-GO / production authorization REJECTED.** The provider-side qualification
-now has a locally verified exact-head image and image-inclusive customer ZIP,
+has a locally built image and synthetic native workflow evidence,
 but no externally published download, real customer-machine acceptance, or
 Owner recovery ceremony is verified. Do not enter real student, payroll, or
 financial data.
@@ -19,7 +19,7 @@ For source revision `b171902abb7bb61b31b27d54279cf72dd70d5eed`:
 - The pinned Product image built successfully on the provider host. Its image
   manifest digest is
   `sha256:87d19595add86e09e9dc1e758d6b5896ce00b2b7fc60fd554d66970ea9d01524`.
-- The image-inclusive package
+- The image-inclusive package (subsequently withdrawn; see below)
   `TOEFL-House-ERP-Customer-ci-b171902abb7b.zip` passed manifest, sidecar,
   archive-integrity, allowlist, and identity checks. ZIP SHA-256:
   `47e4cec35374229ea50d68fd41418310833d10f17ee8b331d7b12c6abefe7b99`.
@@ -46,6 +46,33 @@ in `d5`; the canonical matrix and downloaded file end in `d6`. The checksum
 gate correctly rejected those arguments. The earlier attribution to BuildKit
 was incorrect. Build inputs must be read directly from the canonical matrix.
 The verified image/package above remains bound to `b171902`.
+
+## Follow-up release audit
+
+The earlier ZIP integrity checks did not establish installer compatibility or
+release-host suitability. The `b171902` ZIP is **NOT DELIVERABLE**: its saved
+Docker archive carries `toefl-house-erp-app:ci`, whereas the installer consumes
+`:local`; its 2,803,979,202-byte ZIP also exceeds GitHub's under-2-GiB asset
+limit. Preserve it as historical engineering evidence only.
+
+Confirmed follow-up defects and remediation work:
+
+- Derive and check archive identity from the embedded Docker manifest/config,
+  use `:local` consistently, verify the manifest checksum, and verify the
+  imported image identity before Compose starts.
+- Reject oversized release assets before upload and reduce the runtime image
+  by excluding build checkouts/intermediate build layers.
+- Compile browser bundles on the provider and restore the provider manifest
+  at startup. An isolated restart reproduced missing CSS referenced by the
+  old manifest; startup must never need customer-side asset compilation.
+- Add explicit HTTP `frappe.desk.desk_page.getpage` receipts for every role
+  desk. The earlier 624 checks called the native Page loader in-process and
+  exercised desk projections over HTTP; those scopes do not prove HTTP Page
+  API delivery for all eight desks.
+
+These fixes require the new image, packaging, native, browser and Windows
+regressions to pass before their status can be marked qualified. The physical
+Owner/customer acceptance and production holds remain unchanged.
 
 The canonical release blockers are GitHub issues [#12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
 [#35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35), and

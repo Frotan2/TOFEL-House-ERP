@@ -12,10 +12,12 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import shutil
+import subprocess
 import sys
+import tarfile
 import zipfile
 
 
@@ -38,6 +40,10 @@ ALLOWED_FILES = (
 )
 HEX40 = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
 SAFE_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,95}$")
+MAX_RELEASE_ASSET_BYTES = 2 * 1024 ** 3
+IMAGE_TAG = "toefl-house-erp-app:local"
+METADATA_LIMIT = 4 * 1024 * 1024
+MATRIX_FILE = "docs/engineering/foundation-version-matrix.json"
 
 
 def sha256(path: Path) -> str:
@@ -62,8 +68,76 @@ def load_json(path: Path) -> dict:
     return value
 
 
+def archive_identity(path: Path, supplied_labels: dict) -> tuple[dict[str, str], str]:
+    """Bind the labels to a single saved image without extracting its files."""
+    try:
+        with tarfile.open(path, "r:*") as archive:
+            members = {}
+            for member in archive:
+                if member.name in members:
+                    raise ValueError(f"duplicate image archive member: {member.name}")
+                members[member.name] = member
+
+            def regular_member(name: str) -> tarfile.TarInfo:
+                if (not isinstance(name, str) or not name or "\\" in name
+                        or PurePosixPath(name).is_absolute()
+                        or ".." in PurePosixPath(name).parts):
+                    raise ValueError("invalid image archive member path")
+                member = members.get(name)
+                if member is None or not member.isfile():
+                    raise ValueError(f"missing or non-regular image archive member: {name}")
+                return member
+
+            def metadata(name: str) -> bytes:
+                member = regular_member(name)
+                if member.size > METADATA_LIMIT:
+                    raise ValueError(f"image metadata is too large: {name}")
+                handle = archive.extractfile(member)
+                if handle is None:
+                    raise ValueError(f"cannot read image metadata: {name}")
+                with handle:
+                    data = handle.read()
+                if len(data) != member.size:
+                    raise ValueError(f"truncated image metadata: {name}")
+                return data
+
+            manifest = json.loads(metadata("manifest.json"))
+            if not isinstance(manifest, list) or len(manifest) != 1 or not isinstance(manifest[0], dict):
+                raise ValueError("image archive must contain exactly one manifest image")
+            entry = manifest[0]
+            if entry.get("RepoTags") != [IMAGE_TAG]:
+                raise ValueError(f"image archive must contain only the {IMAGE_TAG} tag")
+            config_bytes = metadata(entry.get("Config"))
+            config_hash = hashlib.sha256(config_bytes).hexdigest()
+            if entry["Config"] not in (f"{config_hash}.json", f"blobs/sha256/{config_hash}"):
+                raise ValueError("image config filename does not match its SHA-256 digest")
+            config = json.loads(config_bytes)
+            if not isinstance(config, dict) or not isinstance(config.get("config"), dict):
+                raise ValueError("image config metadata is not an object")
+            labels = config["config"].get("Labels")
+            if (not isinstance(labels, dict)
+                    or not all(isinstance(k, str) and isinstance(v, str) for k, v in labels.items())):
+                raise ValueError("image config labels must be a string mapping")
+            if labels != supplied_labels:
+                raise ValueError("image archive config labels do not match the supplied image labels")
+            layers = entry.get("Layers")
+            rootfs = config.get("rootfs")
+            if (not isinstance(layers, list) or not isinstance(rootfs, dict)
+                    or rootfs.get("type") != "layers"
+                    or not isinstance(rootfs.get("diff_ids"), list)
+                    or len(rootfs["diff_ids"]) != len(layers)
+                    or not all(isinstance(digest, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
+                               for digest in rootfs["diff_ids"])):
+                raise ValueError("image layer metadata is malformed")
+            for layer in layers:
+                regular_member(layer)
+            return labels, "sha256:" + config_hash
+    except (tarfile.TarError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid Docker image archive metadata: {exc}") from exc
+
+
 def dependency_manifest(source: Path) -> tuple[str, list[dict[str, object]]]:
-    matrix_path = source / "docs/engineering/foundation-version-matrix.json"
+    matrix_path = source / MATRIX_FILE
     matrix_hash = sha256(matrix_path)
     components = matrix_path.read_text(encoding="utf-8")
     payload = json.loads(components)
@@ -77,6 +151,25 @@ def dependency_manifest(source: Path) -> tuple[str, list[dict[str, object]]]:
             if key in component
         })
     return matrix_hash, rows
+
+
+def verify_source_checkout(source: Path, revision: str) -> None:
+    """Use read-only Git commands; unrelated worktree changes are permitted."""
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", "--no-optional-locks", "-C", str(source), *args],
+            capture_output=True, text=True, check=False,
+        )
+        if result.returncode:
+            raise ValueError("cannot verify the selected source Git checkout")
+        return result.stdout.strip()
+
+    if Path(git("rev-parse", "--show-toplevel")).resolve() != source:
+        raise ValueError("selected source must be the Git checkout root")
+    if git("rev-parse", "HEAD").lower() != revision.lower():
+        raise ValueError("source checkout HEAD does not match the requested source revision")
+    if git("status", "--porcelain=v1", "--untracked-files=all", "--", *ALLOWED_FILES, MATRIX_FILE):
+        raise ValueError("source checkout has dirty package files or dependency matrix")
 
 
 def assert_inside(path: Path, root: Path, label: str) -> None:
@@ -101,12 +194,15 @@ def make_zip(package: Path) -> Path:
     archive = package.parent / f"{package.name}.zip"
     if archive.exists():
         raise ValueError(f"refusing to overwrite existing archive: {archive}")
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1) as handle:
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as handle:
         for path in sorted(package.rglob("*")):
             if path.is_symlink():
                 raise ValueError(f"package contains a link: {path}")
             if path.is_file():
                 handle.write(path, path.relative_to(package.parent).as_posix())
+    if archive.stat().st_size >= MAX_RELEASE_ASSET_BYTES:
+        raise ValueError("customer ZIP must be under GitHub's 2 GiB asset limit; reduce the provider image before publication")
+    write_utf8(archive.with_suffix(".zip.sha256"), sha256(archive) + "  " + archive.name + "\n")
     return archive
 
 
@@ -131,12 +227,23 @@ def create_package(
         raise ValueError("a regular prebuilt image archive is required")
     if source == output or output.is_relative_to(source):
         raise ValueError("output must be outside the source repository")
+    if (not isinstance(image_labels, dict)
+            or not all(isinstance(k, str) and isinstance(v, str) for k, v in image_labels.items())):
+        raise ValueError("supplied image labels must be a string mapping")
     if image_labels.get("org.toefl-house.source-eol") != "lf-v1":
         raise ValueError("image lacks org.toefl-house.source-eol=lf-v1")
     if image_labels.get("org.toefl-house.source-revision") != source_revision:
         raise ValueError("image source revision does not match the requested package revision")
     if image_labels.get("org.toefl-house.release-version") != version:
         raise ValueError("image release version does not match the requested package version")
+    archive_labels, config_digest = archive_identity(image_archive, image_labels)
+    verify_source_checkout(source, source_revision)
+    # Reject incomplete source inputs before creating even the output directory.
+    for relative in ALLOWED_FILES:
+        origin = source / relative
+        if not origin.is_file() or origin.is_symlink():
+            raise ValueError(f"required package component is missing or linked: {relative}")
+    matrix_hash, dependencies = dependency_manifest(source)
 
     package = output / f"TOEFL-House-ERP-Customer-{version}"
     if package.exists():
@@ -151,7 +258,6 @@ def create_package(
         archive_hash = sha256(archive)
         checksum = release / "toefl-house-erp-app.tar.sha256"
         write_utf8(checksum, archive_hash + "  toefl-house-erp-app.tar\n")
-        matrix_hash, dependencies = dependency_manifest(source)
         manifest = {
             "schema_version": 1,
             "product": "TOEFL House ERP",
@@ -160,11 +266,12 @@ def create_package(
             "production_authorization": "REJECT",
             "source_revision": source_revision,
             "image": {
-                "tag": "toefl-house-erp-app:customer",
+                "tag": IMAGE_TAG,
+                "config_digest": config_digest,
                 "archive": "product/release/toefl-house-erp-app.tar",
                 "sha256": archive_hash,
                 "size_bytes": archive.stat().st_size,
-                "labels": image_labels,
+                "labels": archive_labels,
             },
             "dependency_matrix_sha256": matrix_hash,
             "dependencies": dependencies,
@@ -228,7 +335,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({
             "package": str(package),
             "archive": str(archive),
-            "archive_sha256": manifest["image"]["sha256"],
+            "archive_sha256": sha256(archive),
+            "image_archive_sha256": manifest["image"]["sha256"],
             "version": manifest["version"],
             "source_revision": manifest["source_revision"],
         }, sort_keys=True))

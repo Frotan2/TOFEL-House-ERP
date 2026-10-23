@@ -36,8 +36,9 @@ capacities are entered by the owner as configuration and are never coded in.
 
 **NO-GO / production authorization REJECT.** Hosted engineering has qualified
 substantial native workflows and the guarded Windows source/package paths. A
-provider-side exact-head image-inclusive package and native runtime suite are
-now locally verified, but there is still no hosted customer download or real
+provider-side image and native runtime suite have been verified, but the first
+customer ZIP was withdrawn after installer-tag and hosting-size defects were
+found. There is still no hosted customer download or real
 Owner/customer-machine acceptance in this checkout. The provider/CI packaging
 path builds and labels the exact image, emits a versioned manifest/checksum
 package, attests it, and can publish a tagged release; permitted CI publication
@@ -48,8 +49,9 @@ The provider qualification for revision
 failures** and verified the native book stock, sale, payment, return, credit,
 restocking, and GL path. The local test ZIP is
 `TOEFL-House-ERP-Customer-ci-b171902abb7b.zip` (SHA-256
-`47e4cec35374229ea50d68fd41418310833d10f17ee8b331d7b12c6abefe7b99`), marked
-`TEST PACKAGE - NO REAL DATA`; it is not a published customer download.
+`47e4cec35374229ea50d68fd41418310833d10f17ee8b331d7b12c6abefe7b99`), now
+**WITHDRAWN / NOT DELIVERABLE** because its imported tag and release-file size
+do not satisfy the installer and hosting requirements.
 The package is bound to the application revision named above. Subsequent
 replacement builds were rejected because an operator command mistyped the
 Node hash; the repository pin and checksum gate were correct. See the audit

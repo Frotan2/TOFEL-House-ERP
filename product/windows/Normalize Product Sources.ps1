@@ -73,6 +73,9 @@ try {
             throw "Dockerfile ADD is not supported by the build-context normalizer; audit its source explicitly."
         }
         if ($line -notmatch "^COPY\s+") { continue }
+        # These audited multi-stage copies use only container paths. They do
+        # not add a host checkout input for this normalizer to follow.
+        if ($line -match '^COPY --from=builder(?: --chown=frappe:frappe)? /\S+ /\S+$') { continue }
         if ($line.EndsWith([string][char]92)) {
             throw "Multiline Dockerfile COPY syntax is unsupported; update the normalizer before building: $line"
         }

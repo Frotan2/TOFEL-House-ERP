@@ -7,6 +7,8 @@ name: Product image
 # This is not production authorization or real Windows/Owner key-custody proof.
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
     paths:
@@ -1654,7 +1656,8 @@ jobs:
           package_root="$RUNNER_TEMP/toefl-house-customer-package"
           image_archive="$RUNNER_TEMP/toefl-house-erp-app.tar"
           image_labels="$RUNNER_TEMP/toefl-house-image-labels.json"
-          docker save --output "$image_archive" toefl-house-erp-app:ci
+          docker tag toefl-house-erp-app:ci toefl-house-erp-app:local
+          docker save --output "$image_archive" toefl-house-erp-app:local
           docker image inspect toefl-house-erp-app:ci --format '{{json .Config.Labels}}' > "$image_labels"
           python3 tools/foundation/annotated_step.py "Customer package assembly" -- python3 tools/release/create_customer_package.py \
             --output "$package_root" \
@@ -1677,6 +1680,7 @@ jobs:
           name: TOEFL-House-ERP-Customer-${{ env.TOEFL_HOUSE_RELEASE_VERSION }}
           path: |
             ${{ runner.temp }}/toefl-house-customer-package/*.zip
+            ${{ runner.temp }}/toefl-house-customer-package/*.zip.sha256
             ${{ runner.temp }}/toefl-house-customer-package/*/product/release/release-manifest.json
             ${{ runner.temp }}/toefl-house-customer-package/*/product/release/release-manifest.json.sha256
           if-no-files-found: error
@@ -1689,7 +1693,8 @@ jobs:
           set -euo pipefail
           zip_path=$(find "$RUNNER_TEMP/toefl-house-customer-package" -maxdepth 1 -type f -name '*.zip' -print -quit)
           test -n "$zip_path"
-          gh release create "$GITHUB_REF_NAME" "$zip_path" \
+          test "$(stat -c %s "$zip_path")" -lt 2147483648
+          gh release create "$GITHUB_REF_NAME" "$zip_path" "$zip_path.sha256" \
             --repo "$GITHUB_REPOSITORY" \
             --title "TOEFL House ERP $GITHUB_REF_NAME" \
             --notes "Provider-built customer package. Verify the included release manifest and GitHub artifact attestation. This is a TEST PACKAGE - NO REAL DATA; production authorization remains REJECT until Owner acceptance gates pass."
@@ -1741,7 +1746,8 @@ jobs:
           $noBom = [System.Text.UTF8Encoding]::new($false)
           $dockerfilePath = Join-Path $PWD "product/app.Dockerfile"
           $dockerfileLines = [System.IO.File]::ReadAllLines($dockerfilePath, $strict)
-          $copyLines = @($dockerfileLines | Where-Object { $_.TrimStart() -match '^COPY\s+' })
+          # Container-to-container copies do not introduce host checkout files.
+          $copyLines = @($dockerfileLines | Where-Object { $_.TrimStart() -match '^COPY\s+(?!--from=)' })
           $copyMatches = [System.Text.RegularExpressions.Regex]::Matches(
             [System.IO.File]::ReadAllText($dockerfilePath), '(?m)^[ \t]*COPY[ \t]+(\S+)[ \t]+\S+[ \t]*$')
           if ($copyLines.Count -eq 0 -or $copyMatches.Count -ne $copyLines.Count) {

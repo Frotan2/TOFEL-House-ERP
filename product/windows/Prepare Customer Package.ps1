@@ -34,16 +34,17 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Start Docker Desktop on the packaging computer."
     }
-    $labelsJson = & docker image inspect "toefl-house-erp-app:local" --format '{{json .Config.Labels}}' 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $labelsJson) {
+    $imageJson = & docker image inspect "toefl-house-erp-app:local" --format '{{json .}}' 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $imageJson) {
         throw "Build and verify the application image before preparing a customer package."
     }
-    $labels = $labelsJson | ConvertFrom-Json
+    $image = $imageJson | ConvertFrom-Json
+    $labels = $image.Config.Labels
     if ($labels.'org.toefl-house.source-eol' -ne "lf-v1") {
         throw "The application image lacks the mandatory Linux source-line-ending contract."
     }
     if (-not $SourceRevision) {
-        $SourceRevision = (& git -C $repositoryRoot rev-parse HEAD 2>$null).Trim()
+        $SourceRevision = (& git --no-optional-locks -C $repositoryRoot rev-parse HEAD 2>$null).Trim()
     }
     if ($SourceRevision -notmatch '^[0-9a-fA-F]{40}$') {
         throw "Provide a full source commit SHA; the package must be bound to an exact revision."
@@ -56,13 +57,6 @@ try {
         $labels.'org.toefl-house.release-version' -ne $Version) {
         throw "The image identity does not match the requested source revision and package version. Rebuild the image with those labels."
     }
-
-    $packageName = "TOEFL-House-ERP-Customer-" + (Get-Date -Format "yyyyMMdd-HHmmss")
-    $packageRoot = Join-Path $destinationFull $packageName
-    if (Test-Path -LiteralPath $packageRoot) {
-        throw "The destination package already exists; refusing to overwrite it."
-    }
-    [System.IO.Directory]::CreateDirectory($packageRoot) | Out-Null
 
     # Deliberate allowlist: no apps, Docker build context, git, data/secrets,
     # database storage, Administrator password, backups or activation receipts.
@@ -82,6 +76,28 @@ try {
         "product/windows/Test Fresh Installation.ps1",
         "product/windows/Test Existing Installation.ps1"
     )
+    $sourceHead = & git --no-optional-locks -C $repositoryRoot rev-parse HEAD 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not [string]::Equals(
+        ([string]$sourceHead).Trim(), $SourceRevision, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Source checkout HEAD does not match the requested source revision."
+    }
+    $sourcePaths = @($files) + @('docs/engineering/foundation-version-matrix.json')
+    $dirtyFiles = & git --no-optional-locks -C $repositoryRoot status --porcelain=v1 --untracked-files=all -- $sourcePaths 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "Cannot verify the selected source checkout." }
+    if ($dirtyFiles) { throw "Source checkout has dirty package files or dependency matrix." }
+    foreach ($relative in $sourcePaths) {
+        $source = Join-Path $repositoryRoot ($relative.Replace('/', '\'))
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or
+            ((Get-Item -LiteralPath $source -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Required package input is missing or linked: $relative"
+        }
+    }
+    $packageName = "TOEFL-House-ERP-Customer-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+    $packageRoot = Join-Path $destinationFull $packageName
+    if (Test-Path -LiteralPath $packageRoot) {
+        throw "The destination package already exists; refusing to overwrite it."
+    }
+    [System.IO.Directory]::CreateDirectory($packageRoot) | Out-Null
     foreach ($relative in $files) {
         $source = Join-Path $repositoryRoot ($relative.Replace('/', '\'))
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
@@ -105,6 +121,19 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "The image export failed. This incomplete folder is NOT deliverable."
     }
+    $archiveIdentityJson = & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $packageRoot "product\windows\Verify Package Image.ps1") -Archive $archive -ReadArchiveIdentity
+    if ($LASTEXITCODE -ne 0 -or -not $archiveIdentityJson) {
+        throw "The exported Docker archive has no valid image identity."
+    }
+    $archiveIdentity = $archiveIdentityJson | ConvertFrom-Json
+    if (@($archiveIdentity.labels.PSObject.Properties).Count -ne @($labels.PSObject.Properties).Count) {
+        throw "The exported image labels differ from the inspected application image."
+    }
+    foreach ($label in $labels.PSObject.Properties) {
+        if ($label.Value -cne $archiveIdentity.labels.($label.Name)) {
+            throw "The exported image labels differ from the inspected application image."
+        }
+    }
     $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     [System.IO.File]::WriteAllText(
         $checksum, $hash + "  toefl-house-erp-app.tar" + [Environment]::NewLine,
@@ -127,7 +156,9 @@ try {
         production_authorization = "REJECT"
         source_revision = $SourceRevision
         image = [ordered]@{
-            tag = "toefl-house-erp-app:customer"
+            tag = "toefl-house-erp-app:local"
+            config_digest = $archiveIdentity.config_digest
+            provider_image_id = $image.Id
             archive = "product/release/toefl-house-erp-app.tar"
             sha256 = $hash
             size_bytes = (Get-Item -LiteralPath $archive).Length
@@ -152,6 +183,10 @@ try {
     & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $packageRoot "product\windows\Verify Package Image.ps1")
     if ($LASTEXITCODE -ne 0) {
         throw "The exported image failed post-packaging verification."
+    }
+    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $packageRoot "product\windows\Verify Package Image.ps1") -VerifyLoadedImage
+    if ($LASTEXITCODE -ne 0) {
+        throw "The application image tag changed during export. This incomplete folder is NOT deliverable."
     }
 
     $instructions = @"

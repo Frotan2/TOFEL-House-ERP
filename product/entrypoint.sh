@@ -34,13 +34,13 @@ run_frappe() {
 case "$SERVICE" in
     bootstrap)
         # One-shot site initialization: waits for services, seeds sites/,
-        # creates the site, installs apps, migrates, builds assets, enables
+        # creates the site, installs apps, migrates, restores prebuilt assets, enables
         # scheduler. Runs once as a Compose one-shot (restart: "no").
         exec su -s /bin/sh frappe -c 'python3 /product/bootstrap.py'
         ;;
     web)
         # Wait for database and Redis, then reconcile static assets after any
-        # interrupted build, then start gunicorn. The working directory is
+        # interrupted asset copy, then start gunicorn. The working directory is
         # /home/frappe/bench/sites so frappe.app resolves sites from there.
         run_frappe 'python3 -c "import sys; sys.path.insert(0, \"/product\"); from bootstrap import wait_for_endpoints; wait_for_endpoints()"'
         run_frappe 'python3 -c "import sys; sys.path.insert(0, \"/product\"); from bootstrap import ensure_web_assets; ensure_web_assets()"'
