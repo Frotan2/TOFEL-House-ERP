@@ -95,7 +95,17 @@ def main():
     def family(actor,tail):return 'SYN-'+digest(actor)[:12].upper()+'-'+tail
     def as_user(label,fn):frappe.set_user(users[label]);return fn()
     def connect(site):
-        frappe.init(site=site,sites_path=str(Path.cwd()));frappe.connect();frappe.set_user('Administrator')
+        # The native runner uses TWO disposable, wizard-less synthetic sites
+        # and deliberately creates more than sixty isolated test accounts.
+        # Frappe's default user-creation throttle protects real sites but can
+        # stop this hosted stress fixture late in the suite. Increase it only
+        # for this exact hosted site, never in shipped app code/site_config.
+        if site not in ('placement-test.localhost','placement-second.localhost'):
+            raise RuntimeError('Refusing to connect to a non-synthetic site')
+        frappe.init(site=site,sites_path=str(Path.cwd()))
+        frappe.connect()
+        frappe.set_user('Administrator')
+        frappe.local.conf.throttle_user_limit=500
     # Synthetic configuration fixtures. Structural values are fixture data, not
     # approved operational policy (P1-P5 remain owner deliverables).
     bp_code='SYN-BP-MAIN-1'
