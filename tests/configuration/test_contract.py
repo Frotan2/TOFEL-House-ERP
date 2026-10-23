@@ -472,8 +472,8 @@ class ControlPlaneTieTests(unittest.TestCase):
         self.assertIn('"th-academic-setup"', init_source)
         for literal in ('"roles": ["Course Owner"]',):
             self.assertIn(literal, init_source)
-        page = json.loads((APP / "operations/page/th-academic-setup/"
-                           "th-academic-setup.json").read_text(encoding="utf-8"))
+        page = json.loads((APP / "operations/page/th_academic_setup/"
+                           "th_academic_setup.json").read_text(encoding="utf-8"))
         self.assertEqual(page["module"], "Operations")
         self.assertEqual(page["title"], "TOEFL House Academic Setup")
         self.assertEqual([row["role"] for row in page["roles"]], ["Course Owner"])

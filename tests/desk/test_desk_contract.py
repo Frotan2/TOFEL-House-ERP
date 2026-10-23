@@ -403,7 +403,9 @@ class DeskAudienceTieTests(unittest.TestCase):
 
     def test_desk_pages_exist_with_matching_audience_and_module(self):
         for slug, spec in self.desks.items():
-            path = APP / "operations" / "page" / slug / f"{slug}.json"
+            # Frappe Page.load_assets() uses scrub(Page.name) for paths.
+            scrubbed = slug.replace("-", "_")
+            path = APP / "operations" / "page" / scrubbed / f"{scrubbed}.json"
             self.assertTrue(path.exists(), f"missing Page JSON for {slug}")
             page = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(page["doctype"], "Page", slug)

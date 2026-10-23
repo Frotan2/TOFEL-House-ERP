@@ -605,8 +605,8 @@ class ConfigurationNavigationTests(unittest.TestCase):
         init_source = (APP / "desk/__init__.py").read_text(encoding="utf-8")
         self.assertIn('"th-configuration"', init_source)
         self.assertIn('"configuration"', init_source)
-        page = json.loads((APP / "operations/page/th-configuration/"
-                           "th-configuration.json").read_text(encoding="utf-8"))
+        page = json.loads((APP / "operations/page/th_configuration/"
+                           "th_configuration.json").read_text(encoding="utf-8"))
         self.assertEqual(page["doctype"], "Page")
         self.assertEqual(page["module"], "Operations")
         self.assertEqual(page["title"], "TOEFL House Configuration")
