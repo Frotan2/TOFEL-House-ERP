@@ -7,13 +7,14 @@ substitutions, recorded here: bench invocations run through a scripted stub
 recording every call (filesystem semantics identical to frappe), and service
 readiness uses real TCP listeners on loopback instead of compose hostnames.
 The shipped code paths — endpoint waits, redis config, site creation, ordered
-app installs, migrate replay, native encryption-key initialization, asset
-build, one-time credential generation, restart idempotence, repair of a
+app installs, migrate replay, native encryption-key initialization, provider
+asset restoration, one-time credential generation, restart idempotence, repair of a
 partial state, restart persistence — are executed unchanged. Assertions are
 hard invariants, fail-closed; synthetic-only flags must never appear.
 """
 from __future__ import annotations
 
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -87,13 +88,10 @@ elif cmd == "execute":
     log(sys.argv[1:])
     save()
 elif cmd == "build":
-    assets = BENCH_ROOT / "sites" / "assets"
-    (assets / "js").mkdir(parents=True, exist_ok=True)
-    (assets / "css").mkdir(parents=True, exist_ok=True)
-    (assets / "assets.json").write_text("{}")
     state["build_calls"] = state.get("build_calls", 0) + 1
     log(sys.argv[1:])
-    save()
+    print("customer asset compilation is forbidden", file=sys.stderr)
+    sys.exit(1)
 elif cmd == "enable-scheduler":
     state["scheduler_enabled"] = True
     log(sys.argv[1:])
@@ -249,6 +247,28 @@ class ProductLifecycleSim(unittest.TestCase):
         seed.mkdir()
         for name in ("apps.txt", "apps.json", "common_site_config.json"):
             (seed / name).write_text("frappe\n" if name == "apps.txt" else "{}")
+        # Real provider globals plus image-resident public assets. Retarget the
+        # restore function's bound defaults; execute its actual validation/copy
+        # and app-link logic rather than mocking a successful asset recovery.
+        self.assets_seed = self.tmp / "assets-seed"
+        self.asset_bytes = {
+            "js/provider.js": b"window.providerAssets = true;\n",
+            "css/provider.css": b".provider-assets { display: block; }\n",
+            "frappe/dist/js/login.bundle.FIXTURE.js": b"window.fixtureLogin = true;\n",
+            "toefl_house/css/th_design_system.css": b".th-page { display: grid; }\n",
+        }
+        for relative, content in self.asset_bytes.items():
+            app, tail = relative.split("/", 1)
+            target = (self.assets_seed / relative if app in ("js", "css") else
+                      self.bench_root / "apps" / app / app / "public" / tail)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        (self.assets_seed / "assets.json").write_text(json.dumps({
+            "provider.js": "/assets/js/provider.js",
+            "provider.css": "/assets/css/provider.css",
+            "login.bundle.js": "/assets/frappe/dist/js/login.bundle.FIXTURE.js",
+            "th_design_system.css": "/assets/toefl_house/css/th_design_system.css",
+        }))
         self.sockets, self.ports = open_listeners(3)
         self.patches = [
             mock.patch.object(bootstrap, "BENCH_DIR", self.bench_root),
@@ -256,6 +276,9 @@ class ProductLifecycleSim(unittest.TestCase):
             mock.patch.object(bootstrap, "ENV_PYTHON", site_python),
             mock.patch.object(bootstrap, "SECRETS_DIR", secrets_dir),
             mock.patch.object(bootstrap, "SITES_SEED", seed),
+            mock.patch.object(bootstrap, "restore_prebuilt_assets", partial(
+                bootstrap.restore_prebuilt_assets, sites_dir=self.bench_root / "sites",
+                seed_dir=self.assets_seed, apps_dir=self.bench_root / "apps")),
             # Simulated bench has no real node_modules; security package validation
             # is tested separately with installed synthetic dependency trees.
             mock.patch.object(bootstrap, "verify_hrms_editor"),
@@ -276,18 +299,37 @@ class ProductLifecycleSim(unittest.TestCase):
             patch.stop()
         for sock in self.sockets:
             sock.close()
+        self.assert_no_customer_builds()
 
     def state(self):
         return json.loads(self.state_path.read_text())
 
+    def assert_no_customer_builds(self):
+        state = self.state()
+        self.assertEqual(state.get("build_calls", 0), 0)
+        for call in state["calls"]:
+            command = call[2:] if call[:1] == ["--site"] else call
+            self.assertNotEqual(command[:1], ["build"], "customer bootstrap must never compile provider assets")
+
+    def assert_provider_assets(self, summary):
+        self.assertIn("assets-prebuilt", summary["actions"])
+        sites = self.bench_root / "sites"
+        self.assertTrue(bootstrap.assets_present(sites))
+        self.assertEqual(bootstrap.manifest_assets_missing(sites), [])
+        self.assertEqual((sites / "assets/assets.json").read_bytes(), (self.assets_seed / "assets.json").read_bytes())
+        for relative, content in self.asset_bytes.items():
+            self.assertEqual((sites / "assets" / relative).read_bytes(), content)
+        self.assert_no_customer_builds()
+
     def test_first_boot_installs_everything_exactly_once_in_proven_order(self):
         summary = bootstrap.bootstrap(SITE, log=lambda _: None)
+        self.assert_provider_assets(summary)
         self.assertEqual(summary["actions"],
                          ["services-reachable", "sites-seeded", "redis-configured", "site-created",
                           "credentials-written", "installed-erpnext", "installed-education", "installed-payments",
                           "installed-hrms", "installed-foundation_security", "installed-toefl_house",
                           "migrated", "migrate-replayed", "encryption-key-initialized",
-                          "assets-built", "assets-complete", "assets-manifest-complete",
+                          "assets-prebuilt", "assets-complete", "assets-manifest-complete",
                           "scheduler-enabled"])
         state = self.state()
         site_state = state["sites"][SITE]
@@ -345,6 +387,7 @@ class ProductLifecycleSim(unittest.TestCase):
         pending_body = pending.read_bytes()
 
         summary = bootstrap.bootstrap(SITE, log=lambda _: None)
+        self.assert_provider_assets(summary)
         self.assertIn("site-present", summary["actions"])
         self.assertIn("credentials-recovered", summary["actions"])
         self.assertEqual(credentials.read_bytes(), pending_body)
@@ -373,34 +416,40 @@ class ProductLifecycleSim(unittest.TestCase):
         self.assertFalse(self.state().get("scheduler_enabled"))
 
         summary = bootstrap.bootstrap(SITE, log=lambda _: None)
+        self.assert_provider_assets(summary)
         self.assertIn("site-present", summary["actions"])
         self.assertIn("scheduler-enabled", summary["actions"])
         self.assertEqual(credentials.read_bytes(), original_credentials)
         self.assertTrue(self.state().get("scheduler_enabled"))
 
     def test_restart_is_fully_idempotent(self):
-        bootstrap.bootstrap(SITE, log=lambda _: None)
+        self.assert_provider_assets(bootstrap.bootstrap(SITE, log=lambda _: None))
         before = (self.bench_root / "sites" / SITE / "private" / "first-run-credentials.txt").read_bytes()
         summary = bootstrap.bootstrap(SITE, log=lambda _: None)  # Start -> Stop -> Start
+        self.assert_provider_assets(summary)
         self.assertEqual(summary["actions"],
                          ["services-reachable", "sites-seeded", "redis-configured", "site-present", "apps-present",
                           "migrated", "migrate-replayed", "encryption-key-initialized",
-                          "assets-present", "assets-complete", "assets-manifest-complete",
+                          "assets-prebuilt", "assets-complete", "assets-manifest-complete",
                           "scheduler-enabled"])
         after = (self.bench_root / "sites" / SITE / "private" / "first-run-credentials.txt").read_bytes()
         self.assertEqual(before, after, "credentials must never rotate silently")
         state = self.state()
         self.assertEqual(state["sites"][SITE]["migrate_calls"], 4)  # migrate always runs, per boot
-        self.assertEqual(state.get("build_calls", 1), 1)  # assets built exactly once
+        self.assertEqual(state.get("build_calls", 0), 0)
 
     def test_repair_reinstalls_only_missing_and_never_rotates(self):
-        bootstrap.bootstrap(SITE, log=lambda _: None)
+        self.assert_provider_assets(bootstrap.bootstrap(SITE, log=lambda _: None))
         credentials_before = (self.bench_root / "sites" / SITE / "private"
                               / "first-run-credentials.txt").read_bytes()
         state = self.state()
         state["sites"][SITE]["apps"] = ["frappe", "erpnext"]  # crashed/partial state
         self.state_path.write_text(json.dumps(state))
+        (self.bench_root / "sites/assets/assets.json").unlink()
+        (self.bench_root / "sites/assets/js/provider.js").unlink()
+        self.assertFalse(bootstrap.assets_present(self.bench_root / "sites"))
         summary = bootstrap.bootstrap(SITE, log=lambda _: None)  # Repair script runs this same entrypoint
+        self.assert_provider_assets(summary)
         self.assertEqual([action for action in summary["actions"] if action.startswith("installed-")],
                          ["installed-education", "installed-payments", "installed-hrms",
                           "installed-foundation_security", "installed-toefl_house"])
@@ -411,12 +460,12 @@ class ProductLifecycleSim(unittest.TestCase):
                           "foundation_security", "toefl_house"])
 
     def test_persistence_survives_cross_restart_state(self):
-        bootstrap.bootstrap(SITE, log=lambda _: None)
+        self.assert_provider_assets(bootstrap.bootstrap(SITE, log=lambda _: None))
         first_migrates = self.state()["sites"][SITE]["migrate_calls"]
         credentials_body = (self.bench_root / "sites" / SITE / "private"
                             / "first-run-credentials.txt").read_bytes()
         for _ in range(3):  # three more daily Start cycles
-            bootstrap.bootstrap(SITE, log=lambda _: None)
+            self.assert_provider_assets(bootstrap.bootstrap(SITE, log=lambda _: None))
         state = self.state()
         self.assertEqual(state["sites"][SITE]["migrate_calls"], first_migrates + 6)
         self.assertEqual((self.bench_root / "sites" / SITE / "private"
@@ -425,6 +474,27 @@ class ProductLifecycleSim(unittest.TestCase):
         site_config = json.loads((self.bench_root / "sites" / SITE / "site_config.json").read_text())
         self.assertEqual(site_config["db_type"], "mariadb")
         self.assertEqual(site_config["encryption_key"], "native-key-material")
+
+    def test_missing_provider_seed_fails_closed_and_retry_preserves_credentials(self):
+        manifest = self.assets_seed / "assets.json"
+        provider_manifest = manifest.read_bytes()
+        manifest.unlink()
+        with self.assertRaisesRegex(RuntimeError, "prebuilt assets are missing"):
+            bootstrap.bootstrap(SITE, log=lambda _: None)
+        self.assertFalse(bootstrap.assets_present(self.bench_root / "sites"))
+        self.assertFalse(self.state().get("scheduler_enabled"))
+        credentials = self.bench_root / "sites" / SITE / "private/first-run-credentials.txt"
+        before = credentials.read_bytes()
+        self.assertEqual(oct(credentials.stat().st_mode & 0o777), "0o600")
+        self.assert_no_customer_builds()
+
+        manifest.write_bytes(provider_manifest)
+        summary = bootstrap.bootstrap(SITE, log=lambda _: None)
+        self.assert_provider_assets(summary)
+        self.assertIn("site-present", summary["actions"])
+        self.assertEqual(credentials.read_bytes(), before)
+        self.assertEqual(oct(credentials.stat().st_mode & 0o777), "0o600")
+        self.assertTrue(self.state().get("scheduler_enabled"))
 
     def test_unavailable_services_fail_closed(self):
         probe = socket.socket()

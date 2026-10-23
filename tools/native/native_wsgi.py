@@ -24,19 +24,36 @@ def setup_assets(site):
         "placement-test.localhost", "placement-second.localhost", "placement-restore.localhost",
     ):
         raise RuntimeError("Native asset setup is restricted to hosted synthetic sites")
-    from frappe import build
-
     frappe.init(site=site, sites_path=sites_path)
     try:
         if frappe.conf.get("allow_tests") != 1 or frappe.conf.get("toefl_house_synthetic_only") != 1:
             raise RuntimeError("Native asset setup requires a synthetic-only test site")
-        # Unlike bundle(), these pinned build helpers only prepare public-path
-        # links. No yarn build, compiled assets, or customer-site reset occurs.
-        build.setup()
-        build.make_asset_dirs()
+        # make_asset_dirs() also links public/node_modules through each app
+        # alias, mutating the pinned source trees. Only create top-level public
+        # aliases in this active sites root; never traverse an alias to write.
+        assets = Path(sites_path) / "assets"
+        if assets.is_symlink():
+            raise RuntimeError("Native static assets root may not be a link")
+        assets.mkdir(parents=True, exist_ok=True)
+        for app in frappe.get_all_apps():
+            if not isinstance(app, str) or app in ("", ".", "..") or Path(app).name != app:
+                raise RuntimeError("Invalid native asset app name")
+            public = Path(frappe.get_app_path(app, "public")).resolve()
+            if not public.is_dir():
+                continue
+            alias = assets / app
+            if alias.is_symlink():
+                if alias.resolve() != public:
+                    raise RuntimeError("Native static alias points outside its installed public directory")
+            elif alias.exists():
+                if not alias.is_dir():
+                    raise RuntimeError("Native static alias is not a directory")
+            else:
+                alias.symlink_to(public, target_is_directory=True)
         installed_css = Path(frappe.get_app_path("toefl_house", "public", "css", "th_design_system.css"))
         served_css = Path(sites_path) / "assets/toefl_house/css/th_design_system.css"
-        if not served_css.is_file() or served_css.read_bytes() != installed_css.read_bytes():
+        if (not installed_css.is_file() or not served_css.is_file()
+                or served_css.read_bytes() != installed_css.read_bytes()):
             raise RuntimeError("Native static root does not expose the installed role Page CSS")
     finally:
         frappe.destroy()

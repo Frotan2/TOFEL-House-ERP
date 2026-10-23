@@ -74,6 +74,33 @@ These fixes require the new image, packaging, native, browser and Windows
 regressions to pass before their status can be marked qualified. The physical
 Owner/customer acceptance and production holds remain unchanged.
 
+The changes were pushed to canonical `main` as `eb4264f`. The Windows customer
+package job [39942912709](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39942912709)
+passed, including the archive/manifest and loaded-image rejection cases. The
+full owned suite on that revision ran 1,621 tests and found six lifecycle
+simulations still expecting first-boot compilation plus a security contract
+assuming a single-stage image. The simulations need real provider seed
+fixtures; the Ghostscript exclusion is enforced in the final runtime stage
+after every copy. Neither failed run is a release pass. The product image
+and native jobs on that revision must be followed through to terminal state.
+
+Native run [39942912690](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39942912690)
+finished with **634 business/security checks passing**, including all eight
+authenticated `frappe.desk.desk_page.getpage` loads, delivered CSS, 12 positive
+Page controls and 56 strict permission denials. Its downloaded report passed
+the receipt verifier for `eb4264f6c7ada8a8f56f41c072cb593bb958bb8c`. Encrypted
+isolated restore and post-restart checks also ran. The overall workflow still
+failed its later source-integrity audit: native asset setup altered
+`education/public/node_modules`. The setup must limit writes to the synthetic
+served asset root; that source-integrity gate is retained.
+
+The follow-up also requires all four canonical CI gates on the package's exact
+revision before assembly/attestation/upload. A live read-only API probe rejected
+the failed `eb4264f` revision as expected. Missing checks are dispatched only
+after verifying the branch/tag still resolves to the selected SHA. This
+orchestration and the revised native asset setup still require their next CI
+run to finish; unit/contract results alone are not the release decision.
+
 The canonical release blockers are GitHub issues [#12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
 [#35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35), and
 [#36](https://github.com/Frotan2/TOFEL-House-ERP/issues/36):

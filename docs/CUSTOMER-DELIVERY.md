@@ -99,6 +99,11 @@ The provider/CI implementation is also available as
 it after the real image and all hosted qualification steps pass, creates a ZIP,
 attests that ZIP with GitHub's build-provenance service, uploads the versioned
 artifact, and publishes a GitHub Release asset only for an explicit `v*` tag.
+Before package assembly it requires successful Owned, native lifecycle,
+Foundation security/runtime, and Windows package workflows on the same source
+revision. The image workflow starts only missing checks after verifying its
+branch/tag still identifies that revision. Missing, failed, cancelled, or
+pending evidence cannot authorize an artifact upload.
 The ZIP is the customer download; the included manifest binds the exact source
 revision, image labels, image hash, and dependency matrix. Verify the
 attestation separately. A package that has only a bare tar/hash pair is not a

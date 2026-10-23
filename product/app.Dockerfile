@@ -186,15 +186,6 @@ RUN python3 /product/secure_weasyprint.py /home/frappe/bench/apps/frappe \
 # (>= 6.6.7), ws (>= 8.21.0) and socket.io-parser (>= 4.2.7). Any drift aborts the build.
 RUN python3 /product/secure_realtime.py /home/frappe/bench/apps/frappe
 RUN python3 /product/secure_markdown.py /home/frappe/bench/apps/frappe
-# Ghostscript guard (GHSA-r543-q48m-4c9j, WeasyPrint RCE). Pillow's EPS plugin
-# renders EPS/PS bytes by running the `gs` executable found on PATH
-# (PIL/EpsImagePlugin.py), and WeasyPrint hands it attacker-reachable images
-# through beta print formats. The runtime image must never ship Ghostscript:
-# the build fails if a `gs` executable exists on PATH, including one pulled in
-# transitively by an apt dependency. Evidence and scope:
-# docs/engineering/evidence/sec-deps-01/advisory-delta-2026-10-09/README.md
-RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GHSA-r543-q48m-4c9j precondition violated" >&2; exit 1; fi
-
 # Compile all browser bundles on the provider. Customer startup restores this
 # seed and verifies the manifest; it never invokes a frontend compiler.
 RUN cd /home/frappe/bench && bench build \
@@ -211,6 +202,9 @@ COPY --from=builder --chown=frappe:frappe /home/frappe/bench /home/frappe/bench
 COPY --from=builder /product /product
 COPY --from=builder /build/sites-seed /build/sites-seed
 COPY --from=builder /build/assets-seed /build/assets-seed
+# Pillow/WeasyPrint must never reach Ghostscript (GHSA-r543-q48m-4c9j).
+# Check the shipped stage AFTER its installs and every cross-stage copy.
+RUN if command -v gs >/dev/null 2>&1; then echo "ghostscript present on PATH: GHSA-r543-q48m-4c9j precondition violated" >&2; exit 1; fi
 USER frappe
 
 # The compose bind mount (./data/sites) hides the bench's own sites/ files on a

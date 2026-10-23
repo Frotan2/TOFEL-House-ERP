@@ -377,12 +377,21 @@ class WeasyPrintOwnedFixtureTests(unittest.TestCase):
 
 
 class GhostscriptGuardStageTests(unittest.TestCase):
-    """The guard must hold for the shipped image: one runtime stage, and no cross-stage copy that could bring gs back."""
+    """The shipped stage is checked after every operation that could add gs."""
 
-    def test_dockerfile_is_a_single_runtime_stage(self):
-        froms = [line for line in DOCKERFILE.splitlines() if line.startswith("FROM ")]
-        self.assertEqual(len(froms), 1, froms)
-        self.assertNotIn("COPY --from", DOCKERFILE)
+    def test_ghostscript_guard_checks_the_final_runtime_stage_after_all_copies(self):
+        lines = DOCKERFILE.splitlines()
+        stages = [index for index, line in enumerate(lines) if line.startswith("FROM ")]
+        self.assertTrue(stages)
+        final = lines[stages[-1] + 1:]
+        guard = [index for index, line in enumerate(final)
+                 if line.startswith("RUN if command -v gs ") and "exit 1" in line]
+        self.assertEqual(len(guard), 1, "the actual runtime stage must fail closed if gs exists")
+        for index, line in enumerate(final):
+            if line.startswith(("COPY ", "ADD ")) or (
+                line.startswith("RUN ") and index != guard[0]
+            ):
+                self.assertLess(index, guard[0], "no runtime filesystem mutation may follow the gs guard")
 
 
 if __name__ == "__main__":

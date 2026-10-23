@@ -44,9 +44,11 @@ on:
       - docs/PRODUCT.md
       - docs/owner-decisions.json
       - tools/release/create_customer_package.py
+      - tools/release/verify_ci_gates.py
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
   id-token: write
   attestations: write
@@ -63,6 +65,10 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+      - name: Start missing release checks for this revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release/verify_ci_gates.py --ensure-started
       - name: Isolated restore safety contracts
         run: |
           python3 tools/foundation/annotated_step.py "Isolated restore safety contracts" -- python3 -m unittest -q \
@@ -1649,6 +1655,11 @@ jobs:
                   print("::notice title=Baseline %s::%s" % (name, s.get("skipped", s.get("error", ""))))
           print("::notice title=Performance baseline::measured, not policy (no owner capacity target exists)")
           EOF
+      - name: Require release checks on the same source revision
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release/verify_ci_gates.py
       - name: Assemble verified customer package
         if: success()
         run: |

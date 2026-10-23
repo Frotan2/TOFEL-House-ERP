@@ -5,7 +5,9 @@ import hashlib
 import importlib.util
 import os
 from pathlib import Path
+import shutil
 import sys
+import tempfile
 from types import ModuleType
 import unittest
 from unittest.mock import Mock, patch
@@ -326,6 +328,7 @@ class NativeStaticWiringTest(unittest.TestCase):
         frappe.conf = {"allow_tests": 1, "toefl_house_synthetic_only": 1}
         frappe.get_app_path = Mock(return_value=str(Path(__file__).resolve().parents[2]
                                                    / "apps/toefl_house/toefl_house/public/css/th_design_system.css"))
+        frappe.get_all_apps = Mock(return_value=[])
         build = ModuleType("frappe.build")
         build.setup = Mock()
         build.make_asset_dirs = Mock()
@@ -371,22 +374,117 @@ class NativeStaticWiringTest(unittest.TestCase):
         environ = {"HTTP_HOST": "127.0.0.1:18000", "HTTP_X_FRAPPE_SITE_NAME": "placement-second.localhost"}
         self.assertEqual(module.application(environ, Mock()), [b"placement-second.localhost"])
 
-    def test_native_asset_setup_links_public_sources_and_checks_delivered_path_bytes(self):
-        for exists, contents in ((True, [b"css", b"css"]), (True, [b"stale", b"css"]), (False, [])):
-            module, _, _, _ = self._load_wsgi()
-            frappe = module.frappe
-            with self.subTest(exists=exists, contents=contents), patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), \
-                    patch.dict(sys.modules, {"frappe": frappe, "frappe.build": frappe.build}), \
-                    patch.object(Path, "is_file", return_value=exists), patch.object(Path, "read_bytes", side_effect=contents):
-                if exists and contents[0] == contents[1]:
+    def _asset_fixture(self):
+        temporary = tempfile.TemporaryDirectory(prefix="native-static-sources-")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        apps = root / "apps"
+        for app in ("education", "toefl_house"):
+            public = apps / app / app / "public/css"
+            public.mkdir(parents=True)
+            (public / "th_design_system.css").write_bytes(b".th-page { display: grid; }\n")
+        # This triggers the old broad linker's public/node_modules side effect.
+        modules = apps / "education/node_modules/fixture-package"
+        modules.mkdir(parents=True)
+        (modules / "index.js").write_bytes(b"module.exports = {};\n")
+        (apps / "foundation_security/foundation_security").mkdir(parents=True)
+        return root, apps
+
+    def _configure_asset_apps(self, module, apps):
+        module.frappe.get_all_apps.return_value = ["education", "toefl_house", "foundation_security"]
+        module.frappe.get_app_path.side_effect = lambda app, *parts: str(apps / app / app / Path(*parts))
+
+    def _public_alias_patch(self, assets, apps):
+        native_symlink = Path.symlink_to
+
+        def link(alias, public, target_is_directory=False):
+            self.assertEqual(alias.parent, assets, "only immediate children of the served assets root may be linked")
+            self.assertEqual(public, (apps / alias.name / alias.name / "public").resolve())
+            self.assertTrue(target_is_directory)
+            try:
+                native_symlink(alias, public, target_is_directory=True)
+            except OSError as exc:
+                if os.name != "nt" or getattr(exc, "winerror", None) != 1314:
+                    raise
+                # Windows without the symlink privilege can still exercise the
+                # real file/byte checks. Linux CI uses actual directory links.
+                shutil.copytree(public, alias)
+
+        return patch.object(Path, "symlink_to", autospec=True, side_effect=link)
+
+    def _app_snapshot(self, apps):
+        snapshot = {}
+        for path in [apps, *sorted(apps.rglob("*"))]:
+            stat = path.lstat()
+            content = (os.readlink(path) if path.is_symlink() else path.read_bytes() if path.is_file() else None)
+            snapshot[path.relative_to(apps).as_posix()] = (stat.st_mode, stat.st_ino, stat.st_mtime_ns, content)
+        return snapshot
+
+    def test_native_asset_setup_only_links_active_roots_without_app_tree_mutation(self):
+        root, apps = self._asset_fixture()
+        before = self._app_snapshot(apps)
+        for directory, site in (("bench/sites", "placement-test.localhost"),
+                                ("isolated-restore-bench/sites", "placement-restore.localhost")):
+            sites = root / directory
+            sites.mkdir(parents=True)
+            module, _, _, _ = self._load_wsgi(sites)
+            self._configure_asset_apps(module, apps)
+            with self.subTest(site=site), patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), \
+                    self._public_alias_patch(sites / "assets", apps) as link:
+                module.setup_assets(site)
+                module.setup_assets(site)
+            self.assertEqual(link.call_count, 2, "repeated setup must preserve existing public aliases")
+            self.assertEqual((sites / "assets/toefl_house/css/th_design_system.css").read_bytes(),
+                             (apps / "toefl_house/toefl_house/public/css/th_design_system.css").read_bytes())
+            self.assertTrue((sites / "assets/education/css/th_design_system.css").is_file())
+            self.assertFalse((sites / "assets/foundation_security").exists())
+            self.assertEqual(self._app_snapshot(apps), before)
+            self.assertFalse((apps / "education/education/public/node_modules").is_symlink())
+            module.frappe.build.setup.assert_not_called()
+            module.frappe.build.make_asset_dirs.assert_not_called()
+            self.assertEqual(module.frappe.destroy.call_count, 2)
+
+    def test_native_asset_setup_preserves_preexisting_public_node_modules_link(self):
+        root, apps = self._asset_fixture()
+        existing = apps / "education/education/public/node_modules"
+        try:
+            existing.symlink_to(apps / "education/node_modules", target_is_directory=True)
+        except OSError as exc:
+            if os.name == "nt" and getattr(exc, "winerror", None) == 1314:
+                self.skipTest("Windows symlink privilege unavailable; Linux CI covers preexisting link preservation")
+            raise
+        before = self._app_snapshot(apps)
+        module, _, _, _ = self._load_wsgi(root / "bench/sites")
+        self._configure_asset_apps(module, apps)
+        with patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), self._public_alias_patch(root / "bench/sites/assets", apps):
+            module.setup_assets("placement-test.localhost")
+        self.assertEqual(self._app_snapshot(apps), before)
+        self.assertTrue(existing.is_symlink())
+
+    def test_native_asset_setup_still_rejects_missing_and_stale_css(self):
+        for condition in ("missing-installed", "missing-served", "stale-served"):
+            root, apps = self._asset_fixture()
+            sites = root / "bench/sites"
+            installed = apps / "toefl_house/toefl_house/public/css/th_design_system.css"
+            served = sites / "assets/toefl_house/css/th_design_system.css"
+            if condition == "missing-installed":
+                installed.unlink()
+            else:
+                served.parent.mkdir(parents=True)
+                if condition == "stale-served":
+                    served.write_bytes(b"stale CSS")
+            before = self._app_snapshot(apps)
+            module, _, _, _ = self._load_wsgi(sites)
+            self._configure_asset_apps(module, apps)
+            with self.subTest(condition=condition), patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}), \
+                    self._public_alias_patch(sites / "assets", apps):
+                with self.assertRaisesRegex(RuntimeError, "does not expose"):
                     module.setup_assets("placement-test.localhost")
-                else:
-                    with self.assertRaisesRegex(RuntimeError, "does not expose"):
-                        module.setup_assets("placement-test.localhost")
-            frappe.init.assert_called_once_with(site="placement-test.localhost", sites_path=module.sites_path)
-            frappe.build.setup.assert_called_once_with()
-            frappe.build.make_asset_dirs.assert_called_once_with()
-            frappe.destroy.assert_called_once_with()
+            self.assertEqual(self._app_snapshot(apps), before)
+            if condition == "stale-served":
+                self.assertEqual(served.read_bytes(), b"stale CSS")
+            module.frappe.build.make_asset_dirs.assert_not_called()
+            module.frappe.destroy.assert_called_once_with()
 
     def test_native_asset_setup_refuses_non_synthetic_sites(self):
         module, _, _, _ = self._load_wsgi()
