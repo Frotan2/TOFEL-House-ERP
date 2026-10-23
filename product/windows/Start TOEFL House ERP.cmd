@@ -24,6 +24,9 @@ echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :up
 if not exist data\secrets\db.env goto :nosecret
+echo [TH_STAGE] Verifying preserved site and database before starting...
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Test Existing Installation.ps1"
+if errorlevel 1 goto :datapreservationhold
 if not exist data\activation mkdir data\activation
 icacls data\activation /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
 if errorlevel 1 goto :failed
@@ -70,6 +73,13 @@ echo  Do NOT reinstall, delete data or create a replacement database password.
 echo  Recover the original credentials or contact TOEFL House support.
 if not defined TH_GUI_MODE pause
 exit /b 1
+:datapreservationhold
+echo  Start was blocked to protect an existing site or missing database volume.
+echo  Do NOT reinstall, delete data or make a new password.
+echo  Choose Check This PC in the Windows launcher, then share only
+echo  Copy Safe Support Status with trusted support. No raw logs.
+if not defined TH_GUI_MODE pause
+exit /b 1
 :failed
 echo.
 echo  TOEFL House ERP could not start. Current service state:
@@ -89,8 +99,8 @@ echo    web "Restarting" or exiting          the app stops right after starting.
 echo    web restart count above 1            the app is crash-looping; the log
 echo                                         lines above show why it stops.
 echo.
-echo  In all of these cases: double-click "Repair TOEFL House ERP.cmd" and wait.
-echo  If the same problem repeats, send a photo of this window plus the
-echo  data\logs folder to TOEFL House support.
+echo  Stop and contact trusted support before using Repair.
+echo  Use Check This PC, then Copy Safe Support Status in the Windows GUI.
+echo  Do not send entire log folders, passwords or student records.
 if not defined TH_GUI_MODE pause
 exit /b 1
