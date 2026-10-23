@@ -9,6 +9,7 @@ on:
   push:
     paths:
       - .github/workflows/product-image.yml
+      - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
       - .gitattributes
       - .dockerignore
       - tests/foundation/test_product_packaging.py

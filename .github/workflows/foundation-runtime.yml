@@ -7,6 +7,7 @@ on:
   push:
     paths:
       - .github/workflows/foundation-runtime.yml
+      - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
       - tools/foundation/**
       - tools/native/site_setup.py
       - product/bootstrap.py

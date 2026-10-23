@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "TOEFL House ERP.vbs"
+      - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
       - "product/windows/**"
       - "tests/foundation/test_customer_install_package.py"
       - ".github/workflows/windows-customer-package.yml"

@@ -28,9 +28,9 @@ def main():
     from toefl_house.finance import policies as billp
     from toefl_house.policy import digest
     output=Path(os.environ['PLACEMENT_REPORT'])
-    report={'scope':'Synthetic content-governance, blueprint/policy/course-map configuration, allocation, staff-supervised digital delivery, objective scoring, independent review, finalization and controlled internal decision release; not full T01-T20','status':'running','checks':[],
+    report={'scope':'Hosted synthetic placement, admission, enrollment, classes, attendance, tuition, role desks, branch access and teaching compensation; NOT final customer acceptance','status':'running','checks':[],
             'commit':os.environ['GITHUB_SHA'],'runtime_kind':'Frappe/MariaDB/Redis/HTTP','production':'REJECT',
-            'note':'Thin admission, native Program Enrollment and native teaching operations (Student Group / Course Schedule / Student Attendance); no TH Enrollment ledger, grading, fees or payroll'}
+            'note':'Business checks use pinned native ERPNext/Education/HRMS records and synthetic owner-policy fixtures. Live Owner Windows, staff devices, book-sale end-to-end and backup-drive recovery remain unverified'}
     users={'author':'synthetic-author@example.test','other':'synthetic-other@example.test',
            'publisher':'synthetic-publisher@example.test','publisher2':'synthetic-publisher2@example.test',
            'second_author':'synthetic-second-author@example.test','auditor':'synthetic-auditor@example.test','outsider':'synthetic-outsider@example.test',

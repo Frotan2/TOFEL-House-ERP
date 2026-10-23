@@ -246,6 +246,12 @@ def main():
         run('security-site-acceptance',
             [benchdir/'env/bin/python',ROOT/'tools/native/security_acceptance.py'],benchdir/'sites')
         run('native-acceptance',[benchdir/'env/bin/python',ROOT/'tools/native/native_checks.py'],benchdir/'sites')
+        # Assert the complete set of executed business receipts before treating
+        # the native suite as product-facing hosted acceptance. CI still cannot
+        # approve Owner Windows, backup/restore or real student operations.
+        run('final-hosted-business-acceptance',
+            [py,ROOT/'tools/native/final_acceptance_report.py',
+             evidence/'native-checks.json',evidence/'final-hosted-acceptance.json'])
         # GHSA-VHRC residual 1 tooling on the real site: save-path containment, read-only audit
         # classification and output discipline, using synthetic Note rows rolled back at the end.
         run('stored-html-real-site',[benchdir/'env/bin/python',ROOT/'tools/native/stored_html_check.py'],benchdir/'sites')
