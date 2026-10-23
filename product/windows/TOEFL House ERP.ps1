@@ -91,6 +91,28 @@ $disclaimer.Location = New-Object System.Drawing.Point(30, 464)
 $disclaimer.Size = New-Object System.Drawing.Size(655, 47)
 $form.Controls.Add($disclaimer)
 
+# The read-only check can finish writing its complete report before the
+# wrapper process has exited. Do not make safe copying depend on ExitCode,
+# a second button refresh or a working Docker engine. Every candidate is still
+# fully validated against literal allowed fields when the user clicks Copy.
+function Get-CompletedCheckPath {
+    if ($script:activeAction -ne "Check") { return "" }
+    $candidate = if ($script:lastCheckPath) { $script:lastCheckPath } else { $script:stdoutPath }
+    if (-not $candidate -or -not (Test-Path -LiteralPath $candidate -PathType Leaf)) { return "" }
+    try {
+        $firstLines = @(Get-Content -LiteralPath $candidate -TotalCount 2 -ErrorAction Stop)
+        $lastLine = @(Get-Content -LiteralPath $candidate -Tail 1 -ErrorAction Stop)
+        if ($firstLines -cnotcontains "TOEFL HOUSE ERP - READ-ONLY TECHNICAL CHECK" -or
+            $lastLine.Count -ne 1 -or
+            $lastLine[0] -cne "End of read-only PC check.") {
+            return ""
+        }
+        return $candidate
+    } catch {
+        return ""
+    }
+}
+
 function Set-Busy([bool]$busy) {
     foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $dailyGuideButton, $copyStatusButton)) {
         $button.Enabled = -not $busy
@@ -98,7 +120,9 @@ function Set-Busy([bool]$busy) {
     $credentials.Enabled = (-not $busy) -and (Test-Path -LiteralPath $credentialFile -PathType Leaf)
     $guideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $guideFile -PathType Leaf)
     $dailyGuideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)
-    $copyStatusButton.Enabled = (-not $busy) -and [bool]$script:lastCheckPath -and (Test-Path -LiteralPath $script:lastCheckPath -PathType Leaf)
+    # A finished, read-only status is safe to copy even if the child process
+    # is still closing, and even if Docker cannot be reached on this PC.
+    $copyStatusButton.Enabled = [bool](Get-CompletedCheckPath)
     $logButton.Enabled = ((-not $busy) -and [bool]$script:stdoutPath -and (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf))
     if ($busy) {
         $progress.Style = [System.Windows.Forms.ProgressBarStyle]::Marquee
@@ -209,8 +233,9 @@ $dailyGuideButton.Add_Click({
 $copyStatusButton.Add_Click({
     # Read-only checks shared using these fixed states alone.
     # Never copy stdout verbatim; other operations may include private logs.
-    if (-not $script:lastCheckPath -or -not (Test-Path -LiteralPath $script:lastCheckPath -PathType Leaf)) {
-        $status.Text = "Run Check This PC first to prepare a safe support summary."
+    $completedCheck = Get-CompletedCheckPath
+    if (-not $completedCheck) {
+        $status.Text = "A complete read-only PC report is not available yet. Run Check This PC and let the report finish."
         return
     }
     # Whitelist exact status VALUES as well as names. An arbitrary diagnostic
@@ -236,7 +261,7 @@ $copyStatusButton.Add_Click({
         "Production authorization" = @("NOT VERIFIED")
     }
     try {
-        $lines = @(Get-Content -LiteralPath $script:lastCheckPath -ErrorAction Stop)
+        $lines = @(Get-Content -LiteralPath $completedCheck -ErrorAction Stop)
         if ($lines -cnotcontains "TOEFL HOUSE ERP - READ-ONLY TECHNICAL CHECK" -or
             $lines -cnotcontains "End of read-only PC check.") {
             throw "Not a complete read-only check"
@@ -303,6 +328,11 @@ $timer.Add_Tick({
                 $status.Text = ($stages[-1] -replace '^\[TH_STAGE\]\s+', "")
             }
         }
+        # Refresh the Copy button from the complete report itself, not only
+        # from process-exit timing. The copy handler enforces field allowlists.
+        if ($script:activeAction -eq "Check") {
+            $copyStatusButton.Enabled = [bool](Get-CompletedCheckPath)
+        }
         $script:process.Refresh()
         if (-not $script:process.HasExited) { return }
         $exitCode = $script:process.ExitCode
@@ -355,7 +385,33 @@ if ($SmokeTest) {
         -not (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)) {
         throw "Graphical lifecycle actions were not initialized."
     }
-    Write-Host "Windows GUI controls initialized without displaying a desktop window."
+    # Simulate the exact Owner case: check writes a full report while the
+    # wrapper still exists, then the GUI must allow safe copying. No real
+    # clipboard access, Docker use, site change or credentials in this test.
+    $syntheticCheck = [System.IO.Path]::GetTempFileName()
+    try {
+        $script:activeAction = "Check"
+        $script:stdoutPath = $syntheticCheck
+        $script:lastCheckPath = ""
+        Set-Content -LiteralPath $syntheticCheck -Value @(
+            "[TH_STAGE] Read-only PC check is running...",
+            "TOEFL HOUSE ERP - READ-ONLY TECHNICAL CHECK",
+            "Windows: 64-bit detected") -Encoding UTF8
+        Set-Busy $true
+        if ($copyStatusButton.Enabled) { throw "Copy activated before PC check completed." }
+        Add-Content -LiteralPath $syntheticCheck -Value "End of read-only PC check."
+        Set-Busy $true
+        if (-not $copyStatusButton.Enabled) { throw "Complete read-only PC check cannot be copied while wrapper is closing." }
+        Set-Busy $false
+        if (-not $copyStatusButton.Enabled) { throw "Copy disabled after completed PC check." }
+        $script:activeAction = "Start"
+        $script:lastCheckPath = ""
+        Set-Busy $false
+        if ($copyStatusButton.Enabled) { throw "Previous PC check leaked into a different lifecycle action." }
+    } finally {
+        Remove-Item -LiteralPath $syntheticCheck -ErrorAction SilentlyContinue
+    }
+    Write-Host "Windows GUI controls and completed-report copy availability verified."
     exit 0
 }
 Set-Busy $false
