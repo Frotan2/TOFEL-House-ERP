@@ -79,15 +79,15 @@ class FinanceContainmentWiringTests(unittest.TestCase):
 
     def test_native_book_sale_is_stock_only_and_role_checked(self):
         source = FINANCE.read_text(encoding="utf-8")
-        for clause in ('def _native_book_sale_allowed(doc):',
+        for clause in ('def _native_book_sale_allowed(doc, method=None):',
                        'item.item_group != "Books"',
                        'int(item.is_stock_item or 0) != 1',
                        'int(item.is_sales_item or 0) != 1',
                        'getattr(doc, "update_stock", 0)',
                        'getattr(doc, "th_placement_case", None)',
                        '"Finance Officer", "Accounts User"',
-                       'frappe.has_permission(INVOICE, "create", user=user)',
-                       'if _native_book_sale_allowed(doc):'):
+                       'frappe.has_permission(INVOICE, permission, doc=doc, user=user, print_logs=False)',
+                       'if _native_book_sale_allowed(doc, method):'):
             self.assertIn(clause, source)
 
     def test_finance_book_shop_links_are_only_for_authorized_staff(self):

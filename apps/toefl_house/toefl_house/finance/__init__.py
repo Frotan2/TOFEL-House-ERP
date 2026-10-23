@@ -85,7 +85,7 @@ def guard_fees(doc, method=None):
     raise frappe.ValidationError("Fees requires an authorized finance command")
 
 
-def _native_book_sale_allowed(doc):
+def _native_book_sale_allowed(doc, method=None):
     """Constrain native invoice UI to stock-only textbook sales.
 
     Normal placement invoices and corrections still require their guarded
@@ -98,7 +98,14 @@ def _native_book_sale_allowed(doc):
     if not {"Finance Officer", "Accounts User"}.issubset(set(frappe.get_roles(user))):
         return False
     # Never trust ignore_permissions on an incoming native request.
-    if not frappe.has_permission(INVOICE, "create", user=user):
+    # Call the independent permission checker with the actual document. A
+    # doctype-only check would miss company/branch User Permissions, and
+    # doc.has_permission() trusts flags.ignore_permissions.
+    permission = {
+        "before_cancel": "cancel",
+        "before_update_after_submit": "write",
+    }.get(method, "create")
+    if not frappe.has_permission(INVOICE, permission, doc=doc, user=user, print_logs=False):
         return False
     if getattr(doc, "th_placement_case", None):
         return False
@@ -152,7 +159,7 @@ def guard_sales_invoice(doc, method=None):
         return
     # Stock-only native book sales cannot impersonate a placement/tuition
     # charge, and remain governed by native accounting and stock validations.
-    if _native_book_sale_allowed(doc):
+    if _native_book_sale_allowed(doc, method):
         return
     deny_premature_invoice(doc, method)
     raise frappe.ValidationError(
