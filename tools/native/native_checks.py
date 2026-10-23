@@ -3211,9 +3211,17 @@ def main():
                         stock_receipt=entry.name)
         books=check('book-native-stock-catalog-and-receipt',traced(book_catalog))
         def book_doc(item_code='SYN-BOOK-STOCK',customer=None,qty=2):
+            # The isolated site skips ERPNext Setup Wizard, so the global
+            # defaults may still specify INR. Select the *configured* selling
+            # Price List currency rather than inheriting that unrelated
+            # global default; the company's receivable account is in AFN.
+            currency=frappe.db.get_value('Price List',fin['price_list'],'currency')
+            company_currency=frappe.db.get_value('Company',fin['company'],'default_currency')
+            assert currency and currency==company_currency,(currency,company_currency)
             return frappe.get_doc(dict(doctype='Sales Invoice',
                 customer=customer or fin['payer'],company=fin['company'],
                 posting_date=pf_post,due_date=pf_due,
+                currency=currency,conversion_rate=1,
                 update_stock=1,is_pos=0,selling_price_list=fin['price_list'],
                 items=[dict(item_code=item_code,qty=qty,
                     rate=300,warehouse=books['warehouse'])]))
