@@ -142,3 +142,12 @@ evidence. Only then consider releasing the package to real customers.
 For current policy/activation and recovery limitations see
 [PRODUCT.md](PRODUCT.md) and
 [engineering/LAUNCH-RUNBOOK.md](engineering/LAUNCH-RUNBOOK.md).
+
+## No-code staff help in the customer launcher
+
+The installed Windows GUI now includes **How to Use**, which opens an offline
+plain-English **DAILY USE GUIDE.txt** supplied in the allowlisted customer kit.
+It explains the Owner, Reception, Academic, Teacher and Finance routines and
+how the native ERPNext stock-book workflow works without developer commands.
+It does **not** grant access, activate production, or replace the separate
+Owner Readiness Guide and real Windows/customer recovery approval.

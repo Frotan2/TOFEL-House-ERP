@@ -23,6 +23,7 @@ VERIFY = (WINDOWS / "Verify Package Image.ps1").read_text()
 PACKAGER = (WINDOWS / "Prepare Customer Package.ps1").read_text()
 SHORTCUT = (ROOT / "TOEFL House ERP.vbs").read_text()
 OWNER_GUIDE = (WINDOWS / "OWNER ACCEPTANCE GUIDE.txt").read_text()
+DAILY_GUIDE = (WINDOWS / "DAILY USE GUIDE.txt").read_text()
 
 
 class CustomerInstallerContract(unittest.TestCase):
@@ -34,7 +35,7 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("Windows GUI controls initialized", GUI)
         for button in ('"Install"', '"Open / Start"', '"Repair"', '"Stop"',
                        '"Get Docker Desktop"', '"View Administrator Login"',
-                       '"Check This PC"', '"Owner Readiness Guide"'):
+                       '"Check This PC"', '"Owner Readiness Guide"', '"How to Use"'):
             self.assertIn(button, GUI)
         self.assertIn('"http://127.0.0.1:8000/"', GUI)
         self.assertIn('$script:process', GUI)
@@ -42,6 +43,20 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("TH_GUI_MODE", WORKER)
         self.assertIn("ValidateSet", WORKER)
         self.assertNotIn("Invoke-Expression", GUI + WORKER)
+
+    def test_daily_help_is_an_offline_non_developer_button(self):
+        self.assertIn('"product/windows/DAILY USE GUIDE.txt"', PACKAGER)
+        self.assertIn('$dailyGuideButton.Add_Click', GUI)
+        self.assertIn('$dailyGuideButton.Enabled', GUI)
+        self.assertIn('$dailyGuideFile = Join-Path $PSScriptRoot "DAILY USE GUIDE.txt"', GUI)
+        self.assertIn("Start-Process -FilePath \"notepad.exe\"", GUI)
+        for expected in ("Reception", "Finance", "Teacher", "Owner", "Book",
+                         "Open / Start", "NO-GO", "No developer"):
+            self.assertIn(expected.lower(), DAILY_GUIDE.lower())
+        for forbidden in ("git clone", "git pull", "docker compose", "powershell.exe",
+                          "MARIADB_ROOT_PASSWORD="):
+            self.assertNotIn(forbidden.lower(), DAILY_GUIDE.lower())
+        self.assertNotIn('Start-LauncherAction "Activate"', GUI)
 
     def test_incomplete_customer_folder_never_attempts_source_build(self):
         # Customer packages deliberately omit app.Dockerfile and all source.

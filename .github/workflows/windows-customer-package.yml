@@ -97,6 +97,7 @@ jobs:
             'product/windows/TOEFL House ERP.ps1',
             'product/windows/Check This PC.ps1',
             'product/windows/OWNER ACCEPTANCE GUIDE.txt',
+            'product/windows/DAILY USE GUIDE.txt',
             'product/release/toefl-house-erp-app.tar',
             'product/release/toefl-house-erp-app.tar.sha256',
             'READ ME FIRST.txt'
@@ -107,6 +108,10 @@ jobs:
           }
           if (Test-Path -LiteralPath (Join-Path $kit 'product/data')) {
             throw "Customer package included private application data."
+          }
+          $dailyGuide = [System.IO.File]::ReadAllText((Join-Path $kit 'product/windows/DAILY USE GUIDE.txt'))
+          if ($dailyGuide -notmatch 'HOW TO USE' -or $dailyGuide -notmatch 'NO-GO') {
+            throw "Customer kit omitted its nontechnical daily-use guide or release warning."
           }
           $ownerGuide = [System.IO.File]::ReadAllText((Join-Path $kit 'product/windows/OWNER ACCEPTANCE GUIDE.txt'))
           if ($ownerGuide -notmatch 'RELEASE DECISION: NO-GO' -or $ownerGuide -notmatch 'PRESERVATION') {

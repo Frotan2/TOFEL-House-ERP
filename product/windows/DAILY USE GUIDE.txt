@@ -1,0 +1,87 @@
+TOEFL HOUSE ERP - HOW TO USE
+============================
+For the course owner and staff. No developer or programming work is required.
+
+IMPORTANT: RELEASE STATUS = NO-GO
+This software has passed many automated tests, but it has NOT passed all
+real-computer, staff and backup/recovery acceptance checks. Until the provider
+has explicitly approved live operation, use invented PRACTICE records only.
+Do not enter real student details, salaries or money into a test installation.
+
+1. OPEN THE PROGRAM
+-------------------
+Double-click "TOEFL House ERP" on the main Windows computer.
+Choose "Open / Start", then sign in in the browser.
+The installed service normally opens at http://127.0.0.1:8000/
+Use "How to Use" to read this guide, or "Owner Readiness Guide" for a
+separate safe Windows acceptance checklist.
+If the app says it is missing or an operation fails, ask the provider
+for support. Do not reset the database or reinstall over existing records.
+
+2. FIRST SETUP - COURSE OWNER
+-----------------------------
+Use your authorized Owner/Configuration and Academic Setup pages in the app.
+Set programs, academic years and terms, courses, instructors, classrooms,
+working time slots, course capacities, tuition plans and staff accounts.
+Set course policies FROM INSIDE THE APP where available; do not ask staff
+to edit source files. Read the Owner posture / readiness notices before
+making operational decisions. "Configured" is not production approval.
+Give each employee only the permissions needed for that job.
+
+3. RECEPTION - DAILY WORK
+-------------------------
+The receptionist signs in with their own account and opens Reception.
+Record each prospective student and continue their admission/registration
+process. Look up existing people before creating a duplicate student.
+Confirm the selected program and the handover to academic staff.
+Reception staff should not receive unrestricted accounting or teacher pay
+permissions.
+
+4. ACADEMIC STAFF AND TEACHERS
+------------------------------
+Academic staff use Academic / Setup to organize programs and classes,
+assign teachers, manage timetables and enrollments. Each teacher signs in
+with their own account and opens Teacher to see assigned classes and
+record attendance or other allowed tasks. If a button is missing, contact
+the course manager for the proper role; do not share logins.
+
+5. FINANCE - TUITION AND BOOK SALES
+-----------------------------------
+Finance staff use Finance to view submitted invoices, paid/outstanding
+balances and approved actions. Tuition or placement fees must follow the
+configured and authorized course billing rules.
+
+For practice book sales: an authorized administrator first sets up the
+standard ERPNext "Books" Item Group, a real stock-enabled selling Item,
+a Warehouse, a compatible Company currency and selling Price List.
+Stock staff with native stock permissions receive books using Stock Entry.
+Finance staff with native finance and accounting permissions create
+a Sales Invoice ONLY for Books items, choose the stocked Warehouse,
+check the price/currency and enable Update Stock. After submitting,
+receive payment using Payment Entry. A book return uses a native
+Sales Return / Credit Note; a credit note is NOT itself a cash refund.
+Book sales may never be mixed with tuition or placement charges.
+The Finance desk shows ONLY shortcuts allowed by the employee's native
+roles. If Item Price, stock or payment pages are unavailable, the
+owner must authorize a suitable employee; do not bypass permissions.
+
+6. DAILY SHUTDOWN AND SUPPORT
+-----------------------------
+The owner may choose Stop to safely stop the application; stored data
+is not supposed to be deleted by Stop. Reopen with Open / Start.
+Do not use Repair unless support specifically directs it and existing
+data has been assessed. For a problem, note what you were doing and
+what the screen said. Avoid sharing student data, passwords and raw logs.
+
+7. SAFETY AND BACKUPS
+---------------------
+Do not delete the product/data folder, Docker volumes or existing backups.
+Do not try Restore or move the installation to a second computer as a
+substitute for backed-up recovery. Real Windows installation, staff access,
+backup-drive encryption/restore, and release permission remain on HOLD
+until independently verified. Do not publish the server to the internet.
+
+YOUR JOB IS TO RUN THE COURSE, NOT TO WRITE CODE.
+For software faults, the provider/developer is responsible for corrections.
+
+RELEASE DECISION: NO-GO FOR LIVE STUDENTS OR REAL PAYMENTS.
