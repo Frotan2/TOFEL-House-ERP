@@ -55,6 +55,17 @@ Full preparation, acceptance criteria and limitations:
 [Customer delivery](docs/CUSTOMER-DELIVERY.md). The source-checkout commands
 below are maintained for developers and diagnosis, not commercial onboarding.
 
+**For the existing Owner computer:** do not reinstall or test Repair during
+the release/preservation HOLD. In the graphical launcher, **Check This PC**
+is read-only; **Copy Safe Support Status** shares only approved generic
+observations. The new daily Start/Repair preflight refuses to start if a
+previously installed Frappe site or named Docker database volume is missing.
+Install also refuses a completed existing site. These fail-closed protections
+do not restore missing records, approve live operation or replace actual
+backup/recovery acceptance.
+
+### Developer-only source checkout smoke instructions (NOT customer onboarding)
+
 You need a 64-bit Windows 10/11 PC with internet and
 [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed
 once. Its installer is click-through.
