@@ -130,7 +130,7 @@ frappe.provide("toefl_house.role_desks");
 		$("<h1 class='th-page-title'></h1>").text(text(surface.title)).appendTo(header);
 		$("<p class='th-page-purpose'></p>").text(text(surface.description)).appendTo(header);
 		$("<p class='th-page-assurance'></p>")
-			.text(text("This desk is a read-only projection. Every action it offers opens the existing guarded command; the server validates role, state and separation for each one."))
+			.text(text("Review your work and choose an available action. Each action opens a form; your account's permissions apply when you save."))
 			.appendTo(header);
 		$("<nav class='th-desk-strip' aria-label='Your desks'></nav>").appendTo(header);
 	}

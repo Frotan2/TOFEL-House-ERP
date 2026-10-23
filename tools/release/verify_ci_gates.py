@@ -1,6 +1,7 @@
 """Require the latest canonical CI workflows on the exact customer-release SHA.
 
-Default mode is read-only and polls for up to 900 seconds. --ensure-started is
+Default mode is read-only and polls for up to 900 seconds (configurable to
+3,600 seconds for the full 60-minute native/foundation jobs). --ensure-started is
 the explicitly authorized orchestration mode: dispatch only absent workflows,
 after resolving the supplied GitHub branch/tag ref to the expected commit.
 Neither mode reruns, cancels, publishes, or modifies repository files.
@@ -215,12 +216,12 @@ def ensure_gate_runs_started(repository: str, expected_sha: str, current_run_id,
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ensure-started", action="store_true", help="dispatch only missing canonical gates; do not wait")
-    parser.add_argument("--timeout", type=int, default=900, help="polling deadline in seconds (1-900; default 900)")
+    parser.add_argument("--timeout", type=int, default=900, help="polling deadline in seconds (1-3600; default 900)")
     parser.add_argument("--ref", default=os.environ.get("GITHUB_REF", ""), help="full branch/tag ref for --ensure-started")
     args = parser.parse_args(argv)
     try:
-        if not 1 <= args.timeout <= 900:
-            raise ValueError("--timeout must be between 1 and 900 seconds")
+        if not 1 <= args.timeout <= 3600:
+            raise ValueError("--timeout must be between 1 and 3600 seconds")
         token = os.environ.get("GH_TOKEN", "")
         if not token:
             raise ValueError("GH_TOKEN is required")

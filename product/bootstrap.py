@@ -25,7 +25,7 @@ Steps, in order (mirrors the operator/hosted sequence):
    the app's own after_install hook uses) so every later backup carries it.
 8. Restore the provider-built asset manifest into the persistent sites volume,
    then merge every app's compiled public/ tree into sites/assets/<app>/ when
-   missing. The customer never compiles assets. Provider `bench build` leaves the
+   missing or stale. The customer never compiles assets. Provider `bench build` leaves the
    built per-app bundles in the app's public/dist/ while the
    sites/assets/assets.json manifest already references them — without this
    sync the static root 404s on the hashed bundles and login silently breaks.
@@ -401,8 +401,23 @@ def _app_public(app_root: Path) -> Path | None:
     return inner[0] / "public" if len(inner) == 1 else None
 
 
+def _asset_content_matches(source: Path, served: Path) -> bool:
+    """Compare bytes without a timestamp cache; provider updates can reuse both
+    filenames and stat metadata. Keep memory bounded even for large bundles.
+    """
+    if not served.is_file() or source.stat().st_size != served.stat().st_size:
+        return False
+    if source.samefile(served):
+        return True
+    with source.open("rb") as expected, served.open("rb") as actual:
+        while chunk := expected.read(1024 * 1024):
+            if chunk != actual.read(len(chunk)):
+                return False
+        return actual.read(1) == b""
+
+
 def sync_built_assets(sites_dir: Path = SITES_DIR, apps_dir: Path | None = None) -> list[str]:
-    """Merge each app's public/ tree into sites/assets/<app>/ where missing.
+    """Merge each app's public/ tree into sites/assets/<app>/ when missing or stale.
 
     The static root is served verbatim (SharedDataMiddleware, no manifest
     resolution at serve time), while page rendering resolves bundle names
@@ -411,8 +426,9 @@ def sync_built_assets(sites_dir: Path = SITES_DIR, apps_dir: Path | None = None)
     reliably place its own per-app output there (observed 2026-10-06:
     education's public/dist/js/education.bundle.<hash>.js present in the app,
     absent from sites/assets/education, login page 404ing it). The merge is
-    additive plus same-name overwrite: it never deletes, it is idempotent,
-    and its cost on a complete volume is a stat walk (skips the copy).
+    additive plus same-name overwrite: it never deletes and it is idempotent.
+    Physical copies are content-checked; aliases to the provider public tree
+    need no comparison or copy.
     """
     apps_dir = apps_dir or (BENCH_DIR / "apps")
     assets = sites_dir / "assets"
@@ -424,12 +440,14 @@ def sync_built_assets(sites_dir: Path = SITES_DIR, apps_dir: Path | None = None)
         if public is None:
             continue
         dest = assets / app_root.name
-        missing = [
+        if dest.is_dir() and public.samefile(dest):
+            continue
+        changed = [
             file
             for file in public.rglob("*")
-            if file.is_file() and not (dest / file.relative_to(public)).is_file()
+            if file.is_file() and not _asset_content_matches(file, dest / file.relative_to(public))
         ]
-        if not missing:
+        if not changed:
             continue
         shutil.copytree(public, dest, dirs_exist_ok=True)
         synced.append(app_root.name)

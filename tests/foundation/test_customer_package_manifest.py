@@ -11,6 +11,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from tools.release.create_customer_package import ALLOWED_FILES, MATRIX_FILE, create_package
 
@@ -296,6 +297,57 @@ exit $LASTEXITCODE
         # equal the config digest already checked against the archive bytes.
         result = self.run_verifier(package, loaded=True, inspect={
             "Id": "sha256:" + "c" * 64, "RepoTags": [IMAGE_TAG], "Config": {"Labels": self.labels}})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(os.name == "nt", "Windows built-in tar selection")
+    def test_windows_verifier_prefers_builtin_tar_with_actual_git_tar_first_in_path(self):
+        git = shutil.which("git.exe")
+        if not git:
+            self.skipTest("Git for Windows is unavailable")
+        candidates = [parent / "usr/bin/tar.exe" for parent in Path(git).resolve().parents]
+        git_tar = next((path for path in candidates if path.is_file()), None)
+        if git_tar is None:
+            self.skipTest("Git for Windows GNU tar is unavailable")
+        package, _, _ = self.create()
+        quoted_package = self.tmp / "Customer Kit With Spaces"
+        shutil.copytree(package, quoted_package)
+        package = quoted_package
+        archive_with_spaces = package / "product/release/toefl-house-erp-app.tar"
+        self.assertIn(" ", str(archive_with_spaces))  # Exercises the native quoted argument too.
+        git_first = str(git_tar.parent) + os.pathsep + os.environ.get("PATH", "")
+        self.assertEqual(Path(shutil.which("tar.exe", path=git_first)).resolve(), git_tar.resolve())
+        with patch.dict(os.environ, {"PATH": git_first}):
+            result = self.run_verifier(package)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(os.name == "nt", "Windows built-in tar selection")
+    def test_windows_tar_selector_prefers_sysnative_and_fails_without_builtin(self):
+        command = r"""
+$ErrorActionPreference = 'Stop'
+$tokens = $null; $errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($env:TH_TEST_VERIFY_SCRIPT, [ref]$tokens, [ref]$errors)
+$definition = $ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-PackageTarPath'}, $true)
+if ($null -eq $definition) { throw 'Tar selector function missing' }
+. ([scriptblock]::Create($definition.Extent.Text))
+function Get-Command { throw 'Tar selection must never consult PATH' }
+function Test-Path {
+    param($LiteralPath, $PathType)
+    if ($script:tarCase -eq 'none') { return $false }
+    if ($script:tarCase -eq 'system32') { return $LiteralPath.EndsWith('\System32\tar.exe') }
+    return $true
+}
+$script:tarCase = 'sysnative'
+if (-not (Get-PackageTarPath).EndsWith('\Sysnative\tar.exe')) { throw 'Sysnative did not take priority' }
+$script:tarCase = 'system32'
+if (-not (Get-PackageTarPath).EndsWith('\System32\tar.exe')) { throw 'Native System32 was not selected' }
+$script:tarCase = 'none'
+try { Get-PackageTarPath; throw 'Missing built-in tar was accepted' }
+catch { if ($_.Exception.Message -notmatch 'Windows built-in tar.exe is missing') { throw } }
+exit 0
+"""
+        env = dict(os.environ, TH_TEST_VERIFY_SCRIPT=str(ROOT / "product/windows/Verify Package Image.ps1"))
+        result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
+                                env=env, capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     @unittest.skipUnless(os.name == "nt", "Windows PowerShell verifier")

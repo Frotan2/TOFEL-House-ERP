@@ -1,8 +1,11 @@
 """Final hosted acceptance report must not confuse CI success with release."""
 import ast
 import copy
+from datetime import date
+from decimal import Decimal
 import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 import shutil
@@ -17,9 +20,12 @@ from tools.native.final_acceptance_report import (
     ROLE_PAGE_API, ROLE_PAGE_CSS, ROLE_PAGE_EXTRA_CONTROLS, verify_report,
 )
 from tools.native.native_checks import (
+    BOOK_INVOICE_API, BOOK_PAYMENT_API, BOOK_PAYMENT_BUILDER, BOOK_RETURN_BUILDER, BOOK_SUBMIT_API,
+    CONFIGURATION_API, CONFIGURATION_DENIED_USERS, CONFIGURATION_SECTIONS,
     ROLE_PAGE_API as NATIVE_ROLE_PAGE_API,
     ROLE_PAGE_CASES,
     ROLE_PAGE_CSS as NATIVE_ROLE_PAGE_CSS,
+    configuration_http_observation, native_book_http_cycle,
     role_page_api_observation, role_page_css_observation, role_page_identity,
 )
 
@@ -56,6 +62,80 @@ def receipt(evidence, name):
     return next(check for check in evidence["checks"] if check["name"] == name)
 
 
+def configuration_observation(denied=False):
+    result = dict(method="GET", endpoint=CONFIGURATION_API)
+    if denied:
+        result["denials"] = [dict(user=user, http_status=403, exc_type="PermissionError", docs=[], message=None)
+                             for user in CONFIGURATION_DENIED_USERS]
+    else:
+        sections = []
+        for sid in sorted(CONFIGURATION_SECTIONS):
+            kind = "facts" if sid in ("operations", "student-guardian") else "queue"
+            sections.append(dict(id=sid, title=sid, kind=kind, **{"facts" if kind == "facts" else "items": []}))
+        result.update(user="synthetic-course-owner@example.test", http_status=200,
+                      message=dict(desk="th-configuration", sections=sections))
+    return result
+
+
+def book_reconciliation_observation():
+    accounts = dict(cash="Cash - SYN", receivable="Debtors - SYN", income="Sales - SYN")
+    documents = dict(sale="SYN-BOOK-INVOICE", payment="SYN-BOOK-RECEIVE", **{"return": "SYN-BOOK-CREDIT"}, refund="SYN-BOOK-REFUND")
+    stages = {key: dict(zip(("cash", "customer", "stock_qty", "stock_value"), values)) for key, values in (
+        ("baseline", (1000, 0, 12, 2100)), ("sale", (1000, 600, 10, 1750)),
+        ("payment", (1600, 0, 10, 1750)), ("return", (1600, -600, 12, 2100)), ("refund", (1000, 0, 12, 2100)),
+    )}
+    gl = {}
+    for key, postings in (("sale", (("receivable", 600), ("income", -600))),
+                          ("payment", (("cash", 600), ("receivable", -600))),
+                          ("return", (("income", 600), ("receivable", -600))),
+                          ("refund", (("receivable", 600), ("cash", -600)))):
+        gl[key] = [dict(company="SYN Company", voucher_type="Sales Invoice" if key in ("sale", "return") else "Payment Entry",
+                        voucher_no=documents[key], account=accounts[role], debit=max(value, 0), credit=max(-value, 0),
+                        party_type="Customer" if role == "receivable" else None,
+                        party="SYN Customer" if role == "receivable" else None, is_cancelled=0) for role, value in postings]
+    payments = {}
+    for key, kind, source, target, reference, allocated in (
+        ("payment", "Receive", "receivable", "cash", "sale", 600), ("refund", "Pay", "cash", "receivable", "return", -600),
+    ):
+        payments[key] = dict(payment_type=kind, paid_from=accounts[source], paid_to=accounts[target],
+                             paid_amount=600, received_amount=600, party_type="Customer", party="SYN Customer",
+                             references=[dict(reference_doctype="Sales Invoice", reference_name=documents[reference],
+                                              allocated_amount=allocated)])
+    stock = {key: [dict(voucher_no=documents[key], item_code="SYN Book", warehouse="SYN Warehouse", is_cancelled=0,
+                        actual_qty=qty, stock_value_difference=value)]
+             for key, qty, value in (("sale", -2, -350), ("return", 2, 350))}
+    return dict(user="synthetic-book-seller@example.test", company="SYN Company", currency="AFN", customer="SYN Customer",
+                item="SYN Book", warehouse="SYN Warehouse", amount=600, quantity=2, unit_price=300, unit_cost=175,
+                accounts=accounts, documents=documents, document_status=dict.fromkeys(documents, 1),
+                invoice_totals={"sale": 600, "return": -600}, outstanding={"sale": 0, "return": 0},
+                stages=stages, gl_entries=gl, stock_entries=stock, payment_details=payments)
+
+
+def book_http_observation():
+    reconciliation = book_reconciliation_observation()
+    save_url = BOOK_INVOICE_API + "/" + reconciliation["documents"]["sale"]
+    requests = [dict(stage=stage, method=method, endpoint=endpoint, http_status=200, csrf=True,
+                     user="synthetic-book-seller@example.test") for stage, method, endpoint in (
+        ("invoice-create", "POST", BOOK_INVOICE_API), ("invoice-save", "PUT", save_url),
+        ("invoice-submit", "POST", BOOK_SUBMIT_API), ("payment-build", "GET", BOOK_PAYMENT_BUILDER),
+        ("payment-create", "POST", BOOK_PAYMENT_API), ("payment-submit", "POST", BOOK_SUBMIT_API),
+        ("return-build", "GET", BOOK_RETURN_BUILDER), ("return-create", "POST", BOOK_INVOICE_API),
+        ("return-submit", "POST", BOOK_SUBMIT_API), ("refund-build", "GET", BOOK_PAYMENT_BUILDER),
+        ("refund-create", "POST", BOOK_PAYMENT_API), ("refund-submit", "POST", BOOK_SUBMIT_API),
+    )]
+    counts = dict.fromkeys(("Sales Invoice", "Payment Entry", "GL Entry", "Stock Ledger Entry"), 0)
+    denials = [dict(stage=stage, method=method, endpoint=endpoint, http_status=400 if stage == "csrf-create" else 403,
+                   user="synthetic-book-seller@example.test" if stage == "csrf-create" else "synthetic-outsider@example.test",
+                   exc_type="CSRFTokenError" if stage == "csrf-create" else "PermissionError",
+                   writes_before=dict(counts), writes_after=dict(counts)) for stage, method, endpoint in (
+        ("csrf-create", "POST", BOOK_INVOICE_API), ("outsider-create", "POST", BOOK_INVOICE_API),
+        ("outsider-save", "PUT", save_url), ("outsider-submit", "POST", BOOK_SUBMIT_API),
+        ("outsider-payment", "POST", BOOK_PAYMENT_API), ("outsider-return", "POST", BOOK_INVOICE_API),
+        ("outsider-refund", "POST", BOOK_PAYMENT_API),
+    )]
+    return dict(transport="HTTP", requests=requests, denials=denials, reconciliation=reconciliation)
+
+
 def synthetic_report():
     required = [n for values in REQUIRED_JOURNEYS.values() for n in values]
     checks = [{"name": n, "status": "pass"} for n in required]
@@ -65,6 +145,14 @@ def synthetic_report():
             check["observation"] = authorization_observation()
         elif name == "role-page-css-delivery":
             check["observation"] = css_observation()
+        elif name == "role-desk-configuration-http":
+            check["observation"] = configuration_observation()
+        elif name == "role-desk-configuration-http-denials":
+            check["observation"] = configuration_observation(denied=True)
+        elif name == "book-native-return-cash-refund-reconciliation":
+            check["observation"] = book_reconciliation_observation()
+        elif name == "book-http-cashier-sale-payment-return-refund":
+            check["observation"] = book_http_observation()
         elif name.startswith("role-page-api-"):
             page = name.removeprefix("role-page-api-")
             check["observation"] = page_observation(page, *REQUIRED_ROLE_PAGES[page])
@@ -130,21 +218,23 @@ class FinalHostedAcceptanceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "incomplete"):
             verify_report(evidence, COMMIT)
 
-    def test_every_page_receipt_is_required_even_with_624_passes(self):
+    def test_every_page_receipt_is_required_even_with_full_check_count(self):
         for page in REQUIRED_ROLE_PAGES:
             evidence = synthetic_report()
             receipt(evidence, "role-page-api-" + page)["name"] = "projection-only-" + page
             evidence["checks"].extend({"name": f"padding-{i}", "status": "pass"}
-                                      for i in range(624 - len(evidence["checks"])))
+                                      for i in range(MIN_NATIVE_CHECKS - len(evidence["checks"])))
             with self.subTest(page=page), self.assertRaisesRegex(ValueError, "Missing executed role_pages"):
                 verify_report(evidence, COMMIT)
 
     def test_legacy_projection_only_624_report_is_rejected(self):
         evidence = synthetic_report()
         evidence["checks"] = [check for check in evidence["checks"] if not check["name"].startswith("role-page-")]
+        evidence["checks"] = evidence["checks"][:624]
         evidence["checks"].extend({"name": f"legacy-padding-{i}", "status": "pass"}
                                   for i in range(624 - len(evidence["checks"])))
-        with self.assertRaisesRegex(ValueError, "Missing executed role_pages"):
+        self.assertEqual(len(evidence["checks"]), 624)
+        with self.assertRaisesRegex(ValueError, "Native acceptance evidence is incomplete"):
             verify_report(evidence, COMMIT)
 
     def test_every_page_requires_observed_http_docs_and_assets(self):
@@ -301,6 +391,156 @@ class NativeRolePageHttpTest(unittest.TestCase):
         response.headers["Content-Type"] = "text/html"
         with self.assertRaisesRegex(AssertionError, "content type"):
             role_page_css_observation(session, "http://synthetic", expected["user"], body)
+
+
+class ConfigurationAndBookEvidenceTest(unittest.TestCase):
+    def test_new_receipts_require_actual_observations(self):
+        for name in ("role-desk-configuration-http", "role-desk-configuration-http-denials",
+                     "book-native-return-cash-refund-reconciliation", "book-http-cashier-sale-payment-return-refund"):
+            for missing in (True, False):
+                evidence = synthetic_report()
+                if missing:
+                    receipt(evidence, name)["name"] = "replacement"
+                else:
+                    receipt(evidence, name).pop("observation")
+                with self.subTest(name=name, missing=missing), self.assertRaises(ValueError):
+                    verify_report(evidence, COMMIT)
+
+    def test_configuration_collector_calls_real_rpc_and_reads_message(self):
+        expected = configuration_observation()
+        session = Mock()
+        session.get.return_value = Mock(status_code=200)
+        session.get.return_value.json.return_value = {"message": expected["message"]}
+        self.assertEqual(configuration_http_observation(session, "http://synthetic", expected["user"]), expected)
+        session.get.assert_called_once_with("http://synthetic" + CONFIGURATION_API,
+                                            headers={"Accept": "application/json"}, timeout=30, allow_redirects=False)
+
+    def test_configuration_positive_requires_endpoint_identity_and_real_sections(self):
+        for path, bad in ((('endpoint',), ROLE_PAGE_API), (('user',), 'Administrator'),
+                          (('http_status',), 302), (('message',), None), (('message', 'desk'), 'th-owner-cockpit'),
+                          (('message', 'sections'), [])):
+            evidence = synthetic_report()
+            observed = receipt(evidence, "role-desk-configuration-http")["observation"]
+            target = observed
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = bad
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "Configuration HTTP"):
+                verify_report(evidence, COMMIT)
+
+    def test_http_commerce_requires_every_step_and_strict_csrf_and_role_controls(self):
+        original = book_http_observation()
+        for key in ("requests", "denials"):
+            for index in range(len(original[key])):
+                evidence = synthetic_report()
+                receipt(evidence, "book-http-cashier-sale-payment-return-refund")["observation"][key].pop(index)
+                with self.subTest(key=key, index=index), self.assertRaisesRegex(ValueError, "book HTTP"):
+                    verify_report(evidence, COMMIT)
+        for key, index, field, bad in (
+            ("requests", 0, "endpoint", "/api/method/toefl_house.finance.issue_placement_fee"),
+            ("requests", 0, "method", "GET"), ("requests", 0, "csrf", False),
+            ("requests", 0, "user", "Administrator"), ("requests", 0, "http_status", 302),
+            ("denials", 0, "exc_type", "PermissionError"), ("denials", 1, "exc_type", "CSRFTokenError"),
+            ("denials", 1, "http_status", 404), ("denials", 1, "writes_after", {"Sales Invoice": 1}),
+        ):
+            evidence = synthetic_report()
+            receipt(evidence, "book-http-cashier-sale-payment-return-refund")["observation"][key][index][field] = bad
+            with self.subTest(key=key, field=field), self.assertRaisesRegex(ValueError, "book HTTP"):
+                verify_report(evidence, COMMIT)
+        evidence = synthetic_report()
+        receipt(evidence, "book-http-cashier-sale-payment-return-refund")["observation"]["reconciliation"]["stages"]["refund"]["cash"] = 1600
+        with self.assertRaisesRegex(ValueError, "book accounting"):
+            verify_report(evidence, COMMIT)
+
+    def test_cashier_driver_uses_http_for_every_write_and_native_builders(self):
+        reconciliation = book_reconciliation_observation()
+        documents = reconciliation["documents"]
+        cashier, outsider, frappe = Mock(), Mock(), Mock()
+        cashier.headers = outsider.headers = {"X-Frappe-CSRF-Token": "unit-csrf"}
+        frappe.db.count.return_value = 0
+        frappe.as_json.side_effect = lambda value: json.dumps(value, default=str)
+
+        def respond(method, url, **kwargs):
+            json.dumps(kwargs.get("json"))  # requests' encoder must receive only JSON-safe native values.
+            if kwargs["headers"].get("X-Frappe-CSRF-Token") == "invalid-native-cashier-csrf":
+                response = Mock(status_code=400)
+                response.json.return_value = {"exc_type": "CSRFTokenError"}
+                return response
+            payload, params = kwargs.get("json") or {}, kwargs.get("params") or {}
+            if url.endswith(BOOK_PAYMENT_BUILDER):
+                doc = dict(doctype="Payment Entry", payment_type="Pay" if params["dn"] == documents["return"] else "Receive")
+            elif url.endswith(BOOK_RETURN_BUILDER):
+                doc = dict(doctype="Sales Invoice", is_return=1)
+            elif url.endswith(BOOK_SUBMIT_API):
+                doc = dict(payload["doc"], docstatus=1)
+            elif method == "PUT":
+                doc = dict(doctype="Sales Invoice", name=documents["sale"], docstatus=0)
+            else:
+                key = ("refund" if payload.get("payment_type") == "Pay" else "payment") if url.endswith(BOOK_PAYMENT_API) else (
+                    "return" if payload.get("is_return") else "sale")
+                doc = dict(payload, name=documents[key], docstatus=0)
+            response = Mock(status_code=200)
+            response.json.return_value = {"data" if "/api/resource/" in url else "message": doc}
+            return response
+
+        cashier.request.side_effect = respond
+        outsider.request.return_value = Mock(status_code=403)
+        outsider.request.return_value.json.return_value = {"exc_type": "PermissionError"}
+        context = {key: value for key, value in reconciliation.items() if key in (
+            "user", "company", "customer", "currency", "item", "warehouse", "amount", "quantity", "unit_price", "unit_cost", "accounts")}
+        states = [reconciliation["stages"][key] for key in ("baseline", "sale", "payment", "return", "refund")]
+        with patch("tools.native.native_checks.native_book_state", side_effect=states), \
+                patch("tools.native.native_checks.collect_book_reconciliation", return_value=reconciliation) as collect:
+            payload = {"doctype": "Sales Invoice", "posting_date": date(2026, 10, 23),
+                       "conversion_rate": Decimal("1.0"), "items": [{"item_code": "SYN Book"}]}
+            observed = native_book_http_cycle(frappe, cashier, outsider, "http://synthetic", context,
+                                             payload)
+        self.assertEqual(len(observed["requests"]), 12)
+        self.assertEqual(len(observed["denials"]), 7)
+        self.assertEqual(outsider.request.call_count, 6)
+        self.assertEqual(collect.call_args.args[2], documents)
+        frappe.as_json.assert_called_once_with(payload)
+        frappe.get_doc.assert_not_called()
+
+    def test_configuration_denials_are_complete_and_strict(self):
+        for index in range(len(CONFIGURATION_DENIED_USERS)):
+            evidence = synthetic_report()
+            receipt(evidence, "role-desk-configuration-http-denials")["observation"]["denials"].pop(index)
+            with self.subTest(index=index), self.assertRaisesRegex(ValueError, "Configuration HTTP"):
+                verify_report(evidence, COMMIT)
+        for key, bad in (("http_status", 404), ("http_status", 500), ("exc_type", "CSRFTokenError"),
+                         ("message", {"desk": "th-configuration"}), ("docs", [{"doctype": "Page"}])):
+            evidence = synthetic_report()
+            receipt(evidence, "role-desk-configuration-http-denials")["observation"]["denials"][0][key] = bad
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, "Configuration HTTP"):
+                verify_report(evidence, COMMIT)
+
+    def test_book_reconciliation_rejects_wrong_amounts_accounts_stock_cash_customer_or_refund(self):
+        mutations = (
+            (("amount",), 599), (("unit_price",), 301), (("quantity",), 0), (("unit_cost",), float("nan")),
+            (("user",), "Administrator"), (("document_status", "refund"), 0),
+            (("invoice_totals", "return"), -500), (("outstanding", "return"), -600),
+            (("gl_entries", "refund"), []), (("gl_entries", "refund", 0, "account"), "Wrong account"),
+            (("gl_entries", "sale", 0, "debit"), 599), (("gl_entries", "refund", 0, "party"), "Wrong customer"),
+            (("gl_entries", "return", 0, "is_cancelled"), 1),
+            (("stock_entries", "return", 0, "actual_qty"), 1),
+            (("stock_entries", "return", 0, "stock_value_difference"), 349),
+            (("stock_entries", "sale", 0, "warehouse"), "Wrong warehouse"),
+            (("stages", "refund", "cash"), 1600), (("stages", "refund", "customer"), -600),
+            (("stages", "refund", "stock_qty"), 10), (("stages", "refund", "stock_value"), 1750),
+            (("payment_details", "refund", "payment_type"), "Receive"),
+            (("payment_details", "refund", "paid_amount"), 500),
+            (("payment_details", "refund", "references", 0, "reference_name"), "SYN-BOOK-INVOICE"),
+            (("payment_details", "refund", "references", 0, "allocated_amount"), 600),
+        )
+        for path, bad in mutations:
+            evidence = synthetic_report()
+            target = receipt(evidence, "book-native-return-cash-refund-reconciliation")["observation"]
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = bad
+            with self.subTest(path=path, bad=bad), self.assertRaisesRegex(ValueError, "book accounting"):
+                verify_report(evidence, COMMIT)
 
 
 class NativeStaticWiringTest(unittest.TestCase):

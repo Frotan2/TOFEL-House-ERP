@@ -101,6 +101,42 @@ after verifying the branch/tag still resolves to the selected SHA. This
 orchestration and the revised native asset setup still require their next CI
 run to finish; unit/contract results alone are not the release decision.
 
+### Follow-up candidate `99f998b`
+
+On `99f998b8921ffdb61d438eed0889f42cbf325f7e`, the
+[Owned suite](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39945006812)
+passed 1,648 tests with seven explicit skips and the Node suites. The
+[Windows package smoke](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39945027919)
+passed. The complete
+[native lifecycle](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39945006759)
+passed, including the final unchanged-upstream source audit, encrypted isolated
+restore, wrong-key rejection and post-restart verification. Its independently
+downloaded report passed the receipt verifier: 634 checks, all eight real HTTP
+Page loads, 12 authorized controls, 56 strict permission denials and the nine
+book-commerce checks.
+
+The [Product image candidate](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/39945006773)
+built and passed first boot, encrypted recovery, Chromium login, proxy/session,
+restart, and upgrade/rollback steps. Engineering deliberately **cancelled it
+before package assembly/publication** when a further audit found two defects:
+existing physical assets could retain old same-name CSS, and PATH-selected Git
+GNU tar could reject valid Windows drive paths. There is no deliverable from
+that run. The downloaded Chromium screenshot shows the authenticated setup
+wizard; it does not prove a completed wizard or eight rendered role desks.
+
+The next revision adds content-aware asset refresh, explicit Windows built-in
+tar selection, and real Chromium desk loads with minimal-role users, successful
+Page/content RPCs, visible sections, and script/asset failure checks. The native
+follow-up also checks Configuration's content endpoint and exact book-return
+accounting. The cashier's separate authenticated HTTP journey includes invoice
+create/save/submit, payment, return and refund, with CSRF/unrelated-user denials
+and account/stock/cash reconciliation. The minimum native receipt count is now
+638. Earlier book checks prove posting and GL-row presence, not complete
+account/cash reconciliation. These additions require fresh exact-revision CI;
+they are not qualified merely by being implemented. Publication waits up to
+60 minutes for the required native/foundation jobs, while preserving immediate
+rejection of a failed gate.
+
 The canonical release blockers are GitHub issues [#12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
 [#35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35), and
 [#36](https://github.com/Frotan2/TOFEL-House-ERP/issues/36):

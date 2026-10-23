@@ -10,11 +10,23 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+function Get-PackageTarPath {
+    # Git's GNU tar interprets C:\... as a remote archive even when quoted.
+    # Sysnative reaches native System32 from a 32-bit PowerShell process; it
+    # does not exist for a native 64-bit process, which uses System32 directly.
+    $windowsRoot = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Windows)
+    foreach ($directory in @('Sysnative', 'System32')) {
+        $candidate = Join-Path $windowsRoot ($directory + '\tar.exe')
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    throw "Windows built-in tar.exe is missing. Repair the Windows prerequisite before installing this package."
+}
+
 function Read-TarMetadata {
     param([string]$Path, [string]$Member)
     # Windows 10/11 include tar.exe. Read stdout bytes, never extract to disk or
     # round-trip config JSON through native text output before hashing it.
-    $tar = (Get-Command tar.exe -ErrorAction Stop).Source
+    $tar = Get-PackageTarPath
     $resolved = (Resolve-Path -LiteralPath $Path).Path
     $info = New-Object System.Diagnostics.ProcessStartInfo
     $info.FileName = $tar

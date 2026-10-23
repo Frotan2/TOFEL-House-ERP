@@ -12,6 +12,11 @@ import os
 from pathlib import Path
 import sys
 
+if __package__:
+    from .native_checks import validate_book_http, validate_book_reconciliation, validate_configuration_http
+else:
+    from native_checks import validate_book_http, validate_book_reconciliation, validate_configuration_http
+
 ROLE_PAGE_API = "/api/method/frappe.desk.desk_page.getpage"
 ROLE_PAGE_CSS = "/assets/toefl_house/css/th_design_system.css"
 REQUIRED_ROLE_PAGES = {
@@ -66,6 +71,8 @@ REQUIRED_JOURNEYS = {
         "book-native-sale-posts-invoice-stock-and-ledger",
         "book-native-payment-settles-invoice",
         "book-native-return-restocks-and-credits",
+        "book-native-return-cash-refund-reconciliation",
+        "book-http-cashier-sale-payment-return-refund",
         "book-native-converted-student-can-buy-only-books",
         "book-native-placement-item-still-denied",
     ),
@@ -78,6 +85,10 @@ REQUIRED_JOURNEYS = {
         *("role-page-api-" + page for page in REQUIRED_ROLE_PAGES),
         "role-page-api-authorization",
         "role-page-css-delivery",
+    ),
+    "configuration_http": (
+        "role-desk-configuration-http",
+        "role-desk-configuration-http-denials",
     ),
     "teacher_compensation": (
         "teaching-compensation-contract-authority",
@@ -92,7 +103,7 @@ REQUIRED_JOURNEYS = {
     ),
 }
 
-MIN_NATIVE_CHECKS = 300
+MIN_NATIVE_CHECKS = 638
 EXPECTED_RUNTIME = "Frappe/MariaDB/Redis/HTTP"
 
 
@@ -195,6 +206,10 @@ def verify_report(evidence: dict, commit: str) -> dict:
         _verify_role_page(receipts["role-page-api-" + page].get("observation"), page, user, projection)
     _verify_role_page_authorization(receipts["role-page-api-authorization"].get("observation"))
     _verify_role_page_css(receipts["role-page-css-delivery"].get("observation"))
+    validate_configuration_http(receipts["role-desk-configuration-http"].get("observation"))
+    validate_configuration_http(receipts["role-desk-configuration-http-denials"].get("observation"), denied=True)
+    validate_book_reconciliation(receipts["book-native-return-cash-refund-reconciliation"].get("observation"))
+    validate_book_http(receipts["book-http-cashier-sale-payment-return-refund"].get("observation"))
     return {
         "scope": "HOSTED SYNTHETIC NATIVE ERP JOURNEYS ONLY",
         "commit": commit,

@@ -24,6 +24,7 @@ on:
       - tools/native/run_native.py
       - tools/native/migrate_restore_site.py
       - tools/native/policy_restart_check.py
+      - tools/native/browser_role_acceptance.py
       # The Dockerfile COPYs these helpers into the production image. A change
       # to their security checks must rebuild the image on this PR, not merely
       # pass the fast Python suite.
@@ -951,6 +952,7 @@ jobs:
               assert page.url.startswith("http://127.0.0.1:8000/desk"), page.url
               assert page.query_selector("#login_password") is None, "login form still present after login"
               assert len(page.inner_text("body").strip()) > 200, "desk rendered no content"
+              assert not page_errors, ("post-login JavaScript exceptions", page_errors)
               page.screenshot(path=str(shot))
               browser.close()
           print("::notice title=Browser UI::real Chromium: login page -> real login -> authenticated desk surface (screenshot kept)")
@@ -965,12 +967,25 @@ jobs:
           python3 ../tools/foundation/annotated_step.py "Browser UI: chromium install" -- /tmp/browser-ui-venv/bin/python -m playwright install --with-deps chromium
           BROWSER_UI_USER="$cred_user" BROWSER_UI_PASSWORD="$cred_password" \
             python3 ../tools/foundation/annotated_step.py "Browser UI: live check" -- /tmp/browser-ui-venv/bin/python browser_ui_check.py
+          # The initial login above deliberately tests the fresh setup surface.
+          # Now complete native setup in this deactivated disposable site and
+          # execute every role client with its own minimal-role login.
+          docker compose cp ../tools/native/browser_role_acceptance.py web:/tmp/browser_role_acceptance.py
+          export BROWSER_UI_PASSWORD="$cred_password"
+          docker compose exec -T -e GITHUB_ACTIONS=true -e CI=1 -e BROWSER_UI_PASSWORD \
+            -w /home/frappe/bench/sites web /home/frappe/bench/env/bin/python \
+            /tmp/browser_role_acceptance.py --prepare
+          CI=1 python3 ../tools/foundation/annotated_step.py "Browser UI: eight authenticated role desks" -- \
+            /tmp/browser-ui-venv/bin/python ../tools/native/browser_role_acceptance.py
+          unset BROWSER_UI_PASSWORD
       - name: Keep browser UI evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: browser-ui-evidence
-          path: product/browser-ui-evidence.png
+          path: |
+            product/browser-ui-evidence.png
+            product/browser-role-evidence/
           if-no-files-found: ignore
       - name: Multi-user tailnet contract (second client, no public exposure, restart persistence)
         # The owner deployment (D13/D15) is one central PC plus authorized
@@ -1659,7 +1674,7 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 tools/release/verify_ci_gates.py
+        run: python3 tools/release/verify_ci_gates.py --timeout 3600
       - name: Assemble verified customer package
         if: success()
         run: |

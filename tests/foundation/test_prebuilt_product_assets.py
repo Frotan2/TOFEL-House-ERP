@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -62,6 +65,74 @@ class PrebuiltProductAssetsTests(unittest.TestCase):
         bootstrap.ensure_built_assets(sites, self.apps)
         self.assertEqual(json.loads((sites / "assets" / "assets.json").read_text()), self.manifest)
         self.assertEqual((sites / "site_config.json").read_text(), "owner settings")
+
+    def test_physical_asset_update_refreshes_same_name_and_stat_contents_only(self):
+        sites = self.root / "customer-sites"
+        # Model installations made before app aliases: a complete physical tree
+        # whose manifest and bundle names do not change in the provider update.
+        served = sites / "assets" / "education"
+        shutil.copytree(self.public, served)
+        stylesheet = self.public / "css" / "style.css"
+        stylesheet.parent.mkdir()
+        stylesheet.write_bytes(b"old css")
+        served_css = served / "css" / "style.css"
+        served_css.parent.mkdir()
+        shutil.copy2(stylesheet, served_css)
+        preserved = {
+            sites / "owner.localhost/site_config.json": b"owner site configuration",
+            sites / "owner.localhost/private/credentials.txt": b"private credentials",
+            sites / "owner.localhost/public/files/student.txt": b"student file",
+            sites.parent / "secrets/db.env": b"database secret",
+            served / "unrelated.txt": b"preserve unrelated asset",
+        }
+        for path, data in preserved.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        original_stat = stylesheet.stat()
+        for content in (b"new css", b"NEW CSS"):
+            with self.subTest(content=content):
+                stylesheet.write_bytes(content)
+                os.utime(stylesheet, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+                # copy2 kept identical size/mtime on the target, so a shallow or
+                # cached stat comparison cannot distinguish these updates.
+                self.assertEqual(stylesheet.stat().st_size, served_css.stat().st_size)
+                self.assertEqual(stylesheet.stat().st_mtime_ns, served_css.stat().st_mtime_ns)
+                bootstrap.restore_prebuilt_assets(sites, self.seed, self.apps)
+                self.assertFalse(served.is_symlink())
+                self.assertEqual(bootstrap.ensure_built_assets(sites, self.apps), ["education"])
+                self.assertEqual(served_css.read_bytes(), content)
+                self.assertEqual(bootstrap.manifest_assets_missing(sites), [])
+                self.assertEqual(json.loads((sites / "assets/assets.json").read_text()), self.manifest)
+                for path, data in preserved.items():
+                    self.assertEqual(path.read_bytes(), data)
+                with patch.object(bootstrap.shutil, "copytree") as copy:
+                    self.assertEqual(bootstrap.ensure_built_assets(sites, self.apps), [])
+                    copy.assert_not_called()
+
+    def test_provider_public_alias_never_compares_or_copies_onto_itself(self):
+        sites = self.root / "customer-sites"
+        served = sites / "assets" / "education"
+        served.parent.mkdir(parents=True)
+        try:
+            served.symlink_to(self.public, target_is_directory=True)
+        except OSError:
+            if os.name != "nt":
+                self.skipTest("directory symlinks are unavailable on this host")
+            # A directory junction exercises the same samefile fast path on
+            # Windows without requiring the symbolic-link privilege.
+            self.assertTrue(served.resolve().is_relative_to(self.root.resolve()))
+            self.assertTrue(self.public.resolve().is_relative_to(self.root.resolve()))
+            # Pass CMD's quoted command line intact; list2cmdline escaping of
+            # embedded quotes is not CMD's /c quoting convention.
+            command = f'"{os.environ["COMSPEC"]}" /d /c mklink /J "{served}" "{self.public}"'
+            result = subprocess.run(command,
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        with patch.object(bootstrap, "_asset_content_matches", side_effect=AssertionError("alias needs no byte scan")), \
+                patch.object(bootstrap.shutil, "copytree") as copy:
+            self.assertEqual(bootstrap.sync_built_assets(sites, self.apps), [])
+            copy.assert_not_called()
+        self.assertEqual((self.public / "dist/lesson.js").read_text(), "provider compiled bundle")
 
     def test_incomplete_provider_seed_refuses_without_build_fallback(self):
         missing = self.root / "missing-seed"

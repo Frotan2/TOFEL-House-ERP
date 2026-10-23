@@ -3,6 +3,7 @@ import concurrent.futures
 from datetime import timedelta
 import hashlib
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -25,6 +26,329 @@ ROLE_PAGE_CASES = {
     'th-teacher-desk': ('teacher_one', 'toefl_house.desk.teacher.work'),
     'th-configuration': ('course_owner', 'toefl_house.desk.configuration.work'),
 }
+CONFIGURATION_API = '/api/method/toefl_house.desk.configuration.work'
+CONFIGURATION_DENIED_USERS = tuple('synthetic-' + label.replace('_', '-') + '@example.test' for label in (
+    'receptionist', 'academic_manager', 'finance_manager', 'general_manager', 'teacher_one',
+    'outsider', 'academic_scheduler', 'finance_officer', 'teaching_scheduler')) + ('Guest',)
+CONFIGURATION_SECTIONS = {'academic', 'owner-policies', 'backup-recovery', 'student-guardian', 'operations', 'system-readiness'}
+BOOK_INVOICE_API = '/api/resource/Sales%20Invoice'
+BOOK_PAYMENT_API = '/api/resource/Payment%20Entry'
+BOOK_SUBMIT_API = '/api/method/frappe.client.submit'
+BOOK_PAYMENT_BUILDER = '/api/method/erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry'
+BOOK_RETURN_BUILDER = '/api/method/erpnext.accounts.doctype.sales_invoice.sales_invoice.make_sales_return'
+
+
+def validate_configuration_http(observation, denied=False):
+    def require(condition):
+        if not condition:
+            raise ValueError('Invalid Configuration HTTP evidence')
+    require(isinstance(observation, dict))
+    require(observation.get('method') == 'GET' and observation.get('endpoint') == CONFIGURATION_API)
+    if denied:
+        rows = observation.get('denials')
+        require(isinstance(rows, list) and len(rows) == len(CONFIGURATION_DENIED_USERS))
+        seen = set()
+        for row in rows:
+            require(isinstance(row, dict) and isinstance(row.get('user'), str))
+            require(row['user'] in CONFIGURATION_DENIED_USERS and row['user'] not in seen)
+            seen.add(row['user'])
+            require(row.get('http_status') == 403 and row.get('exc_type') == 'PermissionError')
+            require(row.get('docs') == [] and not isinstance(row.get('message'), (dict, list)))
+        require(seen == set(CONFIGURATION_DENIED_USERS))
+        return
+    require(observation.get('user') == 'synthetic-course-owner@example.test' and observation.get('http_status') == 200)
+    message = observation.get('message')
+    require(isinstance(message, dict) and message.get('desk') == 'th-configuration')
+    sections = message.get('sections')
+    require(isinstance(sections, list))
+    seen = set()
+    for section in sections:
+        require(isinstance(section, dict) and isinstance(section.get('id'), str))
+        require(section['id'] not in seen and isinstance(section.get('title'), str))
+        seen.add(section['id'])
+        require(section.get('kind') in ('queue', 'facts', 'links'))
+        require(isinstance(section.get('facts' if section['kind'] == 'facts' else 'items'), list))
+    require(CONFIGURATION_SECTIONS <= seen)
+
+
+def native_book_state(frappe, context):
+    def balance(account, party=None):
+        where = 'company=%s and account=%s and is_cancelled=0'
+        args = [context['company'], account]
+        if party:
+            where += " and party_type='Customer' and party=%s"
+            args.append(party)
+        return float(frappe.db.sql('select coalesce(sum(debit-credit),0) from `tabGL Entry` where ' + where, args)[0][0])
+    stock = frappe.db.get_value('Bin', {'item_code': context['item'], 'warehouse': context['warehouse']},
+                                ['actual_qty', 'stock_value'], as_dict=True)
+    assert stock and stock.actual_qty is not None and stock.stock_value is not None, 'Missing book stock snapshot'
+    return {'cash': balance(context['accounts']['cash']),
+            'customer': balance(context['accounts']['receivable'], context['customer']),
+            'stock_qty': float(stock.actual_qty), 'stock_value': float(stock.stock_value)}
+
+
+def collect_book_reconciliation(frappe, context, documents, stages):
+    docs = {key: frappe.get_doc('Sales Invoice' if key in ('sale', 'return') else 'Payment Entry', name)
+            for key, name in documents.items()}
+    result = dict(context, documents=dict(documents), stages=dict(stages),
+                  document_status={key: int(doc.docstatus) for key, doc in docs.items()},
+                  invoice_totals={key: float(docs[key].grand_total) for key in ('sale', 'return')},
+                  outstanding={key: float(docs[key].outstanding_amount) for key in ('sale', 'return')},
+                  gl_entries={}, stock_entries={}, payment_details={})
+    for key, doc in docs.items():
+        result['gl_entries'][key] = frappe.get_all('GL Entry',
+            filters={'voucher_type': doc.doctype, 'voucher_no': doc.name, 'is_cancelled': 0},
+            fields=['company', 'voucher_type', 'voucher_no', 'account', 'party_type', 'party', 'debit', 'credit', 'is_cancelled'])
+        for row in result['gl_entries'][key]:
+            row['debit'], row['credit'] = float(row['debit']), float(row['credit'])
+        if key in ('sale', 'return'):
+            result['stock_entries'][key] = frappe.get_all('Stock Ledger Entry',
+                filters={'voucher_type': 'Sales Invoice', 'voucher_no': doc.name, 'is_cancelled': 0},
+                fields=['voucher_no', 'item_code', 'warehouse', 'actual_qty', 'stock_value_difference', 'is_cancelled'])
+            for row in result['stock_entries'][key]:
+                row['actual_qty'], row['stock_value_difference'] = float(row['actual_qty']), float(row['stock_value_difference'])
+        else:
+            result['payment_details'][key] = {
+                'payment_type': doc.payment_type, 'party_type': doc.party_type, 'party': doc.party,
+                'paid_from': doc.paid_from, 'paid_to': doc.paid_to,
+                'paid_amount': float(doc.paid_amount), 'received_amount': float(doc.received_amount),
+                'references': [{'reference_doctype': row.reference_doctype, 'reference_name': row.reference_name,
+                                'allocated_amount': float(row.allocated_amount)} for row in doc.references]}
+    validate_book_reconciliation(result)
+    return result
+
+
+def validate_book_reconciliation(observation):
+    """Recompute conservation from actual voucher/account and stage receipts."""
+    def require(condition):
+        if not condition:
+            raise ValueError('Invalid book accounting reconciliation')
+    def number(value):
+        require(not isinstance(value, bool) and isinstance(value, (int, float)))
+        require(math.isfinite(value))
+        return float(value)
+    def close(actual, expected):
+        require(abs(number(actual) - expected) < 0.005)
+    require(isinstance(observation, dict))
+    require(observation.get('user') == 'synthetic-book-seller@example.test')
+    for key in ('company', 'currency', 'customer', 'item', 'warehouse'):
+        require(isinstance(observation.get(key), str) and bool(observation[key]))
+    amount, qty = number(observation.get('amount')), number(observation.get('quantity'))
+    require(amount > 0 and qty > 0)
+    close(amount, qty * number(observation.get('unit_price')))
+    value = qty * number(observation.get('unit_cost'))
+    require(value > 0)
+    accounts, documents = observation.get('accounts'), observation.get('documents')
+    require(isinstance(accounts, dict) and set(accounts) == {'cash', 'receivable', 'income'})
+    require(all(isinstance(account, str) and account for account in accounts.values()) and len(set(accounts.values())) == 3)
+    require(isinstance(documents, dict) and set(documents) == {'sale', 'payment', 'return', 'refund'})
+    require(all(isinstance(name, str) and name for name in documents.values()) and len(set(documents.values())) == 4)
+    require(observation.get('document_status') == dict.fromkeys(documents, 1))
+    totals, outstanding = observation.get('invoice_totals'), observation.get('outstanding')
+    require(isinstance(totals, dict) and isinstance(outstanding, dict))
+    for key, sign in (('sale', 1), ('return', -1)):
+        close(totals.get(key), sign * amount)
+        close(outstanding.get(key), 0)
+    stages = observation.get('stages')
+    require(isinstance(stages, dict) and isinstance(stages.get('baseline'), dict))
+    baseline = stages['baseline']
+    for stage, offsets in (('sale', (0, amount, -qty, -value)), ('payment', (amount, 0, -qty, -value)),
+                           ('return', (amount, -amount, 0, 0)), ('refund', (0, 0, 0, 0))):
+        require(isinstance(stages.get(stage), dict))
+        for field, delta in zip(('cash', 'customer', 'stock_qty', 'stock_value'), offsets):
+            close(stages[stage].get(field), number(baseline.get(field)) + delta)
+    gl = observation.get('gl_entries')
+    require(isinstance(gl, dict))
+    posting = {'sale': {'receivable': amount, 'income': -amount},
+               'payment': {'cash': amount, 'receivable': -amount},
+               'return': {'income': amount, 'receivable': -amount},
+               'refund': {'receivable': amount, 'cash': -amount}}
+    for key, expected in posting.items():
+        rows = gl.get(key)
+        require(isinstance(rows, list) and bool(rows))
+        actual = {}
+        for row in rows:
+            require(isinstance(row, dict) and row.get('is_cancelled') == 0)
+            require(row.get('company') == observation['company'] and row.get('voucher_no') == documents[key])
+            require(row.get('voucher_type') == ('Sales Invoice' if key in ('sale', 'return') else 'Payment Entry'))
+            account = row.get('account')
+            require(account in {accounts[role] for role in expected})
+            if account == accounts['receivable']:
+                require(row.get('party_type') == 'Customer' and row.get('party') == observation['customer'])
+            actual[account] = actual.get(account, 0) + number(row.get('debit')) - number(row.get('credit'))
+        require(set(actual) == {accounts[role] for role in expected})
+        for role, expected_amount in expected.items():
+            close(actual[accounts[role]], expected_amount)
+        close(sum(actual.values()), 0)
+    stock = observation.get('stock_entries')
+    require(isinstance(stock, dict))
+    for key, sign in (('sale', -1), ('return', 1)):
+        rows = stock.get(key)
+        require(isinstance(rows, list) and bool(rows))
+        for row in rows:
+            require(isinstance(row, dict) and row.get('is_cancelled') == 0 and row.get('voucher_no') == documents[key])
+            require(row.get('item_code') == observation['item'] and row.get('warehouse') == observation['warehouse'])
+        close(sum(number(row.get('actual_qty')) for row in rows), sign * qty)
+        close(sum(number(row.get('stock_value_difference')) for row in rows), sign * value)
+    details = observation.get('payment_details')
+    require(isinstance(details, dict))
+    for key, kind, source, target, reference, sign in (
+        ('payment', 'Receive', 'receivable', 'cash', 'sale', 1), ('refund', 'Pay', 'cash', 'receivable', 'return', -1),
+    ):
+        detail = details.get(key)
+        require(isinstance(detail, dict) and detail.get('payment_type') == kind)
+        require(detail.get('party_type') == 'Customer' and detail.get('party') == observation['customer'])
+        require(detail.get('paid_from') == accounts[source] and detail.get('paid_to') == accounts[target])
+        close(detail.get('paid_amount'), amount)
+        close(detail.get('received_amount'), amount)
+        refs = detail.get('references')
+        require(isinstance(refs, list) and len(refs) == 1 and isinstance(refs[0], dict))
+        require(refs[0].get('reference_doctype') == 'Sales Invoice' and refs[0].get('reference_name') == documents[reference])
+        close(refs[0].get('allocated_amount'), sign * amount)
+
+
+def validate_book_http(observation):
+    def require(condition):
+        if not condition:
+            raise ValueError('Invalid book HTTP transport evidence')
+    require(isinstance(observation, dict) and observation.get('transport') == 'HTTP')
+    reconciliation = observation.get('reconciliation')
+    validate_book_reconciliation(reconciliation)
+    sale = reconciliation['documents']['sale']
+    expected = {
+        'invoice-create': ('POST', BOOK_INVOICE_API),
+        'invoice-save': ('PUT', BOOK_INVOICE_API + '/' + quote(sale, safe='')),
+        'invoice-submit': ('POST', BOOK_SUBMIT_API),
+        'payment-build': ('GET', BOOK_PAYMENT_BUILDER),
+        'payment-create': ('POST', BOOK_PAYMENT_API), 'payment-submit': ('POST', BOOK_SUBMIT_API),
+        'return-build': ('GET', BOOK_RETURN_BUILDER),
+        'return-create': ('POST', BOOK_INVOICE_API), 'return-submit': ('POST', BOOK_SUBMIT_API),
+        'refund-build': ('GET', BOOK_PAYMENT_BUILDER),
+        'refund-create': ('POST', BOOK_PAYMENT_API), 'refund-submit': ('POST', BOOK_SUBMIT_API),
+    }
+    denied = {'csrf-create': ('POST', BOOK_INVOICE_API), 'outsider-create': ('POST', BOOK_INVOICE_API),
+              'outsider-save': expected['invoice-save'], 'outsider-submit': expected['invoice-submit'],
+              'outsider-payment': expected['payment-create'], 'outsider-return': expected['return-create'],
+              'outsider-refund': expected['refund-create']}
+    for key, wanted in (('requests', expected), ('denials', denied)):
+        rows = observation.get(key)
+        require(isinstance(rows, list) and len(rows) == len(wanted))
+        seen = set()
+        for row in rows:
+            require(isinstance(row, dict) and isinstance(row.get('stage'), str))
+            stage = row['stage']
+            require(stage in wanted and stage not in seen)
+            seen.add(stage)
+            require((row.get('method'), row.get('endpoint')) == wanted[stage])
+            if key == 'requests':
+                require(row.get('user') == 'synthetic-book-seller@example.test' and row.get('http_status') == 200)
+                require(row.get('method') == 'GET' or row.get('csrf') is True)
+            else:
+                csrf = stage == 'csrf-create'
+                require(row.get('user') == ('synthetic-book-seller@example.test' if csrf else 'synthetic-outsider@example.test'))
+                require(row.get('http_status') in ((400, 403) if csrf else (403,)))
+                require(row.get('exc_type') == ('CSRFTokenError' if csrf else 'PermissionError'))
+                before, after = row.get('writes_before'), row.get('writes_after')
+                require(isinstance(before, dict) and before == after
+                        and set(before) == {'Sales Invoice', 'Payment Entry', 'GL Entry', 'Stock Ledger Entry'})
+                require(all(type(value) is int and value >= 0 for value in before.values()))
+        require(seen == set(wanted))
+
+
+def native_book_http_cycle(frappe, session, outsider, base, context, invoice_payload):
+    """Write the whole cashier cycle exclusively through authenticated HTTP."""
+    requests_done, denials, documents, stages = [], [], {}, {}
+
+    def counts():
+        frappe.db.rollback()  # HTTP workers commit independently of this observer.
+        return {dt: frappe.db.count(dt) for dt in ('Sales Invoice', 'Payment Entry', 'GL Entry', 'Stock Ledger Entry')}
+
+    def snapshot():
+        frappe.db.rollback()
+        return native_book_state(frappe, context)
+
+    def request(stage, method, endpoint, payload=None, params=None, reject=False):
+        actor = session if not stage.startswith('outsider-') else outsider
+        user = context['user'] if actor is session else 'synthetic-outsider@example.test'
+        assert actor.headers.get('X-Frappe-CSRF-Token'), 'Fresh authenticated cashier sessions require CSRF tokens'
+        before = counts() if reject else None
+        headers = {'Accept': 'application/json'}
+        if stage == 'csrf-create':
+            headers['X-Frappe-CSRF-Token'] = 'invalid-native-cashier-csrf'
+        response = actor.request(method, base + endpoint, json=payload, params=params,
+                                 headers=headers, timeout=40, allow_redirects=False)
+        result = response.json()
+        observed = {'stage': stage, 'method': method, 'endpoint': endpoint, 'user': user,
+                    'http_status': response.status_code, 'csrf': stage != 'csrf-create'}
+        if reject:
+            expected = 'CSRFTokenError' if stage == 'csrf-create' else 'PermissionError'
+            assert response.status_code in ((400, 403) if stage == 'csrf-create' else (403,)), (stage, response.status_code)
+            assert result.get('exc_type') == expected, (stage, result.get('exc_type'))
+            assert not result.get('data') and not result.get('docs'), (stage, 'denied document leaked')
+            observed.update(exc_type=result['exc_type'], writes_before=before, writes_after=counts())
+            assert observed['writes_before'] == observed['writes_after'], (stage, 'denied request wrote business records')
+            denials.append(observed)
+            return None
+        assert response.status_code == 200, (stage, response.status_code, response.text[:300])
+        assert not any(result.get(key) for key in ('exc_type', 'exception', 'exc')), (stage, 'HTTP exception')
+        doc = result.get('data') if endpoint.startswith('/api/resource/') else result.get('message')
+        assert isinstance(doc, dict), (stage, 'native document output missing')
+        requests_done.append(observed)
+        return doc
+
+    def clean(doc):
+        # Native mapper/payment builders return unsaved documents. Remove only
+        # document identity metadata; native business fields remain intact.
+        omitted = {'name', 'owner', 'creation', 'modified', 'modified_by', 'parent', 'parenttype', 'parentfield',
+                   'docstatus', '__islocal', '__unsaved'}
+        return {key: [clean(row) if isinstance(row, dict) else row for row in value] if isinstance(value, list) else value
+                for key, value in doc.items() if key not in omitted}
+
+    def submit(stage, doc):
+        result = request(stage, 'POST', BOOK_SUBMIT_API, payload={'doc': doc})
+        assert int(result['docstatus']) == 1, (stage, 'native submit did not submit')
+        return result
+
+    # Initial controller defaults can contain date/time/Decimal objects;
+    # subsequent mapper/payment documents already came through JSON over HTTP.
+    invoice_payload = clean(json.loads(frappe.as_json(invoice_payload)))
+    stages['baseline'] = snapshot()
+    request('csrf-create', 'POST', BOOK_INVOICE_API, payload=invoice_payload, reject=True)
+    request('outsider-create', 'POST', BOOK_INVOICE_API, payload=invoice_payload, reject=True)
+    sale = request('invoice-create', 'POST', BOOK_INVOICE_API, payload=invoice_payload)
+    documents['sale'] = sale['name']
+    sale_url = BOOK_INVOICE_API + '/' + quote(sale['name'], safe='')
+    request('outsider-save', 'PUT', sale_url, payload={'remarks': 'SYN unauthorized cashier edit'}, reject=True)
+    sale = request('invoice-save', 'PUT', sale_url, payload={'remarks': 'SYN authenticated cashier HTTP save'})
+    request('outsider-submit', 'POST', BOOK_SUBMIT_API, payload={'doc': sale}, reject=True)
+    sale = submit('invoice-submit', sale)
+    stages['sale'] = snapshot()
+
+    payment = request('payment-build', 'GET', BOOK_PAYMENT_BUILDER,
+                      params={'dt': 'Sales Invoice', 'dn': sale['name'], 'bank_account': context['accounts']['cash']})
+    request('outsider-payment', 'POST', BOOK_PAYMENT_API, payload=clean(payment), reject=True)
+    payment = request('payment-create', 'POST', BOOK_PAYMENT_API, payload=clean(payment))
+    documents['payment'] = submit('payment-submit', payment)['name']
+    stages['payment'] = snapshot()
+
+    credit = request('return-build', 'GET', BOOK_RETURN_BUILDER, params={'source_name': sale['name']})
+    credit = clean(credit)
+    credit['update_outstanding_for_self'] = 1
+    request('outsider-return', 'POST', BOOK_INVOICE_API, payload=credit, reject=True)
+    credit = request('return-create', 'POST', BOOK_INVOICE_API, payload=credit)
+    documents['return'] = submit('return-submit', credit)['name']
+    stages['return'] = snapshot()
+
+    refund = request('refund-build', 'GET', BOOK_PAYMENT_BUILDER,
+                     params={'dt': 'Sales Invoice', 'dn': documents['return'], 'bank_account': context['accounts']['cash']})
+    request('outsider-refund', 'POST', BOOK_PAYMENT_API, payload=clean(refund), reject=True)
+    refund = request('refund-create', 'POST', BOOK_PAYMENT_API, payload=clean(refund))
+    documents['refund'] = submit('refund-submit', refund)['name']
+    stages['refund'] = snapshot()
+    observed = {'transport': 'HTTP', 'requests': requests_done, 'denials': denials,
+                'reconciliation': collect_book_reconciliation(frappe, context, documents, stages)}
+    validate_book_http(observed)
+    return observed
 
 
 def role_page_identity(session, base, expected_user):
@@ -68,6 +392,17 @@ def role_page_css_observation(session, base, user, expected_css):
     return {'method': 'GET', 'endpoint': ROLE_PAGE_CSS, 'user': user, 'http_status': response.status_code,
             'content_type': content_type, 'body': body, 'sha256': hashlib.sha256(response.content).hexdigest(),
             'installed_sha256': hashlib.sha256(expected_css).hexdigest()}
+
+
+def configuration_http_observation(session, base, user):
+    response = session.get(base + CONFIGURATION_API, headers={'Accept': 'application/json'}, timeout=30, allow_redirects=False)
+    assert response.status_code == 200, ('Configuration RPC', response.status_code, response.text[:300])
+    payload = response.json()
+    assert not any(payload.get(key) for key in ('exc_type', 'exception', 'exc')), 'Configuration RPC exception'
+    observed = {'method': 'GET', 'endpoint': CONFIGURATION_API, 'user': user,
+                'http_status': response.status_code, 'message': payload.get('message')}
+    validate_configuration_http(observed)
+    return observed
 
 
 def main():
@@ -3278,6 +3613,16 @@ def main():
             return dict(item=code,warehouse=wh,before_qty=float(qty),
                         stock_receipt=entry.name)
         books=check('book-native-stock-catalog-and-receipt',traced(book_catalog))
+        cash_account = frappe.db.get_value('Account',
+            {'company': fin['company'], 'account_type': 'Cash', 'is_group': 0}, 'name')
+        assert cash_account, 'Synthetic company must have a native cash account'
+        book_context = {'user': users['book_seller'], 'company': fin['company'], 'customer': fin['payer'],
+                        'currency': frappe.db.get_value('Company', fin['company'], 'default_currency'),
+                        'item': books['item'], 'warehouse': books['warehouse'],
+                        'amount': 600.0, 'quantity': 2.0, 'unit_price': 300.0, 'unit_cost': 175.0,
+                        'accounts': {'cash': cash_account, 'receivable': fin['receivable'],
+                                     'income': frappe.db.get_value('Company', fin['company'], 'default_income_account')}}
+        book_documents, book_stages = {}, {}
         def book_doc(item_code='SYN-BOOK-STOCK',customer=None,qty=2):
             # The isolated site skips ERPNext Setup Wizard, so the global
             # defaults may still specify INR. Select the *configured* selling
@@ -3312,6 +3657,7 @@ def main():
                 lambda:doc.insert(ignore_permissions=True)))
         check('book-native-no-stock-update-denied',book_without_stock)
         def book_sale_positive():
+            book_stages['baseline'] = native_book_state(frappe, book_context)
             doc=book_doc()
             as_user('book_seller',lambda:doc.insert())
             as_user('book_seller',lambda:doc.submit())
@@ -3323,6 +3669,8 @@ def main():
                 {'voucher_type':'Sales Invoice','voucher_no':doc.name})>0
             assert frappe.db.count('GL Entry',
                 {'voucher_type':'Sales Invoice','voucher_no':doc.name})>0
+            book_documents['sale'] = doc.name
+            book_stages['sale'] = native_book_state(frappe, book_context)
             return dict(invoice=doc.name,before_qty=books['before_qty'],
                 after_qty=float(qty),amount=float(doc.grand_total))
         book_sale=check('book-native-sale-posts-invoice-stock-and-ledger',traced(book_sale_positive))
@@ -3342,6 +3690,8 @@ def main():
                 doc.submit()
                 return doc.name
             name=as_user('book_seller',post)
+            book_documents['payment'] = name
+            book_stages['payment'] = native_book_state(frappe, book_context)
             outstanding=frappe.db.get_value('Sales Invoice',book_sale['invoice'],
                 'outstanding_amount')
             assert abs(float(outstanding or 0))<0.01,outstanding
@@ -3362,6 +3712,9 @@ def main():
                 assert int(doc.is_return)==1 and doc.return_against==book_sale['invoice']
                 assert int(doc.update_stock)==1
                 assert all(float(row.qty)<0 for row in doc.items)
+                # Keep the paid sale settled and expose the credit note's own
+                # credit balance for a native cash refund against that note.
+                doc.update_outstanding_for_self = 1
                 doc.insert()
                 doc.submit()
                 return doc.name
@@ -3373,9 +3726,25 @@ def main():
                 {'voucher_type':'Sales Invoice','voucher_no':name})>0
             assert frappe.db.count('GL Entry',
                 {'voucher_type':'Sales Invoice','voucher_no':name})>0
+            book_documents['return'] = name
+            book_stages['return'] = native_book_state(frappe, book_context)
             return {'credit_note':name,'restocked_qty':2,
-                'native_stock_and_gl_reversed':True}
+                    'stock_restored':True,'gl_entries_present':True}
         check('book-native-return-restocks-and-credits',traced(book_return))
+        def book_refund_reconciliation():
+            from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+            credit = frappe.get_doc('Sales Invoice', book_documents['return'])
+            assert abs(float(credit.outstanding_amount) + book_context['amount']) < 0.005, credit.outstanding_amount
+            def post():
+                refund = get_payment_entry('Sales Invoice', credit.name, bank_account=cash_account)
+                assert refund.payment_type == 'Pay' and refund.paid_from == cash_account
+                refund.insert()
+                refund.submit()
+                return refund.name
+            book_documents['refund'] = as_user('book_seller', post)
+            book_stages['refund'] = native_book_state(frappe, book_context)
+            return collect_book_reconciliation(frappe, book_context, book_documents, book_stages)
+        check('book-native-return-cash-refund-reconciliation', traced(book_refund_reconciliation))
         def book_for_converted_student():
             customer=frappe.db.get_value('Student',second['student'],'customer')
             assert customer,'Converted student has no linked native customer'
@@ -3391,6 +3760,12 @@ def main():
             return denied(lambda:as_user('book_seller',
                 lambda:doc.insert(ignore_permissions=True)))
         check('book-native-placement-item-still-denied',placement_item_denied)
+        def book_http_commerce():
+            with login('book_seller') as cashier, login('outsider') as unrelated:
+                role_page_identity(cashier, base, users['book_seller'])
+                role_page_identity(unrelated, base, users['outsider'])
+                return native_book_http_cycle(frappe, cashier, unrelated, base, book_context, book_doc().as_dict())
+        check('book-http-cashier-sale-payment-return-refund', traced(book_http_commerce))
         # ---- A13 containment: native bypass-route negative proofs. Pinned
         # frappe (988e54f3c4c2, document.py run_before_save_methods):
         # "validate" fires only for save/submit; cancel runs "before_cancel"
@@ -5365,6 +5740,34 @@ def main():
         check('role-page-api-th-academic-setup', lambda: qualify_role_page('th-academic-setup'))
         check('role-page-api-th-teacher-desk', lambda: qualify_role_page('th-teacher-desk'))
         check('role-page-api-th-configuration', lambda: qualify_role_page('th-configuration'))
+
+        def configuration_http_positive():
+            with login('course_owner') as session:
+                role_page_identity(session, base, users['course_owner'])
+                return configuration_http_observation(session, base, users['course_owner'])
+        check('role-desk-configuration-http', traced(configuration_http_positive))
+
+        def configuration_http_denials():
+            denials = []
+            labels = {user: label for label, user in users.items()}
+            for user in CONFIGURATION_DENIED_USERS:
+                session = requests.Session() if user == 'Guest' else login(labels[user])
+                with session:
+                    session.headers['Host'] = 'placement-test.localhost'
+                    if user != 'Guest':
+                        role_page_identity(session, base, user)
+                    response = session.get(base + CONFIGURATION_API, headers={'Accept': 'application/json'},
+                                           timeout=30, allow_redirects=False)
+                    payload = response.json()
+                    assert response.status_code == 403 and payload.get('exc_type') == 'PermissionError', (
+                        'Configuration audience denial', user, response.status_code, payload.get('exc_type'))
+                    assert not payload.get('docs') and not payload.get('script'), 'Configuration assets leaked on denial'
+                    denials.append({'user': user, 'http_status': response.status_code, 'exc_type': payload.get('exc_type'),
+                                    'docs': payload.get('docs') or [], 'message': payload.get('message')})
+            observed = {'method': 'GET', 'endpoint': CONFIGURATION_API, 'denials': denials}
+            validate_configuration_http(observed, denied=True)
+            return observed
+        check('role-desk-configuration-http-denials', traced(configuration_http_denials))
 
         def role_page_authorization():
             controls, denials = [], []

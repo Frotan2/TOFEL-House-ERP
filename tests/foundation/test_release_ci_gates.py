@@ -250,6 +250,14 @@ class GateCliTests(unittest.TestCase):
         self.assertEqual(json.loads(output)["status"], "started")
         sleep.assert_not_called()
 
+    def test_full_workflow_deadline_allows_slow_checks_but_stays_bounded(self):
+        with patch.object(gates, "fetch_gate_runs", return_value=passing_runs()), \
+                patch.object(gates.time, "monotonic", side_effect=[0, 1800]):
+            self.assertEqual(self.invoke(["--timeout", "3600"])[0], 0)
+        with patch.object(gates, "fetch_gate_runs") as fetch:
+            self.assertEqual(self.invoke(["--timeout", "3601"])[0], 1)
+            fetch.assert_not_called()
+
     def test_api_failures_never_print_response_body_or_credentials(self):
         for error in (HTTPError("https://api.github.com/" + TOKEN, 403, TOKEN, {}, io.BytesIO(TOKEN.encode())),
                       URLError(TOKEN), OSError(TOKEN)):
