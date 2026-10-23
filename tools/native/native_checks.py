@@ -4882,6 +4882,29 @@ def main():
         # This is qualification evidence; it is not OD-RD-1 ratification.
         def desk_qualification():
             frappe.set_user('Administrator')
+            # The original desk qualification only tested JSON endpoints.
+            # A real Owner reported /api/method/frappe.desk.desk_page.getpage
+            # failing with FileNotFoundError, because Frappe scrubs page names
+            # to underscores but the eight desk source folders used dashes.
+            # Qualify the ACTUAL Page.get -> load_assets path for each of the
+            # eight authorized audiences before accepting a desk endpoint.
+            from frappe.desk.desk_page import get as load_role_desk_page
+            for label, page_name in (
+                ('receptionist', 'th-reception-desk'),
+                ('academic_manager', 'th-academic-desk'),
+                ('finance_manager', 'th-finance-desk'),
+                ('general_manager', 'th-operations-desk'),
+                ('course_owner', 'th-owner-cockpit'),
+                ('course_owner', 'th-academic-setup'),
+                ('teacher_one', 'th-teacher-desk'),
+                ('course_owner', 'th-configuration'),
+            ):
+                frappe.clear_cache(user=users[label])
+                frappe.set_user(users[label])
+                page = load_role_desk_page(page_name)
+                assert page.name == page_name, (label, page_name, page.name)
+                assert 'toefl_house.role_desks' in page.script, (label, page_name, 'role desk client absent')
+            frappe.set_user('Administrator')
             # Hermetic fresh logins: the revocation/restore probes above deny
             # stale sessions by design, so the desk pass must not inherit a
             # poisoned session — this is what a staff browser would do today.
