@@ -61,7 +61,8 @@ try {
         "product/windows/Start TOEFL House ERP.cmd",
         "product/windows/Stop TOEFL House ERP.cmd",
         "product/windows/Repair TOEFL House ERP.cmd",
-        "product/windows/Test Fresh Installation.ps1"
+        "product/windows/Test Fresh Installation.ps1",
+        "product/windows/Test Existing Installation.ps1"
     )
     foreach ($relative in $files) {
         $source = Join-Path $repositoryRoot ($relative.Replace('/', '\'))
