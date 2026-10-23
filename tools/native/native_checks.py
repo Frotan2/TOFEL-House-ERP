@@ -3249,7 +3249,57 @@ def main():
                 {'voucher_type':'Sales Invoice','voucher_no':doc.name})>0
             return dict(invoice=doc.name,before_qty=books['before_qty'],
                 after_qty=float(qty),amount=float(doc.grand_total))
-        check('book-native-sale-posts-invoice-stock-and-ledger',traced(book_sale_positive))
+        book_sale=check('book-native-sale-posts-invoice-stock-and-ledger',traced(book_sale_positive))
+        def book_payment():
+            # Native Payment Entry is the receivable settlement authority. No
+            # parallel cash ledger or test-only bypass of native permissions.
+            from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+            frappe.set_user('Administrator')
+            cash=frappe.db.get_value('Account',
+                {'company':fin['company'],'account_type':'Cash','is_group':0},'name')
+            assert cash,'Synthetic company must have a real native cash account'
+            def post():
+                doc=get_payment_entry('Sales Invoice',book_sale['invoice'],
+                    bank_account=cash)
+                assert doc.payment_type=='Receive',doc.payment_type
+                doc.insert()
+                doc.submit()
+                return doc.name
+            name=as_user('book_seller',post)
+            outstanding=frappe.db.get_value('Sales Invoice',book_sale['invoice'],
+                'outstanding_amount')
+            assert abs(float(outstanding or 0))<0.01,outstanding
+            assert frappe.db.count('GL Entry',
+                {'voucher_type':'Payment Entry','voucher_no':name})>0
+            return {'payment_entry':name,'invoice_paid':True,
+                    'native_cash_account':cash}
+        check('book-native-payment-settles-invoice',traced(book_payment))
+        def book_return():
+            # ERPNext generates the return with negative quantities and the
+            # original source reference; stock and accounting must reverse.
+            from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+            frappe.set_user('Administrator')
+            before=frappe.db.get_value('Bin',{'item_code':books['item'],
+                'warehouse':books['warehouse']},'actual_qty')
+            def post():
+                doc=make_sales_return(book_sale['invoice'])
+                assert int(doc.is_return)==1 and doc.return_against==book_sale['invoice']
+                assert int(doc.update_stock)==1
+                assert all(float(row.qty)<0 for row in doc.items)
+                doc.insert()
+                doc.submit()
+                return doc.name
+            name=as_user('book_seller',post)
+            after=frappe.db.get_value('Bin',{'item_code':books['item'],
+                'warehouse':books['warehouse']},'actual_qty')
+            assert abs(float(after)-(float(before)+2))<0.001,(before,after)
+            assert frappe.db.count('Stock Ledger Entry',
+                {'voucher_type':'Sales Invoice','voucher_no':name})>0
+            assert frappe.db.count('GL Entry',
+                {'voucher_type':'Sales Invoice','voucher_no':name})>0
+            return {'credit_note':name,'restocked_qty':2,
+                'native_stock_and_gl_reversed':True}
+        check('book-native-return-restocks-and-credits',traced(book_return))
         def book_for_converted_student():
             customer=frappe.db.get_value('Student',second['student'],'customer')
             assert customer,'Converted student has no linked native customer'

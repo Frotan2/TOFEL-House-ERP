@@ -160,11 +160,12 @@ A student/customer who has been admitted may buy a textbook without creating
 a tuition charge. The owner configures the items, prices, stock and warehouse
 in native ERPNext screens; no artificial product price or TH book ledger exists.
 
-Synthetic integration now tests book-stock receipt and invoice stock/GL posting,
-unprivileged and mixed-item denial, stock-update enforcement, and a
-converted-student sale. Native payments, refunds/returns, end-user book UI,
-actual role assignment, and Owner Windows acceptance remain independent
-requirements before issue #35 may close.
+Synthetic native integration tests book-stock receipt, posted book invoice,
+receivable settlement by native Payment Entry, book return/credit and
+restocking, stock/GL posting, wrong-role and mixed-item denials, stock-update
+enforcement, and a converted-student purchase. Passing hosted tests cannot
+qualify actual users, stock warehouse setup, cashier UX, physical-device
+recovery or Owner Windows; issue #35 stays open until those gates pass.
 
 ## 6. Current state and open items
 

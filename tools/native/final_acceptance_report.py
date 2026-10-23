@@ -44,6 +44,8 @@ REQUIRED_JOURNEYS = {
         "book-native-mixed-service-invoice-denied",
         "book-native-no-stock-update-denied",
         "book-native-sale-posts-invoice-stock-and-ledger",
+        "book-native-payment-settles-invoice",
+        "book-native-return-restocks-and-credits",
         "book-native-converted-student-can-buy-only-books",
         "book-native-placement-item-still-denied",
     ),

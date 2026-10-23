@@ -22,9 +22,11 @@ genuine Books Item Group stock Items, warehouse, `update_stock=1`, and no
 placement-case link. A full synthetic native test must prove stock receipt,
 invoice stock/GL posting, unauthorized/mixed/service invoice refusal and
 a purchase by an enrolled student's customer. The hosted evidence verifier
-fails closed unless each of those test receipts actually passed. This is not
-yet evidence of a native Payment Entry, item return/refund or a receptionist
-workflow. Real Owner operations remain prohibited.
+fails closed unless each of those test receipts actually passed. Hosted checks now also require a native Payment Entry that settles the
+book invoice and a native credit note that returns book stock and posts GL
+reversals. An end-user cashier workflow, real bank/cash custody and Owner
+Windows operation remain separately unverified. Real Owner operations are
+still prohibited.
 
 ## Required Owner and operational gates (not remotely executed)
 
