@@ -105,7 +105,7 @@ def _native_book_sale_allowed(doc, method=None):
         "before_cancel": "cancel",
         "before_update_after_submit": "write",
     }.get(method, "create")
-    if not frappe.has_permission(INVOICE, permission, doc=doc, user=user, print_logs=False):
+    if not frappe.has_permission(INVOICE, permission, doc=doc, user=user):
         return False
     if getattr(doc, "th_placement_case", None):
         return False

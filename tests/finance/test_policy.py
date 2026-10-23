@@ -86,7 +86,7 @@ class FinanceContainmentWiringTests(unittest.TestCase):
                        'getattr(doc, "update_stock", 0)',
                        'getattr(doc, "th_placement_case", None)',
                        '"Finance Officer", "Accounts User"',
-                       'frappe.has_permission(INVOICE, permission, doc=doc, user=user, print_logs=False)',
+                       'frappe.has_permission(INVOICE, permission, doc=doc, user=user)',
                        'if _native_book_sale_allowed(doc, method):'):
             self.assertIn(clause, source)
 
