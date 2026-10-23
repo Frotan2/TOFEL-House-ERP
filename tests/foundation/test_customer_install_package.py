@@ -206,6 +206,16 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertLess(REPAIR.index("Test Existing Installation.ps1"),
                         REPAIR.index("docker compose down"))
 
+    def test_install_refuses_existing_site_before_creating_or_loading_data(self):
+        guard = 'if exist "data\\sites\\toeflhouse.localhost\\site_config.json" goto :alreadyinstalled'
+        self.assertIn(guard, INSTALL)
+        self.assertLess(INSTALL.index(guard), INSTALL.index("where docker"))
+        self.assertIn(":alreadyinstalled", INSTALL)
+        self.assertIn("no installation attempted", INSTALL)
+        self.assertIn("Use Open / Start", INSTALL)
+        self.assertIn("Copy Safe Support Status", INSTALL)
+        self.assertNotIn("data\\logs folder to TOEFL House", INSTALL)
+
     def test_customer_package_verifies_before_import_or_boot(self):
         self.assertIn('if exist "release\\toefl-house-erp-app.tar" goto :packagedimage', INSTALL)
         self.assertIn("Verify Package Image.ps1", INSTALL)
