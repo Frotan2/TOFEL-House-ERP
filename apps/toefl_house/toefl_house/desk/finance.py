@@ -640,22 +640,34 @@ def work():
         "waiting_since": row.get("effective_start"),
     } for row in assignments]
 
-    # Link to the native ERPNext sales/stock UI; never mint document rights.
-    roles = set(frappe.get_roles(frappe.session.user))
+    # Every link must pass both the finance acting-role gate AND the native
+    # DocType permission check. Accounts User cannot normally read Bin or
+    # create Stock Entry; hiding those shortcuts avoids dead-end access errors
+    # without granting stock-management rights to the cashier.
+    user = frappe.session.user
+    roles = set(frappe.get_roles(user))
     book_shop = []
     if {"Finance Manager", "Finance Officer", "Accounts User"}.issubset(roles):
-        book_shop = [section(
-            "book-shop", "Book sales and stock", "links",
-            items=[
-                {"title": "Book items and prices", "slug": "List/Item"},
-                {"title": "Warehouse stock", "slug": "List/Bin"},
-                {"title": "Receive book stock", "slug": "List/Stock Entry"},
-                {"title": "Sell books / sales invoices", "slug": "List/Sales Invoice"},
-                {"title": "Record a customer payment", "slug": "List/Payment Entry"},
-            ],
-            empty_title="No book-shop shortcuts",
-            empty_body="Book sales need stock items in the native Books item group.",
-        )]
+        native_links = (
+            ("Book items", "Item", "read"),
+            ("Configure book prices", "Item Price", "create"),
+            ("Warehouse stock", "Bin", "read"),
+            ("Receive book stock", "Stock Entry", "create"),
+            ("Sell books / sales invoices", "Sales Invoice", "create"),
+            ("Record a customer payment", "Payment Entry", "create"),
+        )
+        links = [
+            {"title": title, "slug": "List/" + doctype}
+            for title, doctype, action in native_links
+            if frappe.has_permission(doctype, action, user=user)
+            and frappe.has_permission(doctype, "read", user=user)
+        ]
+        if links:
+            book_shop = [section(
+                "book-shop", "Book sales and stock", "links", items=links,
+                empty_title="No book-shop shortcuts",
+                empty_body="Book sales require the native Books item group and stock.",
+            )]
 
     return {
         "desk": SLUG,

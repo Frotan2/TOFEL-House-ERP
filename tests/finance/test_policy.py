@@ -95,10 +95,12 @@ class FinanceContainmentWiringTests(unittest.TestCase):
         self.assertIn('{"Finance Manager", "Finance Officer", "Accounts User"}.issubset(roles)', source)
         self.assertIn('frappe.get_roles(frappe.session.user)', source)
         self.assertIn('"book-shop", "Book sales and stock", "links"', source)
+        self.assertIn('frappe.has_permission(doctype, action, user=user)', source)
+        self.assertIn('frappe.has_permission(doctype, "read", user=user)', source)
         self.assertIn('] + book_shop,', source)
-        for path in ('List/Item', 'List/Bin', 'List/Stock Entry',
-                     'List/Sales Invoice', 'List/Payment Entry'):
-            self.assertIn('"' + path + '"', source)
+        for doctype in ('Item', 'Item Price', 'Bin', 'Stock Entry',
+                        'Sales Invoice', 'Payment Entry'):
+            self.assertIn('"' + doctype + '"', source)
 
     def test_finance_kinds_map_to_finance_officer(self):
         source = SECURITY.read_text(encoding="utf-8")

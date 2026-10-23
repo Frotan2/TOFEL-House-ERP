@@ -153,8 +153,12 @@ stock-enabled and sales-enabled **Item**, **Warehouse**, **Stock Entry**,
 Only Finance Officer users who also hold native Accounts User invoice creation
 permission can use normal stock-updating book invoices. A Finance Manager who
 also has Finance Officer and Accounts User receives **Book sales and stock**
-shortcuts in the Finance desk to native Item, Bin, Stock Entry, Sales Invoice
-and Payment Entry screens; links never grant document permissions. Book and service lines
+shortcuts in the Finance desk to native Item, Item Price, Bin, Stock Entry,
+Sales Invoice and Payment Entry screens *only when native rights for that
+DocType actually exist*. For example, native ERPNext requires Stock User to
+manage stock and Sales Master Manager to configure Item Price. A Finance
+Officer with Accounts User alone does not automatically get those rights;
+links never grant document permissions. Book and service lines
 may never be mixed; the placement/tuition command protections remain.
 A student/customer who has been admitted may buy a textbook without creating
 a tuition charge. The owner configures the items, prices, stock and warehouse

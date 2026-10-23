@@ -148,6 +148,9 @@ def _frappe_stub(roles=()):
     stub.whitelist = whitelist
     stub.session = types.SimpleNamespace(user="desk-user@example.com")
     stub.get_roles = lambda user: set(roles)
+    # Native document rights are never implied by our fake desk-role list.
+    # Tests that qualify a specific native permission must opt in explicitly.
+    stub.has_permission = lambda doctype, ptype="read", user=None: False
     def _db_get_all(doctype, filters=None, fields=None, order_by=None,
                     limit_start=None, limit_page_length=None, **kwargs):
         assert_columns_real("stub get_all", doctype,
@@ -1706,6 +1709,56 @@ class DeskBranchScopeTests(unittest.TestCase):
         self.assertGreater(scoped, 0,
                            "a viewer with Company/Branch permissions must see the "
                            "scope applied on doctypes that carry the field")
+
+
+class FinanceBookShopNavigationTests(unittest.TestCase):
+    """Book shop pointers must not lead a finance clerk to denied native pages."""
+
+    @staticmethod
+    def _payload(roles, allowed):
+        module = _import_desk("finance", roles=roles)
+        module.frappe.has_permission = (
+            lambda doctype, ptype="read", user=None: (doctype, ptype) in allowed
+        )
+        return module.work()
+
+    @staticmethod
+    def _links(payload):
+        sections = [item for item in payload["sections"]
+                    if item["id"] == "book-shop"]
+        return sections[0]["items"] if sections else []
+
+    def test_finance_manager_without_acting_roles_has_no_book_sale_links(self):
+        allowed = {("Sales Invoice", "create"), ("Sales Invoice", "read")}
+        payload = self._payload({"Finance Manager"}, allowed)
+        self.assertEqual(self._links(payload), [])
+
+    def test_book_seller_links_respect_native_doctype_rights(self):
+        roles = {"Finance Manager", "Finance Officer", "Accounts User"}
+        allowed = {
+            ("Item", "read"), ("Sales Invoice", "read"),
+            ("Sales Invoice", "create"), ("Payment Entry", "read"),
+            ("Payment Entry", "create"),
+            # A cash desk user normally cannot manage warehouse stock.
+        }
+        links = self._links(self._payload(roles, allowed))
+        routes = {link["slug"] for link in links}
+        self.assertEqual(routes, {"List/Item", "List/Sales Invoice",
+                                  "List/Payment Entry"})
+        self.assertNotIn("List/Bin", routes)
+        self.assertNotIn("List/Stock Entry", routes)
+        self.assertNotIn("List/Item Price", routes)
+
+    def test_native_stock_and_price_roles_unlock_only_their_own_links(self):
+        roles = {"Finance Manager", "Finance Officer", "Accounts User"}
+        allowed = {(dtype, access) for dtype in (
+            "Item", "Item Price", "Bin", "Stock Entry",
+            "Sales Invoice", "Payment Entry") for access in ("read", "create")}
+        self.assertEqual(
+            {item["slug"] for item in self._links(self._payload(roles, allowed))},
+            {"List/Item", "List/Item Price", "List/Bin",
+             "List/Stock Entry", "List/Sales Invoice", "List/Payment Entry"},
+        )
 
 
 class FinanceAssignmentFactsTests(unittest.TestCase):
