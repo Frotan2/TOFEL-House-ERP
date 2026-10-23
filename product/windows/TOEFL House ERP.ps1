@@ -411,7 +411,7 @@ if ($SmokeTest) {
     } finally {
         Remove-Item -LiteralPath $syntheticCheck -ErrorAction SilentlyContinue
     }
-    Write-Host "Windows GUI controls and completed-report copy availability verified."
+    Write-Host "Windows GUI controls initialized; completed-report copy availability verified."
     exit 0
 }
 Set-Busy $false
