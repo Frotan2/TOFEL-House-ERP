@@ -5,6 +5,16 @@ WSL, Git, Python, Bench, database, or command-line knowledge. Every action
 below is a **double-click**, a **browser click**, or **taking a screenshot**
 (`Win + Shift + S`, drag, then paste — or simply take a photo with your phone).
 
+**Safety boundary — read before any step:** This longer engineering checklist is
+for a **separate, clean, disposable Windows test PC with invented data**, under
+a provider-supervised acceptance exercise. On the **existing Owner PC**, do
+**not** follow the Install, Repair, reset, lifecycle or recovery steps while
+the preservation/recovery HOLD is active. Open the customer launcher, choose
+**Check This PC**, and use **Copy Safe Support Status** if support needs the
+result; both are read-only. Never send a raw log folder, a full diagnostic
+archive, a database, or any password. The packaged **Owner Readiness Guide**
+takes precedence for nontechnical Owner acceptance.
+
 **What its result means:** the ten-step on-machine lifecycle sequence is
 `Install → first boot → login → Start → Stop → Start again → Repair → browser
 login → persistence`. Backup and restore are additional mandatory Owner gates
@@ -368,12 +378,21 @@ not run Tailscale Serve or prove the actual tailnet/WebSocket path.
 
 ## If something fails
 
-1. **Exactly one retry path exists:** double-click `Repair TOEFL House ERP.cmd`
-   and wait. It is safe and never deletes data.
-2. If the same step still fails, **stop**. Do not look for terminal commands.
-3. Send: a photo of the failing window, the step number, plus the `data\logs`
-   folder (right-click it → **Send to → Compressed (zipped) folder**, attach
-   the ZIP). Engineering treats first-run discrepancies as product defects.
+1. **On an existing Owner PC:** stop. Do not reinstall, Repair, reset credentials,
+   alter databases, or run backup/restore while the preservation HOLD applies.
+   In the Windows GUI choose **Check This PC**; if it completes, choose
+   **Copy Safe Support Status** and share only that fixed, privacy-filtered
+   summary with trusted TOEFL House support. A BLOCKED warning is not a request
+   to fix or bypass it yourself.
+2. **On the separate, disposable synthetic acceptance PC only:** record the
+   failed step and the non-sensitive screen message. Contact support before
+   using the GUI **Repair** action; Repair is not a backup or recovery method.
+   If support authorizes one Repair attempt and it fails, stop.
+3. Never send `data\\logs`, complete operation logs, zipped diagnostic folders,
+   raw screenshots showing student/personnel records, Administrator passwords,
+   `db.env`, backup files or recovery keys. Engineering must reproduce and
+   diagnose the fault without asking the Owner to work with code or expose
+   private data.
 
 *This checklist mirrors the shipped scripts exactly. None of these steps is a
 deployment approval: production approval remains a separate, owner-signed
