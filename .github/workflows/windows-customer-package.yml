@@ -228,6 +228,11 @@ jobs:
           $heldSiteConfig = "$siteConfig.synthetic-hold"
           Move-Item -LiteralPath $siteConfig -Destination $heldSiteConfig
           try {
+            $missingSiteOutput = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $checkScript 2>&1)
+            if ($LASTEXITCODE -ne 0 -or
+                ($missingSiteOutput -join "`n") -notmatch 'BLOCKED: credentials exist but site configuration is missing') {
+              throw "Owner read-only PC check missed a missing Frappe site configuration."
+            }
             $previousPreference = $ErrorActionPreference
             try {
               $ErrorActionPreference = 'Continue'
@@ -247,6 +252,11 @@ jobs:
           # A missing database volume with credentials + site config present
           # must NOT allow Compose to create an empty replacement database.
           $env:TH_SYNTHETIC_VOLUME_EXISTS = '0'
+          $missingVolumeCheck = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $checkScript 2>&1)
+          if ($LASTEXITCODE -ne 0 -or
+              ($missingVolumeCheck -join "`n") -notmatch 'NOT VERIFIED: credentials exist but the database volume could not be confirmed') {
+            throw "Owner read-only PC check missed a missing named database volume."
+          }
           $blockedStart = Join-Path $kit 'product/windows/Start TOEFL House ERP.cmd'
           $previousPreference = $ErrorActionPreference
           try {
