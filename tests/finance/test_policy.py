@@ -93,7 +93,8 @@ class FinanceContainmentWiringTests(unittest.TestCase):
     def test_finance_book_shop_links_are_only_for_authorized_staff(self):
         source = (ROOT / "apps/toefl_house/toefl_house/desk/finance.py").read_text()
         self.assertIn('{"Finance Manager", "Finance Officer", "Accounts User"}.issubset(roles)', source)
-        self.assertIn('frappe.get_roles(frappe.session.user)', source)
+        self.assertIn('frappe.get_roles(user)', source)
+        self.assertIn('user = frappe.session.user', source)
         self.assertIn('"book-shop", "Book sales and stock", "links"', source)
         self.assertIn('frappe.has_permission(doctype, action, user=user)', source)
         self.assertIn('frappe.has_permission(doctype, "read", user=user)', source)
