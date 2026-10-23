@@ -35,12 +35,21 @@ capacities are entered by the owner as configuration and are never coded in.
 ## Release status
 
 **NO-GO / production authorization REJECT.** Hosted engineering has qualified
-substantial native workflows and the guarded Windows source/package paths, but
-there is no verified exact-head customer download or real Owner/customer
-machine acceptance in this checkout. The provider/CI packaging path now
-builds and labels the exact image, emits a versioned manifest/checksum package,
-attests it, and can publish a tagged release; it must still execute in CI
-before an artifact exists.
+substantial native workflows and the guarded Windows source/package paths. A
+provider-side exact-head image-inclusive package and native runtime suite are
+now locally verified, but there is still no hosted customer download or real
+Owner/customer-machine acceptance in this checkout. The provider/CI packaging
+path builds and labels the exact image, emits a versioned manifest/checksum
+package, attests it, and can publish a tagged release; permitted CI publication
+and independent Windows acceptance remain open.
+
+The provider qualification for revision
+`b171902abb7bb61b31b27d54279cf72dd70d5eed` passed **624 native checks with 0
+failures** and verified the native book stock, sale, payment, return, credit,
+restocking, and GL path. The local test ZIP is
+`TOEFL-House-ERP-Customer-ci-b171902abb7b.zip` (SHA-256
+`47e4cec35374229ea50d68fd41418310833d10f17ee8b331d7b12c6abefe7b99`), marked
+`TEST PACKAGE - NO REAL DATA`; it is not a published customer download.
 
 The remaining release gates are [Owner Windows and recovery #12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
 [hands-on book cashier acceptance #35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35),

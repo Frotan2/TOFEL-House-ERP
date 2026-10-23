@@ -2,11 +2,43 @@
 
 ## Decision
 
-**NO-GO / production authorization REJECTED.** The repository has an
-engineering path for a provider-built, image-inclusive Windows customer kit,
-but no exact-head downloadable artifact or real customer-machine acceptance
-was available at the start of this audit. Do not enter real student, payroll,
-or financial data.
+**NO-GO / production authorization REJECTED.** The provider-side qualification
+now has a locally verified exact-head image and image-inclusive customer ZIP,
+but no externally published download, real customer-machine acceptance, or
+Owner recovery ceremony is verified. Do not enter real student, payroll, or
+financial data.
+
+The initial audit snapshot was taken before Docker access was granted. The
+qualification update below records the later provider-side evidence separately
+so the historical findings are not silently rewritten.
+
+## Provider qualification update (2026-10-23)
+
+For source revision `b171902abb7bb61b31b27d54279cf72dd70d5eed`:
+
+- The pinned Product image built successfully on the provider host. Its image
+  manifest digest is
+  `sha256:87d19595add86e09e9dc1e758d6b5896ce00b2b7fc60fd554d66970ea9d01524`.
+- The image-inclusive package
+  `TOEFL-House-ERP-Customer-ci-b171902abb7b.zip` passed manifest, sidecar,
+  archive-integrity, allowlist, and identity checks. ZIP SHA-256:
+  `47e4cec35374229ea50d68fd41418310833d10f17ee8b331d7b12c6abefe7b99`.
+  The package is marked `TEST PACKAGE - NO REAL DATA` and
+  `production_authorization=REJECT`.
+- A disposable Frappe/MariaDB/Redis runtime booted the image; authenticated
+  Administrator probes returned HTTP 200 for login, identity, home, Desk, and
+  Student search.
+- The native synthetic acceptance suite passed **624 checks, 0 failures** on
+  the exact revision. It covered placement, admissions, enrollment, classes,
+  timetables, attendance, tuition, finance, role desks, audit/access-control
+  negatives, and native book stock receipt, Books-only sale, Payment Entry,
+  return/credit, restocking, and GL reconciliation.
+- The available computer-use environment had no browser surface, so no
+  Chromium UI claim is made. The authenticated Frappe HTTP/Page-path checks
+  are real runtime evidence, not a browser substitute.
+- The package is not a GitHub Release asset and has no independent hosted
+  artifact attestation or provider signature. Real Windows Docker Desktop/
+  WSL2 hardware acceptance remains unverified.
 
 The canonical release blockers are GitHub issues [#12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
 [#35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35), and
@@ -21,9 +53,9 @@ The canonical release blockers are GitHub issues [#12](https://github.com/Frotan
 - #36 — the prior repository could prepare a package only from a local image
   and CI did not publish a customer image. This audit adds the provider/CI
   package assembly, identity manifest, image-label binding, attestation,
-  artifact upload, and tag-based GitHub Release path. It is **not complete
-  evidence** until CI actually produces and independently downloads/verifies a
-  real image-inclusive artifact.
+  artifact upload, and tag-based GitHub Release path. A provider-side local
+  image-inclusive package is now verified, but issue #36 remains open until a
+  permitted CI run publishes an independently downloadable artifact.
 
 ## Repository audit findings
 
@@ -65,8 +97,18 @@ drive/key custody; and a native synthetic book receipt is not cashier UX.
 - Product packaging contract suite: **101 PASS**.
 - Workflow action pin suite: **9 PASS**.
 - Node realtime, command-page, design-system, and role-desk suites: **PASS**.
-- Docker daemon access from this workspace: **NOT AVAILABLE** (named-pipe
-  permission denied; no containers, volumes, or customer data were changed).
+- Docker daemon access at the initial audit snapshot: **NOT AVAILABLE**
+  (named-pipe permission denied). Later provider qualification used an isolated
+  temporary Compose project and did not reset existing Docker state, volumes,
+  or customer data.
+- Provider image build and package verification after the snapshot: **PASS**;
+  see the exact revision, image digest, package hash, and synthetic-only
+  status above.
+- Native Frappe/MariaDB/Redis/HTTP synthetic acceptance after the snapshot:
+  **624 PASS / 0 FAIL**; report retained outside the repository.
+- Authenticated browser UI: **UNVERIFIED** because no browser surface was
+  available in this environment; do not convert the HTTP result into a
+  Chromium claim.
 - Full Python tree on this Windows host: **not a release pass**. The run
   exposed platform-specific harness assumptions (POSIX `grep`, POSIX paths
   interpolated into Python heredocs, and Unix mode-bit assertions) plus tests
@@ -76,10 +118,11 @@ drive/key custody; and a native synthetic book receipt is not cashier UX.
 
 ## Required next gates
 
-1. Run the Product image workflow on this exact tree and retain the image ZIP,
-   manifest, SHA-256 files, attestation, and run SHA.
-2. Download the artifact independently and verify the manifest/image identity
-   before a disposable Windows Docker Desktop + WSL2 test.
+1. Run the Product image workflow on the final permitted `main` SHA and retain
+   the image ZIP, manifest, SHA-256 files, attestation, and run SHA. The local
+   provider package is evidence, not the hosted customer download.
+2. Download the hosted artifact independently and verify the manifest/image
+   identity before a disposable Windows Docker Desktop + WSL2 test.
 3. Complete the real Windows install, login, Stop/Start, reboot, Repair and
    persistence procedure with synthetic records.
 4. Complete manual book cashier acceptance for #35 with synthetic books,
