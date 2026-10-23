@@ -20,12 +20,13 @@ $script:process = $null
 $script:activeAction = ""
 $script:stdoutPath = ""
 $script:stderrPath = ""
+$script:lastCheckPath = ""
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "TOEFL House ERP"
 $form.StartPosition = "CenterScreen"
-$form.ClientSize = New-Object System.Drawing.Size(720, 488)
-$form.MinimumSize = New-Object System.Drawing.Size(736, 527)
+$form.ClientSize = New-Object System.Drawing.Size(720, 552)
+$form.MinimumSize = New-Object System.Drawing.Size(736, 591)
 $form.MaximizeBox = $false
 $form.FormBorderStyle = "FixedDialog"
 $form.BackColor = [System.Drawing.Color]::FromArgb(247, 249, 252)
@@ -80,22 +81,24 @@ $logButton = New-LauncherButton "View Details" 485 285 155
 $checkButton = New-LauncherButton "Check This PC" 30 339 165
 $guideButton = New-LauncherButton "Owner Readiness Guide" 205 339 235
 $dailyGuideButton = New-LauncherButton "How to Use" 450 339 190
+$copyStatusButton = New-LauncherButton "Copy Safe Support Status" 30 395 275
 
 $disclaimer = New-Object System.Windows.Forms.Label
 $disclaimer.Text = "Docker Desktop must be installed once. Real business use requires owner configuration and release approval."
 $disclaimer.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $disclaimer.ForeColor = [System.Drawing.Color]::FromArgb(96, 105, 119)
-$disclaimer.Location = New-Object System.Drawing.Point(30, 400)
+$disclaimer.Location = New-Object System.Drawing.Point(30, 464)
 $disclaimer.Size = New-Object System.Drawing.Size(655, 47)
 $form.Controls.Add($disclaimer)
 
 function Set-Busy([bool]$busy) {
-    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $dailyGuideButton)) {
+    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $dailyGuideButton, $copyStatusButton)) {
         $button.Enabled = -not $busy
     }
     $credentials.Enabled = (-not $busy) -and (Test-Path -LiteralPath $credentialFile -PathType Leaf)
     $guideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $guideFile -PathType Leaf)
     $dailyGuideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)
+    $copyStatusButton.Enabled = (-not $busy) -and [bool]$script:lastCheckPath -and (Test-Path -LiteralPath $script:lastCheckPath -PathType Leaf)
     $logButton.Enabled = ((-not $busy) -and [bool]$script:stdoutPath -and (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf))
     if ($busy) {
         $progress.Style = [System.Windows.Forms.ProgressBarStyle]::Marquee
@@ -200,6 +203,28 @@ $dailyGuideButton.Add_Click({
         $status.Text = "Daily use guide is missing. Ask your provider for a complete installer."
     }
 })
+$copyStatusButton.Add_Click({
+    # Read-only checks shared using these fixed states alone.
+    # Never copy stdout verbatim; other operations may include private logs.
+    if (-not $script:lastCheckPath -or -not (Test-Path -LiteralPath $script:lastCheckPath -PathType Leaf)) {
+        $status.Text = "Run Check This PC first to prepare a safe support summary."
+        return
+    }
+    $allow = '^(Windows|Docker Desktop|Existing local site data|Database credential safety|Local browser endpoint|Owner backup/restore|Actual Tailscale staff access|Production authorization): (.+)$'
+    $safe = @("TOEFL House ERP - Safe Support Status",
+              "Read-only observation. NOT approval to use real student or financial data.")
+    foreach ($line in (Get-Content -LiteralPath $script:lastCheckPath -ErrorAction Stop)) {
+        if ($line -match $allow -and $Matches[2].Length -le 220) {
+            $safe += ($Matches[1] + ": " + $Matches[2])
+        }
+    }
+    if ($safe.Count -lt 4) {
+        $status.Text = "Support summary incomplete. Run Check This PC again."
+        return
+    }
+    [System.Windows.Forms.Clipboard]::SetText(($safe -join [Environment]::NewLine))
+    $status.Text = "Safe status copied. Paste it to trusted support; no passwords or raw logs."
+})
 $dockerButton.Add_Click({
     [System.Diagnostics.Process]::Start("https://www.docker.com/products/docker-desktop/") | Out-Null
     $status.Text = "Install Docker Desktop for Windows, complete WSL 2 setup if prompted, and restart Windows if required. Reopen this app."
@@ -250,6 +275,7 @@ $timer.Add_Tick({
             if ($completedAction -eq "Stop") {
                 $status.Text = "TOEFL House ERP has stopped safely. Your data remains stored."
             } elseif ($completedAction -eq "Check") {
+                $script:lastCheckPath = $script:stdoutPath
                 $status.Text = "Read-only PC check completed. This is not release approval. See View Details."
                 if (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf) {
                     Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $script:stdoutPath + '"')
@@ -284,6 +310,7 @@ if ($SmokeTest) {
         $checkButton.Text -ne "Check This PC" -or
         $guideButton.Text -ne "Owner Readiness Guide" -or
         $dailyGuideButton.Text -ne "How to Use" -or
+        $copyStatusButton.Text -ne "Copy Safe Support Status" -or
         -not (Test-Path -LiteralPath $guideFile -PathType Leaf) -or
         -not (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)) {
         throw "Graphical lifecycle actions were not initialized."
