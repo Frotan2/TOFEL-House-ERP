@@ -24,6 +24,9 @@ rem  plain top-level call.
 rem ============================================================
 title Installing TOEFL House ERP
 cd /d "%~dp0.."
+rem A completed Frappe site is already installed. Install must never be used
+rem as a daily restart, source upgrade or recovery action on that site.
+if exist "data\sites\toeflhouse.localhost\site_config.json" goto :alreadyinstalled
 
 where docker >nul 2>nul
 if not errorlevel 1 goto :dockerfound
@@ -161,6 +164,14 @@ echo  Install finished. From now on use the "Start TOEFL House ERP" shortcut.
 if not defined TH_GUI_MODE pause
 exit /b 0
 
+:alreadyinstalled
+echo [TH_STAGE] Existing TOEFL House ERP site detected - no installation attempted.
+echo  This computer already has an ERP site. Use Open / Start in the
+echo  TOEFL House ERP Windows application for normal daily work.
+echo  Never run Install over an existing site. If it cannot start,
+echo  choose Check This PC and share only Copy Safe Support Status with support.
+if not defined TH_GUI_MODE pause
+exit /b 1
 :packageinvalid
 echo  Package integrity verification failed before credential setup.
 echo  Do NOT install from this package. Request a complete trusted copy.
