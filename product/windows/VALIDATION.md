@@ -388,7 +388,7 @@ not run Tailscale Serve or prove the actual tailnet/WebSocket path.
    failed step and the non-sensitive screen message. Contact support before
    using the GUI **Repair** action; Repair is not a backup or recovery method.
    If support authorizes one Repair attempt and it fails, stop.
-3. Never send `data\\logs`, complete operation logs, zipped diagnostic folders,
+3. Never send `data\logs`, complete operation logs, zipped diagnostic folders,
    raw screenshots showing student/personnel records, Administrator passwords,
    `db.env`, backup files or recovery keys. Engineering must reproduce and
    diagnose the fault without asking the Owner to work with code or expose
