@@ -32,7 +32,6 @@ VERIFY = read_utf8(WINDOWS / "Verify Package Image.ps1")
 PACKAGER = read_utf8(WINDOWS / "Prepare Customer Package.ps1")
 SHORTCUT = read_utf8(ROOT / "TOEFL House ERP.vbs")
 OWNER_GUIDE = read_utf8(WINDOWS / "OWNER ACCEPTANCE GUIDE.txt")
-OWNER_HANDBOOK = read_utf8(WINDOWS / "OWNER HANDBOOK.txt")
 DAILY_GUIDE = read_utf8(WINDOWS / "DAILY USE GUIDE.txt")
 
 
@@ -46,7 +45,7 @@ class CustomerInstallerContract(unittest.TestCase):
         for button in ('"Install"', '"Open / Start"', '"Repair"', '"Stop"',
                        '"Get Docker Desktop"', '"View Administrator Login"',
                        '"Check This PC"', '"Owner Readiness Guide"', '"How to Use"',
-                       '"Owner Handbook"', '"Copy Safe Support Status"'):
+                       '"Copy Safe Support Status"'):
             self.assertIn(button, GUI)
         self.assertIn('"http://127.0.0.1:8000/"', GUI)
         self.assertIn('$script:process', GUI)
@@ -68,19 +67,6 @@ class CustomerInstallerContract(unittest.TestCase):
                           "MARIADB_ROOT_PASSWORD="):
             self.assertNotIn(forbidden.lower(), DAILY_GUIDE.lower())
         self.assertNotIn('Start-LauncherAction "Activate"', GUI)
-
-    def test_owner_handbook_is_packaged_and_available_without_commands(self):
-        self.assertIn('"product/windows/OWNER HANDBOOK.txt"', PACKAGER)
-        self.assertIn('$ownerHandbookButton.Add_Click', GUI)
-        self.assertIn('$ownerHandbookButton.Enabled', GUI)
-        self.assertIn('$ownerHandbookFile = Join-Path $PSScriptRoot "OWNER HANDBOOK.txt"', GUI)
-        self.assertIn('Start-Process -FilePath "notepad.exe"', GUI)
-        for expected in ("NO-GO", "Applicant", "Placement", "Admission", "Enrollment",
-                         "Assessment / Progression", "Billing", "Payment", "Payroll",
-                         "Backup and Recovery Hold".lower(), "خلاصهٔ مهم برای صاحب کورس"):
-            self.assertIn(expected.lower(), OWNER_HANDBOOK.lower())
-        for forbidden in ("git clone", "git pull", "docker compose", "MARIADB_ROOT_PASSWORD="):
-            self.assertNotIn(forbidden.lower(), OWNER_HANDBOOK.lower())
 
     def test_safe_status_is_read_only_and_privacy_filtered(self):
         self.assertIn('$copyStatusButton.Add_Click', GUI)
@@ -255,9 +241,10 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertNotIn("data\\logs folder to TOEFL House", INSTALL)
 
     def test_customer_package_verifies_before_import_or_boot(self):
-        self.assertIn('if exist "release\\toefl-house-erp-app.tar" goto :packagedimage', INSTALL)
+        self.assertIn('if not exist "release\\toefl-house-erp-app.tar" goto :packagemissing', INSTALL)
         self.assertIn("Verify Package Image.ps1", INSTALL)
         self.assertIn(":packageinvalid", INSTALL)
+        self.assertIn(":packagemissing", INSTALL)
         self.assertLess(INSTALL.index("Checking package integrity before local installation"),
                         INSTALL.index("if not exist data\\secrets mkdir data\\secrets"))
         self.assertIn('docker load -i "release\\toefl-house-erp-app.tar"', INSTALL)
@@ -276,8 +263,22 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("docker compose down", REPAIR)
         self.assertNotIn("docker compose down -v", REPAIR)
         self.assertIn('docker load -i "release\\toefl-house-erp-app.tar"', REPAIR)
-        self.assertIn("docker compose build", REPAIR)
+        self.assertIn("goto :packagemissing", REPAIR)
         self.assertNotIn("git reset --hard", REPAIR)
+
+    def test_no_customer_script_can_build_the_application_from_source(self):
+        # Issue #36: a customer package must never compile Frappe, Python or
+        # frontend assets on the customer PC.  A missing or corrupt image is a
+        # safe refusal, not a build.
+        for name, text in (("install", INSTALL), ("repair", REPAIR)):
+            with self.subTest(script=name):
+                self.assertNotIn("docker compose build", text)
+                self.assertNotIn("docker-compose build", text)
+                self.assertNotIn("docker build", text)
+                self.assertNotIn("--build", text)
+                self.assertIn(":packagemissing", text)
+        self.assertNotIn("Normalize Product Sources.ps1", INSTALL)
+        self.assertNotIn("Normalize Product Sources.ps1", REPAIR)
 
     def test_packager_allowlists_only_code_and_never_copies_customer_data(self):
         self.assertIn("docker save --output", PACKAGER)

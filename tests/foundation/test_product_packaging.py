@@ -355,8 +355,11 @@ class DesktopContract(unittest.TestCase):
             self.assertIn('cd /d "%~dp0.."', text, path.name)
             self.assertNotIn("wsl ", text, path.name)  # Docker Desktop owns WSL2, users never touch it
         install = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
-        self.assertIn("docker compose build", install)
-        self.assertIn("docker compose up -d", install)
+        # Issue #36: the customer package ships a verified prebuilt image and
+        # must never compile the application on the customer computer.
+        self.assertNotIn("docker compose build", install)
+        self.assertIn("docker compose up -d --no-build", install)
+        self.assertIn(":packagemissing", install)
         self.assertIn("first-run-credentials.txt", install.lower())
 
 class LineEndingContract(unittest.TestCase):
@@ -376,9 +379,9 @@ class LineEndingContract(unittest.TestCase):
         self.assertIn("*.cmd text eol=crlf", text)
         self.assertIn("*.bat text eol=crlf", text)
 
-    def test_existing_worktree_normalizer_is_wired_before_build_and_repair(self):
+    def test_existing_worktree_normalizer_is_developer_only(self):
         normalizer_path = PRODUCT / "windows" / "Normalize Product Sources.ps1"
-        self.assertTrue(normalizer_path.is_file(), "existing Windows worktrees need a physical normalizer")
+        self.assertTrue(normalizer_path.is_file(), "stale developer worktrees still need a normalizer")
         normalizer = normalizer_path.read_text()
         for invariant in ("product\\app.Dockerfile", "product\\docker-compose.yml",
                           ".dockerignore", r'Replace("`r`n", "`n").Replace("`r", "`n")',
@@ -386,16 +389,18 @@ class LineEndingContract(unittest.TestCase):
                           "Repository root is a link/junction", "Add-SourceFiles $path $files",
                           "Multiline Dockerfile COPY syntax is unsupported"):
             self.assertIn(invariant, normalizer)
-        self.assertIn("Normalize Product Sources.ps1",
-                      (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text())
+        # The normalizer belongs to the developer/packaging path only: a
+        # customer kit never builds, so it never normalizes sources either.
+        install = (PRODUCT / "windows" / "Install TOEFL House ERP.cmd").read_text()
+        self.assertNotIn("Normalize Product Sources.ps1", install)
         repair = (PRODUCT / "windows" / "Repair TOEFL House ERP.cmd").read_text()
-        self.assertIn("Normalize Product Sources.ps1", repair)
-        self.assertIn('if "%NORMALIZE_STATUS%"=="10" goto :rebuildimage', repair)
+        self.assertNotIn("Normalize Product Sources.ps1", repair)
         self.assertIn('if exist "release\\toefl-house-erp-app.tar" goto :packageimage', repair)
         self.assertIn("Verify Package Image.ps1", repair)
         self.assertIn("goto :sourcesready", repair)
         self.assertIn('LABEL org.toefl-house.source-eol="lf-v1"', DOCKERFILE.read_text())
-        self.assertIn("docker compose build", repair)
+        self.assertNotIn("docker compose build", repair)
+        self.assertIn("goto :packagemissing", repair)
         workflow = (ROOT / ".github/workflows/product-image.yml").read_text()
         self.assertIn("windows-worktree-eol:", workflow)
         self.assertIn("git config core.autocrlf true", workflow)
@@ -449,6 +454,8 @@ class LineEndingContract(unittest.TestCase):
             "product/bootstrap.py", "product/activate.py", "product/restore.py",
             "product/backup.py", "product/native_gpg.py", "product/native_db.py",
             "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
+            # Signed update engine + its container entrypoint (Issue #40).
+            "product/update_engine.py", "product/update_entrypoint.sh",
             "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_frappe_python.py",
             "tools/foundation/secure_hrms.py",
             "tools/foundation/hrms-locks", "tools/foundation/banking-locks",
