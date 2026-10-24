@@ -616,7 +616,8 @@ def main() -> int:
             ROOT / "tools/foundation/secure_frappe_python.py", bench_dir / "apps/frappe"])
         run("install-frappe-python-security-deps", [lab / "tools/bin/uv", "pip", "install",
             "--python", bench_dir / "env/bin/python", "--no-deps", "--upgrade",
-            "GitPython==3.2.1", "Pillow==13.0.0", "PyJWT==2.15.1", "pypdf==6.21.2"])
+            "GitPython==3.2.1", "Pillow==13.0.0", "PyJWT==2.15.1", "pypdf==6.21.2",
+            "filelock==3.20.3"])
         run("refresh-frappe-security-metadata", [lab / "tools/bin/uv", "pip", "install",
             "--python", bench_dir / "env/bin/python", "--no-deps", "--reinstall",
             "--editable", bench_dir / "apps/frappe"])
