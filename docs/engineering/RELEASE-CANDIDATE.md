@@ -37,7 +37,7 @@ Assessment/Progression and full payroll posting are **not** included merely beca
 - Exclusive ownership and sequencing rules for shared hooks, permissions, fixtures, configuration, tests and CI.
 - A four-state acceptance matrix separating IMPLEMENTED, VERIFIED, DEFERRED and BLOCKED.
 - Exact-SHA gate receipts embedded in the downloadable package and checksummed in its manifest.
-- Atomic staged ZIP/checksum creation, image platform/source/layer validation, customer allowlist, no `product/data`, and TEST/REJECT labels.
+- Same-directory staged ZIP and checksum files with non-overwriting publication and failed-staging cleanup; their sequential renames are not represented as one atomic transaction. Image platform/source/layer validation, customer allowlist, no `product/data`, and TEST/REJECT labels remain enforced.
 - Offline English/Dari **Owner Handbook**, available from the Windows GUI without a terminal.
 
 ### Recently integrated security/reliability work
@@ -51,6 +51,9 @@ Assessment/Progression and full payroll posting are **not** included merely beca
 
 - **PR #46:** signed/prebuilt updater remains KEEP UNMERGED under its special hold and independent changes-requested findings. This RC has no approved automatic updater.
 - **PR #48:** notifications/provider stubs/student/guardian portals are excluded after integration changes-required review and failed Owned gates. Nothing from that PR is included.
+- **PR #49:** Assessment/Progression runtime is excluded. D1 still defers that consumer, and the proposed progression read RPC requires permission corrections despite green hosted checks.
+- **PR #50:** finance/installment/tax/cashier/refund changes are excluded pending correction of cashier-policy authority, company scoping, drift selection and native return-reversal defects, followed by fresh exact-head qualification and independent review.
+- **PR #51:** class operations/mobility changes are excluded. The exact Native run failed fixture import, and D5 still defers the proposed transfer policy/consumer.
 - **D1:** runtime Assessment, grading, pass bands, credits and Progression are deferred; native Education historical outcomes remain untouched.
 - **D4:** advanced identity, guardian delegation and public/student/guardian portals are deferred.
 - **D5:** repeat, transfer and withdrawal policy remains deferred; any fail-closed mechanism is not authorization to use it.

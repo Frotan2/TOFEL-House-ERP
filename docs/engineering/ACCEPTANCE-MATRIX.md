@@ -53,9 +53,9 @@ The final candidate’s exact source SHA and four gate runs are supplied by its 
 
 | ID | Deferred scope | Authority / consequence |
 |---|---|---|
-| D-01 | Runtime Assessment, grading, pass bands, credits, Progression/next-level decisions and their portal exposure. | **D1 DEFER.** Native Education remains future authority; historical outcomes stay untouched. |
+| D-01 | Runtime Assessment, grading, pass bands, credits, Progression/next-level decisions and their portal exposure. | **D1 DEFER.** Native Education remains future authority; historical outcomes stay untouched. PR #49 cannot unlock this scope without an explicit superseding Owner decision. |
 | D-02 | Advanced identity, guardian delegation, public admission/student/guardian portals and portal policy. | **D4 DEFER ADVANCED POLICY.** PR #48 cannot unlock this scope. |
-| D-03 | Repeat, transfer and withdrawal business policy beyond the native basic calendar/lifecycle. | **D5.** A05/A11 remain unstarted; fail-closed mechanism is not policy approval. |
+| D-03 | Repeat, transfer and withdrawal business policy beyond the native basic calendar/lifecycle. | **D5.** A05/A11 remain unstarted; fail-closed mechanism is not policy approval. PR #51 cannot unlock transfer scope without an explicit superseding Owner decision. |
 | D-04 | Tax configuration and any invented tax default. | **D6a TAX NOT CONFIGURED YET.** This is an Owner business-configuration gate. |
 | D-05 | Online payment gateway integration. | **D6b NO ONLINE PAYMENT GATEWAY AT LAUNCH.** Payments app pinning is not gateway enablement. |
 | D-06 | Derived metric/warehouse/reporting layer, including invented risk, ranking, denominators, disclosure or retention semantics. | **D7 DEFER / RAW REPORTS NOW.** Named stewards and policy are required first. |
@@ -76,6 +76,7 @@ The final candidate’s exact source SHA and four gate runs are supplied by its 
 | B-07 | Real payroll posting, statutory/tax/payable correctness and payment approval. | D2 leaves full payroll posting gated; D6a supplies no tax configuration. Requires explicit Owner terms and native HRMS qualification; never invent rates or rules. |
 | B-08 | Owner capacity/performance targets and real-device responsiveness acceptance. | Hosted performance numbers are baselines, not Owner targets. D8/operations evidence and real staff workloads are required. |
 | B-09 | Production authorization for real students, guardians, staff, payroll, stock or money. | **REJECT / NO-GO.** All applicable B-rows, independent security review and explicit Owner production approval must be resolved; no CI result can override this. |
+| B-10 | Integration of proposed feature PRs #49/#50/#51 into this RC. | All three are excluded after exact-head integration review. #49 requires a D1 supersession and read-scope correction; #50 requires cashier/company-scope/drift/reversal corrections; #51 has a failed Native fixture import and requires a D5 supersession for transfer scope. Corrected heads require independent review and all applicable gates. |
 
 ## Release assertion allowed by this matrix
 

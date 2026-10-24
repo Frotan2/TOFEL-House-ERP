@@ -78,6 +78,35 @@ Exact head reviewed: `d7dffdb` (full head is identified by the PR). **CHANGES RE
 - GitHub rejected a formal same-author request-changes review. The substance is recorded as PR comment `#issuecomment-6383878246`; it is **not** represented as a formal independent GitHub review.
 - A temporary local cherry-pick used only for review was removed with a hard reset to the clean baseline. Nothing from PR #48 is in the RC.
 
+### PR #49 — Assessment/Progression runtime
+
+Exact head reviewed: `50ca132aa437eb7e491556599e0ea9a12a1f56c5`. **CHANGES REQUIRED; excluded from this RC.**
+
+- Canonical D1 still says `DEFER` and `A06 remains unstarted`. Configurable values and fail-closed behavior do not authorize the new grading, publication, progression and enrollment-gate consumers.
+- `progression_state` checks native Student read permission and then bypasses the new result/decision role and branch permissions with `frappe.get_all`; the RPC needs the same denial boundaries as its owned records and negative cross-role/cross-branch tests.
+- Native run `40091858486`, Foundation run `40091858494` and the exact-head Owned runs passed, but green checks cannot supersede D1 or substitute for independent review.
+- The integration findings are recorded in PR comment `#issuecomment-6384072302`; this is not a formal independent GitHub review decision.
+
+### PR #50 — finance/installments/tax/cashier/refund changes
+
+Exact head reviewed: `6a183b5c400555630526166f33bcc8668aab26d7`. **CHANGES REQUIRED; excluded from this RC.**
+
+- Cashier close incorrectly reuses the billing policy's invoice backdate bound instead of an explicit cashier-policy authority.
+- Cashier write and tax-read RPCs do not consistently enforce the actor's native Company/User Permission scope.
+- Cashier drift detection watches every company GL account rather than only the reconciled Cash/Bank accounts, so unrelated backdated entries can cause false drift.
+- Existing-return reversal paths can count the current submitted return once in prior returns and again as the current return, refusing valid native cancellation as an over-return.
+- Exact-head Owned runs passed; Native run `40092775298` was still running when the integration findings were posted. Any result for that head cannot qualify a corrected later head.
+- The integration findings are recorded in PR comment `#issuecomment-6384075236`; this is not a formal independent GitHub review decision.
+
+### PR #51 — class operations/scheduling/capacity/mobility
+
+Exact head reviewed: `96330eaec7572094b8826f0045fb98f63ff641fa`. **CHANGES REQUIRED; excluded from this RC.**
+
+- Native run `40092388242` failed during `custom_field.json` import with `KeyError: 'name'`; the four new Course Schedule fixture rows omit the stable fixture name. Offline tests did not establish native installability.
+- Canonical D5 expressly defers repeat, transfer and withdrawal policy. The PR's class/program/branch transfer policy and execution consumers require an explicit superseding Owner decision; its narrower PR-description reading of D5 is not authoritative.
+- The exact-head Owned runs passed but cannot override the failed Native gate, D5, or the need for independent shared-file review.
+- The integration findings are recorded in PR comment `#issuecomment-6384073275`; this is not a formal independent GitHub review decision.
+
 ## Integration defects addressed in this candidate
 
 1. **Portable gate traceability:** `verify_ci_gates.py` can now emit a validated receipt only after all four canonical workflows pass on the exact full SHA. The receipt includes run IDs/URLs and retains `production_authorization=REJECT`.

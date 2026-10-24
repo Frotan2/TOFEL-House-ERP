@@ -183,6 +183,6 @@ If two PRs need the same shared file, the integration lead sequences them. The l
 2. Obtain independent review. Same-author comments are useful records but are not formal GitHub approval; do not describe them as such.
 3. Require green checks on the exact full head SHA after the last change. A green base branch or earlier head is insufficient.
 4. Merge with the repository’s approved method, then run/pin main qualification on the resulting exact SHA.
-5. Preserve PR #46’s explicit hold and all NO-GO boundaries. Do not merge PR #48 unless its blockers are independently resolved and a new exact head is approved.
+5. Preserve PR #46’s explicit hold and all NO-GO boundaries. PRs #48–#51 remain excluded until their recorded policy, security, correctness and native-evidence blockers are resolved and each corrected exact head is independently approved; a green earlier head or same-author comment is insufficient.
 6. Build the versioned package only from the accepted full SHA and a matching `v*` tag. Record the Product-image run, four gate runs, artifact digest, package SHA-256, image digest, and release URL.
 7. Publish only the engineering RC. Production remains REJECT until real Owner Windows, recovery, staff, cashier/stock, download/install, payroll/configuration, and Owner approvals are actually evidenced.
