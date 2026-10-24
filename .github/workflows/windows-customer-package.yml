@@ -259,6 +259,49 @@ jobs:
             throw "Repeated Install did not refuse the existing Frappe site."
           }
           Write-Host "Repeated Install was refused safely."
+          # The graphical update path must run on a real Windows host and stop
+          # before any download or mutation while the provider has not enabled
+          # a production channel. Exit 3 is the documented refusal code.
+          $updateScript = Join-Path $kit 'product/windows/Update TOEFL House ERP.ps1'
+          $previousPreference = $ErrorActionPreference
+          try {
+            $ErrorActionPreference = 'Continue'
+            $updateOutput = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $updateScript -Action Check 2>&1)
+            $updateExit = $LASTEXITCODE
+          } finally { $ErrorActionPreference = $previousPreference }
+          $updateText = ($updateOutput -join "`n")
+          Write-Host "Update Check output:"
+          Write-Host $updateText
+          if ($updateExit -ne 3) {
+            # Annotations are the only failure detail reachable from the API;
+            # the job log itself lives behind a host this project cannot poll.
+            Write-Host ("::error::Update Check exit=" + $updateExit + " lines=" + (($updateText -split "`n").Count))
+            foreach ($line in @($updateText -split "`n" | Select-Object -Last 6)) {
+              Write-Host ("::error::" + $line)
+            }
+            throw ("Update Check should refuse a disabled channel, exit=" + $updateExit)
+          }
+          if ($updateText -notmatch 'paused updates') {
+            Write-Host "::error::Update refusal did not explain the disabled channel."
+            throw "Update refusal did not explain the disabled channel."
+          }
+          if ($updateText -notmatch '\p{IsArabic}') { throw "Update refusal was not shown in Dari." }
+          $updateResult = Join-Path $kit 'product/data/updates/last-result.json'
+          if (-not (Test-Path -LiteralPath $updateResult -PathType Leaf)) {
+            Write-Host "::error::Update refusal did not record a safe result."
+            if (Test-Path -LiteralPath (Join-Path $kit 'product/data/updates')) {
+              Get-ChildItem -LiteralPath (Join-Path $kit 'product/data/updates') -Recurse -Force |
+                ForEach-Object { Write-Host ("::error::updates path " + $_.FullName) }
+            }
+            throw "Update refusal did not record a safe result."
+          }
+          $resultText = [System.IO.File]::ReadAllText($updateResult)
+          $result = $resultText | ConvertFrom-Json -ErrorAction Stop
+          if ($result.document_type -ne 'toefl-house-erp-updater-result') { throw "Update refusal did not record the documented result type." }
+          if ($result.message_key -ne 'channel.disabled') { throw "Update refusal recorded an unexpected reason." }
+          if ($result.status -ne 'refused') { throw "Update refusal recorded an unexpected status." }
+          if ($resultText -match 'password|secret|MARIADB|C:\\\\') { throw "Update refusal recorded private detail." }
+          Write-Host "Update Check refused a disabled provider channel without downloading anything."
           # Partial-install protection: credentials alone must prevent Install
           # even when the synthetic Frappe site config is temporarily absent.
           $siteConfig = Join-Path $kit 'product/data/sites/toeflhouse.localhost/site_config.json'
