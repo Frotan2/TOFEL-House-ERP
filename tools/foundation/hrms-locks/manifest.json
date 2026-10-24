@@ -4,11 +4,11 @@
   "files": {
     "frontend/package.json": {
       "upstream_sha256": "1ed2ee1c3d6b91c788eefc6fbeed45a8843e100cc144c74d11198ca1a339f685",
-      "security_sha256": "ae9ab750977aea6a4aeeacfa9003f56d1cd4c321d9495ee6e488937b1ede5d68"
+      "security_sha256": "25b3516ae021448b3b7fca2030fe1fd5414d33639ad72b6694670dfaa3197efe"
     },
     "frontend/yarn.lock": {
       "upstream_sha256": "8aaf33ce7e5756a992d68f07caa1df03d88f3694e085d99adcca047efcf6df7d",
-      "security_sha256": "32c7dd13a7b76ffe4280d6a0e66f621156b69002bb6e2883f245e1abb7cbc1f0"
+      "security_sha256": "81fb3abb387d3b3e6ccf5ef1dee35e620d47ac665f6f51932b728fe1dc52fc92"
     },
     "roster/package.json": {
       "upstream_sha256": "259ebbb75525cf482546f82fba3de115a7fd542add969b596f522c0d26a71e2c",
@@ -19,5 +19,5 @@
       "security_sha256": "b3a68571aac06b5dcc1c76030db07f1e5e04b6cc2cb0c67812a1f5e15725dbde"
     }
   },
-  "purpose": "HRMS frontend/roster security locks. 2026-10-22: pin markdown-it 14.3.3 (fixes GHSA-vfgh-jcmw-g37q and GHSA-gfr2-rv44-r23c) in both shipped HRMS browser builds."
+  "purpose": "HRMS frontend/roster security locks. 2026-10-22: pin markdown-it 14.3.3 (fixes GHSA-vfgh-jcmw-g37q and GHSA-gfr2-rv44-r23c) in both shipped HRMS browser builds. 2026-10-24 (Issues #41/#38, npm 1243098/1243101/1243104/1243107/1243082/1243079/1243114): frontend-only Yarn 1.22.22 resolution uplift inside existing dependency ranges - fast-uri 3.1.9 (ajv 8.20.0 transitive; GHSA-w74x-v6f9-j3xg, GHSA-xhq7-xmqj-769h, GHSA-wjr9-j795-jxcr, GHSA-333x-w4r6-6crp, first patched 3.1.9), serialize-javascript 7.1.3 (@rollup/plugin-terser 1.0.0 transitive; GHSA-m5mm-p8h7-m29v, first patched 7.1.3), undici 6.29.1 (Firebase exact-pinned 6.19.7 override; GHSA-4qv8-2p9j-2685 and GHSA-xjj6-f33q-929c, first patched 6.29.1). All three patched releases keep identical dependency sets and engine constraints, so no other graph entries change. Roster has no installed copy of these packages."
 }
