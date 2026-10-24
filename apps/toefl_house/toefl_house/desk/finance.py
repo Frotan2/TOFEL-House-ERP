@@ -10,6 +10,10 @@ Sections are specified in docs/ROLE-DESKS.md.
 import frappe
 from frappe.utils import today
 
+try:
+    from toefl_house.desk import analytics
+except Exception:
+    analytics = None
 from toefl_house.configuration import rules as foundation
 from toefl_house.desk import (
     BOUNCE_WINDOW,
@@ -495,30 +499,30 @@ def work():
 
     money_facts = [
         {"label": "Collected today",
-         "definition": "Money received today from posted payment records, summed per receiving currency.",
+         "definition": "Money received today from posted payment records, summed per receiving currency. Native payments are the only money authority.",
          "value": _summarize(payments, "paid_amount",
                               currency_key="paid_from_account_currency"),
-         "owner": None},
+         "owner": None, "source": "payments received today (submitted)", "scope": "company permission", "drill_path": "payment list"},
         {"label": "Invoiced today",
-         "definition": "Amounts billed today across invoices and tuition fees, summed per currency.",
+         "definition": "Amounts billed today across placement invoices and tuition fees, summed per currency — native charged amounts only.",
          "value": _summarize(invoices_today + fees_today, "grand_total"),
-         "owner": None},
+         "owner": None, "source": "invoices + tuition fees posted today", "scope": "company/branch where record carries the field", "drill_path": "tuition fees list"},
         {"label": "Outstanding invoices",
-         "definition": "Invoices posted and still owing money.",
-         "value": len(outstanding_invoices), "owner": "Finance Officer"},
+         "definition": "Placement invoices posted and still owing money (native outstanding amount > 0).",
+         "value": len(outstanding_invoices), "owner": "Finance Officer", "source": "placement invoices outstanding", "scope": "company scope (native invoices)", "drill_path": "invoice list"},
         {"label": "Outstanding tuition fees",
-         "definition": "Issued tuition fees still owing money.",
-         "value": len(outstanding_fees), "owner": "Finance Officer"},
+         "definition": "Tuition fees posted and still owing money (native outstanding amount > 0).",
+         "value": len(outstanding_fees), "owner": "Finance Officer", "source": "tuition fees outstanding", "scope": "branch via roster", "drill_path": "tuition fees list"},
         {"label": "Corrections pending",
-         "definition": "Correction requests (invoice or tuition fee) in Requested status.",
+         "definition": "Correction requests (invoice or tuition fee) awaiting approver action.",
          "value": sum(1 for row in corrections if row["status"] == "Requested"),
-         "owner": "Finance Officer"},
+         "owner": "Finance Officer", "source": "correction requests in requested status", "scope": "company/branch via linkage", "drill_path": "correction request list"},
         {"label": "Enrollments awaiting billing",
-         "definition": "Confirmed enrollments that no issued bill covers; cancelled bills do not count.",
-         "value": len(awaiting_billing), "owner": "Finance Officer"},
+         "definition": "Confirmed enrollments that no issued tuition bill covers; cancelled bills do not count.",
+         "value": len(awaiting_billing), "owner": "Finance Officer", "source": "enrollments without tuition fees", "scope": "branch via roster", "drill_path": "enrollment list"},
         {"label": "Teaching assignments on file",
          "definition": "Instructor skill assignments. Pay is native payroll, one-off per assignment; this desk does not calculate pay.",
-         "value": len(assignments), "owner": "Finance Officer"},
+         "value": len(assignments), "owner": "Finance Officer", "source": "teaching assignments", "scope": "branch via class branch", "drill_path": "teaching assignment list"},
     ]
 
     def money_item(row, kind):
@@ -669,6 +673,31 @@ def work():
                 empty_body="Book sales require the native Books item group and stock.",
             )]
 
+    # Tuition analytics breakdown where data permits
+    finance_analytics = []
+    if analytics is not None:
+        try:
+            t_metrics = analytics.tuition_metrics()
+            if t_metrics.get("by_program"):
+                analytics_section = section("finance-by-program", "Tuition by program", "analytics",
+                                            empty_title="No tuition by program", empty_body="Tuition fees appear when enrollments are billed.")
+                analytics_section["comparison"] = {
+                    "title": "Tuition fees by program",
+                    "columns": ["Program", "Tuition fees"],
+                    "rows": [{"label": k, "value": v, "drill": {"slug": "List/Fees"}} for k, v in sorted(t_metrics["by_program"].items(), key=lambda x: -x[1])[:12]],
+                }
+                analytics_section["chart"] = {
+                    "title": "Tuition per program (top programs)",
+                    "rows": [{"label": k, "value": v, "tone": "info"} for k, v in sorted(t_metrics["by_program"].items(), key=lambda x: -x[1])[:8]],
+                }
+                analytics_section["provenance"] = [
+                    {"label": "Source records", "value": t_metrics["source"]},
+                    {"label": "Permission scope", "value": t_metrics["scope"]},
+                    {"label": "Drill-down", "value": "tuition fees list filtered by program"},
+                ]
+                finance_analytics.append(analytics_section)
+        except Exception:
+            pass
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
@@ -676,15 +705,16 @@ def work():
             section("today", "Today", "queue", items=payment_items,
                     empty_title="No payments recorded today",
                     empty_body="No payment has been received for today. Payments appear here the moment they are posted."),
-            section("facts", "Money facts", "facts", facts=money_facts,
+            section("facts", "Money facts (auditable)", "facts", facts=money_facts,
                     empty_title="No money facts yet",
-                    empty_body="Facts appear once the native billing and payment records exist."),
-            section("outstanding", "Outstanding receivables", "queue",
+                    empty_body="Facts appear once the native billing and payment records exist. Each figure carries its definition, source and permission scope."),
+            *finance_analytics,
+            section("outstanding", "Outstanding receivables — action queue", "queue",
                     items=[money_item(row, "Sales Invoice") for row in outstanding_invoices]
                           + [money_item(row, "Fees") for row in outstanding_fees],
                     empty_title="Nothing is outstanding",
                     empty_body="No submitted invoice or fee carries an outstanding amount for your scope."),
-            section("billing", "Awaiting billing", "queue", items=billing_items,
+            section("billing", "Awaiting billing — action required", "queue", items=billing_items,
                     empty_title="Everything submitted is billed",
                     empty_body="Every confirmed enrollment has an issued bill, or no enrollment has been confirmed yet."),
             section("policy", "Correction policy", "facts", facts=policy_facts,
@@ -693,7 +723,7 @@ def work():
             section("policy-versions", "Policy versions", "queue", items=version_items,
                     empty_title="No policy versions",
                     empty_body="No correction policy version is recorded; new correction requests fail closed until a Finance Officer records the first version."),
-            section("corrections", "Correction queue", "queue",
+            section("corrections", "Correction queue — approve or deny", "queue",
                     items=_correction_items(corrections, policies),
                     empty_title="No correction requests",
                     empty_body="No correction request (invoice or tuition fee) is open. Requests appear here the moment they are created."),
