@@ -4871,6 +4871,30 @@ def main():
                     'retirement_one_way':True,'new_contract_denied':True,
                     'new_assignment_denied':True,'unknown_skill_denied':True}
         check('teaching-retired-skill-runtime-policy',traced(retired_skill_runtime))
+        def native_academic_progression_schema():
+            # The academic mission must survive a genuine Frappe migrate,
+            # including its branch-linked authorization metadata. Stub
+            # tests cannot prove MariaDB schema and installed hook parity.
+            from toefl_house.academic import progression as progression_mod
+            required = {
+                "TH Assessment Book": ("student_group", "status"),
+                "TH Academic Result": ("student", "student_group", "status"),
+                "TH Progression Decision": ("student", "student_group",
+                                            "academic_result", "decision", "status"),
+            }
+            for doctype, fields in required.items():
+                assert frappe.db.exists("DocType", doctype), (
+                    "native migrated academic DocType missing", doctype)
+                meta = frappe.get_meta(doctype)
+                for field in fields:
+                    assert meta.has_field(field), (doctype, "missing native field", field)
+            field = frappe.get_meta("TH Progression Decision").get_field("student_group")
+            assert field.fieldtype == "Link" and field.options == "Student Group"
+            assert int(field.reqd) == 1, "a progression decision cannot lose class linkage"
+            assert hasattr(progression_mod, "next_level_eligibility")
+            return {"doctypes": sorted(required), "class_scope": "required"}
+
+        check("native-academic-progression-schema", native_academic_progression_schema)
         # --- D3 correction framework (owner: "framework approved; exact
         # terms later"). Fail-closed until a policy exists; approval terms
         # are fixture configuration, not invented policy. The money
@@ -7083,6 +7107,75 @@ def main():
             frappe.db.commit()
             return {'contract':con,'adjustment':adj,'additional_salary':row.name}
         check('teaching-s13-orphan-adjustment-post-skip',traced(s13_orphan_journey))
+        def s14_academic_wiring():
+            # S14 (B04/B05): the deployed site carries the assessment and
+            # progression surface, and that surface fails closed. This is the
+            # deployment-level half of the academic journeys; the end-to-end
+            # configuration -> marks -> approval -> publication -> progression
+            # journey runs in the owned suite (tests/academic) against the same
+            # modules with a scripted store.
+            from toefl_house.academic import assessment as asm
+            from toefl_house.academic import grading as grd
+            from toefl_house.academic import progression as prg
+            frappe.set_user('Administrator')
+            observed={}
+            for doctype,required in (
+                    ('TH Assessment Book',
+                     {'student_group','policy','policy_effective_from','policy_digest',
+                      'grading_scale','assessment_plan','attempt','status','marks',
+                      'corrections'}),
+                    ('TH Academic Result',
+                     {'student','student_group','level','book','attempt','revision',
+                      'status','policy','policy_effective_from','policy_digest',
+                      'overall_percent','grade_code','outcome','passed',
+                      'snapshot_json','snapshot_digest','components','supersedes',
+                      'superseded_by','native_assessment_result'}),
+                    ('TH Progression Decision',
+                     {'student','academic_result','decision','status','from_level',
+                      'to_level','policy','policy_effective_from','eligible',
+                      'override_used','eligibility_json','eligibility_digest',
+                      'override_reason','decided_by'})):
+                meta=frappe.get_meta(doctype)
+                missing=required-{field.fieldname for field in meta.fields}
+                assert not missing,(doctype,sorted(missing))
+                assert not meta.is_submittable,doctype
+                observed[doctype]={'fields':len(meta.fields),'submittable':bool(meta.is_submittable)}
+            hooks_has=frappe.get_hooks('has_permission') or []
+            hooks_query=frappe.get_hooks('permission_query_conditions') or []
+            for doctype in ('TH Assessment Book','TH Academic Result','TH Progression Decision'):
+                assert doctype in hooks_has,(doctype,'has_permission hook missing')
+                assert doctype in hooks_query,(doctype,'query hook missing')
+            commands=('open_assessment_book','record_assessment_marks',
+                      'submit_assessment_book','review_assessment_book',
+                      'correct_assessment_mark','approve_assessment_book',
+                      'publish_assessment_results','correct_published_result',
+                      'assessment_state')
+            for name in commands:
+                assert callable(getattr(asm,name,None)),name
+            for name in ('decide_progression','override_progression',
+                         'next_level_eligibility','enrollment_gate',
+                         'progression_state'):
+                assert callable(getattr(prg,name,None)),name
+            # Fail closed on the deployed code: no configured facets means no
+            # grading and no progression, never a default threshold.
+            empty=grd.policy_state({},[])
+            assert empty['configured'] is False,empty
+            assert set(empty['missing'])=={'components','weights','pass_rules','grading scale intervals'},empty
+            try:
+                grd.compute_result({}, {}, [])
+            except ValueError as exc:
+                assert 'no components' in str(exc) or 'configured' in str(exc),str(exc)
+            else:
+                raise AssertionError('Unconfigured policy produced a grade')
+            # The role vocabulary the commands depend on must ship as fixtures.
+            for role in ('Academic Manager','Instructor','General Manager',
+                         'Teaching Auditor','Enrollment Officer'):
+                assert frappe.db.exists('Role',role),role
+            assert frappe.db.exists('Role','Course Owner'),'Course Owner'
+            frappe.db.commit()
+            return {'doctypes':observed,'commands':len(commands)+5,
+                    'unconfigured_missing':sorted(empty['missing'])}
+        check('academic-s14-deployment-and-fail-closed',traced(s14_academic_wiring))
         report['status']='pass'
 
     except Exception as exc:

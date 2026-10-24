@@ -60,7 +60,8 @@ has_permission = {
                  "TH Adjustment Posting Policy",
                  "TH Alerting Policy",
                  "TH Guardian Lifecycle Policy", "TH Owner Operations Policy",
-                 "TH Configuration Operation", "TH Configuration Audit Event")
+                 "TH Configuration Operation", "TH Configuration Audit Event",
+                 "TH Assessment Book", "TH Academic Result", "TH Progression Decision")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Program Level"] = "toefl_house.permissions.configuration_has_permission"
@@ -105,7 +106,10 @@ permission_query_conditions = {
         ("TH Correction Request", "correction_request"),
         ("TH Cashier Day", "cashier_day"),
         ("TH Attendance Correction Request", "attendance_correction"),
-        ("TH Enrollment Exit", "enrollment_exit"))
+        ("TH Enrollment Exit", "enrollment_exit"),
+        ("TH Assessment Book", "assessment_book"),
+        ("TH Academic Result", "academic_result"),
+        ("TH Progression Decision", "progression_decision"))
 }
 # Governance configuration is queried through the non-synthetic checker.
 permission_query_conditions["TH Academic Program"] = "toefl_house.permissions.configuration_query"
