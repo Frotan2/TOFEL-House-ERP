@@ -131,6 +131,7 @@ class BookLedgerEvidenceTests(unittest.TestCase):
     def test_mismatched_stock_valuation_direction_rejected(self):
         forged = copy.deepcopy(self.receipt)
         sale_stock = forged["stock_entries"]["sale"][0]
+        sale_stock["actual_qty"] = -1.0
         sale_stock["stock_value_difference"] = 100.0
         forged["stock_entries"]["sale"].append({
             **sale_stock, "actual_qty": -1.0, "stock_value_difference": -300.0
