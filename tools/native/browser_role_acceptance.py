@@ -102,7 +102,9 @@ def qualify(base_url: str, destination: Path):
                 for slug, actor, role, method, title in CASES:
                     context = browser.new_context(viewport={"width": 1440, "height": 1000})
                     page = context.new_page()
-                    errors, failed_assets = [], []
+                    errors, failed_assets, console_errors = [], [], []
+                    page.on("console", lambda msg: console_errors.append(str(msg.text)[:220])
+                            if msg.type == "error" else None)
                     page.on("pageerror", lambda error: errors.append({
                         "message": str(error), "stack": error.stack or "",
                     }))
@@ -167,6 +169,46 @@ def qualify(base_url: str, destination: Path):
                     except Exception:
                         report["status"] = "fail"
                         report["failed_page"] = slug
+                        # Safe, synthetic diagnostic: never log credentials,
+                        # cookie, token, Student data, raw network bodies.
+                        # Fail closed, preserve the screenshot and a bounded
+                        # route/JS state report for actual product repair.
+                        try:
+                            detail = page.evaluate("""slug => ({
+                                path: location.pathname,
+                                hash: location.hash,
+                                route: typeof frappe !== 'undefined' &&
+                                       typeof frappe.get_route === 'function'
+                                    ? frappe.get_route().map(String).slice(0, 4) : [],
+                                pageHook: typeof frappe !== 'undefined' &&
+                                    frappe.pages && frappe.pages[slug]
+                                    ? typeof frappe.pages[slug].on_page_load : 'missing',
+                                mounted: document.querySelectorAll('.th-page').length,
+                                visible: [...document.querySelectorAll('.th-page')]
+                                    .filter(e => !!(e.offsetWidth || e.offsetHeight ||
+                                                    e.getClientRects().length)).length,
+                                bodies: document.querySelectorAll('.page-content').length,
+                                title: document.title.slice(0, 120)
+                            })""", slug)
+                            report["failure_diagnostic"] = detail
+                            report["javascript_error_types"] = [
+                                (e["message"].split(":")[0])[:80] for e in errors[-5:]]
+                            report["console_error_types"] = [
+                                x.split(":")[0][:80] for x in console_errors[-5:]]
+                            report["failed_assets"] = failed_assets[-8:]
+                            print("ROLE-DESK FAILURE (synthetic): " +
+                                  json.dumps(report["failure_diagnostic"]), flush=True)
+                            if report["javascript_error_types"]:
+                                print("JS errors: " +
+                                      json.dumps(report["javascript_error_types"]), flush=True)
+                            if report["console_error_types"]:
+                                print("Console errors: " +
+                                      json.dumps(report["console_error_types"]), flush=True)
+                            if failed_assets:
+                                print("Asset failures: " +
+                                      json.dumps(failed_assets[-8:]), flush=True)
+                        except Exception:
+                            report["failure_diagnostic"] = {"status": "probe-unavailable"}
                         page.screenshot(path=str(destination / f"{slug}-failure.png"), full_page=True)
                         raise
                     finally:
