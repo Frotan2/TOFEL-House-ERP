@@ -20,10 +20,23 @@
   }
 
   function renderList(el, items, empty) {
-    if (!items || !items.length) { el.innerHTML = `<p class="text-muted">${empty}</p>`; return; }
-    el.innerHTML = "<ul class='list-group'>" + items.map(i =>
-      `<li class="list-group-item">${Object.values(i).slice(0,4).join(" — ")}</li>`
-    ).join("") + "</ul>";
+    el.replaceChildren();
+    if (!items || !items.length) {
+      const msg = document.createElement("p");
+      msg.className = "text-muted";
+      msg.textContent = empty;
+      el.appendChild(msg);
+      return;
+    }
+    const list = document.createElement("ul");
+    list.className = "list-group";
+    items.forEach(item => {
+      const li = document.createElement("li");
+      li.className = "list-group-item";
+      li.textContent = Object.values(item).slice(0, 4).map(v => String(v ?? "")).join(" — ");
+      list.appendChild(li);
+    });
+    el.appendChild(list);
   }
 
   function loadTab(tab) {
@@ -38,7 +51,12 @@
     promise.then(items => {
       renderList(pane, items, "No records found.");
       pane.dataset.loaded = "1";
-    }).catch(e => { pane.innerHTML = `<div class="alert alert-danger">${e.message || "Access denied or portal disabled."}</div>`; });
+    }).catch(() => {
+      const alert = document.createElement("div");
+      alert.className = "alert alert-danger";
+      alert.textContent = "Access denied or portal disabled.";
+      pane.replaceChildren(alert);
+    });
   }
 
   // Announcements load immediately
@@ -46,8 +64,21 @@
     const el = document.getElementById("portal-announcements");
     if (!el) return;
     const items = r.message || [];
-    if (!items.length) { el.innerHTML = ""; return; }
-    el.innerHTML = "<h6>Announcements</h6>" + items.map(a => `<div class="alert alert-info"><strong>${frappe.utils.escape_html(a.title||"")}</strong><br>${a.message||""}</div>`).join("");
+    el.replaceChildren();
+    if (!items.length) return;
+    const heading = document.createElement("h6");
+    heading.textContent = "Announcements";
+    el.appendChild(heading);
+    items.forEach(item => {
+      const alert = document.createElement("div");
+      alert.className = "alert alert-info";
+      const title = document.createElement("strong");
+      title.textContent = String(item.title || "");
+      alert.appendChild(title);
+      alert.appendChild(document.createElement("br"));
+      alert.appendChild(document.createTextNode(String(item.message || "")));
+      el.appendChild(alert);
+    });
   });
 
   // Load initial tab
