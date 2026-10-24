@@ -203,6 +203,28 @@ class CustomerPackageManifestTests(unittest.TestCase):
         write_tar(self.image, dict(self.members, **{name: self.members[name] + b" "}))
         self.assert_rejected_before_output("config filename")
 
+    def test_changed_image_layer_is_rejected_even_with_valid_config_labels(self):
+        # A label/config match is insufficient if the saved filesystem bytes
+        # no longer match the immutable rootfs.diff_ids in the image config.
+        members = dict(self.members)
+        members["layer/layer.tar"] += b"unexpected extra bytes"
+        write_tar(self.image, members)
+        self.assert_rejected_before_output("layer content")
+
+    def test_incorrect_rootfs_digest_is_rejected_even_with_valid_config_hash(self):
+        config_name = self.config_digest.removeprefix("sha256:") + ".json"
+        config = json.loads(self.members[config_name])
+        config["rootfs"]["diff_ids"][0] = "sha256:" + "0" * 64
+        config_bytes = json.dumps(config, sort_keys=True).encode()
+        new_name = hashlib.sha256(config_bytes).hexdigest() + ".json"
+        manifest = json.loads(self.members["manifest.json"])
+        manifest[0]["Config"] = new_name
+        members = {name: value for name, value in self.members.items() if name != config_name}
+        members["manifest.json"] = json.dumps(manifest).encode()
+        members[new_name] = config_bytes
+        write_tar(self.image, members)
+        self.assert_rejected_before_output("layer content")
+
     def test_oci_config_path_is_supported(self):
         old_name = self.config_digest.removeprefix("sha256:") + ".json"
         name = "blobs/sha256/" + self.config_digest.removeprefix("sha256:")
