@@ -308,81 +308,87 @@ def tuition_metrics():
 
 # ------------------------------------------------------------------ book stock
 
-def book_stock_metrics():
-    """Book stock: native inventory facts.
+def _native_rows(doctype, fields, *, filters=None, order_by=None):
+    """Native permission-enforcing read; never bypass Company/User Permission.
 
-    These are native stock facts, never a custom ledger.
-    Available only where the role holds stock visibility; otherwise
-    returns empty with explanatory note.
+    A truncated set cannot be represented as an institution-wide total.
     """
-    try:
-        items = _project_rows("management", "Item",
-                             ["name", "item_name", "item_group", "is_stock_item", "disabled"],
-                             filters={"item_group": "Books", "disabled": 0},
-                             order_by="item_name asc", limit=LIMIT_QUEUES)
-    except Exception:
-        items = []
-    try:
-        bins = _project_rows("management", "Bin",
-                            ["name", "item_code", "warehouse", "actual_qty", "stock_value"],
-                            order_by="actual_qty desc", limit=BOUNCE_WINDOW)
-    except Exception:
-        bins = []
-    total_qty = sum(float(r.get("actual_qty") or 0) for r in bins)
-    low_stock = [r for r in bins if float(r.get("actual_qty") or 0) <= 2]
-    return {
-        "items": len(items),
-        "bins": len(bins),
-        "total_qty": total_qty,
-        "low_stock": len(low_stock),
-        "low_stock_rows": low_stock[:10],
-        "definition": "Book items in item group 'Books' and their warehouse quantities. Low stock <=2 units.",
-        "source": "book items + warehouse bins (native stock)",
-        "scope": "Stock visibility requires stock role; otherwise branch-wide.",
-        "drill": "warehouse stock list",
+    if frappe is None or not hasattr(frappe, "has_permission"):
+        raise PermissionError("Native role permissions unavailable")
+    if not frappe.has_permission(doctype, "read"):
+        raise PermissionError(f"Native {doctype} read role required")
+    if not hasattr(frappe, "get_list"):
+        raise PermissionError("Native permission-aware query unavailable")
+    rows = frappe.get_list(
+        doctype, fields=fields, filters=filters or {},
+        order_by=order_by, limit_page_length=BOUNCE_WINDOW + 1)
+    if len(rows) > BOUNCE_WINDOW:
+        raise OverflowError(f"{doctype} exceeds bounded analytics coverage")
+    return rows
+
+
+def book_stock_metrics():
+    """Permission-scoped native inventory, never a fabricated zero.
+
+    'Books' is a clearly named inventory subset; no unapproved numerical
+    reorder threshold is invented. Missing native visibility or incomplete
+    pagination is shown as unavailable, not as an empty warehouse.
+    """
+    unavailable = {
+        "items": "—", "bins": "—", "total_qty": "—", "low_stock": "—",
+        "low_stock_rows": [],
+        "definition": "Stock for native Item Group Books only. Reorder threshold is not configured.",
+        "source": "Item and Bin native inventory (not a parallel ledger)",
+        "scope": "Requires native Item and Bin read; warehouses restricted by native permissions.",
+        "drill": "List/Item",
     }
+    try:
+        if not frappe.db.exists("Item Group", "Books"):
+            return dict(unavailable, scope="Native Item Group Books not configured")
+        items = _native_rows(
+            "Item", ["name", "item_name"],
+            filters={"item_group": "Books", "is_stock_item": 1, "disabled": 0},
+            order_by="name asc")
+        # Do not query unrelated warehouse bins; protect the item/stock scope.
+        names = [r["name"] for r in items]
+        bins = (_native_rows(
+            "Bin", ["name", "item_code", "warehouse", "actual_qty"],
+            filters={"item_code": ("in", names)}, order_by="name asc")
+            if names else [])
+        units = sum(float(r.get("actual_qty") or 0) for r in bins)
+    except (Exception, OverflowError):
+        # A failed or truncated read is NOT proof of zero stock.
+        return unavailable
+    return dict(unavailable, items=len(items), bins=len(bins),
+                total_qty=round(units, 2),
+                scope="Native Item/Bin read + native Warehouse and User Permissions")
 
 
 # ------------------------------------------------------------------ payroll
 
 def payroll_metrics(authorized=False):
-    """Payroll totals — only when the viewer holds the authorized role.
-
-    If not authorized, returns a placeholder that names the gate instead of
-    inventing a figure.
-    """
-    if not authorized:
-        return {
-            "authorized": False,
-            "total": "—",
-            "definition": "Payroll totals are visible only to Finance Manager and General Manager where the viewer holds payroll access. Others see no payroll figure.",
-            "source": "additional salary → salary slips (native HRMS), gated by payroll authorization",
-            "scope": "HRMS role + company scope; payroll-confidential.",
-            "drill": "additional salary list",
-        }
-    try:
-        additional = _project_rows("management", "Additional Salary",
-                                 ["name", "employee", "salary_component", "amount", "payroll_date", "docstatus"],
-                                 filters={"docstatus": 1},
-                                 order_by="payroll_date desc", limit=BOUNCE_WINDOW)
-    except Exception:
-        additional = []
-    try:
-        slips = _project_rows("management", "Salary Slip",
-                             ["name", "employee", "start_date", "end_date", "docstatus"],
-                             filters={"docstatus": 1},
-                             order_by="start_date desc", limit=LIMIT_QUEUES)
-    except Exception:
-        slips = []
-    return {
-        "authorized": True,
-        "total": len(additional),
-        "slips": len(slips),
-        "definition": "Submitted additional salary records — native payroll inputs created by teaching compensation or HR; salary slips are the posted outputs.",
-        "source": "additional salary, salary slips (native HRMS, submitted only)",
-        "scope": "HRMS payroll authorization + company scope; payroll-confidential.",
-        "drill": "additional salary list",
+    """Only HRMS-authorized managers see permission-filtered payroll counts."""
+    unavailable = {
+        "authorized": False,
+        "total": "—",
+        "slips": "—",
+        "definition": "Submitted native Additional Salary and Salary Slip counts; unavailable without HRMS permissions or complete records.",
+        "source": "Native HRMS Additional Salary / Salary Slip",
+        "scope": "Requires finance management role and native HRMS record read (Company User Permissions apply).",
+        "drill": "List/Salary Slip",
     }
+    if not authorized:
+        return unavailable
+    try:
+        additional = _native_rows(
+            "Additional Salary", ["name"], filters={"docstatus": 1},
+            order_by="name asc")
+        slips = _native_rows(
+            "Salary Slip", ["name"], filters={"docstatus": 1},
+            order_by="name asc")
+    except (Exception, OverflowError):
+        return unavailable
+    return dict(unavailable, authorized=True, total=len(additional), slips=len(slips))
 
 
 # ------------------------------------------------------------------ retention
