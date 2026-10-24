@@ -114,6 +114,12 @@ def archive_identity(path: Path, supplied_labels: dict) -> tuple[dict[str, str],
             config = json.loads(config_bytes)
             if not isinstance(config, dict) or not isinstance(config.get("config"), dict):
                 raise ValueError("image config metadata is not an object")
+            # The customer runs the provider's Linux/amd64 appliance under
+            # Docker Desktop. A Windows container could carry the expected
+            # labels, but would invalidate our Linux-only runtime security
+            # assumptions (including the setuptools Windows advisory scope).
+            if config.get("os") != "linux" or config.get("architecture") != "amd64":
+                raise ValueError("customer application image must be linux/amd64")
             labels = config["config"].get("Labels")
             if (not isinstance(labels, dict)
                     or not all(isinstance(k, str) and isinstance(v, str) for k, v in labels.items())):
