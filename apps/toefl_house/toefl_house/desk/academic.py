@@ -20,6 +20,10 @@ from toefl_house.desk import (
     require_desk_audience,
     section,
 )
+try:
+    from toefl_house.desk import analytics
+except Exception:
+    analytics = None
 from toefl_house.desk import lifecycle
 
 SLUG = "th-academic-desk"
@@ -283,13 +287,66 @@ def work():
         "action": None,
     } for row in assignments]
 
+    academic_analytics = []
+    if analytics is not None:
+        try:
+            att_metrics = analytics.attendance_metrics()
+            academic_analytics.append(
+                section("academic-attendance", "Attendance analytics (auditable)", "facts",
+                        facts=[
+                            {"label": "Attendance records", "value": att_metrics["total"],
+                             "definition": att_metrics["definition"], "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "owner": "Attendance Recorder"},
+                            {"label": "Attendance rate", "value": att_metrics["rate"],
+                             "definition": "Present / (Present + Absent) — submitted marks only; no threshold invented.", "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "owner": "Attendance Recorder"},
+                            {"label": "Absent marks", "value": att_metrics["absent"],
+                             "definition": "Submitted attendance with absent mark.", "source": att_metrics["source"], "scope": att_metrics["scope"], "drill_path": att_metrics["drill"], "owner": "Attendance Recorder"},
+                        ],
+                        empty_title="No attendance yet", empty_body="Attendance appears when sessions are scheduled and marks recorded."))
+            if att_metrics.get("by_group"):
+                academic_analytics[-1]["comparison"] = {
+                    "title": "Attendance by class (recent window)",
+                    "columns": ["Class", "Records"],
+                    "rows": [{"label": k or "Unassigned", "value": v, "drill": {"slug": "List/Student Attendance"}} for k, v in sorted(att_metrics["by_group"].items(), key=lambda x: -x[1])[:10]],
+                }
+                academic_analytics[-1]["provenance"] = [
+                    {"label": "Source records", "value": att_metrics["source"]},
+                    {"label": "Permission scope", "value": att_metrics["scope"]},
+                    {"label": "Drill-down", "value": att_metrics["drill"] + " — filtered by course, group, date"},
+                ]
+        except Exception:
+            pass
+        try:
+            enroll_metrics = analytics.enrollment_metrics()
+            academic_analytics.append(
+                section("academic-enrollments", "Enrollments & waiting list", "facts",
+                        facts=[
+                            {"label": "Active enrollments", "value": enroll_metrics["total"],
+                             "definition": enroll_metrics["definition"], "source": enroll_metrics["source"], "scope": enroll_metrics["scope"], "drill_path": enroll_metrics["drill"], "owner": "Enrollment Officer"},
+                            {"label": "Enrollments awaiting a class", "value": len(unclassed),
+                             "definition": "Enrollments whose program/year has no planned or active class.", "source": "enrollments + class roster", "scope": "Branch via roster", "drill_path": "enrollment list", "owner": "Teaching Scheduler"},
+                        ],
+                        empty_title="No enrollments", empty_body="Enrollments appear after admission conversion."))
+            if enroll_metrics.get("by_program"):
+                academic_analytics[-1]["comparison"] = {
+                    "title": "Active enrollments by program",
+                    "columns": ["Program", "Enrollments"],
+                    "rows": [{"label": k, "value": v} for k, v in sorted(enroll_metrics["by_program"].items(), key=lambda x: -x[1])[:10]],
+                }
+                academic_analytics[-1]["chart"] = {
+                    "title": "Enrollments by program",
+                    "rows": [{"label": k, "value": v, "tone": "info"} for k, v in sorted(enroll_metrics["by_program"].items(), key=lambda x: -x[1])[:8]],
+                }
+        except Exception:
+            pass
+
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
         "sections": [
-            section("funnel", "Academic funnel", "facts", facts=funnel_facts,
+            section("funnel", "Academic funnel — today\u2019s operations", "facts", facts=funnel_facts,
                     empty_title="Nothing in the academic pipeline",
                     empty_body="No attempts, admissions or cohorts exist yet. Records appear here as the placement and admission workflows advance."),
+            *academic_analytics,
             section("admissions", "Admissions waiting on academic action", "queue",
                     items=_admission_queue(admissions) + _admission_queue(offers) + _admission_queue(conversions),
                     empty_title="No admission needs an academic action",
@@ -298,18 +355,15 @@ def work():
                     items=release_items,
                     empty_title="Nothing is awaiting release",
                     empty_body="Every finalized attempt already has its released decision."),
-            section("sessions", "Sessions today", "queue", items=session_items,
+            section("sessions", "Today\u2019s sessions — your teaching schedule", "queue", items=session_items,
                     empty_title="No sessions scheduled today",
-                    empty_body="Nothing is scheduled for today. Plan a session for a "
-                               "running class from its row on this desk."),
-            section("classes", "Classes", "queue", items=cohort_items,
+                    empty_body="Nothing is scheduled for today. Plan a session for a running class from its row on this desk."),
+            section("classes", "Classes — lifecycle and next action", "queue", items=cohort_items,
                     empty_title="No classes yet",
-                    empty_body="Nothing is planned or running. A class can be created "
-                               "for any level and year that has submitted enrollments."),
+                    empty_body="Nothing is planned or running. A class can be created for any level and year that has submitted enrollments."),
             section("assignments", "Teaching assignments", "queue", items=assignment_items,
                     empty_title="No teaching assignments",
-                    empty_body="No skill assignment exists yet. Instructors are assigned "
-                               "to classes from the Teaching Scheduling page."),
+                    empty_body="No skill assignment exists yet. Instructors are assigned to classes from the Teaching Scheduling page."),
             section("attendance", "Attendance, last 30 days", "facts", facts=attendance_facts,
                     empty_title="No attendance recorded yet",
                     empty_body="Attendance facts appear after the first session is recorded."),

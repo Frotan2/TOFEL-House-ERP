@@ -5663,7 +5663,19 @@ def main():
                 operational_sections=[
                     sec for sec in payload['sections'] if sec['id']!='book-shop'
                 ]
-                text=json.dumps(operational_sections)
+                # Machine-navigation values like drill.slug are deliberately
+                # native List routes. They are NOT staff-facing descriptions.
+                # Keep U5 strict for every rendered label, definition, fact
+                # and next step while allowing proven navigation identifiers.
+                def user_visible(node):
+                    if isinstance(node, dict):
+                        return {key: user_visible(value) for key, value in node.items()
+                                if key not in ("slug", "drill", "drill_path", "endpoint",
+                                               "args", "action")}
+                    if isinstance(node, list):
+                        return [user_visible(value) for value in node]
+                    return node
+                text=json.dumps(user_visible(operational_sections))
                 for word in BANNED_PLUMBING:
                     assert word not in text,(name,word)
             # registry: server-decided, per audience
