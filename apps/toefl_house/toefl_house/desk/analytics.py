@@ -228,9 +228,6 @@ def attendance_metrics():
 
 def attendance_by_instructor():
     """Attendance sessions per instructor for the current window."""
-    groups = _project_rows("management", "Student Group",
-                          ["name", "student_group_name", "program", "course"],
-                          limit=LIMIT_QUEUES)
     schedules = _project_rows("management", "Course Schedule",
                              ["name", "student_group", "instructor", "course", "schedule_date"],
                              order_by="schedule_date desc", limit=BOUNCE_WINDOW)
@@ -424,10 +421,9 @@ def retention_metrics():
 def exception_metrics():
     """Operational exceptions: overdue, stuck, pending approver, past-deadline."""
     try:
-        from toefl_house.desk.lifecycle import PLACEMENT_ATTEMPT_ORDER, ADMISSION_OPEN_STATUSES
+        from toefl_house.desk.lifecycle import PLACEMENT_ATTEMPT_ORDER
     except Exception:
         PLACEMENT_ATTEMPT_ORDER = ["Allocated", "Verified", "Delivered", "Sealed", "Scored", "Review", "Finalized"]
-    day = _today()
     corrections = _project_rows("management", "TH Correction Request",
                               ["name", "sales_invoice", "fees", "reason", "requested_amount", "status", "modified"],
                               filters={"status": "Requested"},
