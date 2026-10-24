@@ -20,6 +20,11 @@ import sys
 import tarfile
 import zipfile
 
+if __package__:
+    from .verify_ci_gates import MAX_EVIDENCE_BYTES, validate_gate_evidence
+else:
+    from verify_ci_gates import MAX_EVIDENCE_BYTES, validate_gate_evidence
+
 
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_FILES = (
@@ -29,6 +34,7 @@ ALLOWED_FILES = (
     "product/windows/Run TOEFL House ERP.ps1",
     "product/windows/Check This PC.ps1",
     "product/windows/OWNER ACCEPTANCE GUIDE.txt",
+    "product/windows/OWNER HANDBOOK.txt",
     "product/windows/DAILY USE GUIDE.txt",
     "product/windows/Verify Package Image.ps1",
     "product/windows/Install TOEFL House ERP.cmd",
@@ -66,6 +72,14 @@ def load_json(path: Path) -> dict:
     if not isinstance(value, dict):
         raise ValueError(f"metadata is not an object: {path}")
     return value
+
+
+def load_gate_evidence(path: Path, source_revision: str) -> dict:
+    """Require the exact-SHA hosted gate receipt before any package output."""
+    if not path.is_file() or path.is_symlink() or path.stat().st_size > MAX_EVIDENCE_BYTES:
+        raise ValueError("a bounded, regular CI gate evidence file is required")
+    evidence = load_json(path)
+    return validate_gate_evidence(evidence, source_revision)
 
 
 def archive_identity(path: Path, supplied_labels: dict) -> tuple[dict[str, str], str]:
@@ -260,6 +274,7 @@ def create_package(
     image_labels: dict,
     version: str,
     source_revision: str,
+    gate_evidence: Path,
     provider_attestation: str,
 ) -> tuple[Path, Path, dict]:
     source = source.resolve()
@@ -282,6 +297,7 @@ def create_package(
         raise ValueError("image source revision does not match the requested package revision")
     if image_labels.get("org.toefl-house.release-version") != version:
         raise ValueError("image release version does not match the requested package version")
+    qualification = load_gate_evidence(gate_evidence, source_revision)
     archive_labels, config_digest = archive_identity(image_archive, image_labels)
     verify_source_checkout(source, source_revision)
     # Reject incomplete source inputs before creating even the output directory.
@@ -299,6 +315,12 @@ def create_package(
         copy_allowlist(source, package)
         release = package / "product/release"
         release.mkdir(parents=True)
+        packaged_gates = release / "ci-gates.json"
+        shutil.copy2(gate_evidence, packaged_gates)
+        if load_gate_evidence(packaged_gates, source_revision) != qualification:
+            raise ValueError("CI gate evidence changed during customer package assembly")
+        gate_evidence_hash = sha256(packaged_gates)
+        write_utf8(release / "ci-gates.json.sha256", gate_evidence_hash + "  ci-gates.json\n")
         archive = release / "toefl-house-erp-app.tar"
         shutil.copy2(image_archive, archive)
         archive_hash = sha256(archive)
@@ -321,6 +343,15 @@ def create_package(
             },
             "dependency_matrix_sha256": matrix_hash,
             "dependencies": dependencies,
+            "qualification": {
+                "scope": qualification["scope"],
+                "evidence": "product/release/ci-gates.json",
+                "sha256": gate_evidence_hash,
+                "repository": qualification["repository"],
+                "source_revision": qualification["source_revision"],
+                "gates": qualification["gates"],
+                "real_owner_windows": "NOT_VERIFIED",
+            },
             "provider_attestation": {
                 "type": provider_attestation,
                 "required_for_delivery": True,
@@ -338,14 +369,18 @@ does not build Frappe, compile Docker images, use Git, or run database commands.
 1. Install Docker Desktop for Windows 10/11 (64-bit) and complete WSL 2 setup.
 2. Extract this complete folder to a local drive and double-click TOEFL House ERP.vbs.
 3. Use Install on a genuinely new computer, then use Open / Start on later days.
-4. Use the included Owner Readiness Guide and DAILY USE GUIDE.txt. They are
-   acceptance instructions, not production approval.
+4. Open the included Owner Handbook from the GUI, then use the Owner Readiness
+   Guide and DAILY USE GUIDE.txt. They are acceptance instructions, not
+   production approval.
 
 Verify product/release/release-manifest.json and its checksum with the trusted
-provider before use. The archive checksum detects corruption; the provider
-attestation/signature is the identity check. Release status is TEST PACKAGE -
-NO REAL DATA and production authorization is REJECT. Do not enter real student,
-payroll or financial data until the owner gates are separately approved.
+provider before use. The same folder contains ci-gates.json and its checksum:
+these bind the four hosted engineering gate runs to this exact source revision.
+They are not real Windows, Owner-machine, recovery, staff, or production approval.
+The archive checksum detects corruption; the provider attestation/signature is
+the identity check. Release status is TEST PACKAGE - NO REAL DATA and production
+authorization is REJECT. Do not enter real student, payroll or financial data
+until the owner gates are separately approved.
 """
         write_utf8(package / "READ ME FIRST.txt", instructions)
         archive_zip = make_zip(package)
@@ -365,6 +400,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--image-labels", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--source-revision", required=True)
+    parser.add_argument("--gate-evidence", type=Path, required=True,
+                        help="passing exact-SHA receipt from verify_ci_gates.py --output")
     parser.add_argument("--provider-attestation", default="GitHub Actions artifact attestation")
     args = parser.parse_args(argv)
     try:
@@ -376,6 +413,7 @@ def main(argv: list[str] | None = None) -> int:
             image_labels=labels,
             version=args.version,
             source_revision=args.source_revision,
+            gate_evidence=args.gate_evidence,
             provider_attestation=args.provider_attestation,
         )
         print(json.dumps({

@@ -47,6 +47,21 @@ class ReleaseImageTriggerContract(unittest.TestCase):
         self.assertIn("cancel-in-progress: true", workflow)
         self.assertIn("workflow_dispatch:", workflow)
 
+    def test_customer_package_contains_the_exact_sha_gate_receipt(self):
+        workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
+        self.assertIn('verify_ci_gates.py --timeout 3600 --output "$RUNNER_TEMP/toefl-house-ci-gates.json"', workflow)
+        self.assertIn('--gate-evidence "$RUNNER_TEMP/toefl-house-ci-gates.json"', workflow)
+        self.assertIn("/product/release/ci-gates.json", workflow)
+
+    def test_tagged_release_uses_versioned_notes_and_exact_build_references(self):
+        workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
+        self.assertIn("cp docs/engineering/RELEASE-CANDIDATE.md", workflow)
+        self.assertIn("printf -- '- Full source SHA: `%s`\\n' \"$GITHUB_SHA\"", workflow)
+        self.assertIn('"$GITHUB_RUN_ID"', workflow)
+        self.assertIn("--verify-tag", workflow)
+        self.assertIn("--prerelease", workflow)
+        self.assertIn('--notes-file "$notes"', workflow)
+
     def test_release_qualification_stays_non_authorizing(self):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
         self.assertIn("This is not production authorization", workflow)

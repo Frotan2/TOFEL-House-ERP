@@ -32,6 +32,7 @@ VERIFY = read_utf8(WINDOWS / "Verify Package Image.ps1")
 PACKAGER = read_utf8(WINDOWS / "Prepare Customer Package.ps1")
 SHORTCUT = read_utf8(ROOT / "TOEFL House ERP.vbs")
 OWNER_GUIDE = read_utf8(WINDOWS / "OWNER ACCEPTANCE GUIDE.txt")
+OWNER_HANDBOOK = read_utf8(WINDOWS / "OWNER HANDBOOK.txt")
 DAILY_GUIDE = read_utf8(WINDOWS / "DAILY USE GUIDE.txt")
 
 
@@ -45,7 +46,7 @@ class CustomerInstallerContract(unittest.TestCase):
         for button in ('"Install"', '"Open / Start"', '"Repair"', '"Stop"',
                        '"Get Docker Desktop"', '"View Administrator Login"',
                        '"Check This PC"', '"Owner Readiness Guide"', '"How to Use"',
-                       '"Copy Safe Support Status"'):
+                       '"Owner Handbook"', '"Copy Safe Support Status"'):
             self.assertIn(button, GUI)
         self.assertIn('"http://127.0.0.1:8000/"', GUI)
         self.assertIn('$script:process', GUI)
@@ -67,6 +68,19 @@ class CustomerInstallerContract(unittest.TestCase):
                           "MARIADB_ROOT_PASSWORD="):
             self.assertNotIn(forbidden.lower(), DAILY_GUIDE.lower())
         self.assertNotIn('Start-LauncherAction "Activate"', GUI)
+
+    def test_owner_handbook_is_packaged_and_available_without_commands(self):
+        self.assertIn('"product/windows/OWNER HANDBOOK.txt"', PACKAGER)
+        self.assertIn('$ownerHandbookButton.Add_Click', GUI)
+        self.assertIn('$ownerHandbookButton.Enabled', GUI)
+        self.assertIn('$ownerHandbookFile = Join-Path $PSScriptRoot "OWNER HANDBOOK.txt"', GUI)
+        self.assertIn('Start-Process -FilePath "notepad.exe"', GUI)
+        for expected in ("NO-GO", "Applicant", "Placement", "Admission", "Enrollment",
+                         "Assessment / Progression", "Billing", "Payment", "Payroll",
+                         "Backup and Recovery Hold".lower(), "خلاصهٔ مهم برای صاحب کورس"):
+            self.assertIn(expected.lower(), OWNER_HANDBOOK.lower())
+        for forbidden in ("git clone", "git pull", "docker compose", "MARIADB_ROOT_PASSWORD="):
+            self.assertNotIn(forbidden.lower(), OWNER_HANDBOOK.lower())
 
     def test_safe_status_is_read_only_and_privacy_filtered(self):
         self.assertIn('$copyStatusButton.Add_Click', GUI)

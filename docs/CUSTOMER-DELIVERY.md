@@ -40,9 +40,10 @@ records and runs migrations, which must be timed during customer acceptance.
    native **Course Owner** account for normal administration. Do not email
    or photograph the credentials. Owner policies and real-operation mode
    remain subject to the documented release hold.
-5. Select **Owner Readiness Guide** to read a no-command, read-only first-check
-   and a separate synthetic Windows test checklist directly from the GUI.
-   This does not lift the backup/restore hold or authorize production.
+5. Select **Owner Handbook** for the complete no-code English/Dari operating
+   and safety guide, and **Owner Readiness Guide** for a no-command, read-only
+   first-check plus a separate synthetic Windows test checklist. Neither lifts
+   the backup/restore hold or authorizes production.
    Select **Check This PC** for a read-only technical report. The report
    checks Windows, Docker availability, local disk space, possible fixed local
    backup volumes, the presence (never contents) of database storage and its
@@ -80,12 +81,15 @@ password just to repeat installation.
 From a verified source checkout with a built local image tagged
 toefl-house-erp-app:local, open
 product/windows/Prepare Customer Package.ps1 in Windows PowerShell, or run
-it with a chosen Destination path. The provider-side utility:
+it with a chosen Destination path. This local preparer is for disposable
+engineering tests only; it is not the approved v1.0.0-rc.1 publication path.
+The versioned RC must come from the exact-SHA attested Product-image pipeline
+below. The provider-side utility:
 
 - Confirms Docker is running and the image includes the Linux LF-source,
   exact source-revision, and exact release-version labels.
-- Copies only the explicitly allowed Windows GUI, Owner readiness guide,
-  lifecycle scripts and Compose configuration. It never copies source repositories, Docker data,
+- Copies only the explicitly allowed Windows GUI, Owner Handbook, Owner
+  readiness/daily guides, lifecycle scripts and Compose configuration. It never copies source repositories, Docker data,
   administrator credentials, active site files, activation receipts or backups.
 - Uses docker save to write product/release/toefl-house-erp-app.tar, and writes
   an archive checksum, release manifest, dependency-matrix hash, and manifest
@@ -103,10 +107,13 @@ Before package assembly it requires successful Owned, native lifecycle,
 Foundation security/runtime, and Windows package workflows on the same source
 revision. The image workflow starts only missing checks after verifying its
 branch/tag still identifies that revision. Missing, failed, cancelled, or
-pending evidence cannot authorize an artifact upload.
+pending evidence cannot authorize an artifact upload. The successful four-gate
+receipt is written only after that check and is required by package assembly;
+it is embedded as `product/release/ci-gates.json` with its own SHA-256 sidecar
+and bound into the release manifest.
 The ZIP is the customer download; the included manifest binds the exact source
-revision, image labels, image hash, and dependency matrix. Verify the
-attestation separately. A package that has only a bare tar/hash pair is not a
+revision, image labels, image hash, dependency matrix and four gate run URLs.
+Verify the attestation separately. A package that has only a bare tar/hash pair is not a
 verified customer release.
 
 Both packagers require the selected checkout HEAD and clean customer inputs
@@ -183,7 +190,8 @@ For current policy/activation and recovery limitations see
 
 ## No-code staff help in the customer launcher
 
-The installed Windows GUI now includes **How to Use**, which opens an offline
+The installed Windows GUI includes **Owner Handbook**, which opens the complete
+offline English/Dari **OWNER HANDBOOK.txt**, and **How to Use**, which opens the
 plain-English **DAILY USE GUIDE.txt** supplied in the allowlisted customer kit.
 It explains the Owner, Reception, Academic, Teacher and Finance routines and
 how the native ERPNext stock-book workflow works without developer commands.
