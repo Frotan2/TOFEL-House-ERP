@@ -1,0 +1,259 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-24 00:00:00.000000",
+ "doctype": "DocType",
+ "documentation": "One class's authorized mark entry against one pinned assessment-policy version.",
+ "engine": "InnoDB",
+ "field_order": [
+  "student_group",
+  "level",
+  "column_break_1",
+  "policy",
+  "policy_effective_from",
+  "policy_digest",
+  "grading_scale",
+  "assessment_plan",
+  "attempt",
+  "status",
+  "section_break_marks",
+  "marks",
+  "section_break_corrections",
+  "corrections",
+  "section_break_trail",
+  "review_note",
+  "column_break_trail",
+  "opened_by",
+  "opened_on",
+  "submitted_by",
+  "submitted_on",
+  "reviewed_by",
+  "reviewed_on",
+  "approved_by",
+  "approved_on",
+  "published_by",
+  "published_on",
+  "synthetic"
+ ],
+ "fields": [
+  {
+   "fieldname": "student_group",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Student group",
+   "options": "Student Group",
+   "reqd": 1
+  },
+  {
+   "fieldname": "level",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Program level",
+   "options": "TH Program Level"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "policy",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Assessment policy",
+   "options": "TH Assessment Policy",
+   "reqd": 1
+  },
+  {
+   "description": "The governing policy version this book was opened under. Each result is graded against this pin, never against a later version.",
+   "fieldname": "policy_effective_from",
+   "fieldtype": "Date",
+   "label": "Pinned policy version",
+   "reqd": 1
+  },
+  {
+   "description": "Canonical digest of the pinned version's facets: the exact policy the marks were graded under.",
+   "fieldname": "policy_digest",
+   "fieldtype": "Data",
+   "label": "Pinned policy digest",
+   "read_only": 1
+  },
+  {
+   "description": "The native Grading Scale the pinned version names. Its intervals are the only source of grade codes.",
+   "fieldname": "grading_scale",
+   "fieldtype": "Link",
+   "label": "Grading scale",
+   "options": "Grading Scale"
+  },
+  {
+   "description": "Optional native Education Assessment Plan. When set, publication also writes one native Assessment Result per student.",
+   "fieldname": "assessment_plan",
+   "fieldtype": "Link",
+   "label": "Native assessment plan",
+   "options": "Assessment Plan"
+  },
+  {
+   "default": "1",
+   "description": "Attempt ordinal for this class and policy. Prior attempts keep their own books and results.",
+   "fieldname": "attempt",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Attempt",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_marks",
+   "fieldtype": "Section Break",
+   "label": "Marks"
+  },
+  {
+   "fieldname": "marks",
+   "fieldtype": "Table",
+   "label": "Marks",
+   "options": "TH Assessment Book Mark"
+  },
+  {
+   "fieldname": "section_break_corrections",
+   "fieldtype": "Section Break",
+   "label": "Academic corrections"
+  },
+  {
+   "fieldname": "corrections",
+   "fieldtype": "Table",
+   "label": "Corrections",
+   "options": "TH Assessment Book Correction"
+  },
+  {
+   "fieldname": "section_break_trail",
+   "fieldtype": "Section Break",
+   "label": "Decision trail"
+  },
+  {
+   "fieldname": "review_note",
+   "fieldtype": "Small Text",
+   "label": "Review note"
+  },
+  {
+   "fieldname": "column_break_trail",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "opened_by",
+   "fieldtype": "Link",
+   "label": "Opened by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "opened_on",
+   "fieldtype": "Datetime",
+   "label": "Opened on",
+   "read_only": 1
+  },
+  {
+   "fieldname": "submitted_by",
+   "fieldtype": "Link",
+   "label": "Submitted by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "submitted_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted on",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Reviewed on",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved on",
+   "read_only": 1
+  },
+  {
+   "fieldname": "published_by",
+   "fieldtype": "Link",
+   "label": "Published by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "published_on",
+   "fieldtype": "Datetime",
+   "label": "Published on",
+   "read_only": 1
+  },
+  {
+   "fieldname": "synthetic",
+   "fieldtype": "Check",
+   "label": "Synthetic",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Academic",
+ "name": "TH Assessment Book",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Instructor",
+   "select": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Academic Manager",
+   "select": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Teaching Auditor",
+   "select": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

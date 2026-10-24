@@ -536,6 +536,19 @@ def can_read(kind, roles, actor, owner, status=None):
         return bool(roles & {"Attendance Recorder", "Teaching Auditor"})
     if kind == "enrollment_exit":
         return bool(roles & {"Enrollment Officer", "Enrollment Auditor"})
+    # Assessment: academic staff and the teaching auditor read the academic
+    # record; an instructor reads only their own classes (the row scope is
+    # applied by permissions.has_permission/query, never widened here);
+    # enrollment staff read results and progression decisions to admit a
+    # student to the next level.
+    if kind == "assessment_book":
+        return bool(roles & {"Academic Manager", "Teaching Auditor", "Instructor"})
+    if kind == "academic_result":
+        return bool(roles & {"Academic Manager", "Teaching Auditor",
+                             "Enrollment Officer", "Instructor"})
+    if kind == "progression_decision":
+        return bool(roles & {"Academic Manager", "Teaching Auditor",
+                             "Enrollment Officer", "Enrollment Auditor"})
     if "Placement Publisher" in roles:
         return True
     # Invigilator may operate the Digital session and read the operational

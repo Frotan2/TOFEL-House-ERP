@@ -78,6 +78,20 @@ KIND_ROLES = {
     "request_fees_correction": "Finance Officer",
     "approve_fees_correction": "Finance Officer",
     "deny_fees_correction": "Finance Officer",
+    # B04 assessment: academic staff open, review, correct, approve and
+    # publish results; only the class's assigned instructor may record and
+    # submit its marks. An academic override is a senior academic act
+    # (General Manager), never a wider version of the normal decision.
+    "open_assessment_book": "Academic Manager",
+    "record_assessment_marks": "Instructor",
+    "submit_assessment_book": "Instructor",
+    "review_assessment_book": "Academic Manager",
+    "correct_assessment_mark": "Academic Manager",
+    "approve_assessment_book": "Academic Manager",
+    "publish_assessment_results": "Academic Manager",
+    "correct_published_result": "Academic Manager",
+    "decide_progression": "Academic Manager",
+    "override_progression": "General Manager",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -93,6 +107,7 @@ DOCTYPES = {
     "TH Instructor Contract", "TH Teaching Assignment",
     "TH Correction Policy", "TH Correction Request",
     "TH Attendance Correction Request",
+    "TH Assessment Book", "TH Academic Result", "TH Progression Decision",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision",
                    "TH Placement Course Map Revision")

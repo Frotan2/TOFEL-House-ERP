@@ -21,6 +21,9 @@ KINDS = {
     "TH Correction Policy": "correction_policy",
     "TH Correction Request": "correction_request",
     "TH Attendance Correction Request": "attendance_correction",
+    "TH Assessment Book": "assessment_book",
+    "TH Academic Result": "academic_result",
+    "TH Progression Decision": "progression_decision",
 }
 TABLES = {
     "item": "`tabTH Placement Item Revision`",
@@ -43,7 +46,42 @@ TABLES = {
     "correction_policy": "`tabTH Correction Policy`",
     "correction_request": "`tabTH Correction Request`",
     "attendance_correction": "`tabTH Attendance Correction Request`",
+    "assessment_book": "`tabTH Assessment Book`",
+    "academic_result": "`tabTH Academic Result`",
+    "progression_decision": "`tabTH Progression Decision`",
 }
+
+# Assessment readership. Academic staff and the teaching auditor read the
+# whole academic record; an instructor reads only the classes they actually
+# teach (resolved natively through TH Teaching Assignment -> Instructor ->
+# Employee.user_id). Enrollment staff need published results and progression
+# decisions to admit a student to the next level, and nothing else.
+ACADEMIC_BOOK_ROLES = ("Academic Manager", "Teaching Auditor")
+ACADEMIC_RESULT_ROLES = ("Academic Manager", "Teaching Auditor", "Enrollment Officer")
+PROGRESSION_ROLES = ("Academic Manager", "Teaching Auditor", "Enrollment Officer",
+                     "Enrollment Auditor")
+INSTRUCTOR_GROUPS_SQL = (
+    "SELECT ta.student_group FROM `tabTH Teaching Assignment` ta "
+    "JOIN `tabInstructor` i ON i.name = ta.instructor "
+    "JOIN `tabEmployee` emp ON emp.name = i.employee "
+    "WHERE emp.user_id = {user}")
+
+
+def _instructor_groups(user):
+    """The classes an instructor teaches, from the native identity chain."""
+    rows = frappe.db.sql(INSTRUCTOR_GROUPS_SQL.format(
+        user=frappe.db.escape(user)), as_dict=True)
+    return {row["student_group"] for row in rows}
+
+
+def _instructor_reads(kind, doc, user):
+    """Instructor row scope: own classes only, never another class's marks."""
+    if kind not in ("assessment_book", "academic_result"):
+        return False
+    group = doc.get("student_group") if hasattr(doc, "get") else None
+    return bool(group) and group in _instructor_groups(user)
+
+
 LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
 STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score", "decision")
 
@@ -78,6 +116,9 @@ BRANCH_KINDS = {
     "TH Teaching Assignment": "assignment",
     "TH Correction Request": "correction_request",
     "TH Attendance Correction Request": "attendance_correction",
+    "TH Assessment Book": "assessment_book",
+    "TH Academic Result": "academic_result",
+    "TH Progression Decision": "progression_decision",
 }
 
 # The four native doctypes that gain their OWN hooks for branch isolation
@@ -175,6 +216,12 @@ def _branch_condition(kind, branches):
         return (f"`tabTH Attendance Correction Request`.course_schedule IN "
                 f"(SELECT name FROM `tabCourse Schedule` WHERE student_group IN "
                 f"(SELECT name FROM `tabStudent Group` WHERE th_branch IN ({b})))")
+    if kind in ("assessment_book", "academic_result", "progression_decision"):
+        # Academic evidence belongs to a class, and a class belongs to a
+        # branch: a branch-scoped user reads only their own branches' results
+        # (an unresolvable branch fails closed through the comparison).
+        return (f"{TABLES[kind]}.student_group IN "
+                f"(SELECT name FROM `tabStudent Group` WHERE th_branch IN ({b}))")
     return None
 
 
@@ -225,6 +272,12 @@ def _doc_branches_guarded(doc, kind):
         if not doc.get("fees"):
             return set()
         return _student_branches(frappe.db.get_value("Fees", doc.fees, "student"))
+    if kind in ("assessment_book", "academic_result", "progression_decision"):
+        group = doc.get("student_group")
+        if not group:
+            return set()
+        branch = frappe.db.get_value("Student Group", group, "th_branch")
+        return {branch} if branch else set()
     if kind == "attendance_correction":
         branches = set()
         if doc.get("course_schedule"):
@@ -355,6 +408,13 @@ def has_permission(doc, ptype=None, user=None, **kwargs):
             and can_read(KINDS[doc.doctype], frappe.get_roles(user), user, doc.owner, doc.get("status"))):
         return False
     kind = KINDS[doc.doctype]
+    if kind in ("assessment_book", "academic_result"):
+        # Instructors see their own classes only; academic staff and auditors
+        # keep the full read. Role union never widens a row scope.
+        held = set(frappe.get_roles(user))
+        if "Instructor" in held and not held & set(
+                ACADEMIC_BOOK_ROLES + ACADEMIC_RESULT_ROLES):
+            return _instructor_reads(kind, doc, user)
     if kind not in BRANCH_KINDS.values():
         return True
     branches = _user_branches(user)
@@ -413,6 +473,22 @@ def _query_role(kind, user=None):
         return "1=1" if roles & {"Attendance Recorder", "Teaching Auditor"} else "1=0"
     if kind == "enrollment_exit":
         return "1=1" if roles & {"Enrollment Officer", "Enrollment Auditor"} else "1=0"
+    if kind == "assessment_book":
+        if roles & set(ACADEMIC_BOOK_ROLES):
+            return "1=1"
+        if "Instructor" in roles:
+            return f"{TABLES[kind]}.student_group IN (" \
+                   + INSTRUCTOR_GROUPS_SQL.format(user=frappe.db.escape(user)) + ")"
+        return "1=0"
+    if kind == "academic_result":
+        if roles & set(ACADEMIC_RESULT_ROLES):
+            return "1=1"
+        if "Instructor" in roles:
+            return f"{TABLES[kind]}.student_group IN (" \
+                   + INSTRUCTOR_GROUPS_SQL.format(user=frappe.db.escape(user)) + ")"
+        return "1=0"
+    if kind == "progression_decision":
+        return "1=1" if roles & set(PROGRESSION_ROLES) else "1=0"
     if "Placement Publisher" in roles:
         return "1=1"
     if kind in ("case", "attempt", "exposure", "response") and "Placement Invigilator" in roles:
@@ -456,3 +532,6 @@ def query_correction_policy(user=None): return query("correction_policy", user)
 def query_correction_request(user=None): return query("correction_request", user)
 def query_attendance_correction(user=None): return query("attendance_correction", user)
 def query_enrollment_exit(user=None): return query("enrollment_exit", user)
+def query_assessment_book(user=None): return query("assessment_book", user)
+def query_academic_result(user=None): return query("academic_result", user)
+def query_progression_decision(user=None): return query("progression_decision", user)
