@@ -48,11 +48,11 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "How many seats this approval allows above the class capacity. Consumed once, by one admission.",
+   "description": "Approved override of the class capacity for this one student. Consumed once, in the same transaction as the roster row.",
    "fieldname": "seats",
    "fieldtype": "Int",
    "in_list_view": 1,
-   "label": "Extra seats",
+   "label": "Extra seats above capacity",
    "reqd": 1
   },
   {
@@ -135,7 +135,7 @@
  "modified": "2026-10-24 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Teaching",
- "name": "TH Capacity Override",
+ "name": "TH Capacity Approval",
  "owner": "Administrator",
  "permissions": [
   {

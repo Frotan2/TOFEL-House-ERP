@@ -66,7 +66,7 @@ has_permission = {
                  "TH Class Operations Policy", "TH Academic Calendar",
                  "TH Timetable Template",
                  "TH Class Transfer", "TH Class Waiting List",
-                 "TH Capacity Override", "TH Class Suspension")
+                 "TH Capacity Approval", "TH Class Suspension")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Program Level"] = "toefl_house.permissions.configuration_has_permission"
@@ -116,7 +116,7 @@ permission_query_conditions = {
         ("TH Enrollment Exit", "enrollment_exit"),
         ("TH Class Transfer", "class_transfer"),
         ("TH Class Waiting List", "class_waiting_list"),
-        ("TH Capacity Override", "capacity_override"),
+        ("TH Capacity Approval", "capacity_approval"),
         ("TH Class Suspension", "class_suspension"))
 }
 # Governance configuration is queried through the non-synthetic checker.

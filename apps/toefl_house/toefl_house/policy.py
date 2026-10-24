@@ -574,7 +574,7 @@ def can_read(kind, roles, actor, owner, status=None):
         return bool(roles & {"Reception", "Teaching Scheduler", "Teaching Auditor",
                              "Academic Manager", "General Manager", "Course Owner",
                              "Enrollment Officer", "Enrollment Auditor"})
-    if kind == "capacity_override":
+    if kind == "capacity_approval":
         return bool(roles & {"Academic Manager", "Teaching Scheduler",
                              "Teaching Auditor", "General Manager", "Course Owner"})
     if kind == "class_suspension":

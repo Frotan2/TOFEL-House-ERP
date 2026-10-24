@@ -117,7 +117,7 @@ DOCTYPES = {
     "TH Attendance Correction Request",
     # Mission 3 class operations (guarded operational records).
     "TH Class Transfer", "TH Class Waiting List",
-    "TH Capacity Override", "TH Class Suspension",
+    "TH Capacity Approval", "TH Class Suspension",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision",
                    "TH Placement Course Map Revision")
@@ -264,7 +264,7 @@ TEACHING_COMMANDS = {
     "schedule_session": "Course Schedule",
     "record_attendance": "Student Attendance",
     # a roster addition may also consume an approved capacity override
-    "add_class_member": ("Student Group", "TH Capacity Override"),
+    "add_class_member": ("Student Group", "TH Capacity Approval"),
     "move_class_member": "Student Group",
     "remove_class_member": "Student Group",
     # the approval command voids the erroneous mark and submits the
@@ -285,16 +285,16 @@ TEACHING_COMMANDS = {
     # admission moves the waiting entry AND appends the native roster row,
     # consuming the override in the same transaction
     "admit_from_waiting_list": ("TH Class Waiting List", "Student Group",
-                                "TH Capacity Override"),
-    "create_capacity_override": "TH Capacity Override",
-    "revoke_capacity_override": "TH Capacity Override",
+                                "TH Capacity Approval"),
+    "create_capacity_override": "TH Capacity Approval",
+    "revoke_capacity_override": "TH Capacity Approval",
     "request_class_transfer": "TH Class Transfer",
     "deny_class_transfer": "TH Class Transfer",
     "cancel_class_transfer": "TH Class Transfer",
     # approval executes the move (both class rosters) and consumes a seat
     # override when the target class is full
     "approve_class_transfer": ("TH Class Transfer", "Student Group",
-                               "TH Capacity Override"),
+                               "TH Capacity Approval"),
 }
 
 

@@ -269,7 +269,7 @@ class ApprovalTests(TransferTestBase):
         result = self.ops.transfers.approve_class_transfer(
             "transfer-approve-0009", transfer, override=override)
         self.assertEqual(result["override"]["override"], override)
-        self.assertEqual(self.site.get("TH Capacity Override",
+        self.assertEqual(self.site.get("TH Capacity Approval",
                                        override)["status"], "Used")
         self.assertEqual(self.ops.roster("GRP-B"), [("STU-2", 1), ("STU-1", 1)])
 

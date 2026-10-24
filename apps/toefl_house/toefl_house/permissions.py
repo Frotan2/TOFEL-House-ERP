@@ -23,7 +23,7 @@ KINDS = {
     "TH Attendance Correction Request": "attendance_correction",
     "TH Class Transfer": "class_transfer",
     "TH Class Waiting List": "class_waiting_list",
-    "TH Capacity Override": "capacity_override",
+    "TH Capacity Approval": "capacity_approval",
     "TH Class Suspension": "class_suspension",
 }
 TABLES = {
@@ -49,7 +49,7 @@ TABLES = {
     "attendance_correction": "`tabTH Attendance Correction Request`",
     "class_transfer": "`tabTH Class Transfer`",
     "class_waiting_list": "`tabTH Class Waiting List`",
-    "capacity_override": "`tabTH Capacity Override`",
+    "capacity_approval": "`tabTH Capacity Approval`",
     "class_suspension": "`tabTH Class Suspension`",
 }
 LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
@@ -88,7 +88,7 @@ BRANCH_KINDS = {
     "TH Attendance Correction Request": "attendance_correction",
     "TH Class Transfer": "class_transfer",
     "TH Class Waiting List": "class_waiting_list",
-    "TH Capacity Override": "capacity_override",
+    "TH Capacity Approval": "capacity_approval",
     "TH Class Suspension": "class_suspension",
 }
 
@@ -187,7 +187,7 @@ def _branch_condition(kind, branches):
         return (f"`tabTH Attendance Correction Request`.course_schedule IN "
                 f"(SELECT name FROM `tabCourse Schedule` WHERE student_group IN "
                 f"(SELECT name FROM `tabStudent Group` WHERE th_branch IN ({b})))")
-    if kind in ("class_waiting_list", "capacity_override", "class_suspension"):
+    if kind in ("class_waiting_list", "capacity_approval", "class_suspension"):
         table = TABLES[kind]
         return (f"{table}.student_group IN "
                 f"(SELECT name FROM `tabStudent Group` WHERE th_branch IN ({b}))")
@@ -246,7 +246,7 @@ def _doc_branches_guarded(doc, kind):
         if not doc.get("fees"):
             return set()
         return _student_branches(frappe.db.get_value("Fees", doc.fees, "student"))
-    if kind in ("class_waiting_list", "capacity_override", "class_suspension"):
+    if kind in ("class_waiting_list", "capacity_approval", "class_suspension"):
         group = doc.get("student_group")
         if not group:
             return set()
@@ -459,7 +459,7 @@ def _query_role(kind, user=None):
         return "1=1" if roles & {"Reception", "Teaching Scheduler", "Teaching Auditor",
                                  "Academic Manager", "General Manager", "Course Owner",
                                  "Enrollment Officer", "Enrollment Auditor"} else "1=0"
-    if kind == "capacity_override":
+    if kind == "capacity_approval":
         return "1=1" if roles & {"Academic Manager", "Teaching Scheduler",
                                  "Teaching Auditor", "General Manager",
                                  "Course Owner"} else "1=0"
@@ -512,5 +512,5 @@ def query_attendance_correction(user=None): return query("attendance_correction"
 def query_enrollment_exit(user=None): return query("enrollment_exit", user)
 def query_class_transfer(user=None): return query("class_transfer", user)
 def query_class_waiting_list(user=None): return query("class_waiting_list", user)
-def query_capacity_override(user=None): return query("capacity_override", user)
+def query_capacity_approval(user=None): return query("capacity_approval", user)
 def query_class_suspension(user=None): return query("class_suspension", user)

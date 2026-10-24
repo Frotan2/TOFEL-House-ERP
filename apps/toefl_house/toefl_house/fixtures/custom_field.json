@@ -400,6 +400,7 @@
  },
  {
   "doctype": "Custom Field",
+  "name": "Course Schedule-th_session_kind",
   "dt": "Course Schedule",
   "fieldname": "th_session_kind",
   "label": "Session kind",
@@ -412,6 +413,7 @@
  },
  {
   "doctype": "Custom Field",
+  "name": "Course Schedule-th_session_status",
   "dt": "Course Schedule",
   "fieldname": "th_session_status",
   "label": "Session status",
@@ -424,6 +426,7 @@
  },
  {
   "doctype": "Custom Field",
+  "name": "Course Schedule-th_replaces",
   "dt": "Course Schedule",
   "fieldname": "th_replaces",
   "label": "Replaces session",
@@ -434,6 +437,7 @@
  },
  {
   "doctype": "Custom Field",
+  "name": "Course Schedule-th_session_note",
   "dt": "Course Schedule",
   "fieldname": "th_session_note",
   "label": "Session note",

@@ -278,8 +278,8 @@ class PolicyWiringTests(unittest.TestCase):
             "join_waiting_list": "TH Class Waiting List",
             "leave_waiting_list": "TH Class Waiting List",
             "offer_waiting_list_seat": "TH Class Waiting List",
-            "create_capacity_override": "TH Capacity Override",
-            "revoke_capacity_override": "TH Capacity Override",
+            "create_capacity_override": "TH Capacity Approval",
+            "revoke_capacity_override": "TH Capacity Approval",
             "request_class_transfer": "TH Class Transfer",
             "deny_class_transfer": "TH Class Transfer",
             "cancel_class_transfer": "TH Class Transfer",
@@ -293,13 +293,13 @@ class PolicyWiringTests(unittest.TestCase):
 
     def test_multi_doctype_commands_declare_every_row_they_write(self):
         roster = set(self.commands["add_class_member"])
-        self.assertEqual(roster, {"Student Group", "TH Capacity Override"})
+        self.assertEqual(roster, {"Student Group", "TH Capacity Approval"})
         self.assertEqual(set(self.commands["admit_from_waiting_list"]),
                          {"TH Class Waiting List", "Student Group",
-                          "TH Capacity Override"})
+                          "TH Capacity Approval"})
         self.assertEqual(set(self.commands["approve_class_transfer"]),
                          {"TH Class Transfer", "Student Group",
-                          "TH Capacity Override"})
+                          "TH Capacity Approval"})
 
     def test_configuration_masters_carry_the_command_context_hook(self):
         events = self.hooks["doc_events"]
@@ -322,7 +322,7 @@ class PolicyWiringTests(unittest.TestCase):
 
     def test_operational_records_are_guarded_and_branch_scoped(self):
         for doctype in ("TH Class Transfer", "TH Class Waiting List",
-                        "TH Capacity Override", "TH Class Suspension"):
+                        "TH Capacity Approval", "TH Class Suspension"):
             self.assertIn(doctype, self.hooks["has_permission"], doctype)
             self.assertIn(doctype, self.hooks["permission_query_conditions"],
                           doctype)

@@ -98,8 +98,8 @@ def after_migrate():
     frappe.db.add_index("TH Class Waiting List", ["student_group", "status"],
                         "th_wait_group_status")
     frappe.db.add_index("TH Class Waiting List", ["student", "status"], "th_wait_student")
-    frappe.db.add_index("TH Capacity Override", ["student_group", "status"],
-                        "th_override_group_status")
+    frappe.db.add_index("TH Capacity Approval", ["student_group", "status"],
+                        "th_approval_group_status")
     frappe.db.add_index("TH Class Suspension", ["student_group", "status"],
                         "th_suspension_group_status")
     frappe.db.add_index("TH Class Transfer", ["student", "status"], "th_transfer_student")

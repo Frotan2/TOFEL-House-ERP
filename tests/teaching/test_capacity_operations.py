@@ -97,7 +97,7 @@ class CapacityTests(unittest.TestCase):
         override = self.ops.seed_override(group, "STU-3")
         seat = self.ops.capacity.assert_seat_available(group, "STU-3", override)
         self.assertEqual(seat["override"]["override"], override)
-        stored = self.site.get("TH Capacity Override", override)
+        stored = self.site.get("TH Capacity Approval", override)
         self.assertEqual(stored["status"], "Used")
         self.assertTrue(stored["used_on"])
         with self.assertRaises(ValidationError) as ctx:
@@ -257,7 +257,7 @@ class CapacityTests(unittest.TestCase):
         result = self.ops.capacity.admit_from_waiting_list(
             "admit-full-0002", entry, override=override)
         self.assertEqual(result["override"]["override"], override)
-        self.assertEqual(self.site.get("TH Capacity Override", override)["status"],
+        self.assertEqual(self.site.get("TH Capacity Approval", override)["status"],
                          "Used")
         self.assertEqual(len(self.ops.roster(group)), 3,
                          "the override admits one student into the full class")
@@ -320,7 +320,7 @@ class CapacityTests(unittest.TestCase):
         result = self.ops.capacity.revoke_capacity_override(
             "revoke-override-0001", override, "student declined")
         self.assertEqual(result["status"], "Revoked")
-        stored = self.site.get("TH Capacity Override", override)
+        stored = self.site.get("TH Capacity Approval", override)
         self.assertEqual(stored["revocation_reason"], "student declined")
         self.assertTrue(stored["revoked_on"])
         with self.assertRaises(ValidationError) as ctx:

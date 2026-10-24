@@ -154,7 +154,7 @@ class ClassOperationsJourneyTests(unittest.TestCase):
             "journey-admit-0001", entry["name"], override=override["name"])
         self.assertEqual(admitted["status"], "Admitted")
         self.assertEqual(admitted["override"]["override"], override["name"])
-        self.assertEqual(self.site.get("TH Capacity Override",
+        self.assertEqual(self.site.get("TH Capacity Approval",
                                        override["name"])["status"], "Used")
         with self.assertRaises(ValidationError) as ctx:
             self.ops.capacity.admit_from_waiting_list(

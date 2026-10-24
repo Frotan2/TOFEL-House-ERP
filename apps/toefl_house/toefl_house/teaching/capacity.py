@@ -33,7 +33,7 @@ from toefl_house.teaching import class_operations
 
 GROUP = "Student Group"
 WAITING = "TH Class Waiting List"
-OVERRIDE = "TH Capacity Override"
+OVERRIDE = "TH Capacity Approval"
 ENROLLMENT = "Program Enrollment"
 STUDENT = "Student"
 ROSTER_TABLE = "Student Group Student"

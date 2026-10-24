@@ -1,4 +1,6 @@
-"""Controller for TH Capacity Override: one approval, one seat, one use.
+"""Controller for TH Capacity Approval: an approved capacity override.
+
+One approval, one seat, one use.
 
 The approval facts (class, student, seats, reason, approver) are immutable;
 the status moves Approved to Used, Revoked or Expired and never back. A used
@@ -16,7 +18,7 @@ TRANSITIONS = {("Approved", "Used"), ("Approved", "Revoked"),
                ("Approved", "Expired")}
 
 
-class THCapacityOverride(ProtectedRecord):
+class THCapacityApproval(ProtectedRecord):
     def validate(self):
         super().validate()
         if not teaching_command_active(self.doctype):

@@ -814,7 +814,7 @@ class OperationsSite:
     def seed_override(self, group, student, seats=1, status="Approved",
                       expires="2026-10-01", approved_by=APPROVER):
         return self.site.add(
-            "TH Capacity Override", student_group=group, student=student,
+            "TH Capacity Approval", student_group=group, student=student,
             seats=seats, status=status, reason="approved extra seat",
             approved_by=approved_by, approved_on="2026-09-21 10:00:00",
             expires_on=expires, synthetic=1,
