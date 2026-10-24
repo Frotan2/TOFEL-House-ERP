@@ -1,0 +1,31 @@
+name: One-time verified merged branch retirement
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/retire-merged-branches.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: retire-merged-branches-main
+  cancel-in-progress: false
+
+jobs:
+  retire-explicit-merged-branches:
+    if: github.repository == 'Frotan2/TOFEL-House-ERP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact main revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Retire ONLY seven merged, unchanged, unreferenced branches
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CONFIRM_MERGED_BRANCH_CLEANUP: seven-exact-merged-pr-branches
+        run: python3 tools/maintenance/retire_merged_branches.py --apply
