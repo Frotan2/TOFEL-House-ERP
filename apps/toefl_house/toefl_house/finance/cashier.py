@@ -81,6 +81,29 @@ def _money(value, what):
     return amount
 
 
+def _company_permitted(company, user=None):
+    """Whether the native Company User Permission scope reaches a company.
+
+    Same documented semantics as ``permissions._user_branches``: a User
+    Permission restricts only the users who hold it, so no Company row means
+    unrestricted (HQ roles, Administrator) and a row means that company only.
+    """
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return True
+    rows = frappe.get_all(
+        "User Permission",
+        filters={"user": user, "allow": COMPANY},
+        pluck="for_value",
+        limit_page_length=100,
+    )
+    if not rows:
+        return True
+    allowed = {row.get("for_value") if isinstance(row, dict) else row
+               for row in rows}
+    return company in allowed
+
+
 def cash_drawers(company):
     """The company's postable native Cash and Bank accounts."""
     rows = frappe.db.get_all(
@@ -218,6 +241,13 @@ def reconcile_cashier_day(request_key, company, date, counts):
             raise frappe.ValidationError("A company is required")
         if not frappe.db.exists(COMPANY, company):
             raise frappe.ValidationError("Unknown company")
+        # Company scope is the native User Permission, not a courtesy of the
+        # desk: a cashier restricted to one company must not close another's
+        # drawer, and the ledger reads below are raw SQL that Frappe's own
+        # permission layer would not filter for us.
+        if not _company_permitted(company):
+            raise frappe.PermissionError(
+                f"You are not permitted to record a cash close for {company}")
         if not isinstance(counts, list) or not counts:
             raise frappe.ValidationError("Record the counted amount for at least one drawer")
         if len(counts) > MAX_DRAWERS:

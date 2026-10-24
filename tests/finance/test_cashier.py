@@ -52,6 +52,7 @@ def load_cashier(drawers=()):
         now_datetime=lambda: "2026-10-24 18:00:00",
     )
     frappe.session = types.SimpleNamespace(user="cashier@example.com")
+    frappe.has_permission = lambda *args, **kwargs: True
     frappe.db = types.SimpleNamespace(
         get_all=lambda doctype, **kwargs: list(drawers) if doctype == "Account" else [],
         get_value=lambda *args, **kwargs: None,
@@ -59,6 +60,7 @@ def load_cashier(drawers=()):
         sql=lambda *args, **kwargs: [],
         count=lambda *args, **kwargs: 0,
     )
+    frappe.get_all = frappe.db.get_all
     sys.modules["frappe"] = frappe
 
     policy = types.ModuleType("toefl_house.policy")
@@ -248,6 +250,23 @@ class CommandContractTests(unittest.TestCase):
     def test_closing_window_is_the_owner_billing_policy(self):
         self.assertIn("governing_billing_terms", self.source)
         self.assertIn("older than the billing policy's closing window", self.source)
+
+    def test_command_refuses_a_company_outside_the_cashier_scope(self):
+        module = load_cashier(DRAWERS)
+        module.frappe.get_all = lambda doctype, **kwargs: (
+            ["Other Company"] if doctype == "User Permission" else [])
+        with self.assertRaises(module.frappe.PermissionError) as caught:
+            module.reconcile_cashier_day(
+                "fin_cashier_scope_00001", "TOEFL House", "2026-10-24", [])
+        self.assertIn("not permitted to record a cash close", str(caught.exception))
+
+    def test_a_cashier_with_no_company_permission_is_unrestricted(self):
+        module = load_cashier(DRAWERS)
+        self.assertTrue(module._company_permitted("Any Company"))
+
+    def test_company_scope_is_checked_before_any_write(self):
+        self.assertIn("_company_permitted(company)", self.source)
+        self.assertIn('filters={"user": user, "allow": COMPANY}', self.source)
 
     def test_command_rejects_an_invalid_date_with_a_business_message(self):
         # The command's public parameter is named `date` (the desk field). If
