@@ -38,6 +38,21 @@ BOOK_PAYMENT_BUILDER = '/api/method/erpnext.accounts.doctype.payment_entry.payme
 BOOK_RETURN_BUILDER = '/api/method/erpnext.accounts.doctype.sales_invoice.sales_invoice.make_sales_return'
 
 
+def seed_native_party_types(frappe):
+    """Restore the pinned wizard's accounting prerequisites on the synthetic site."""
+    from erpnext.setup.setup_wizard.operations.install_fixtures import get_preset_records
+
+    for record in get_preset_records('Afghanistan'):
+        if record.get('doctype') != 'Party Type':
+            continue
+        party_type = record['party_type']
+        if not frappe.db.exists('Party Type', party_type):
+            frappe.get_doc(dict(record)).insert()
+        actual = frappe.db.get_value('Party Type', party_type, 'account_type')
+        if actual != record['account_type']:
+            raise ValueError(f'Native Party Type {party_type}: expected {record["account_type"]}, got {actual}')
+
+
 def validate_configuration_http(observation, denied=False):
     def require(condition):
         if not condition:
@@ -3249,6 +3264,10 @@ def main():
         def finance_catalog():
             frappe.set_user('Administrator')
             fin_before={dt:frappe.db.count(dt) for dt in before_counts}
+            # This suite skips the setup wizard. Its native Party Type fixtures
+            # drive Payment Entry's refund debit/credit reversal; without
+            # Customer=Receivable a -600 allocation becomes a second credit.
+            seed_native_party_types(frappe)
             if not frappe.db.get_value('Currency','AFN','enabled'):
                 frappe.db.set_value('Currency','AFN','enabled',1)
             if not frappe.db.exists('Fiscal Year','2026'):

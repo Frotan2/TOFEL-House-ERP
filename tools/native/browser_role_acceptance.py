@@ -125,7 +125,7 @@ def qualify(base_url: str, destination: Path):
                         page.locator("#login_email").fill(f"browser-{actor}@example.test")
                         page.locator("#login_password").fill(password)
                         page.wait_for_function("typeof frappe !== 'undefined' && typeof frappe.call === 'function'")
-                        page.locator("button.btn-login[type=submit]").click()
+                        page.locator(".for-login .form-login .btn-login[type=submit]").click()
                         page.wait_for_url("**/desk**", timeout=90_000)
                         # Navigate through the live router so Page.getpage loads
                         # and executes the installed page script in Chromium.

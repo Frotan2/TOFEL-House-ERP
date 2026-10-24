@@ -81,10 +81,11 @@ class FrappePythonSecurityOverlayWiringTests(unittest.TestCase):
     def test_native_final_integrity_allows_only_reviewed_frappe_overlays(self):
         native = (ROOT / "tools/native/run_native.py").read_text(encoding="utf-8")
         self.assertIn(
-            "['frappe/utils/weasyprint.py', 'pyproject.toml']",
+            "['frappe/public/js/frappe/ui/sidebar/sidebar.js', 'frappe/utils/weasyprint.py', 'pyproject.toml']",
             native,
         )
         self.assertIn("verify-final-frappe-python-security", native)
+        self.assertIn("verify-final-setup-sidebar", native)
 
     def test_product_image_contains_only_the_current_security_helper(self):
         docker = (ROOT / "product/app.Dockerfile").read_text(encoding="utf-8")

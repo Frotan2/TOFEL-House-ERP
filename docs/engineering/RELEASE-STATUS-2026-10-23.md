@@ -264,3 +264,28 @@ actual pinned source, reproduces the original crash, verifies both toggle
 directions after the fix and after setup, and confirms unexpected missing DOM
 after setup still raises. Local focused verification: 92 tests passed; Ruff
 0.16.8 and diff integrity passed. Real Chromium rerun remains required.
+
+## Resumed qualification (2026-10-24)
+
+The completed `c92d4c7` runs are not release passes. Windows package smoke
+passed. Owned suite and Foundation runtime both failed the same stale test
+expectation: the native source-integrity allowlist now includes the reviewed,
+hash-verified sidebar overlay. Product image passed initial setup and reached
+role-browser qualification, where its unscoped login selector matched both
+password-login and email-link buttons. Native lifecycle still failed the
+600 AFN cash refund because its synthetic site skipped wizard Party Type
+fixtures.
+
+The follow-up restores only the pinned wizard's Party Type prerequisites on
+the synthetic native site, scopes the browser selector to the password-login
+form used by the other browser suites, and updates the integrity regression
+to require the sidebar overlay and its final verification. Accounting rules,
+GL validation and release gates are unchanged. See
+[the refund source trace](evidence/native-book-refund-2026-10-23.md).
+Focused local verification: 82 tests, one existing skip; diff integrity passed.
+Fresh hosted native, browser and Foundation results are still required.
+
+The separate unfinished distribution and Windows Update Guard drafts are
+not part of this qualification fix and are not a delivered update feature.
+Existing operational containers and Owner data were not modified.
+Production authorization remains **REJECT**.
