@@ -1,0 +1,141 @@
+{
+ "actions": [],
+ "autoname": "field:code",
+ "creation": "2026-10-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "code",
+  "title",
+  "column_break_1",
+  "status",
+  "section_break_1",
+  "description",
+  "section_break_2",
+  "student_portal_enabled",
+  "guardian_portal_enabled",
+  "section_break_3",
+  "dashboard_enabled",
+  "email_enabled",
+  "sms_enabled",
+  "whatsapp_enabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Code",
+   "reqd": 1,
+   "set_only_once": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Active\nRetired",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "section_break_2",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "student_portal_enabled",
+   "fieldtype": "Check",
+   "label": "Student portal enabled"
+  },
+  {
+   "default": "0",
+   "fieldname": "guardian_portal_enabled",
+   "fieldtype": "Check",
+   "label": "Guardian portal enabled"
+  },
+  {
+   "fieldname": "section_break_3",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "dashboard_enabled",
+   "fieldtype": "Check",
+   "label": "Dashboard channel enabled"
+  },
+  {
+   "default": "0",
+   "fieldname": "email_enabled",
+   "fieldtype": "Check",
+   "label": "Email channel enabled"
+  },
+  {
+   "default": "0",
+   "fieldname": "sms_enabled",
+   "fieldtype": "Check",
+   "label": "SMS channel enabled (requires approved provider)"
+  },
+  {
+   "default": "0",
+   "fieldname": "whatsapp_enabled",
+   "fieldtype": "Check",
+   "label": "WhatsApp Business enabled (requires approved provider)"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-10-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Operations",
+ "name": "TH Portal Configuration",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Course Owner",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "General Manager",
+   "select": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
