@@ -78,6 +78,7 @@ class BaseHarness(unittest.TestCase):
         self.user_permissions = []   # list of {user, allow, for_value, apply_to_all_doctypes}
         self.guardian_consents = []  # TH Guardian Consent rows
         self.notifications = {}  # name -> notification dict/doc
+        self.dispatch_rules = {}  # durable stub rows for policy dispatch rules
         self.fees = []
         self.course_schedules = []
         self.attendances = []
@@ -170,7 +171,16 @@ class BaseHarness(unittest.TestCase):
                 rows = [v for v in fake.notifications.values() if match(v, filters)]
                 return apply(rows)
             if doctype == "TH Notification Dispatch Rule":
-                return []
+                rows = [r for r in fake.dispatch_rules.values() if match(r, filters)]
+                return apply(rows)[:(limit or limit_page_length or 9999)]
+            if doctype in ("TH Notification Recipient", "TH Notification Escalation Recipient"):
+                field = ("recipients" if doctype == "TH Notification Recipient"
+                         else "escalation_recipients")
+                rows = [{"parent": r["name"], "recipient": address}
+                        for r in fake.dispatch_rules.values()
+                        for address in r.get(field, []) if match(
+                            {"parent": r["name"], "recipient": address}, filters)]
+                return apply(rows)[:(limit or limit_page_length or 9999)]
             # Default: empty
             return []
 
@@ -247,6 +257,21 @@ class BaseHarness(unittest.TestCase):
                     doc.save = save_wrap
                     doc.insert = insert_wrap
                     return doc
+                if dt == "TH Notification Dispatch Rule":
+                    if "name" not in d:
+                        d["name"] = "SYN-RULE-" + d["event_type"]
+                    doc = _FakeDoc(d)
+                    orig_save, orig_insert = doc.save, doc.insert
+                    def persist(ignore_permissions=False):
+                        fake.dispatch_rules[doc["name"]] = dict(doc)
+                    def save_wrap(ignore_permissions=False):
+                        persist(ignore_permissions)
+                        return orig_save(ignore_permissions=ignore_permissions)
+                    def insert_wrap(ignore_permissions=False):
+                        persist(ignore_permissions)
+                        return orig_insert(ignore_permissions=ignore_permissions)
+                    doc.save, doc.insert = save_wrap, insert_wrap
+                    return doc
                 # TH Guardian Consent
                 if dt == "TH Guardian Consent":
                     if "name" not in d:
@@ -280,6 +305,17 @@ class BaseHarness(unittest.TestCase):
                     return orig_save(ignore_permissions=ignore_permissions)
                 fd.save = save_wrap
                 return fd
+            if doctype == "TH Notification Dispatch Rule":
+                row = fake.dispatch_rules.get(name)
+                if not row:
+                    raise Exception("Dispatch rule not found")
+                doc = _FakeDoc(dict(row))
+                orig_save = doc.save
+                def save_wrap(ignore_permissions=False):
+                    fake.dispatch_rules[name] = dict(doc)
+                    return orig_save(ignore_permissions=ignore_permissions)
+                doc.save = save_wrap
+                return doc
             if doctype == "TH Guardian Consent":
                 for c in fake.guardian_consents:
                     if c.get("name") == name:
@@ -350,6 +386,28 @@ class BaseHarness(unittest.TestCase):
                 m = types.ModuleType(pkg)
                 m.__path__ = [str(APP)] if "toefl_house" in pkg else []
                 sys.modules[pkg] = m
+        # The real foundation guardian hook is separately tested against
+        # Frappe. This isolated harness provides the same fail-closed
+        # membership/customer precondition using its synthetic records.
+        guards = types.ModuleType("foundation_security.guards")
+        def validate_guardian_scope():
+            actor = stub.session.user
+            if actor in (None, "Guest", "Administrator"):
+                raise PermissionError("Guardian scope requires a signed-in guardian")
+            if "Guardian" not in stub.get_roles(actor):
+                raise PermissionError("Guardian role required")
+            identities = [g for g in fake.guardians.values() if g.get("user") == actor]
+            if len(identities) != 1:
+                raise PermissionError("Exactly one canonical Guardian required")
+            children = [x["parent"] for x in fake.student_guardians
+                        if x.get("guardian") == identities[0]["name"]]
+            if not children or any(
+                    not fake.students.get(name, {}).get("customer")
+                    for name in children):
+                raise PermissionError("Guardian requires valid child/customer links")
+        guards.validate_guardian_scope = validate_guardian_scope
+        sys.modules["foundation_security.guards"] = guards
+
         # Real foundation rules (needed for some imports)
         def try_load(mod, rel):
             p = APP / rel
