@@ -247,6 +247,7 @@ def decide_progression(request_key, academic_result, decision, reason):
         document = frappe.get_doc({
             "doctype": DECISION,
             "student": row.student,
+            "student_group": row.student_group,
             "academic_result": name,
             "decision": decision,
             "status": "Approved",
@@ -339,6 +340,7 @@ def override_progression(request_key, academic_result, decision, reason):
         document = frappe.get_doc({
             "doctype": DECISION,
             "student": row.student,
+            "student_group": row.student_group,
             "academic_result": name,
             "decision": decision,
             "status": "Approved",
@@ -420,7 +422,8 @@ def next_level_eligibility(student, program):
     decisions = frappe.get_all(DECISION,
                                filters={"student": student_name, "status": "Approved",
                                         "from_level": predecessor.name},
-                               fields=["name", "decision", "to_level", "override_used"],
+                               fields=["name", "decision", "to_level", "override_used",
+                                       "academic_result"],
                                order_by="decided_on desc", limit=1)
     if not decisions:
         return {"required": True, "eligible": False, "level": level.name,
@@ -428,6 +431,17 @@ def next_level_eligibility(student, program):
                 "reasons": [f"No approved progression decision is recorded for level "
                             f"{predecessor.code}; enrollment into {level.code} is refused"]}
     decision = decisions[0]
+    # A corrected result supersedes its prior decision evidence. No earlier
+    # approved Promote can admit a student when its linked result is no
+    # longer the current Published result (including post-correction).
+    evidence_status = frappe.db.get_value(
+        RESULT, decision.academic_result, "status") if decision.academic_result else None
+    if evidence_status != "Published":
+        return {"required": True, "eligible": False, "level": level.name,
+                "from_level": predecessor.name, "decision": decision.name,
+                "reasons": ["The prior progression evidence was superseded or "
+                            "is no longer a published academic result; a new "
+                            "approved decision is required"]}
     if decision.decision in ("Promote", "Complete") and decision.to_level == level.name:
         return {"required": True, "eligible": True, "level": level.name,
                 "from_level": predecessor.name, "decision": decision.name,
