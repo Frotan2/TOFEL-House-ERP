@@ -130,31 +130,15 @@ def _student_age_years(student):
 
 
 def _get_consent(guardian, student):
-    """Return the latest consent record for a guardian-student pair, or None."""
-    try:
-        rows = frappe.db.get_all(
-            CONSENT_DOCTYPE,
-            filters={"guardian": guardian, "student": student},
-            fields=["name", "status", "consent_date", "expiry_date", "evidence_type", "revoked_at"],
-            order_by="consent_date desc",
-            limit=1,
-        )
-        if rows:
-            return rows[0]
-        # Fallback in-memory when frappe DB is stubbed
-        for c in _fallback_consents:
-            if c.get("guardian")==guardian and c.get("student")==student:
-                return c
-        for c in getattr(frappe, "_test_consents", []):
-            if c.get("guardian")==guardian and c.get("student")==student:
-                return c
-        return None
-    except Exception:
-        # also check fallback
-        for c in _fallback_consents:
-            if c.get("guardian")==guardian and c.get("student")==student:
-                return c
-        return None
+    """Only persistent verified consent counts; process memory is not proof."""
+    rows = frappe.db.get_all(
+        CONSENT_DOCTYPE,
+        filters={"guardian": guardian, "student": student},
+        fields=["name", "status", "consent_date", "expiry_date",
+                "evidence_type", "revoked_at", "approved_by", "approved_on"],
+        order_by="creation desc",
+        limit_page_length=1)
+    return rows[0] if rows else None
 
 
 def _is_consent_valid(guardian, student, policy_terms=None):
@@ -169,6 +153,8 @@ def _is_consent_valid(guardian, student, policy_terms=None):
     # Pending evidence is not authorization. Only staff-approved Active
     # consent can authorize child-grade, attendance or finance disclosures.
     if consent.get("status") != "Active":
+        return False
+    if not consent.get("approved_by") or not consent.get("approved_on"):
         return False
     if consent.get("revoked_at"):
         return False
@@ -542,32 +528,15 @@ def revoke_consent(student, reason=""):
     if consent.get("status") == "Revoked":
         raise frappe.ValidationError("Consent is already revoked")
 
-    try:
-        doc = frappe.get_doc(CONSENT_DOCTYPE, consent["name"])
-        doc.status = "Revoked"
-        doc.revoked_at = _now()
-        doc.revoked_by = user
-        doc.revocation_reason = reason or "Guardian requested revocation"
-        doc.save(ignore_permissions=True)
-        return {"name": doc.name, "status": "Revoked", "revoked_at": doc.revoked_at}
-    except Exception:
-        # Offline: mutate the stub record
-        try:
-            for c in _fallback_consents:
-                if c.get("guardian") == guardian and c.get("student") == student:
-                    c["status"] = "Revoked"
-                    c["revoked_at"] = _now()
-        except Exception:
-            pass
-        try:
-            if hasattr(frappe, "_test_consents"):
-                for c in frappe._test_consents:
-                    if c.get("guardian") == guardian and c.get("student") == student:
-                        c["status"] = "Revoked"
-                        c["revoked_at"] = _now()
-        except Exception:
-            pass
-        return {"student": student, "guardian": guardian, "status": "Revoked", "revoked_at": _now()}
+    doc = frappe.get_doc(CONSENT_DOCTYPE, consent["name"])
+    if doc.status == "Revoked":
+        raise frappe.ValidationError("Consent is already revoked")
+    doc.status = "Revoked"
+    doc.revoked_at = _now()
+    doc.revoked_by = user
+    doc.revocation_reason = reason or "Guardian requested revocation"
+    doc.save(ignore_permissions=True)
+    return {"name": doc.name, "status": "Revoked", "revoked_at": doc.revoked_at}
 
 
 @frappe.whitelist()
