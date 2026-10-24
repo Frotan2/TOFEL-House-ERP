@@ -42,6 +42,20 @@ class SetuptoolsWindowsBoundaryTests(unittest.TestCase):
         self.assertIn("docker compose up", installer)
         self.assertNotRegex(installer, re.compile(r"(?im)^\s*(?:python(?:\.exe)?|pip(?:\.exe)?|uv(?:\.exe)?)\b"))
 
+    def test_all_shipped_windows_launchers_avoid_native_python_installers(self):
+        # The boundary must cover Start, Repair and future update scripts,
+        # not only the initial Install command used by the previous test.
+        prohibited = re.compile(
+            r"(?i)\\b(?:python(?:3(?:\\.\\d+)?)?|pip(?:3)?|uv)(?:\\.exe)?\\b"
+        )
+        launchers = [name for name in ALLOWED_FILES
+                     if Path(name).suffix.lower() in {".vbs", ".ps1", ".cmd"}]
+        self.assertTrue(launchers)
+        for relative in launchers:
+            with self.subTest(relative=relative):
+                body = (ROOT / relative).read_text(encoding="utf-8")
+                self.assertNotRegex(body, prohibited)
+
     def test_customer_allowlist_contains_no_windows_python_payload(self):
         self.assertTrue(ALLOWED_FILES)
         for relative in ALLOWED_FILES:
