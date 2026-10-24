@@ -134,7 +134,7 @@ def enrollment_metrics():
         "definition": "Submitted enrollment records (confirmed). Each enrollment maps one learner to one program and academic year.",
         "source": "enrollment records (native Education, submitted)",
         "scope": "Branch-scoped via student roster; HQ sees all.",
-        "drill": "Program Enrollment list",
+        "drill": "List/Program Enrollment",
     }
 
 
