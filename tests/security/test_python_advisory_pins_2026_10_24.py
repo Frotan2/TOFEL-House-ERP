@@ -1,4 +1,4 @@
-"""Keep patched Python advisory dependencies aligned in the shipped image and hosted audit.
+"""Keep compatible filelock security pins aligned in the image and hosted audit.
 
 These contracts do not replace native integration or the full-stack advisory
 audit: they only prevent a stale source pin in one of the two environments.
@@ -8,7 +8,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-REMEDIATED_PINS = ("filelock==4.2.1", "setuptools==84.1.0")
+REMEDIATED_PINS = ("filelock==3.20.3",)
 
 
 class PythonAdvisoryPinTests(unittest.TestCase):
