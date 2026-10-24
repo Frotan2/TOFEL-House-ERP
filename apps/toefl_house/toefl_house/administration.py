@@ -98,7 +98,9 @@ def set_managed_role(request_key, user, role, enabled):
     """
     if frappe.session.user in PROTECTED_USERS:
         raise frappe.PermissionError("Protected accounts cannot assign managed roles")
-    security.require_operational()
+    # Managed-role setup is a guarded configuration exception: it must remain
+    # available to an enabled Course Owner during release HOLD. Do not grant
+    # business-data mutation rights here or mistake setup for production approval.
     actor_roles = set(frappe.get_roles(frappe.session.user))
     if "Course Owner" not in actor_roles:
         raise frappe.PermissionError("Course Owner role required")
