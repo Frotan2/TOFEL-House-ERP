@@ -4748,6 +4748,30 @@ def main():
                     'retirement_one_way':True,'new_contract_denied':True,
                     'new_assignment_denied':True,'unknown_skill_denied':True}
         check('teaching-retired-skill-runtime-policy',traced(retired_skill_runtime))
+        def native_academic_progression_schema():
+            # The academic mission must survive a genuine Frappe migrate,
+            # including its branch-linked authorization metadata. Stub
+            # tests cannot prove MariaDB schema and installed hook parity.
+            from toefl_house.academic import progression as progression_mod
+            required = {
+                "TH Assessment Book": ("student_group", "status"),
+                "TH Academic Result": ("student", "student_group", "status"),
+                "TH Progression Decision": ("student", "student_group",
+                                            "academic_result", "decision", "status"),
+            }
+            for doctype, fields in required.items():
+                assert frappe.db.exists("DocType", doctype), (
+                    "native migrated academic DocType missing", doctype)
+                meta = frappe.get_meta(doctype)
+                for field in fields:
+                    assert meta.has_field(field), (doctype, "missing native field", field)
+            field = frappe.get_meta("TH Progression Decision").get_field("student_group")
+            assert field.fieldtype == "Link" and field.options == "Student Group"
+            assert int(field.reqd) == 1, "a progression decision cannot lose class linkage"
+            assert hasattr(progression_mod, "next_level_eligibility")
+            return {"doctypes": sorted(required), "class_scope": "required"}
+
+        check("native-academic-progression-schema", native_academic_progression_schema)
         # --- D3 correction framework (owner: "framework approved; exact
         # terms later"). Fail-closed until a policy exists; approval terms
         # are fixture configuration, not invented policy. The money
