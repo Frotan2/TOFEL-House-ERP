@@ -26,7 +26,11 @@ The closing window (how far back a day may still be closed) is the governing
 billing policy's ``max_backdate_days`` — the owner's existing bound, reused
 rather than a second invented limit. No active policy means no closes.
 """
-from datetime import date
+# The command's public parameter is named ``date`` (the desk field), so the
+# class is imported under an alias: inside ``reconcile_cashier_day`` the
+# name ``date`` is the argument, and ``date.fromisoformat`` would be an
+# AttributeError on the string (caught only by the native run, 2026-10-24).
+from datetime import date as _date
 import frappe
 
 from toefl_house.api import _execute
@@ -133,7 +137,7 @@ def validate_close(doc):
     company = doc.get("company")
     if not day or not company:
         raise frappe.ValidationError("A cashier close needs a business date and a company")
-    if date.fromisoformat(str(day)) > date.fromisoformat(str(frappe.utils.today())):
+    if _date.fromisoformat(str(day)) > _date.fromisoformat(str(frappe.utils.today())):
         raise frappe.ValidationError("A cashier close cannot cover a future business day")
     rows = list(doc.get("accounts") or [])
     if not rows:
@@ -187,8 +191,8 @@ def _closing_window(day):
         raise frappe.ValidationError(
             "No active billing policy governs cash closes; the Course Owner "
             "must configure one first")
-    today = date.fromisoformat(str(frappe.utils.today()))
-    posted = date.fromisoformat(str(day))
+    today = _date.fromisoformat(str(frappe.utils.today()))
+    posted = _date.fromisoformat(str(day))
     if posted > today:
         raise frappe.ValidationError("A cashier close cannot cover a future business day")
     if (today - posted).days > int(terms["max_backdate_days"]):
@@ -207,7 +211,7 @@ def reconcile_cashier_day(request_key, company, date, counts):
     def work(actor):
         day = str(date or "").strip()
         try:
-            date.fromisoformat(day)
+            _date.fromisoformat(day)
         except ValueError as exc:
             raise frappe.ValidationError("A valid business date is required") from exc
         if not isinstance(company, str) or not company or len(company) > 140:

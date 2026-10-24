@@ -249,6 +249,33 @@ class CommandContractTests(unittest.TestCase):
         self.assertIn("governing_billing_terms", self.source)
         self.assertIn("older than the billing policy's closing window", self.source)
 
+    def test_command_rejects_an_invalid_date_with_a_business_message(self):
+        # The command's public parameter is named `date` (the desk field). If
+        # that shadows the date class, `date.fromisoformat` raises
+        # AttributeError and only the native run finds out (2026-10-24).
+        module = load_cashier(DRAWERS)
+        with self.assertRaises(_ValidationError) as caught:
+            module.reconcile_cashier_day(
+                "fin_cashier_bad_date_01", "TOEFL House", "not-a-date",
+                [{"account": "Cash - TH", "counted_amount": 1}])
+        self.assertIn("A valid business date is required", str(caught.exception))
+
+    def test_package_date_class_is_not_shadowed_inside_the_command(self):
+        import ast
+        tree = ast.parse(self.source)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.FunctionDef)
+                    and node.name == "reconcile_cashier_day"):
+                continue
+            self.assertIn("date", {a.arg for a in node.args.args})
+            for inner in ast.walk(node):
+                if (isinstance(inner, ast.Attribute)
+                        and inner.attr == "fromisoformat"
+                        and isinstance(inner.value, ast.Name)
+                        and inner.value.id == "date"):
+                    self.fail("the `date` parameter shadows the date class")
+        self.assertIn("from datetime import date as _date", self.source)
+
     def test_naming_series_the_command_passes_exists_on_the_doctype(self):
         # Autoname "naming_series:" needs a naming_series field; without it a
         # real site refuses the insert and only the native run would notice.
