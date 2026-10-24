@@ -101,7 +101,7 @@ def payment(**overrides):
     facts = {"payment_type": "Pay", "party_type": "Customer",
              "party": "SYN-CUSTOMER", "company": "TOEFL House",
              "paid_from": "Cash - TH", "paid_to": "Debtors - TH",
-             "unallocated_amount": 0.0,
+             "unallocated_amount": 0.0, "paid_amount": 600.0, "deductions": [],
              "reference_rows": [{"reference_name": "SYN-CREDIT",
                                  "allocated_amount": -600.0}]}
     facts.update(overrides)
@@ -126,8 +126,31 @@ class RefundTests(unittest.TestCase):
 
     def test_partial_refund_is_allowed(self):
         self.assertTrue(self.judge(payment(
+            paid_amount=250.0,
             reference_rows=[{"reference_name": "SYN-CREDIT",
                              "allocated_amount": -250.0}])))
+
+    def test_duplicate_reference_rows_cannot_overpay_one_credit(self):
+        self.assertFalse(self.judge(payment(
+            paid_amount=900.0,
+            reference_rows=[
+                {"reference_name": "SYN-CREDIT", "allocated_amount": -450.0},
+                {"reference_name": "SYN-CREDIT", "allocated_amount": -450.0},
+            ])))
+
+    def test_paid_amount_must_equal_total_allocated_credit(self):
+        self.assertFalse(self.judge(payment(paid_amount=900.0)))
+        self.assertFalse(self.judge(payment(paid_amount=None)))
+        self.assertFalse(self.judge(payment(paid_amount=0.0)))
+
+    def test_unapproved_deductions_cannot_hide_cash_movement(self):
+        self.assertFalse(self.judge(payment(
+            deductions=[{"account": "Charges - TH", "amount": 50.0}])))
+
+    def test_foreign_reference_doctype_is_refused(self):
+        self.assertFalse(self.judge(payment(reference_rows=[
+            {"reference_name": "SYN-CREDIT", "reference_doctype": "Journal Entry",
+             "allocated_amount": -600.0}])))
 
     def test_refund_without_a_reference_is_refused(self):
         self.assertFalse(self.judge(payment(reference_rows=[])))
@@ -207,8 +230,8 @@ class WiringTests(unittest.TestCase):
         self.assertIn('existing=method in (', source)
         self.assertIn('"before_cancel", "before_update_after_submit"', source)
         # Creation and submission keep the strict ceiling.
-        self.assertIn("if not existing and allocated - outstanding > TOLERANCE:",
-                      source)
+        self.assertIn("allocated_by_note[name] - outstanding > TOLERANCE", source)
+        self.assertIn("total_allocated - _flt(paid)", source)
 
 
 def tearDownModule():
