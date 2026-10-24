@@ -181,6 +181,8 @@ const endpointFiles = {
 	"toefl_house.enrollment.exits": ["enrollment/exits.py"],
 	"toefl_house.finance": ["finance/__init__.py"],
 	"toefl_house.finance.policies": ["finance/policies.py"],
+	"toefl_house.finance.installments": ["finance/installments.py"],
+	"toefl_house.finance.cashier": ["finance/cashier.py"],
 	"toefl_house.teaching": ["teaching/__init__.py"],
 	"toefl_house.teaching.policies": ["teaching/policies.py"],
 	"toefl_house.teaching.attendance_corrections": ["teaching/attendance_corrections.py"],

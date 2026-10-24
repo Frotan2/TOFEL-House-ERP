@@ -213,6 +213,13 @@ PROJECTION_FIELDS = {
     ("finance", "Instructor"): [
         "name", "instructor_name", "employee", "status",
     ],
+    # Cashier day closes: the control record the finance desk summarises.
+    # Counted cash, the ledger-derived expectation and the variance are the
+    # record's own facts; nothing ledger-shaped is projected here.
+    ("finance", "TH Cashier Day"): [
+        "name", "date", "company", "cashier", "total_expected",
+        "total_counted", "total_variance", "reconciled_on", "docstatus",
+    ],
     # Owner cockpit counts enabled Students; the projection carries the key
     # only — no student detail leaves the store through the cockpit.
     ("management", "Student"): [

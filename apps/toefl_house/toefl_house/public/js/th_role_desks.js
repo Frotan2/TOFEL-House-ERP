@@ -343,6 +343,18 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Check" },
 		],
+		"toefl_house.finance.installments.issue_tuition_installment_plan": [
+			{ fieldname: "program_enrollment", label: "Program enrollment", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "fee_structure", label: "Fee plan", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "posting_date", label: "Posting date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "first_due_date", label: "First due date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "installments", label: "Installments (owner policy)", fieldtype: "Int", reqd: 1 },
+		],
+		"toefl_house.finance.cashier.reconcile_cashier_day": [
+			{ fieldname: "company", label: "Company", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "date", label: "Business date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "counts", label: "Counted drawers", fieldtype: "Small Text", reqd: 1 },
+		],
 		"toefl_house.finance.policies.create_billing_policy": [
 			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
@@ -355,6 +367,9 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "max_backdate_days", label: "Max backdate days", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "max_future_days", label: "Max future days", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "placement_fee_timing", label: "Placement-fee timing", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "installments_allowed", label: "Installments allowed", fieldtype: "Check" },
+			{ fieldname: "max_installments", label: "Maximum installments", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "installment_interval_days", label: "Installment interval (days)", fieldtype: "Int", reqd: 1 },
 		],
 		"toefl_house.finance.policies.set_billing_policy_status": [
 			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },

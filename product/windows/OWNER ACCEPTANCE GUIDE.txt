@@ -89,6 +89,47 @@ Do NOT perform them on a computer with existing Owner student or cash data.
          and that a Sales Invoice mixing Books and placement/service items
          is refused. Report any failure without altering real data.
 
+CASHIER AND FEES PRACTICE - DISPOSABLE TEST PC ONLY
+---------------------------------------------------
+Use invented amounts only. Never enter a real price, tax rate or real cash.
+
+[ ] 26. Configure an invented Fee Structure for the practice program and
+         issue one tuition fee from the Finance desk ("Awaiting billing").
+         Confirm exactly one Fees document and its outstanding amount.
+         Repeat the same bill: it must be refused as already billed.
+[ ] 27. Open the Finance desk and read the Installments fact. While the
+         billing policy leaves installments off it must say "Not enabled",
+         and an unbilled enrollment must offer only the single-payment
+         action - no "Issue installment plan". Do not change the policy
+         merely to make the step pass.
+[ ] 28. Count the practice cash drawer and open "Cash close" on the Finance
+         desk. The expected figure must come from the accounts ledger, not
+         from you. Record the counted amount and close the day. Confirm the
+         close posts nothing to the accounts.
+[ ] 29. Record another day's close with a deliberately different counted
+         amount and no explanation: it must be refused. Record the same
+         close with a short explanation: the variance must be stored
+         exactly as counted minus expected.
+[ ] 30. Try to close the same company and day twice: the second attempt
+         must be refused because a submitted close is never replaced.
+[ ] 31. Record a practice cash refund with Payment Entry (Pay) to a
+         customer without a credit note: it must be refused. A refund that
+         references the submitted credit note of the same customer must
+         succeed, with no unallocated amount left.
+[ ] 32. Read the "Tax configuration" fact on the Finance desk. It must say
+         "No native tax configured" because the Owner has supplied no tax
+         policy. Do not type any tax rate anywhere.
+[ ] 33. Open "Cash close history": submitted closes are listed with their
+         expected, counted and variance figures. A posting dated on or
+         before a closed day, made after the close, must show "Drift".
+[ ] 34. Ask a practice user without Finance Officer to sell a book, close
+         the cash drawer and split a fee: all three must be refused. A
+         cashier limited to another branch must not see or act on this
+         company's records.
+[ ] 35. Keep proof of these steps redacted. If any step fails, record the
+         exact message and stop; never grant Administrator or disable a
+         guard to make it pass.
+
 Keep proof of these book-commerce steps redacted. They are manual end-user
 qualification gates, not proof that the entire product is release-ready.
 

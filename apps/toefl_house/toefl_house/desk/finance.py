@@ -22,8 +22,12 @@ from toefl_house.desk import (
     project_count,
     project_rows,
     require_desk_audience,
+    scope_filters,
     section,
 )
+
+from toefl_house.finance import cashier as cashier_money
+from toefl_house.finance import taxes as tax_configuration
 
 SLUG = "th-finance-desk"
 
@@ -64,6 +68,12 @@ CALCULATE_COMPENSATION_ENDPOINT = ("toefl_house.teaching.compensation."
 CONTRACT_STAGE_DEFINITION = ("One instructor's active compensation terms; "
                              "a revision supersedes, never rewrites.")
 PLAN_ROW_FIELDS = ["name", "parent", "parenttype", "fees_category", "amount", "idx"]
+CASHIER_DAY = "TH Cashier Day"
+CASHIER_DAY_FIELDS = ["name", "date", "company", "cashier", "total_expected",
+                      "total_counted", "total_variance", "reconciled_on",
+                      "docstatus"]
+RECONCILE_ENDPOINT = "toefl_house.finance.cashier.reconcile_cashier_day"
+PLAN_ENDPOINT = "toefl_house.finance.installments.issue_tuition_installment_plan"
 
 
 def _money_state(row):
@@ -493,6 +503,10 @@ def work():
                                filters={"status": "Active"},
                                order_by="name asc", limit=LIMIT_QUEUES)
 
+    # Owner installment terms for the billing prefill (read once per load).
+    from toefl_house.finance import policies as billing_policy
+    installment_terms = billing_policy.governing_billing_terms()
+
     money_facts = [
         {"label": "Collected today",
          "definition": "Money received today from posted payment records, summed per receiving currency.",
@@ -516,6 +530,15 @@ def work():
         {"label": "Enrollments awaiting billing",
          "definition": "Confirmed enrollments that no issued bill covers; cancelled bills do not count.",
          "value": len(awaiting_billing), "owner": "Finance Officer"},
+        {"label": "Installments",
+         "definition": ("The governing billing policy's installment terms. The "
+                        "Course Owner decides whether a configured price may be "
+                        "split and how far apart the due dates fall."),
+         "value": (f"Allowed, up to {int(installment_terms.get('max_installments') or 0)}"
+                   f" every {int(installment_terms.get('installment_interval_days') or 0)} days"
+                   if installment_terms and int(installment_terms.get("installments_allowed") or 0)
+                   else "Not enabled"),
+         "owner": "Course Owner"},
         {"label": "Teaching assignments on file",
          "definition": "Instructor skill assignments. Pay is native payroll, one-off per assignment; this desk does not calculate pay.",
          "value": len(assignments), "owner": "Finance Officer"},
@@ -577,6 +600,26 @@ def work():
         plans_by_key.setdefault(
             (plan.get("program"), plan.get("academic_year") or ""), []).append(plan)
 
+    def installment_next(plan, row):
+        """The installment-plan action, or None when the owner has not enabled it.
+
+        The schedule length and interval are the owner's policy terms: the
+        prefill offers a split only inside them, and the command re-judges
+        every term on the server anyway.
+        """
+        if not installment_terms or not int(installment_terms.get("installments_allowed") or 0):
+            return None
+        maximum = int(installment_terms.get("max_installments") or 1)
+        if maximum < 2:
+            return None
+        return guided_action(
+            "Finance Officer", PLAN_ENDPOINT,
+            "Issue installment plan",
+            {"program_enrollment": row["name"],
+             "fee_structure": plan["name"],
+             "posting_date": day, "first_due_date": day,
+             "installments": maximum})
+
     def billing_guidance(row):
         """Resolve the plan for one unbilled enrollment into next/action.
 
@@ -589,6 +632,11 @@ def work():
         complete = plan_with_components(usable, rows_by_plan)
         if len(complete) == 1:
             plan = complete[0]
+            split = installment_next(plan, row)
+            if split:
+                return ("Split the configured plan into the owner-authorized "
+                        "installment schedule, or bill it in one payment.",
+                        "Finance Officer", split)
             return ("Issue the tuition fees from the configured plan for this "
                     "level and academic year.", "Finance Officer",
                     guided_action(
@@ -669,6 +717,8 @@ def work():
                 empty_body="Book sales require the native Books item group and stock.",
             )]
 
+    cash_section, tax_section, history_section = _cash_close_sections(day)
+
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
@@ -705,8 +755,158 @@ def work():
                     items=_compensation_items(contracts, instructors),
                     empty_title="No teaching compensation work yet",
                     empty_body="No active teaching contract or instructor on file; the queue appears as soon as contracts are recorded or payroll instructors exist."),
+            cash_section,
+            history_section,
+            tax_section,
         ] + book_shop,
     }
+
+
+def _scope_companies():
+    """The viewer's native Company scope, or None for an unrestricted viewer."""
+    allowed = scope_filters("finance").get("company")
+    return None if allowed is None else list(allowed)
+
+
+def _cash_close_sections(day):
+    """Cashiers' drawer position, close history and native tax readiness.
+
+    Every number here is computed from the native ledger (or is the control
+    record's own stored count); the desk never posts, and the guided action is
+    the existing guarded close command, offered only to a Finance Officer.
+    """
+    companies = _scope_companies()
+    position = cashier_money.cashier_position(day, companies=companies)
+    history = cashier_money.cashier_history(companies=companies, limit=LIMIT_TODAY)
+
+    drawers = [(row["company"], drawer) for row in position
+               for drawer in row.get("drawers", [])]
+    closed = [row for row in position if row.get("close")]
+    drifted = [row["company"] for row in position if row.get("drift")]
+    # In multi-company mode, a close in ONE company is never a global close.
+    # Add each closed company's recorded expectation and each still-open
+    # company's current native ledger position, without dropping either.
+    expected_total = round(sum(
+        float((row["close"] or {}).get("total_expected") or 0)
+        if row.get("close") else sum(d["closing"] for d in row.get("drawers", []))
+        for row in position), 2)
+    variance_total = round(sum(
+        float(row.get("close", {}).get("total_variance") or 0) for row in closed), 2)
+
+    facts = [
+        {"label": "Drawers in scope",
+         "definition": ("Native Cash and Bank accounts of the companies in your "
+                        "scope. Expected money is their ledger closing balance."),
+         "value": len(drawers), "owner": None},
+        {"label": "Cash close today",
+         "definition": ("All in-scope companies must have a submitted close to show Closed. "
+                        "Partial company closes and posting drift are never reported as Closed."),
+         "value": ("No drawers" if not drawers else
+                   "Drift" if drifted else
+                   "Closed" if len(closed) == len(position) else
+                   "Partially closed" if closed else "Open"),
+         "owner": "Finance Officer"},
+        {"label": "Expected at close",
+         "definition": ("Ledger closing balance of the drawers: the counted "
+                        "figure when a close exists, otherwise the live position."),
+         "value": f"{expected_total:.2f}", "owner": None},
+        {"label": "Variance recorded",
+         "definition": ("Counted minus expected on the submitted close, exactly "
+                        "as the control record states it."),
+         "value": f"{variance_total:.2f}" if closed else "Not closed",
+         "owner": "Finance Officer"},
+        {"label": "Ledger drift",
+         "definition": ("A posting dated on or before a closed day was created "
+                        "after the close, so the counted figures are stale."),
+         "value": ", ".join(drifted) if drifted else "None",
+         "owner": "Finance Auditor"},
+    ]
+
+    closing_window = cashier_money.day_window_hint()
+    items = []
+    closes = {row["company"]: row.get("close") for row in position}
+    for company, drawer in drawers:
+        close = closes.get(company)
+        if close and drifted and company in drifted:
+            state, next_text = "Drift", ("Re-check the drawer against the ledger; "
+                                         "the day was posted to after the close. "
+                                         "The Finance Auditor reviews the difference.")
+        elif close:
+            state = "Closed"
+            next_text = "No action; the day is closed and cannot be re-stated."
+        else:
+            state = "Open"
+            next_text = ("Count the drawer and record the close for today "
+                         + ("within " + closing_window + "." if closing_window
+                            else "; no billing policy governs the closing window yet."))
+        item = {
+            "id": f"{company}:{drawer['account']}",
+            "person": drawer["account"],
+            "detail": f"{company} · opening {drawer['opening']:.2f}, "
+                      f"today {drawer['movement']:.2f}",
+            "status": state,
+            "stage": "Cash drawer",
+            "stage_definition": ("Expected money is the native ledger closing "
+                                 "balance of this account; counted money is what "
+                                 "the cashier records."),
+            "next": next_text,
+            "next_role": "Finance Officer",
+            "waiting_since": day,
+            "amount": drawer["closing"],
+            "currency": "",
+        }
+        items.append(item)
+
+    cash = section("cash-close", "Cash close", "queue", items=items,
+                   facts=facts,
+                   empty_title="No cash drawer in scope",
+                   empty_body="This company has no native Cash or Bank account yet; nothing can be counted until Finance configures one.")
+
+    history_items = [{
+        "id": row["name"],
+        "person": row.get("cashier") or "",
+        "detail": f"{row.get('date')} · expected {float(row.get('total_expected') or 0):.2f}, "
+                  f"counted {float(row.get('total_counted') or 0):.2f}",
+        "status": "Variance" if abs(float(row.get("total_variance") or 0)) > 0.005
+                  else "Balanced",
+        "stage": "Cash close",
+        "stage_definition": ("A submitted cashier day close: the counted drawer "
+                             "against the native ledger for that business day."),
+        "next": "No action; a submitted close is never overwritten.",
+        "next_role": None,
+        "waiting_since": row.get("date"),
+        "amount": row.get("total_variance") or 0,
+        "currency": "",
+    } for row in history]
+    history_section = section(
+        "cash-history", "Cash close history", "queue", items=history_items,
+        empty_title="No cash close recorded",
+        empty_body="No cashier day has been closed yet; closes appear here the moment they are submitted.")
+
+    tax_rows = [tax_configuration.describe_tax_configuration(name)
+                for name in (companies if companies is not None else [])
+                if name]
+    if not tax_rows:
+        tax_rows = [tax_configuration.describe_tax_configuration()]
+    tax_facts = []
+    for entry in tax_rows:
+        for row in entry.get("companies", []) or []:
+            tax_facts.append({
+                "label": f"Native tax — {row['company']}",
+                "definition": ("Whether the owner has configured a native sales "
+                               "tax template. Unconfigured means the explicit "
+                               "zero the owner decision records; no rate is "
+                               "invented here."),
+                "value": row["state"] + (
+                    f" ({row['configured_tax_lines']} lines)" if row["configured_tax_lines"] else ""),
+                "owner": "Course Owner",
+            })
+    tax_section = section(
+        "tax", "Tax configuration", "facts", facts=tax_facts,
+        empty_title="No company tax state",
+        empty_body="No company is visible in your scope, so no native tax configuration can be reported.")
+
+    return cash, tax_section, history_section
 
 
 def _summarize(rows, field, currency_key="currency"):

@@ -264,7 +264,11 @@ class BillingPolicyTests(unittest.TestCase):
         self.assertEqual(self.policies.governing_billing_terms(), {
             "effective_from": "2026-09-23",
             "max_backdate_days": 90, "max_future_days": 30,
-            "placement_fee_timing": "any"})
+            "placement_fee_timing": "any",
+            # A version that does not mention installments leaves them OFF:
+            # splitting is never inferred from the absence of a decision.
+            "installments_allowed": 0, "max_installments": 1,
+            "installment_interval_days": 0})
 
     def test_bad_bounds_are_refused(self):
         self._existing_policy()

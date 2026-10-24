@@ -15,8 +15,14 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 HOOKS = ROOT / "apps/toefl_house/toefl_house/hooks.py"
+SECURITY = ROOT / "apps/toefl_house/toefl_house/security.py"
 
 GUARDS = {
+    # Customer refunds settle credit notes only (2026-10-24 finance mission);
+    # the same guard runs on create, cancel and post-submit edits.
+    "Payment Entry": "toefl_house.finance.refunds.guard_payment_entry",
+    # The cashier day close is a control record: command-only on every seam.
+    "TH Cashier Day": "toefl_house.finance.cashier.guard",
     "Program Enrollment": "toefl_house.enrollment.guard_program_enrollment",
     "Course Enrollment": "toefl_house.enrollment.guard_course_enrollment",
     "Sales Invoice": "toefl_house.finance.guard_sales_invoice",
@@ -29,6 +35,8 @@ SEAMS = ("validate", "before_cancel", "before_update_after_submit")
 MODULE_FILES = {
     "toefl_house.enrollment": ROOT / "apps/toefl_house/toefl_house/enrollment/__init__.py",
     "toefl_house.finance": ROOT / "apps/toefl_house/toefl_house/finance/__init__.py",
+    "toefl_house.finance.cashier": ROOT / "apps/toefl_house/toefl_house/finance/cashier.py",
+    "toefl_house.finance.refunds": ROOT / "apps/toefl_house/toefl_house/finance/refunds.py",
     "toefl_house.teaching": ROOT / "apps/toefl_house/toefl_house/teaching/__init__.py",
 }
 
@@ -40,6 +48,21 @@ def doc_events():
                 getattr(t, "id", None) == "doc_events" for t in node.targets):
             return ast.literal_eval(node.value)
     raise AssertionError("doc_events assignment not found in hooks.py")
+
+
+def _assignments():
+    """Module-level literal dict/str assignments from security.py (AST only)."""
+    tree = ast.parse(SECURITY.read_text(encoding="utf-8"))
+    found = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+            if isinstance(target, ast.Name):
+                try:
+                    found[target.id] = ast.literal_eval(node.value)
+                except (ValueError, SyntaxError):
+                    continue
+    return found
 
 
 class ContainmentHookWiringTests(unittest.TestCase):
@@ -95,6 +118,41 @@ class ContainmentHookWiringTests(unittest.TestCase):
             defs = [n.name for n in ast.walk(tree)
                     if isinstance(n, ast.FunctionDef)]
             self.assertIn(function, defs, guard)
+
+    def test_every_finance_command_declares_its_guarded_doctype(self):
+        # guard_fees/guard_sales_invoice only accept a write inside the
+        # matching finance command, so a finance command that creates one of
+        # those doctypes must be registered here or its own writes are refused
+        # on a real site (invisible to offline stubs).
+        modules = _assignments()
+        commands = modules["FINANCE_COMMANDS"]
+        self.assertEqual(commands["issue_tuition_fees"], "Fees")
+        self.assertEqual(commands["issue_tuition_installment_plan"], "Fees")
+        self.assertEqual(commands["issue_placement_fee"], "Sales Invoice")
+        self.assertEqual(commands["reconcile_cashier_day"], "TH Cashier Day")
+        for command, doctype in commands.items():
+            # Either a money doctype with a pinned guard or an owned control
+            # record; nothing else may be written by a finance command.
+            self.assertTrue(doctype in GUARDS or doctype in modules["DOCTYPES"],
+                            (command, doctype))
+            self.assertIn(command, modules["KIND_ROLES"],
+                          (command, "must have a command role"))
+
+    def test_finance_command_doctypes_are_either_guarded_or_control_records(self):
+        commands = _assignments()["FINANCE_COMMANDS"]
+        self.assertEqual(
+            set(commands.values()) - set(GUARDS),
+            set(),
+            "every doctype a finance command writes must pin its guard in "
+            "hooks.py on all three lifecycle seams",
+        )
+        self.assertEqual(commands["reconcile_cashier_day"], "TH Cashier Day")
+        # The close is a control record: it must never post to the ledger or
+        # restock anything, only record counted cash.
+        source = MODULE_FILES["toefl_house.finance.cashier"].read_text(encoding="utf-8")
+        for primitive in ("make_gl_entries", "Journal Entry", "journal_entry",
+                          "get_payment_entry", "Stock Entry", "Sales Invoice"):
+            self.assertNotIn(primitive, source, primitive)
 
 
 if __name__ == "__main__":

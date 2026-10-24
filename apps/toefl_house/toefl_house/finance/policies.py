@@ -31,6 +31,11 @@ ANY_PROGRESS = "any"
 RELEASED = "released"
 TIMING_CHOICES = (ANY_PROGRESS,) + tuple(ATTEMPT_STATUSES) + (RELEASED,)
 DAY_BOUND_MAX = 366
+# Installment schedule bounds. These are mechanism guardrails, not policy:
+# the owner chooses any count/interval inside them, and an owner who never
+# enables installments bills one document exactly as before.
+MAX_INSTALLMENTS = 12
+INSTALLMENT_INTERVAL_MAX = 366
 
 
 def validate_day_bound(value, what):
@@ -67,6 +72,59 @@ def validate_terms(backdate_days, future_days, timing):
     back = validate_day_bound(backdate_days, "Max backdate days")
     fut = validate_day_bound(future_days, "Max future days")
     return back, fut, validate_timing(timing)
+
+
+def as_flag(value, what="value"):
+    """Interpret an owner-supplied on/off value as a bool, or refuse it.
+
+    Accepts the boolean spellings a Desk Check field, a REST payload and a
+    Python caller legitimately produce. Anything else is refused: a policy
+    term is never guessed from a missing or ambiguous value.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in ("1", "true", "yes"):
+            return True
+        if text in ("0", "false", "no", ""):
+            return False
+    raise ValueError(f"{what} must be true or false")
+
+
+def validate_installment_terms(allowed, max_installments, interval_days):
+    """Shape-check one version's installment schedule terms.
+
+    Off is the only state a fresh version can be in without the owner
+    saying so: with installments disabled the count and interval are
+    irrelevant, and the command stores the owner's numbers unchanged so
+    enabling later is one decision, not a new arithmetic.
+    """
+    on = as_flag(allowed, "Installments allowed")
+    if isinstance(max_installments, bool) or not isinstance(max_installments, int):
+        raise ValueError(
+            f"Maximum installments must be an integer (1-{MAX_INSTALLMENTS})")
+    if not 1 <= max_installments <= MAX_INSTALLMENTS:
+        raise ValueError(
+            f"Maximum installments must be between 1 and {MAX_INSTALLMENTS}")
+    if isinstance(interval_days, bool) or not isinstance(interval_days, int):
+        raise ValueError(
+            "Installment interval must be an integer number of days "
+            f"(0-{INSTALLMENT_INTERVAL_MAX})")
+    if not 0 <= interval_days <= INSTALLMENT_INTERVAL_MAX:
+        raise ValueError(
+            "Installment interval must be between 0 and "
+            f"{INSTALLMENT_INTERVAL_MAX} days")
+    if on and max_installments < 2:
+        raise ValueError(
+            "Enabling installments needs a maximum of at least 2; a single "
+            "installment is the ordinary one-document bill")
+    if on and interval_days < 1:
+        raise ValueError(
+            "Enabling installments needs an interval of at least 1 day")
+    return on, max_installments, interval_days
 
 
 def check_posting_bounds(posting, today, backdate_days, future_days):
@@ -108,15 +166,7 @@ def _policy_doc(code, for_update=False):
 
 
 def _as_bool(value, what):
-    if isinstance(value, str) and value.strip().lower() in ("1", "true", "yes"):
-        return True
-    if isinstance(value, str) and value.strip().lower() in ("0", "false", "no"):
-        return False
-    if isinstance(value, bool):
-        return value
-    if value in (0, 1):
-        return bool(value)
-    raise ValueError(f"{what} must be true or false")
+    return as_flag(value, what)
 
 
 def _policy_result(doc, extra=None):
@@ -134,6 +184,12 @@ def _policy_result(doc, extra=None):
             governing.get("max_future_days") if governing else ""),
         "governing_placement_fee_timing": (
             (governing.get("placement_fee_timing") or "") if governing else ""),
+        "governing_installments_allowed": (
+            int(governing.get("installments_allowed") or 0) if governing else 0),
+        "governing_max_installments": (
+            governing.get("max_installments") if governing else ""),
+        "governing_installment_interval_days": (
+            governing.get("installment_interval_days") if governing else ""),
     }
     if extra:
         result.update(extra)
@@ -163,6 +219,13 @@ def governing_billing_terms(on_date=None):
         "max_backdate_days": governing.get("max_backdate_days"),
         "max_future_days": governing.get("max_future_days"),
         "placement_fee_timing": governing.get("placement_fee_timing") or "",
+        # Installment schedule terms. A version written before this field
+        # existed reads as OFF: installments stay denied until the owner
+        # records a version that enables them.
+        "installments_allowed": int(governing.get("installments_allowed") or 0),
+        "max_installments": int(governing.get("max_installments") or 1),
+        "installment_interval_days": int(
+            governing.get("installment_interval_days") or 0),
     }
 
 
@@ -208,13 +271,17 @@ def create_billing_policy(request_key, code, title, description=""):
 @frappe.whitelist(methods=["POST"])
 def set_billing_policy_version(request_key, policy, effective_from, reason,
                                max_backdate_days, max_future_days,
-                               placement_fee_timing):
+                               placement_fee_timing, installments_allowed=0,
+                               max_installments=1,
+                               installment_interval_days=0):
     """Append an effective-dated billing policy version.
 
-    The version enacts one pair of posting-date bounds plus one
-    placement-fee timing threshold from ``effective_from``; a change
-    reason is mandatory; backdated or same-day versions are refused.
-    The superseded version is closed, never rewritten.
+    The version enacts one pair of posting-date bounds, one
+    placement-fee timing threshold and one installment schedule from
+    ``effective_from``; a change reason is mandatory; backdated or
+    same-day versions are refused. The superseded version is closed,
+    never rewritten. Installment terms default to OFF, so a version
+    that does not mention them cannot enable split billing.
     """
     def work(actor):
         try:
@@ -223,6 +290,10 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
             clean_reason = configuration_rules.validate_change_reason(reason)
             clean_back, clean_fut, clean_timing = validate_terms(
                 max_backdate_days, max_future_days, placement_fee_timing)
+            clean_inst_on, clean_inst_max, clean_inst_days = \
+                validate_installment_terms(
+                    installments_allowed, max_installments,
+                    installment_interval_days)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         doc = _policy_doc(clean_code, for_update=True)
@@ -242,6 +313,9 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
             "effective_from": clean_from, "max_backdate_days": clean_back,
             "max_future_days": clean_fut,
             "placement_fee_timing": clean_timing,
+            "installments_allowed": 1 if clean_inst_on else 0,
+            "max_installments": clean_inst_max,
+            "installment_interval_days": clean_inst_days,
             "reason": clean_reason, "set_by": actor,
             "set_on": frappe.utils.now_datetime()})
         if current:
@@ -262,7 +336,10 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
     payload = {"policy": policy, "effective_from": effective_from,
                "reason": reason, "max_backdate_days": max_backdate_days,
                "max_future_days": max_future_days,
-               "placement_fee_timing": placement_fee_timing}
+               "placement_fee_timing": placement_fee_timing,
+               "installments_allowed": installments_allowed,
+               "max_installments": max_installments,
+               "installment_interval_days": installment_interval_days}
     return configuration_audit.execute(
         "set_billing_policy_version", request_key, payload, work)
 

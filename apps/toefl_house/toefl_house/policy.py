@@ -588,6 +588,9 @@ def can_read(kind, roles, actor, owner, status=None):
                              "Finance Officer", "Finance Auditor"})
     if kind in ("correction_policy", "correction_request"):
         return bool(roles & {"Finance Officer", "Finance Auditor"})
+    if kind == "cashier_day":
+        return bool(roles & {"Finance Officer", "Finance Auditor",
+                             "Finance Manager"})
     if kind == "attendance_correction":
         return bool(roles & {"Attendance Recorder", "Teaching Auditor"})
     if kind == "enrollment_exit":

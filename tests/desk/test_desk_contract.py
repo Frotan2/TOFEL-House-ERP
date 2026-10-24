@@ -162,11 +162,15 @@ def _frappe_stub(roles=()):
         assert_columns_real("stub count", doctype, list((filters or {}).keys()))
         return 0
 
+    # The cash-close projection sums native GL movement in SQL (one aggregate
+    # per drawer per day); the offline double answers "no entries", which is
+    # the correct empty ledger, and the desk must still render.
     stub.db = types.SimpleNamespace(
         count=_db_count,
         get_value=lambda *args, **kwargs: 1,
         get_all=_db_get_all,
         get_list=_db_get_all,
+        sql=lambda *args, **kwargs: [{"opening": 0, "movement": 0, "closing": 0}],
     )
     stub.get_all = _db_get_all
 
