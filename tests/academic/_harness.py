@@ -399,6 +399,10 @@ class Harness:
                                           escape=lambda value: f"'{value}'")
         frappe.get_doc = get_doc
         frappe.get_all = get_all
+        # Native frappe.get_list enforces per-document permission query hooks.
+        # The isolated harness mirrors permitted synthetic rows here; separate
+        # live-site tests validate the actual role-and-branch boundary.
+        frappe.get_list = get_all
         frappe.get_roles = self.roles_of
         frappe.get_value = get_value
         frappe.has_permission = lambda *args, **kwargs: True
