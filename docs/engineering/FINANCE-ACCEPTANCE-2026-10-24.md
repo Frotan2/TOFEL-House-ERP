@@ -34,7 +34,7 @@ recorded in [evidence/native-book-refund-2026-10-23.md](evidence/native-book-ref
 | 3 | Policy-driven tuition billing, fee adjustments, installment schedules, discounts, authorized corrections | Billing policy versions carry posting bounds, placement timing and installment terms; terms default **OFF**; installment split in integer cents with remainder on the last row; discounts resolve from the Course Owner’s `TH Discount Rule`; corrections via the existing framework | `test_billing_policy.py` (23), `test_installments.py` (18), `tests/configuration/test_discount_math.py`, `test_corrections.py` | **Implemented; offline PASS** |
 | 4 | Configurable tax via native ERPNext facilities; never invent Afghan tax law | `finance/taxes.py`: reads native default selling templates and Item Tax templates; refuses any invoice tax line not backed by them (pre-insert and pre-submit); sign rule is native (expectation = `grand_total − net_total`, sales ≥ 0, credit notes ≤ 0); reports `No native tax configured` | `test_taxes.py` (15); native check `finance-tax-configuration-native-state` | **Implemented; offline PASS; native pending exact-SHA run** |
 | 5 | Book receiving, availability, stock-enabled sales invoices, payment allocation, credit notes, refunds, restocking consistent | Native-only path retained; return guard enforces cumulative quantity and value limits, same customer/company, stock-enabled sale, Books item group; refund guard requires a submitted credit note of the same customer, cash/bank payment, full allocation, cleared receivable | `test_refund_guards.py` (24); native checks `book-*` (receipt, sale+GL+stock, payment, return/restock, refund reconciliation, HTTP commerce) | **Implemented; native PASS on the run cited in #35; guards extended since — new checks pending** |
-| 6 | Safe cashier workflows, outstanding visibility, daily reconciliation, transaction history, reliable reports | Finance desk sections: Today, Outstanding receivables, Awaiting billing, Cash close, Cash close history, Tax configuration; commands `reconcile_cashier_day`, `issue_tuition_installment_plan`; reports `th_tuition_billing_register`, `th_placement_billing_register` | `test_cashier.py` (17), `tests/desk/test_desk_contract.py` (105), `tests/foundation/test_role_desks.cjs` (8 desks, 72 guided actions) | **Implemented; offline PASS; real-cashier acceptance open (#35)** |
+| 6 | Safe cashier workflows, outstanding visibility, daily reconciliation, transaction history, reliable reports | Finance desk sections: Today, Outstanding receivables, Awaiting billing, Cash close, Cash close history, Tax configuration; commands `reconcile_cashier_day`, `issue_tuition_installment_plan`; reports `th_tuition_billing_register`, `th_placement_billing_register`. The close also enforces the native Company User Permission scope before it reads or writes. | `test_cashier.py` (17), `tests/desk/test_desk_contract.py` (105), `tests/foundation/test_role_desks.cjs` (8 desks, 72 guided actions) | **Implemented; offline PASS; real-cashier acceptance open (#35)** |
 | 7 | Verify payroll integration with existing HRMS without rewriting teacher compensation | No payroll code changed. Teaching-assignment/compensation projections are read-only and remain on native HRMS `Salary Slip`/`Additional Salary`; payroll containment checks unchanged | `tests/teaching/test_compensation*.py`; native `no-academic-finance-payroll-writes` containment | **Unchanged; native PASS on prior run; A09/R06 remain gated** |
 | 8 | Reject duplicate billing, unauthorized invoices, invalid mixed invoices, accounting inconsistencies, incorrect returns, forged offsetting entries, cross-branch violations | Duplicate guards (enrollment row lock, first-writer-wins), placement/tuition command-only invoices, mixed Books+service invoices refused, non-stock-update book invoices refused, cumulative return limits, refund allocation checks, command-only GL/stock seams, branch-scoped reads and money documents | `test_refund_guards.py`, `test_cashier.py`, `test_taxes.py`, `test_corrections.py`, `tests/placement/test_native_check_actors.py`; native negative checks incl. HTTP races, CSRF, GET-mutation, revoked-session, containment probes | **Implemented; offline PASS; native PASS on prior run, extended checks pending** |
 | 9 | Auditability and period-correct records; never silently edit submitted history | Submitted documents are never rewritten; corrections are new submitted records with receipts; cash closes are immutable once submitted (duplicate refused, drift surfaced); billing policy versions are append-only | `test_corrections.py`, `test_billing_policy.py`, `test_cashier.py`, `tests/desk/test_desk_contract.py` | **Implemented; offline PASS** |
@@ -98,11 +98,20 @@ synthetic ERPNext lifecycle runs. This branch **appends** finance checks to it:
 | `finance-cashier-close-future-day-denied` | A future business date is refused |
 
 **Status: PASS on the exact code SHA.** Native lifecycle integration
-[run 40092775298](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40092775298)
-**SUCCESS** at `6a183b5c400555630526166f33bcc8668aab26d7`, together with Owned
+[run 40094216697](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40094216697)
+**SUCCESS** at `0e8eee447bae79d4f4f8754a506ad481230e699f`, together with Owned
 suite
-[40092775280](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40092775280)
-**SUCCESS** on the same SHA. The first native attempt on this branch
+[40094222085](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40094222085)
+**SUCCESS** and Foundation runtime
+[40094216664](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40094216664)
+on the same SHA. The preceding code SHA `6a183b5` passed the same three
+workflows (Native
+[40092775298](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40092775298),
+Owned
+[40092775280](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40092775280),
+Foundation
+[40092775285](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40092775285)).
+The first native attempt on this branch
 ([40091964812](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40091964812),
 `e2882fc`) **failed** at `finance-cashier-day-close-native-ledger` with
 `AttributeError: 'str' object has no attribute 'fromisoformat'` — the
