@@ -56,6 +56,13 @@ def api(path, token, method="GET"):
     return json.loads(payload) if payload else None
 
 
+def delete_ref_path(read_path):
+    """GitHub reads /git/ref/{ref} but deletes /git/refs/{ref}."""
+    if not read_path.startswith("/git/ref/heads/"):
+        raise ValueError("Ref deletion path must be within heads")
+    return read_path.replace("/git/ref/", "/git/refs/", 1)
+
+
 def open_pulls(token):
     out = []
     for page in range(1, 101):
@@ -114,7 +121,7 @@ def main():
             if not ok:
                 print("KEEP after recheck:", branch, reason)
                 continue
-            api(path, token, "DELETE")
+            api(delete_ref_path(path), token, "DELETE")
             print("DELETED:", branch, "PR", number, "SHA", sha)
         return 0
     except (urllib.error.URLError, ValueError, RuntimeError, TypeError) as error:

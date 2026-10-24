@@ -1,4 +1,5 @@
 name: One-time verified merged branch retirement
+# Retest 2026-10-24: API GET uses /git/ref/, DELETE must use /git/refs/.
 
 on:
   push:
