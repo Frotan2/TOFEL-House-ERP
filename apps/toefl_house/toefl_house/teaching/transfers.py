@@ -27,7 +27,7 @@ import json
 
 import frappe
 
-from toefl_house.policy import digest
+from toefl_house.policy import clock_text, digest
 from toefl_house.security import record_synthetic_flag
 from toefl_house.teaching import capacity, class_operations
 
@@ -145,8 +145,8 @@ def timetable_conflicts(student, target_group, from_day):
                     "other_session": other.get("name"),
                     "other_group": other.get("student_group"),
                     "schedule_date": str(session.get("schedule_date")),
-                    "from_time": str(session.get("from_time")),
-                    "to_time": str(session.get("to_time")),
+                    "from_time": clock_text(session.get("from_time")),
+                    "to_time": clock_text(session.get("to_time")),
                 })
     return conflicts
 

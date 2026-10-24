@@ -25,8 +25,9 @@ from datetime import date, timedelta
 
 import frappe
 
-from toefl_house.policy import (digest, session_minutes, session_windows_overlap,
-                                validate_schedule_date, validate_session_window)
+from toefl_house.policy import (clock_text, digest, session_minutes,
+                                session_windows_overlap, validate_schedule_date,
+                                validate_session_window)
 from toefl_house.teaching import calendars as academic_calendar
 from toefl_house.teaching import class_operations, timetables
 
@@ -223,18 +224,20 @@ def check_new_session(terms, group_name, day, start, end, instructor, room,
     if conflict:
         raise frappe.ValidationError(
             f"{group_name} already has session {conflict.get('name')} at "
-            f"{conflict.get('from_time')}-{conflict.get('to_time')} on {clean_day}")
+            f"{clock_text(conflict.get('from_time'))}-"
+            f"{clock_text(conflict.get('to_time'))} on {clean_day}")
     conflict = _conflict(rows, "instructor", instructor, clean_start, clean_end)
     if conflict:
         raise frappe.ValidationError(
             f"Instructor {instructor} is already scheduled in session "
-            f"{conflict.get('name')} at {conflict.get('from_time')}-"
-            f"{conflict.get('to_time')} on {clean_day}")
+            f"{conflict.get('name')} at {clock_text(conflict.get('from_time'))}-"
+            f"{clock_text(conflict.get('to_time'))} on {clean_day}")
     conflict = _conflict(rows, "room", room, clean_start, clean_end)
     if conflict:
         raise frappe.ValidationError(
             f"Room {room} is already booked by session {conflict.get('name')} "
-            f"at {conflict.get('from_time')}-{conflict.get('to_time')} on {clean_day}")
+            f"at {clock_text(conflict.get('from_time'))}-"
+            f"{clock_text(conflict.get('to_time'))} on {clean_day}")
     doubled = student_conflicts(group_name, clean_day, clean_start, clean_end,
                                 exclude_session)
     if doubled:
@@ -242,7 +245,8 @@ def check_new_session(terms, group_name, day, start, end, instructor, room,
         raise frappe.ValidationError(
             f"Student {first.get('student')} is already in session "
             f"{first.get('name')} ({first.get('student_group')}) at "
-            f"{first.get('from_time')}-{first.get('to_time')} on {clean_day}")
+            f"{clock_text(first.get('from_time'))}-"
+            f"{clock_text(first.get('to_time'))} on {clean_day}")
     seating = room_seating(room)
     if seating and int(facts.max_strength or 0) > seating:
         raise frappe.ValidationError(
@@ -272,7 +276,8 @@ def _session_result(session):
         "name": session.name, "student_group": session.student_group,
         "instructor": session.instructor, "room": session.room,
         "course": session.course, "schedule_date": str(session.schedule_date),
-        "from_time": str(session.from_time), "to_time": str(session.to_time),
+        "from_time": clock_text(session.from_time),
+        "to_time": clock_text(session.to_time),
         "kind": session.get("th_session_kind") or "Regular",
         "status": session.get("th_session_status") or "Scheduled",
         "replaces": session.get("th_replaces") or "",
@@ -421,7 +426,7 @@ def postpone_session(request_key, course_schedule, reason, new_date,
         try:
             day = validate_schedule_date(new_date)
             start, end = validate_session_window(
-                from_time or str(facts.from_time), to_time or str(facts.to_time))
+                from_time or facts.from_time, to_time or facts.to_time)
             original_day = str(facts.schedule_date)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc

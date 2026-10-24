@@ -266,6 +266,11 @@ class PostponementAndMakeUpTests(SchedulingTestBase):
         self.assertEqual(result["replacement"]["kind"], "Replacement")
         self.assertEqual(result["replacement"]["replaces"], self.session)
         self.assertEqual(result["replacement"]["schedule_date"], "2026-09-22")
+        # The fake site hands stored times back the way the driver does
+        # (datetime.timedelta), so a defaulted postponement must still report
+        # the same HH:MM:SS text the payload contract promises.
+        self.assertEqual(result["replacement"]["from_time"], "09:00:00")
+        self.assertEqual(result["replacement"]["to_time"], "10:00:00")
         self.assertEqual(self.site.get("Course Schedule",
                                        result["replacement"]["name"])[
                            "th_session_status"], "Scheduled")

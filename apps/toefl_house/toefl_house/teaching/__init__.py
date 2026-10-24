@@ -45,7 +45,7 @@ from datetime import datetime, timedelta
 import frappe
 from toefl_house.api import _execute
 from toefl_house.academic.rules import resolve_duration
-from toefl_house.policy import (DELIVERY_MODES, digest, distinct_roster_rows,
+from toefl_house.policy import (DELIVERY_MODES, clock_text, digest, distinct_roster_rows,
                                 is_valid_class_transition,
                                 validate_attendance_statuses, validate_capacity,
                                 validate_class_status, validate_delivery_mode,
@@ -455,8 +455,8 @@ def schedule_session(request_key, student_group, schedule_date, from_time, to_ti
             "instructor": instructor_name,
             "room": room_name,
             "schedule_date": str(session.schedule_date),
-            "from_time": str(session.from_time),
-            "to_time": str(session.to_time),
+            "from_time": clock_text(session.from_time),
+            "to_time": clock_text(session.to_time),
             "title": session.title,
         }
         return result, dict(target=session.name,

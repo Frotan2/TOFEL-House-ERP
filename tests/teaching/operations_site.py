@@ -21,6 +21,7 @@ Nothing here is a parallel implementation of a business rule: the tests assert
 what the production modules do to this fake site.
 """
 from copy import deepcopy
+import datetime
 import importlib.util
 import sys
 import types
@@ -296,6 +297,38 @@ def _query(sql):
     return " ".join(str(sql).split())
 
 
+def _native_row(doctype, row):
+    """One stored row as the driver would hand it back.
+
+    TIME columns come back as ``datetime.timedelta`` on a real site, so every
+    read of a session row must survive that shape - which is exactly how a
+    hosted run caught the "must be HH:MM or HH:MM:SS" bug this fake site used
+    to hide by storing plain strings.
+    """
+    if doctype != "Course Schedule":
+        return row
+    return dict(row, from_time=_db_time(row.get("from_time")),
+                to_time=_db_time(row.get("to_time")))
+
+
+def _db_time(value):
+    """A TIME column as Frappe/MariaDB actually hands it back.
+
+    ``frappe.db.sql`` returns ``datetime.timedelta`` for MySQL TIME columns;
+    only the fake site used to simplify them to strings. Returning the native
+    type keeps every conflict/overlap path honest offline.
+    """
+    if value is None:
+        return None
+    if hasattr(value, "total_seconds"):
+        return value
+    text = str(value)
+    parts = [int(part) for part in text.split(":")]
+    while len(parts) < 3:
+        parts.append(0)
+    return datetime.timedelta(hours=parts[0], minutes=parts[1], seconds=parts[2])
+
+
 def _time_overlap(start, end, other_start, other_end):
     """Frappe stores times as timedelta/strings; compare as normalized text."""
     def norm(value):
@@ -342,6 +375,7 @@ def build_frappe(site):
             row = site.get(doctype, name_or_filters)
         if row is None:
             return None
+        row = _native_row(doctype, row)
         if fieldname is None:
             return row.get("name")
         if isinstance(fieldname, (list, tuple)):
@@ -455,8 +489,8 @@ def build_frappe(site):
                     hits.append({
                         "name": session["name"],
                         "schedule_date": str(session.get("schedule_date")),
-                        "from_time": str(session.get("from_time")),
-                        "to_time": str(session.get("to_time")),
+                        "from_time": _db_time(session.get("from_time")),
+                        "to_time": _db_time(session.get("to_time")),
                         "student_group": session.get("student_group"),
                     })
                 return hits
@@ -488,15 +522,17 @@ def build_frappe(site):
                             hits.append({
                                 "name": session["name"],
                                 "student_group": session.get("student_group"),
-                                "from_time": str(session.get("from_time")),
-                                "to_time": str(session.get("to_time")),
+                                "from_time": _db_time(session.get("from_time")),
+                                "to_time": _db_time(session.get("to_time")),
                                 "student": member.get("student"),
                             })
                 return hits
             if "where schedule_date=%s for update" in text:
                 rows = [session for session in site.all("Course Schedule")
                         if str(session.get("schedule_date")) == str(values[0])]
-                return [dict(row) for row in rows]
+                return [dict(row, from_time=_db_time(row.get("from_time")),
+                             to_time=_db_time(row.get("to_time")))
+                        for row in rows]
             if "where student_group=%s and schedule_date=%s" in text:
                 rows = [session for session in site.all("Course Schedule")
                         if session.get("student_group") == values[0]
@@ -511,7 +547,9 @@ def build_frappe(site):
                         and str(session.get("schedule_date")) >= str(from_day)
                         and str(session.get("th_session_status") or "Scheduled") == "Scheduled"]
                 rows.sort(key=lambda row: str(row.get("schedule_date")))
-                return [dict(row) for row in rows[:limit]]
+                return [dict(row, from_time=_db_time(row.get("from_time")),
+                             to_time=_db_time(row.get("to_time")))
+                        for row in rows[:limit]]
 
         raise AssertionError(f"unstubbed SQL: {text[:160]}")
 

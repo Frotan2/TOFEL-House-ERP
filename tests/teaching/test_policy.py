@@ -4,12 +4,14 @@ Not native Frappe qualification; hosted acceptance lives in
 tools/native/native_checks.py on the branch-restricted runner.
 """
 import ast
+from datetime import datetime, time, timedelta
 from pathlib import Path
 import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps/toefl_house"))
-from toefl_house.policy import (can_read, validate_attendance_statuses, validate_capacity,
+from toefl_house.policy import (can_read, session_minutes, session_windows_overlap,
+                                validate_attendance_statuses, validate_capacity,
                                 validate_group_name, validate_schedule_date,
                                 validate_session_window)
 
@@ -58,6 +60,31 @@ class SessionWindowTests(unittest.TestCase):
             validate_session_window("10:30:00", "09:00:00")
         with self.assertRaises(ValueError):
             validate_session_window("09:00:00", "09:00:00")
+
+    def test_native_time_representations_are_understood(self):
+        # A native site hands stored times back as timedelta (MySQL TIME via
+        # frappe.db.sql, and every Time field on a loaded document), and some
+        # callers pass datetime.time. All three mean the same wall clock, so a
+        # conflict check must never mistake the driver's shape for bad input.
+        # A hosted run caught exactly that: comparing a stored session against
+        # a new one raised "must be HH:MM or HH:MM:SS" on the real site while
+        # every offline fake returned strings.
+        nine = timedelta(hours=9)
+        ten_thirty = timedelta(hours=10, minutes=30)
+        self.assertEqual(validate_session_window(nine, ten_thirty),
+                         ("09:00:00", "10:30:00"))
+        self.assertEqual(validate_session_window(time(9, 0), time(10, 30)),
+                         ("09:00:00", "10:30:00"))
+        self.assertEqual(validate_session_window(datetime(2026, 9, 21, 9, 0),
+                                                 datetime(2026, 9, 21, 10, 30)),
+                         ("09:00:00", "10:30:00"))
+        self.assertEqual(session_minutes(nine, ten_thirty), 90)
+        self.assertTrue(session_windows_overlap(nine, ten_thirty,
+                                                timedelta(hours=10), timedelta(hours=11)))
+        self.assertFalse(session_windows_overlap(timedelta(hours=9), ten_thirty,
+                                                 ten_thirty, timedelta(hours=11)))
+        with self.assertRaises(ValueError):
+            validate_session_window(timedelta(days=1), timedelta(days=2))
 
     def test_malformed_times_denied(self):
         for bad in (("25:00", "26:00"), ("9:00", "10:00"), ("abc", "def"), (9, 10), ("", "")):

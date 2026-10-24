@@ -1,5 +1,5 @@
 """Pure content validation, not scoring or academic placement policy."""
-from datetime import datetime, timedelta
+from datetime import datetime, time as clock_time, timedelta
 import hashlib
 import hmac
 import json
@@ -431,9 +431,37 @@ def validate_finance_dates(posting_date, due_date):
 
 
 def _normalize_time(value, field):
+    """Normalize one time-of-day to ``HH:MM:SS``.
+
+    MySQL TIME columns come back from ``frappe.db.sql`` as
+    ``datetime.timedelta``, and a ``Time`` field on a loaded document is a
+    ``timedelta`` too; ``datetime.time``/``datetime.datetime`` values arrive
+    from Python callers. All of them mean the same wall-clock time, so they
+    are accepted and normalized rather than refused — comparing a stored
+    session against a new one must not depend on which shape the driver used.
+    """
+    if isinstance(value, timedelta):
+        seconds = int(value.total_seconds())
+        if seconds < 0 or seconds >= 24 * 60 * 60:
+            raise ValueError(f"{field} must be a time of day")
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    if isinstance(value, (clock_time, datetime)):
+        return value.strftime("%H:%M:%S")
     if not isinstance(value, str) or not TIME_PATTERN.fullmatch(value):
         raise ValueError(f"{field} must be HH:MM or HH:MM:SS")
     return value if len(value) == 8 else value + ":00"
+
+
+def clock_text(value, field="time"):
+    """``HH:MM:SS`` text for one time-of-day value.
+
+    Public wrapper for the normalizer: command results and defaulted fields
+    must render a native ``timedelta`` exactly like the ``HH:MM:SS`` string the
+    same value has on a JSON payload, instead of ``str(timedelta)`` -> "9:30:00".
+    """
+    return _normalize_time(value, field)
 
 
 def validate_session_window(from_time, to_time):
