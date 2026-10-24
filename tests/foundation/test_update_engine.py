@@ -143,6 +143,7 @@ class UpdateFixture:
                  authorization: str = "AUTHORIZED", migration: str = "supported",
                  reversible: bool = False, recovery_required: bool = True):
         self.base = base
+        self.state_dir = base / "engine-state"
         self.product_root = base / "product"
         self.data = self.product_root / "data"
         self.site = self.data / "sites" / engine.SITE_NAME
@@ -406,7 +407,8 @@ class UpdateFixture:
         return request
 
     def preflight(self, **overrides) -> dict:
-        return engine.preflight(self.preflight_request(**overrides), now=NOW)
+        return engine.preflight(self.preflight_request(**overrides), now=NOW,
+                                state_dir=self.state_dir)
 
     def authorize_request(self, transaction: dict, **overrides) -> dict:
         request = self.preflight_request(**overrides)
@@ -415,7 +417,8 @@ class UpdateFixture:
         return request
 
     def authorize(self, transaction: dict, **overrides) -> dict:
-        return engine.authorize(self.authorize_request(transaction, **overrides), now=NOW)
+        return engine.authorize(self.authorize_request(transaction, **overrides), now=NOW,
+                                state_dir=self.state_dir)
 
     def verified_transaction(self, **overrides) -> dict:
         """A complete manifest -> image authorization, as the updater performs it."""
@@ -956,13 +959,15 @@ class ApplyTests(UpdateEngineBase):
             "backup_dir": str(self.fixture.backup_dir.relative_to(self.fixture.product_root)),
             "recovery_authorization": self.fixture.authorization_rel,
             "recovery_signature": self.fixture.authorization_signature_rel,
+            "journal_state": "idle",
+            "host": self.fixture.host(),
         }
         request.update(overrides)
         return request
 
     def apply(self, **overrides) -> dict:
         return engine.apply_update(self.apply_request(**overrides), now=NOW,
-                                   state_dir=self.tmp / "run")
+                                   state_dir=self.fixture.state_dir)
 
     def blocker_codes(self, report: dict) -> set[str]:
         return {item["code"] for item in report["blockers"]}
@@ -1222,7 +1227,8 @@ class AuthorizationGateTests(UpdateEngineBase):
         decision = fixture.preflight()
         response = engine.authorize(
             fixture.authorize_request(decision["transaction"]),
-            now=NOW + timedelta(minutes=engine.TRANSACTION_TTL_MINUTES + 1))
+            now=NOW + timedelta(minutes=engine.TRANSACTION_TTL_MINUTES + 1),
+            state_dir=fixture.state_dir)
         self.assertEqual(response["decision"], "refuse")
         self.assertIn("transaction.expired", codes(response))
 
@@ -1240,13 +1246,15 @@ class AuthorizationGateTests(UpdateEngineBase):
         self.assertEqual(response["transaction"]["target"]["archive_sha256"],
                          fixture.identity["sha256"])
 
-    def test_authorize_refuses_a_transaction_for_another_site(self):
+    def test_a_caller_cannot_change_the_transaction_site(self):
+        # The site binding comes from the engine's own record, not the caller's
+        # copy, so editing the copy cannot move an authorization to another site.
         fixture = self.fixture()
         decision = fixture.preflight()
         tampered = {**decision["transaction"], "site": "other.localhost"}
         response = fixture.authorize(tampered)
-        self.assertEqual(response["decision"], "refuse")
-        self.assertIn("transaction.mismatch", codes(response))
+        self.assertEqual(response["decision"], "allow", response["blockers"])
+        self.assertEqual(response["transaction"]["site"], engine.SITE_NAME)
 
     def test_authorize_refuses_a_replaced_archive(self):
         fixture = self.fixture()
@@ -1299,26 +1307,45 @@ class TransactionBindingTests(ApplyTests):
 
     def test_apply_with_an_expired_transaction_is_refused(self):
         report = engine.apply_update(self.apply_request(),
-                                     now=NOW + timedelta(minutes=engine.TRANSACTION_TTL_MINUTES + 1))
+                                     now=NOW + timedelta(minutes=engine.TRANSACTION_TTL_MINUTES + 1),
+                                     state_dir=self.fixture.state_dir)
         self.assertEqual(report["status"], "failed")
         self.assertIn("transaction.expired", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
-    def test_apply_with_a_modified_transaction_is_refused(self):
+    def test_a_forged_authorized_document_is_never_migrated(self):
+        # A plausible, self-consistent ``authorized`` document that no engine
+        # ever issued is refused: apply authenticates the engine's own durable
+        # record, not the caller's copy.
+        transaction = self.transaction()
+        forged = {**transaction, "phase": "authorized", "transaction_id": "f" * 32}
+        report = self.apply(transaction=forged)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("transaction.unknown", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_a_tampered_engine_record_is_never_migrated(self):
+        # Editing the record the engine wrote -- even one field -- breaks its
+        # authentication tag and stops the migration.
+        transaction = self.transaction()
+        record = self.fixture.state_dir / engine.TRANSACTION_RECORDS_DIR / (
+            transaction["transaction_id"] + ".json")
+        stored = json.loads(record.read_text(encoding="utf-8"))
+        stored["target"]["version"] = "2026.12.24"
+        record.write_text(json.dumps(stored, sort_keys=True), encoding="utf-8")
+        report = self.apply(transaction=transaction)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("transaction.tampered", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_a_caller_modified_copy_cannot_change_the_authorization(self):
+        # The caller's copy is not the authority: changing it does not let a
+        # different release through, because apply re-reads the engine record.
         transaction = self.transaction()
         transaction["target"]["version"] = "2026.12.24"
         report = self.apply(transaction=transaction)
-        self.assertEqual(report["status"], "failed")
-        self.assertIn("transaction.mismatch", self.blocker_codes(report))
-        self.assertFalse(self.migrate_called())
-
-    def test_apply_with_a_usable_signature_is_refused(self):
-        transaction = self.transaction()
-        transaction["signature"] = "0" * 64
-        report = self.apply(transaction=transaction)
-        self.assertEqual(report["status"], "failed")
-        self.assertIn("transaction.invalid", self.blocker_codes(report))
-        self.assertFalse(self.migrate_called())
+        self.assertEqual(report["status"], "succeeded", report["blockers"])
+        self.assertEqual(report["target_version"], self.fixture.version)
 
     def test_a_transaction_can_only_be_applied_once(self):
         transaction = self.transaction()
@@ -1363,6 +1390,72 @@ class TransactionBindingTests(ApplyTests):
         self.assertEqual(report["status"], "failed")
         self.assertIn("apply.evidence_mismatch", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
+
+
+class AuthenticatedAuthorizationTests(ApplyTests):
+    """Only an engine-issued, authenticated record may authorize a migration.
+
+    These are the adversarial cases from the security review: a fabricated
+    ``authorized`` document, a changed installed image, a changed journal or
+    volume, and a replay from another run folder must all produce zero
+    ``bench migrate`` invocations.
+    """
+
+    def test_changing_the_installed_image_labels_is_refused(self):
+        transaction = self.transaction()
+        installed = {**self.fixture.installed(),
+                     "image_labels": {**self.fixture.installed()["image_labels"],
+                                      "org.toefl-house.release-version": "2099.01.01"}}
+        report = self.apply(transaction=transaction, installed=installed)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.installed_mismatch", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_changing_the_actual_docker_image_is_refused(self):
+        transaction = self.transaction()
+        report = self.apply(transaction=transaction,
+                            host=self.fixture.host(image_id="sha256:" + "8" * 64))
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.installed_mismatch", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_changing_the_journal_after_authorization_is_refused(self):
+        transaction = self.transaction()
+        report = self.apply(transaction=transaction, journal_state="applying")
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.journal_unsafe", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_losing_the_database_volume_after_authorization_is_refused(self):
+        transaction = self.transaction()
+        report = self.apply(transaction=transaction,
+                            host=self.fixture.host(volume_present=False))
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.host_unsafe", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_stopping_a_service_after_authorization_is_refused(self):
+        transaction = self.transaction()
+        services = {**self.fixture.host()["services"], "db": False}
+        report = self.apply(transaction=transaction, host=self.fixture.host(services=services))
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.host_unsafe", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_the_use_marker_is_durable_not_per_run(self):
+        transaction = self.transaction()
+        first = self.apply(transaction=transaction)
+        self.assertEqual(first["status"], "succeeded", first["blockers"])
+        marker = (self.fixture.state_dir / engine.TRANSACTION_CONSUMED_DIR
+                  / (transaction["transaction_id"] + ".json"))
+        self.assertTrue(marker.is_file())
+        # A later run folder has its own state; it can neither consume the
+        # marker nor find the authorization it belongs to.
+        later = engine.apply_update(self.apply_request(transaction=transaction), now=NOW,
+                                    state_dir=self.tmp / "a-later-run")
+        self.assertEqual(later["status"], "failed")
+        self.assertIn("transaction.unknown", self.blocker_codes(later))
+        self.assertEqual(sum(1 for call in self.calls() if "migrate" in call), 2)
 
 
 class CensusStrictnessTests(ApplyTests):

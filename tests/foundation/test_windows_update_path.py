@@ -208,13 +208,24 @@ class TwoPhaseProtocolTests(unittest.TestCase):
         self.assertIn('$request.action = "authorize"', check)
         self.assertIn('$request.transaction = $manifestTransaction', check)
 
+    def test_the_engine_state_is_durable_and_shared_across_runs(self):
+        # The authorization record and one-use marker must live outside the
+        # per-run work folder so a replay from a later run is refused.
+        self.assertIn('$engineStateRoot = Join-Path $updatesRoot "engine-state"', UPDATE)
+        self.assertIn('$containerEngineState = "/update-state"', UPDATE)
+        engine = self.block("function Invoke-UpdateEngine", "function Invoke-EngineStep")
+        self.assertIn('($engineStateRoot + ":" + $containerEngineState)', engine)
+        self.assertIn("--state-dir /update-state", ENTRYPOINT)
+        self.assertIn("chown -R frappe:frappe /update-state", ENTRYPOINT)
+
     def test_only_an_authorized_transaction_reaches_apply(self):
         check = self.block("function Invoke-UpdateCheck", "function Invoke-UpdateStart")
         self.assertIn('[string]$transaction.phase -cne "authorized"', check)
         install = self.block("function Invoke-UpdateInstall", "function Invoke-SmokeTest")
         for field in ("transaction = $Check.Transaction", "archive = ($Check.RunFolder",
                       "backup_receipt =", "backup_dir =", "installed = [pscustomobject]@{",
-                      "recovery_authorization =", "recovery_signature ="):
+                      "recovery_authorization =", "recovery_signature =",
+                      "journal_state =", "host = $Check.Facts"):
             self.assertIn(field, install, f"the apply request does not carry {field}")
 
     def test_every_engine_request_is_answered_with_a_fresh_document(self):
@@ -229,8 +240,10 @@ class TwoPhaseProtocolTests(unittest.TestCase):
 
     def test_the_new_refusal_codes_are_translatable(self):
         for key in ("transaction.missing", "transaction.invalid", "transaction.expired",
-                    "transaction.mismatch", "transaction.replayed", "apply.archive_mismatch",
-                    "apply.installed_mismatch", "apply.evidence_mismatch", "apply.identity_mismatch"):
+                    "transaction.mismatch", "transaction.replayed", "transaction.unknown",
+                    "transaction.tampered", "apply.archive_mismatch",
+                    "apply.installed_mismatch", "apply.evidence_mismatch", "apply.identity_mismatch",
+                    "apply.host_unsafe", "apply.journal_unsafe"):
             self.assertIn(key, CATALOG["messages"])
             entry = CATALOG["messages"][key]
             self.assertTrue(entry["en"].strip() and entry["fa"].strip(), key)

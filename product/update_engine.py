@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -88,6 +89,14 @@ TRANSACTION_SCHEMA_VERSION = 1
 DOCUMENT_TRANSACTION = "toefl-house-erp-update-transaction"
 TRANSACTION_TTL_MINUTES = 30
 TRANSACTION_PHASES = ("manifest", "authorized")
+# An authorization is only real when the engine itself wrote it into a durable
+# state folder.  The caller carries the identifier between phases; it never
+# carries the authority.  See _persist_transaction / _load_persisted_transaction.
+TRANSACTION_ID = re.compile(r"^[0-9a-f]{32}$")
+TRANSACTION_RECORDS_DIR = "authorizations"
+TRANSACTION_CONSUMED_DIR = "consumed"
+ENGINE_AUTH_KEY_NAME = "engine-auth.key"
+ENGINE_AUTH_KEY_BYTES = 32
 SAFE_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -219,6 +228,10 @@ MESSAGE_CODES = frozenset({
     "transaction.expired",
     "transaction.mismatch",
     "transaction.replayed",
+    "transaction.unknown",
+    "transaction.tampered",
+    "apply.host_unsafe",
+    "apply.journal_unsafe",
     "engine.request_invalid",
     "engine.unexpected",
     "warning.backup_age_near_limit",
@@ -1291,44 +1304,58 @@ def _host_facts(request: Mapping[str, object]) -> dict:
     }
 
 
-def preflight(request: Mapping[str, object], *, now: datetime) -> dict:
+def preflight(request: Mapping[str, object], *, now: datetime,
+              state_dir: Path | None = None) -> dict:
     """Return an allow/refuse decision.  This function never mutates anything.
 
     ``archive`` is optional.  Without it the decision covers the signed
     manifest, the installed installation, the backup/recovery evidence and the
     host facts only, so a customer PC can refuse an update **before** any large
     image is downloaded.  When ``archive`` is supplied the image identity is
-    verified too.
+    verified too.  When a durable ``state_dir`` is supplied the manifest-phase
+    transaction is written there so ``authorize`` can authenticate it.
     """
-    response, _context = _evaluate(request, now=now, action="preflight", require_archive=False)
+    response, _context = _evaluate(request, now=now, action="preflight", require_archive=False,
+                                   state_dir=state_dir)
     return response
 
 
-def authorize(request: Mapping[str, object], *, now: datetime) -> dict:
+def authorize(request: Mapping[str, object], *, now: datetime,
+              state_dir: Path | None = None) -> dict:
     """Bind the downloaded archive to the manifest-phase decision.
 
     This is phase B: the image exists, so the archive identity is verified and
-    every mutable condition is re-read.  On success a fresh, short-lived
-    ``authorized`` transaction is issued; ``apply`` accepts nothing else.
+    every mutable condition is re-read.  The manifest-phase transaction is
+    loaded from the engine's own durable state folder -- never from the
+    caller's copy -- and a fresh, short-lived ``authorized`` transaction is
+    issued there.  ``apply`` accepts nothing else.
     """
     request = _require_object(request, "request")
     try:
-        transaction = _load_transaction(request.get("transaction"), now=now)
+        supplied = request.get("transaction")
+        if supplied is None:
+            raise refuse("transaction.missing", "no verified update transaction was supplied")
+        supplied = _require_object(supplied, "transaction")
+        transaction_id = supplied.get("transaction_id")
+        if not isinstance(transaction_id, str) or not TRANSACTION_ID.fullmatch(transaction_id):
+            raise refuse("transaction.invalid", "the transaction identifier is malformed")
+        transaction = _load_persisted_transaction(state_dir, transaction_id, now=now)
         if transaction["phase"] != "manifest":
-            raise refuse("transaction.invalid","the transaction is already authorized")
+            raise refuse("transaction.invalid", "the transaction is already authorized")
     except UpdateError as error:
         return _refusal("authorize", error, request)
-    response, context = _evaluate(request, now=now, action="authorize", require_archive=True)
+    response, context = _evaluate(request, now=now, action="authorize", require_archive=True,
+                                  state_dir=state_dir)
     if response["decision"] != "allow":
         return response
     assert context is not None
     _bind_transaction(transaction, context)
-    response["transaction"] = _issue_transaction(context, phase="authorized", now=now)
+    response["transaction"] = _persist_authorization(state_dir, context, phase="authorized", now=now)
     return response
 
 
 def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
-              require_archive: bool) -> tuple[dict, dict | None]:
+              require_archive: bool, state_dir: Path | None = None) -> tuple[dict, dict | None]:
     """Shared read-only evaluation for the manifest and image phases."""
     request = _require_object(request, "request")
     allowed = ("action", "now_utc", "site", "product_root", "host_updater_version",
@@ -1368,7 +1395,7 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
                                       channel_id=None)
     except UpdateError as error:
         blockers.append(_block(error.code, error.detail))
-        return _finish(blockers, [], None, None, request, None, None)
+        return _finish(blockers, [], None, None, request, None, None, state_dir)
 
     try:
         manifest = verify_manifest_signature(
@@ -1377,7 +1404,7 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
             store, now=now)
     except UpdateError as error:
         blockers.append(_block(error.code, error.detail))
-        return _finish(blockers, [], None, None, request, None, None)
+        return _finish(blockers, [], None, None, request, None, None, state_dir)
 
     if manifest["channel"] != channel["id"]:
         blockers.append(_block("policy.release_not_authorized",
@@ -1505,15 +1532,18 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
         if require_archive and (identity is None or context is None):
             blockers.append(_block("release.archive.missing", "the downloaded image archive is required here"))
             context = None
-    return _finish(blockers, warnings, manifest, identity, request, receipt_details, context)
+    return _finish(blockers, warnings, manifest, identity, request, receipt_details, context,
+                   state_dir if action == "preflight" else None)
 
 
 def _finish(blockers: list[dict], warnings: list[dict], manifest: dict | None,
             identity: dict | None, request: Mapping[str, object],
-            receipt_details: dict | None, context: dict | None) -> tuple[dict, dict | None]:
+            receipt_details: dict | None, context: dict | None,
+            state_dir: Path | None = None) -> tuple[dict, dict | None]:
     response = _decision(blockers, warnings, manifest, identity, request, receipt_details)
     if response["decision"] == "allow" and context is not None:
-        response["transaction"] = _issue_transaction(context, phase="manifest", now=context["now"])
+        response["transaction"] = _persist_authorization(
+            state_dir, context, phase="manifest", now=context["now"])
     else:
         response["transaction"] = None
     return response, context
@@ -1541,6 +1571,7 @@ def _build_context(request: Mapping[str, object], product_root: Path, manifest: 
             "release_sequence": installed.get("release_sequence"),
             "source_revision": installed.get("source_revision"),
             "image_id": installed.get("image_id"),
+            "image_labels": installed.get("image_labels"),
         },
         "target": {
             "version": manifest["version"],
@@ -1562,6 +1593,114 @@ def _build_context(request: Mapping[str, object], product_root: Path, manifest: 
             "target_schema_version": manifest["database"]["target_schema_version"],
         },
     }
+
+
+def _state_directory(state_dir: Path | None) -> Path | None:
+    """The durable engine state folder, or ``None`` when it was not supplied."""
+    if state_dir is None:
+        return None
+    path = Path(state_dir)
+    if path.is_symlink():
+        raise refuse("transaction.invalid", "the engine state folder is unsafe")
+    return path
+
+
+def _authentication_key(state_dir: Path) -> bytes:
+    """Load (or create once) the engine's own HMAC key for transaction records.
+
+    The key lives only inside the durable state folder the engine was given.
+    It authenticates records the engine wrote and is never returned to the
+    caller, so a fabricated ``authorized`` document cannot carry a valid tag.
+    """
+    key_path = state_dir / ENGINE_AUTH_KEY_NAME
+    if key_path.is_symlink():
+        raise refuse("transaction.invalid", "the engine authentication key is unsafe")
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        raise refuse("transaction.invalid", "the engine state folder could not be prepared") from None
+    if key_path.is_file():
+        raw = key_path.read_bytes()
+        try:
+            value = base64.b64decode(raw, validate=True)
+        except (ValueError, OSError):
+            raise refuse("transaction.invalid", "the engine authentication key is malformed") from None
+        if len(value) != ENGINE_AUTH_KEY_BYTES:
+            raise refuse("transaction.invalid", "the engine authentication key is malformed")
+        return value
+    value = secrets.token_bytes(ENGINE_AUTH_KEY_BYTES)
+    temporary = key_path.with_name(key_path.name + ".partial")
+    temporary.write_bytes(base64.b64encode(value))
+    try:
+        os.chmod(temporary, 0o600)
+    except OSError:  # pragma: no cover - platform dependent
+        pass
+    os.replace(temporary, key_path)
+    return value
+
+
+def _transaction_mac(key: bytes, transaction: Mapping[str, object]) -> str:
+    payload = json.dumps(transaction, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hmac.new(key, payload, hashlib.sha256).hexdigest()
+
+
+def _persist_transaction(state_dir: Path, transaction: dict) -> dict:
+    """Write an engine-issued transaction where ``apply`` can authenticate it."""
+    key = _authentication_key(state_dir)
+    folder = state_dir / TRANSACTION_RECORDS_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    record = dict(transaction)
+    record["auth_mac"] = _transaction_mac(key, transaction)
+    path = folder / (transaction["transaction_id"] + ".json")
+    temporary = path.with_name(path.name + ".partial")
+    temporary.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n",
+                         encoding="utf-8", newline="\n")
+    os.replace(temporary, path)
+    return record
+
+
+def _load_persisted_transaction(state_dir: Path | None, transaction_id: str, *,
+                                now: datetime) -> dict:
+    """Read back an engine-issued transaction and prove it was not altered.
+
+    A caller-supplied document is never trusted here: only the record the
+    engine wrote, authenticated with its own key, can authorize a migration.
+    """
+    if state_dir is None:
+        raise refuse("transaction.invalid", "the engine state folder is not established")
+    key = _authentication_key(state_dir)
+    path = state_dir / TRANSACTION_RECORDS_DIR / (transaction_id + ".json")
+    if path.is_symlink() or not path.is_file():
+        raise refuse("transaction.unknown",
+                     "no engine-issued update transaction matches this request")
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        raise refuse("transaction.unknown", "the update transaction record is unreadable") from None
+    if not raw or len(raw) > MAX_JSON_BYTES:
+        raise refuse("transaction.tampered", "the update transaction record has an unsupported size")
+    try:
+        record = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        raise refuse("transaction.tampered", "the update transaction record is not valid JSON") from None
+    if not isinstance(record, dict):
+        raise refuse("transaction.tampered", "the update transaction record is malformed")
+    stored_mac = record.pop("auth_mac", None)
+    if not isinstance(stored_mac, str) or not re.fullmatch(r"[0-9a-f]{64}", stored_mac):
+        raise refuse("transaction.tampered", "the update transaction record is missing its authentication tag")
+    if not hmac.compare_digest(stored_mac, _transaction_mac(key, record)):
+        raise refuse("transaction.tampered",
+                     "the update transaction record was modified after it was issued")
+    return _load_transaction(record, now=now)
+
+
+def _persist_authorization(state_dir: Path | None, context: dict, *, phase: str,
+                           now: datetime) -> dict:
+    """Issue a transaction and, when a state folder exists, durably authenticate it."""
+    transaction = _issue_transaction(context, phase=phase, now=now)
+    if state_dir is not None:
+        _persist_transaction(state_dir, transaction)
+    return transaction
 
 
 def _issue_transaction(context: dict, *, phase: str, now: datetime) -> dict:
@@ -1833,10 +1972,11 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
             "action", "site", "product_root", "manifest", "signature", "trust_store", "sites_dir", "bench",
             "host_updater_version", "migrate_replays", "command_timeout_seconds", "transaction", "archive",
             "installed", "backup_receipt", "backup_dir", "recovery_authorization", "recovery_signature",
+            "host", "journal_state",
         ), (
             "action", "site", "product_root", "manifest", "signature", "trust_store", "sites_dir", "bench",
             "host_updater_version", "transaction", "archive", "installed", "backup_receipt",
-            "recovery_authorization", "recovery_signature",
+            "recovery_authorization", "recovery_signature", "host", "journal_state",
         ), "request")
         if request["action"] != "apply":
             raise refuse("engine.request_invalid", "request action is not apply")
@@ -1861,7 +2001,14 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
         return _apply_report("failed", "pre-migrate", blockers=[_block(error.code, error.detail)])
 
     try:
-        transaction = _load_transaction(request["transaction"], now=now)
+        # The caller only carries the identifier.  The authority is the record
+        # the engine wrote at authorize time, authenticated with its own key;
+        # a fabricated or edited ``authorized`` document is never accepted.
+        supplied = _require_object(request["transaction"], "transaction")
+        transaction_id = supplied.get("transaction_id")
+        if not isinstance(transaction_id, str) or not TRANSACTION_ID.fullmatch(transaction_id):
+            raise refuse("transaction.invalid", "the transaction identifier is malformed")
+        transaction = _load_persisted_transaction(state_dir, transaction_id, now=now)
         if transaction["phase"] != "authorized":
             raise refuse("transaction.invalid",
                          "apply needs the image-phase authorization, not a manifest-only decision")
@@ -2006,7 +2153,7 @@ def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction
 
     installed = _require_object(request.get("installed"), "installed")
     authorized_installed = transaction["installed"]
-    for name in ("version", "release_sequence", "source_revision", "image_id"):
+    for name in ("version", "release_sequence", "source_revision", "image_id", "image_labels"):
         if installed.get(name) != authorized_installed.get(name):
             raise refuse("apply.installed_mismatch",
                          f"the installed {name} changed since the update was authorized")
@@ -2028,16 +2175,43 @@ def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction
         store, site=SITE_NAME, receipt_sha256=evidence.get("backup_receipt_sha256"), now=now,
         max_age_hours=manifest["requirements"]["recovery_max_age_hours"])
 
+    # Re-read the host and journal state now, not at authorize time: a change
+    # since the authorization (a lost volume, a stopped service, a half-finished
+    # update, a replaced image) must stop the migration before it starts.
+    journal_state = request.get("journal_state", "idle")
+    if journal_state not in JOURNAL_TERMINAL_STATES:
+        raise refuse("apply.journal_unsafe", "the update journal is not in a finished state")
+    facts = _host_facts(request)
+    required_free = max(manifest["requirements"]["minimum_free_bytes"], MIN_FREE_BYTES_FLOOR)
+    if facts["disk_free_bytes"] < required_free:
+        raise refuse("apply.host_unsafe", "free disk space changed after authorization")
+    if not facts["volume_present"] or not facts["volume_verified"]:
+        raise refuse("apply.host_unsafe", "the database volume changed after authorization")
+    if not facts["site_credentials_present"] or not facts["site_config_present"]:
+        raise refuse("apply.host_unsafe", "the site files changed after authorization")
+    if not facts["image_present"]:
+        raise refuse("apply.host_unsafe", "the installed image disappeared after authorization")
+    if facts["image_id"] != transaction["installed"].get("image_id"):
+        raise refuse("apply.installed_mismatch",
+                     "the installed image identity changed after authorization")
+    if facts["image_labels"] != transaction["installed"].get("image_labels"):
+        raise refuse("apply.installed_mismatch",
+                     "the installed image labels changed after authorization")
+    unhealthy = [name for name, value in facts["services"].items() if value is not True]
+    if unhealthy:
+        raise refuse("apply.host_unsafe",
+                     "services changed after authorization: " + ",".join(sorted(unhealthy)))
+
 
 def _consume_transaction(state_dir: Path, transaction: dict) -> None:
-    """Record the transaction as used in this run folder; refuse a replay.
+    """Record the transaction as used in the durable state; refuse a replay.
 
-    The product folder is mounted read-only for the engine, and the run folder
-    is the only writable private location it can name on its own (it is where
-    the request document was read from).  A replay in a later run would need a
-    fresh authorization, which needs every piece of evidence again.
+    The marker lives in the engine's durable state folder, which is shared by
+    every update run on this PC, so a replay from a later run folder is refused
+    before any migration.  A replay would otherwise need a fresh authorization,
+    which needs every piece of evidence again.
     """
-    folder = state_dir / "transactions"
+    folder = state_dir / TRANSACTION_CONSUMED_DIR
     try:
         folder.mkdir(parents=True, exist_ok=True)
         marker = folder / (transaction["transaction_id"] + ".json")
@@ -2133,13 +2307,13 @@ def run(request: Mapping[str, object], *, now: datetime | None = None,
     action = request.get("action") if isinstance(request, Mapping) else None
     try:
         if action == "preflight":
-            response = preflight(request, now=now)
+            response = preflight(request, now=now, state_dir=state_dir)
             return response, 0 if response["decision"] == "allow" else 3
         if action == "apply":
             response = apply_update(request, now=now, state_dir=state_dir)
             return response, 0 if response["status"] == "succeeded" else 5
         if action == "authorize":
-            response = authorize(request, now=now)
+            response = authorize(request, now=now, state_dir=state_dir)
             return response, 0 if response["decision"] == "allow" else 3
         if action == "verify-release":
             return verify_release(request, now=now), 0
@@ -2209,6 +2383,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="TOEFL House ERP safe update engine")
     parser.add_argument("--request", default="")
     parser.add_argument("--response", default="")
+    parser.add_argument("--state-dir", default="",
+                        help="durable engine state folder (defaults to the request folder)")
     parser.add_argument("--self-check", action="store_true",
                         help="validate the engine and its message catalog, then exit")
     arguments = parser.parse_args(argv)
@@ -2225,10 +2401,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     except UpdateError as error:
         _write_response(arguments, _error_response(None, error.code, error.detail))
         return 4
-    # The engine may only write inside the run folder it was started with, so
-    # the transaction-use marker is anchored to the request document itself.
+    # The engine writes only inside its durable state folder.  The Windows
+    # updater mounts a persistent one and passes --state-dir; when it is not
+    # supplied the request folder is used so a direct CLI run still works.
     request_path = arguments.request or os.environ.get("TH_UPDATE_REQUEST", "")
-    state_dir = Path(request_path).resolve().parent if request_path else None
+    state_dir_value = arguments.state_dir or os.environ.get("TH_UPDATE_STATE_DIR", "")
+    if state_dir_value:
+        state_dir = Path(state_dir_value)
+    elif request_path:
+        state_dir = Path(request_path).resolve().parent
+    else:
+        state_dir = None
     response, code = run(request, state_dir=state_dir)
     _write_response(arguments, response)
     return code

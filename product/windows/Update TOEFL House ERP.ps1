@@ -52,6 +52,10 @@ $volumeName = "toefl-house-erp_db-data"
 $composeProject = "toefl-house-erp"
 $containerProductRoot = "/product-root"
 $containerWorkRoot = "/update"
+# Durable engine state: authorization records and one-use markers live here, so
+# they survive every update run folder on this PC.
+$engineStateRoot = Join-Path $updatesRoot "engine-state"
+$containerEngineState = "/update-state"
 $maxIndexBytes = 1048576
 $maxJsonBytes = 262144
 $maxArchiveBytes = [int64]17179869184
@@ -565,10 +569,14 @@ function Resolve-ChannelUrl($Channel, [string]$Name) {
 # ---------------------------------------------------------------------------
 
 function Invoke-UpdateEngine([string]$Mode) {
+    if (-not (Test-Path -LiteralPath $engineStateRoot -PathType Container)) {
+        New-Item -ItemType Directory -Path $engineStateRoot -Force | Out-Null
+    }
     $arguments = @(
         "run", "--rm", "--user", "root",
         "--volume", ($productRoot + ":" + $containerProductRoot + ":ro"),
         "--volume", ($script:WorkDir + ":" + $containerWorkRoot),
+        "--volume", ($engineStateRoot + ":" + $containerEngineState),
         "--entrypoint", "/product/update_entrypoint.sh"
     )
     if ($Mode -ceq "apply") {
@@ -885,6 +893,8 @@ function Invoke-UpdateCheck {
         Sequence = $sequence
         Transaction = $transaction
         Installed = $installed
+        Facts = $facts
+        JournalState = $journalState
         Manifest = $workRelative + "/manifest.json"
         Signature = $workRelative + "/signature.json"
         RunFolder = $workRelative
@@ -968,6 +978,8 @@ function Invoke-UpdateInstall($Check) {
         host_updater_version = [string]$Check.Installed.version
         migrate_replays = 2
         command_timeout_seconds = 1800
+        journal_state = [string]$Check.JournalState
+        host = $Check.Facts
     }
     if (Test-Path -LiteralPath $recoveryAuthorizationPath -PathType Leaf) {
         $applyRequest.recovery_authorization = "data/updates/recovery-authorization.json"

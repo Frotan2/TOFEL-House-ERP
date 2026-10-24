@@ -267,6 +267,22 @@
     "transaction.replayed": {
       "en": "This update step was already used. Nothing was changed; start Check for Updates again.",
       "fa": "این مرحلهٔ به‌روزرسانی قبلاً استفاده شده است. هیچ چیزی تغییر نکرد؛ «بررسی به‌روزرسانی» را دوباره آغاز کنید."
+    },
+    "transaction.unknown": {
+      "en": "This update authorization was not issued by the application. Nothing was changed.",
+      "fa": "این صاحهٔ به‌روزرسانی توسط برنامه صادر نشده است. هیچ چیزی تغییر نکرد."
+    },
+    "transaction.tampered": {
+      "en": "The update authorization was changed after it was issued. Nothing was changed.",
+      "fa": "صاحهٔ به‌روزرسانی پس از صدور تغییر کرد. هیچ چیزی تغییر نکرد."
+    },
+    "apply.host_unsafe": {
+      "en": "The computer changed while the update was being prepared. Nothing was migrated; start Check for Updates again.",
+      "fa": "در جریان آماده‌سازی به‌روزرسانی، رایانه تغییر کرد. هیچ مهاجرتی انجام نشد؛ «بررسی به‌روزرسانی» را دوباره آغاز کنید."
+    },
+    "apply.journal_unsafe": {
+      "en": "Another update is not finished yet. Nothing was migrated; wait for it or start Check for Updates again.",
+      "fa": "یکی دیگر از به‌روزرسانی‌ها هنوز تمام نشده است. هیچ مهاجرتی انجام نشد؛ صبر کنید یا «بررسی به‌روزرسانی» را دوباره آغاز کنید."
     }
   },
   "launcher": {

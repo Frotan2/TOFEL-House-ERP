@@ -8,8 +8,10 @@
 # The engine only reads and verifies.  It never imports an image, starts a
 # service, deletes customer records or rewrites storage; importing the new image
 # and starting the stack stay explicit host-level steps in the Windows updater.
-# The single thing it writes is the transaction-use marker inside this writable
-# run folder (/update/transactions), so a replayed apply can never migrate twice.
+# The only writable state it owns is the durable engine state folder
+# (/update-state), where it stores the authentication key, the authorization
+# records it issues and the one-use consumption marker.  That folder is shared
+# by every update run on this PC, so a replayed apply can never migrate twice.
 # No credential value is read or printed here.
 set -eu
 
@@ -25,5 +27,6 @@ fi
 # writing outside the run folder.
 chown -R frappe:frappe /home/frappe/bench/sites /home/frappe/bench/logs 2>/dev/null || true
 chown -R frappe:frappe /update 2>/dev/null || true
+chown -R frappe:frappe /update-state 2>/dev/null || true
 
-exec su -s /bin/sh frappe -c 'exec python3 /product/update_engine.py --request /update/request.json --response /update/response.json'
+exec su -s /bin/sh frappe -c 'exec python3 /product/update_engine.py --request /update/request.json --response /update/response.json --state-dir /update-state'

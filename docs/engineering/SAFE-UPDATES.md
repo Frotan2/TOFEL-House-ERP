@@ -39,19 +39,30 @@ Check for Updates
 Install Update (confirmed)
   -> docker compose stop web worker scheduler socketio     (never -v)
   -> docker load <verified archive>
-  -> engine apply: requires the `authorized` transaction, re-verifies the
-     manifest signature, archive hash and identity, backup receipt, recovery
-     authorization and installed identity, then records the census,
-     `bench migrate` x2, the census again, apps, orphan rows and role desks
+  -> engine apply: loads the `authorized` record from the durable engine state,
+     re-verifies the manifest signature, archive hash and identity, backup
+     receipt, recovery authorization, installed image identity and labels,
+     journal and host state, then records the census, `bench migrate` x2, the
+     census again, apps, orphan rows and role desks
   -> docker compose up -d --no-build, HTTP health, journal completed
 ```
 
 `apply` accepts nothing but an `authorized` transaction, and a transaction can
-be used once. The use marker is written into the run folder (the only writable
-place the engine has), so a repeated or replayed apply is refused before any
-migration runs. Every requirement the engine enforces is also enforced at apply
-time: a transaction bound to a different site, release, archive, installed
-image or evidence file is refused with `transaction.mismatch`.
+be used once. Authority is **not** carried in the caller's document. When a
+phase allows, the engine writes an HMAC-authenticated record into a durable
+state folder (`data/updates/engine-state`) that every update run on this PC
+shares. `authorize` and `apply` load the record back by identifier and verify
+the engine's own authentication tag, so a fabricated or edited `authorized`
+document is refused (`transaction.unknown` / `transaction.tampered`) before any
+migration runs. The one-use marker is written to the same durable folder, so a
+replay from a later run folder is refused (`transaction.replayed`).
+
+At apply time the engine re-reads every mutable fact -- manifest signature,
+archive identity, backup receipt, recovery authorization, installed image
+identity and labels, journal state, database volume, services and disk space --
+and refuses with `transaction.mismatch`, `apply.installed_mismatch`,
+`apply.archive_mismatch`, `apply.evidence_mismatch`, `apply.host_unsafe` or
+`apply.journal_unsafe` if anything changed since the authorization was issued.
 
 Failures:
 
@@ -108,6 +119,12 @@ extra local state has to be trusted.
   most 168 hours old, whatever the manifest says.
 * No code path contains `docker compose down -v`, `docker volume rm`,
   `docker system prune`, `git reset --hard` or a restore over a live site.
+* Authority is engine-issued and durable. The caller carries only an
+  identifier between phases; `authorize` and `apply` load the record the engine
+  wrote into `data/updates/engine-state` and verify its HMAC tag. A forged or
+  edited `authorized` document, a changed installed image, a changed journal or
+  volume, and a replay from another run folder each stop the update before the
+  first `bench migrate`.
 * A migration failure never reopens the application automatically.
 * Every customer-visible message is a stable code with English and Dari text in
   `product/windows/updater-strings.json`; the Windows GUI only renders catalogue
@@ -117,9 +134,9 @@ extra local state has to be trusted.
 
 | Suite | Covers |
 | --- | --- |
-| `tests/foundation/test_update_engine.py` | trust store, signature, image identity, channel, compatibility, preflight, backup evidence, recovery authorization, manifest invariants (no waivers, evidence age), phase A/B authorization, transaction binding and replay, strict census and orphan checks, apply, protocol, catalogue |
+| `tests/foundation/test_update_engine.py` | trust store, signature, image identity, channel, compatibility, preflight, backup evidence, recovery authorization, manifest invariants (no waivers, evidence age), phase A/B authorization, authenticated authorization (forged/tampered/replayed records, changed installed image, journal and volume), strict census and orphan checks, apply, protocol, catalogue |
 | `tests/foundation/test_update_bundle.py` | provider signing with a real RSA key, index, tampering, wrong key, archive corruption, recovery authorization, packaging allowlists |
-| `tests/foundation/test_windows_update_path.py` | GUI wiring, Owner confirmation, read-only preflight, download-after-allow ordering, authorized-transaction-only apply, prebuilt-only install, no destructive commands, packaging, bilingual catalogue |
+| `tests/foundation/test_windows_update_path.py` | GUI wiring, Owner confirmation, read-only preflight, download-after-allow ordering, authorized-transaction-only apply, durable engine state mount, prebuilt-only install, no destructive commands, packaging, bilingual catalogue |
 | `.github/workflows/windows-customer-package.yml` | real Windows PowerShell parse, updater `-SmokeTest`, disabled-channel refusal in English and Dari with no download |
 
 Run locally:
