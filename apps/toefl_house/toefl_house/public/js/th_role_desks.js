@@ -473,9 +473,10 @@ frappe.provide("toefl_house.role_desks");
 		return alert;
 	}
 
-	function actionButton(action) {
+	function actionButton(action, variant = "primary") {
 		if (!action) return null;
-		const btn = $("<button type='button' class='btn btn-primary btn-xs th-queue-action'></button>")
+		const buttonClass = variant === "secondary" ? "btn-secondary" : "btn-primary";
+		const btn = $(`<button type='button' class='btn ${buttonClass} btn-xs th-queue-action'></button>`)
 			.text(text(action.label))
 			.attr("aria-label", text(action.label))
 			.on("click", () => openGuidedAction(action));
@@ -522,9 +523,8 @@ frappe.provide("toefl_house.role_desks");
 			const button = actionButton(item.action);
 			if (button) button.appendTo(action);
 			(item.actions || []).forEach((extra) => {
-				const secondary = actionButton(extra);
+				const secondary = actionButton(extra, "secondary");
 				if (secondary) {
-					secondary.removeClass("btn-primary").addClass("btn-secondary");
 					secondary.appendTo(action);
 				}
 			});
