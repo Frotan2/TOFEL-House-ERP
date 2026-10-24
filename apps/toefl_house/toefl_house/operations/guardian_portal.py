@@ -411,7 +411,9 @@ def record_consent(student, evidence_type="Link", attachment=None, link_referenc
         raise frappe.PermissionError("No verified guardian relationship for this student")
 
     terms = _governing_guardian_terms()
-    if terms and terms.get("consent_evidence"):
+    if not terms or not terms.get("consent_evidence") or not terms.get("consent_expiry_days"):
+        raise frappe.ValidationError("The Course Owner must activate a guardian consent policy first")
+    if terms.get("consent_evidence"):
         required = terms["consent_evidence"]
         if required == "Both" and evidence_type != "Both":
             raise frappe.ValidationError("This policy requires Both Link and Attachment evidence")
@@ -420,11 +422,12 @@ def record_consent(student, evidence_type="Link", attachment=None, link_referenc
         if required == "Attachment" and evidence_type not in ("Attachment", "Both"):
             raise frappe.ValidationError("This policy requires Attachment evidence")
 
-    expiry_days = terms.get("consent_expiry_days") if terms else 365
     try:
-        expiry_days = int(expiry_days or 365)
-    except Exception:
-        expiry_days = 365
+        expiry_days = int(terms["consent_expiry_days"])
+    except (TypeError, ValueError) as exc:
+        raise frappe.ValidationError("Invalid configured consent expiry policy") from exc
+    if expiry_days <= 0:
+        raise frappe.ValidationError("Configured consent expiry must be positive")
 
     consent_date = _today()
     try:
@@ -487,7 +490,9 @@ def approve_guardian_consent(request_key, consent):
         if not row.expiry_date or str(row.expiry_date) < _today():
             raise frappe.ValidationError("The consent must have a valid future expiry date")
         terms = _governing_guardian_terms()
-        required = terms.get("consent_evidence") if terms else None
+        if not terms or not terms.get("consent_evidence"):
+            raise frappe.ValidationError("An active guardian policy must govern approval")
+        required = terms.get("consent_evidence")
         if required == "Both" and row.evidence_type != "Both":
             raise frappe.ValidationError("The approved policy requires both evidence kinds")
         if required == "Link" and row.evidence_type not in ("Link", "Both"):
