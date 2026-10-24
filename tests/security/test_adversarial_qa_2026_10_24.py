@@ -573,82 +573,47 @@ class DependencySecurityTriageAdversarialTests(unittest.TestCase):
         self.assertIsNone(rec)
 
 
-class BaselineMainDefectReproductionTests(unittest.TestCase):
-    """Reproducible adversarial proofs of defects identified on `main` (c22b9979542c88a2cd179e179a91829d07a79a3a).
+class BaselineSecurityRegressionTests(unittest.TestCase):
+    """Guard previously confirmed baseline weaknesses after remediation.
 
-    Per Mission 7 rules, feature-agent source files are not overwritten; these
-    tests execute the target code paths and document the exact defect mechanics.
+    Prior test iterations proved the bugs were present by asserting insecure
+    syntax. Such proofs must not survive as *passing* contracts after fixes:
+    they are now reversed into positive non-regression checks.
     """
 
-    def test_adv_main_01_desk_apply_scope_skips_branch_filter_when_name_in_filters(self):
-        """Finding MAIN-02: `desk._apply_scope` skips `branch_filter` when `'name'` is already in `filters`,
-        and `_branch_allowed_names('TH Correction Request', ...)` omits `Sales Invoice` correction requests.
-
-        Location: `apps/toefl_house/toefl_house/desk/__init__.py:555-605`.
-        """
-        src = (APP_ROOT / "toefl_house/desk/__init__.py").read_text(encoding="utf-8")
+    def _source(self, path, function):
+        src = (APP_ROOT / path).read_text(encoding="utf-8")
         tree = ast.parse(src)
-        apply_fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_apply_scope")
-        apply_seg = ast.get_source_segment(src, apply_fn)
-        self.assertIn('if branch_filter is not None and "name" not in filters:', apply_seg)
+        fn = next(node for node in tree.body
+                  if isinstance(node, ast.FunctionDef) and node.name == function)
+        return ast.get_source_segment(src, fn)
 
-        chain_fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_branch_allowed_names")
-        chain_seg = ast.get_source_segment(src, chain_fn)
-        self.assertIn('if doctype == "TH Correction Request":', chain_seg)
-        self.assertNotIn("sales_invoice", chain_seg)
+    def test_adv_main_01_scoped_names_cannot_override_branch_restrictions(self):
+        apply_seg = self._source("toefl_house/desk/__init__.py", "_apply_scope")
+        guard_seg = self._source("toefl_house/desk/__init__.py", "_intersect_scope_filter")
+        self.assertIn("_intersect_scope_filter(filters[", apply_seg)
+        self.assertIn("raise frappe.ValidationError", guard_seg)
 
-    def test_adv_main_02_teaching_record_attendance_and_roster_read_omit_active_filter(self):
-        """Finding MAIN-01: `teaching.record_attendance` and `_roster_read` omit `active = 1` on `tabStudent Group Student`.
+    def test_adv_main_02_attendance_restricts_active_members_and_open_groups(self):
+        for fn in ("_roster_read", "record_attendance"):
+            seg = self._source("toefl_house/teaching/__init__.py", fn)
+            self.assertIn("active=1", seg)
+        record = self._source("toefl_house/teaching/__init__.py", "record_attendance")
+        self.assertIn("_TERMINAL_CLASS_STATUSES", record)
 
-        Location: `apps/toefl_house/toefl_house/teaching/__init__.py:466-470, 520-523`.
-        Withdrawn/transferred students (`active = 0` on `Student Group Student`) remain
-        in the SQL result set for attendance recording and teacher roster reads.
-        """
-        src = (APP_ROOT / "toefl_house/teaching/__init__.py").read_text(encoding="utf-8")
-        tree = ast.parse(src)
-        for fn_name in ("_roster_read", "record_attendance"):
-            fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == fn_name)
-            segment = ast.get_source_segment(src, fn)
-            self.assertIn("tabStudent Group Student", segment)
-            self.assertNotIn("active = 1", segment)
-            self.assertNotIn("active=1", segment)
+    def test_adv_main_03_control_mutations_refuse_protected_admin(self):
+        require = self._source("toefl_house/administration.py", "_require_control_role")
+        mutate = self._source("toefl_house/administration.py", "set_managed_role")
+        self.assertIn("PROTECTED_USERS", require)
+        self.assertIn("PROTECTED_USERS", mutate)
 
-    def test_adv_main_03_administration_set_managed_role_omits_operational_and_admin_guard(self):
-        """Finding MAIN-03: `administration._require_control_role` (used by `set_managed_role`
-        and `get_control_center_snapshot`) does not call `security.require_operational()`
-        or refuse `Administrator`.
-
-        Location: `apps/toefl_house/toefl_house/administration.py:186-210`.
-        """
-        src = (APP_ROOT / "toefl_house/administration.py").read_text(encoding="utf-8")
-        tree = ast.parse(src)
-        require_fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_require_control_role")
-        segment = ast.get_source_segment(src, require_fn)
-        self.assertNotIn("require_operational", segment)
-        self.assertNotIn("Administrator", segment)
-
-    def test_adv_main_04_correction_approvals_omit_self_approval_maker_checker_guard(self):
-        """Finding MAIN-04: `finance.corrections` (`approve_invoice_correction`, `approve_fees_correction`)
-        and `teaching.attendance_corrections` (`approve_attendance_correction`) check `_require_approver`
-        by role only without refusing self-approval when `actor == req.owner` / `actor == req.requested_by`.
-
-        Location: `apps/toefl_house/toefl_house/finance/corrections.py:124-127, 360-445, 515-575`
-        and `apps/toefl_house/toefl_house/teaching/attendance_corrections.py:249-253, 302-365`.
-        """
-        fin_src = (APP_ROOT / "toefl_house/finance/corrections.py").read_text(encoding="utf-8")
-        fin_tree = ast.parse(fin_src)
-        for fn_name in ("approve_invoice_correction", "approve_fees_correction"):
-            fn = next(n for n in fin_tree.body if isinstance(n, ast.FunctionDef) and n.name == fn_name)
-            seg = ast.get_source_segment(fin_src, fn)
-            self.assertNotIn("req.owner", seg)
-            self.assertNotIn("requested_by", seg)
-
-        att_src = (APP_ROOT / "toefl_house/teaching/attendance_corrections.py").read_text(encoding="utf-8")
-        att_tree = ast.parse(att_src)
-        att_fn = next(n for n in att_tree.body if isinstance(n, ast.FunctionDef) and n.name == "approve_attendance_correction")
-        att_seg = ast.get_source_segment(att_src, att_fn)
-        self.assertNotIn("requested_by", att_seg)
-        self.assertNotIn("req.owner", att_seg)
+    def test_adv_main_04_maker_cannot_approve_own_correction(self):
+        for fn in ("approve_invoice_correction", "approve_fees_correction"):
+            seg = self._source("toefl_house/finance/corrections.py", fn)
+            self.assertIn('getattr(req, "owner", None)', seg)
+        seg = self._source("toefl_house/teaching/attendance_corrections.py",
+                           "approve_attendance_correction")
+        self.assertIn('getattr(req, "requested_by", None)', seg)
 
 
 if __name__ == "__main__":
