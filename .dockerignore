@@ -17,6 +17,10 @@ docs/*
 !product/wsgi.py
 !product/entrypoint.sh
 !product/perf_baseline.py
+# Signed update engine plus its container entrypoint (the customer image
+# verifies and migrates releases; nothing is built on the Windows PC).
+!product/update_engine.py
+!product/update_entrypoint.sh
 !tools/
 tools/*
 !tools/foundation/

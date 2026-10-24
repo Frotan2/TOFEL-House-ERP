@@ -5,11 +5,12 @@ rem  TOEFL House ERP - one-time installer (double-click; no typing)
 rem  Requires: Docker Desktop for Windows (free, installs with WSL2).
 rem  What it does, automatically:
 rem    1. Verifies Docker Desktop is installed and running
-rem    2. Generates a private database password (stored locally only)
-rem    3. Builds the application image from the pinned, reviewed sources
-rem    4. Starts the app, database, background worker and scheduler
+rem    2. Verifies the prebuilt, signed application image in this package
+rem    3. Generates a private database password (stored locally only)
+rem    4. Imports the verified image and starts every service
 rem    5. Opens TOEFL House ERP in your browser when it is ready
-rem  First build needs ~20-60 minutes depending on your connection.
+rem  Nothing is compiled on this computer; a complete package always
+rem  contains release\toefl-house-erp-app.tar.
 rem
 rem  Author note: NO multi-line parenthesized blocks and NO FOR commands are
 rem  used anywhere in this script on purpose. cmd.exe parses "( ... )" blocks
@@ -57,22 +58,14 @@ echo  Docker Desktop did not finish starting within 5 minutes.
 goto :failed
 :dockerup
 
-rem Reject a corrupt kit BEFORE local credential creation or ACL changes.
-if not exist "release\toefl-house-erp-app.tar" goto :checksources
+rem A customer kit always ships one prebuilt, verified image.  There is no
+rem source-build path: compiling Frappe or frontend assets on a customer PC
+rem needs developer tools, is not reproducible, and can silently replace a
+rem working installation with an unverified build.
+if not exist "release\toefl-house-erp-app.tar" goto :packagemissing
 echo [TH_STAGE] Checking package integrity before local installation...
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1"
 if errorlevel 1 goto :packageinvalid
-:checksources
-if exist "release\toefl-house-erp-app.tar" goto :sourcesready
-echo  Checking product source line endings before the image build...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Normalize Product Sources.ps1"
-set "NORMALIZE_STATUS=%ERRORLEVEL%"
-if "%NORMALIZE_STATUS%"=="0" goto :sourcesready
-if "%NORMALIZE_STATUS%"=="10" goto :sourceschanged
-goto :sourcefailed
-:sourceschanged
-echo  Existing checkout source endings were repaired safely.
-:sourcesready
 
 if not exist data\secrets mkdir data\secrets
 rem  Restrict database credentials before writing any temporary password.
@@ -101,9 +94,6 @@ if not defined DBPW goto :failed
 attrib +h data\secrets >nul 2>nul
 
 echo.
-if exist "release\toefl-house-erp-app.tar" goto :packagedimage
-goto :sourcebuild
-:packagedimage
 echo [TH_STAGE] Verifying the supplied application image...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1"
 if errorlevel 1 goto :failed
@@ -114,14 +104,6 @@ powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0Verify
 if errorlevel 1 goto :failed
 echo [TH_STAGE] Starting TOEFL House ERP...
 docker compose up -d --no-build
-if errorlevel 1 goto :failed
-goto :waitboot
-:sourcebuild
-echo [TH_STAGE] Building the application from source. A customer package avoids this long step.
-docker compose build
-if errorlevel 1 goto :failed
-echo [TH_STAGE] Starting TOEFL House ERP...
-docker compose up -d
 if errorlevel 1 goto :failed
 :waitboot
 
@@ -182,6 +164,16 @@ echo  Do NOT install from this package. Request a complete trusted copy.
 if not defined TH_GUI_MODE pause
 exit /b 1
 
+:packagemissing
+echo.
+echo  This folder is not a complete TOEFL House ERP customer package.
+echo  The verified application image release\toefl-house-erp-app.tar is missing.
+echo  Nothing was built, started or changed on this computer.
+echo  Ask authorized TOEFL House support for a complete package download.
+echo  Do not build the application yourself on this computer.
+if not defined TH_GUI_MODE pause
+exit /b 1
+
 :storagecheckfailed
 echo  Installation stopped safely. Existing data was not changed.
 echo  Recover the original database password file before continuing.
@@ -192,13 +184,6 @@ exit /b 1
 echo.
 echo  Windows could not restrict access to the local secrets and activation receipt folders.
 echo  No database password was generated. Check this account's local permissions and try again.
-if not defined TH_GUI_MODE pause
-exit /b 1
-
-:sourcefailed
-echo.
-echo  Product source files could not be safely normalized. No product data was changed.
-echo  Send a photo of this window and the product source folder to support.
 if not defined TH_GUI_MODE pause
 exit /b 1
 
