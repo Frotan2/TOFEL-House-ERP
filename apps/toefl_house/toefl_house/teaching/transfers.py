@@ -416,7 +416,11 @@ def approve_class_transfer(request_key, transfer, override=""):
         evidence, _seats = _eligibility(student, source, target,
                                         effective_day, terms)
         seat = capacity.assert_seat_available(target, student, override)
-        from toefl_house.teaching import _set_membership
+        # Executing the transfer IS a roster change, so it obeys the same owner
+        # window as add/move/remove. Without this, an approved transfer would
+        # be a way around a closed roster policy.
+        from toefl_house.teaching import _require_open_cutoff, _set_membership
+        cutoff = _require_open_cutoff()
         label = frappe.db.get_value(STUDENT, student, "student_name") or student
         _set_membership(source, student, label, False)
         _set_membership(target, student, label, True)
@@ -431,14 +435,14 @@ def approve_class_transfer(request_key, transfer, override=""):
             "name": doc.name, "status": "Executed", "student": student,
             "from_group": source, "to_group": target,
             "transfer_kind": doc.transfer_kind,
-            "effective_date": effective_day,
+            "effective_date": effective_day, "cutoff": cutoff,
             "approved_by": actor, "override": seat["override"],
             "preserved": json.loads(row.get("preserved_json") or "{}"),
             "policy_effective_from": terms.get("effective_from", ""),
         }
         return result, dict(target=doc.name,
                             after_hash=digest([doc.name, student, source, target,
-                                               effective_day, "Executed"]))
+                                               effective_day, cutoff, "Executed"]))
 
     return _execute("approve_class_transfer", request_key,
                     {"transfer": transfer, "override": override}, work)

@@ -192,6 +192,29 @@ class ApprovalTests(TransferTestBase):
         self.assertEqual(stored["approved_by"], APPROVER)
         self.assertTrue(stored["executed_on"])
 
+    def test_a_closed_roster_window_blocks_execution_and_touches_no_roster(self):
+        # Executing a transfer is a roster change: the same owner window that
+        # governs add/move/remove governs it, so a transfer can never be used
+        # to slip a roster edit past a closed policy.
+        transfer = self.request()["name"]
+        self.ops.login(APPROVER)
+        self.site.set_roles(APPROVER, ["Academic Manager"])
+        before = (self.ops.roster("GRP-A"), self.ops.roster("GRP-B"))
+        self.site.cutoff = "2026-01-01"
+        with self.assertRaises(ValidationError) as ctx:
+            self.ops.transfers.approve_class_transfer(
+                "transfer-approve-closed-01", transfer)
+        self.assertIn("Roster changes closed", str(ctx.exception))
+        self.assertEqual((self.ops.roster("GRP-A"), self.ops.roster("GRP-B")),
+                         before)
+        self.assertEqual(self.site.get("TH Class Transfer", transfer)["status"],
+                         "Requested")
+        self.ops.login(APPROVER)
+        self.site.cutoff = "2026-12-31"
+        executed = self.ops.transfers.approve_class_transfer(
+            "transfer-approve-open-01", transfer)
+        self.assertEqual(executed["status"], "Executed")
+
     def test_the_requester_cannot_approve_their_own_transfer(self):
         transfer = self.request()["name"]
         self.ops.login(APPROVER)
