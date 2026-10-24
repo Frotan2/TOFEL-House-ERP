@@ -170,7 +170,8 @@ RUN set -eux; \
     bench get-app --skip-assets /build/owned/toefl_house; \
     python3 /product/secure_frappe_python.py /home/frappe/bench/apps/frappe; \
     /build/tools/bin/uv pip install --python /home/frappe/bench/env/bin/python --no-deps --upgrade \
-      "GitPython==3.2.1" "Pillow==13.0.0" "PyJWT==2.15.1" "pypdf==6.21.2"; \
+      "GitPython==3.2.1" "Pillow==13.0.0" "PyJWT==2.15.1" "pypdf==6.21.2" \
+      "filelock==4.2.1" "setuptools==84.1.0"; \
     /build/tools/bin/uv pip install --python /home/frappe/bench/env/bin/python --no-deps --reinstall --editable /home/frappe/bench/apps/frappe; \
     /home/frappe/bench/env/bin/python /product/secure_frappe_python.py /home/frappe/bench/apps/frappe --verify; \
     uv pip check --python /home/frappe/bench/env/bin/python; \
