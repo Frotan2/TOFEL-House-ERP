@@ -22,19 +22,12 @@ if errorlevel 1 goto :datapreservationhold
 if not exist data\activation mkdir data\activation
 icacls data\activation /inheritance:r /grant:r "%USERDOMAIN%\%USERNAME%:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /T >nul 2>nul
 if errorlevel 1 goto :failed
+rem Repair only ever reinstalls the verified prebuilt image that ships with
+rem the customer kit.  Building from source here would compile a different
+rem application on the customer PC and could replace a working installation
+rem with an unverified build, so a missing image is a safe refusal instead.
 if exist "release\toefl-house-erp-app.tar" goto :packageimage
-echo  Checking product source line endings before repair...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Normalize Product Sources.ps1"
-set "NORMALIZE_STATUS=%ERRORLEVEL%"
-if "%NORMALIZE_STATUS%"=="0" goto :rebuildimage
-if "%NORMALIZE_STATUS%"=="10" goto :rebuildimage
-goto :sourcefailed
-:rebuildimage
-rem Rebuild even when the prior image has an LF label: source code may be newer.
-echo [TH_STAGE] Rebuilding the application from current source for repair...
-docker compose build
-if errorlevel 1 goto :failed
-goto :sourcesready
+goto :packagemissing
 :packageimage
 echo [TH_STAGE] Verifying the packaged application image...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Verify Package Image.ps1"
@@ -99,10 +92,14 @@ echo  Do NOT reinstall, delete Docker volumes or regenerate passwords.
 echo  Ask trusted support. Use Check This PC and Copy Safe Support Status.
 if not defined TH_GUI_MODE pause
 exit /b 1
-:sourcefailed
+
+:packagemissing
 echo.
-echo  Product source files could not be safely normalized. Runtime data was not changed.
-echo  Resolve the source check and run Repair again.
+echo  This folder is not a complete TOEFL House ERP customer package.
+echo  The verified application image release\toefl-house-erp-app.tar is missing.
+echo  Repair did not build, start, stop or change anything on this computer.
+echo  Your students, payments, invoices and other records were not touched.
+echo  Ask authorized TOEFL House support for a complete package download.
 if not defined TH_GUI_MODE pause
 exit /b 1
 
