@@ -1138,7 +1138,9 @@ frappe.provide("toefl_house.role_desks");
 				const announcement = $("<div class='th-visually-hidden' role='status' aria-live='polite'></div>")
 					.text(text("Your work has loaded. " + ((response.message || {}).sections || []).length + " sections available."));
 				sections.append(announcement);
-				setTimeout(() => announcement.remove(), 2000);
+				if (typeof setTimeout === "function") {
+					setTimeout(() => announcement.remove(), 2000);
+				}
 			},
 			error() {
 				loadingWrap.remove();
