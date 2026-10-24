@@ -104,12 +104,12 @@ python3 -m unittest tests.foundation.test_update_engine tests.foundation.test_up
 ```
 
 Real Windows evidence (GitHub Actions, `windows-2022`): "Windows customer package
-smoke" run `40082334000` on revision `4a2034d` parsed every customer script with
+smoke" run `40082696503` on revision `28a8d9e` parsed every customer script with
 the real PowerShell parser, ran the updater `-SmokeTest`, checked the two new
 buttons through the WinForms smoke test, and built a synthetic customer kit where
 **Check for Updates** refused the disabled channel with exit 3, printed the
 English and Dari explanation, downloaded nothing and wrote a safe
-`last-result.json`. "Owned suite" run `40082337305` (pull-request gate) passed on
+`last-result.json`. "Owned suite" run `40082699700` (pull-request gate) passed on
 the same revision.
 
 ## What still requires real hardware
