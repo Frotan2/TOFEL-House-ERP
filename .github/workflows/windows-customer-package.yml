@@ -6,7 +6,17 @@ on:
       - "TOEFL House ERP.vbs"
       - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
       - "product/windows/**"
+      # The signed update path is only proven here: a change to the engine,
+      # its entrypoint, the shipped channel or its contract tests must re-run
+      # the real Windows parser, smoke test and disabled-channel refusal.
+      - "product/update_engine.py"
+      - "product/update_entrypoint.sh"
+      - "product/updates/**"
+      - "tests/foundation/test_update_engine.py"
+      - "tests/foundation/test_update_bundle.py"
+      - "tests/foundation/test_windows_update_path.py"
       - "tests/foundation/test_customer_install_package.py"
+      - "tests/foundation/test_product_packaging.py"
       - ".github/workflows/windows-customer-package.yml"
   workflow_dispatch:
 
