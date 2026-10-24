@@ -195,6 +195,17 @@ def _validate_backup_receipt(site: str, receipt: object, now: float,
     return receipt
 
 
+def validate_backup_receipt_for_update(site: str, receipt: object, now: float,
+                                       backup_dir: Path | None = None) -> dict:
+    """Public entry point for the safe-update preflight.
+
+    Updates must satisfy exactly the same verified, encrypted, independently
+    stored native-backup contract as activation; the update engine reuses this
+    validator rather than maintaining a second receipt schema.
+    """
+    return _validate_backup_receipt(site, receipt, now, backup_dir)
+
+
 def validate_receipt_policy(receipt: dict, policy: object) -> None:
     if not isinstance(policy, dict) or policy.get("configured") is not True:
         raise Refused("the Course Owner must configure the nightly backup schedule and retention policy")

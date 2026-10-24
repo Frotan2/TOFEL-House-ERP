@@ -4778,7 +4778,7 @@ def main():
             frappe.set_user('Administrator')
             assert not frappe.db.exists(POLICY,{'status':'Active'}),('a policy exists before configuration')
             gt=float(frappe.db.get_value('Sales Invoice',cfx2['si'],'grand_total'))
-            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+            assert denied(lambda:as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_req_nopolicy_00001',cfx2['si'],'SYN fixture correction',gt))),('request accepted with no policy')
             return {'no_policy_fail_closed':True}
         check('finance-correction-fail-closed',correction_fail_closed)
@@ -4796,13 +4796,13 @@ def main():
             assert denied(lambda:as_user('teaching_scheduler',lambda:corr.request_invoice_correction(
                 'fc_req_sched_0000001',cfx2['si'],'SYN fixture correction',gt))),('scheduler requested a correction')
             # partial amounts are refused until owner terms exist
-            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+            assert denied(lambda:as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_req_partial_000001',cfx2['si'],'SYN partial attempt',round(gt-1,2)))),('partial correction accepted')
             # window enforcement from the owner-configured policy
             original=frappe.db.get_value('Sales Invoice',cfx2['si'],'posting_date')
             frappe.db.set_value('Sales Invoice',cfx2['si'],'posting_date','2020-01-01')
             try:
-                assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+                assert denied(lambda:as_user('correction_probe',lambda:corr.request_invoice_correction(
                     'fc_req_window_000001',cfx2['si'],'SYN late correction',gt))),('expired-window correction accepted')
             finally:
                 frappe.db.set_value('Sales Invoice',cfx2['si'],'posting_date',original)
@@ -4810,7 +4810,10 @@ def main():
             # dual key: command access alone (Finance Officer without the
             # configured approver role) cannot approve; the approver role
             # alone (Finance Auditor without command access) cannot either
-            req=as_user('finance_officer',lambda:corr.request_invoice_correction(
+            # Separate synthetic requester and approver: a Finance Officer
+            # with no approval role raises the request; the configured
+            # Finance Officer+approver later posts it. Never bypass 4-eyes.
+            req=as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_req_ok_00000000001',cfx2['si'],'SYN fixture correction',gt))
             assert req['correction_policy']==pol['name'],req
             assert denied(lambda:as_user('correction_probe',lambda:corr.approve_invoice_correction(
@@ -4841,11 +4844,11 @@ def main():
             # one-shot decisions; no second correction on a corrected invoice
             assert denied(lambda:as_user('finance_officer',lambda:corr.approve_invoice_correction(
                 'fc_appr_again_0000001',csod['request']))),('request approved twice')
-            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+            assert denied(lambda:as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_req_second_0000001',si,'SYN second attempt',gt))),('second correction on corrected invoice')
             # denial path posts nothing
             gt2=float(frappe.db.get_value('Sales Invoice',cfx2['si2'],'grand_total'))
-            req2=as_user('finance_officer',lambda:corr.request_invoice_correction(
+            req2=as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_req_deny_000000001',cfx2['si2'],'SYN fixture denial path',gt2))
             denied_req=as_user('finance_officer',lambda:corr.deny_invoice_correction(
                 'fc_deny_post_000000001',req2['name']))
@@ -4870,7 +4873,7 @@ def main():
             si=cfx2['si2']
             gt=float(frappe.db.get_value('Sales Invoice',si,'grand_total'))
             cn_before=frappe.db.count('Sales Invoice',{'is_return':1,'docstatus':('!=',2)})
-            req=as_user('finance_officer',lambda:corr.request_invoice_correction(
+            req=as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_inv_race_req_00001',si,'SYN invoice approval race',gt))
             frappe.set_user('Administrator')
             frappe.db.set_value('Sales Invoice',si,'grand_total',gt+1,update_modified=False)
@@ -4885,7 +4888,7 @@ def main():
             as_user('finance_officer',lambda:corr.deny_invoice_correction(
                 'fc_inv_race_deny_0001',req['name']))
             orig_posting=frappe.db.get_value('Sales Invoice',si,'posting_date')
-            reqw=as_user('finance_officer',lambda:corr.request_invoice_correction(
+            reqw=as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_inv_win_req_000001',si,'SYN invoice window race',gt))
             frappe.set_user('Administrator')
             frappe.db.set_value('Sales Invoice',si,'posting_date','2000-01-01',update_modified=False)
@@ -4897,7 +4900,7 @@ def main():
             frappe.db.commit()
             as_user('finance_officer',lambda:corr.deny_invoice_correction(
                 'fc_inv_win_deny_00001',reqw['name']))
-            reqs=as_user('finance_officer',lambda:corr.request_invoice_correction(
+            reqs=as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_inv_unsub_req_00001',si,'SYN invoice unsubmitted race',gt))
             frappe.set_user('Administrator')
             frappe.db.set_value('Sales Invoice',si,'docstatus',0,update_modified=False)
@@ -4941,7 +4944,7 @@ def main():
                 'fc_pol_back_0000000001','Accounts User',30,today,'SYN backdated version')))
             # the scheduled version does not govern yet: new requests pin v1
             gt=float(frappe.db.get_value('Sales Invoice',cfx2['si2'],'grand_total'))
-            req=as_user('finance_officer',lambda:corr.request_invoice_correction(
+            req=as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_req_pin_0000000001',cfx2['si2'],'SYN pin probe',gt))
             assert req['correction_policy']==v1,req
             # validation commits to the exact snapshot; the future latest
@@ -4951,13 +4954,13 @@ def main():
             # retirement fails new requests closed; the raised request still
             # resolves its pin (denied here, so no money moves)
             as_user('finance_officer',lambda:corr.set_correction_policy_status('fc_ret_0000000000001','Retired'))
-            assert denied(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+            assert denied(lambda:as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_req_ret_0000000001',cfx2['si2'],'SYN retired probe',gt)))
             denied_req=as_user('finance_officer',lambda:corr.deny_invoice_correction(
                 'fc_deny_pin_0000000001',req['name']))
             assert denied_req['status']=='Denied'
             as_user('finance_officer',lambda:corr.set_correction_policy_status('fc_react_000000000001','Active'))
-            req2=as_user('finance_officer',lambda:corr.request_invoice_correction(
+            req2=as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_req_react_000000001',cfx2['si2'],'SYN reactivated probe',gt))
             assert req2['correction_policy']==v1,req2
             as_user('finance_officer',lambda:corr.deny_invoice_correction(
@@ -5033,7 +5036,7 @@ def main():
             frappe.set_user('Administrator')
             si = s1inv['sales_invoice']
             gt = float(frappe.db.get_value('Sales Invoice', si, 'grand_total'))
-            req = as_user('finance_officer', lambda: corr.request_invoice_correction(
+            req = as_user('correction_probe', lambda: corr.request_invoice_correction(
                 's1_conv_req_00000001', si, 'SYN converted-student correction', gt))
             posted = as_user('finance_officer', lambda: corr.approve_invoice_correction(
                 's1_conv_appr_0000001', req['name']))
@@ -5084,7 +5087,7 @@ def main():
                 's1_hist_bill_0000001', case4['name'], customer,
                 pf_post, pf_due))
             gt = float(frappe.db.get_value('Sales Invoice', inv['sales_invoice'], 'grand_total'))
-            creq = as_user('finance_officer', lambda: corr.request_invoice_correction(
+            creq = as_user('correction_probe', lambda: corr.request_invoice_correction(
                 's1_hist_req_00000001', inv['sales_invoice'],
                 'SYN pre-enrollment correction', gt))
             cposted = as_user('finance_officer', lambda: corr.approve_invoice_correction(
@@ -5307,10 +5310,10 @@ def main():
             # OD-CP-2: the only correction surface is the native placement
             # Sales Invoice; submitted Fees (tuition receivables) are not a
             # correction target at all — no second refund authority exists.
-            assert unavailable(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+            assert unavailable(lambda:as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'odcp-refund-fees-name-01',fdisc['fees'],'SYN refund attempt via Fees',1.0)),
                 'Unknown sales invoice')
-            assert unavailable(lambda:as_user('finance_officer',lambda:corr.request_invoice_correction(
+            assert unavailable(lambda:as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'odcp-refund-ghost-invoice',
                 'ACC-SINV-2026-99999','SYN refund attempt missing invoice',1.0)),
                 'Unknown sales invoice')
@@ -5408,7 +5411,7 @@ def main():
             # poisoned session — this is what a staff browser would do today.
             sess={label:login(label) for label in ('receptionist','academic_manager',
                   'finance_manager','general_manager','course_owner','academic_scheduler',
-                  'finance_officer','outsider','teaching_scheduler',
+                  'finance_officer','correction_probe','outsider','teaching_scheduler',
                   'teacher_one','teacher_two','teacher_unlinked')}
             # S6 teacher-daily-use: bind the Instructor-role logins through
             # the native identity chain (Employee.user_id at erpnext
@@ -5616,7 +5619,7 @@ def main():
             assert fee2,('a submitted outstanding fee must exist for the correction probe')
             f2=frappe.db.get_value('Fees',fee2,['grand_total','outstanding_amount'],as_dict=True)
             gt2=round(float(f2.grand_total),2)
-            assert denied(lambda:as_user('finance_officer',lambda:corr.request_fees_correction(
+            assert denied(lambda:as_user('correction_probe',lambda:corr.request_fees_correction(
                 'desk-fees-partial-0001',fee2,'SYN partial attempt',round(gt2-1,2)))), \
                 'partial corrections stay refused until owner terms exist'
             assert denied(lambda:as_user('outsider',lambda:corr.request_fees_correction(
@@ -5629,13 +5632,15 @@ def main():
             # row for the worker's transaction, instead of waiting into a
             # lock-wait timeout.
             frappe.db.rollback()
-            r=sess['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+            # Different logins must request and approve. HTTP validates the
+            # same immutable maker/checker rule as direct native commands.
+            r=sess['correction_probe'].post(base+'/api/method/toefl_house.finance.'
                 'corrections.request_fees_correction',json=dict(
                 request_key='desk-fees-http-req-0001',fees=fee2,
                 reason='SYN hosted desk probe',requested_amount=gt2),timeout=40)
             assert r.status_code==200,('fees correction request over HTTP',r.status_code,r.text[:300])
             creq=r.json()['message']
-            rd=sess['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+            rd=sess['correction_probe'].post(base+'/api/method/toefl_house.finance.'
                 'corrections.request_fees_correction',json=dict(
                 request_key='desk-fees-http-req-0002',fees=fee2,
                 reason='SYN duplicate attempt',requested_amount=gt2),timeout=40)
@@ -5686,14 +5691,14 @@ def main():
             exc=next(sect for sect in ops_post['sections'] if sect['id']=='exceptions')
             assert creq['name'] not in {i['id'] for i in exc['items']}
             # denial path leaves the fee untouched, and a denial reopens the door
-            req3=as_user('finance_officer',lambda:corr.request_fees_correction(
+            req3=as_user('correction_probe',lambda:corr.request_fees_correction(
                 'desk-fees-deny-req-001',fdisc['fees'],'SYN denial path probe',26000.0))
             d3=as_user('finance_officer',lambda:corr.deny_fees_correction(
                 'desk-fees-deny-run-01',req3['name']))
             assert d3['status']=='Denied'
             still=frappe.db.get_value('Fees',fdisc['fees'],['docstatus','outstanding_amount'],as_dict=True)
             assert int(still.docstatus)==1 and float(still.outstanding_amount)==26000.0,still
-            req4=as_user('finance_officer',lambda:corr.request_fees_correction(
+            req4=as_user('correction_probe',lambda:corr.request_fees_correction(
                 'desk-fees-redo-req-001',fdisc['fees'],'SYN re-request after denial',26000.0))
             as_user('finance_officer',lambda:corr.deny_fees_correction(
                 'desk-fees-redo-deny-01',req4['name']))
@@ -5706,7 +5711,7 @@ def main():
             # cancelling the fee and reporting a stale refund. Without the
             # re-validation this posted a reversal whose reported amount no
             # longer matched the fee it reversed.
-            race=as_user('finance_officer',lambda:corr.request_fees_correction(
+            race=as_user('correction_probe',lambda:corr.request_fees_correction(
                 'desk-fees-race-req-01',fdisc['fees'],'SYN approval race probe',26000.0))
             frappe.set_user('Administrator')
             frappe.db.set_value('Fees',fdisc['fees'],'grand_total',27500.0,update_modified=False)
@@ -5732,7 +5737,7 @@ def main():
             # window is shut by the time approval runs.
             win_fee=fdisc['fees']
             orig_posting=frappe.db.get_value('Fees',win_fee,'posting_date')
-            win=as_user('finance_officer',lambda:corr.request_fees_correction(
+            win=as_user('correction_probe',lambda:corr.request_fees_correction(
                 'desk-fees-win-req-001',win_fee,'SYN window race probe',26000.0))
             frappe.set_user('Administrator')
             frappe.db.set_value('Fees',win_fee,'posting_date','2000-01-01',update_modified=False)
@@ -5755,7 +5760,7 @@ def main():
             # commands. A cancelled or draft fee must not be cancelled again
             # by a stale approval. Restore the original docstatus so later
             # assertions about this fixture stay true.
-            unsub=as_user('finance_officer',lambda:corr.request_fees_correction(
+            unsub=as_user('correction_probe',lambda:corr.request_fees_correction(
                 'desk-fees-unsub-req-01',fdisc['fees'],'SYN unsubmitted race',26000.0))
             frappe.set_user('Administrator')
             orig_ds=int(frappe.db.get_value('Fees',fdisc['fees'],'docstatus'))

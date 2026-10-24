@@ -67,7 +67,6 @@ try {
         "product/windows/Run TOEFL House ERP.ps1",
         "product/windows/Check This PC.ps1",
         "product/windows/OWNER ACCEPTANCE GUIDE.txt",
-        "product/windows/OWNER HANDBOOK.txt",
         "product/windows/DAILY USE GUIDE.txt",
         "product/windows/Verify Package Image.ps1",
         "product/windows/Install TOEFL House ERP.cmd",
@@ -75,7 +74,10 @@ try {
         "product/windows/Stop TOEFL House ERP.cmd",
         "product/windows/Repair TOEFL House ERP.cmd",
         "product/windows/Test Fresh Installation.ps1",
-        "product/windows/Test Existing Installation.ps1"
+        "product/windows/Test Existing Installation.ps1",
+        "product/windows/Update TOEFL House ERP.ps1",
+        "product/windows/updater-strings.json",
+        "product/updates/channel.json"
     )
     $sourceHead = & git --no-optional-locks -C $repositoryRoot rev-parse HEAD 2>$null
     if ($LASTEXITCODE -ne 0 -or -not [string]::Equals(
