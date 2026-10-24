@@ -111,6 +111,19 @@
       "fieldtype": "Link",
       "label": "Recorded by",
       "options": "User"
+    },
+    {
+      "fieldname": "approved_by",
+      "fieldtype": "Link",
+      "label": "Staff approver",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "approved_on",
+      "fieldtype": "Datetime",
+      "label": "Approved on",
+      "read_only": 1
     }
   ],
   "index_web_pages_for_search": 1,
