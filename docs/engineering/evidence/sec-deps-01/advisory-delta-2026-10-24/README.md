@@ -60,3 +60,8 @@ boundary premise while its config is internally hash-consistent.
 This is only an image-platform control. It does not establish that all
 Python dependencies are vulnerability-free, and it does not authorize
 host-side native Python wheel installation or production use.
+
+The boundary regression also reads **every** VBS/PowerShell/CMD launcher in the
+published customer-file allowlist and rejects native `python`, `pip`, or
+`uv` tool invocations. Any future updater that needs such a tool must be
+reviewed as a platform change before this advisory can remain closed.
