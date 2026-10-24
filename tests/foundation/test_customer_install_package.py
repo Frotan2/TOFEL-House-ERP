@@ -241,9 +241,10 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertNotIn("data\\logs folder to TOEFL House", INSTALL)
 
     def test_customer_package_verifies_before_import_or_boot(self):
-        self.assertIn('if exist "release\\toefl-house-erp-app.tar" goto :packagedimage', INSTALL)
+        self.assertIn('if not exist "release\\toefl-house-erp-app.tar" goto :packagemissing', INSTALL)
         self.assertIn("Verify Package Image.ps1", INSTALL)
         self.assertIn(":packageinvalid", INSTALL)
+        self.assertIn(":packagemissing", INSTALL)
         self.assertLess(INSTALL.index("Checking package integrity before local installation"),
                         INSTALL.index("if not exist data\\secrets mkdir data\\secrets"))
         self.assertIn('docker load -i "release\\toefl-house-erp-app.tar"', INSTALL)
@@ -262,8 +263,22 @@ class CustomerInstallerContract(unittest.TestCase):
         self.assertIn("docker compose down", REPAIR)
         self.assertNotIn("docker compose down -v", REPAIR)
         self.assertIn('docker load -i "release\\toefl-house-erp-app.tar"', REPAIR)
-        self.assertIn("docker compose build", REPAIR)
+        self.assertIn("goto :packagemissing", REPAIR)
         self.assertNotIn("git reset --hard", REPAIR)
+
+    def test_no_customer_script_can_build_the_application_from_source(self):
+        # Issue #36: a customer package must never compile Frappe, Python or
+        # frontend assets on the customer PC.  A missing or corrupt image is a
+        # safe refusal, not a build.
+        for name, text in (("install", INSTALL), ("repair", REPAIR)):
+            with self.subTest(script=name):
+                self.assertNotIn("docker compose build", text)
+                self.assertNotIn("docker-compose build", text)
+                self.assertNotIn("docker build", text)
+                self.assertNotIn("--build", text)
+                self.assertIn(":packagemissing", text)
+        self.assertNotIn("Normalize Product Sources.ps1", INSTALL)
+        self.assertNotIn("Normalize Product Sources.ps1", REPAIR)
 
     def test_packager_allowlists_only_code_and_never_copies_customer_data(self):
         self.assertIn("docker save --output", PACKAGER)

@@ -27,17 +27,31 @@ The update engine answers all of these by refusing, not by repairing.
 Windows launcher            product/update_engine.py (inside the image)
 ----------------            -------------------------------------------
 Check for Updates
-  -> HTTPS index          \
-  -> update.json           >  signature + trust store + image identity
-  -> update.json.sig      /   + compatibility + host facts + backup evidence
-  -> image archive            => decision allow | refuse
+  -> HTTPS index
+  -> update.json + update.json.sig
+  -> engine authorize "preflight"   signature + trust store + compatibility
+                                    + host facts + backup/recovery evidence
+                                    => allow | refuse, plus a manifest transaction
+  -> image archive                  only after the manifest phase allowed
+  -> engine authorize "authorize"   re-reads every mutable fact, verifies the
+                                    archive identity, issues a 30-minute
+                                    `authorized` transaction
 Install Update (confirmed)
-  -> engine preflight (again, fresh download)
   -> docker compose stop web worker scheduler socketio     (never -v)
   -> docker load <verified archive>
-  -> engine apply: record census, bench migrate x2, census, apps, role desks
+  -> engine apply: requires the `authorized` transaction, re-verifies the
+     manifest signature, archive hash and identity, backup receipt, recovery
+     authorization and installed identity, then records the census,
+     `bench migrate` x2, the census again, apps, orphan rows and role desks
   -> docker compose up -d --no-build, HTTP health, journal completed
 ```
+
+`apply` accepts nothing but an `authorized` transaction, and a transaction can
+be used once. The use marker is written into the run folder (the only writable
+place the engine has), so a repeated or replayed apply is refused before any
+migration runs. Every requirement the engine enforces is also enforced at apply
+time: a transaction bound to a different site, release, archive, installed
+image or evidence file is refused with `transaction.mismatch`.
 
 Failures:
 
@@ -47,6 +61,8 @@ Failures:
 | `recovery-required` | a migration started, or the database changed | do **not** start the stack; journal `recovery-required`; show recovery steps |
 | interrupted | the journal is `prepared`/`applying` on the next run | refuse and show recovery steps |
 | `records_lost` / `apps_missing` / `role_desk_missing` | post-migration verification failed | `recovery-required`, never silently continue |
+| `identity_mismatch` | orphaned child rows grew across the migration | `recovery-required`, never silently continue |
+| `counts_unavailable` | a mandatory count or integrity query was unreadable | refused before the first migration; a missing count is never evidence of preserved data |
 
 ## Documents
 
@@ -80,7 +96,16 @@ extra local state has to be trusted.
 * Preflight is read-only. It opens no network socket (`--network none`) and
   mounts the product folder read-only.
 * The customer PC never builds Frappe, Node assets or an image. The only image
-  bytes are the signed archive.
+  bytes are the signed archive. `Install TOEFL House ERP.cmd` and
+  `Repair TOEFL House ERP.cmd` refuse with a bilingual `:packagemissing`
+  message when the verified archive is absent; neither contains a source-build
+  fallback any more, and a contract test pins that.
+* A release cannot waive its own safety requirements. A migrating manifest that
+  does not require a verified backup and a restore rehearsal, that excuses
+  `requires_verified_backup`, that switches recovery authorization off, or that
+  claims a migration is reversible is rejected as `release.manifest.invalid`.
+  Backup evidence must be at most 24 hours old and a recovery authorization at
+  most 168 hours old, whatever the manifest says.
 * No code path contains `docker compose down -v`, `docker volume rm`,
   `docker system prune`, `git reset --hard` or a restore over a live site.
 * A migration failure never reopens the application automatically.
@@ -92,9 +117,9 @@ extra local state has to be trusted.
 
 | Suite | Covers |
 | --- | --- |
-| `tests/foundation/test_update_engine.py` | trust store, signature, image identity, channel, compatibility, preflight, backup evidence, recovery authorization, apply, protocol, catalogue |
+| `tests/foundation/test_update_engine.py` | trust store, signature, image identity, channel, compatibility, preflight, backup evidence, recovery authorization, manifest invariants (no waivers, evidence age), phase A/B authorization, transaction binding and replay, strict census and orphan checks, apply, protocol, catalogue |
 | `tests/foundation/test_update_bundle.py` | provider signing with a real RSA key, index, tampering, wrong key, archive corruption, recovery authorization, packaging allowlists |
-| `tests/foundation/test_windows_update_path.py` | GUI wiring, Owner confirmation, read-only preflight, prebuilt-only install, no destructive commands, packaging, bilingual catalogue |
+| `tests/foundation/test_windows_update_path.py` | GUI wiring, Owner confirmation, read-only preflight, download-after-allow ordering, authorized-transaction-only apply, prebuilt-only install, no destructive commands, packaging, bilingual catalogue |
 | `.github/workflows/windows-customer-package.yml` | real Windows PowerShell parse, updater `-SmokeTest`, disabled-channel refusal in English and Dari with no download |
 
 Run locally:

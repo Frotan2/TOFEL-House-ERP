@@ -190,6 +190,52 @@ class UpdateWorkflowTests(unittest.TestCase):
         self.assertIn('"channel.disabled"', UPDATE)
 
 
+class TwoPhaseProtocolTests(unittest.TestCase):
+    """The Windows updater must never skip a verification phase (#40, review A/B)."""
+
+    def block(self, start: str, end: str) -> str:
+        begin = UPDATE.index(start)
+        return UPDATE[begin:UPDATE.index(end, begin)]
+
+    def test_the_manifest_phase_runs_before_the_image_is_downloaded(self):
+        check = self.block("function Invoke-UpdateCheck", "function Invoke-UpdateStart")
+        preflight = check.index('Invoke-EngineStep "preflight"')
+        download = check.index("Save-RemoteFile (Resolve-ChannelUrl $channel $archiveName)")
+        authorize = check.index('Invoke-EngineStep "authorize"')
+        self.assertLess(preflight, download, "the archive must not be fetched before the manifest phase allows it")
+        self.assertLess(download, authorize, "the image phase must run after the archive exists")
+        self.assertIn('$request.archive = $archiveRelative', check)
+        self.assertIn('$request.action = "authorize"', check)
+        self.assertIn('$request.transaction = $manifestTransaction', check)
+
+    def test_only_an_authorized_transaction_reaches_apply(self):
+        check = self.block("function Invoke-UpdateCheck", "function Invoke-UpdateStart")
+        self.assertIn('[string]$transaction.phase -cne "authorized"', check)
+        install = self.block("function Invoke-UpdateInstall", "function Invoke-SmokeTest")
+        for field in ("transaction = $Check.Transaction", "archive = ($Check.RunFolder",
+                      "backup_receipt =", "backup_dir =", "installed = [pscustomobject]@{",
+                      "recovery_authorization =", "recovery_signature ="):
+            self.assertIn(field, install, f"the apply request does not carry {field}")
+
+    def test_every_engine_request_is_answered_with_a_fresh_document(self):
+        self.assertIn('Remove-Item -LiteralPath (Join-Path $script:WorkDir "response.json")', UPDATE)
+        self.assertIn("function Invoke-EngineStep", UPDATE)
+        self.assertIn('$response.document_type -cne "toefl-house-erp-update-engine-response"', UPDATE)
+
+    def test_the_updater_never_builds_the_application(self):
+        for command in ("docker compose build", "docker build", "compose up -d\n"):
+            self.assertNotIn(command, UPDATE)
+        self.assertIn('Invoke-DockerVerbose @("load", "--input", $Check.Archive)', UPDATE)
+
+    def test_the_new_refusal_codes_are_translatable(self):
+        for key in ("transaction.missing", "transaction.invalid", "transaction.expired",
+                    "transaction.mismatch", "transaction.replayed", "apply.archive_mismatch",
+                    "apply.installed_mismatch", "apply.evidence_mismatch", "apply.identity_mismatch"):
+            self.assertIn(key, CATALOG["messages"])
+            entry = CATALOG["messages"][key]
+            self.assertTrue(entry["en"].strip() and entry["fa"].strip(), key)
+
+
 class PackageMembershipTests(unittest.TestCase):
     def test_the_updater_travels_in_the_verified_customer_package(self):
         for path in ("tools/release/create_customer_package.py", "product/windows/Prepare Customer Package.ps1"):
