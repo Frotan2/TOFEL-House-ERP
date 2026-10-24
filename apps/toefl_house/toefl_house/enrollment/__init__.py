@@ -139,6 +139,11 @@ def enroll_in_program(request_key, admission_decision):
             raise frappe.ValidationError(str(exc)) from exc
         if _existing_enrollment(student, row.program, row.academic_year, row.academic_term):
             raise frappe.ValidationError("Student is already enrolled")
+        # Progression gate (B05): a configured successor level in the catalog
+        # is entered only through an approved academic progression decision.
+        # Entry levels and unconfigured catalogs are unaffected.
+        from toefl_house.academic import progression as academic_progression
+        progression_state = academic_progression.enrollment_gate(student, row.program)
         customer = linked.customer or frappe.db.get_value(STUDENT, student, "customer")
         # BUG-ENR-02: snapshot before the native submit so only invoices CREATED
         # by this enrollment are refused; a linked customer with older history
@@ -177,6 +182,7 @@ def enroll_in_program(request_key, admission_decision):
             "docstatus": int(pe.docstatus),
             "course_enrollments": int(course_count),
             "sales_invoice": 0,
+            "progression": progression_state,
         }
         return result, dict(target=pe.name, after_hash=digest([pe.name, student, row.program]))
 
