@@ -470,6 +470,60 @@ def record_consent(student, evidence_type="Link", attachment=None, link_referenc
 
 
 @frappe.whitelist(methods=["POST"])
+def approve_guardian_consent(request_key, consent):
+    """Owner-only, idempotent approval after independent evidence review.
+
+    Submitting guardian evidence never authorizes disclosure. This command
+    persists a separate staff approval and a hash-chained audit receipt.
+    """
+    from toefl_house.configuration.audit import execute
+    from toefl_house.policy import digest
+
+    if not isinstance(consent, str) or not consent.strip():
+        raise frappe.ValidationError("A pending guardian consent is required")
+
+    def work(actor):
+        row = frappe.db.get_value(
+            CONSENT_DOCTYPE, consent,
+            ["name", "guardian", "student", "status", "evidence_type",
+             "link_reference", "attachment", "expiry_date", "recorded_by"],
+            as_dict=True, for_update=True)
+        if not row or row.status != "Pending":
+            raise frappe.ValidationError("Only a pending guardian consent can be approved")
+        if row.recorded_by == actor:
+            raise frappe.PermissionError("The evidence submitter cannot approve themselves")
+        if row.student not in _get_verified_children(row.guardian):
+            raise frappe.PermissionError("The guardian/student relationship is not verified")
+        if row.evidence_type in ("Link", "Both") and not row.link_reference:
+            raise frappe.ValidationError("The consent link evidence has not been supplied")
+        if row.evidence_type in ("Attachment", "Both") and not row.attachment:
+            raise frappe.ValidationError("The consent attachment evidence has not been supplied")
+        if not row.expiry_date or str(row.expiry_date) < _today():
+            raise frappe.ValidationError("The consent must have a valid future expiry date")
+        terms = _governing_guardian_terms()
+        required = terms.get("consent_evidence") if terms else None
+        if required == "Both" and row.evidence_type != "Both":
+            raise frappe.ValidationError("The approved policy requires both evidence kinds")
+        if required == "Link" and row.evidence_type not in ("Link", "Both"):
+            raise frappe.ValidationError("The approved policy requires link evidence")
+        if required == "Attachment" and row.evidence_type not in ("Attachment", "Both"):
+            raise frappe.ValidationError("The approved policy requires attachment evidence")
+        before_hash = digest([row.name, row.guardian, row.student, row.status])
+        doc = frappe.get_doc(CONSENT_DOCTYPE, row.name)
+        doc.status = "Active"
+        doc.approved_by = actor
+        doc.approved_on = _now()
+        doc.save(ignore_permissions=True)
+        result = {"name": doc.name, "status": "Active", "approved_by": actor}
+        return result, {"target": doc.name, "before_hash": before_hash,
+                        "after_hash": digest([doc.name, doc.guardian, doc.student,
+                                               doc.status, doc.approved_by,
+                                               str(doc.approved_on)])}
+
+    return execute("approve_guardian_consent", request_key, {"consent": consent}, work)
+
+
+@frappe.whitelist(methods=["POST"])
 def revoke_consent(student, reason=""):
     """Revoke guardian consent for a child. Revocation is immediate and audit-logged."""
     _require_portal_enabled()
