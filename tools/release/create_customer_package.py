@@ -224,6 +224,7 @@ def make_zip(package: Path) -> Path:
     if any(path.exists() or path.is_symlink()
            for path in (archive, checksum, staging, staged_checksum)):
         raise ValueError("refusing to overwrite an existing customer ZIP, checksum, or partial archive")
+    published = False
     try:
         with zipfile.ZipFile(staging, "x", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as handle:
             for path in sorted(package.rglob("*")):
@@ -238,15 +239,16 @@ def make_zip(package: Path) -> Path:
         # Never expose a final ZIP while it is still being written. On any
         # publishing error, remove only artifacts created by this attempt.
         staging.rename(archive)
+        published = True
         staged_checksum.rename(checksum)
         return archive
     except BaseException:
         for temporary in (staging, staged_checksum):
             temporary.unlink(missing_ok=True)
-        # The final ZIP exists only if this invocation successfully renamed
-        # its staged archive. Remove it if checksum publication failed.
-        if archive.exists() and not checksum.exists():
-            archive.unlink()
+        # Never remove another invocation's existing archive on an early
+        # error; only this attempt's successful publish can be rolled back.
+        if published:
+            archive.unlink(missing_ok=True)
         raise
 
 
