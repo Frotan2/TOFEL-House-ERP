@@ -53,12 +53,9 @@ def _reason(value, what, maximum=300):
 def _published_result(name):
     if not frappe.db.exists(RESULT, name):
         raise frappe.ValidationError("Unknown academic result")
-    row = frappe.db.get_value(
-        RESULT, name,
-        ["name", "student", "student_group", "level", "book", "attempt",
-         "status", "outcome", "policy", "policy_effective_from",
-         "attendance_percent", "overall_percent", "grade_code"],
-        as_dict=True)
+    # Lock the live result while deciding: concurrent score corrections
+    # must not supersede the evidence between eligibility and decision.
+    row = frappe.get_doc(RESULT, name, for_update=True)
     if row.status != "Published":
         raise frappe.ValidationError(
             f"Result {name} is {row.status}; progression is decided on the "
@@ -474,12 +471,18 @@ def progression_state(student, program=""):
     student_name = _text(student, "Student")
     if not frappe.has_permission("Student", "read", student_name):
         raise frappe.PermissionError("Students are not available to your role")
-    results = frappe.get_all(RESULT,
+    # A Student/Guardian/Reception read of the Student master is NOT
+    # authorization for confidential draft assessment or progression data.
+    roles = set(frappe.get_roles(frappe.session.user))
+    if not roles.intersection({"Academic Manager", "Teaching Auditor",
+                               "Enrollment Officer", "Enrollment Auditor"}):
+        raise frappe.PermissionError("Academic progression history is restricted to authorized staff")
+    results = frappe.get_list(RESULT,
                              filters={"student": student_name, "status": "Published"},
                              fields=["name", "level", "outcome", "overall_percent",
                                      "grade_code", "attempt", "published_on"],
                              order_by="published_on desc", limit=20)
-    decisions = frappe.get_all(DECISION, filters={"student": student_name},
+    decisions = frappe.get_list(DECISION, filters={"student": student_name},
                                fields=["name", "academic_result", "decision",
                                        "from_level", "to_level", "override_used",
                                        "decided_on"],
