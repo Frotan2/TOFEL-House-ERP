@@ -44,3 +44,19 @@ authorization is implied by this narrow assessment.
 - `product/app.Dockerfile`, `tools/release/create_customer_package.py`,
   `product/windows/Install TOEFL House ERP.cmd`, and
   `.github/workflows/foundation-runtime.yml`
+
+## Release-package OS/architecture integrity guard
+
+The static Linux Dockerfile and Windows customer-file allowlist are now
+reinforced by a **provider-side check of the saved image config**, not merely
+its declared labels. `tools/release/create_customer_package.py` requires the
+archive's SHA-256-bound config to state `os=linux` and `architecture=amd64`
+and rejects Windows/missing/wrong-architecture configs **before package output**.
+`tests/foundation/test_customer_package_manifest.py` modifies each field,
+recomputes the config digest and verifies that packaging still refuses it.
+This ensures a label-forged Windows container cannot satisfy the appliance
+boundary premise while its config is internally hash-consistent.
+
+This is only an image-platform control. It does not establish that all
+Python dependencies are vulnerability-free, and it does not authorize
+host-side native Python wheel installation or production use.
