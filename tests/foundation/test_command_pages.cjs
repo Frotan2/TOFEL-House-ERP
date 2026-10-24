@@ -154,6 +154,10 @@ const endpointFiles = {
 	teaching: path.join(APP, "teaching/__init__.py"),
 	"teaching.compensation": path.join(APP, "teaching/compensation.py"),
 	"teaching.attendance_corrections": path.join(APP, "teaching/attendance_corrections.py"),
+	"teaching.scheduling": path.join(APP, "teaching/scheduling.py"),
+	"teaching.suspensions": path.join(APP, "teaching/suspensions.py"),
+	"teaching.capacity": path.join(APP, "teaching/capacity.py"),
+	"teaching.transfers": path.join(APP, "teaching/transfers.py"),
 };
 function endpointSignature(method) {
 	const parts = method.split(".");

@@ -189,6 +189,7 @@ The Dockerfile, compose file and CI are tested against it.
 | [docs/engineering/INTEGRATION-AUDIT-2026-10-24.md](docs/engineering/INTEGRATION-AUDIT-2026-10-24.md) | Main/PR/security review and integration decisions |
 | [Owner Handbook](product/windows/OWNER%20HANDBOOK.txt) | No-code English/Dari operating, safety and acceptance instructions |
 | [docs/ROLE-DESKS.md](docs/ROLE-DESKS.md) | Role desks: audiences, data sources, permissions |
+| [docs/CLASS-OPERATIONS.md](docs/CLASS-OPERATIONS.md) | Operator runbook: scheduling, capacity, waiting lists, transfers, suspensions |
 | [docs/PLACEMENT-SPEC.md](docs/PLACEMENT-SPEC.md) | Placement technical specification |
 | [docs/FINANCE-POLICY-APPROVAL.md](docs/FINANCE-POLICY-APPROVAL.md) | Owner approval record for the finance framework |
 | [docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md) | Guarded site-mode lifecycle, backup, restore, and rollback (not release authorization) |

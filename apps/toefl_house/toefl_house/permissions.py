@@ -21,6 +21,10 @@ KINDS = {
     "TH Correction Policy": "correction_policy",
     "TH Correction Request": "correction_request",
     "TH Attendance Correction Request": "attendance_correction",
+    "TH Class Transfer": "class_transfer",
+    "TH Class Waiting List": "class_waiting_list",
+    "TH Capacity Approval": "capacity_approval",
+    "TH Class Suspension": "class_suspension",
     "TH Cashier Day": "cashier_day",
 }
 TABLES = {
@@ -44,6 +48,10 @@ TABLES = {
     "correction_policy": "`tabTH Correction Policy`",
     "correction_request": "`tabTH Correction Request`",
     "attendance_correction": "`tabTH Attendance Correction Request`",
+    "class_transfer": "`tabTH Class Transfer`",
+    "class_waiting_list": "`tabTH Class Waiting List`",
+    "capacity_approval": "`tabTH Capacity Approval`",
+    "class_suspension": "`tabTH Class Suspension`",
     "cashier_day": "`tabTH Cashier Day`",
 }
 LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
@@ -80,6 +88,10 @@ BRANCH_KINDS = {
     "TH Teaching Assignment": "assignment",
     "TH Correction Request": "correction_request",
     "TH Attendance Correction Request": "attendance_correction",
+    "TH Class Transfer": "class_transfer",
+    "TH Class Waiting List": "class_waiting_list",
+    "TH Capacity Approval": "capacity_approval",
+    "TH Class Suspension": "class_suspension",
 }
 
 # The four native doctypes that gain their OWN hooks for branch isolation
@@ -177,6 +189,15 @@ def _branch_condition(kind, branches):
         return (f"`tabTH Attendance Correction Request`.course_schedule IN "
                 f"(SELECT name FROM `tabCourse Schedule` WHERE student_group IN "
                 f"(SELECT name FROM `tabStudent Group` WHERE th_branch IN ({b})))")
+    if kind in ("class_waiting_list", "capacity_approval", "class_suspension"):
+        table = TABLES[kind]
+        return (f"{table}.student_group IN "
+                f"(SELECT name FROM `tabStudent Group` WHERE th_branch IN ({b}))")
+    if kind == "class_transfer":
+        t = "`tabTH Class Transfer`"
+        return (f"({t}.from_group IN (SELECT name FROM `tabStudent Group` "
+                f"WHERE th_branch IN ({b})) OR {t}.to_group IN "
+                f"(SELECT name FROM `tabStudent Group` WHERE th_branch IN ({b})))")
     return None
 
 
@@ -227,6 +248,21 @@ def _doc_branches_guarded(doc, kind):
         if not doc.get("fees"):
             return set()
         return _student_branches(frappe.db.get_value("Fees", doc.fees, "student"))
+    if kind in ("class_waiting_list", "capacity_approval", "class_suspension"):
+        group = doc.get("student_group")
+        if not group:
+            return set()
+        branch = frappe.db.get_value("Student Group", group, "th_branch")
+        return {branch} if branch else set()
+    if kind == "class_transfer":
+        branches = set()
+        for group in (doc.get("from_group"), doc.get("to_group")):
+            if not group:
+                continue
+            branch = frappe.db.get_value("Student Group", group, "th_branch")
+            if branch:
+                branches.add(branch)
+        return branches
     if kind == "attendance_correction":
         branches = set()
         if doc.get("course_schedule"):
@@ -306,6 +342,8 @@ CONFIGURATION_READERS = ("Course Owner", "General Manager", "Academic Manager", 
 # configuration's readership (mirroring how native Version rows inherit
 # their document's readers) and is read-only for every role.
 GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount Rule", "TH Skill",
+                        "TH Class Operations Policy", "TH Academic Calendar",
+                        "TH Timetable Template",
                         "TH Assessment Policy", "TH Returning Student Policy",
                         "TH Roster Change Policy",
                         "TH Attendance Correction Policy",
@@ -420,6 +458,22 @@ def _query_role(kind, user=None):
         return "1=1" if roles & {"Attendance Recorder", "Teaching Auditor"} else "1=0"
     if kind == "enrollment_exit":
         return "1=1" if roles & {"Enrollment Officer", "Enrollment Auditor"} else "1=0"
+    if kind == "class_transfer":
+        return "1=1" if roles & {"Teaching Scheduler", "Teaching Auditor",
+                                 "Academic Manager", "General Manager",
+                                 "Course Owner"} else "1=0"
+    if kind == "class_waiting_list":
+        return "1=1" if roles & {"Reception", "Teaching Scheduler", "Teaching Auditor",
+                                 "Academic Manager", "General Manager", "Course Owner",
+                                 "Enrollment Officer", "Enrollment Auditor"} else "1=0"
+    if kind == "capacity_approval":
+        return "1=1" if roles & {"Academic Manager", "Teaching Scheduler",
+                                 "Teaching Auditor", "General Manager",
+                                 "Course Owner"} else "1=0"
+    if kind == "class_suspension":
+        return "1=1" if roles & {"Teaching Scheduler", "Teaching Auditor",
+                                 "Academic Manager", "General Manager",
+                                 "Course Owner"} else "1=0"
     if "Placement Publisher" in roles:
         return "1=1"
     if kind in ("case", "attempt", "exposure", "response") and "Placement Invigilator" in roles:
@@ -463,4 +517,8 @@ def query_correction_policy(user=None): return query("correction_policy", user)
 def query_correction_request(user=None): return query("correction_request", user)
 def query_attendance_correction(user=None): return query("attendance_correction", user)
 def query_enrollment_exit(user=None): return query("enrollment_exit", user)
+def query_class_transfer(user=None): return query("class_transfer", user)
+def query_class_waiting_list(user=None): return query("class_waiting_list", user)
+def query_capacity_approval(user=None): return query("capacity_approval", user)
+def query_class_suspension(user=None): return query("class_suspension", user)
 def query_cashier_day(user=None): return query("cashier_day", user)

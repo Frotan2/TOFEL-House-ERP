@@ -399,6 +399,53 @@
   "width": null
  },
  {
+  "doctype": "Custom Field",
+  "name": "Course Schedule-th_session_kind",
+  "dt": "Course Schedule",
+  "fieldname": "th_session_kind",
+  "label": "Session kind",
+  "fieldtype": "Select",
+  "options": "Regular\nReplacement\nMakeup",
+  "default": "Regular",
+  "read_only": 1,
+  "in_standard_filter": 1,
+  "description": "Regular sessions come from the timetable; Replacements postpone a session; Makeups replace a cancelled session. Set only by the guarded scheduling commands."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Course Schedule-th_session_status",
+  "dt": "Course Schedule",
+  "fieldname": "th_session_status",
+  "label": "Session status",
+  "fieldtype": "Select",
+  "options": "Scheduled\nPostponed\nCancelled",
+  "default": "Scheduled",
+  "read_only": 1,
+  "in_standard_filter": 1,
+  "description": "Only Scheduled sessions carry attendance. A Postponed original keeps its row and links its replacement; a Cancelled session never meets."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Course Schedule-th_replaces",
+  "dt": "Course Schedule",
+  "fieldname": "th_replaces",
+  "label": "Replaces session",
+  "fieldtype": "Link",
+  "options": "Course Schedule",
+  "read_only": 1,
+  "description": "The postponed or cancelled session this replacement/makeup stands in for. Preserves the original row and its history."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Course Schedule-th_session_note",
+  "dt": "Course Schedule",
+  "fieldname": "th_session_note",
+  "label": "Session note",
+  "fieldtype": "Small Text",
+  "read_only": 1,
+  "description": "The operator's reason for a postponement or cancellation. Never overwrites attendance history."
+ },
+ {
   "allow_on_submit": 0,
   "bold": 0,
   "collapsible": 0,

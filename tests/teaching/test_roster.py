@@ -89,6 +89,7 @@ class RosterCommandTests(unittest.TestCase):
         }
         self.roster = {}
         self.counts = {}
+        self.seat_calls = []
         self.enrollments = [{"name": "ENR-1"}]
         self.group_docs = {}
         previous = dict(sys.modules)
@@ -158,6 +159,7 @@ class RosterCommandTests(unittest.TestCase):
         security.active_command_kind = lambda: None
         security.is_production = lambda: False
         security.require_operational = lambda: None
+        security.record_synthetic_flag = lambda: 1
         security.teaching_command_active = lambda doctype: True
         sys.modules["toefl_house.security"] = security
         api = types.ModuleType("toefl_house.api")
@@ -170,6 +172,38 @@ class RosterCommandTests(unittest.TestCase):
         roster_policies.governing_cutoff_date = (
             lambda on_date=None: fake.cutoff)
         sys.modules["toefl_house.teaching.policies"] = roster_policies
+        # Mission 3 collaboration seams. The roster commands delegate seat
+        # truth, direct-move gating and session validation to their own
+        # modules; those modules have dedicated test trees, so here they are
+        # scripted and only their CALLS are asserted.
+        capacity = types.ModuleType("toefl_house.teaching.capacity")
+
+        def assert_direct_move_allowed():
+            fake.calls.append(("direct_move_gate", ()))
+            return {}
+
+        def assert_seat_available(group, student, override=""):
+            fake.seat_calls.append((group, student, override))
+            return {"seats": {"available": 0}, "override":
+                    {"override": override} if override else None}
+
+        def assert_remove_allowed():
+            fake.calls.append(("remove_gate", ()))
+            return {}
+
+        capacity.assert_direct_move_allowed = assert_direct_move_allowed
+        capacity.assert_seat_available = assert_seat_available
+        capacity.assert_remove_allowed = assert_remove_allowed
+        sys.modules["toefl_house.teaching.capacity"] = capacity
+        scheduling = types.ModuleType("toefl_house.teaching.scheduling")
+        scheduling.governing_terms = lambda: {}
+        scheduling.check_new_session = lambda *a, **k: None
+        scheduling.assert_session_open_for_attendance = lambda name: None
+        sys.modules["toefl_house.teaching.scheduling"] = scheduling
+        suspensions = types.ModuleType("toefl_house.teaching.suspensions")
+        suspensions.assert_scheduling_allowed = lambda group, day: True
+        suspensions.assert_attendance_allowed = lambda group, day, marks: True
+        sys.modules["toefl_house.teaching.suspensions"] = suspensions
         self.teaching = _load_real("toefl_house.teaching",
                                    APP / "teaching/__init__.py")
 
