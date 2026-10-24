@@ -102,11 +102,11 @@ synthetic ERPNext lifecycle runs. This branch **appends** finance checks to it:
 **SUCCESS** at `0e8eee447bae79d4f4f8754a506ad481230e699f`, together with Owned
 suite
 [40094222085](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40094222085)
-**SUCCESS** on the same SHA. Foundation runtime
+**SUCCESS**, and Foundation runtime
 [40094216664](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40094216664)
-was still **in progress** when this report was written and is not claimed
-either way; the preceding code SHA `6a183b5` completed all three workflows
-(Native
+**SUCCESS** (it was still running when the first version of this report was
+written and is recorded now that it completed). The preceding code SHA
+`6a183b5` also completed all three workflows (Native
 [40092775298](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40092775298),
 Owned
 [40092775280](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40092775280),
