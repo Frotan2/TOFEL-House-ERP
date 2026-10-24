@@ -20,6 +20,10 @@ from toefl_house.desk import (
     viewer_roles,
 )
 from toefl_house.desk import lifecycle
+try:
+    from toefl_house.desk import analytics
+except Exception:
+    analytics = None
 from toefl_house import observability as obs
 
 SLUG = "th-operations-desk"
@@ -501,14 +505,46 @@ def work():
         if set(spec["roles"]) & held:
             desks_for_viewer.append({"slug": slug, "title": spec["title"]})
 
+    ops_analytics = []
+    if analytics is not None:
+        try:
+            enroll = analytics.enrollment_metrics()
+            tuit = analytics.tuition_metrics()
+            exc = analytics.exception_metrics()
+            ops_analytics.append(
+                section("ops-overview", "Operational overview (auditable)", "facts",
+                        facts=[
+                            {"label": "Active enrollments", "value": enroll["total"],
+                             "definition": enroll["definition"], "source": enroll["source"], "scope": enroll["scope"], "drill_path": enroll["drill"], "owner": "Enrollment Officer"},
+                            {"label": "Outstanding tuition", "value": tuit["fees_outstanding"],
+                             "definition": "Submitted tuition fees still owing.", "source": "tuition fees outstanding", "scope": tuit["scope"], "drill_path": "tuition fees list", "owner": "Finance Officer"},
+                            {"label": "Overdue fees", "value": tuit["fees_overdue"],
+                             "definition": "Outstanding fees with due date before today.", "source": "fees overdue", "scope": tuit["scope"], "drill_path": "tuition fees list", "owner": "Finance Officer"},
+                            {"label": "Operational exceptions", "value": exc["corrections_pending"] + exc["admissions_in_review"] + exc["attempts_past_deadline"] + exc["awaiting_release"],
+                             "definition": exc["definition"], "source": exc["source"], "scope": exc["scope"], "drill_path": exc["drill"], "owner": "General Manager"},
+                        ],
+                        empty_title="No operational overview yet", empty_body="Operational metrics appear as soon as placement, admission and enrollment records exist."))
+            if enroll.get("by_program"):
+                ops_analytics[-1]["comparison"] = {
+                    "title": "Enrollments by program",
+                    "columns": ["Program", "Enrollments"],
+                    "rows": [{"label": k, "value": v} for k, v in sorted(enroll["by_program"].items(), key=lambda x: -x[1])[:10]],
+                }
+                ops_analytics[-1]["chart"] = {
+                    "title": "Enrollments per program",
+                    "rows": [{"label": k, "value": v, "tone": "info"} for k, v in sorted(enroll["by_program"].items(), key=lambda x: -x[1])[:8]],
+                }
+        except Exception:
+            pass
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
         "sections": [
-            section("funnel", "Operation funnel", "facts", facts=funnel_facts,
+            *ops_analytics,
+            section("funnel", "Operation funnel — today\u2019s state", "facts", facts=funnel_facts,
                     empty_title="No operational records yet",
                     empty_body="Nothing is running in the placement, admission, enrollment or finance pipeline."),
-            section("exceptions", "Exceptions and oldest waiting work", "queue",
+            section("exceptions", "Exceptions and oldest waiting work — action queue", "queue",
                     items=exception_items,
                     empty_title="No exceptions",
                     empty_body="Nothing is overdue, stuck or waiting on an approver right now."),
