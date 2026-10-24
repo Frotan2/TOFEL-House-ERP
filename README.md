@@ -179,6 +179,7 @@ The Dockerfile, compose file and CI are tested against it.
 | [docs/owner-decisions.json](docs/owner-decisions.json) | Owner business decisions |
 | [docs/CONFIGURATION-PLANE.md](docs/CONFIGURATION-PLANE.md) | How owner policies are configured, versioned and audited |
 | [docs/ROLE-DESKS.md](docs/ROLE-DESKS.md) | Role desks: audiences, data sources, permissions |
+| [docs/CLASS-OPERATIONS.md](docs/CLASS-OPERATIONS.md) | Operator runbook: scheduling, capacity, waiting lists, transfers, suspensions |
 | [docs/PLACEMENT-SPEC.md](docs/PLACEMENT-SPEC.md) | Placement technical specification |
 | [docs/FINANCE-POLICY-APPROVAL.md](docs/FINANCE-POLICY-APPROVAL.md) | Owner approval record for the finance framework |
 | [docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md) | Guarded site-mode lifecycle, backup, restore, and rollback (not release authorization) |
