@@ -60,6 +60,14 @@ Failures:
 | `recovery-authorization.json` + `.sig` | Owner + provider support | engine, bound to the receipt SHA-256 |
 | `journal.json` | Windows updater | engine (`journal_state` must be terminal) |
 
+`release-manifest.json` (the customer *package* manifest) and `update.json` (the
+signed *channel* manifest) are deliberately different documents: the package
+manifest describes what the provider built, while `update.json` is the only
+artifact the customer engine accepts. `create_update_bundle.py` is the bridge —
+it re-reads and cross-checks the package manifest and the archive bytes, then
+copies `release_status` and `production_authorization` verbatim, so signing can
+never upgrade a test package into a production release.
+
 `release_sequence` is the date-derived build number (`2026.11.01` →
 `2026110100`). Both the Python engine and the Windows updater derive it with the
 same rule and the same rejection table, pinned by tests on both platforms, so no
@@ -94,6 +102,15 @@ Run locally:
 ```bash
 python3 -m unittest tests.foundation.test_update_engine tests.foundation.test_update_bundle tests.foundation.test_windows_update_path
 ```
+
+Real Windows evidence (GitHub Actions, `windows-2022`): "Windows customer package
+smoke" run `40082334000` on revision `4a2034d` parsed every customer script with
+the real PowerShell parser, ran the updater `-SmokeTest`, checked the two new
+buttons through the WinForms smoke test, and built a synthetic customer kit where
+**Check for Updates** refused the disabled channel with exit 3, printed the
+English and Dari explanation, downloaded nothing and wrote a safe
+`last-result.json`. "Owned suite" run `40082337305` (pull-request gate) passed on
+the same revision.
 
 ## What still requires real hardware
 
