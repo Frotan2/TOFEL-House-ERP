@@ -14,6 +14,7 @@ import unittest
 from unittest.mock import patch
 
 from tools.release.create_customer_package import ALLOWED_FILES, MATRIX_FILE, create_package
+from tools.release import verify_ci_gates as gate_tools
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -94,11 +95,19 @@ class CustomerPackageManifestTests(unittest.TestCase):
         }
         self.members, self.config_digest = image_archive_members(self.labels)
         write_tar(self.image, self.members)
+        runs = [{"id": index + 1, "path": path, "head_sha": self.revision,
+                 "status": "completed", "conclusion": "success", "run_attempt": 1,
+                 "created_at": f"2026-10-24T00:00:0{index}Z"}
+                for index, path in enumerate(gate_tools.REQUIRED_WORKFLOWS)]
+        report = gate_tools.evaluate_gate_runs(runs, self.revision, None)
+        self.gate_evidence = self.tmp / "ci-gates.json"
+        gate_tools.write_gate_evidence(
+            self.gate_evidence, gate_tools.make_gate_evidence(report, "example/customer-erp"), self.revision)
 
     def create(self, **overrides):
         args = dict(source=self.source, output=self.tmp / "out", image_archive=self.image,
                     image_labels=self.labels, version=self.version, source_revision=self.revision,
-                    provider_attestation="synthetic-test-attestation")
+                    gate_evidence=self.gate_evidence, provider_attestation="synthetic-test-attestation")
         args.update(overrides)
         return create_package(**args)
 
@@ -115,6 +124,7 @@ class CustomerPackageManifestTests(unittest.TestCase):
             image_labels=self.labels,
             version=self.version,
             source_revision=self.revision,
+            gate_evidence=self.gate_evidence,
             provider_attestation="synthetic-test-attestation",
         )
         release = package / "product" / "release"
@@ -127,6 +137,12 @@ class CustomerPackageManifestTests(unittest.TestCase):
         self.assertEqual(saved["image"]["config_digest"], self.config_digest)
         self.assertTrue(archive.is_file())
         self.assertTrue((release / "release-manifest.json.sha256").is_file())
+        packaged_gates = release / "ci-gates.json"
+        self.assertTrue(packaged_gates.is_file())
+        self.assertEqual(hashlib.sha256(packaged_gates.read_bytes()).hexdigest(),
+                         saved["qualification"]["sha256"])
+        gate_tools.validate_gate_evidence(json.loads(packaged_gates.read_text(encoding="utf-8")), self.revision)
+        self.assertEqual(saved["qualification"]["real_owner_windows"], "NOT_VERIFIED")
         self.assertFalse((package / "product" / "data").exists())
         self.assertFalse((package / "apps").exists())
 
@@ -139,9 +155,34 @@ class CustomerPackageManifestTests(unittest.TestCase):
                 image_labels=self.labels,
                 version=self.version,
                 source_revision="b" * 40,
+                gate_evidence=self.gate_evidence,
                 provider_attestation="synthetic-test-attestation",
             )
         self.assertFalse((self.tmp / "out").exists())
+
+    def test_package_requires_four_passing_receipts_on_the_exact_revision(self):
+        self.assert_rejected_before_output("gate evidence", gate_evidence=self.tmp / "missing.json")
+        valid = json.loads(self.gate_evidence.read_text(encoding="utf-8"))
+        mutations = (
+            lambda row: row.update(source_revision="b" * 40),
+            lambda row: row.update(status="pending"),
+            lambda row: row["gates"].pop(),
+            lambda row: row["gates"][0].update(run_id=0),
+            lambda row: row.update(production_authorization="ALLOW"),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                payload = json.loads(json.dumps(valid))
+                mutate(payload)
+                self.gate_evidence.write_text(json.dumps(payload), encoding="utf-8")
+                self.assert_rejected_before_output()
+
+    def test_gate_evidence_symlink_is_not_accepted_as_a_regular_receipt(self):
+        if os.name == "nt":
+            self.skipTest("symlink creation requires additional Windows privilege")
+        linked = self.tmp / "linked-gates.json"
+        linked.symlink_to(self.gate_evidence)
+        self.assert_rejected_before_output("regular CI gate evidence", gate_evidence=linked)
 
     def test_embedded_labels_must_match_sidecar(self):
         for key, value in (
@@ -281,9 +322,13 @@ class CustomerPackageManifestTests(unittest.TestCase):
         self.assert_rejected_before_output("prebuilt image archive")
 
     def test_source_head_must_match_image_revision(self):
-        labels = dict(self.labels, **{"org.toefl-house.source-revision": "b" * 40})
+        other_revision = "b" * 40
+        labels = dict(self.labels, **{"org.toefl-house.source-revision": other_revision})
         write_image_archive(self.image, labels)
-        self.assert_rejected_before_output("checkout HEAD", image_labels=labels, source_revision="b" * 40)
+        evidence = json.loads(self.gate_evidence.read_text(encoding="utf-8"))
+        evidence["source_revision"] = other_revision
+        self.gate_evidence.write_text(json.dumps(evidence), encoding="utf-8")
+        self.assert_rejected_before_output("checkout HEAD", image_labels=labels, source_revision=other_revision)
 
     def test_dirty_package_files_and_matrix_are_rejected(self):
         for relative in ("product/windows/TOEFL House ERP.ps1", MATRIX_FILE):

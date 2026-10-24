@@ -208,7 +208,7 @@ def _roster_read():
 
     def roster(student_group, include_inactive=0):
         return frappe.db.sql(
-            "select student, student_name from `tabStudent Group Student` where parent=%s",
+            "select student, student_name from `tabStudent Group Student` where parent=%s and active=1",
             (student_group,), as_dict=True)
 
     native.get_student_group_students = roster
@@ -496,11 +496,23 @@ def record_attendance(request_key, course_schedule, statuses):
                       (schedule_name,))
         session = frappe.db.get_value(SCHEDULE, schedule_name,
                                       ["student_group", "schedule_date"], as_dict=True)
+        # A submitted mark is valid only for an active class and active
+        # roster member; exited students keep their history but cannot be
+        # marked anew merely because their old child row remains.
+        group = frappe.db.get_value(
+            GROUP, session.student_group,
+            ["disabled", "th_class_status"], as_dict=True)
+        if not group or group.disabled or group.th_class_status in _TERMINAL_CLASS_STATUSES:
+            raise frappe.ValidationError("Attendance is closed for this student group")
+        # Mission 3: only a session that will actually meet carries marks, and
+        # a bounded suspension window pauses Present marks without hiding the
+        # Absent/Leave record.
         session_rules.assert_session_open_for_attendance(schedule_name)
         class_suspensions.assert_attendance_allowed(
             session.student_group, str(session.schedule_date), marks)
         roster = {row.student for row in frappe.db.sql(
-            "select student from `tabStudent Group Student` where parent=%s",
+            "select student from `tabStudent Group Student` "
+            "where parent=%s and active=1",
             (session.student_group,), as_dict=True)}
         for student in sorted(marks):
             if student not in roster:

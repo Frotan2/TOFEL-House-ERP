@@ -233,7 +233,7 @@ class AttendanceCorrectionCommandTests(unittest.TestCase):
         fields = {"attendance": "ATT-1", "course_schedule": "SCHED-1",
                   "from_status": "Absent", "requested_status": "Present",
                   "reason": "Recorder misread the sheet",
-                  "requested_by": ACTOR,
+                  "requested_by": "original.recorder@example.com",
                   "requested_on": "2026-09-22 12:00:00",
                   "pinned_effective_from": "2026-09-20",
                   "pinned_approver_role": "Teaching Auditor",
@@ -309,6 +309,14 @@ class AttendanceCorrectionCommandTests(unittest.TestCase):
         self.assertEqual(self.request_doc.status, "Posted")
         self.assertEqual(self.request_doc.replacement_attendance, "ATT-NEW")
         self.assertEqual(self.request_doc.approved_by, ACTOR)
+
+    def test_approve_refused_when_requester_is_same_actor(self):
+        self.actor_roles = {"Attendance Recorder", "Teaching Auditor"}
+        self._pending_doc(requested_by=ACTOR)
+        with self.assertRaises(_PermissionError) as ctx:
+            self.corrections.approve_attendance_correction(
+                "test-key-attcorr-self-approval", "REQ-1")
+        self.assertIn("requester cannot approve", str(ctx.exception).lower())
 
     def test_approve_refused_without_the_approver_role(self):
         self._pending_doc()

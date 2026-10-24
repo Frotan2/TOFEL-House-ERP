@@ -376,6 +376,8 @@ def approve_invoice_correction(request_key, request):
         req = _pending_request(_name(request, "Correction request"))
         terms = _pinned_policy(req)
         _require_approver(terms, actor)
+        if actor == getattr(req, "owner", None):
+            raise frappe.PermissionError("A requester cannot approve their own financial correction")
         if not req.sales_invoice:
             raise frappe.ValidationError("Correction request is not for an invoice")
         frappe.db.sql("select name from `tabSales Invoice` where name=%s for update",
@@ -525,6 +527,8 @@ def approve_fees_correction(request_key, request):
         req = _pending_request(_name(request, "Correction request"))
         terms = _pinned_policy(req)
         _require_approver(terms, actor)
+        if actor == getattr(req, "owner", None):
+            raise frappe.PermissionError("A requester cannot approve their own financial correction")
         if not req.fees:
             raise frappe.ValidationError("Correction request is not for a Fees record")
         # Re-validate the fee at approval time, under the same row lock the

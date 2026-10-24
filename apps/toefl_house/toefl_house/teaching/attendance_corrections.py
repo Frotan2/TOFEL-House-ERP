@@ -355,6 +355,8 @@ def approve_attendance_correction(request_key, request):
     def work(actor):
         req = _pending_request(_name(request, "Attendance-correction request"))
         _require_approver(req.pinned_approver_role, actor)
+        if actor == getattr(req, "requested_by", None):
+            raise frappe.PermissionError("The requester cannot approve their own attendance change")
         facts = _locked_attendance_facts(req.attendance)
         if int(facts.docstatus or 0) != 1:
             raise frappe.ValidationError(

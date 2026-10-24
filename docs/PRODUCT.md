@@ -5,7 +5,11 @@ is native, what is TOEFL House-specific, and where each rule lives. It replaces
 the earlier capability map, domain closure records, roadmaps and baselines
 (still available in Git history). Decisions and their rationale are in
 [DECISIONS.md](DECISIONS.md); owner business decisions are in
-[owner-decisions.json](owner-decisions.json).
+[owner-decisions.json](owner-decisions.json). Cross-domain implementation and
+release ownership are binding in
+[engineering/INTEGRATION-CONTRACTS.md](engineering/INTEGRATION-CONTRACTS.md);
+the separate implementation/evidence/deferred/blocked states are in
+[engineering/ACCEPTANCE-MATRIX.md](engineering/ACCEPTANCE-MATRIX.md).
 
 ## 1. What it is
 

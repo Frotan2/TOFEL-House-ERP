@@ -11,6 +11,7 @@ $productRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $worker = Join-Path $PSScriptRoot "Run TOEFL House ERP.ps1"
 $credentialFile = Join-Path $productRoot "data\sites\toeflhouse.localhost\private\first-run-credentials.txt"
 $guideFile = Join-Path $PSScriptRoot "OWNER ACCEPTANCE GUIDE.txt"
+$ownerHandbookFile = Join-Path $PSScriptRoot "OWNER HANDBOOK.txt"
 $dailyGuideFile = Join-Path $PSScriptRoot "DAILY USE GUIDE.txt"
 $logDirectory = Join-Path $env:LOCALAPPDATA "TOEFL House ERP\Launcher"
 $desktopExe = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
@@ -82,6 +83,7 @@ $checkButton = New-LauncherButton "Check This PC" 30 339 165
 $guideButton = New-LauncherButton "Owner Readiness Guide" 205 339 235
 $dailyGuideButton = New-LauncherButton "How to Use" 450 339 190
 $copyStatusButton = New-LauncherButton "Copy Safe Support Status" 30 395 275
+$ownerHandbookButton = New-LauncherButton "Owner Handbook" 320 395 320
 
 $disclaimer = New-Object System.Windows.Forms.Label
 $disclaimer.Text = "Docker Desktop must be installed once. Real business use requires owner configuration and release approval."
@@ -114,12 +116,13 @@ function Get-CompletedCheckPath {
 }
 
 function Set-Busy([bool]$busy) {
-    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $dailyGuideButton, $copyStatusButton)) {
+    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $dailyGuideButton, $copyStatusButton, $ownerHandbookButton)) {
         $button.Enabled = -not $busy
     }
     $credentials.Enabled = (-not $busy) -and (Test-Path -LiteralPath $credentialFile -PathType Leaf)
     $guideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $guideFile -PathType Leaf)
     $dailyGuideButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)
+    $ownerHandbookButton.Enabled = (-not $busy) -and (Test-Path -LiteralPath $ownerHandbookFile -PathType Leaf)
     # A finished, read-only status is safe to copy even if the child process
     # is still closing, and even if Docker cannot be reached on this PC.
     $copyStatusButton.Enabled = [bool](Get-CompletedCheckPath)
@@ -228,6 +231,15 @@ $dailyGuideButton.Add_Click({
         Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $dailyGuideFile + '"')
     } else {
         $status.Text = "Daily use guide is missing. Ask your provider for a complete installer."
+    }
+})
+$ownerHandbookButton.Add_Click({
+    # Open the complete offline owner handbook without changing application,
+    # account, Docker, backup, recovery, or release state.
+    if (Test-Path -LiteralPath $ownerHandbookFile -PathType Leaf) {
+        Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $ownerHandbookFile + '"')
+    } else {
+        $status.Text = "Owner Handbook is missing. Ask your provider for a complete package."
     }
 })
 $copyStatusButton.Add_Click({
@@ -381,7 +393,9 @@ if ($SmokeTest) {
         $guideButton.Text -ne "Owner Readiness Guide" -or
         $dailyGuideButton.Text -ne "How to Use" -or
         $copyStatusButton.Text -ne "Copy Safe Support Status" -or
+        $ownerHandbookButton.Text -ne "Owner Handbook" -or
         -not (Test-Path -LiteralPath $guideFile -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $ownerHandbookFile -PathType Leaf) -or
         -not (Test-Path -LiteralPath $dailyGuideFile -PathType Leaf)) {
         throw "Graphical lifecycle actions were not initialized."
     }

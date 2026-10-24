@@ -10,7 +10,9 @@ GitHub repository name is `TOFEL-House-ERP`.
 One system for running the institute: applicants and students, placement
 testing, admission, enrollment, courses and levels, classes, teachers,
 timetables, attendance, assessment and progression, tuition and payments,
-teacher compensation, and reporting.
+teacher compensation, and reporting. Assessment/Progression and the other
+explicitly deferred stages are not enabled by that target lifecycle; see the
+[acceptance matrix](docs/engineering/ACCEPTANCE-MATRIX.md).
 
 **Who uses it:** the Course Owner, the General Manager, the Academic Manager,
 the Finance Manager, reception staff and instructors. Each role gets its own
@@ -34,34 +36,34 @@ capacities are entered by the owner as configuration and are never coded in.
 
 ## Release status
 
-**NO-GO / production authorization REJECT.** Hosted engineering has qualified
-substantial native workflows and the guarded Windows source/package paths. A
-provider-side image and native runtime suite have been verified, but the first
-customer ZIP was withdrawn after installer-tag and hosting-size defects were
-found. There is still no hosted customer download or real
-Owner/customer-machine acceptance in this checkout. The provider/CI packaging
-path builds and labels the exact image, emits a versioned manifest/checksum
-package, attests it, and can publish a tagged release; permitted CI publication
-and independent Windows acceptance remain open.
+**NO-GO / production authorization REJECT.** The consolidated native-first
+engineering candidate is defined by the
+[v1.0.0-rc.1 release notes](docs/engineering/RELEASE-CANDIDATE.md),
+[integration contracts](docs/engineering/INTEGRATION-CONTRACTS.md), and
+[four-state acceptance matrix](docs/engineering/ACCEPTANCE-MATRIX.md).
+Assessment/Progression, portals, notification delivery, derived reporting,
+online payments, and other explicitly deferred scope are not silently included.
 
-The provider qualification for revision
-`b171902abb7bb61b31b27d54279cf72dd70d5eed` passed **624 native checks with 0
-failures** and verified the native book stock, sale, payment, return, credit,
-restocking, and GL path. The local test ZIP is
-`TOEFL-House-ERP-Customer-ci-b171902abb7b.zip` (SHA-256
-`47e4cec35374229ea50d68fd41418310833d10f17ee8b331d7b12c6abefe7b99`), now
-**WITHDRAWN / NOT DELIVERABLE** because its imported tag and release-file size
-do not satisfy the installer and hosting requirements.
-The package is bound to the application revision named above. Subsequent
-replacement builds were rejected because an operator command mistyped the
-Node hash; the repository pin and checksum gate were correct. See the audit
-record for the correction and current validation scope.
+Baseline revision `c22b9979542c88a2cd179e179a91829d07a79a3a` has exact-SHA
+hosted successes for Owned, Native, Foundation, Product-image and Windows
+customer-package workflows. Those are engineering results only. The candidate
+package pipeline requires all four canonical gate receipts on its exact full
+SHA, embeds them with checksums in the customer ZIP, attests the prebuilt
+Linux/amd64 image package, and publishes only an existing reviewed `v*` tag.
+See [Releases](https://github.com/Frotan2/TOFEL-House-ERP/releases) for an
+actually published version; this source document does not assert that a tag or
+download exists before the workflow creates it.
 
-The remaining release gates are [Owner Windows and recovery #12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
-[hands-on book cashier acceptance #35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35),
-and [prebuilt customer package #36](https://github.com/Frotan2/TOFEL-House-ERP/issues/36).
-See the [current audit/release record](docs/engineering/RELEASE-STATUS-2026-10-23.md),
-[customer delivery guide](docs/CUSTOMER-DELIVERY.md), and [hosted acceptance note](docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md).
+Real Owner Windows/recovery/staff acceptance, cashier/book-stock acceptance,
+independent download/install, and the held safe updater remain open in
+[issue #12](https://github.com/Frotan2/TOFEL-House-ERP/issues/12),
+[issue #35](https://github.com/Frotan2/TOFEL-House-ERP/issues/35),
+[issue #36](https://github.com/Frotan2/TOFEL-House-ERP/issues/36), and
+[issue #40](https://github.com/Frotan2/TOFEL-House-ERP/issues/40).
+See the [2026-10-24 integration audit](docs/engineering/INTEGRATION-AUDIT-2026-10-24.md),
+[customer delivery guide](docs/CUSTOMER-DELIVERY.md), and the historical
+[2026-10-23 release record](docs/engineering/RELEASE-STATUS-2026-10-23.md).
+The withdrawn first ZIP remains historical and is not a deliverable.
 
 ## Owner: install and daily use (Windows)
 
@@ -71,7 +73,10 @@ prepare a clean image-inclusive folder and customers can use the graphical
 Desktop/WSL prerequisite still requires its own Windows installation, and
 neither the GUI nor the package lifts the current production/backup holds.
 Full preparation, acceptance criteria and limitations:
-[Customer delivery](docs/CUSTOMER-DELIVERY.md). The source-checkout commands
+[Customer delivery](docs/CUSTOMER-DELIVERY.md). No-code operating and safety
+instructions are in the packaged
+[Owner Handbook](product/windows/OWNER%20HANDBOOK.txt), also available from the
+GUI. The source-checkout commands
 below are maintained for developers and diagnosis, not commercial onboarding.
 
 **For the existing Owner computer:** do not reinstall or test Repair during
@@ -178,6 +183,11 @@ The Dockerfile, compose file and CI are tested against it.
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Architecture decision register (A01–A13) |
 | [docs/owner-decisions.json](docs/owner-decisions.json) | Owner business decisions |
 | [docs/CONFIGURATION-PLANE.md](docs/CONFIGURATION-PLANE.md) | How owner policies are configured, versioned and audited |
+| [docs/engineering/INTEGRATION-CONTRACTS.md](docs/engineering/INTEGRATION-CONTRACTS.md) | Domain/data ownership, APIs, events, migrations, tests and shared-file ownership |
+| [docs/engineering/ACCEPTANCE-MATRIX.md](docs/engineering/ACCEPTANCE-MATRIX.md) | Separate IMPLEMENTED, VERIFIED, DEFERRED and BLOCKED acceptance registers |
+| [docs/engineering/RELEASE-CANDIDATE.md](docs/engineering/RELEASE-CANDIDATE.md) | v1.0.0-rc.1 scope, package provenance, exclusions and release notes |
+| [docs/engineering/INTEGRATION-AUDIT-2026-10-24.md](docs/engineering/INTEGRATION-AUDIT-2026-10-24.md) | Main/PR/security review and integration decisions |
+| [Owner Handbook](product/windows/OWNER%20HANDBOOK.txt) | No-code English/Dari operating, safety and acceptance instructions |
 | [docs/ROLE-DESKS.md](docs/ROLE-DESKS.md) | Role desks: audiences, data sources, permissions |
 | [docs/CLASS-OPERATIONS.md](docs/CLASS-OPERATIONS.md) | Operator runbook: scheduling, capacity, waiting lists, transfers, suspensions |
 | [docs/PLACEMENT-SPEC.md](docs/PLACEMENT-SPEC.md) | Placement technical specification |

@@ -1,0 +1,32 @@
+name: One-time verified merged branch retirement
+# Final retirement 2026-10-24: remove verified merged maintenance heads too; active agent branches excluded.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/retire-merged-branches.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: retire-merged-branches-main
+  cancel-in-progress: false
+
+jobs:
+  retire-explicit-merged-branches:
+    if: github.repository == 'Frotan2/TOFEL-House-ERP'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact main revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Retire ONLY seven merged, unchanged, unreferenced branches
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CONFIRM_MERGED_BRANCH_CLEANUP: seven-exact-merged-pr-branches
+        run: python3 tools/foundation/annotated_step.py "Retire verified merged branches" -- python3 tools/maintenance/retire_merged_branches.py --apply
