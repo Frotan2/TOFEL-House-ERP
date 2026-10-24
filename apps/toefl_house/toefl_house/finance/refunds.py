@@ -107,7 +107,8 @@ def refund_allocation_ok(payment, credit_notes, party_account, cash_accounts,
     references = _payment(payment, "reference_rows") or []
     if not references:
         return False  # money out to a customer without a credit note
-    if abs(_flt(_payment(payment, "unallocated_amount"))) > TOLERANCE:
+    unallocated = _flt(_payment(payment, "unallocated_amount"))
+    if not math.isfinite(unallocated) or abs(unallocated) > TOLERANCE:
         return False
     paid_from = _payment(payment, "paid_from")
     paid_to = _payment(payment, "paid_to")
