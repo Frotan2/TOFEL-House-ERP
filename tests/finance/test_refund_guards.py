@@ -152,6 +152,15 @@ class RefundTests(unittest.TestCase):
             {"reference_name": "SYN-CREDIT", "reference_doctype": "Journal Entry",
              "allocated_amount": -600.0}])))
 
+    def test_nonfinite_amounts_must_never_pass_refund_checks(self):
+        self.assertFalse(self.judge(payment(paid_amount=float("nan"))))
+        self.assertFalse(self.judge(payment(paid_amount=float("inf"))))
+        self.assertFalse(self.judge(payment(reference_rows=[
+            {"reference_name": "SYN-CREDIT",
+             "allocated_amount": float("nan")}])))
+        self.assertFalse(self.judge(payment(
+            deductions=[{"amount": float("nan")}])))
+
     def test_refund_without_a_reference_is_refused(self):
         self.assertFalse(self.judge(payment(reference_rows=[])))
 
