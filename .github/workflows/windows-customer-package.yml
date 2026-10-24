@@ -17,6 +17,10 @@ on:
       - "tests/foundation/test_windows_update_path.py"
       - "tests/foundation/test_customer_install_package.py"
       - "tests/foundation/test_product_packaging.py"
+      # The customer update instructions are part of the delivery contract, so
+      # editing them re-proves the workflow they describe.
+      - "docs/CUSTOMER-UPDATES.md"
+      - "docs/engineering/SAFE-UPDATES.md"
       - ".github/workflows/windows-customer-package.yml"
   workflow_dispatch:
 
