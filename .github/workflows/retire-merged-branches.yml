@@ -21,11 +21,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout exact main revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       - name: Retire ONLY seven merged, unchanged, unreferenced branches
         env:
           GITHUB_TOKEN: ${{ github.token }}
           CONFIRM_MERGED_BRANCH_CLEANUP: seven-exact-merged-pr-branches
-        run: python3 tools/maintenance/retire_merged_branches.py --apply
+        run: python3 tools/foundation/annotated_step.py "Retire verified merged branches" -- python3 tools/maintenance/retire_merged_branches.py --apply
