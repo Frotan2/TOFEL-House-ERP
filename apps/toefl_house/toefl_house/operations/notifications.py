@@ -277,61 +277,43 @@ def get_dispatch_rule(event_type):
 
 
 def set_dispatch_rule(rule, request_key=None):
-    """Create/update a dispatch rule. Course Owner only when frappe available.
+    """Owner-authorized durable dispatch rule. No offline fake success.
 
-    `rule` is a dict as validated by validate_dispatch_rule.
-    Returns the cleaned rule.
+    A transport or DB failure is a failure, not a valid policy change.
+    A process-local cache must never become the source of notification
+    authority for another request or worker.
     """
-    # Authority check when possible
-    try:
-        from toefl_house.configuration.audit import require_authority
-        require_authority("business_policy")
-    except Exception:
-        pass
-
+    from toefl_house.configuration.audit import require_authority
+    require_authority("business_policy")
     cleaned = validate_dispatch_rule(rule)
     et = cleaned["event_type"]
-
-    # Persist to DB if available
-    try:
-        existing = frappe.db.get_all(
-            DISPATCH_RULE_DOCTYPE,
-            filters={"event_type": et},
-            fields=["name"],
-            limit=1,
-        )
-        if existing:
-            doc = frappe.get_doc(DISPATCH_RULE_DOCTYPE, existing[0]["name"])
-        else:
-            doc = frappe.get_doc({"doctype": DISPATCH_RULE_DOCTYPE, "event_type": et})
-            # Use ignore_permissions since authority already checked
-        doc.enabled = 1 if cleaned["enabled"] else 0
-        doc.severity = cleaned["severity"]
-        doc.channel = cleaned["channel"]
-        doc.timing_delay_minutes = cleaned["timing_delay_minutes"]
-        doc.max_retries = cleaned["max_retries"]
-        doc.retry_delay_minutes = cleaned["retry_delay_minutes"]
-        doc.escalate_after_minutes = cleaned["escalate_after_minutes"]
-        # Child tables for recipients
-        # Clear and re-add
-        try:
-            doc.set("recipients", [])
-            for r in cleaned["recipients"]:
-                doc.append("recipients", {"recipient": r})
-            doc.set("escalation_recipients", [])
-            for r in cleaned["escalation_recipients"]:
-                doc.append("escalation_recipients", {"recipient": r})
-        except Exception:
-            pass
-        if existing:
-            doc.save(ignore_permissions=True)
-        else:
-            doc.insert(ignore_permissions=True)
-    except Exception:
-        # Offline: just keep in memory
-        pass
-
-    _memory_rules[et] = cleaned
+    existing = frappe.db.get_all(
+        DISPATCH_RULE_DOCTYPE, filters={"event_type": et},
+        fields=["name"], limit=2)
+    if len(existing) > 1:
+        raise frappe.ValidationError("Multiple dispatch rules for the same event")
+    if existing:
+        doc = frappe.get_doc(DISPATCH_RULE_DOCTYPE, existing[0]["name"])
+    else:
+        doc = frappe.get_doc({"doctype": DISPATCH_RULE_DOCTYPE, "event_type": et})
+    doc.enabled = 1 if cleaned["enabled"] else 0
+    doc.severity = cleaned["severity"]
+    doc.channel = cleaned["channel"]
+    doc.timing_delay_minutes = cleaned["timing_delay_minutes"]
+    doc.max_retries = cleaned["max_retries"]
+    doc.retry_delay_minutes = cleaned["retry_delay_minutes"]
+    doc.escalate_after_minutes = cleaned["escalate_after_minutes"]
+    doc.set("recipients", [])
+    for recipient in cleaned["recipients"]:
+        doc.append("recipients", {"recipient": recipient})
+    doc.set("escalation_recipients", [])
+    for recipient in cleaned["escalation_recipients"]:
+        doc.append("escalation_recipients", {"recipient": recipient})
+    if existing:
+        doc.save(ignore_permissions=True)
+    else:
+        doc.insert(ignore_permissions=True)
+    # Do not publish a process-global rule as an alternative to the DB.
     return cleaned
 
 
