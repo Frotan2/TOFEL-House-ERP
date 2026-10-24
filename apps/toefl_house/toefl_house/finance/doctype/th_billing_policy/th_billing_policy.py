@@ -45,6 +45,18 @@ def validate(doc, method=None):
         billing.validate_terms(row.get("max_backdate_days"),
                                row.get("max_future_days"),
                                row.get("placement_fee_timing") or "")
+        # Installment schedule terms are validated as a triple: a version
+        # that enables splitting must state a usable count and interval.
+        # A version written before these fields existed reads NULL/0 from
+        # MariaDB; that legacy state must stay loadable and means "off", so
+        # the count is normalised to the ordinary single-document bill.
+        count = row.get("max_installments")
+        count = int(count) if count not in (None, "") else 1
+        interval = row.get("installment_interval_days")
+        interval = int(interval) if interval not in (None, "") else 0
+        billing.validate_installment_terms(
+            row.get("installments_allowed") or 0,
+            count if count >= 1 else 1, interval)
     _assert_versions_sound(doc)
 
 
