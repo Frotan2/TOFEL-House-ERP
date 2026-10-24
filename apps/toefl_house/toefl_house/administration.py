@@ -25,6 +25,8 @@ PRODUCTION_AUTHORIZATION = "REJECT"
 
 
 def _require_control_role():
+    if frappe.session.user in PROTECTED_USERS:
+        raise frappe.PermissionError("Protected accounts cannot act as business control users")
     roles = set(frappe.get_roles(frappe.session.user))
     if not roles.intersection(CONTROL_ROLES):
         raise frappe.PermissionError("Course Owner or General Manager role required")
@@ -94,6 +96,9 @@ def set_managed_role(request_key, user, role, enabled):
     not routine targets. Native Version is used for the auditable change record;
     no custom role or permission ledger is introduced.
     """
+    if frappe.session.user in PROTECTED_USERS:
+        raise frappe.PermissionError("Protected accounts cannot assign managed roles")
+    security.require_operational()
     actor_roles = set(frappe.get_roles(frappe.session.user))
     if "Course Owner" not in actor_roles:
         raise frappe.PermissionError("Course Owner role required")
