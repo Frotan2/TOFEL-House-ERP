@@ -64,7 +64,7 @@ INSTRUCTOR_GROUPS_SQL = (
     "SELECT ta.student_group FROM `tabTH Teaching Assignment` ta "
     "JOIN `tabInstructor` i ON i.name = ta.instructor "
     "JOIN `tabEmployee` emp ON emp.name = i.employee "
-    "WHERE emp.user_id = {user}")
+    "WHERE emp.user_id = {user} AND emp.status = 'Active'")
 
 
 def _instructor_groups(user):
@@ -409,12 +409,21 @@ def has_permission(doc, ptype=None, user=None, **kwargs):
         return False
     kind = KINDS[doc.doctype]
     if kind in ("assessment_book", "academic_result"):
-        # Instructors see their own classes only; academic staff and auditors
-        # keep the full read. Role union never widens a row scope.
+        # Academic Manager and Teaching Auditor have institutional read.
+        # Enrollment Officer only sees Published academic results, and a
+        # mixed Instructor+Enrollment role never unlocks draft books globally.
         held = set(frappe.get_roles(user))
-        if "Instructor" in held and not held & set(
-                ACADEMIC_BOOK_ROLES + ACADEMIC_RESULT_ROLES):
-            return _instructor_reads(kind, doc, user)
+        full_academic = bool(held & set(ACADEMIC_BOOK_ROLES))
+        if not full_academic:
+            if kind == "assessment_book":
+                return ("Instructor" in held
+                        and _instructor_reads(kind, doc, user))
+            if "Enrollment Officer" in held and doc.get("status") == "Published":
+                pass
+            elif "Instructor" in held and _instructor_reads(kind, doc, user):
+                pass
+            else:
+                return False
     if kind not in BRANCH_KINDS.values():
         return True
     branches = _user_branches(user)
@@ -481,12 +490,16 @@ def _query_role(kind, user=None):
                    + INSTRUCTOR_GROUPS_SQL.format(user=frappe.db.escape(user)) + ")"
         return "1=0"
     if kind == "academic_result":
-        if roles & set(ACADEMIC_RESULT_ROLES):
+        if roles & set(ACADEMIC_BOOK_ROLES):
             return "1=1"
+        conditions = []
+        if "Enrollment Officer" in roles:
+            conditions.append(f"{TABLES[kind]}.status = 'Published'")
         if "Instructor" in roles:
-            return f"{TABLES[kind]}.student_group IN (" \
-                   + INSTRUCTOR_GROUPS_SQL.format(user=frappe.db.escape(user)) + ")"
-        return "1=0"
+            conditions.append(f"{TABLES[kind]}.student_group IN ("
+                              + INSTRUCTOR_GROUPS_SQL.format(
+                                  user=frappe.db.escape(user)) + ")")
+        return "(" + " OR ".join(conditions) + ")" if conditions else "1=0"
     if kind == "progression_decision":
         return "1=1" if roles & set(PROGRESSION_ROLES) else "1=0"
     if "Placement Publisher" in roles:
