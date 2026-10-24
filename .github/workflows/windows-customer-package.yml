@@ -32,7 +32,8 @@ jobs:
             'product/windows/Verify Package Image.ps1',
             'product/windows/Prepare Customer Package.ps1',
             'product/windows/Test Fresh Installation.ps1',
-            'product/windows/Test Existing Installation.ps1'
+            'product/windows/Test Existing Installation.ps1',
+            'product/windows/Update TOEFL House ERP.ps1'
           )
           foreach ($path in $paths) {
             $tokens = $null
@@ -43,6 +44,13 @@ jobs:
             }
           }
           Write-Host "Customer PowerShell scripts parsed successfully."
+      - name: Verify the update workflow fails closed offline
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "product/windows/Update TOEFL House ERP.ps1" -SmokeTest
+          if ($LASTEXITCODE -ne 0) { throw "Windows update controls failed their offline checks." }
+          Write-Host "Windows update controls passed their offline fail-closed checks."
       - name: Initialize Windows GUI without opening a desktop window
         shell: powershell
         run: |
@@ -127,6 +135,9 @@ jobs:
             'product/windows/TOEFL House ERP.ps1',
             'product/windows/Check This PC.ps1',
             'product/windows/Test Existing Installation.ps1',
+            'product/windows/Update TOEFL House ERP.ps1',
+            'product/windows/updater-strings.json',
+            'product/updates/channel.json',
             'product/windows/OWNER ACCEPTANCE GUIDE.txt',
             'product/windows/DAILY USE GUIDE.txt',
             'product/release/toefl-house-erp-app.tar',
@@ -244,6 +255,26 @@ jobs:
             throw "Repeated Install did not refuse the existing Frappe site."
           }
           Write-Host "Repeated Install was refused safely."
+          # The graphical update path must run on a real Windows host and stop
+          # before any download or mutation while the provider has not enabled
+          # a production channel. Exit 3 is the documented refusal code.
+          $updateScript = Join-Path $kit 'product/windows/Update TOEFL House ERP.ps1'
+          $previousPreference = $ErrorActionPreference
+          try {
+            $ErrorActionPreference = 'Continue'
+            $updateOutput = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $updateScript -Action Check 2>&1)
+            $updateExit = $LASTEXITCODE
+          } finally { $ErrorActionPreference = $previousPreference }
+          if ($updateExit -ne 3) { throw ("Update Check should refuse a disabled channel, exit=" + $updateExit + " output=" + ($updateOutput | Out-String)) }
+          $updateText = ($updateOutput -join "`n")
+          if ($updateText -notmatch 'paused updates') { throw "Update refusal did not explain the disabled channel." }
+          if ($updateText -notmatch '\p{IsArabic}') { throw "Update refusal was not shown in Dari." }
+          $updateResult = Join-Path $kit 'product/data/updates/last-result.json'
+          if (-not (Test-Path -LiteralPath $updateResult -PathType Leaf)) { throw "Update refusal did not record a safe result." }
+          $resultText = [System.IO.File]::ReadAllText($updateResult)
+          if ($resultText -notmatch '"message_key": "channel.disabled"') { throw "Update refusal recorded an unexpected reason." }
+          if ($resultText -match 'password|secret|MARIADB') { throw "Update refusal recorded private detail." }
+          Write-Host "Update Check refused a disabled provider channel without downloading anything."
           # Partial-install protection: credentials alone must prevent Install
           # even when the synthetic Frappe site config is temporarily absent.
           $siteConfig = Join-Path $kit 'product/data/sites/toeflhouse.localhost/site_config.json'

@@ -197,3 +197,36 @@ After the read-only **Check This PC** succeeds, the Windows launcher enables
 status lines, not raw Docker/PowerShell logs, secrets or student records.
 It does not approve live use, authorize backup/restore or connect to a
 support service without the owner's direct action.
+
+## Updates (separate from Install and Repair)
+
+The Windows launcher now offers **Check for Updates** and **Install Update**.
+They are deliberately separate controls: a customer can learn whether a signed
+release exists without any install, repair, stop or start being reachable, and
+an update never creates a second site or "repairs" an existing one.
+
+An update is allowed only when all of the following are true:
+
+- the release manifest signature verifies against a trust key that was
+  provisioned **separately** on this computer (a checksum is never identity),
+- the signed release is marked `PRODUCTION RELEASE` and `AUTHORIZED`,
+- the downloaded archive is the exact prebuilt image the signed manifest names,
+- the installed version is inside the supported upgrade path,
+- a verified, encrypted backup on a **separate drive** still matches its
+  receipt, and the signed Owner recovery/key-custody authorization is bound to
+  that receipt,
+- free disk space, the named `toefl-house-erp_db-data` volume, the site
+  configuration, the credentials and the running services all check out,
+- no earlier update is in a non-terminal journal state.
+
+If any check fails the updater stops before the first change and explains why
+in English and Dari. It never builds Frappe or frontend assets on the customer
+PC, never removes the database volume, never prunes Docker and never restores a
+backup over the live site. A failed migration is reported as
+**recovery-required** and the application is **not** restarted.
+
+The channel shipped in this package is disabled (`enabled: false`), so every
+Check refuses with a plain explanation until the provider completes the
+release gates above. See [CUSTOMER-UPDATES.md](CUSTOMER-UPDATES.md) for the
+customer and provider steps, and
+[engineering/SAFE-UPDATES.md](engineering/SAFE-UPDATES.md) for the design.
