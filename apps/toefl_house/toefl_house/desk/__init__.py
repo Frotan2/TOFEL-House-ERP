@@ -391,6 +391,32 @@ PROJECTION_FIELDS = {
         "consent_evidence", "consent_expiry_days", "reason", "set_by",
         "set_on", "superseded_on",
     ],
+    # Notification dispatch (Mission 5): each event type's recipients,
+    # severity, timing, channel, retries, escalation, enabled — all
+    # owner-configurable, no defaults invented.
+    ("configuration", "TH Notification Dispatch Rule"): [
+        "name", "event_type", "enabled", "severity", "channel",
+        "timing_delay_minutes", "max_retries", "retry_delay_minutes",
+        "escalate_after_minutes",
+    ],
+    ("configuration", "TH Portal Configuration"): [
+        "name", "code", "title", "status", "student_portal_enabled",
+        "guardian_portal_enabled", "dashboard_enabled", "email_enabled",
+        "sms_enabled", "whatsapp_enabled", "modified",
+    ],
+    ("configuration", "TH Guardian Consent"): [
+        "name", "guardian", "student", "consent_date", "expiry_date",
+        "evidence_type", "status", "revoked_at", "revoked_by",
+    ],
+    ("configuration", "TH Portal Announcement"): [
+        "name", "title", "audience", "status", "publish_date", "message",
+    ],
+    # Notification ledger — readable by managers, not deletable by anyone.
+    ("configuration", "TH Notification"): [
+        "name", "event_type", "title", "severity", "channel", "status",
+        "related_doctype", "related_name", "retry_count", "max_retries",
+        "created_at", "delivered_at", "acknowledged_at",
+    ],
     # Teacher desk (Instructor): the teacher's own classes only, resolved
     # through session User -> Employee.user_id -> Instructor.employee ->
     # TH Teaching Assignment. Identity + window + recorded facts only: no
