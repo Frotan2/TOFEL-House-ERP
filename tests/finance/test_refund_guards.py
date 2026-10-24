@@ -153,6 +153,7 @@ class RefundTests(unittest.TestCase):
              "allocated_amount": -600.0}])))
 
     def test_nonfinite_amounts_must_never_pass_refund_checks(self):
+        self.assertFalse(self.judge(payment(unallocated_amount=float("nan"))))
         self.assertFalse(self.judge(payment(paid_amount=float("nan"))))
         self.assertFalse(self.judge(payment(paid_amount=float("inf"))))
         self.assertFalse(self.judge(payment(reference_rows=[
