@@ -22,6 +22,9 @@ KINDS = {
     "TH Correction Request": "correction_request",
     "TH Attendance Correction Request": "attendance_correction",
     "TH Cashier Day": "cashier_day",
+    "TH Assessment Book": "assessment_book",
+    "TH Academic Result": "academic_result",
+    "TH Progression Decision": "progression_decision",
 }
 TABLES = {
     "item": "`tabTH Placement Item Revision`",
@@ -45,7 +48,35 @@ TABLES = {
     "correction_request": "`tabTH Correction Request`",
     "attendance_correction": "`tabTH Attendance Correction Request`",
     "cashier_day": "`tabTH Cashier Day`",
+    "assessment_book": "`tabTH Assessment Book`",
+    "academic_result": "`tabTH Academic Result`",
+    "progression_decision": "`tabTH Progression Decision`",
 }
+ACADEMIC_BOOK_ROLES = ("Academic Manager", "Teaching Auditor")
+ACADEMIC_RESULT_ROLES = ("Academic Manager", "Teaching Auditor", "Enrollment Officer")
+PROGRESSION_ROLES = ("Academic Manager", "Teaching Auditor", "Enrollment Officer",
+                     "Enrollment Auditor")
+INSTRUCTOR_GROUPS_SQL = (
+    "SELECT ta.student_group FROM `tabTH Teaching Assignment` ta "
+    "JOIN `tabInstructor` i ON i.name = ta.instructor "
+    "JOIN `tabEmployee` emp ON emp.name = i.employee "
+    "WHERE emp.user_id = {user} AND emp.status = 'Active'"
+)
+
+
+def _instructor_groups(user):
+    rows = frappe.db.sql(INSTRUCTOR_GROUPS_SQL.format(
+        user=frappe.db.escape(user)), as_dict=True)
+    return {row["student_group"] for row in rows}
+
+
+def _instructor_reads(kind, doc, user):
+    if kind not in ("assessment_book", "academic_result"):
+        return False
+    group = doc.get("student_group") if hasattr(doc, "get") else None
+    return bool(group) and group in _instructor_groups(user)
+
+
 LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
 STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score", "decision")
 
