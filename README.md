@@ -83,6 +83,17 @@ Install also refuses a completed existing site. These fail-closed protections
 do not restore missing records, approve live operation or replace actual
 backup/recovery acceptance.
 
+**Updates** are a separate graphical workflow: **Check for Updates** and
+**Install Update**. The updater trusts only a signed release from a provider
+channel that was provisioned separately on this computer, verifies the exact
+version and prebuilt image, and refuses to start unless a verified encrypted
+backup, the Owner recovery/key-custody authorization, disk space and site
+integrity are all confirmed. It never builds software, never deletes the
+database volume and never restores over live data. The shipped channel stays
+disabled until the release gates above close. English and Dari instructions:
+[Customer updates](docs/CUSTOMER-UPDATES.md); engineering design:
+[docs/engineering/SAFE-UPDATES.md](docs/engineering/SAFE-UPDATES.md).
+
 ### Developer-only source checkout smoke instructions (NOT customer onboarding)
 
 You need a 64-bit Windows 10/11 PC with internet and
@@ -182,6 +193,8 @@ The Dockerfile, compose file and CI are tested against it.
 | [docs/PLACEMENT-SPEC.md](docs/PLACEMENT-SPEC.md) | Placement technical specification |
 | [docs/FINANCE-POLICY-APPROVAL.md](docs/FINANCE-POLICY-APPROVAL.md) | Owner approval record for the finance framework |
 | [docs/engineering/LAUNCH-RUNBOOK.md](docs/engineering/LAUNCH-RUNBOOK.md) | Guarded site-mode lifecycle, backup, restore, and rollback (not release authorization) |
+| [docs/CUSTOMER-UPDATES.md](docs/CUSTOMER-UPDATES.md) | Customer-facing update workflow in English and Dari, plus provider channel activation |
+| [docs/engineering/SAFE-UPDATES.md](docs/engineering/SAFE-UPDATES.md) | Fail-closed update design, protocol, invariants and test map |
 
 ## Contribution and data policy
 

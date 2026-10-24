@@ -37,6 +37,11 @@ ALLOWED_FILES = (
     "product/windows/Repair TOEFL House ERP.cmd",
     "product/windows/Test Fresh Installation.ps1",
     "product/windows/Test Existing Installation.ps1",
+    # Signed update workflow: the Windows driver, its bilingual catalogue and
+    # the (disabled until the provider authorizes production) channel record.
+    "product/windows/Update TOEFL House ERP.ps1",
+    "product/windows/updater-strings.json",
+    "product/updates/channel.json",
 )
 HEX40 = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
 SAFE_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,95}$")

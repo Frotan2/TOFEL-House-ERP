@@ -12,6 +12,8 @@ $worker = Join-Path $PSScriptRoot "Run TOEFL House ERP.ps1"
 $credentialFile = Join-Path $productRoot "data\sites\toeflhouse.localhost\private\first-run-credentials.txt"
 $guideFile = Join-Path $PSScriptRoot "OWNER ACCEPTANCE GUIDE.txt"
 $dailyGuideFile = Join-Path $PSScriptRoot "DAILY USE GUIDE.txt"
+$updaterStrings = Join-Path $PSScriptRoot "updater-strings.json"
+$updateResultFile = Join-Path $productRoot "data\updates\last-result.json"
 $logDirectory = Join-Path $env:LOCALAPPDATA "TOEFL House ERP\Launcher"
 $desktopExe = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
 $dockerCli = Join-Path $env:ProgramFiles "Docker\Docker\resources\bin\docker.exe"
@@ -25,8 +27,8 @@ $script:lastCheckPath = ""
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "TOEFL House ERP"
 $form.StartPosition = "CenterScreen"
-$form.ClientSize = New-Object System.Drawing.Size(720, 552)
-$form.MinimumSize = New-Object System.Drawing.Size(736, 591)
+$form.ClientSize = New-Object System.Drawing.Size(720, 612)
+$form.MinimumSize = New-Object System.Drawing.Size(736, 651)
 $form.MaximizeBox = $false
 $form.FormBorderStyle = "FixedDialog"
 $form.BackColor = [System.Drawing.Color]::FromArgb(247, 249, 252)
@@ -82,12 +84,16 @@ $checkButton = New-LauncherButton "Check This PC" 30 339 165
 $guideButton = New-LauncherButton "Owner Readiness Guide" 205 339 235
 $dailyGuideButton = New-LauncherButton "How to Use" 450 339 190
 $copyStatusButton = New-LauncherButton "Copy Safe Support Status" 30 395 275
+# Updates are deliberately separate from Install and Repair: a customer can
+# check for a signed release without any lifecycle action being reachable.
+$updateButton = New-LauncherButton "Check for Updates" 30 451 269
+$installUpdateButton = New-LauncherButton "Install Update" 309 451 220
 
 $disclaimer = New-Object System.Windows.Forms.Label
 $disclaimer.Text = "Docker Desktop must be installed once. Real business use requires owner configuration and release approval."
 $disclaimer.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $disclaimer.ForeColor = [System.Drawing.Color]::FromArgb(96, 105, 119)
-$disclaimer.Location = New-Object System.Drawing.Point(30, 464)
+$disclaimer.Location = New-Object System.Drawing.Point(30, 524)
 $disclaimer.Size = New-Object System.Drawing.Size(655, 47)
 $form.Controls.Add($disclaimer)
 
@@ -113,8 +119,75 @@ function Get-CompletedCheckPath {
     }
 }
 
+# Update results are rendered only from fixed catalogue text. The result file
+# can never inject a free-text message, URL or command into this window.
+function Get-UpdaterCatalog {
+    if (-not (Test-Path -LiteralPath $updaterStrings -PathType Leaf)) { return $null }
+    try {
+        $encoding = New-Object System.Text.UTF8Encoding($false, $true)
+        $catalog = [System.IO.File]::ReadAllText($updaterStrings, $encoding) | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        return $null
+    }
+    if ($null -eq $catalog -or $catalog.schema_version -ne 1 -or
+        $catalog.document_type -cne "toefl-house-erp-updater-strings") {
+        return $null
+    }
+    return $catalog
+}
+
+function Get-UpdaterText([string]$Section, [string]$Key) {
+    $catalog = Get-UpdaterCatalog
+    if ($null -eq $catalog) { return $null }
+    $entries = $catalog.$Section
+    if ($null -eq $entries) { return $null }
+    $entry = $entries.$Key
+    if ($null -eq $entry) { return $null }
+    if (-not ($entry.en -is [string]) -or -not ($entry.fa -is [string])) { return $null }
+    return $entry
+}
+
+function Get-UpdateResult {
+    if (-not (Test-Path -LiteralPath $updateResultFile -PathType Leaf)) { return $null }
+    try {
+        $item = Get-Item -LiteralPath $updateResultFile -Force
+        if ($item.Length -gt 65536) { return $null }
+        $encoding = New-Object System.Text.UTF8Encoding($false, $true)
+        $result = [System.IO.File]::ReadAllText($updateResultFile, $encoding) | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        return $null
+    }
+    if ($null -eq $result -or $result.document_type -cne "toefl-house-erp-updater-result") { return $null }
+    $statuses = @("update-available", "up-to-date", "refused", "failed", "completed",
+                  "recovery-required", "cancelled", "busy", "not-configured")
+    if ($statuses -cnotcontains ([string]$result.status)) { return $null }
+    $section = [string]$result.message_section
+    if (@("messages", "launcher") -cnotcontains $section) { return $null }
+    $entry = Get-UpdaterText $section ([string]$result.message_key)
+    if ($null -eq $entry) { return $null }
+    $version = ""
+    if ([string]$result.version -match '^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$') { $version = [string]$result.version }
+    return [pscustomobject]@{ en = $entry.en; fa = $entry.fa; version = $version; status = [string]$result.status }
+}
+
+function Show-UpdateResult {
+    $result = Get-UpdateResult
+    if ($null -eq $result) { return "" }
+    $body = $result.en + [Environment]::NewLine + [Environment]::NewLine + $result.fa
+    if ($result.version) {
+        $body = $body + [Environment]::NewLine + [Environment]::NewLine + "Version: " + $result.version
+    }
+    $icon = [System.Windows.Forms.MessageBoxIcon]::Information
+    if ($result.status -eq "refused" -or $result.status -eq "failed" -or $result.status -eq "recovery-required") {
+        $icon = [System.Windows.Forms.MessageBoxIcon]::Warning
+    }
+    [System.Windows.Forms.MessageBox]::Show($body, "TOEFL House ERP update",
+        [System.Windows.Forms.MessageBoxButtons]::OK, $icon) | Out-Null
+    return $result.en
+}
+
 function Set-Busy([bool]$busy) {
-    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $dailyGuideButton, $copyStatusButton)) {
+    foreach ($button in @($install, $open, $repair, $stop, $dockerButton, $checkButton, $guideButton, $dailyGuideButton, $copyStatusButton, $updateButton, $installUpdateButton)) {
         $button.Enabled = -not $busy
     }
     $credentials.Enabled = (-not $busy) -and (Test-Path -LiteralPath $credentialFile -PathType Leaf)
@@ -185,7 +258,13 @@ function Start-LauncherAction([string]$action) {
             RedirectStandardError = $script:stderrPath
         }
         $script:process = Start-Process @launch
-        $status.Text = "$action is running. Keep this window open. The first installation can take some time."
+        if ($action -eq "UpdateCheck" -or $action -eq "UpdateInstall") {
+            # Updates may take several minutes but change nothing until every
+            # check passes; the first installation message would be misleading.
+            $status.Text = "The update workflow is running. Keep this window open. Your records are only touched after every check passes."
+        } else {
+            $status.Text = "$action is running. Keep this window open. The first installation can take some time."
+        }
         Set-Busy $true
     } catch {
         $script:process = $null
@@ -289,6 +368,23 @@ $copyStatusButton.Add_Click({
         $status.Text = "Cannot verify a safe summary. Run Check This PC again."
     }
 })
+$updateButton.Add_Click({ Start-LauncherAction "UpdateCheck" })
+$installUpdateButton.Add_Click({
+    # Explicit Owner authorization before any mutating step. The update script
+    # still refuses unless the signed release, verified backup, recovery
+    # authorization and every host precondition pass.
+    $answer = [System.Windows.Forms.MessageBox]::Show(
+        "Installing an update changes the application and may upgrade the database. It runs only when the provider's signed release and every safety check pass, including a verified backup. Continue?",
+        "Confirm update",
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Warning,
+        [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+    if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) {
+        Start-LauncherAction "UpdateInstall"
+    } else {
+        $status.Text = "Update cancelled. Your system was not changed."
+    }
+})
 $dockerButton.Add_Click({
     [System.Diagnostics.Process]::Start("https://www.docker.com/products/docker-desktop/") | Out-Null
     $status.Text = "Install Docker Desktop for Windows, complete WSL 2 setup if prompted, and restart Windows if required. Reopen this app."
@@ -322,10 +418,20 @@ $timer.Add_Tick({
     if ($null -eq $script:process) { return }
     try {
         if (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf) {
-            $stages = @(Get-Content -LiteralPath $script:stdoutPath -Tail 100 -ErrorAction SilentlyContinue |
-                Where-Object { $_ -match '^\[TH_STAGE\]\s+(.+)$' })
+            # The update worker writes the same progress line in English and in
+            # Dari. Show both, so a Dari-speaking owner never depends on the
+            # English line to know what the computer is doing.
+            $tail = @(Get-Content -LiteralPath $script:stdoutPath -Tail 100 -ErrorAction SilentlyContinue)
+            $stages = @($tail | Where-Object { $_ -match '^\[TH_STAGE\]\s+(.+)$' })
+            $stagesFa = @($tail | Where-Object { $_ -match '^\[TH_STAGE-FA\]\s+(.+)$' })
             if ($stages.Count -gt 0) {
-                $status.Text = ($stages[-1] -replace '^\[TH_STAGE\]\s+', "")
+                $english = ($stages[-1] -replace '^\[TH_STAGE\]\s+', "")
+                if ($stagesFa.Count -gt 0) {
+                    $dari = ($stagesFa[-1] -replace '^\[TH_STAGE-FA\]\s+', "")
+                    $status.Text = $english + [Environment]::NewLine + $dari
+                } else {
+                    $status.Text = $english
+                }
             }
         }
         # Refresh the Copy button from the complete report itself, not only
@@ -350,12 +456,26 @@ $timer.Add_Tick({
                 if (Test-Path -LiteralPath $script:stdoutPath -PathType Leaf) {
                     Start-Process -FilePath "notepad.exe" -ArgumentList ('"' + $script:stdoutPath + '"')
                 }
+            } elseif ($completedAction -eq "UpdateCheck" -or $completedAction -eq "UpdateInstall") {
+                $summary = Show-UpdateResult
+                if (-not $summary) {
+                    $summary = "The update action finished. Select View Details for the recorded result."
+                }
+                $status.Text = $summary
+                if ($completedAction -eq "UpdateInstall") {
+                    [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
+                }
             } else {
                 $status.Text = "TOEFL House ERP is ready. Opening in your browser."
                 [System.Diagnostics.Process]::Start("http://127.0.0.1:8000/") | Out-Null
             }
         } else {
-            $status.Text = "$completedAction could not finish safely. Nothing has been reset. Select View Details, or contact your support provider."
+            if ($completedAction -eq "UpdateCheck" -or $completedAction -eq "UpdateInstall") {
+                $summary = Show-UpdateResult
+                if ($summary) { $status.Text = $summary } else { $status.Text = "The update stopped safely. Select View Details, or contact your support provider." }
+            } else {
+                $status.Text = "$completedAction could not finish safely. Nothing has been reset. Select View Details, or contact your support provider."
+            }
         }
     } catch {
         $status.Text = "The launcher could not read the operation status. Check View Details."
@@ -378,6 +498,8 @@ if ($SmokeTest) {
     if ($install.Text -ne "Install" -or $open.Text -ne "Open / Start" -or
         $repair.Text -ne "Repair" -or $stop.Text -ne "Stop" -or
         $checkButton.Text -ne "Check This PC" -or
+        $updateButton.Text -ne "Check for Updates" -or
+        $installUpdateButton.Text -ne "Install Update" -or
         $guideButton.Text -ne "Owner Readiness Guide" -or
         $dailyGuideButton.Text -ne "How to Use" -or
         $copyStatusButton.Text -ne "Copy Safe Support Status" -or

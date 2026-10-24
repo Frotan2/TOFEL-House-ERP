@@ -1,0 +1,211 @@
+"""Contract for the Windows "Check for Updates" workflow (Issue #40).
+
+The Windows scripts cannot run on this Linux CI runner, so these tests pin the
+safety properties of the update path: a separate graphical workflow, explicit
+Owner confirmation, a read-only engine call, prebuilt-image-only installs, no
+destructive Docker command, bilingual messages and updater files inside the
+verified customer package. The real PowerShell smoke test runs on the Windows
+runner in .github/workflows/windows-customer-package.yml.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+WINDOWS = ROOT / "product" / "windows"
+UPDATE = (WINDOWS / "Update TOEFL House ERP.ps1").read_text(encoding="utf-8")
+GUI = (WINDOWS / "TOEFL House ERP.ps1").read_text(encoding="utf-8")
+WORKER = (WINDOWS / "Run TOEFL House ERP.ps1").read_text(encoding="utf-8")
+ENTRYPOINT = (ROOT / "product" / "update_entrypoint.sh").read_text(encoding="utf-8")
+DOCKERFILE = (ROOT / "product" / "app.Dockerfile").read_text(encoding="utf-8")
+DOCKERIGNORE = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+CHANNEL = json.loads((ROOT / "product" / "updates" / "channel.json").read_text(encoding="utf-8"))
+CATALOG = json.loads((WINDOWS / "updater-strings.json").read_text(encoding="utf-8"))
+
+
+class UpdateWorkflowTests(unittest.TestCase):
+    def test_the_update_workflow_is_separate_from_install_and_repair(self):
+        self.assertNotIn("Install TOEFL House ERP.cmd", UPDATE)
+        self.assertNotIn("Repair TOEFL House ERP.cmd", UPDATE)
+        self.assertNotIn("Start TOEFL House ERP.cmd", UPDATE)
+        self.assertNotIn("Stop TOEFL House ERP.cmd", UPDATE)
+        self.assertNotIn("activate.py", UPDATE)
+
+    def test_the_graphical_launcher_exposes_the_two_update_controls(self):
+        for caption in ('New-LauncherButton "Check for Updates"', 'New-LauncherButton "Install Update"'):
+            self.assertIn(caption, GUI)
+        self.assertIn('$updateButton.Add_Click({ Start-LauncherAction "UpdateCheck" })', GUI)
+        self.assertIn('Start-LauncherAction "UpdateInstall"', GUI)
+        self.assertIn('$updateButton.Text -ne "Check for Updates"', GUI)
+        self.assertIn('$installUpdateButton.Text -ne "Install Update"', GUI)
+        # Both buttons must be disabled while any operation is running.
+        self.assertIn("$copyStatusButton, $updateButton, $installUpdateButton", GUI)
+
+    def test_the_worker_routes_updates_without_touching_lifecycle_commands(self):
+        self.assertIn('"Install", "Start", "Repair", "Stop", "Check", "UpdateCheck", "UpdateInstall"', WORKER)
+        self.assertIn('Join-Path $PSScriptRoot "Update TOEFL House ERP.ps1"', WORKER)
+        self.assertIn("& $updatePath -Action Check", WORKER)
+        self.assertIn("& $updatePath -Action Install -ConfirmationAccepted", WORKER)
+        update_branch = WORKER[WORKER.index('if ($Action -eq "UpdateCheck"'):]
+        update_branch = update_branch[:update_branch.index("$scriptPath = Join-Path")]
+        self.assertNotIn(".cmd", update_branch)
+
+    def test_install_requires_an_explicit_owner_confirmation(self):
+        self.assertIn("[switch]$ConfirmationAccepted", UPDATE)
+        self.assertIn("if (-not $ConfirmationAccepted) {", UPDATE)
+        self.assertIn('[System.Windows.Forms.MessageBoxDefaultButton]::Button2', GUI)
+        self.assertIn("Update cancelled. Your system was not changed.", GUI)
+
+    def test_install_refuses_before_any_change_when_the_engine_refuses(self):
+        install = UPDATE[UPDATE.index("function Invoke-UpdateInstall"):]
+        install = install[:install.index("function Invoke-SmokeTest")]
+        # The `docker load` and every stack mutation live behind the engine's
+        # allow decision, which is produced by Invoke-UpdateCheck before the
+        # install pipeline runs at all.
+        self.assertLess(UPDATE.index("function Invoke-UpdateCheck"), UPDATE.index("function Invoke-UpdateInstall"))
+        self.assertNotIn("docker load", UPDATE[:UPDATE.index("function Invoke-UpdateInstall")])
+        self.assertIn("if ($status -ne \"succeeded\")", install)
+        self.assertIn("recovery-required", install)
+
+    def test_no_destructive_command_can_appear_in_the_update_path(self):
+        combined = "\n".join((UPDATE, WORKER, ENTRYPOINT))
+        forbidden = ("down -v", "volume rm", "volume prune", "system prune", "docker compose down",
+                     "docker-compose down", "git reset --hard", "git clone", "Invoke-Expression",
+                     "--privileged", "docker build", "docker compose build", "bench build",
+                     "yarn install", "npm install", "restore.py", "rm -rf")
+        self.assertEqual([item for item in forbidden if item in combined], [],
+                         "the update path contains a destructive or build command")
+
+    def test_the_engine_is_read_only_and_offline_during_the_check(self):
+        engine_call = UPDATE[UPDATE.index("function Invoke-UpdateEngine"):]
+        engine_call = engine_call[:engine_call.index("function Read-EngineResponse")]
+        self.assertIn('"--network", "none"', engine_call)
+        self.assertIn(":ro", engine_call)
+        self.assertIn("--entrypoint", engine_call)
+        self.assertIn("/product/update_entrypoint.sh", engine_call)
+        # The site and log folders are only shared with the migrating engine.
+        self.assertIn('if ($Mode -ceq "apply")', engine_call)
+        apply_branch = engine_call[engine_call.index('if ($Mode -ceq "apply")'):engine_call.index("} else {")]
+        self.assertIn("sitesRoot", apply_branch)
+        self.assertNotIn("sitesRoot", engine_call[engine_call.index("} else {"):])
+
+    def test_only_a_prebuilt_verified_image_is_imported(self):
+        self.assertTrue('Invoke-DockerVerbose @("load", "--input", $Check.Archive)' in UPDATE,
+                        "the verified prebuilt archive is not the only imported image")
+        self.assertNotIn("docker build", UPDATE)
+        self.assertNotIn("bench build", UPDATE)
+        self.assertIn("function Test-AllowedUrl", UPDATE)
+        self.assertIn("https", UPDATE)
+
+    def test_the_download_is_https_only_on_an_allowlisted_provider_host(self):
+        self.assertIn('if ($uri.Scheme -cne "https") { return $false }', UPDATE)
+        self.assertIn("foreach ($allowed in @($AllowedHosts))", UPDATE)
+        self.assertIn("$request.AllowAutoRedirect = $false", UPDATE)
+        self.assertIn("[System.Net.SecurityProtocolType]::Tls12", UPDATE)
+        self.assertIn("Assert-SafeAssetName", UPDATE)
+        self.assertIn("$required -cnotcontains $name", UPDATE)
+
+    def test_a_verified_backup_and_owner_recovery_authorization_are_required(self):
+        self.assertIn('"activation\\backup-receipt.json"', UPDATE)
+        self.assertIn("recovery-authorization.json", UPDATE)
+        self.assertIn("data/updates/recovery-authorization.sig", UPDATE)
+        self.assertIn("preflight.backup.receipt_missing", UPDATE)
+        self.assertIn("recovery_authorization =", UPDATE)
+        self.assertIn("backup_dir = $script:BackupDirRelative", UPDATE)
+
+    def test_the_installed_identity_is_derived_from_the_running_image(self):
+        self.assertIn("org.toefl-house.release-version", UPDATE)
+        self.assertIn("org.toefl-house.source-revision", UPDATE)
+        self.assertIn("ConvertTo-ReleaseSequence", UPDATE)
+        self.assertIn("release_sequence = $sequence", UPDATE)
+
+    def test_a_failed_migration_is_never_restarted_automatically(self):
+        install = UPDATE[UPDATE.index("function Invoke-UpdateInstall"):]
+        install = install[:install.index("function Invoke-SmokeTest")]
+        self.assertIn('$outcome -ceq "safe-abort"', install)
+        recovery = install[install.index("# A migration may already have changed the database."):]
+        recovery = recovery[:recovery.index("exit $script:ExitRecoveryRequired")]
+        self.assertNotIn("Invoke-UpdateStart", recovery)
+        self.assertNotIn("compose", recovery)
+        # The journal records a recovery decision instead of a silent restart.
+        self.assertIn('Set-JournalState "recovery-required" $Check.Version', install)
+
+    def test_the_journal_blocks_a_second_update_and_reports_interruption(self):
+        self.assertIn('document_type = "toefl-house-erp-update-journal"', UPDATE)
+        self.assertIn('@("idle", "prepared", "applying", "completed", "rolled-back", "recovery-required")', UPDATE)
+        self.assertIn('if ($journalState -ceq "prepared" -or $journalState -ceq "applying")', UPDATE)
+        self.assertIn("updater.interrupted", UPDATE)
+        self.assertIn("Enter-UpdateLock", UPDATE)
+        self.assertIn("[System.IO.FileMode]::CreateNew", UPDATE)
+
+    def test_the_result_document_never_carries_free_text(self):
+        save = UPDATE[UPDATE.index("function Save-Result"):]
+        save = save[:save.index("function Stop-Update")]
+        self.assertIn('document_type = "toefl-house-erp-updater-result"', save)
+        self.assertNotIn("Detail", save)
+        for field in ("schema_version", "status", "message_section", "message_key", "version", "blockers"):
+            self.assertIn(field, save)
+        self.assertIn('if (@("messages", "launcher") -cnotcontains $section) { return $null }', GUI)
+        self.assertIn('if ($item.Length -gt 65536) { return $null }', GUI)
+
+    def test_the_engine_and_entrypoint_are_shipped_inside_the_image(self):
+        self.assertIn("COPY product/update_engine.py /product/update_engine.py", DOCKERFILE)
+        self.assertIn("COPY product/update_entrypoint.sh /product/update_entrypoint.sh", DOCKERFILE)
+        self.assertIn("/product/update_entrypoint.sh", DOCKERFILE)
+        self.assertIn("!product/update_engine.py", DOCKERIGNORE)
+        self.assertIn("!product/update_entrypoint.sh", DOCKERIGNORE)
+        self.assertTrue(ENTRYPOINT.startswith("#!/bin/sh\n"))
+        self.assertIn("python3 /product/update_engine.py --request /update/request.json", ENTRYPOINT)
+        self.assertIn("--response /update/response.json", ENTRYPOINT)
+        for forbidden in ("docker ", "volume rm", "restore", "activate", "rm -rf", "prune"):
+            self.assertNotIn(forbidden, ENTRYPOINT)
+
+    def test_every_customer_visible_message_is_english_and_dari(self):
+        self.assertEqual(CATALOG["document_type"], "toefl-house-erp-updater-strings")
+        for section in ("messages", "launcher", "ui"):
+            self.assertIn(section, CATALOG)
+            for key, entry in CATALOG[section].items():
+                self.assertEqual(set(entry), {"en", "fa"}, key)
+                self.assertTrue(entry["en"].strip(), key)
+                self.assertTrue(entry["fa"].strip(), key)
+                self.assertRegex(entry["fa"], r"[\u0600-\u06FF\u200c]", key)
+        for key in ("updater.checking", "updater.available", "updater.up_to_date", "updater.completed",
+                    "updater.failed", "updater.recovery_required", "updater.cancelled", "updater.not_installed",
+                    "updater.installed_version_unknown", "updater.engine_failed", "updater.engine_missing",
+                    "updater.already_running", "updater.rollback_done", "updater.interrupted",
+                    "updater.not_configured", "updater.network_failed", "updater.download_failed",
+                    "updater.package_invalid", "updater.guard_blocked"):
+            self.assertIn(key, CATALOG["launcher"])
+
+    def test_the_channel_cannot_reach_the_network_until_the_provider_enables_it(self):
+        self.assertEqual(CHANNEL["document_type"], "toefl-house-erp-update-channels")
+        for entry in CHANNEL["channels"]:
+            self.assertFalse(entry["enabled"])
+            self.assertTrue(entry["metadata_url"].startswith("https://"))
+            self.assertEqual(set(entry["required_assets"]),
+                             {"update.json", "update.json.sig", "toefl-house-erp-app.tar"})
+        self.assertIn('if ($selected.enabled -ne $true) {', UPDATE)
+        self.assertIn('"channel.disabled"', UPDATE)
+
+
+class PackageMembershipTests(unittest.TestCase):
+    def test_the_updater_travels_in_the_verified_customer_package(self):
+        for path in ("tools/release/create_customer_package.py", "product/windows/Prepare Customer Package.ps1"):
+            text = (ROOT / path).read_text(encoding="utf-8")
+            for name in ("product/windows/Update TOEFL House ERP.ps1",
+                         "product/windows/updater-strings.json",
+                         "product/updates/channel.json"):
+                self.assertIn(name, text, f"{name} is missing from {path}")
+
+    def test_the_windows_workflow_parses_and_smoke_tests_the_updater(self):
+        workflow = (ROOT / ".github" / "workflows" / "windows-customer-package.yml").read_text(encoding="utf-8")
+        self.assertIn("product/windows/Update TOEFL House ERP.ps1", workflow)
+        self.assertIn("Update TOEFL House ERP.ps1\" -SmokeTest", workflow)
+        self.assertIn("channel.disabled", workflow)
+        self.assertIn("paused updates", workflow)
+
+
+if __name__ == "__main__":
+    unittest.main()

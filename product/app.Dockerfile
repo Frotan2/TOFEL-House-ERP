@@ -126,12 +126,17 @@ COPY tools/foundation/realtime-locks /product/realtime-locks
 # an allowlist - enforced by the packaging guard in
 # tests/foundation/test_product_packaging.py.)
 COPY product/perf_baseline.py /product/perf_baseline.py
+# Signed update engine and its dedicated container entrypoint. The Windows
+# updater starts this image with the product folder mounted read-only; the
+# engine decides whether an already-downloaded release may be applied.
+COPY product/update_engine.py /product/update_engine.py
+COPY product/update_entrypoint.sh /product/update_entrypoint.sh
 # Fail the build if a Windows checkout or manually altered build context
 # carries CRLFs, a Unicode BOM, or a non-LF kernel shebang into the image.
 # The Windows preflight normalizes existing worktrees before docker build;
 # this independent in-image check makes bypassing that preflight fail closed.
 RUN python3 -c 'from pathlib import Path; import codecs; suffixes={".py",".sh",".js",".json",".css",".md",".txt",".toml",".yaml",".yml",".html",".xml",".csv",".svg",".jinja",".jinja2"}; roots=(Path("/build/owned"),Path("/product")); files=[p for root in roots for p in root.rglob("*") if p.is_file() and p.suffix.lower() in suffixes]; bom=(codecs.BOM_UTF8,codecs.BOM_UTF16_LE,codecs.BOM_UTF16_BE,codecs.BOM_UTF32_LE,codecs.BOM_UTF32_BE); bad=[str(p) for p in files if b"\r" in p.read_bytes() or p.read_bytes().startswith(bom)]; [print("LF/BOM contract violation: "+p) for p in bad]; assert Path("/product/entrypoint.sh").read_bytes().startswith(b"#!/bin/sh\n"), "entrypoint shebang is not LF"; assert Path("/product/activate.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "activate shebang is not LF"; assert Path("/product/bootstrap.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "bootstrap shebang is not LF"; assert Path("/product/restore.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "restore shebang is not LF"; assert Path("/product/backup.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "backup shebang is not LF"; assert Path("/product/perf_baseline.py").read_bytes().startswith(b"#!/usr/bin/env python3\n"), "performance shebang is not LF"; raise SystemExit(bool(bad))'
-RUN chmod +x /product/entrypoint.sh /product/activate.py
+RUN chmod +x /product/entrypoint.sh /product/activate.py /product/update_entrypoint.sh
 
 # Local bench: frappe from the pinned source (not re-resolved), then the rest.
 # Yarn Classic keeps upstream lockfiles frozen for nested installs.
