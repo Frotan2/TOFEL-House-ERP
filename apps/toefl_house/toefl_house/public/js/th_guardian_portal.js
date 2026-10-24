@@ -13,9 +13,26 @@
   // Load children
   api("toefl_house.operations.guardian_portal.get_my_children").then(children => {
     const el = document.getElementById("guardian-children");
-    if (!children || !children.length) { el.innerHTML = "<p class='text-muted'>No verified children linked to your guardian profile.</p>"; return; }
-    el.innerHTML = "<label>Select child:</label><select id='child-select' class='form-control'>" +
-      children.map(c => `<option value="${c.name}">${frappe.utils.escape_html(c.student_name||c.name)}</option>`).join("") + "</select>";
+    el.replaceChildren();
+    if (!children || !children.length) {
+      const msg = document.createElement("p");
+      msg.className = "text-muted";
+      msg.textContent = "No verified children linked to your guardian profile.";
+      el.appendChild(msg);
+      return;
+    }
+    const label = document.createElement("label");
+    label.textContent = "Select child:";
+    const select = document.createElement("select");
+    select.id = "child-select";
+    select.className = "form-control";
+    children.forEach(child => {
+      const option = document.createElement("option");
+      option.value = String(child.name || "");
+      option.textContent = String(child.student_name || child.name || "");
+      select.appendChild(option);
+    });
+    el.append(label, select);
     currentStudent = children[0].name;
     loadConsent(currentStudent);
     loadTab("schedule");
@@ -26,14 +43,21 @@
       loadTab("schedule");
     });
   }).catch(e => {
-    document.getElementById("guardian-children").innerHTML = `<div class="alert alert-danger">${e.message || "Guardian verification failed."}</div>`;
+    const alert = document.createElement("div");
+    alert.className = "alert alert-danger";
+    alert.textContent = "Guardian verification failed.";
+    document.getElementById("guardian-children").replaceChildren(alert);
   });
 
   function loadConsent(student) {
     api("toefl_house.operations.guardian_portal.get_consent_status", { student }).then(s => {
       const el = document.getElementById("guardian-consent-status");
-      if (s && s.has_consent) el.innerHTML = `<span class="badge badge-success">Consent active — expires ${s.expiry_date||"unknown"}</span>`;
-      else el.innerHTML = `<span class="badge badge-warning">Consent required/expired for ${student}</span>`;
+      const badge = document.createElement("span");
+      badge.className = (s && s.has_consent) ? "badge badge-success" : "badge badge-warning";
+      badge.textContent = (s && s.has_consent)
+        ? "Consent active — expires " + String(s.expiry_date || "unknown")
+        : "Consent required or expired for " + String(student);
+      el.replaceChildren(badge);
     });
   }
 
@@ -47,10 +71,23 @@
   }));
 
   function renderList(el, items, empty) {
-    if (!items || !items.length) { el.innerHTML = `<p class="text-muted">${empty}</p>`; return; }
-    el.innerHTML = "<ul class='list-group'>" + items.map(i =>
-      `<li class="list-group-item">${Object.values(i).slice(0,4).join(" — ")}</li>`
-    ).join("") + "</ul>";
+    el.replaceChildren();
+    if (!items || !items.length) {
+      const msg = document.createElement("p");
+      msg.className = "text-muted";
+      msg.textContent = empty;
+      el.appendChild(msg);
+      return;
+    }
+    const list = document.createElement("ul");
+    list.className = "list-group";
+    items.forEach(item => {
+      const li = document.createElement("li");
+      li.className = "list-group-item";
+      li.textContent = Object.values(item).slice(0, 4).map(v => String(v ?? "")).join(" — ");
+      list.appendChild(li);
+    });
+    el.appendChild(list);
   }
 
   function loadTab(tab) {
@@ -65,12 +102,19 @@
     };
     const method = methodMap[tab];
     if (!method) return;
-    pane.innerHTML = "<em>Loading…</em>";
+    const loading = document.createElement("em");
+    loading.textContent = "Loading…";
+    pane.replaceChildren(loading);
     api(method, { student: currentStudent }).then(data => {
       let items = data;
       if (tab === "fees") items = (data.fees||[]).concat(data.invoices||[]);
       renderList(pane, items, "No records found or access requires valid consent.");
-    }).catch(e => { pane.innerHTML = `<div class="alert alert-danger">${e.message || "Access denied."}</div>`; });
+    }).catch(() => {
+      const alert = document.createElement("div");
+      alert.className = "alert alert-danger";
+      alert.textContent = "Access denied.";
+      pane.replaceChildren(alert);
+    });
   }
 
   // Announcements
@@ -78,6 +122,19 @@
     const el = document.getElementById("guardian-announcements");
     const items = r.message || [];
     if (!items.length) return;
-    el.innerHTML = "<h6>Announcements</h6>" + items.map(a => `<div class="alert alert-info"><strong>${frappe.utils.escape_html(a.title||"")}</strong><br>${a.message||""}</div>`).join("");
+    el.replaceChildren();
+    const heading = document.createElement("h6");
+    heading.textContent = "Announcements";
+    el.appendChild(heading);
+    items.forEach(item => {
+      const alert = document.createElement("div");
+      alert.className = "alert alert-info";
+      const title = document.createElement("strong");
+      title.textContent = String(item.title || "");
+      alert.appendChild(title);
+      alert.appendChild(document.createElement("br"));
+      alert.appendChild(document.createTextNode(String(item.message || "")));
+      el.appendChild(alert);
+    });
   });
 })();
