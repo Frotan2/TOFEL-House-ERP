@@ -1,0 +1,106 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-10-24 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "component",
+  "title",
+  "maximum_score",
+  "mark",
+  "percent",
+  "weight",
+  "weighted_percent",
+  "pass_rule",
+  "pass_met",
+  "missing",
+  "missing_reason"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "component",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Component",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title"
+  },
+  {
+   "columns": 1,
+   "fieldname": "maximum_score",
+   "fieldtype": "Float",
+   "label": "Maximum"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mark",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mark"
+  },
+  {
+   "columns": 1,
+   "fieldname": "percent",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Percent"
+  },
+  {
+   "columns": 1,
+   "fieldname": "weight",
+   "fieldtype": "Float",
+   "label": "Weight"
+  },
+  {
+   "columns": 1,
+   "fieldname": "weighted_percent",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Weighted points"
+  },
+  {
+   "columns": 2,
+   "fieldname": "pass_rule",
+   "fieldtype": "Data",
+   "label": "Pass rule"
+  },
+  {
+   "columns": 1,
+   "fieldname": "pass_met",
+   "fieldtype": "Check",
+   "label": "Met"
+  },
+  {
+   "columns": 1,
+   "fieldname": "missing",
+   "fieldtype": "Check",
+   "label": "Missing"
+  },
+  {
+   "columns": 2,
+   "fieldname": "missing_reason",
+   "fieldtype": "Data",
+   "label": "Missing reason"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Academic",
+ "name": "TH Academic Result Component",
+ "owner": "Administrator",
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
