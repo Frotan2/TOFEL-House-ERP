@@ -12,6 +12,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 import os
+from pathlib import Path
 import re
 import sys
 import time
@@ -30,6 +31,9 @@ PENDING_STATUSES = {"queued", "in_progress", "waiting", "pending", "requested"}
 POLL_INTERVAL = 15
 API_ROOT = "https://api.github.com"
 HEX40 = re.compile(r"^[0-9a-fA-F]{40}$")
+EVIDENCE_SCHEMA = "toefl-house-ci-gates/1"
+EVIDENCE_SCOPE = "HOSTED ENGINEERING GATES ONLY - NOT OWNER OR PRODUCTION ACCEPTANCE"
+MAX_EVIDENCE_BYTES = 1024 * 1024
 
 
 class GateQueryError(RuntimeError):
@@ -125,6 +129,109 @@ def _repository(value: str) -> str:
     return value
 
 
+def validate_gate_evidence(evidence: dict, expected_sha: str) -> dict:
+    """Validate the portable, non-secret evidence embedded in a customer kit.
+
+    This validates the receipt's shape and exact-SHA binding. The receipt is
+    produced only after ``evaluate_gate_runs`` has queried GitHub successfully;
+    it is not a substitute for that online check or for human acceptance.
+    """
+    expected_sha = _sha(expected_sha)
+    if not isinstance(evidence, dict) or evidence.get("schema") != EVIDENCE_SCHEMA:
+        raise ValueError("invalid CI gate evidence schema")
+    repository = _repository(evidence.get("repository", ""))
+    if evidence.get("source_revision") != expected_sha or evidence.get("status") != "passed":
+        raise ValueError("CI gate evidence does not pass on the exact source revision")
+    if evidence.get("production_authorization") != "REJECT" or evidence.get("scope") != EVIDENCE_SCOPE:
+        raise ValueError("CI gate evidence is missing its non-authorization boundary")
+    created = evidence.get("generated_utc")
+    try:
+        timestamp = datetime.fromisoformat(created.replace("Z", "+00:00"))
+    except (AttributeError, TypeError, ValueError):
+        raise ValueError("CI gate evidence timestamp is invalid") from None
+    if timestamp.tzinfo is None:
+        raise ValueError("CI gate evidence timestamp lacks timezone")
+    rows = evidence.get("gates")
+    if not isinstance(rows, list) or len(rows) != len(REQUIRED_WORKFLOWS):
+        raise ValueError("CI gate evidence must contain all four workflows")
+    by_path = {}
+    seen_run_ids = set()
+    for row in rows:
+        if not isinstance(row, dict) or row.get("workflow") in by_path:
+            raise ValueError("CI gate evidence contains a malformed or duplicate workflow")
+        path = row.get("workflow")
+        if path not in REQUIRED_WORKFLOWS:
+            raise ValueError("CI gate evidence contains an unexpected workflow")
+        try:
+            run_id = _positive_int(row.get("run_id"))
+            _positive_int(row.get("run_attempt"))
+        except ValueError:
+            raise ValueError("CI gate evidence contains an invalid run identifier") from None
+        if run_id in seen_run_ids:
+            raise ValueError("CI gate evidence reuses one run for multiple workflows")
+        seen_run_ids.add(run_id)
+        expected_url = f"https://github.com/{repository}/actions/runs/{run_id}"
+        if (row.get("status") != "passed" or row.get("reason") != "completed_success"
+                or row.get("run_url") != expected_url):
+            raise ValueError("CI gate evidence contains an unqualified workflow receipt")
+        by_path[path] = row
+    if set(by_path) != set(REQUIRED_WORKFLOWS):
+        raise ValueError("CI gate evidence is incomplete")
+    return evidence
+
+
+def make_gate_evidence(report: dict, repository: str) -> dict:
+    """Convert a just-queried passing report into a portable release receipt."""
+    repository = _repository(repository)
+    if not isinstance(report, dict) or report.get("status") != "passed":
+        raise ValueError("only a passing exact-SHA gate report can become release evidence")
+    rows = []
+    for gate in report.get("gates", []):
+        if not isinstance(gate, dict):
+            raise ValueError("malformed CI gate report")
+        row = dict(gate)
+        try:
+            run_id = _positive_int(row.get("run_id"))
+        except ValueError:
+            raise ValueError("passing CI gate report lacks a run identifier") from None
+        row["run_url"] = f"https://github.com/{repository}/actions/runs/{run_id}"
+        rows.append(row)
+    evidence = {
+        "schema": EVIDENCE_SCHEMA,
+        "repository": repository,
+        "source_revision": report.get("expected_sha"),
+        "status": "passed",
+        "scope": EVIDENCE_SCOPE,
+        "production_authorization": "REJECT",
+        "generated_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "gates": rows,
+    }
+    return validate_gate_evidence(evidence, report.get("expected_sha", ""))
+
+
+def write_gate_evidence(path: Path, evidence: dict, expected_sha: str) -> None:
+    """Write a new evidence file without replacing an existing receipt."""
+    if not isinstance(path, Path):
+        raise ValueError("CI gate evidence output must be a filesystem path")
+    validate_gate_evidence(evidence, expected_sha)
+    if not path.parent.is_dir() or path.exists() or path.is_symlink():
+        raise ValueError("CI gate evidence output must be a new file in an existing directory")
+    payload = (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if len(payload) > MAX_EVIDENCE_BYTES:
+        raise ValueError("CI gate evidence exceeds the size limit")
+    created = False
+    try:
+        with path.open("xb") as handle:
+            created = True
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError:
+        if created:
+            path.unlink(missing_ok=True)
+        raise GateQueryError("could not write CI gate evidence without overwriting an existing file") from None
+
+
 def _api_json(repository: str, suffix: str, token: str, *, method="GET", body=None, timeout=30):
     data = None if body is None else json.dumps(body).encode("utf-8")
     request = Request(API_ROOT + "/repos/" + _repository(repository) + suffix, data=data, method=method,
@@ -218,8 +325,14 @@ def main(argv=None) -> int:
     parser.add_argument("--ensure-started", action="store_true", help="dispatch only missing canonical gates; do not wait")
     parser.add_argument("--timeout", type=int, default=900, help="polling deadline in seconds (1-3600; default 900)")
     parser.add_argument("--ref", default=os.environ.get("GITHUB_REF", ""), help="full branch/tag ref for --ensure-started")
+    parser.add_argument("--output", type=Path, help="write the final passing receipt to a new JSON file")
     args = parser.parse_args(argv)
     try:
+        if args.ensure_started and args.output is not None:
+            raise ValueError("--output is available only after all gates pass, not with --ensure-started")
+        if args.output is not None and (not args.output.parent.is_dir()
+                                       or args.output.exists() or args.output.is_symlink()):
+            raise ValueError("--output must be a new file in an existing directory")
         if not 1 <= args.timeout <= 3600:
             raise ValueError("--timeout must be between 1 and 3600 seconds")
         token = os.environ.get("GH_TOKEN", "")
@@ -240,7 +353,12 @@ def main(argv=None) -> int:
             if report["status"] == "failed":
                 return 1
             if report["status"] == "passed":
-                return 0 if time.monotonic() <= deadline else 1
+                if time.monotonic() > deadline:
+                    return 1
+                if args.output is not None:
+                    evidence = make_gate_evidence(report, repository)
+                    write_gate_evidence(args.output, evidence, sha)
+                return 0
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 print("CI gates timed out; dispatch missing workflows on the exact SHA before releasing", file=sys.stderr)

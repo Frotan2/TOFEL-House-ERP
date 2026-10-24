@@ -6,6 +6,8 @@ import copy
 import io
 import json
 import os
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
@@ -118,6 +120,56 @@ class EvaluateGateRunsTests(unittest.TestCase):
         before = copy.deepcopy(runs)
         self.evaluate(runs)
         self.assertEqual(runs, before)
+
+
+class GateEvidenceTests(unittest.TestCase):
+    def evidence(self):
+        report = gates.evaluate_gate_runs(passing_runs(), SHA, None)
+        return gates.make_gate_evidence(report, REPOSITORY)
+
+    def test_portable_receipt_binds_every_exact_sha_run_and_preserves_reject(self):
+        evidence = self.evidence()
+        self.assertIs(gates.validate_gate_evidence(evidence, SHA), evidence)
+        self.assertEqual(evidence["source_revision"], SHA)
+        self.assertEqual(evidence["production_authorization"], "REJECT")
+        self.assertEqual({row["workflow"] for row in evidence["gates"]}, set(gates.REQUIRED_WORKFLOWS))
+        for row in evidence["gates"]:
+            self.assertEqual(row["run_url"], f"https://github.com/{REPOSITORY}/actions/runs/{row['run_id']}")
+
+    def test_wrong_revision_missing_run_or_non_success_cannot_be_embedded(self):
+        for mutate in (
+            lambda row: row.update(source_revision=OTHER_SHA),
+            lambda row: row.update(status="pending"),
+            lambda row: row.update(production_authorization="ALLOW"),
+            lambda row: row["gates"].pop(),
+            lambda row: row["gates"][0].update(run_id=None),
+            lambda row: row["gates"][0].update(run_url="https://example.invalid/1"),
+            lambda row: row["gates"][0].update(reason="manual_override"),
+        ):
+            with self.subTest(mutate=mutate):
+                evidence = self.evidence()
+                mutate(evidence)
+                with self.assertRaises(ValueError):
+                    gates.validate_gate_evidence(evidence, SHA)
+
+    def test_one_run_cannot_impersonate_multiple_workflows(self):
+        evidence = self.evidence()
+        first = evidence["gates"][0]
+        evidence["gates"][1]["run_id"] = first["run_id"]
+        evidence["gates"][1]["run_url"] = first["run_url"]
+        with self.assertRaisesRegex(ValueError, "reuses one run"):
+            gates.validate_gate_evidence(evidence, SHA)
+
+    def test_receipt_write_is_new_only_and_never_overwrites(self):
+        evidence = self.evidence()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "gates.json"
+            gates.write_gate_evidence(destination, evidence, SHA)
+            self.assertEqual(json.loads(destination.read_text(encoding="utf-8")), evidence)
+            before = destination.read_bytes()
+            with self.assertRaises(ValueError):
+                gates.write_gate_evidence(destination, evidence, SHA)
+            self.assertEqual(destination.read_bytes(), before)
 
 
 class GateApiTests(unittest.TestCase):
@@ -249,6 +301,25 @@ class GateCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(output)["status"], "started")
         sleep.assert_not_called()
+
+    def test_cli_emits_receipt_only_after_all_gates_pass(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "receipt.json"
+            with patch.object(gates, "fetch_gate_runs", return_value=passing_runs()):
+                code, _, _ = self.invoke(["--output", str(destination)])
+            self.assertEqual(code, 0)
+            gates.validate_gate_evidence(json.loads(destination.read_text(encoding="utf-8")), SHA)
+            before = destination.read_bytes()
+            with patch.object(gates, "fetch_gate_runs") as fetch:
+                self.assertEqual(self.invoke(["--output", str(destination)])[0], 1)
+                fetch.assert_not_called()
+            self.assertEqual(destination.read_bytes(), before)
+
+    def test_dispatch_mode_cannot_emit_a_passing_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(gates, "urlopen") as api:
+            code, _, _ = self.invoke(["--ensure-started", "--output", str(Path(temporary) / "receipt.json")])
+            self.assertEqual(code, 1)
+            api.assert_not_called()
 
     def test_full_workflow_deadline_allows_slow_checks_but_stays_bounded(self):
         with patch.object(gates, "fetch_gate_runs", return_value=passing_runs()), \

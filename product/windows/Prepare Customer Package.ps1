@@ -67,6 +67,7 @@ try {
         "product/windows/Run TOEFL House ERP.ps1",
         "product/windows/Check This PC.ps1",
         "product/windows/OWNER ACCEPTANCE GUIDE.txt",
+        "product/windows/OWNER HANDBOOK.txt",
         "product/windows/DAILY USE GUIDE.txt",
         "product/windows/Verify Package Image.ps1",
         "product/windows/Install TOEFL House ERP.cmd",
