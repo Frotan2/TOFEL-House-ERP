@@ -708,6 +708,9 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "max_backdate_days", label: "Max backdate days", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "max_future_days", label: "Max future days", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "placement_fee_timing", label: "Placement-fee timing", fieldtype: "Data", reqd: 1 },
+			{ fieldname: "installments_allowed", label: "Installments allowed", fieldtype: "Check" },
+			{ fieldname: "max_installments", label: "Maximum installments", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "installment_interval_days", label: "Installment interval (days)", fieldtype: "Int", reqd: 1 },
 		],
 		"toefl_house.finance.policies.set_billing_policy_status": [
 			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
