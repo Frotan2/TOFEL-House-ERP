@@ -4810,7 +4810,10 @@ def main():
             # dual key: command access alone (Finance Officer without the
             # configured approver role) cannot approve; the approver role
             # alone (Finance Auditor without command access) cannot either
-            req=as_user('finance_officer',lambda:corr.request_invoice_correction(
+            # Separate synthetic requester and approver: a Finance Officer
+            # with no approval role raises the request; the configured
+            # Finance Officer+approver later posts it. Never bypass 4-eyes.
+            req=as_user('correction_probe',lambda:corr.request_invoice_correction(
                 'fc_req_ok_00000000001',cfx2['si'],'SYN fixture correction',gt))
             assert req['correction_policy']==pol['name'],req
             assert denied(lambda:as_user('correction_probe',lambda:corr.approve_invoice_correction(
@@ -5408,7 +5411,7 @@ def main():
             # poisoned session — this is what a staff browser would do today.
             sess={label:login(label) for label in ('receptionist','academic_manager',
                   'finance_manager','general_manager','course_owner','academic_scheduler',
-                  'finance_officer','outsider','teaching_scheduler',
+                  'finance_officer','correction_probe','outsider','teaching_scheduler',
                   'teacher_one','teacher_two','teacher_unlinked')}
             # S6 teacher-daily-use: bind the Instructor-role logins through
             # the native identity chain (Employee.user_id at erpnext
@@ -5629,13 +5632,15 @@ def main():
             # row for the worker's transaction, instead of waiting into a
             # lock-wait timeout.
             frappe.db.rollback()
-            r=sess['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+            # Different logins must request and approve. HTTP validates the
+            # same immutable maker/checker rule as direct native commands.
+            r=sess['correction_probe'].post(base+'/api/method/toefl_house.finance.'
                 'corrections.request_fees_correction',json=dict(
                 request_key='desk-fees-http-req-0001',fees=fee2,
                 reason='SYN hosted desk probe',requested_amount=gt2),timeout=40)
             assert r.status_code==200,('fees correction request over HTTP',r.status_code,r.text[:300])
             creq=r.json()['message']
-            rd=sess['finance_officer'].post(base+'/api/method/toefl_house.finance.'
+            rd=sess['correction_probe'].post(base+'/api/method/toefl_house.finance.'
                 'corrections.request_fees_correction',json=dict(
                 request_key='desk-fees-http-req-0002',fees=fee2,
                 reason='SYN duplicate attempt',requested_amount=gt2),timeout=40)
