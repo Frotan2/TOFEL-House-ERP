@@ -39,8 +39,21 @@ result. No terminal, Git, Docker command or database command is ever needed.
    match the backup receipt.
 7. A signed Owner recovery and key-custody authorization, bound to that backup.
 8. That no previous update is still unfinished.
+9. That the downloaded image still has the exact size, SHA-256 and image
+   identity the signed release promised — checked again immediately before the
+   update is applied.
+10. That every existing student, payment, invoice, book, class, attendance and
+    payroll record is still there afterwards, with the same counts and the same
+    links between records. If any count cannot be read, the update stops before
+    the first change instead of assuming the data is safe.
+
+The image is downloaded only after the release information has passed every
+check, and a verified update permission expires after 30 minutes, so a stale or
+repeated step is refused rather than executed twice.
 
 If any item cannot be verified, the update is refused before the first change.
+A release cannot switch these requirements off: a manifest that does not demand
+a verified backup and a signed Owner authorization is rejected as invalid.
 
 ### بررسی‌های پیش از هر تغییر
 
@@ -55,7 +68,21 @@ If any item cannot be verified, the update is refused before the first change.
 ۷. اجازهٔ امضاشدهٔ مالک برای بازیابی و نگهداری کلید، متصل به همان بکاپ.
 ۸. اینکه هیچ به‌روزرسانی قبلی ناتمام نمانده باشد.
 
-اگر هر مورد تأیید نشود، به‌روزرسانی پیش از نخستین تغییر رد می‌شود.
+۹. اینکه فایل تصویر دانلودشده هنوز همان اندازه، همان SHA-256 و همان هویت
+تصویر وعده‌داده‌شده در نسخهٔ امضاشده را دارد — درست پیش از تطبیق دوباره
+بررسی می‌شود.
+۱۰. اینکه همهٔ سوابق موجود شاگردان، پرداخت‌ها، بل‌ها، صنوف، حاضری و معاشات
+پس از به‌روزرسانی باقی مانده‌اند؛ با همان شمار و همان روابط میان سوابق. اگر
+شمردن هر سابقه ممکن نباشد، به‌روزرسانی پیش از نخستین تغییر متوقف می‌شود و
+فرض نمی‌شود که داده‌ها سالم‌اند.
+
+فایل تصویر تنها پس از گذشتن معلومات نسخه از همهٔ بررسی‌ها دانلود می‌شود و
+اجازهٔ تأییدشده پس از ۳۰ دقیقه منقضی می‌گردد؛ بنابراین یک مرحلهٔ کهنه یا
+تکرارشده رد می‌شود و دو بار اجرا نمی‌گردد.
+
+اگر هر مورد تأیید نشود، به‌روزرسانی پیش از نخستین تغییر رد می‌شود. یک نسخه
+نمی‌تواند این شرط‌ها را خاموش کند: مانیفستی که بکاپ تأییدشده و اجازهٔ امضاشدهٔ
+مالک را لازم نداند، نامعتبر شمرده می‌شود.
 
 ## Safe recovery / بازیابی ایمن
 

@@ -408,6 +408,25 @@ class UpdateFixture:
     def preflight(self, **overrides) -> dict:
         return engine.preflight(self.preflight_request(**overrides), now=NOW)
 
+    def authorize_request(self, transaction: dict, **overrides) -> dict:
+        request = self.preflight_request(**overrides)
+        request["action"] = "authorize"
+        request["transaction"] = transaction
+        return request
+
+    def authorize(self, transaction: dict, **overrides) -> dict:
+        return engine.authorize(self.authorize_request(transaction, **overrides), now=NOW)
+
+    def verified_transaction(self, **overrides) -> dict:
+        """A complete manifest -> image authorization, as the updater performs it."""
+        decision = self.preflight(**overrides)
+        if decision["decision"] != "allow":
+            raise AssertionError(f"preflight refused: {decision['blockers']}")
+        authorized = self.authorize(decision["transaction"], **overrides)
+        if authorized["decision"] != "allow":
+            raise AssertionError(f"authorize refused: {authorized['blockers']}")
+        return authorized["transaction"]
+
 
 def codes(response: dict) -> set[str]:
     return {item["code"] for item in response.get("blockers", [])}
@@ -805,10 +824,15 @@ class RecoveryAuthorizationTests(UpdateEngineBase):
         fixture.write_recovery_authorization(key=fixture.signing, key_id="release-2026a")
         self.assertIn("trust.key_unknown", codes(fixture.preflight()))
 
-    def test_authorization_is_optional_only_when_the_release_does_not_require_it(self):
+    def test_a_release_cannot_switch_recovery_authorization_off(self):
+        # A migrating release must always carry a signed Owner authorization,
+        # even if its manifest asks to skip one.
         fixture = self.fixture(recovery_required=False)
         response = fixture.preflight(recovery_authorization="", recovery_signature="")
-        self.assertEqual(response["decision"], "allow", response["blockers"])
+        self.assertEqual(response["decision"], "refuse")
+        self.assertIn("release.manifest.invalid", codes(response))
+        self.assertEqual(response["decision"], "refuse")
+        self.assertIsNone(response["transaction"])
 
 
 FAKE_BENCH = r'''#!/usr/bin/env python3
@@ -826,6 +850,11 @@ if "migrate" in args:
     state["migrate_calls"] = state.get("migrate_calls", 0) + 1
     for doctype, delta in state.get("mutations", {}).items():
         state["counts"][doctype] = (state["counts"].get(doctype) or 0) + delta
+    for doctype in state.get("drop_after_migrate", []):
+        state["counts"].pop(doctype, None)
+    for doctype, delta in state.get("orphan_mutations", {}).items():
+        state.setdefault("orphans", {})[doctype] = state["orphans"].get(doctype, 0) + delta
+        state["counts"][doctype] = (state["counts"].get(doctype) or 0) + delta
     open(state_path, "w", encoding="utf-8").write(json.dumps(state))
     print("migration complete")
     raise SystemExit(0)
@@ -838,7 +867,19 @@ if "frappe.db.count" in args:
     if value is None:
         sys.stderr.write("DoesNotExistError\n")
         raise SystemExit(1)
-    print(value)
+    print(value if isinstance(value, int) else json.dumps(value))
+    raise SystemExit(0)
+if "frappe.db.sql" in args:
+    query = json.loads(args[args.index("--kwargs") + 1])["query"]
+    rows = []
+    for child in ("Sales Invoice Item", "Payment Entry Reference"):
+        if child in query:
+            value = state.get("orphans", {}).get(child)
+            if value is None:
+                sys.stderr.write("synthetic integrity failure\n")
+                raise SystemExit(1)
+            rows.append([child, str(value)])
+    print(json.dumps(rows))
     raise SystemExit(0)
 if "frappe.client.get_list" in args:
     if state.get("fail_pages"):
@@ -866,6 +907,7 @@ class ApplyTests(UpdateEngineBase):
                        "Salary Slip": 5, "Employee": 6, "User": 4, "Role": 9},
             "apps": list(engine.REQUIRED_APPS),
             "pages": list(engine.ROLE_DESK_PAGES),
+            "orphans": {"Sales Invoice Item": 0, "Payment Entry Reference": 0},
             "mutations": {},
         }
         self.state_path = self.tmp / "bench-state.json"
@@ -887,7 +929,13 @@ class ApplyTests(UpdateEngineBase):
             return []
         return [json.loads(line) for line in self.log_path.read_text().splitlines() if line.strip()]
 
+    def transaction(self, **overrides) -> dict:
+        return self.fixture.verified_transaction(**overrides)
+
     def apply_request(self, **overrides) -> dict:
+        transaction = overrides.pop("transaction", None)
+        if transaction is None:
+            transaction = self.transaction()
         request = {
             "action": "apply",
             "site": engine.SITE_NAME,
@@ -900,12 +948,27 @@ class ApplyTests(UpdateEngineBase):
             "host_updater_version": "2026.10.24",
             "migrate_replays": 2,
             "command_timeout_seconds": 120,
+            "transaction": transaction,
+            "archive": str((self.fixture.staging / "toefl-house-erp-app.tar")
+                           .relative_to(self.fixture.product_root)),
+            "installed": self.fixture.installed(),
+            "backup_receipt": self.fixture.receipt_rel,
+            "backup_dir": str(self.fixture.backup_dir.relative_to(self.fixture.product_root)),
+            "recovery_authorization": self.fixture.authorization_rel,
+            "recovery_signature": self.fixture.authorization_signature_rel,
         }
         request.update(overrides)
         return request
 
     def apply(self, **overrides) -> dict:
-        return engine.apply_update(self.apply_request(**overrides), now=NOW)
+        return engine.apply_update(self.apply_request(**overrides), now=NOW,
+                                   state_dir=self.tmp / "run")
+
+    def blocker_codes(self, report: dict) -> set[str]:
+        return {item["code"] for item in report["blockers"]}
+
+    def migrate_called(self) -> bool:
+        return any("migrate" in call for call in self.calls())
 
     def test_supported_migration_runs_twice_and_preserves_all_records(self):
         report = self.apply()
@@ -959,22 +1022,26 @@ class ApplyTests(UpdateEngineBase):
         self.assertEqual(self.read_state()["migrate_calls"], 0)
 
     def test_unauthorized_release_is_never_migrated(self):
+        # Even a correctly signed test package can never reach the migration:
+        # a previously issued authorization does not make it installable.
         fixture = self.fixture
+        transaction = self.transaction()
         fixture.manifest = fixture.build_manifest(release_status="TEST PACKAGE - NO REAL DATA",
                                                   production_authorization="REJECT")
         fixture.manifest_rel, fixture.signature_rel = fixture.write_signed_manifest(fixture.manifest, "update")
-        report = self.apply()
+        report = self.apply(transaction=transaction)
         self.assertEqual(report["status"], "failed")
-        self.assertIn("policy.release_not_authorized", {item["code"] for item in report["blockers"]})
+        self.assertIn("policy.release_not_authorized", {code for code in self.blocker_codes(report)})
         self.assertNotIn("migrate", [item for call in self.calls() for item in call])
 
     def test_tampered_manifest_is_never_migrated(self):
+        transaction = self.transaction()
         path = self.fixture.product_root / self.fixture.manifest_rel
         path.write_bytes(path.read_bytes().replace(b"2026.11.01", b"2026.11.02"))
-        report = self.apply()
+        report = self.apply(transaction=transaction)
         self.assertEqual(report["status"], "failed")
-        self.assertIn("release.signature.invalid", {item["code"] for item in report["blockers"]})
-        self.assertEqual(self.state["migrate_calls"], 0)
+        self.assertIn("release.signature.invalid", {code for code in self.blocker_codes(report)})
+        self.assertNotIn("migrate", [item for call in self.calls() for item in call])
 
 
 class ProtocolTests(UpdateEngineBase):
@@ -1061,3 +1128,287 @@ class CatalogTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManifestInvariantTests(UpdateEngineBase):
+    """A manifest cannot waive its own safety requirements (BLOCKER A)."""
+
+    def fixture(self, **overrides) -> UpdateFixture:
+        return UpdateFixture(self.tmp / "fixture", **overrides)
+
+    def with_requirement(self, name: str, value) -> dict:
+        fixture = self.fixture()
+        fixture.manifest["requirements"] = {**fixture.manifest["requirements"], name: value}
+        fixture.manifest_rel, fixture.signature_rel = fixture.write_signed_manifest(fixture.manifest, "update")
+        return fixture.preflight()
+
+    def test_release_cannot_waive_the_backup_requirement(self):
+        response = self.with_requirement("backup_required", False)
+        self.assertEqual(response["decision"], "refuse")
+        self.assertIn("release.manifest.invalid", codes(response))
+
+    def test_release_cannot_waive_the_restore_rehearsal(self):
+        response = self.with_requirement("restore_rehearsal_required", False)
+        self.assertEqual(response["decision"], "refuse")
+        self.assertIn("release.manifest.invalid", codes(response))
+
+    def test_release_cannot_excuse_a_verified_backup(self):
+        fixture = self.fixture()
+        fixture.manifest["database"] = {**fixture.manifest["database"], "requires_verified_backup": False}
+        fixture.manifest_rel, fixture.signature_rel = fixture.write_signed_manifest(fixture.manifest, "update")
+        self.assertIn("release.manifest.invalid", codes(fixture.preflight()))
+
+    def test_release_cannot_excuse_recovery_authorization(self):
+        fixture = self.fixture()
+        fixture.manifest["requirements"] = {
+            **fixture.manifest["requirements"],
+            "recovery_authorization": {**fixture.manifest["requirements"]["recovery_authorization"],
+                                       "required": False}}
+        fixture.manifest_rel, fixture.signature_rel = fixture.write_signed_manifest(fixture.manifest, "update")
+        self.assertIn("release.manifest.invalid", codes(fixture.preflight()))
+
+    def test_migration_release_cannot_claim_reversibility(self):
+        fixture = self.fixture()
+        fixture.manifest["database"] = {**fixture.manifest["database"], "reversible": True}
+        fixture.manifest_rel, fixture.signature_rel = fixture.write_signed_manifest(fixture.manifest, "update")
+        self.assertIn("release.manifest.invalid", codes(fixture.preflight()))
+
+    def test_backup_older_than_a_day_is_refused(self):
+        fixture = self.fixture()
+        fixture.write_backup_receipt(created=NOW - timedelta(hours=30))
+        response = fixture.preflight()
+        self.assertEqual(response["decision"], "refuse")
+        self.assertIn("preflight.backup.stale", codes(response))
+
+    def test_recovery_authorization_older_than_a_week_is_refused(self):
+        fixture = self.fixture()
+        fixture.write_recovery_authorization(issued=NOW - timedelta(hours=200),
+                                             expires=NOW + timedelta(days=2))
+        response = fixture.preflight()
+        self.assertEqual(response["decision"], "refuse")
+
+    def test_unverified_installed_identity_is_refused(self):
+        fixture = self.fixture()
+        response = fixture.preflight(installed=fixture.installed(image_id=""))
+        self.assertEqual(response["decision"], "refuse")
+
+
+class AuthorizationGateTests(UpdateEngineBase):
+    """No archive may be downloaded, imported or migrated without phase B (BLOCKER B)."""
+
+    def test_missing_archive_blocks_authorization_but_not_the_manifest_phase(self):
+        fixture = self.fixture()
+        decision = fixture.preflight()
+        self.assertEqual(decision["decision"], "allow", decision["blockers"])
+        (fixture.staging / "toefl-house-erp-app.tar").unlink()
+        response = fixture.authorize(decision["transaction"])
+        self.assertEqual(response["decision"], "refuse")
+        self.assertIn("release.archive.missing", codes(response))
+
+    def test_authorize_requires_a_manifest_phase_transaction(self):
+        fixture = self.fixture()
+        self.assertIn("transaction.missing", codes(fixture.authorize(None)))
+        self.assertIn("transaction.invalid", codes(fixture.authorize({})))
+
+    def test_authorize_refuses_an_already_authorized_transaction(self):
+        fixture = self.fixture()
+        transaction = fixture.verified_transaction()
+        response = fixture.authorize(transaction)
+        self.assertEqual(response["decision"], "refuse")
+        self.assertIn("transaction.invalid", codes(response))
+
+    def test_authorize_refuses_an_expired_transaction(self):
+        fixture = self.fixture()
+        decision = fixture.preflight()
+        response = engine.authorize(
+            fixture.authorize_request(decision["transaction"]),
+            now=NOW + timedelta(minutes=engine.TRANSACTION_TTL_MINUTES + 1))
+        self.assertEqual(response["decision"], "refuse")
+        self.assertIn("transaction.expired", codes(response))
+
+    def test_authorize_completes_a_manifest_phase_without_the_archive(self):
+        # Exactly what the Windows updater does: decide on the signed manifest
+        # first, download the image only if that allows, then authorize.
+        fixture = self.fixture()
+        decision = fixture.preflight(archive="")
+        self.assertEqual(decision["decision"], "allow", decision["blockers"])
+        self.assertIsNone(decision["target"]["image"])
+        response = fixture.authorize(decision["transaction"], archive=str(
+            (fixture.staging / "toefl-house-erp-app.tar").relative_to(fixture.product_root)))
+        self.assertEqual(response["decision"], "allow", response["blockers"])
+        self.assertEqual(response["transaction"]["phase"], "authorized")
+        self.assertEqual(response["transaction"]["target"]["archive_sha256"],
+                         fixture.identity["sha256"])
+
+    def test_authorize_refuses_a_transaction_for_another_site(self):
+        fixture = self.fixture()
+        decision = fixture.preflight()
+        tampered = {**decision["transaction"], "site": "other.localhost"}
+        response = fixture.authorize(tampered)
+        self.assertEqual(response["decision"], "refuse")
+        self.assertIn("transaction.mismatch", codes(response))
+
+    def test_authorize_refuses_a_replaced_archive(self):
+        fixture = self.fixture()
+        decision = fixture.preflight()
+        archive = fixture.staging / "toefl-house-erp-app.tar"
+        archive.write_bytes(archive.read_bytes() + b"\0")
+        response = fixture.authorize(decision["transaction"])
+        self.assertEqual(response["decision"], "refuse")
+        self.assertIn("release.archive.hash_mismatch", codes(response))
+
+    def test_authorize_does_not_change_any_evidence(self):
+        fixture = self.fixture()
+        decision = fixture.preflight()
+        before = {path: path.stat().st_mtime_ns for path in fixture.product_root.rglob("*") if path.is_file()}
+        response = fixture.authorize(decision["transaction"])
+        self.assertEqual(response["decision"], "allow", response["blockers"])
+        after = {path: path.stat().st_mtime_ns for path in fixture.product_root.rglob("*") if path.is_file()}
+        self.assertEqual(before, after)
+
+
+class TransactionBindingTests(ApplyTests):
+    """`apply` executes exactly one previously authorized update (BLOCKER B)."""
+
+    def test_the_full_windows_sequence_migrates_exactly_once(self):
+        # Manifest phase before the download, image phase after it, then apply --
+        # the exact order the Windows updater uses.
+        decision = self.fixture.preflight(archive="")
+        self.assertEqual(decision["decision"], "allow", decision["blockers"])
+        authorized = self.fixture.authorize(decision["transaction"])
+        self.assertEqual(authorized["decision"], "allow", authorized["blockers"])
+        report = self.apply(transaction=authorized["transaction"])
+        self.assertEqual(report["status"], "succeeded", report["blockers"])
+        self.assertEqual(report["transaction_outcome"], "completed")
+        self.assertEqual(sum(1 for call in self.calls() if "migrate" in call), 2)
+
+    def test_apply_without_a_transaction_is_refused(self):
+        request = self.apply_request()
+        request.pop("transaction")
+        report = engine.apply_update(request, now=NOW)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_apply_with_a_manifest_phase_transaction_is_refused(self):
+        decision = self.fixture.preflight()
+        report = self.apply(transaction=decision["transaction"])
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("transaction.invalid", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_apply_with_an_expired_transaction_is_refused(self):
+        report = engine.apply_update(self.apply_request(),
+                                     now=NOW + timedelta(minutes=engine.TRANSACTION_TTL_MINUTES + 1))
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("transaction.expired", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_apply_with_a_modified_transaction_is_refused(self):
+        transaction = self.transaction()
+        transaction["target"]["version"] = "2026.12.24"
+        report = self.apply(transaction=transaction)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("transaction.mismatch", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_apply_with_a_usable_signature_is_refused(self):
+        transaction = self.transaction()
+        transaction["signature"] = "0" * 64
+        report = self.apply(transaction=transaction)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("transaction.invalid", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_a_transaction_can_only_be_applied_once(self):
+        transaction = self.transaction()
+        report = self.apply(transaction=transaction)
+        self.assertEqual(report["status"], "succeeded", report["blockers"])
+        replay = self.apply(transaction=transaction)
+        self.assertEqual(replay["status"], "failed")
+        self.assertIn("transaction.replayed", self.blocker_codes(replay))
+        self.assertEqual(sum(1 for call in self.calls() if "migrate" in call), 2)
+
+    def test_apply_refuses_when_the_archive_changed_after_authorization(self):
+        transaction = self.transaction()
+        archive = self.fixture.staging / "toefl-house-erp-app.tar"
+        archive.write_bytes(archive.read_bytes() + b"\0")
+        report = self.apply(transaction=transaction)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.archive_mismatch", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_apply_refuses_when_the_installed_identity_changed(self):
+        transaction = self.transaction()
+        installed = {**self.fixture.installed(), "image_id": "sha256:" + "7" * 64}
+        report = self.apply(transaction=transaction, installed=installed)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.installed_mismatch", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_apply_refuses_when_the_backup_receipt_changed(self):
+        transaction = self.transaction()
+        receipt = self.fixture.product_root / self.fixture.receipt_rel
+        receipt.write_bytes(receipt.read_bytes() + b" ")
+        report = self.apply(transaction=transaction)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.evidence_mismatch", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_apply_refuses_when_the_recovery_authorization_changed(self):
+        transaction = self.transaction()
+        document = self.fixture.product_root / self.fixture.authorization_rel
+        document.write_bytes(document.read_bytes() + b" ")
+        report = self.apply(transaction=transaction)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.evidence_mismatch", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+
+class CensusStrictnessTests(ApplyTests):
+    """A missing count is not evidence of preserved data (BLOCKER C)."""
+
+    def test_unknown_before_count_stops_the_update_before_migrating(self):
+        del self.state["counts"]["Attendance"]
+        self.write_state()
+        report = self.apply()
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.counts_unavailable", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_unknown_after_count_is_a_failure_not_a_success(self):
+        self.state["drop_after_migrate"] = ["Attendance"]
+        self.write_state()
+        report = self.apply()
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.counts_unavailable", self.blocker_codes(report))
+
+    def test_non_integer_counts_are_refused(self):
+        self.state["counts"]["Student"] = {"unexpected": 12}
+        self.write_state()
+        report = self.apply()
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.counts_unavailable", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())
+
+    def test_a_disappearing_application_fails_the_update(self):
+        self.state["apps"] = [app for app in engine.REQUIRED_APPS if app != "payments"]
+        self.write_state()
+        report = self.apply()
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.apps_missing", self.blocker_codes(report))
+
+    def test_deleted_parent_records_are_detected(self):
+        self.state["orphan_mutations"] = {"Sales Invoice Item": 3}
+        self.write_state()
+        report = self.apply()
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.identity_mismatch", self.blocker_codes(report))
+
+    def test_unreadable_integrity_report_is_refused(self):
+        self.state["orphans"] = {}
+        self.write_state()
+        report = self.apply()
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("apply.counts_unavailable", self.blocker_codes(report))
+        self.assertFalse(self.migrate_called())

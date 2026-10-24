@@ -231,6 +231,42 @@
     "warning.not_rollback_safe": {
       "en": "Database changes cannot be undone automatically. A verified backup and recovery authorization are required.",
       "fa": "تغییرات دیتابیس به‌طور خودکار برگشت‌پذیر نیستند. بکاپ تأییدشده و اجازه‌نامه بازیابی لازم است."
+    },
+    "apply.identity_mismatch": {
+      "en": "Related ERP records no longer line up after the upgrade. The update needs a recovery decision; nothing was deleted.",
+      "fa": "سوابق مرتبط سیستم پس از ارتقا با هم مطابقت ندارند. به‌روزرسانی نیاز به تصمیم بازیابی دارد؛ هیچ چیزی حذف نشد."
+    },
+    "apply.installed_mismatch": {
+      "en": "The installed version changed while the update was being prepared. Nothing was migrated.",
+      "fa": "نسخهٔ نصب‌شده در جریان آماده‌سازی به‌روزرسانی تغییر کرد. هیچ مهاجرتی انجام نشد."
+    },
+    "apply.evidence_mismatch": {
+      "en": "The backup or recovery evidence changed after it was verified. Nothing was migrated.",
+      "fa": "شواهد بکاپ یا بازیابی پس از تأیید تغییر کرد. هیچ مهاجرتی انجام نشد."
+    },
+    "apply.archive_mismatch": {
+      "en": "The downloaded update file no longer matches the verified release. Nothing was migrated.",
+      "fa": "فایل به‌روزرسانی دانلودشده دیگر با نسخهٔ تأییدشده مطابقت ندارد. هیچ مهاجرتی انجام نشد."
+    },
+    "transaction.missing": {
+      "en": "The update was not authorized on this computer. Nothing was changed.",
+      "fa": "به‌روزرسانی روی این کمپیوتر اجازه نگرفت. هیچ چیزی تغییر نکرد."
+    },
+    "transaction.invalid": {
+      "en": "The update authorization record is not usable. Nothing was changed.",
+      "fa": "سند اجازهٔ به‌روزرسانی قابل استفاده نیست. هیچ چیزی تغییر نکرد."
+    },
+    "transaction.expired": {
+      "en": "The verified update expired before it was applied. Run Check for Updates again.",
+      "fa": "به‌روزرسانی تأییدشده پیش از تطبیق منقضی شد. لطفاً «بررسی به‌روزرسانی» را دوباره اجرا کنید."
+    },
+    "transaction.mismatch": {
+      "en": "This computer or release changed after the update was verified. Nothing was migrated.",
+      "fa": "این کمپیوتر یا نسخه پس از تأیید به‌روزرسانی تغییر کرد. هیچ مهاجرتی انجام نشد."
+    },
+    "transaction.replayed": {
+      "en": "This update step was already used. Nothing was changed; start Check for Updates again.",
+      "fa": "این مرحلهٔ به‌روزرسانی قبلاً استفاده شده است. هیچ چیزی تغییر نکرد؛ «بررسی به‌روزرسانی» را دوباره آغاز کنید."
     }
   },
   "launcher": {

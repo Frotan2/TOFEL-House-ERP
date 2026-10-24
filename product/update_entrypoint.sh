@@ -8,6 +8,8 @@
 # The engine only reads and verifies.  It never imports an image, starts a
 # service, deletes customer records or rewrites storage; importing the new image
 # and starting the stack stay explicit host-level steps in the Windows updater.
+# The single thing it writes is the transaction-use marker inside this writable
+# run folder (/update/transactions), so a replayed apply can never migrate twice.
 # No credential value is read or printed here.
 set -eu
 

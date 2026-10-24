@@ -588,6 +588,55 @@ function Invoke-UpdateEngine([string]$Mode) {
     return (Invoke-DockerVerbose $arguments)
 }
 
+function Invoke-EngineStep([string]$Mode, $Request, [string]$Version) {
+    # One request, one response, one fresh document.  A stale response from an
+    # earlier phase must never be read back as if it belonged to this one.
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText((Join-Path $script:WorkDir "request.json"),
+        ($Request | ConvertTo-Json -Depth 12), $encoding)
+    Remove-Item -LiteralPath (Join-Path $script:WorkDir "response.json") -Force -ErrorAction SilentlyContinue
+    Write-Stage "updater.verifying"
+    $engineExit = Invoke-UpdateEngine $Mode
+    $response = Read-EngineResponse
+    if ($null -eq $response) {
+        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
+    }
+    if ($response.document_type -cne "toefl-house-erp-update-engine-response") {
+        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
+    }
+    if ($engineExit -ne $script:ExitAllowed -and $engineExit -ne $script:ExitRefused) {
+        # Exit 4/5 means the engine itself could not decide.  A stray allow in
+        # that state would be a fail-open, so treat it as a hard stop.
+        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
+    }
+    return $response
+}
+
+function Assert-EngineAllowed($Response, [string]$Version) {
+    $blockers = @(Get-BlockerCodes $Response)
+    if ($Response.decision -ceq "allow") { return $blockers }
+    $onlyDowngrade = ($blockers.Count -gt 0)
+    foreach ($code in $blockers) {
+        if ($code -cne "compat.downgrade") { $onlyDowngrade = $false }
+    }
+    if ($onlyDowngrade) {
+        Save-Result -Status "up-to-date" -Section "launcher" -Key "updater.up_to_date" -Version $Version
+        Write-Host ""
+        Write-Bilingual "launcher" "updater.up_to_date"
+        exit $script:ExitAllowed
+    }
+    $primary = "updater.failed"
+    if ($blockers.Count -gt 0 -and $null -ne (Get-Text "messages" $blockers[0])) { $primary = $blockers[0] }
+    Save-Result -Status "refused" -Section "messages" -Key $primary -Version $Version -Blockers $blockers
+    Write-Host ""
+    Write-Bilingual "messages" $primary
+    if ($blockers.Count -gt 1) {
+        Write-Host ""
+        foreach ($code in $blockers) { Write-Bilingual "messages" $code }
+    }
+    exit $script:ExitRefused
+}
+
 function Read-EngineResponse {
     $responsePath = Join-Path $script:WorkDir "response.json"
     if (-not (Test-Path -LiteralPath $responsePath -PathType Leaf)) { return $null }
@@ -738,29 +787,18 @@ function Invoke-UpdateCheck {
     $signaturePath = Join-Path $script:WorkDir "signature.json"
     $archivePath = Join-Path $script:WorkDir "toefl-house-erp-app.tar"
     Write-Stage "updater.verifying"
+    # Only the small signed documents are fetched first.  The image archive is
+    # downloaded after the manifest phase allows it, so a forged, unauthorized
+    # or incompatible release never costs the customer a single image byte.
     try {
         Save-RemoteFile (Resolve-ChannelUrl $channel $manifestName) $manifestPath $maxJsonBytes
         Save-RemoteFile (Resolve-ChannelUrl $channel $signatureName) $signaturePath $maxJsonBytes
-        Save-RemoteFile (Resolve-ChannelUrl $channel $archiveName) $archivePath $maxArchiveBytes
     } catch {
         Stop-Update $script:ExitRefused "refused" "launcher" "updater.download_failed"
     }
-    $archiveItem = Get-Item -LiteralPath $archivePath -Force
-    if ($archiveItem.Length -lt $minArchiveBytes -or $archiveItem.Length -gt $maxArchiveBytes) {
-        Stop-Update $script:ExitRefused "refused" "messages" "release.archive.size_mismatch" $targetVersion
-    }
-    # Transport check only: the signed manifest below is the authority.
-    if ($null -ne $latest.archive_size_bytes -and [int64]$latest.archive_size_bytes -ne $archiveItem.Length) {
-        Stop-Update $script:ExitRefused "refused" "messages" "release.archive.size_mismatch" $targetVersion
-    }
-    if ($null -ne $latest.archive_sha256) {
-        $actual = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($actual -cne ([string]$latest.archive_sha256).ToLowerInvariant()) {
-            Stop-Update $script:ExitRefused "refused" "messages" "release.archive.hash_mismatch" $targetVersion
-        }
-    }
 
     $workRelative = "data/updates/runs/" + $runId
+    $archiveRelative = $workRelative + "/toefl-house-erp-app.tar"
     $request = [ordered]@{
         action = "preflight"
         now_utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -771,7 +809,7 @@ function Invoke-UpdateCheck {
         channel = "updates/channel.json"
         manifest = $workRelative + "/manifest.json"
         signature = $workRelative + "/signature.json"
-        archive = $workRelative + "/toefl-house-erp-app.tar"
+        archive = ""
         backup_receipt = "data/activation/backup-receipt.json"
         backup_dir = $script:BackupDirRelative
         recovery_authorization = ""
@@ -792,46 +830,48 @@ function Invoke-UpdateCheck {
     if (Test-Path -LiteralPath $recoverySignaturePath -PathType Leaf) {
         $request.recovery_signature = "data/updates/recovery-authorization.sig"
     }
-    $requestText = $request | ConvertTo-Json -Depth 12
-    $encoding = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText((Join-Path $script:WorkDir "request.json"), $requestText, $encoding)
+    # Phase A: signed manifest, authorization, compatibility and local
+    # readiness.  Nothing is downloaded into the image path until this allows.
+    $response = Invoke-EngineStep "preflight" $request $targetVersion
+    [void](Assert-EngineAllowed $response $targetVersion)
+    $manifestTransaction = $response.transaction
+    if ($null -eq $manifestTransaction -or $null -eq $manifestTransaction.transaction_id) {
+        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $targetVersion
+    }
 
-    Write-Stage "updater.verifying"
-    $engineExit = Invoke-UpdateEngine "preflight"
-    $response = Read-EngineResponse
-    if ($null -eq $response) {
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $targetVersion
+    Write-Stage "updater.downloading"
+    try {
+        Save-RemoteFile (Resolve-ChannelUrl $channel $archiveName) $archivePath $maxArchiveBytes
+    } catch {
+        Stop-Update $script:ExitRefused "refused" "launcher" "updater.download_failed"
     }
-    if ($response.document_type -cne "toefl-house-erp-update-engine-response") {
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $targetVersion
+    $archiveItem = Get-Item -LiteralPath $archivePath -Force
+    if ($archiveItem.Length -lt $minArchiveBytes -or $archiveItem.Length -gt $maxArchiveBytes) {
+        Stop-Update $script:ExitRefused "refused" "messages" "release.archive.size_mismatch" $targetVersion
     }
-    if ($engineExit -ne $script:ExitAllowed -and $engineExit -ne $script:ExitRefused) {
-        # Exit 4/5 means the engine itself could not decide. A stray allow in
-        # that state would be a fail-open, so treat it as a hard stop.
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $targetVersion
+    # Transport check only: the signed manifest is the authority, and the
+    # engine re-verifies the same bytes inside the container below.
+    if ($null -ne $latest.archive_size_bytes -and [int64]$latest.archive_size_bytes -ne $archiveItem.Length) {
+        Stop-Update $script:ExitRefused "refused" "messages" "release.archive.size_mismatch" $targetVersion
     }
-    $blockers = @(Get-BlockerCodes $response)
-    if ($response.decision -cne "allow") {
-        $onlyDowngrade = ($blockers.Count -gt 0)
-        foreach ($code in $blockers) {
-            if ($code -cne "compat.downgrade") { $onlyDowngrade = $false }
+    if ($null -ne $latest.archive_sha256) {
+        $actual = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actual -cne ([string]$latest.archive_sha256).ToLowerInvariant()) {
+            Stop-Update $script:ExitRefused "refused" "messages" "release.archive.hash_mismatch" $targetVersion
         }
-        if ($onlyDowngrade) {
-            Save-Result -Status "up-to-date" -Section "launcher" -Key "updater.up_to_date" -Version $targetVersion
-            Write-Host ""
-            Write-Bilingual "launcher" "updater.up_to_date"
-            exit $script:ExitAllowed
-        }
-        $primary = "updater.failed"
-        if ($blockers.Count -gt 0 -and $null -ne (Get-Text "messages" $blockers[0])) { $primary = $blockers[0] }
-        Save-Result -Status "refused" -Section "messages" -Key $primary -Version $targetVersion -Blockers $blockers
-        Write-Host ""
-        Write-Bilingual "messages" $primary
-        if ($blockers.Count -gt 1) {
-            Write-Host ""
-            foreach ($code in $blockers) { Write-Bilingual "messages" $code }
-        }
-        exit $script:ExitRefused
+    }
+
+    # Phase B: bind the downloaded image to the manifest decision.  The engine
+    # re-reads every mutable fact and issues a short-lived authorization; apply
+    # accepts nothing else.
+    $request.action = "authorize"
+    $request.archive = $archiveRelative
+    $request.transaction = $manifestTransaction
+    $response = Invoke-EngineStep "authorize" $request $targetVersion
+    [void](Assert-EngineAllowed $response $targetVersion)
+    $transaction = $response.transaction
+    if ($null -eq $transaction -or [string]$transaction.phase -cne "authorized") {
+        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $targetVersion
     }
 
     $sequence = $null
@@ -843,6 +883,11 @@ function Invoke-UpdateCheck {
         Version = $targetVersion
         Archive = $archivePath
         Sequence = $sequence
+        Transaction = $transaction
+        Installed = $installed
+        Manifest = $workRelative + "/manifest.json"
+        Signature = $workRelative + "/signature.json"
+        RunFolder = $workRelative
         Response = $response
     }
 }
@@ -902,22 +947,36 @@ function Invoke-UpdateInstall($Check) {
         action = "apply"
         site = $siteName
         product_root = $containerProductRoot
-        manifest = ("data/updates/runs/" + (Split-Path -Leaf $script:WorkDir) + "/manifest.json")
-        signature = ("data/updates/runs/" + (Split-Path -Leaf $script:WorkDir) + "/signature.json")
+        manifest = $Check.Manifest
+        signature = $Check.Signature
         trust_store = "data/updates/trust-store.json"
+        archive = ($Check.RunFolder + "/toefl-house-erp-app.tar")
+        transaction = $Check.Transaction
+        installed = [pscustomobject]@{
+            version = [string]$Check.Installed.version
+            release_sequence = $Check.Installed.release_sequence
+            source_revision = [string]$Check.Installed.source_revision
+            image_labels = $Check.Installed.image_labels
+            image_id = [string]$Check.Installed.image_id
+        }
+        backup_receipt = "data/activation/backup-receipt.json"
+        backup_dir = $script:BackupDirRelative
+        recovery_authorization = ""
+        recovery_signature = ""
         sites_dir = "/home/frappe/bench/sites"
         bench = "/build/tools/bin/bench"
-        host_updater_version = [string]$Check.Version
+        host_updater_version = [string]$Check.Installed.version
         migrate_replays = 2
         command_timeout_seconds = 1800
     }
-    $encoding = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText((Join-Path $script:WorkDir "request.json"),
-        ($applyRequest | ConvertTo-Json -Depth 8), $encoding)
-    Remove-Item -LiteralPath (Join-Path $script:WorkDir "response.json") -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $recoveryAuthorizationPath -PathType Leaf) {
+        $applyRequest.recovery_authorization = "data/updates/recovery-authorization.json"
+    }
+    if (Test-Path -LiteralPath $recoverySignaturePath -PathType Leaf) {
+        $applyRequest.recovery_signature = "data/updates/recovery-authorization.sig"
+    }
 
-    $engineExit = Invoke-UpdateEngine "apply"
-    $report = Read-EngineResponse
+    $report = Invoke-EngineStep "apply" $applyRequest $Check.Version
     $outcome = "safe-abort"
     $status = "failed"
     if ($null -ne $report) {

@@ -47,6 +47,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
 import tarfile
@@ -78,6 +79,15 @@ MIN_FREE_BYTES_FLOOR = 30 * 1024 ** 3
 # release_sequence); the ceiling stays inside a signed 32-bit integer.
 MAX_SEQUENCE = 2_147_483_647
 MAX_BACKUP_MAX_AGE_HOURS = 24
+# A migrating release may not accept a stale recovery authorization either.
+# Both ceilings are engine constants, not publisher-chosen values.
+MAX_RECOVERY_MAX_AGE_HOURS = 168
+# A verified transaction is short-lived: apply must follow the image-phase
+# authorization quickly, and revalidates everything it can re-read.
+TRANSACTION_SCHEMA_VERSION = 1
+DOCUMENT_TRANSACTION = "toefl-house-erp-update-transaction"
+TRANSACTION_TTL_MINUTES = 30
+TRANSACTION_PHASES = ("manifest", "authorized")
 SAFE_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -137,6 +147,12 @@ PLAN_PHASES = (
     "health",
 )
 JOURNAL_TERMINAL_STATES = ("idle", "completed", "rolled-back")
+# Child tables whose orphaned rows must never increase across a migration: a
+# count-only census would not notice a broken parent relationship.
+ORPHAN_CHECKS = (
+    ("Sales Invoice Item", "Sales Invoice"),
+    ("Payment Entry Reference", "Payment Entry"),
+)
 
 # Every code the engine can emit.  The Windows catalog must define English and
 # Dari text for each one; tests/foundation/test_update_engine.py enforces it.
@@ -194,6 +210,15 @@ MESSAGE_CODES = frozenset({
     "apply.apps_missing",
     "apply.role_desk_missing",
     "apply.health_failed",
+    "apply.identity_mismatch",
+    "apply.installed_mismatch",
+    "apply.evidence_mismatch",
+    "apply.archive_mismatch",
+    "transaction.missing",
+    "transaction.invalid",
+    "transaction.expired",
+    "transaction.mismatch",
+    "transaction.replayed",
     "engine.request_invalid",
     "engine.unexpected",
     "warning.backup_age_near_limit",
@@ -277,6 +302,11 @@ def parse_utc(value: object, label: str) -> datetime:
     if parsed.tzinfo is None:
         raise refuse("engine.request_invalid", f"{label} must include a timezone")
     return parsed.astimezone(timezone.utc)
+
+
+def parse_utc_iso(value: datetime) -> str:
+    """Render an aware datetime the way every signed document is dated."""
+    return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def sha256_file(path: Path) -> str:
@@ -711,7 +741,8 @@ def _validate_manifest(manifest: object, *, now: datetime) -> dict:
     _require_exact_keys(recovery, ("required", "max_age_hours"), ("required", "max_age_hours"),
                         "requirements.recovery_authorization", code="release.manifest.invalid")
     recovery_required = _boolean(recovery["required"], "requirements.recovery_authorization.required")
-    recovery_age = _integer(recovery["max_age_hours"], "requirements.recovery_authorization.max_age_hours", 1, 720)
+    recovery_age = _integer(recovery["max_age_hours"], "requirements.recovery_authorization.max_age_hours",
+                            1, MAX_RECOVERY_MAX_AGE_HOURS)
 
     database = _require_object(manifest["database"], "manifest.database")
     _require_exact_keys(database, ("migration", "reversible", "requires_verified_backup", "target_schema_version",
@@ -728,6 +759,31 @@ def _validate_manifest(manifest: object, *, now: datetime) -> dict:
     if minimum_source_schema is not None:
         minimum_source_schema = _text(minimum_source_schema, "database.minimum_source_schema_version",
                                       pattern=SAFE_TOKEN, maximum=64)
+
+    # The engine, not the publisher, owns the minimum data protection of a
+    # migration.  A signed manifest can never weaken these; a contradictory
+    # manifest is refused outright instead of being silently upgraded.
+    if database["migration"] == "supported":
+        if not backup_required:
+            raise refuse("release.manifest.invalid",
+                         "a migrating release must require a verified backup")
+        if not restore_required:
+            raise refuse("release.manifest.invalid",
+                         "a migrating release must require a verified restore rehearsal")
+        if not requires_backup:
+            raise refuse("release.manifest.invalid",
+                         "a migrating release must require a verified backup")
+        if not recovery_required:
+            raise refuse("release.manifest.invalid",
+                         "a migrating release must require a signed Owner recovery authorization")
+        if reversible:
+            raise refuse("release.manifest.invalid",
+                         "database migrations are not assumed reversible")
+        if backup_age > MAX_BACKUP_MAX_AGE_HOURS:
+            raise refuse("release.manifest.invalid", "the backup age limit is outside the engine policy")
+        if recovery_age > MAX_RECOVERY_MAX_AGE_HOURS:
+            raise refuse("release.manifest.invalid",
+                         "the recovery authorization age limit is outside the engine policy")
 
     image = _require_object(manifest["image"], "manifest.image")
     _require_exact_keys(image, ("tag", "archive", "sha256", "size_bytes", "config_digest", "labels"),
@@ -1043,6 +1099,19 @@ def evaluate_compatibility(manifest: dict, installed: Mapping[str, object] | Non
         blockers.append(_block("compat.installed_version_unknown",
                                "the installed release version is not established"))
         return blockers
+    if not isinstance(installed["image_id"], str) or not re.fullmatch(
+            r"sha256:[0-9a-f]{64}", installed["image_id"]):
+        # Without a known image identity the updater cannot prove which build is
+        # running, so it cannot prove a rollback would restore it either.
+        blockers.append(_block("compat.installed_version_unknown",
+                               "the installed image identity is not established"))
+        return blockers
+    labels = installed["image_labels"]
+    if (not isinstance(labels, Mapping)
+            or labels.get("org.toefl-house.release-version") != installed_version):
+        blockers.append(_block("compat.installed_version_unknown",
+                               "the installed image labels do not match the installed version"))
+        return blockers
     sequence = installed["release_sequence"]
     if sequence is not None:
         try:
@@ -1223,16 +1292,57 @@ def _host_facts(request: Mapping[str, object]) -> dict:
 
 
 def preflight(request: Mapping[str, object], *, now: datetime) -> dict:
-    """Return an allow/refuse decision.  This function never mutates anything."""
+    """Return an allow/refuse decision.  This function never mutates anything.
+
+    ``archive`` is optional.  Without it the decision covers the signed
+    manifest, the installed installation, the backup/recovery evidence and the
+    host facts only, so a customer PC can refuse an update **before** any large
+    image is downloaded.  When ``archive`` is supplied the image identity is
+    verified too.
+    """
+    response, _context = _evaluate(request, now=now, action="preflight", require_archive=False)
+    return response
+
+
+def authorize(request: Mapping[str, object], *, now: datetime) -> dict:
+    """Bind the downloaded archive to the manifest-phase decision.
+
+    This is phase B: the image exists, so the archive identity is verified and
+    every mutable condition is re-read.  On success a fresh, short-lived
+    ``authorized`` transaction is issued; ``apply`` accepts nothing else.
+    """
     request = _require_object(request, "request")
-    _require_exact_keys(request, ("action", "now_utc", "site", "product_root", "host_updater_version",
-                                  "trust_store", "channel", "manifest", "signature", "archive",
-                                  "backup_receipt", "backup_dir", "recovery_authorization",
-                                  "recovery_signature", "installed", "journal_state", "host"),
-                        ("action", "site", "product_root", "host_updater_version", "trust_store",
-                         "channel", "manifest", "signature", "archive", "installed", "host"), "request")
-    if request["action"] != "preflight":
-        raise refuse("engine.request_invalid", "request action is not preflight")
+    try:
+        transaction = _load_transaction(request.get("transaction"), now=now)
+        if transaction["phase"] != "manifest":
+            raise refuse("transaction.invalid","the transaction is already authorized")
+    except UpdateError as error:
+        return _refusal("authorize", error, request)
+    response, context = _evaluate(request, now=now, action="authorize", require_archive=True)
+    if response["decision"] != "allow":
+        return response
+    assert context is not None
+    _bind_transaction(transaction, context)
+    response["transaction"] = _issue_transaction(context, phase="authorized", now=now)
+    return response
+
+
+def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
+              require_archive: bool) -> tuple[dict, dict | None]:
+    """Shared read-only evaluation for the manifest and image phases."""
+    request = _require_object(request, "request")
+    allowed = ("action", "now_utc", "site", "product_root", "host_updater_version",
+               "trust_store", "channel", "manifest", "signature", "archive",
+               "backup_receipt", "backup_dir", "recovery_authorization",
+               "recovery_signature", "installed", "journal_state", "host")
+    required = ("action", "site", "product_root", "host_updater_version", "trust_store",
+                "channel", "manifest", "signature", "installed", "host")
+    if action == "authorize":
+        allowed = allowed + ("transaction",)
+        required = required + ("transaction",)
+    _require_exact_keys(request, allowed, required, "request")
+    if request["action"] != action:
+        raise refuse("engine.request_invalid", "request action is not an evaluation")
     if request["site"] != SITE_NAME:
         raise refuse("preflight.site.config_unreadable", "the site name is not the supported product site")
     product_root = Path(_text(request["product_root"], "request.product_root", maximum=1024))
@@ -1258,7 +1368,7 @@ def preflight(request: Mapping[str, object], *, now: datetime) -> dict:
                                       channel_id=None)
     except UpdateError as error:
         blockers.append(_block(error.code, error.detail))
-        return _decision(blockers, [], None, None, request)
+        return _finish(blockers, [], None, None, request, None, None)
 
     try:
         manifest = verify_manifest_signature(
@@ -1267,7 +1377,7 @@ def preflight(request: Mapping[str, object], *, now: datetime) -> dict:
             store, now=now)
     except UpdateError as error:
         blockers.append(_block(error.code, error.detail))
-        return _decision(blockers, [], None, None, request)
+        return _finish(blockers, [], None, None, request, None, None)
 
     if manifest["channel"] != channel["id"]:
         blockers.append(_block("policy.release_not_authorized",
@@ -1279,12 +1389,21 @@ def preflight(request: Mapping[str, object], *, now: datetime) -> dict:
         blockers.append(_block("policy.release_not_production",
                                "this release is a non-production test package"))
 
+    # Phase A deliberately carries no image bytes.  When the caller supplies an
+    # archive it is verified here as well; otherwise the image is verified by
+    # the authorize phase, before it is ever imported.
     identity = None
-    try:
-        identity = inspect_image_archive(
-            resolve_inside(product_root, request["archive"], "request.archive"), expected=manifest["image"])
-    except UpdateError as error:
-        blockers.append(_block(error.code, error.detail))
+    archive_value = request.get("archive")
+    if (isinstance(archive_value, str) and archive_value) or require_archive:
+        try:
+            if not isinstance(archive_value, str) or not archive_value:
+                raise refuse("release.archive.missing", "the downloaded image archive is required here")
+            identity = inspect_image_archive(
+                resolve_inside(product_root, archive_value, "request.archive"),
+                expected=manifest["image"],
+                verify_layers=require_archive)
+        except UpdateError as error:
+            blockers.append(_block(error.code, error.detail))
 
     blockers.extend(evaluate_compatibility(manifest, request.get("installed"), host_version))
 
@@ -1324,7 +1443,13 @@ def preflight(request: Mapping[str, object], *, now: datetime) -> dict:
 
     warnings: list[dict] = []
     receipt_details = None
-    if requirements["backup_required"] or manifest["database"]["requires_verified_backup"]:
+    recovery_details = None
+    # A migrating release always needs the evidence: the engine, not the
+    # signed manifest, decides the minimum protection for customer data.
+    backup_needed = (manifest["database"]["migration"] == "supported"
+                     or requirements["backup_required"]
+                     or manifest["database"]["requires_verified_backup"])
+    if backup_needed:
         receipt_value = request.get("backup_receipt")
         if not isinstance(receipt_value, str) or not receipt_value:
             blockers.append(_block("preflight.backup.receipt_missing",
@@ -1349,7 +1474,9 @@ def preflight(request: Mapping[str, object], *, now: datetime) -> dict:
         warnings.append(_block("warning.not_rollback_safe",
                                "database migrations are not reversible; recovery uses the verified backup"))
 
-    if requirements["recovery_required"]:
+    recovery_needed = (manifest["database"]["migration"] == "supported"
+                       or requirements["recovery_required"])
+    if recovery_needed:
         if not request.get("recovery_authorization") or not request.get("recovery_signature"):
             blockers.append(_block("preflight.recovery.authorization_missing",
                                    "signed Owner recovery/key-custody authorization is not present"))
@@ -1358,7 +1485,7 @@ def preflight(request: Mapping[str, object], *, now: datetime) -> dict:
                                    "recovery authorization cannot be bound without a verified backup"))
         else:
             try:
-                validate_recovery_authorization(
+                recovery_details = validate_recovery_authorization(
                     resolve_inside(product_root, request["recovery_authorization"],
                                    "request.recovery_authorization"),
                     resolve_inside(product_root, request["recovery_signature"],
@@ -1371,7 +1498,147 @@ def preflight(request: Mapping[str, object], *, now: datetime) -> dict:
                 blockers.append(_block("preflight.recovery.authorization_invalid",
                                        "recovery authorization could not be read"))
 
-    return _decision(blockers, warnings, manifest, identity, request, receipt_details)
+    context = None
+    if not blockers:
+        context = _build_context(request, product_root, manifest, identity, receipt_details,
+                                 recovery_details, now)
+        if require_archive and (identity is None or context is None):
+            blockers.append(_block("release.archive.missing", "the downloaded image archive is required here"))
+            context = None
+    return _finish(blockers, warnings, manifest, identity, request, receipt_details, context)
+
+
+def _finish(blockers: list[dict], warnings: list[dict], manifest: dict | None,
+            identity: dict | None, request: Mapping[str, object],
+            receipt_details: dict | None, context: dict | None) -> tuple[dict, dict | None]:
+    response = _decision(blockers, warnings, manifest, identity, request, receipt_details)
+    if response["decision"] == "allow" and context is not None:
+        response["transaction"] = _issue_transaction(context, phase="manifest", now=context["now"])
+    else:
+        response["transaction"] = None
+    return response, context
+
+
+def _refusal(action: str, error: UpdateError, request: Mapping[str, object]) -> dict:
+    """A refused evaluation that never reached a signed release."""
+    document = _decision([_block(error.code, error.detail)], [], None, None, request, None)
+    document["action"] = action
+    document["transaction"] = None
+    return document
+
+
+def _build_context(request: Mapping[str, object], product_root: Path, manifest: dict,
+                   identity: dict | None, receipt_details: dict | None,
+                   recovery_details: dict | None, now: datetime) -> dict:
+    """Everything a later phase must prove again before it may act."""
+    installed = request.get("installed") if isinstance(request.get("installed"), dict) else {}
+    signature_path = resolve_inside(product_root, request.get("signature"), "request.signature")
+    return {
+        "now": now,
+        "site": SITE_NAME,
+        "installed": {
+            "version": installed.get("version"),
+            "release_sequence": installed.get("release_sequence"),
+            "source_revision": installed.get("source_revision"),
+            "image_id": installed.get("image_id"),
+        },
+        "target": {
+            "version": manifest["version"],
+            "release_sequence": manifest["release_sequence"],
+            "source_revision": manifest["source_revision"],
+            "manifest_sha256": manifest.get("raw_sha256"),
+            "signature_sha256": sha256_file(signature_path),
+            "archive_sha256": None if identity is None else identity["archive_sha256"],
+            "archive_size_bytes": None if identity is None else identity["size_bytes"],
+            "image_config_digest": None if identity is None else identity["config_digest"],
+        },
+        "evidence": {
+            "backup_receipt_sha256": None if receipt_details is None else receipt_details["sha256"],
+            "backup_set": None if receipt_details is None else receipt_details["receipt"].get("backup_set"),
+            "recovery_authorization_sha256": None if recovery_details is None else recovery_details["sha256"],
+        },
+        "migration": {
+            "mode": manifest["database"]["migration"],
+            "target_schema_version": manifest["database"]["target_schema_version"],
+        },
+    }
+
+
+def _issue_transaction(context: dict, *, phase: str, now: datetime) -> dict:
+    expires = now + timedelta(minutes=TRANSACTION_TTL_MINUTES)
+    return {
+        "schema_version": TRANSACTION_SCHEMA_VERSION,
+        "document_type": DOCUMENT_TRANSACTION,
+        "phase": phase,
+        "transaction_id": secrets.token_hex(16),
+        "site": context["site"],
+        "issued_utc": parse_utc_iso(now),
+        "expires_utc": parse_utc_iso(expires),
+        "installed": dict(context["installed"]),
+        "target": dict(context["target"]),
+        "evidence": dict(context["evidence"]),
+        "migration": dict(context["migration"]),
+    }
+
+
+def _load_transaction(value: object, *, now: datetime) -> dict:
+    """Validate a transaction document the engine itself issued earlier."""
+    if value is None:
+        raise refuse("transaction.missing", "no verified update transaction was supplied")
+    document = _require_object(value, "transaction")
+    fields = ("schema_version", "document_type", "phase", "transaction_id", "site", "issued_utc",
+              "expires_utc", "installed", "target", "evidence", "migration")
+    _require_exact_keys(document, fields, fields, "transaction", code="transaction.invalid")
+    if (document["schema_version"] != TRANSACTION_SCHEMA_VERSION
+            or document["document_type"] != DOCUMENT_TRANSACTION):
+        raise refuse("transaction.invalid", "the update transaction is not supported")
+    if document["phase"] not in TRANSACTION_PHASES:
+        raise refuse("transaction.invalid", "the update transaction phase is invalid")
+    if document["site"] != SITE_NAME:
+        raise refuse("transaction.mismatch", "the transaction belongs to another site")
+    if not isinstance(document["transaction_id"], str) or not re.fullmatch(
+            r"[0-9a-f]{32}", document["transaction_id"]):
+        raise refuse("transaction.invalid", "the transaction identifier is malformed")
+    issued = parse_utc(document["issued_utc"], "transaction.issued_utc")
+    expires = parse_utc(document["expires_utc"], "transaction.expires_utc")
+    if expires <= issued or (expires - issued) > timedelta(minutes=TRANSACTION_TTL_MINUTES):
+        raise refuse("transaction.invalid", "the transaction lifetime is not supported")
+    if issued > now + timedelta(minutes=10):
+        raise refuse("transaction.invalid", "the transaction is dated in the future")
+    if expires <= now:
+        raise refuse("transaction.expired", "the verified update transaction has expired")
+    for name in ("installed", "target", "evidence", "migration"):
+        document[name] = _require_object(document[name], f"transaction.{name}")
+    return document
+
+
+def _bind_transaction(transaction: dict, context: dict) -> None:
+    """Prove this transaction was issued for exactly the current evidence.
+
+    The manifest phase deliberately runs before the image is downloaded, so the
+    archive identity it saw is empty.  Everything it did establish must match
+    exactly; the image fields are the ones this phase adds.
+    """
+    for section in ("installed", "evidence", "migration"):
+        if transaction[section] != context[section]:
+            raise refuse("transaction.mismatch",
+                         f"the update transaction does not match the current {section} evidence")
+    image_fields = ("archive_sha256", "archive_size_bytes", "image_config_digest")
+    for name, value in context["target"].items():
+        if value is None:
+            continue
+        prior = transaction["target"].get(name)
+        if prior is None and name in image_fields:
+            # The manifest phase ran before the download on purpose, so only
+            # this phase could ever establish the image identity.
+            continue
+        if prior != value:
+            raise refuse("transaction.mismatch",
+                         f"the update transaction does not match the release {name}")
+    for name, value in transaction["target"].items():
+        if value is not None and context["target"].get(name) is None:
+            raise refuse("transaction.mismatch",
+                         f"the update transaction cannot drop the release {name}")
 
 
 def _decision(blockers: list[dict], warnings: list[dict], manifest: dict | None,
@@ -1475,6 +1742,57 @@ class BenchRunner:
     def census(self, site: str) -> dict[str, int | None]:
         return {doctype: self.count(site, doctype) for doctype in CENSUS_DOCTYPES}
 
+    def orphans(self, site: str) -> dict[str, int]:
+        """Rows whose parent document is missing, per checked child table.
+
+        This is a read-only query: it can only count, never modify.  A failed or
+        unreadable answer is a hard refusal, because an unverified relationship
+        is not evidence that records were preserved.
+        """
+        query = " UNION ALL ".join(
+            f"SELECT '{child}' AS child, CAST(COUNT(*) AS CHAR) AS orphans FROM `tab{child}` c "
+            f"LEFT JOIN `tab{parent}` p ON p.name = c.parent WHERE p.name IS NULL"
+            for child, parent in ORPHAN_CHECKS)
+        result = self._run(["--site", site, "execute", "frappe.db.sql",
+                            "--kwargs", json.dumps({"query": query})], timeout=600)
+        if result.returncode != 0:
+            raise refuse("apply.counts_unavailable", "referential integrity could not be verified")
+        payload = None
+        for line in reversed((result.stdout or "").splitlines()):
+            line = line.strip()
+            if line.startswith("["):
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    payload = None
+                if payload is not None:
+                    break
+        if not isinstance(payload, list):
+            raise refuse("apply.counts_unavailable", "the referential integrity report is unreadable")
+        counts: dict[str, int] = {}
+        for item in payload:
+            if isinstance(item, list) and len(item) >= 2:
+                name, value = item[0], item[1]
+            elif isinstance(item, dict):
+                name, value = item.get("child"), item.get("orphans")
+            else:
+                raise refuse("apply.counts_unavailable", "the referential integrity report is malformed")
+            if not isinstance(name, str):
+                raise refuse("apply.counts_unavailable", "the referential integrity report is malformed")
+            try:
+                number = int(value)
+            except (TypeError, ValueError):
+                raise refuse("apply.counts_unavailable",
+                             "the referential integrity report is malformed") from None
+            if number < 0:
+                raise refuse("apply.counts_unavailable", "the referential integrity report is malformed")
+            counts[name] = number
+        for child, _parent in ORPHAN_CHECKS:
+            if child not in counts:
+                raise refuse("apply.counts_unavailable",
+                             "the referential integrity report is incomplete")
+        return counts
+
     def migrate(self, site: str) -> None:
         result = self._run(["--site", site, "migrate"], timeout=self.timeout)
         if result.returncode != 0:
@@ -1500,60 +1818,99 @@ class BenchRunner:
         return sorted(set(names))
 
 
-def apply_update(request: Mapping[str, object], *, now: datetime) -> dict:
-    request = _require_object(request, "request")
-    _require_exact_keys(request, ("action", "site", "product_root", "manifest", "signature", "trust_store",
-                                  "sites_dir", "bench", "host_updater_version", "migrate_replays",
-                                  "command_timeout_seconds"),
-                        ("action", "site", "product_root", "manifest", "signature", "trust_store",
-                         "sites_dir", "bench", "host_updater_version"), "request")
-    if request["action"] != "apply":
-        raise refuse("engine.request_invalid", "request action is not apply")
-    if request["site"] != SITE_NAME:
-        raise refuse("apply.site_invalid", "the site name is not the supported product site")
-    product_root = Path(_text(request["product_root"], "request.product_root", maximum=1024))
-    sites_dir = Path(_text(request["sites_dir"], "request.sites_dir", maximum=1024))
-    if sites_dir.is_symlink() or not sites_dir.is_dir():
-        raise refuse("apply.site_invalid", "the sites directory is missing or unsafe")
-    site_dir = sites_dir / SITE_NAME
-    if site_dir.is_symlink() or not site_dir.is_dir():
-        raise refuse("apply.site_invalid", "the installed site directory is missing or unsafe")
-    if not (site_dir / "site_config.json").is_file():
-        raise refuse("apply.site_invalid", "the Frappe site configuration is missing")
+def apply_update(request: Mapping[str, object], *, now: datetime,
+                 state_dir: Path | None = None) -> dict:
+    """Run the supported migration, but only inside a verified transaction.
 
+    Nothing here trusts the caller.  The signed manifest, the downloaded image,
+    the backup receipt, the Owner recovery authorization, the installed image
+    identity and the transaction issued by ``authorize`` are all re-read and
+    compared again; any difference stops the update before the first migration.
+    """
+    request = _require_object(request, "request")
+    try:
+        _require_exact_keys(request, (
+            "action", "site", "product_root", "manifest", "signature", "trust_store", "sites_dir", "bench",
+            "host_updater_version", "migrate_replays", "command_timeout_seconds", "transaction", "archive",
+            "installed", "backup_receipt", "backup_dir", "recovery_authorization", "recovery_signature",
+        ), (
+            "action", "site", "product_root", "manifest", "signature", "trust_store", "sites_dir", "bench",
+            "host_updater_version", "transaction", "archive", "installed", "backup_receipt",
+            "recovery_authorization", "recovery_signature",
+        ), "request")
+        if request["action"] != "apply":
+            raise refuse("engine.request_invalid", "request action is not apply")
+        if request["site"] != SITE_NAME:
+            raise refuse("apply.site_invalid", "the site name is not the supported product site")
+        product_root = Path(_text(request["product_root"], "request.product_root", maximum=1024))
+        sites_dir = Path(_text(request["sites_dir"], "request.sites_dir", maximum=1024))
+        if sites_dir.is_symlink() or not sites_dir.is_dir():
+            raise refuse("apply.site_invalid", "the sites directory is missing or unsafe")
+        site_dir = sites_dir / SITE_NAME
+        if site_dir.is_symlink() or not site_dir.is_dir():
+            raise refuse("apply.site_invalid", "the installed site directory is missing or unsafe")
+        if not (site_dir / "site_config.json").is_file():
+            raise refuse("apply.site_invalid", "the Frappe site configuration is missing")
+        migrate_replays = request.get("migrate_replays", 2)
+        if not _is_int(migrate_replays) or not 1 <= migrate_replays <= 3:
+            raise refuse("engine.request_invalid", "migrate_replays must be 1, 2 or 3")
+        timeout = request.get("command_timeout_seconds", 1800)
+        if not _is_int(timeout) or not 60 <= timeout <= 7200:
+            raise refuse("engine.request_invalid", "command_timeout_seconds is out of range")
+    except UpdateError as error:
+        return _apply_report("failed", "pre-migrate", blockers=[_block(error.code, error.detail)])
+
+    try:
+        transaction = _load_transaction(request["transaction"], now=now)
+        if transaction["phase"] != "authorized":
+            raise refuse("transaction.invalid",
+                         "apply needs the image-phase authorization, not a manifest-only decision")
+    except UpdateError as error:
+        return _apply_report("failed", "pre-migrate", blockers=[_block(error.code, error.detail)])
+
+    target_version = transaction["target"].get("version")
     try:
         store = load_trust_store(resolve_inside(product_root, request["trust_store"], "request.trust_store"),
                                  now=now)
         manifest = verify_manifest_signature(
             resolve_inside(product_root, request["manifest"], "request.manifest"),
             resolve_inside(product_root, request["signature"], "request.signature"), store, now=now)
+        blockers = []
+        if manifest["production_authorization"] != "AUTHORIZED":
+            blockers.append(_block("policy.release_not_authorized",
+                                   "release is not production-authorized"))
+        if manifest["release_status"] != "PRODUCTION RELEASE":
+            blockers.append(_block("policy.release_not_production", "release is a test package"))
+        if blockers:
+            return _apply_report("failed", "pre-migrate", blockers=blockers,
+                                 target_version=manifest["version"])
+        _rebind_apply(request, product_root, transaction, manifest, store, now)
     except UpdateError as error:
-        return _apply_report("failed", "pre-migrate", blockers=[_block(error.code, error.detail)])
-    blockers: list[dict] = []
-    if manifest["production_authorization"] != "AUTHORIZED":
-        blockers.append(_block("policy.release_not_authorized", "release is not production-authorized"))
-    if manifest["release_status"] != "PRODUCTION RELEASE":
-        blockers.append(_block("policy.release_not_production", "release is a test package"))
-    if blockers:
-        return _apply_report("failed", "pre-migrate", blockers=blockers,
+        return _apply_report("failed", "pre-migrate", blockers=[_block(error.code, error.detail)],
+                             target_version=target_version)
+
+    # A transaction is single use.  The marker lives inside the update data
+    # folder (mounted writable for apply only) and is created exclusively, so a
+    # replayed request can never migrate twice.
+    if state_dir is None:
+        return _apply_report("failed", "pre-migrate",
+                             blockers=[_block("transaction.invalid",
+                                              "the update run folder is not established")],
+                             target_version=manifest["version"])
+    try:
+        _consume_transaction(state_dir, transaction)
+    except UpdateError as error:
+        return _apply_report("failed", "pre-migrate", blockers=[_block(error.code, error.detail)],
                              target_version=manifest["version"])
 
-    migrate_replays = request.get("migrate_replays", 2)
-    if not _is_int(migrate_replays) or not 1 <= migrate_replays <= 3:
-        raise refuse("engine.request_invalid", "migrate_replays must be 1, 2 or 3")
-    timeout = request.get("command_timeout_seconds", 1800)
-    if not _is_int(timeout) or not 60 <= timeout <= 7200:
-        raise refuse("engine.request_invalid", "command_timeout_seconds is out of range")
     runner = BenchRunner(_text(request["bench"], "request.bench", maximum=512), sites_dir, timeout=timeout)
 
     counts_before: dict[str, int | None] = {}
     apps_before: list[str] = []
     try:
         apps_before = runner.list_apps(SITE_NAME)
-        counts_before = runner.census(SITE_NAME)
-        if counts_before and all(value is None for value in counts_before.values()):
-            raise refuse("apply.counts_unavailable",
-                         "no business record could be counted before the migration")
+        counts_before = _strict_census(runner.census(SITE_NAME), "before")
+        orphans_before = runner.orphans(SITE_NAME)
     except UpdateError as error:
         return _apply_report("failed", "pre-migrate", blockers=[_block(error.code, error.detail)],
                              counts_before=counts_before, apps_before=apps_before,
@@ -1570,21 +1927,30 @@ def apply_update(request: Mapping[str, object], *, now: datetime) -> dict:
 
     try:
         apps_after = runner.list_apps(SITE_NAME)
-        counts_after = runner.census(SITE_NAME)
+        counts_after = _strict_census(runner.census(SITE_NAME), "after")
+        orphans_after = runner.orphans(SITE_NAME)
         pages = runner.role_desk_pages(SITE_NAME)
     except UpdateError as error:
         return _apply_report("failed", "verify-data", blockers=[_block(error.code, error.detail)],
                              counts_before=counts_before, apps_before=apps_before,
                              target_version=manifest["version"])
 
-    for doctype, before in counts_before.items():
-        after = counts_after.get(doctype)
-        if before is not None and (after is None or after < before):
+    for doctype in CENSUS_DOCTYPES:
+        before = counts_before[doctype]
+        after = counts_after[doctype]
+        if after < before:
             blockers.append(_block("apply.records_lost",
                                    f"{doctype}: {before} before, {after} after the migration"))
+    lost_apps = [app for app in apps_before if app not in apps_after]
     missing_apps = [app for app in REQUIRED_APPS if app not in apps_after]
-    if missing_apps:
-        blockers.append(_block("apply.apps_missing", "missing applications: " + ",".join(missing_apps)))
+    if lost_apps or missing_apps:
+        blockers.append(_block("apply.apps_missing",
+                               "missing applications: " + ",".join(sorted(set(lost_apps + missing_apps)))))
+    for table, before in orphans_before.items():
+        after = orphans_after.get(table)
+        if not isinstance(after, int) or after > before:
+            blockers.append(_block("apply.identity_mismatch",
+                                   f"{table}: {before} orphaned rows before, {after} after the migration"))
     lost_pages = [page for page in ROLE_DESK_PAGES if page not in pages]
     if lost_pages:
         blockers.append(_block("apply.role_desk_missing", "missing role desks: " + ",".join(lost_pages)))
@@ -1593,6 +1959,102 @@ def apply_update(request: Mapping[str, object], *, now: datetime) -> dict:
                          blockers=blockers, counts_before=counts_before, counts_after=counts_after,
                          apps_before=apps_before, apps_after=apps_after, role_pages=pages,
                          target_version=manifest["version"])
+
+
+def _strict_census(values: object, phase: str) -> dict[str, int]:
+    """Every mandatory business count must be a real, non-negative integer.
+
+    A missing count is not evidence of preservation, so it fails the update
+    before any migration instead of being treated as success.
+    """
+    if not isinstance(values, Mapping):
+        raise refuse("apply.counts_unavailable", f"the {phase}-migration census is unavailable")
+    required: dict[str, int] = {}
+    for doctype in CENSUS_DOCTYPES:
+        value = values.get(doctype)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise refuse("apply.counts_unavailable",
+                         f"the {phase}-migration count for {doctype} is unavailable")
+        required[doctype] = value
+    return required
+
+
+def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction: dict,
+                  manifest: dict, store: dict, now: datetime) -> None:
+    """Prove the apply request acts on exactly the authorized transaction."""
+    target = transaction["target"]
+    if target.get("manifest_sha256") != manifest.get("raw_sha256"):
+        raise refuse("transaction.mismatch", "the signed manifest changed after authorization")
+    for name, value in (("version", manifest["version"]),
+                        ("release_sequence", manifest["release_sequence"]),
+                        ("source_revision", manifest["source_revision"])):
+        if target.get(name) != value:
+            raise refuse("transaction.mismatch", f"the authorized {name} does not match the manifest")
+    migration = transaction["migration"]
+    if (migration.get("mode") != manifest["database"]["migration"]
+            or migration.get("target_schema_version") != manifest["database"]["target_schema_version"]):
+        raise refuse("transaction.mismatch", "the authorized migration plan does not match the release")
+
+    archive = resolve_inside(product_root, request["archive"], "request.archive")
+    if sha256_file(archive) != target.get("archive_sha256"):
+        raise refuse("apply.archive_mismatch", "the image archive changed after authorization")
+    identity = inspect_image_archive(archive, expected=manifest["image"], verify_layers=True)
+    if (identity["archive_sha256"] != target.get("archive_sha256")
+            or identity["size_bytes"] != target.get("archive_size_bytes")
+            or identity["config_digest"] != target.get("image_config_digest")):
+        raise refuse("apply.archive_mismatch", "the image identity does not match the authorized release")
+
+    installed = _require_object(request.get("installed"), "installed")
+    authorized_installed = transaction["installed"]
+    for name in ("version", "release_sequence", "source_revision", "image_id"):
+        if installed.get(name) != authorized_installed.get(name):
+            raise refuse("apply.installed_mismatch",
+                         f"the installed {name} changed since the update was authorized")
+
+    evidence = transaction["evidence"]
+    receipt_path = resolve_inside(product_root, request["backup_receipt"], "request.backup_receipt")
+    if sha256_file(receipt_path) != evidence.get("backup_receipt_sha256"):
+        raise refuse("apply.evidence_mismatch", "the backup receipt changed after authorization")
+    backup_dir = resolve_inside(product_root, request["backup_dir"], "request.backup_dir")
+    validate_backup_receipt(receipt_path, site=SITE_NAME, backup_dir=backup_dir, now=now,
+                            max_age_hours=manifest["requirements"]["backup_max_age_hours"])
+    authorization_path = resolve_inside(product_root, request["recovery_authorization"],
+                                        "request.recovery_authorization")
+    if sha256_file(authorization_path) != evidence.get("recovery_authorization_sha256"):
+        raise refuse("apply.evidence_mismatch", "the recovery authorization changed after authorization")
+    validate_recovery_authorization(
+        authorization_path,
+        resolve_inside(product_root, request["recovery_signature"], "request.recovery_signature"),
+        store, site=SITE_NAME, receipt_sha256=evidence.get("backup_receipt_sha256"), now=now,
+        max_age_hours=manifest["requirements"]["recovery_max_age_hours"])
+
+
+def _consume_transaction(state_dir: Path, transaction: dict) -> None:
+    """Record the transaction as used in this run folder; refuse a replay.
+
+    The product folder is mounted read-only for the engine, and the run folder
+    is the only writable private location it can name on its own (it is where
+    the request document was read from).  A replay in a later run would need a
+    fresh authorization, which needs every piece of evidence again.
+    """
+    folder = state_dir / "transactions"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        marker = folder / (transaction["transaction_id"] + ".json")
+        with marker.open("x", encoding="utf-8", newline="\n") as handle:
+            json.dump({
+                "schema_version": 1,
+                "document_type": "toefl-house-erp-update-transaction-use",
+                "transaction_id": transaction["transaction_id"],
+                "consumed_utc": parse_utc_iso(datetime.now(timezone.utc)),
+                "target_version": transaction["target"].get("version"),
+            }, handle, sort_keys=True)
+            handle.write("\n")
+    except FileExistsError:
+        raise refuse("transaction.replayed", "this update transaction was already used") from None
+    except OSError:
+        raise refuse("transaction.invalid",
+                     "the update transaction could not be recorded; nothing was migrated") from None
 
 
 def _apply_report(status: str, phase: str, *, blockers: list[dict] | None = None,
@@ -1665,7 +2127,8 @@ def verify_release(request: Mapping[str, object], *, now: datetime) -> dict:
 # CLI
 # --------------------------------------------------------------------------
 
-def run(request: Mapping[str, object], *, now: datetime | None = None) -> tuple[dict, int]:
+def run(request: Mapping[str, object], *, now: datetime | None = None,
+        state_dir: Path | None = None) -> tuple[dict, int]:
     now = now or datetime.now(timezone.utc)
     action = request.get("action") if isinstance(request, Mapping) else None
     try:
@@ -1673,8 +2136,11 @@ def run(request: Mapping[str, object], *, now: datetime | None = None) -> tuple[
             response = preflight(request, now=now)
             return response, 0 if response["decision"] == "allow" else 3
         if action == "apply":
-            response = apply_update(request, now=now)
+            response = apply_update(request, now=now, state_dir=state_dir)
             return response, 0 if response["status"] == "succeeded" else 5
+        if action == "authorize":
+            response = authorize(request, now=now)
+            return response, 0 if response["decision"] == "allow" else 3
         if action == "verify-release":
             return verify_release(request, now=now), 0
         raise refuse("engine.request_invalid", "unsupported action")
@@ -1759,7 +2225,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     except UpdateError as error:
         _write_response(arguments, _error_response(None, error.code, error.detail))
         return 4
-    response, code = run(request)
+    # The engine may only write inside the run folder it was started with, so
+    # the transaction-use marker is anchored to the request document itself.
+    request_path = arguments.request or os.environ.get("TH_UPDATE_REQUEST", "")
+    state_dir = Path(request_path).resolve().parent if request_path else None
+    response, code = run(request, state_dir=state_dir)
     _write_response(arguments, response)
     return code
 
