@@ -190,7 +190,15 @@ def validate_book_reconciliation(observation):
             require(account in {accounts[role] for role in expected})
             if account == accounts['receivable']:
                 require(row.get('party_type') == 'Customer' and row.get('party') == observation['customer'])
-            actual[account] = actual.get(account, 0) + number(row.get('debit')) - number(row.get('credit'))
+            debit, credit = number(row.get('debit')), number(row.get('credit'))
+            # A net balance alone would also accept a forged row that posts
+            # both sides (or uses negative debits/credits). Real ERPNext GL
+            # entries in this tax-free book cycle must be one-sided and the
+            # posting direction must match the exact account role.
+            require(debit >= 0 and credit >= 0 and (debit > 0) != (credit > 0))
+            direction = {accounts[role]: value for role, value in expected.items()}[account]
+            require((debit > 0) == (direction > 0))
+            actual[account] = actual.get(account, 0) + debit - credit
         require(set(actual) == {accounts[role] for role in expected})
         for role, expected_amount in expected.items():
             close(actual[accounts[role]], expected_amount)
@@ -203,6 +211,11 @@ def validate_book_reconciliation(observation):
         for row in rows:
             require(isinstance(row, dict) and row.get('is_cancelled') == 0 and row.get('voucher_no') == documents[key])
             require(row.get('item_code') == observation['item'] and row.get('warehouse') == observation['warehouse'])
+        # Reject offsetting fake SLE movements that happen to sum to the
+        # expected net inventory change but conceal an extra transaction.
+        for row in rows:
+            require(sign * number(row.get('actual_qty')) > 0)
+            require(sign * number(row.get('stock_value_difference')) > 0)
         close(sum(number(row.get('actual_qty')) for row in rows), sign * qty)
         close(sum(number(row.get('stock_value_difference')) for row in rows), sign * value)
     details = observation.get('payment_details')
