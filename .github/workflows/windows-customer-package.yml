@@ -6,6 +6,14 @@ on:
       - "TOEFL House ERP.vbs"
       - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
       - "product/windows/**"
+      - "product/update_engine.py"
+      - "product/update_entrypoint.sh"
+      - "product/updates/**"
+      - "tests/foundation/test_update_engine.py"
+      - "tests/foundation/test_update_bundle.py"
+      - "tests/foundation/test_windows_update_path.py"
+      - "docs/CUSTOMER-UPDATES.md"
+      - "docs/engineering/SAFE-UPDATES.md"
       - "tests/foundation/test_customer_install_package.py"
       - ".github/workflows/windows-customer-package.yml"
   workflow_dispatch:
@@ -32,7 +40,8 @@ jobs:
             'product/windows/Verify Package Image.ps1',
             'product/windows/Prepare Customer Package.ps1',
             'product/windows/Test Fresh Installation.ps1',
-            'product/windows/Test Existing Installation.ps1'
+            'product/windows/Test Existing Installation.ps1',
+            'product/windows/Update TOEFL House ERP.ps1'
           )
           foreach ($path in $paths) {
             $tokens = $null
@@ -43,6 +52,12 @@ jobs:
             }
           }
           Write-Host "Customer PowerShell scripts parsed successfully."
+      - name: Prove signed Windows update workflow refuses unconfigured channel
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "product/windows/Update TOEFL House ERP.ps1" -SmokeTest
+          if ($LASTEXITCODE -ne 0) { throw "Windows updater refused its fail-closed smoke." }
       - name: Initialize Windows GUI without opening a desktop window
         shell: powershell
         run: |
