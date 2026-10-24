@@ -783,9 +783,13 @@ def _cash_close_sections(day):
                for drawer in row.get("drawers", [])]
     closed = [row for row in position if row.get("close")]
     drifted = [row["company"] for row in position if row.get("drift")]
+    # In multi-company mode, a close in ONE company is never a global close.
+    # Add each closed company's recorded expectation and each still-open
+    # company's current native ledger position, without dropping either.
     expected_total = round(sum(
-        float(row.get("close", {}).get("total_expected") or 0) for row in closed), 2) \
-        if closed else round(sum(drawer["closing"] for _, drawer in drawers), 2)
+        float((row["close"] or {}).get("total_expected") or 0)
+        if row.get("close") else sum(d["closing"] for d in row.get("drawers", []))
+        for row in position), 2)
     variance_total = round(sum(
         float(row.get("close", {}).get("total_variance") or 0) for row in closed), 2)
 
@@ -795,9 +799,12 @@ def _cash_close_sections(day):
                         "scope. Expected money is their ledger closing balance."),
          "value": len(drawers), "owner": None},
         {"label": "Cash close today",
-         "definition": ("Whether a submitted cashier day close covers today. "
-                        "The close records counted cash; it posts nothing."),
-         "value": "Closed" if closed else ("No drawers" if not drawers else "Open"),
+         "definition": ("All in-scope companies must have a submitted close to show Closed. "
+                        "Partial company closes and posting drift are never reported as Closed."),
+         "value": ("No drawers" if not drawers else
+                   "Drift" if drifted else
+                   "Closed" if len(closed) == len(position) else
+                   "Partially closed" if closed else "Open"),
          "owner": "Finance Officer"},
         {"label": "Expected at close",
          "definition": ("Ledger closing balance of the drawers: the counted "
