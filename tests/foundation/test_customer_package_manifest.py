@@ -198,6 +198,29 @@ class CustomerPackageManifestTests(unittest.TestCase):
                 write_tar(self.image, members)
                 self.assert_rejected_before_output()
 
+    def test_non_linux_or_wrong_architecture_image_is_rejected(self):
+        # A correct source label on a Windows or wrong-architecture image
+        # cannot qualify a Linux/amd64 customer appliance.
+        original = self.members
+        old_name = self.config_digest.removeprefix("sha256:") + ".json"
+        for field, value in (("os", "windows"), ("architecture", "arm64"),
+                             ("os", None), ("architecture", None)):
+            with self.subTest(field=field, value=value):
+                config = json.loads(original[old_name])
+                if value is None:
+                    del config[field]
+                else:
+                    config[field] = value
+                serialized = json.dumps(config, sort_keys=True).encode()
+                new_name = hashlib.sha256(serialized).hexdigest() + ".json"
+                manifest = json.loads(original["manifest.json"])
+                manifest[0]["Config"] = new_name
+                members = {name: data for name, data in original.items() if name != old_name}
+                members["manifest.json"] = json.dumps(manifest).encode()
+                members[new_name] = serialized
+                write_tar(self.image, members)
+                self.assert_rejected_before_output("linux/amd64")
+
     def test_config_content_must_match_digest_filename(self):
         name = self.config_digest.removeprefix("sha256:") + ".json"
         write_tar(self.image, dict(self.members, **{name: self.members[name] + b" "}))
