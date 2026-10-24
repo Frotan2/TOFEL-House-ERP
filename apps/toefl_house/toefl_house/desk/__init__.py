@@ -548,11 +548,20 @@ def _branch_allowed_names(doctype, branches):
         fee_names = [row["name"] for row in frappe.get_all(
             "Fees", filters={"student": ("in", roster)},
             fields=["name"], limit_page_length=_CHAIN_LIMIT)]
-        if not fee_names:
-            return []
-        return [row["name"] for row in frappe.get_all(
-            doctype, filters={"fees": ("in", fee_names)},
-            fields=["name"], limit_page_length=_CHAIN_LIMIT)]
+        # A correction may reference native Fees OR a native Sales Invoice.
+        # The latter must also be traced back to branch-owned students.
+        invoice_names = [row["name"] for row in frappe.get_all(
+            "Sales Invoice", filters={"student": ("in", roster)},
+            fields=["name"], limit_page_length=_CHAIN_LIMIT)] if frappe.get_meta(
+                "Sales Invoice").has_field("student") else []
+        names = set()
+        for link, allowed in (("fees", fee_names),
+                              ("sales_invoice", invoice_names)):
+            if allowed:
+                names |= {row["name"] for row in frappe.get_all(
+                    doctype, filters={link: ("in", allowed)},
+                    fields=["name"], limit_page_length=_CHAIN_LIMIT)}
+        return sorted(names)
     if doctype == "TH Admission Decision":
         applicants = [row["name"] for row in frappe.get_all(
             "Student Applicant", filters={"th_branch": ("in", branches)},
@@ -594,14 +603,37 @@ def _branch_name_filter(desk, doctype):
     return ("in", _branch_allowed_names(doctype, branches))
 
 
+def _intersect_scope_filter(existing, permitted):
+    """Never let a caller-supplied filter override a mandatory permission scope.
+
+    Only equality and membership are acceptable for a scoped field. Reject
+    other operators rather than silently broadening the query.
+    """
+    allowed = set(permitted)
+    if isinstance(existing, (tuple, list)):
+        if len(existing) != 2 or existing[0] not in ("in", "=", "=="):
+            raise frappe.ValidationError("Unsupported filter on a scope-limited field")
+        values = existing[1] if existing[0] == "in" else [existing[1]]
+        if not isinstance(values, (list, tuple, set)):
+            raise frappe.ValidationError("Scope membership requires a list")
+    else:
+        values = [existing]
+    return ("in", [value for value in values if value in allowed])
+
+
 def _apply_scope(desk, doctype, filters):
     for fieldname, allowed in scope_filters(desk).items():
         meta_field = fieldname if frappe.get_meta(doctype).has_field(fieldname) else None
-        if meta_field and meta_field not in filters:
-            filters[meta_field] = ("in", allowed)
+        if meta_field:
+            filters[meta_field] = (
+                _intersect_scope_filter(filters[meta_field], allowed)
+                if meta_field in filters else ("in", allowed))
     branch_filter = _branch_name_filter(desk, doctype)
-    if branch_filter is not None and "name" not in filters:
-        filters["name"] = branch_filter
+    if branch_filter is not None:
+        allowed = branch_filter[1]
+        filters["name"] = (
+            _intersect_scope_filter(filters["name"], allowed)
+            if "name" in filters else branch_filter)
     return filters
 
 

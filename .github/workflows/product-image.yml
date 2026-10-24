@@ -1686,7 +1686,7 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 tools/release/verify_ci_gates.py --timeout 3600
+        run: python3 tools/release/verify_ci_gates.py --timeout 3600 --output "$RUNNER_TEMP/toefl-house-ci-gates.json"
       - name: Assemble verified customer package
         if: success()
         run: |
@@ -1703,6 +1703,7 @@ jobs:
             --image-labels "$image_labels" \
             --version "$TOEFL_HOUSE_RELEASE_VERSION" \
             --source-revision "$GITHUB_SHA" \
+            --gate-evidence "$RUNNER_TEMP/toefl-house-ci-gates.json" \
             --provider-attestation "GitHub Actions artifact attestation"
           test -s "$package_root"/*.zip
           echo "::notice title=Customer package::version $TOEFL_HOUSE_RELEASE_VERSION; image archive, checksum, manifest and allowlisted GUI included"
@@ -1721,6 +1722,8 @@ jobs:
             ${{ runner.temp }}/toefl-house-customer-package/*.zip.sha256
             ${{ runner.temp }}/toefl-house-customer-package/*/product/release/release-manifest.json
             ${{ runner.temp }}/toefl-house-customer-package/*/product/release/release-manifest.json.sha256
+            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/ci-gates.json
+            ${{ runner.temp }}/toefl-house-customer-package/*/product/release/ci-gates.json.sha256
           if-no-files-found: error
           compression-level: 0
       - name: Publish tagged customer release
@@ -1732,10 +1735,22 @@ jobs:
           zip_path=$(find "$RUNNER_TEMP/toefl-house-customer-package" -maxdepth 1 -type f -name '*.zip' -print -quit)
           test -n "$zip_path"
           test "$(stat -c %s "$zip_path")" -lt 2147483648
+          notes="$RUNNER_TEMP/toefl-house-release-notes.md"
+          cp docs/engineering/RELEASE-CANDIDATE.md "$notes"
+          {
+            printf '\n## Exact published build evidence\n\n'
+            printf -- '- Tag: `%s`\n' "$GITHUB_REF_NAME"
+            printf -- '- Full source SHA: `%s`\n' "$GITHUB_SHA"
+            printf -- '- Product-image run: %s/%s/actions/runs/%s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf -- '- Four exact-SHA gate receipts: `product/release/ci-gates.json` inside the ZIP.\n'
+            printf -- '- Production authorization: **REJECT / NO-GO**.\n'
+          } >> "$notes"
           gh release create "$GITHUB_REF_NAME" "$zip_path" "$zip_path.sha256" \
             --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --prerelease \
             --title "TOEFL House ERP $GITHUB_REF_NAME" \
-            --notes "Provider-built customer package. Verify the included release manifest and GitHub artifact attestation. This is a TEST PACKAGE - NO REAL DATA; production authorization remains REJECT until Owner acceptance gates pass."
+            --notes-file "$notes"
       - name: Stack logs on failure
         if: failure()
         working-directory: product

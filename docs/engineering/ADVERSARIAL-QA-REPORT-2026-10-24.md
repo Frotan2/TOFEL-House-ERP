@@ -268,3 +268,9 @@ We audited `docs/engineering/foundation-version-matrix.json`, `tools/foundation/
 1. **Do not merge PRs #46, #48, #49, #50, #51, or branch `arena/e281e864-tofel-house-erp`** until every Critical, High, and Medium defect documented in Section 3 is remediated by the responsible domain owner, covered by regression tests, and re-qualified on the new exact head SHA across all four canonical CI workflows.
 2. **Remediate `main` findings `[MAIN-01]` through `[MAIN-04]`** (`teaching/__init__.py` active roster filter, `desk/__init__.py` scope filter intersection & `Sales Invoice` correction request branch chain, `administration.py` `Administrator` refusal, and `finance/corrections.py` + `teaching/attendance_corrections.py` maker-checker self-approval refusal).
 3. **Maintain `production_authorization = REJECT`** until all physical hardware, recovery, cashier/stock, payroll, and Owner policy gates (`#12`, `#35`, `#36`, `#40`, `D1`–`D7`) are evidenced and approved.
+
+---
+
+## Integration update — 2026-10-24 (after the baseline audit)
+
+The original report above is a historical snapshot of `main` at `c22b997`, not a current all-branches release decision. The integration lead merged PR #59 into `main` at `aa49db9717fa5d22c01b7d457121187a41947f10` to remediate the **baseline** inactive-roster check, branch filter intersection, protected-account role controls, and requester self-approval gaps. The four formerly exploit-presence assertions have been converted into positive regression contracts. The Sales Invoice branch-chain case still depends on a verified native relation and must be qualified on a live schema; do not claim broad correction-read parity without that evidence. The outstanding severity findings on #46/#48/#49/#50/#51/#58 remain until independently retested on their respective latest heads and integrated revision. No Owner Windows/production acceptance is implied.
