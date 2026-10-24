@@ -54,6 +54,28 @@ KIND_ROLES = {
     "record_attendance": "Attendance Recorder",
     "add_class_member": "Teaching Scheduler",
     "move_class_member": "Teaching Scheduler",
+    "remove_class_member": "Teaching Scheduler",
+    # Class operations (Mission 3): scheduling, calendars, waiting lists,
+    # capacity overrides, transfers and suspensions. Policy-gated commands
+    # additionally require the role the governing policy pins (checked
+    # inside the command, dual key).
+    "generate_timetable": "Teaching Scheduler",
+    "postpone_session": "Teaching Scheduler",
+    "schedule_replacement_session": "Teaching Scheduler",
+    "cancel_session": "Teaching Scheduler",
+    "suspend_class": "Teaching Scheduler",
+    "suspend_student_membership": "Teaching Scheduler",
+    "resume_suspension": "Teaching Scheduler",
+    "join_waiting_list": "Reception",
+    "leave_waiting_list": "Reception",
+    "offer_waiting_list_seat": "Teaching Scheduler",
+    "admit_from_waiting_list": "Teaching Scheduler",
+    "create_capacity_override": "Academic Manager",
+    "revoke_capacity_override": "Academic Manager",
+    "request_class_transfer": "Teaching Scheduler",
+    "approve_class_transfer": "Academic Manager",
+    "deny_class_transfer": "Academic Manager",
+    "cancel_class_transfer": "Teaching Scheduler",
     "request_attendance_correction": "Attendance Recorder",
     "approve_attendance_correction": "Attendance Recorder",
     "deny_attendance_correction": "Attendance Recorder",
@@ -93,6 +115,9 @@ DOCTYPES = {
     "TH Instructor Contract", "TH Teaching Assignment",
     "TH Correction Policy", "TH Correction Request",
     "TH Attendance Correction Request",
+    # Mission 3 class operations (guarded operational records).
+    "TH Class Transfer", "TH Class Waiting List",
+    "TH Capacity Override", "TH Class Suspension",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision",
                    "TH Placement Course Map Revision")
@@ -238,19 +263,55 @@ TEACHING_COMMANDS = {
     "transition_class": "Student Group",
     "schedule_session": "Course Schedule",
     "record_attendance": "Student Attendance",
-    "add_class_member": "Student Group",
+    # a roster addition may also consume an approved capacity override
+    "add_class_member": ("Student Group", "TH Capacity Override"),
     "move_class_member": "Student Group",
+    "remove_class_member": "Student Group",
     # the approval command voids the erroneous mark and submits the
     # replacement (both Student Attendance) inside the guarded context
     "approve_attendance_correction": "Student Attendance",
+    # Mission 3 class operations. A command lists every guarded doctype it
+    # may write; anything else is refused by the same controller seam.
+    "generate_timetable": "Course Schedule",
+    "postpone_session": "Course Schedule",
+    "schedule_replacement_session": "Course Schedule",
+    "cancel_session": "Course Schedule",
+    "suspend_class": "TH Class Suspension",
+    "suspend_student_membership": "TH Class Suspension",
+    "resume_suspension": "TH Class Suspension",
+    "join_waiting_list": "TH Class Waiting List",
+    "leave_waiting_list": "TH Class Waiting List",
+    "offer_waiting_list_seat": "TH Class Waiting List",
+    # admission moves the waiting entry AND appends the native roster row,
+    # consuming the override in the same transaction
+    "admit_from_waiting_list": ("TH Class Waiting List", "Student Group",
+                                "TH Capacity Override"),
+    "create_capacity_override": "TH Capacity Override",
+    "revoke_capacity_override": "TH Capacity Override",
+    "request_class_transfer": "TH Class Transfer",
+    "deny_class_transfer": "TH Class Transfer",
+    "cancel_class_transfer": "TH Class Transfer",
+    # approval executes the move (both class rosters) and consumes a seat
+    # override when the target class is full
+    "approve_class_transfer": ("TH Class Transfer", "Student Group",
+                               "TH Capacity Override"),
 }
 
 
 def teaching_command_active(doctype):
-    """Return True only inside the matching teaching command for this actor."""
+    """Return True only inside the matching teaching command for this actor.
+
+    A command may be bound to one doctype (the common case) or to a tuple of
+    the guarded doctypes it is allowed to write; every other doctype stays
+    refused, so a command cannot become a general write backdoor.
+    """
     context = _CONTEXT.get()
-    return bool(context and context[1] == frappe.session.user
-                and TEACHING_COMMANDS.get(context[0]) == doctype)
+    if not context or context[1] != frappe.session.user:
+        return False
+    allowed = TEACHING_COMMANDS.get(context[0])
+    if isinstance(allowed, str):
+        return allowed == doctype
+    return bool(allowed) and doctype in allowed
 
 
 def active_command_kind():

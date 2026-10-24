@@ -449,6 +449,34 @@ def validate_session_window(from_time, to_time):
     return start, end
 
 
+def session_minutes(from_time, to_time):
+    """Duration of a normalized session window, in whole minutes.
+
+    Pure arithmetic over the same ``HH:MM:SS`` strings the native Course
+    Schedule stores, so a policy bound and a stored session always agree.
+    """
+    start = _normalize_time(from_time, "from_time")
+    end = _normalize_time(to_time, "to_time")
+    if start >= end:
+        raise ValueError("from_time must be strictly before to_time")
+    start_h, start_m = (int(part) for part in start.split(":")[:2])
+    end_h, end_m = (int(part) for part in end.split(":")[:2])
+    return (end_h * 60 + end_m) - (start_h * 60 + start_m)
+
+
+def session_windows_overlap(start_a, end_a, start_b, end_b):
+    """Half-open overlap: two sessions conflict when their times intersect.
+
+    Touching windows (one ends exactly when the other starts) do not
+    conflict — that is how back-to-back classes are scheduled.
+    """
+    a_start = _normalize_time(start_a, "from_time")
+    a_end = _normalize_time(end_a, "to_time")
+    b_start = _normalize_time(start_b, "from_time")
+    b_end = _normalize_time(end_b, "to_time")
+    return a_start < b_end and b_start < a_end
+
+
 def validate_attendance_statuses(value):
     """Bounded attendance batch using only native Student Attendance statuses.
 
@@ -536,6 +564,22 @@ def can_read(kind, roles, actor, owner, status=None):
         return bool(roles & {"Attendance Recorder", "Teaching Auditor"})
     if kind == "enrollment_exit":
         return bool(roles & {"Enrollment Officer", "Enrollment Auditor"})
+    # Mission 3 class operations: operational records stay with the staff who
+    # run classes; Reception reads the waiting list it creates, and the
+    # Academic Manager reads the decisions it approves.
+    if kind == "class_transfer":
+        return bool(roles & {"Teaching Scheduler", "Teaching Auditor",
+                             "Academic Manager", "General Manager", "Course Owner"})
+    if kind == "class_waiting_list":
+        return bool(roles & {"Reception", "Teaching Scheduler", "Teaching Auditor",
+                             "Academic Manager", "General Manager", "Course Owner",
+                             "Enrollment Officer", "Enrollment Auditor"})
+    if kind == "capacity_override":
+        return bool(roles & {"Academic Manager", "Teaching Scheduler",
+                             "Teaching Auditor", "General Manager", "Course Owner"})
+    if kind == "class_suspension":
+        return bool(roles & {"Teaching Scheduler", "Teaching Auditor",
+                             "Academic Manager", "General Manager", "Course Owner"})
     if "Placement Publisher" in roles:
         return True
     # Invigilator may operate the Digital session and read the operational

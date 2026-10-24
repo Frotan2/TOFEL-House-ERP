@@ -44,6 +44,12 @@ KNOWN_DOCTYPES = {
     "TH Placement Response", "TH Placement Score", "TH Placement Decision",
     "TH Placement Operation", "TH Placement Audit Event",
     "TH Admission Decision",
+    # Mission 3 class operations, scheduling, capacity and mobility
+    "TH Class Operations Policy", "TH Class Operations Policy Version",
+    "TH Academic Calendar", "TH Academic Calendar Day",
+    "TH Timetable Template", "TH Timetable Slot",
+    "TH Capacity Override", "TH Class Waiting List",
+    "TH Class Transfer", "TH Class Suspension",
 }
 
 

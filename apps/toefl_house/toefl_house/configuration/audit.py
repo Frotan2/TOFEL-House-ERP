@@ -90,6 +90,17 @@ KIND_AUTHORITY = {
     "set_guardian_lifecycle_policy_version": "business_policy",
     "set_guardian_lifecycle_policy_status": "business_policy",
     "validate_guardian_lifecycle_policy": "business_policy",
+    # Mission 3 class-operations configuration (Course Owner authority).
+    "create_class_operations_policy": "business_policy",
+    "set_class_operations_policy_version": "business_policy",
+    "set_class_operations_policy_status": "business_policy",
+    "create_academic_calendar": "business_policy",
+    "add_academic_calendar_day": "business_policy",
+    "remove_academic_calendar_day": "business_policy",
+    "set_academic_calendar_status": "business_policy",
+    "create_timetable_template": "business_policy",
+    "set_timetable_slots": "business_policy",
+    "set_timetable_template_status": "business_policy",
 }
 
 

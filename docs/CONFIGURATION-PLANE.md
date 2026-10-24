@@ -33,7 +33,11 @@ the **complete** owner-configurable carrier inventory as shipped today:
   `toefl_house.finance.policies`.
 - **Teaching:** `TH Adjustment Posting Policy` (+ versions),
   `TH Attendance Correction Policy` (+ versions), `TH Roster Change Policy`
-  (+ versions) — `toefl_house.teaching.policies`.
+  (+ versions) — `toefl_house.teaching.policies`; `TH Class Operations Policy`
+  (+ versions) — `toefl_house.teaching.class_operations`. A `TH Timetable
+  Template` (+ `TH Timetable Slot` rows) and `TH Academic Calendar`
+  (+ `TH Academic Calendar Day` rows) are operational carriers written by
+  the same guarded commands; they are not policy versions.
 - **Operations:** `TH Alerting Policy`, `TH Guardian Lifecycle Policy`
   (each + versions), and `TH Owner Operations Policy` (+ versions) —
   `toefl_house.operations.{alerting, guardian_lifecycle, owner_configuration}`.
@@ -97,7 +101,7 @@ runs.
 | Admission `Deferred` outcome | Admission Reviewer/Releaser command records a native `TH Admission Decision` transition with actor, reason and audit; allowed outcomes are the native state-machine vocabulary. | `decide_admission` accepts `Deferred` as a human decision, not as an assessment result or policy threshold. Returning-student mode has its own effective-dated `TH Returning Student Policy` resolver in admission. | **PASS (contract only).** Manual `Deferred` status is distinct from D1's deferred academic policy. |
 | Refunds and corrections | Finance desk actions append `TH Correction Policy` versions through guarded commands and the `TH Placement Audit Event` policy stream; the version captures approver role, correction window and reason. | `_governing_policy` resolves the active effective version; requests pin it; approvals use the pinned approver/window and post only native Sales Invoice credit notes or native Fees cancellation. Full-amount-only rules refuse partial refunds. `validate_correction_policy` records structural-readiness evidence; it is not a second, hard-coded refund authority. | **PASS (contract only).** OD-CP-2 Option B is the stated Fees scope; no unconfigured approver/window default is used. Actual Owner terms remain unconfigured/unverified. |
 | Identity, branch access and guardian | Native Frappe `User`/`Role` and the existing permission/command gates remain the identity authority; guarded Owner configuration uses the Course Owner role. `TH Guardian Lifecycle Policy` versions use the same configuration audit spine. | No second identity store or guardian-portal consumer exists. Administrator/Guest cannot act as Course Owner. Guardian lifecycle terms do not grant access or activate delegation/consent behavior; SEC-GUARDIAN-01 and D4 remain the limit. | **PASS (static/contract); advanced guardian/portal DEFERRED.** Owner user/branch setup is still an actual deployment check. |
-| Student lifecycle, withdrawal and transfer | Returning-student versions are saved/audited through Admission commands. The Enrollment Exit desk exposes guarded `TH Enrollment Exit Policy` versions. | Returning-student mode is read by admission. Withdrawal/dismissal refuses unless the effective exit version cites an explicit, shipped Owner decision that supersedes D5 and authorizes both actions; the current canonical D5 record does not. The separate Owner Operations `withdrawal_allowed` and `transfer_allowed` fields are not exit resolvers; no transfer command is enabled. | **PASS (fail-closed contract); exits/transfer UNVERIFIED and D5-gated.** No hard-coded permission bypass was found. |
+| Student lifecycle, withdrawal and transfer | Returning-student versions are saved/audited through Admission commands. The Enrollment Exit desk exposes guarded `TH Enrollment Exit Policy` versions. | Returning-student mode is read by admission. Withdrawal/dismissal refuses unless the effective exit version cites an explicit, shipped Owner decision that supersedes D5 and authorizes both actions; the current canonical D5 record does not. The separate Owner Operations `withdrawal_allowed` and `transfer_allowed` fields are not exit resolvers; no transfer command was enabled at this audit. | **PASS (fail-closed contract); exits/transfer UNVERIFIED and D5-gated.** Mission 3 later added class-level mobility under its own bounded policy (§0.1b); enrollment withdrawal/dismissal stays D5-gated. No hard-coded permission bypass was found. |
 | Calendar, tax, metrics and capacity | Owner Operations versions/audit store `calendar_notice_days`, tax inputs, `reporting_review_days` and `capacity_target`; the desk labels these as decision inputs. | No calendar scheduler consumes the notice value; tax remains native ERPNext configuration; no derived-metric/review runner consumes the metrics interval; class membership enforcement remains native `Student Group.max_strength`, not the Owner planning target. | **PASS (static honesty); these inputs are NOT runtime policy.** No silent default or cross-domain consumer was found. |
 | Backup, off-site scope and key custody | Backup schedule, retention count/behavior and public recovery key are versioned and audited in `TH Owner Operations Policy`; the desk resolves only a currently validated snapshot. | `current_backup_policy` and the Windows backup/activation checks consume the local schedule, explicit retention choice and public-key identity. Private keys, custodian identities and ceremonies remain external. Legacy off-site fields are hidden/read-only and ignored; only the separate fixed local drive on the same PC is in scope. | **UNVERIFIED / HOLD.** The Owner decided the retention behavior on 2026-10-14 (decision D17: delete beyond keep count), but no complete policy is configured: do not run the helper, cleanup/deletion, or activation. Off-site/NAS/second-device/cloud backup stays deferred; CI fixtures do not authorize the Owner. |
 | Production and launch controls | Owner/Administration projections report operational site mode separately from the immutable production-authorization decision. | `product/activate.py` can change only guarded site mode after its backup checks; neither a `PRODUCTION` mode nor a configured policy can flip release authorization. | **REJECTED.** Production authorization remains REJECT until real Owner/deployment evidence and authorization are supplied and verified. |
@@ -116,6 +120,28 @@ restore frames, but not the failing operation. None of this is a claim of a live
 Frappe UI-to-database or Owner-PC pass.
 
 ---
+
+## 0.1b Class operations, scheduling, capacity and mobility (2026-10-24)
+
+Mission 3 adds one new policy carrier and four operational records, all native
+ERPNext Education facts underneath:
+
+| Carrier | Guarded commands | Runtime consumer |
+| --- | --- | --- |
+| `TH Class Operations Policy` (+ versions) | `toefl_house.teaching.class_operations.{create_class_operations_policy,set_class_operations_policy_version,set_class_operations_policy_status}` | `governing_operations()` resolves the latest validated effective version and every scheduling, capacity, waiting-list, suspension and transfer command reads it. No version means those rules are unbound: session-window/lifecycle commands refuse with `NOT CONFIGURED` language, while legacy scheduling keeps its native-only checks. |
+| `TH Academic Calendar` + `TH Academic Calendar Day` | `toefl_house.teaching.calendars.{create_academic_calendar,add_academic_calendar_day,set_academic_calendar_day_status}` (receipted, not policy versions) | `resolve_day_kinds()` / `teaching_refusal()` gate new sessions and timetable generation. Branch rows override global rows; a missing calendar never blocks; closed/holiday days never rewrite sessions that already exist. |
+| `TH Timetable Template` + `TH Timetable Slot` | `toefl_house.teaching.timetables.{create_timetable_template,set_timetable_slots,set_timetable_template_status}` | `generate_timetable()` expands the active slots inside the pinned horizon and refuses overlapping/duplicate slots up front. |
+| `TH Capacity Override`, `TH Class Waiting List`, `TH Class Transfer`, `TH Class Suspension` | `toefl_house.teaching.capacity.*`, `toefl_house.teaching.transfers.*`, `toefl_house.teaching.suspensions.*` | Seat arithmetic (`capacity − roster rows − unexpired offers`), waiting-list offers/admission, one-shot overrides, and eligibility-checked transfers. Every mutation re-proves the facts under row locks and preserves the native attendance/enrollment/assessment/finance rows untouched. |
+
+Owner Operations `capacity_target`, `calendar_notice_days`, `transfer_allowed`
+and `withdrawal_allowed` remain decision inputs; the class-operations policy is
+the bounded resolver that makes class-level capacity, calendar and mobility
+operational. Program/branch transfers stay closed unless the effective version
+enables them. Enrollment withdrawal/dismissal remains gated by D5; the calendar
+carrier does **not** implement A05 rolling terms/repeats or A11 enrollment
+cancellation, so both stay BLOCKED. Evidence: `tests/teaching/test_{class_operations_policy,
+academic_calendar,timetable_templates,scheduling_rules,capacity_operations,
+suspensions,class_transfers,class_operations_journey}.py`.
 
 ## 1. Native model verification (done, not assumed)
 
