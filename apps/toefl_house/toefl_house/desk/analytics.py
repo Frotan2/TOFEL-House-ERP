@@ -345,6 +345,10 @@ def book_stock_metrics():
     try:
         if not frappe.db.exists("Item Group", "Books"):
             return dict(unavailable, scope="Native Item Group Books not configured")
+        # Even when the group currently has no items, lack of Bin permission
+        # cannot be interpreted as verified zero stock.
+        if not frappe.has_permission("Bin", "read"):
+            return unavailable
         items = _native_rows(
             "Item", ["name", "item_name"],
             filters={"item_group": "Books", "is_stock_item": 1, "disabled": 0},
