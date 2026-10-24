@@ -20,7 +20,13 @@ CANDIDATES = (
     (44, "release/atomic-customer-archives", "c80f9250d5214c95617f670571ed5eeb9bb943e7"),
     (45, "finance/strict-book-ledger-reconciliation", "17dda4de3ccdb1ec00ed39729b3c0e3cc1d4bf0d"),
     (47, "release/trigger-image-for-native-commerce", "2d9d28dbc7517320fd2c69328d21dc964dff155b"),
+    (54, "maintenance/verified-merged-branch-cleanup-20261024", "3587c18bb5adbdbeb4c127ef600b02aa86ecc635"),
+    (55, "maintenance/fix-retire-delete-endpoint-20261024", "1af7f9b815ca481ecff2e4c382635bfafc8a8506"),
 )
+
+# The final maintenance PR head is known only after its last commit; derive it
+# from an already-merged PR and the actual unchanged branch, never a guessed SHA.
+SELF_BRANCH = "maintenance/final-cleanup-self-retirement-20261024"
 
 
 def eligible(pr, ref, opened, branch, sha):
@@ -75,6 +81,24 @@ def open_pulls(token):
     raise RuntimeError("Too many PR pages; stop")
 
 
+def find_merged_self(token):
+    """Find the exact closed and merged PR for the named maintenance branch."""
+    for page in range(1, 101):
+        batch = api("/pulls?state=closed&per_page=100&page=" + str(page), token)
+        if not isinstance(batch, list):
+            raise RuntimeError("Unexpected closed PR-list response")
+        for pr in batch:
+            head = pr.get("head") or {}
+            if (pr.get("merged_at") and pr.get("state") == "closed"
+                    and (pr.get("base") or {}).get("ref") == "main"
+                    and head.get("ref") == SELF_BRANCH
+                    and (head.get("repo") or {}).get("full_name") == REPOSITORY):
+                return pr
+        if len(batch) < 100:
+            return None
+    raise RuntimeError("Too many closed PR pages")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true")
@@ -91,8 +115,12 @@ def main():
         return 2
     try:
         opened = open_pulls(token)
+        candidates = list(CANDIDATES)
+        own_pr = find_merged_self(token)
+        if own_pr:
+            candidates.append((own_pr["number"], SELF_BRANCH, own_pr["head"]["sha"]))
         selected = []
-        for number, branch, sha in CANDIDATES:
+        for number, branch, sha in candidates:
             path = "/git/ref/heads/" + urllib.parse.quote(branch, safe="/")
             pr = api("/pulls/" + str(number), token)
             try:
@@ -107,7 +135,7 @@ def main():
             if ok:
                 selected.append((number, branch, sha, path))
         if not args.apply:
-            print("DRY RUN: eligible", len(selected), "of", len(CANDIDATES))
+            print("DRY RUN: eligible", len(selected), "of", len(candidates))
             return 0
         for number, branch, sha, path in selected:
             # Verify again to avoid deleting a branch reused since preflight.

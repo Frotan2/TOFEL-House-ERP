@@ -50,6 +50,12 @@ class RetireMergedBranchesSafetyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             cleanup.delete_ref_path("/git/ref/tags/release")
 
+    def test_explicit_self_cleanup_name_is_not_main_or_a_live_agent_branch(self):
+        self.assertEqual(cleanup.SELF_BRANCH,
+                         "maintenance/final-cleanup-self-retirement-20261024")
+        self.assertNotIn(cleanup.SELF_BRANCH, [b for _, b, _ in cleanup.CANDIDATES])
+        self.assertTrue(all("/" in name for _, name, _ in cleanup.CANDIDATES))
+
     def test_allowlist_exact_shas_no_duplicates(self):
         names = [branch for _, branch, _ in cleanup.CANDIDATES]
         self.assertEqual(len(names), len(set(names)))
