@@ -168,6 +168,17 @@ class S1GuardTests(unittest.TestCase):
         linkage.check_intake_open = lambda program: fake.linkage_calls.append(program)
         sys.modules["toefl_house.academic.catalog_linkage"] = linkage
 
+        # B05: enroll_in_program consults the progression gate before writing.
+        # This harness stands in for an unconfigured successor catalog (no
+        # progression required), the same fail-open shape production uses for
+        # entry levels, while recording the consultation.
+        self.progression_calls = []
+        progression = types.ModuleType("toefl_house.academic.progression")
+        progression.enrollment_gate = lambda student, program: (
+            fake.progression_calls.append((student, program))
+            or {"required": False, "eligible": True, "level": ""})
+        sys.modules["toefl_house.academic.progression"] = progression
+
         api = types.ModuleType("toefl_house.api")
         api._execute = lambda kind, key, payload, work: work(ACTOR)[0]
         sys.modules["toefl_house.api"] = api
@@ -215,6 +226,11 @@ class S1GuardTests(unittest.TestCase):
 
     def test_invoice_without_customer_ignored(self):
         self.enrollment.deny_premature_invoice(self._invoice(customer=None))
+
+    def test_enrollment_consults_progression_gate_before_committing(self):
+        """B05: the progression gate is consulted for every enrollment."""
+        self.enrollment.enroll_in_program("test-key-enroll-000005", "ADM-1")
+        self.assertEqual(self.progression_calls, [("STU-1", "TH-A1")])
 
     def test_enrollment_consults_catalog_linkage_before_committing(self):
         self.invoice_reads = [[], []]
