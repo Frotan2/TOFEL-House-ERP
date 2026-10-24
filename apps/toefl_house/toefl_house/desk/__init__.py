@@ -318,10 +318,6 @@ PROJECTION_FIELDS = {
         "name", "student_group_name", "program", "academic_year",
         "max_strength", "course", "disabled", "th_class_status",
     ],
-    ("finance", "Program Enrollment"): [
-        "name", "student", "student_name", "program", "academic_year",
-        "enrollment_date", "docstatus",
-    ],
     ("reception", "Fees"): [
         "name", "student", "program", "due_date", "grand_total",
         "outstanding_amount", "currency", "docstatus",
