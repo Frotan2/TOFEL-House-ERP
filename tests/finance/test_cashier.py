@@ -120,7 +120,14 @@ def close(**overrides):
 
 class CloseShapeTests(unittest.TestCase):
     def setUp(self):
-        self.module = load_cashier(DRAWERS)
+        # These individual validation cases use one approved cash drawer;
+        # the multi-drawer completeness contract has a separate test.
+        self.module = load_cashier(DRAWERS[:1])
+
+    def test_partial_company_drawer_close_is_refused(self):
+        module = load_cashier(DRAWERS)
+        with self.assertRaisesRegex(_ValidationError, "every enabled Cash/Bank drawer"):
+            module.validate_close(close())
 
     def test_balanced_close_is_accepted(self):
         self.assertIsNone(self.module.validate_close(close()))
@@ -259,6 +266,14 @@ class CommandContractTests(unittest.TestCase):
             module.reconcile_cashier_day(
                 "fin_cashier_scope_00001", "TOEFL House", "2026-10-24", [])
         self.assertIn("not permitted to record a cash close", str(caught.exception))
+
+    def test_explicit_company_read_scope_is_not_trusted(self):
+        module = load_cashier(DRAWERS)
+        module.frappe.get_all = lambda doctype, **kwargs: (
+            ["TOEFL House"] if doctype == "User Permission" else [])
+        self.assertEqual(
+            module._resolve_companies(["Other Company", "TOEFL House"]),
+            ["TOEFL House"])
 
     def test_a_cashier_with_no_company_permission_is_unrestricted(self):
         module = load_cashier(DRAWERS)
