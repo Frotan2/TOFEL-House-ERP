@@ -129,8 +129,23 @@ def archive_identity(path: Path, supplied_labels: dict) -> tuple[dict[str, str],
                     or not all(isinstance(digest, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
                                for digest in rootfs["diff_ids"])):
                 raise ValueError("image layer metadata is malformed")
-            for layer in layers:
-                regular_member(layer)
+            # Docker rootfs.diff_ids bind each uncompressed layer's exact bytes.
+            # Checking the config digest alone would allow an altered layer to
+            # travel inside an otherwise correctly labelled customer package.
+            # Hash in bounded chunks: a production image can exceed 1 GiB.
+            for layer, expected_digest in zip(layers, rootfs["diff_ids"]):
+                member = regular_member(layer)
+                stream = archive.extractfile(member)
+                if stream is None:
+                    raise ValueError(f"cannot read image layer: {layer}")
+                digest = hashlib.sha256()
+                total = 0
+                with stream:
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                        total += len(chunk)
+                if total != member.size or "sha256:" + digest.hexdigest() != expected_digest:
+                    raise ValueError("image layer content does not match rootfs diff_id")
             return labels, "sha256:" + config_hash
     except (tarfile.TarError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"invalid Docker image archive metadata: {exc}") from exc
