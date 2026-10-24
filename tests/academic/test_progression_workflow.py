@@ -140,6 +140,27 @@ class DecisionTests(ProgressionCase):
             self.decide(first["name"])
         self.assertIn("is Superseded", str(ctx.exception))
 
+    def test_correcting_an_approved_result_revokes_next_level_eligibility(self):
+        book = self.published_book()
+        first = self.h.store.find("TH Academic Result",
+                                  filters={"student": "SYN-STU-1"})[0]
+        decision = self.decide(first["name"], key="key-decide-before-correction")
+        self.assertEqual(decision["decision"], "Promote")
+        self.assertTrue(self.h.progression.next_level_eligibility(
+            "SYN-STU-1", "SYN-GEN-ENG-2")["eligible"])
+        self.h.acting_as(MANAGER)
+        self.h.assessment.correct_published_result(
+            "key-revise-after-promotion", book["name"], "SYN-STU-1",
+            "Correct the published mark and withdraw the former evidence",
+            marks=[{"component": "READING", "mark": 12}])
+        eligibility = self.h.progression.next_level_eligibility(
+            "SYN-STU-1", "SYN-GEN-ENG-2")
+        self.assertTrue(eligibility["required"])
+        self.assertFalse(eligibility["eligible"])
+        self.assertIn("superseded", " ".join(eligibility["reasons"]).lower())
+        with self.assertRaises(ValidationError):
+            self.h.progression.enrollment_gate("SYN-STU-1", "SYN-GEN-ENG-2")
+
     def test_progression_requires_the_policy_configured_approval_role(self):
         self.h.seed_policy(
             "SYN-DIRECTOR", levels=("SYN-GE-1",),
