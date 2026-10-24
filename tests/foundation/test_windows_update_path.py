@@ -199,6 +199,12 @@ class PackageMembershipTests(unittest.TestCase):
                          "product/updates/channel.json"):
                 self.assertIn(name, text, f"{name} is missing from {path}")
 
+    def test_the_windows_workflow_reruns_when_the_update_path_changes(self):
+        workflow = (ROOT / ".github" / "workflows" / "windows-customer-package.yml").read_text(encoding="utf-8")
+        for trigger in ("product/update_engine.py", "product/update_entrypoint.sh", "product/updates/**",
+                        "tests/foundation/test_windows_update_path.py"):
+            self.assertIn(trigger, workflow, f"{trigger} does not trigger the Windows update smoke")
+
     def test_the_windows_workflow_parses_and_smoke_tests_the_updater(self):
         workflow = (ROOT / ".github" / "workflows" / "windows-customer-package.yml").read_text(encoding="utf-8")
         self.assertIn("product/windows/Update TOEFL House ERP.ps1", workflow)
