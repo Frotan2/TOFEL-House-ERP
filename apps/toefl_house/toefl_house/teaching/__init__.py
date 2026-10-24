@@ -42,6 +42,14 @@ Moves deactivate the source row (membership history is preserved) and
 approved transfer executes inside that same roster window, so no path shifts
 a roster after the owner closed it.
 
+Attendance obeys three gates in this order, and each one exists for a
+different reason: the class must be active and the student's roster row
+active (an exited student keeps history but cannot be marked anew), the
+session must still meet (a Postponed or Cancelled session carries no marks),
+and a bounded suspension window refuses ``Present`` while still recording
+``Absent``/``Leave``. The native Student Attendance row is the only record;
+this module never stores a second copy of a mark.
+
 The operator-facing walkthrough (who calls which command, the order a session
 is validated in, the seat arithmetic, and what each refusal means) is
 ``docs/CLASS-OPERATIONS.md``.
