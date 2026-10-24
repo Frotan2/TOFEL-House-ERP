@@ -115,7 +115,13 @@ def refund_allocation_ok(payment, credit_notes, party_account, cash_accounts,
         return False
     company = _payment(payment, "company")
     party = _payment(payment, "party")
+    # A reference can be repeated across child rows. Compare its COMBINED
+    # allocation to the live balance, not each row independently.
+    allocated_by_note = {}
     for row in references:
+        if not isinstance(row, dict) or row.get("reference_doctype") not in (
+                None, "Sales Invoice"):
+            return False
         name = row.get("reference_name")
         note = (credit_notes or {}).get(name)
         if not note:
@@ -125,11 +131,24 @@ def refund_allocation_ok(payment, credit_notes, party_account, cash_accounts,
         if note.get("customer") != party or note.get("company") != company:
             return False
         allocated = abs(_flt(row.get("allocated_amount")))
-        outstanding = abs(_flt(note.get("outstanding_amount")))
         if allocated <= 0:
             return False
-        if not existing and allocated - outstanding > TOLERANCE:
-            return False
+        allocated_by_note[name] = allocated_by_note.get(name, 0.0) + allocated
+        if not existing:
+            outstanding = abs(_flt(note.get("outstanding_amount")))
+            if allocated_by_note[name] - outstanding > TOLERANCE:
+                return False
+    total_allocated = sum(allocated_by_note.values())
+    paid = _payment(payment, "paid_amount")
+    if paid is None or _flt(paid) <= 0:
+        return False
+    if abs(total_allocated - _flt(paid)) > TOLERANCE:
+        return False
+    # No unreviewed deductions can reduce the amount actually paid while
+    # still reporting the credit as fully refunded.
+    if any(abs(_flt(row.get("amount"))) > TOLERANCE
+           for row in (_payment(payment, "deductions") or [])):
+        return False
     return True
 
 
@@ -187,6 +206,9 @@ def refund_permitted(doc, *, existing=False):
         "paid_from": getattr(doc, "paid_from", None),
         "paid_to": getattr(doc, "paid_to", None),
         "unallocated_amount": getattr(doc, "unallocated_amount", 0) or 0,
+        "paid_amount": getattr(doc, "paid_amount", None),
+        "deductions": [row.as_dict() if hasattr(row, "as_dict") else dict(row)
+                       for row in (doc.get("deductions") or [])],
         "reference_rows": [row.as_dict() if hasattr(row, "as_dict") else dict(row)
                            for row in (doc.get("references") or [])],
     }
@@ -232,8 +254,11 @@ def prior_returns_for(invoice):
             fields=["item_code", "qty"],
             limit_page_length=200,
         )
-        quantities.append({item["item_code"]: abs(_flt(item["qty"]))
-                           for item in (items or [])})
+        per_item = {}
+        for item in (items or []):
+            code = item["item_code"]
+            per_item[code] = per_item.get(code, 0.0) + abs(_flt(item["qty"]))
+        quantities.append(per_item)
         credited += abs(_flt(frappe.db.get_value(INVOICE, row["name"], "grand_total")))
     return quantities, credited
 
