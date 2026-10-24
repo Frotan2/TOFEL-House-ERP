@@ -21,6 +21,7 @@ KINDS = {
     "TH Correction Policy": "correction_policy",
     "TH Correction Request": "correction_request",
     "TH Attendance Correction Request": "attendance_correction",
+    "TH Cashier Day": "cashier_day",
 }
 TABLES = {
     "item": "`tabTH Placement Item Revision`",
@@ -43,6 +44,7 @@ TABLES = {
     "correction_policy": "`tabTH Correction Policy`",
     "correction_request": "`tabTH Correction Request`",
     "attendance_correction": "`tabTH Attendance Correction Request`",
+    "cashier_day": "`tabTH Cashier Day`",
 }
 LISTED_KINDS = ("item", "blueprint", "policy", "course_map")
 STAFF_ONLY_KINDS = ("case", "attempt", "manifest", "exposure", "response", "score", "decision")
@@ -409,6 +411,11 @@ def _query_role(kind, user=None):
                                  "Finance Officer", "Finance Auditor"} else "1=0"
     if kind in ("correction_policy", "correction_request"):
         return "1=1" if roles & {"Finance Officer", "Finance Auditor"} else "1=0"
+    # Cashier day closes: the cashier who signs them, the auditor who reviews
+    # them, and the Finance Manager whose desk summarises them.
+    if kind == "cashier_day":
+        return "1=1" if roles & {"Finance Officer", "Finance Auditor",
+                                 "Finance Manager"} else "1=0"
     if kind == "attendance_correction":
         return "1=1" if roles & {"Attendance Recorder", "Teaching Auditor"} else "1=0"
     if kind == "enrollment_exit":
@@ -456,3 +463,4 @@ def query_correction_policy(user=None): return query("correction_policy", user)
 def query_correction_request(user=None): return query("correction_request", user)
 def query_attendance_correction(user=None): return query("attendance_correction", user)
 def query_enrollment_exit(user=None): return query("enrollment_exit", user)
+def query_cashier_day(user=None): return query("cashier_day", user)

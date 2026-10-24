@@ -1,0 +1,155 @@
+{
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "date",
+  "company",
+  "column_break_1",
+  "cashier",
+  "reconciled_on",
+  "accounts_section",
+  "accounts",
+  "totals_section",
+  "total_expected",
+  "column_break_2",
+  "total_counted",
+  "total_variance",
+  "notes_section",
+  "notes",
+  "synthetic"
+ ],
+ "fields": [
+  {
+   "default": "TH-CASH-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "TH-CASH-.YYYY.-",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Business date",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "The officer who counted the drawer.",
+   "fieldname": "cashier",
+   "fieldtype": "Link",
+   "label": "Cashier",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "description": "When the native general ledger was read for this close.",
+   "fieldname": "reconciled_on",
+   "fieldtype": "Datetime",
+   "label": "Reconciled on",
+   "read_only": 1
+  },
+  {
+   "fieldname": "accounts_section",
+   "fieldtype": "Section Break",
+   "label": "Cash and bank drawers"
+  },
+  {
+   "fieldname": "accounts",
+   "fieldtype": "Table",
+   "label": "Counted drawers",
+   "options": "TH Cashier Count",
+   "reqd": 1
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break",
+   "label": "Totals"
+  },
+  {
+   "description": "Sum of the native expected balances at close.",
+   "fieldname": "total_expected",
+   "fieldtype": "Currency",
+   "label": "Total expected",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Sum of what the cashier counted.",
+   "fieldname": "total_counted",
+   "fieldtype": "Currency",
+   "label": "Total counted",
+   "read_only": 1
+  },
+  {
+   "description": "Total counted minus total expected. Zero means the drawer matches the ledger.",
+   "fieldname": "total_variance",
+   "fieldtype": "Currency",
+   "label": "Total variance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "description": "Cashier note for the close as a whole (the per-drawer explanation lives on each row).",
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "default": "1",
+   "fieldname": "synthetic",
+   "fieldtype": "Check",
+   "label": "Synthetic",
+   "read_only": 1
+  }
+ ],
+ "is_submittable": 1,
+ "module": "Finance",
+ "name": "TH Cashier Day",
+ "naming_series": "TH-CASH-.YYYY.-",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "Finance Officer",
+   "select": 1
+  },
+  {
+   "read": 1,
+   "role": "Finance Auditor",
+   "select": 1
+  },
+  {
+   "read": 1,
+   "role": "Finance Manager",
+   "select": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

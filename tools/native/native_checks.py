@@ -3399,6 +3399,35 @@ def main():
             frappe.db.commit()
             return {'policy':pol['name']}
         check('finance-billing-fixture',traced(billing_fixture))
+
+        # Installment schedules split one configured Fee Structure price into
+        # owner-authorized native Fees rows. A policy version that never
+        # mentioned installments leaves them OFF, and this runs while the
+        # second enrollment is still unbilled, so the refusal below is the
+        # installment rule itself and not a duplicate-billing guard.
+        def installments_off_by_default():
+            from toefl_house.finance import installments as fin_inst
+            return denied_because(
+                lambda:as_user('finance_officer',
+                    lambda:fin_inst.issue_tuition_installment_plan(
+                        'fin_inst_off_0000001',second['program_enrollment'],
+                        fin['fee_structure'],'2026-09-01','2026-10-01',3)),
+                'Installments are not authorized')
+        check('finance-installments-off-by-default-denied',installments_off_by_default)
+        def installments_wrong_role():
+            from toefl_house.finance import installments as fin_inst
+            return denied(lambda:as_user('enrollment_officer',
+                lambda:fin_inst.issue_tuition_installment_plan(
+                    'fin_inst_role_000001',second['program_enrollment'],
+                    fin['fee_structure'],'2026-09-01','2026-10-01',3)))
+        check('finance-installments-wrong-role-denied',installments_wrong_role)
+        def installments_settle_nothing():
+            # The refused split wrote nothing: one submitted Fees per
+            # enrollment is still the whole native billing record.
+            assert frappe.db.count('Fees',{'program_enrollment':second['program_enrollment'],
+                                           'docstatus':('!=',2)})==0
+            return {'fees_for_unbilled_enrollment':0}
+        check('finance-installments-refusal-writes-nothing',installments_settle_nothing)
         check('finance-tuition-unknown-enrollment-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_pe_0000000001','NO-SUCH-PE',fin['fee_structure'],'2026-09-01','2026-09-30'))))
         check('finance-tuition-bad-window-denied',lambda:denied(lambda:as_user('finance_officer',lambda:fin_m.issue_tuition_fees('fin_bad_window_00001',second['program_enrollment'],fin['fee_structure'],'2026-09-30','2026-09-01'))))
         def wrong_year_structure():
@@ -3831,6 +3860,100 @@ def main():
                 role_page_identity(unrelated, base, users['outsider'])
                 return native_book_http_cycle(frappe, cashier, unrelated, base, book_context, book_doc().as_dict())
         check('book-http-cashier-sale-payment-return-refund', traced(book_http_commerce))
+
+        def tax_configuration_state():
+            # The owner has supplied no tax policy, so the only truthful
+            # readiness fact is "no native tax configured" and no invented
+            # line can be posted. Nothing here asserts a rate, exemption or
+            # jurisdiction.
+            from toefl_house.finance import taxes as fin_tax
+            company=fin['company']
+            state=fin_tax.describe_tax_configuration(company)
+            allowed=fin_tax.allowed_tax_rows(company,['SYN-BOOK-STOCK','SYN-PLACEMENT-FEE'])
+            assert state['company']==company,state
+            assert state['configured_tax_lines']==len(allowed),(state,len(allowed))
+            expected_state=('Configured' if state['default_selling_templates']
+                            else 'No native tax configured')
+            assert state['state']==expected_state,(state,expected_state)
+            invented=[dict(charge_type='Actual',account_head=fin['receivable'],rate=10,
+                           description='SYN invented tax line')]
+            permitted=fin_tax.supplied_taxes_permitted(company,['SYN-BOOK-STOCK'],invented)
+            if not allowed:
+                assert permitted is False,state
+            assert fin_tax.supplied_taxes_permitted(company,['SYN-BOOK-STOCK'],[]) is True
+            return {'company':company,'state':state['state'],
+                    'default_selling_templates':state['default_selling_templates'],
+                    'configured_tax_lines':state['configured_tax_lines'],
+                    'invented_line_permitted':permitted}
+        check('finance-tax-configuration-native-state',traced(tax_configuration_state))
+        # Cashier day close: the expected figure is the native ledger's closing
+        # balance and is computed server-side; the person supplies only what
+        # they counted. This runs after the book-commerce postings, so the
+        # synthetic drawer carries real GL movement to reconcile.
+        def cashier_close_fixture():
+            from toefl_house.finance import cashier as fin_cash
+            company=fin['company']; day=frappe.utils.today()
+            drawers=fin_cash.cash_drawers(company)
+            assert drawers,('synthetic company has no native Cash/Bank account',company)
+            names=tuple(row['name'] for row in drawers)
+            balances={row['account']:row for row in fin_cash.drawer_balances(company,names,day)}
+            account=sorted(balances)[0]
+            expected=balances[account]['closing']
+            # Independent ledger read: the close must equal the native GL sum
+            # with cancelled entries excluded.
+            gl=frappe.db.sql("""select coalesce(sum(debit-credit),0) from `tabGL Entry`
+                                where account=%s and company=%s and is_cancelled=0
+                                  and posting_date<=%s""",(account,company,day))[0][0]
+            assert abs(float(gl)-expected)<0.01,(gl,expected)
+            unexplained=denied_because(
+                lambda:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                    'fin_cashier_var_000001',company,day,
+                    [dict(account=account,counted_amount=expected+5,note='')])),
+                'Explain the')
+            result=as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                'fin_cashier_close_0001',company,day,
+                [dict(account=account,counted_amount=expected,note='')]))
+            assert abs(result['total_expected']-round(expected,2))<0.01,result
+            assert abs(result['total_variance'])<0.01,result
+            stored=frappe.db.get_value('TH Cashier Day',result['cashier_day'],
+                ['docstatus','company','date','total_counted','total_variance','cashier'],
+                as_dict=True)
+            assert int(stored.docstatus)==1,stored
+            assert stored.company==company and str(stored.date)==day,stored
+            assert abs(float(stored.total_counted)-round(expected,2))<0.01,stored
+            assert abs(float(stored.total_variance))<0.01,stored
+            duplicate=denied_because(
+                lambda:as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                    'fin_cashier_dup_000001',company,day,
+                    [dict(account=account,counted_amount=expected,note='')])),
+                'already closed')
+            position=[row for row in fin_cash.cashier_position(day=day,companies=[company])
+                      if row['company']==company][0]
+            assert position['close'] and position['close']['name']==result['cashier_day'],position
+            assert position['drift'] is False,position
+            return {'cashier_day':result['cashier_day'],'drawer':account,
+                    'ledger_closing':round(expected,2),
+                    'counted':result['total_counted'],
+                    'variance':result['total_variance'],'cashier':stored.cashier,
+                    'unexplained_variance_refused':unexplained['denied'],
+                    'duplicate_refused':duplicate['denied'],'drift':position['drift']}
+        fin_close=check('finance-cashier-day-close-native-ledger',traced(cashier_close_fixture))
+        def cashier_close_wrong_role():
+            from toefl_house.finance import cashier as fin_cash
+            return denied(lambda:as_user('book_unauthorized',
+                lambda:fin_cash.reconcile_cashier_day(
+                    'fin_cashier_role_000001',fin['company'],frappe.utils.today(),
+                    [dict(account=fin_close['drawer'],counted_amount=0,note='')])))
+        check('finance-cashier-close-wrong-role-denied',cashier_close_wrong_role)
+        def cashier_close_future_day():
+            from toefl_house.finance import cashier as fin_cash
+            ahead=str(frappe.utils.add_days(frappe.utils.today(),1))
+            return denied_because(lambda:as_user('book_seller',
+                lambda:fin_cash.reconcile_cashier_day(
+                    'fin_cashier_future_0001',fin['company'],ahead,
+                    [dict(account=fin_close['drawer'],counted_amount=0,note='')])),
+                'future business day')
+        check('finance-cashier-close-future-day-denied',cashier_close_future_day)
         # ---- A13 containment: native bypass-route negative proofs. Pinned
         # frappe (988e54f3c4c2, document.py run_before_save_methods):
         # "validate" fires only for save/submit; cancel runs "before_cancel"

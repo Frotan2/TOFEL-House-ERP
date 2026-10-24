@@ -120,12 +120,18 @@ def _native_book_sale_allowed(doc, method=None):
             return False
         source = frappe.db.get_value(
             INVOICE, original,
-            ["docstatus", "customer", "company", "update_stock", "th_placement_case"],
+            ["name", "docstatus", "customer", "company", "update_stock",
+             "th_placement_case", "grand_total"],
             as_dict=True,
         )
         if (not source or int(source.docstatus or 0) != 1
                 or source.customer != doc.customer or source.company != doc.company
                 or int(source.update_stock or 0) != 1 or source.th_placement_case):
+            return False
+        # Cumulative limits: an invoice can only be restocked and credited up
+        # to what it actually sold, across every submitted return of it.
+        from toefl_house.finance import refunds
+        if not refunds.book_return_permitted(doc, dict(source)):
             return False
     elif original:
         return False
@@ -146,6 +152,13 @@ def _native_book_sale_allowed(doc, method=None):
                 or int(item.is_sales_item or 0) != 1
                 or int(item.disabled or 0) != 0):
             return False
+    # A tax line on a book sale must come from the owner's native tax
+    # configuration; a hand-added rate is refused (finance.taxes owns the rule).
+    from toefl_house.finance import taxes
+    codes = [row.get("item_code") for row in items]
+    if not taxes.supplied_taxes_permitted(
+            doc.company, codes, doc.get("taxes") or []):
+        return False
     return True
 
 
@@ -164,6 +177,70 @@ def guard_sales_invoice(doc, method=None):
     deny_premature_invoice(doc, method)
     raise frappe.ValidationError(
         "Sales Invoice requires an authorized finance command or a stock-book invoice")
+
+
+def resolved_billable_components(pe, fs_name):
+    """Resolve one enrollment's billable component rows from its Fee Structure.
+
+    Native authority only: the component amounts are the Finance-configured
+    ``Fee Structure`` values, and the applied discount (OD-CP-1 Policy A:
+    single discount per charge) is the Course Owner's ``TH Discount Rule``.
+    Nothing here supplies a price or a percentage.
+
+    Returns ``(components, discounts, gross_total)`` where ``components`` is
+    the row list to bill (net of any discount) and ``discounts`` records each
+    applied rule for the receipt. Both the single-document bill and the
+    installment plan call this, so a split plan can never price a charge
+    differently from the one-payment route.
+    """
+    components = frappe.db.get_all("Fee Component",
+                                   filters={"parent": fs_name, "parenttype": FEE_STRUCTURE},
+                                   fields=["fees_category", "amount"], order_by="idx")
+    if not components:
+        raise frappe.ValidationError("Fee structure has no configured components")
+
+    from toefl_house.academic import rules
+    # "status" must be part of the fetched fields: resolve_charge_discount
+    # re-checks each row's status and a row without the key is not
+    # eligible (found by the first hosted odcp-discount run: the field
+    # list omitted it and every rule was silently skipped).
+    discount_rules = frappe.db.get_all("TH Discount Rule",
+                                       filters={"status": "Active"},
+                                       fields=["code", "title", "discount_percentage",
+                                               "precedence", "fee_category", "program",
+                                               "student", "status"])
+    # TH Discount Rule.program is a family; native Program Enrollment.program
+    # is a specific level. Resolve that authority link fail-closed: duplicate
+    # links can otherwise select an arbitrary family and misprice tuition.
+    discount_family = _discount_family_for_native_program(pe.program)
+    applied_discounts = []
+    fee_components = []
+    for c in components:
+        comp_row = dict(fees_category=c.fees_category, amount=c.amount)
+        winner = rules.resolve_charge_discount(
+            discount_rules, fee_category=c.fees_category,
+            program=discount_family, student=pe.student)
+        if winner:
+            gross = float(c.amount)
+            # Native Fees sums component amounts into grand_total and
+            # ignores the child discount field (verified against pinned
+            # education 93bc70757533): bill the net amount so the
+            # receivable honors OD-CP-1, and keep the percentage on the
+            # row as the descriptive record of the applied rule.
+            net = rules.apply_charge_discount(gross, winner["discount_percentage"])
+            comp_row["amount"] = net
+            comp_row["discount"] = winner["discount_percentage"]
+            applied_discounts.append({
+                "fee_category": c.fees_category,
+                "rule_code": winner["rule_code"],
+                "rule_title": winner["rule_title"],
+                "discount_percentage": winner["discount_percentage"],
+                "gross_amount": gross,
+                "net_amount": net,
+            })
+        fee_components.append(comp_row)
+    gross_total = round(sum(float(c.amount) for c in components), 2)
+    return fee_components, applied_discounts, gross_total
 
 
 @frappe.whitelist(methods=["POST"])
@@ -211,57 +288,13 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             raise frappe.ValidationError("Unknown fee structure")
         if fs.program != pe.program or fs.academic_year != pe.academic_year:
             raise frappe.ValidationError("Fee structure does not match the enrollment program/year")
-        components = frappe.db.get_all("Fee Component",
-                                       filters={"parent": fs_name, "parenttype": FEE_STRUCTURE},
-                                       fields=["fees_category", "amount"], order_by="idx")
-        if not components:
-            raise frappe.ValidationError("Fee structure has no configured components")
         if frappe.db.exists(FEES, {"program_enrollment": pe_name,
                                    "fee_structure": fs_name, "docstatus": ("!=", 2)}):
             raise frappe.ValidationError(
                 "Tuition is already billed for this enrollment on this fee plan")
 
-        # Resolve centralized discount policy (OD-CP-1 Policy A: single discount per charge)
-        from toefl_house.academic import rules
-        # "status" must be part of the fetched fields: resolve_charge_discount
-        # re-checks each row's status and a row without the key is not
-        # eligible (found by the first hosted odcp-discount run: the field
-        # list omitted it and every rule was silently skipped).
-        discount_rules = frappe.db.get_all("TH Discount Rule",
-                                           filters={"status": "Active"},
-                                           fields=["code", "title", "discount_percentage",
-                                                   "precedence", "fee_category", "program",
-                                                   "student", "status"])
-        # TH Discount Rule.program is a family; native Program Enrollment.program
-        # is a specific level. Resolve that authority link fail-closed: duplicate
-        # links can otherwise select an arbitrary family and misprice tuition.
-        discount_family = _discount_family_for_native_program(pe.program)
-        applied_discounts = []
-        fee_components = []
-        for c in components:
-            comp_row = dict(fees_category=c.fees_category, amount=c.amount)
-            winner = rules.resolve_charge_discount(
-                discount_rules, fee_category=c.fees_category,
-                program=discount_family, student=pe.student)
-            if winner:
-                gross = float(c.amount)
-                # Native Fees sums component amounts into grand_total and
-                # ignores the child discount field (verified against pinned
-                # education 93bc70757533): bill the net amount so the
-                # receivable honors OD-CP-1, and keep the percentage on the
-                # row as the descriptive record of the applied rule.
-                net = rules.apply_charge_discount(gross, winner["discount_percentage"])
-                comp_row["amount"] = net
-                comp_row["discount"] = winner["discount_percentage"]
-                applied_discounts.append({
-                    "fee_category": c.fees_category,
-                    "rule_code": winner["rule_code"],
-                    "rule_title": winner["rule_title"],
-                    "discount_percentage": winner["discount_percentage"],
-                    "gross_amount": gross,
-                    "net_amount": net,
-                })
-            fee_components.append(comp_row)
+        fee_components, applied_discounts, gross_total = \
+            resolved_billable_components(pe, fs_name)
 
         company = fs.company or COMPANY
         # The framework prefills an empty `currency` field from the system
@@ -295,13 +328,13 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
         }
         if applied_discounts:
             result["discounts_applied"] = applied_discounts
-            result["gross_total"] = round(sum(float(c.amount) for c in components), 2)
+            result["gross_total"] = gross_total
             result["discount_amount"] = round(result["gross_total"]
                                               - float(row.grand_total), 2)
         return result, dict(target=fees.name,
                             after_hash=digest([fees.name, pe_name, fs_name, posting, due,
-                                               {c.fees_category: float(c.amount)
-                                                for c in components},
+                                               {c["fees_category"]: float(c["amount"])
+                                                for c in fee_components},
                                                applied_discounts]))
 
     return _execute("issue_tuition_fees", request_key,

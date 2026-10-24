@@ -58,7 +58,11 @@ KIND_ROLES = {
     "approve_attendance_correction": "Attendance Recorder",
     "deny_attendance_correction": "Attendance Recorder",
     "issue_tuition_fees": "Finance Officer",
+    # Owner-authorized installment plan (billing policy terms); same role.
+    "issue_tuition_installment_plan": "Finance Officer",
     "issue_placement_fee": "Finance Officer",
+    # Cashier day close: records counted cash against the native ledger.
+    "reconcile_cashier_day": "Finance Officer",
     # D2 teaching compensation: contracts and payroll calculation are the
     # finance/payroll side; skill-area assignment facts stay teaching ops.
     "create_teaching_contract": "Finance Officer",
@@ -93,6 +97,7 @@ DOCTYPES = {
     "TH Instructor Contract", "TH Teaching Assignment",
     "TH Correction Policy", "TH Correction Request",
     "TH Attendance Correction Request",
+    "TH Cashier Day",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision",
                    "TH Placement Course Map Revision")
@@ -266,11 +271,16 @@ def active_command_kind():
 
 FINANCE_COMMANDS = {
     "issue_tuition_fees": "Fees",
+    # The installment plan submits N native Fees rows inside one guarded
+    # command, so guard_fees must see the plan as the authorizing command.
+    "issue_tuition_installment_plan": "Fees",
     "issue_placement_fee": "Sales Invoice",
     # the approval command posts the native credit note (a Sales Invoice
     # with is_return=1) inside the guarded context
     "approve_invoice_correction": "Sales Invoice",
     "approve_fees_correction": "Fees",
+    # the close records counted cash against the ledger; it posts nothing
+    "reconcile_cashier_day": "TH Cashier Day",
 }
 
 
