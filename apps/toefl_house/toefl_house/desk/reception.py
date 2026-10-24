@@ -18,6 +18,10 @@ from toefl_house.desk import (
     require_desk_audience,
     section,
 )
+try:
+    from toefl_house.desk import analytics
+except Exception:
+    analytics = None
 from toefl_house.desk import lifecycle
 
 SLUG = "th-reception-desk"
@@ -144,26 +148,26 @@ def _funnel(handover_count):
          "definition": "Placement attempts from Allocated through Review that are not yet finalized.",
          "value": project_count("reception", ATTEMPT, {
              "status": ("in", [s for s in lifecycle.PLACEMENT_ATTEMPT_ORDER if s != "Finalized"])}),
-         "owner": "Placement Invigilator"},
+         "owner": "Placement Invigilator", "source": "placement attempts (non-finalized)", "scope": "Branch-wide", "drill_path": "placement attempt list"},
         {"label": "Results awaiting intake",
          "definition": "Released placement decisions with no active admission decision attached.",
-         "value": handover_count, "owner": "Admission Officer"},
+         "value": handover_count, "owner": "Admission Officer", "source": "released placement outcomes", "scope": "Branch-wide", "drill_path": "placement decision list"},
         {"label": "Admissions drafted",
-         "definition": "Admission decisions in Draft.",
+         "definition": "Admission decisions in Draft — waiting for review.",
          "value": project_count("reception", ADMISSION, {"status": "Draft"}),
-         "owner": "Admission Reviewer"},
+         "owner": "Admission Reviewer", "source": "admission decisions in Draft", "scope": "Branch via applicant linkage", "drill_path": "admission decision list"},
         {"label": "Admissions in review",
-         "definition": "Admission decisions in Review.",
+         "definition": "Admission decisions in Review — oldest first is action priority.",
          "value": project_count("reception", ADMISSION, {"status": "Review"}),
-         "owner": "Admission Approver"},
+         "owner": "Admission Approver", "source": "admission decisions in Review", "scope": "Branch via applicant linkage", "drill_path": "admission decision list"},
         {"label": "Offers to accept",
          "definition": "Approved or Conditional decisions whose offer is not yet accepted.",
          "value": project_count("reception", ADMISSION,
                                 {"status": ("in", ["Approved", "Conditional"]), "accepted": 0}),
-         "owner": "Admission Officer"},
+         "owner": "Admission Officer", "source": "admission decisions awaiting acceptance", "scope": "Branch via applicant linkage", "drill_path": "admission decision list"},
         {"label": "Active students",
          "definition": "Active learner records in the student register.",
-         "value": project_count("reception", STUDENT, {"enabled": 1}), "owner": None},
+         "value": project_count("reception", STUDENT, {"enabled": 1}), "owner": None, "source": "active learners (native register)", "scope": "Branch via roster or HQ unrestricted", "drill_path": "student list"},
     ]
 
 

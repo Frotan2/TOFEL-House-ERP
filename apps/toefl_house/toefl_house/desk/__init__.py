@@ -278,6 +278,58 @@ PROJECTION_FIELDS = {
     ("management", "Scheduled Job Log"): [
         "name", "scheduled_job_type", "status", "creation",
     ],
+    # Executive analytics (Mission 6): auditable metrics grounded in native
+    # records. Each projection is bounded, permission-scoped and carries an
+    # explicit definition + drill path on the desk. Payroll is authorization-
+    # gated (see desk/analytics.py) — no payroll figure leaves the server
+    # unless the viewer holds the payroll role.
+    ("management", "Fees"): [
+        "name", "student", "student_name", "program", "program_enrollment",
+        "academic_year", "posting_date", "due_date", "grand_total",
+        "outstanding_amount", "currency", "company", "docstatus",
+    ],
+    ("management", "Sales Invoice"): [
+        "name", "customer", "customer_name", "th_placement_case",
+        "posting_date", "due_date", "grand_total", "outstanding_amount",
+        "currency", "company", "status", "is_return", "docstatus",
+    ],
+    ("management", "Payment Entry"): [
+        "name", "payment_type", "party_type", "party", "paid_amount",
+        "received_amount", "paid_from_account_currency", "company",
+        "posting_date", "docstatus",
+    ],
+    ("management", "Student Attendance"): [
+        "name", "student", "student_group", "course_schedule", "date",
+        "status", "docstatus",
+    ],
+    ("management", "Course Schedule"): [
+        "name", "student_group", "instructor", "course", "room",
+        "from_time", "to_time", "schedule_date",
+    ],
+    ("management", "TH Enrollment Exit"): [
+        "name", "program_enrollment", "student", "exit_kind", "exit_date",
+        "reason", "status", "creation",
+    ],
+    ("finance", "Student Attendance"): [
+        "name", "student", "student_group", "course_schedule", "date",
+        "status", "docstatus",
+    ],
+    ("finance", "Student Group"): [
+        "name", "student_group_name", "program", "academic_year",
+        "max_strength", "course", "disabled", "th_class_status",
+    ],
+    ("finance", "Program Enrollment"): [
+        "name", "student", "student_name", "program", "academic_year",
+        "enrollment_date", "docstatus",
+    ],
+    ("reception", "Fees"): [
+        "name", "student", "program", "due_date", "grand_total",
+        "outstanding_amount", "currency", "docstatus",
+    ],
+    ("reception", "Sales Invoice"): [
+        "name", "customer", "grand_total", "outstanding_amount",
+        "currency", "status", "docstatus",
+    ],
     # Academic Setup (Course Owner): configuration masters, their effective-
     # dated duration versions, and the enrollment usage counts that guard
     # deactivation. No student detail beyond the enrollment link.
