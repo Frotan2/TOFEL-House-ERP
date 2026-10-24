@@ -26,6 +26,11 @@ from toefl_house.desk import (
     section,
 )
 
+try:
+    from toefl_house.desk import analytics
+except ImportError:
+    analytics = None
+
 from toefl_house.finance import cashier as cashier_money
 from toefl_house.finance import taxes as tax_configuration
 
@@ -719,6 +724,31 @@ def work():
 
     cash_section, tax_section, history_section = _cash_close_sections(day)
 
+    # Tuition analytics breakdown where data permits
+    finance_analytics = []
+    if analytics is not None:
+        try:
+            t_metrics = analytics.tuition_metrics()
+            if t_metrics.get("by_program"):
+                analytics_section = section("finance-by-program", "Tuition by program", "analytics",
+                                            empty_title="No tuition by program", empty_body="Tuition fees appear when enrollments are billed.")
+                analytics_section["comparison"] = {
+                    "title": "Tuition fees by program",
+                    "columns": ["Program", "Tuition fees"],
+                    "rows": [{"label": k, "value": v, "drill": {"slug": "List/Fees"}} for k, v in sorted(t_metrics["by_program"].items(), key=lambda x: -x[1])[:12]],
+                }
+                analytics_section["chart"] = {
+                    "title": "Tuition per program (top programs)",
+                    "rows": [{"label": k, "value": v, "tone": "info"} for k, v in sorted(t_metrics["by_program"].items(), key=lambda x: -x[1])[:8]],
+                }
+                analytics_section["provenance"] = [
+                    {"label": "Source records", "value": t_metrics["source"]},
+                    {"label": "Permission scope", "value": t_metrics["scope"]},
+                    {"label": "Drill-down", "value": "tuition fees list filtered by program"},
+                ]
+                finance_analytics.append(analytics_section)
+        except Exception:
+            pass
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
@@ -729,6 +759,7 @@ def work():
             section("facts", "Money facts", "facts", facts=money_facts,
                     empty_title="No money facts yet",
                     empty_body="Facts appear once the native billing and payment records exist."),
+            *finance_analytics,
             section("outstanding", "Outstanding receivables", "queue",
                     items=[money_item(row, "Sales Invoice") for row in outstanding_invoices]
                           + [money_item(row, "Fees") for row in outstanding_fees],
