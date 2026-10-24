@@ -28,6 +28,8 @@ untouched by this guard.
 Nothing here computes an amount, a rate or a tax: every number is the native
 document's own.
 """
+import math
+
 import frappe
 
 INVOICE = "Sales Invoice"
@@ -131,23 +133,28 @@ def refund_allocation_ok(payment, credit_notes, party_account, cash_accounts,
         if note.get("customer") != party or note.get("company") != company:
             return False
         allocated = abs(_flt(row.get("allocated_amount")))
-        if allocated <= 0:
+        if not math.isfinite(allocated) or allocated <= 0:
             return False
         allocated_by_note[name] = allocated_by_note.get(name, 0.0) + allocated
         if not existing:
             outstanding = abs(_flt(note.get("outstanding_amount")))
+            if not math.isfinite(outstanding):
+                return False
             if allocated_by_note[name] - outstanding > TOLERANCE:
                 return False
     total_allocated = sum(allocated_by_note.values())
     paid = _payment(payment, "paid_amount")
-    if paid is None or _flt(paid) <= 0:
+    if paid is None or not math.isfinite(_flt(paid)) or _flt(paid) <= 0:
         return False
-    if abs(total_allocated - _flt(paid)) > TOLERANCE:
+    if not math.isfinite(total_allocated) or abs(total_allocated - _flt(paid)) > TOLERANCE:
         return False
     # No unreviewed deductions can reduce the amount actually paid while
     # still reporting the credit as fully refunded.
-    if any(abs(_flt(row.get("amount"))) > TOLERANCE
-           for row in (_payment(payment, "deductions") or [])):
+    deductions = _payment(payment, "deductions") or []
+    if any(not isinstance(row, dict) or
+           not math.isfinite(_flt(row.get("amount"))) or
+           abs(_flt(row.get("amount"))) > TOLERANCE
+           for row in deductions):
         return False
     return True
 
