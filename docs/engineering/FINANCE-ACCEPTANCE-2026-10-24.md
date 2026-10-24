@@ -29,7 +29,7 @@ recorded in [evidence/native-book-refund-2026-10-23.md](evidence/native-book-ref
 
 | # | Requirement | Implementation | Evidence | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Audit tuition, placement fees, discounts, installments, receivables, Payment Entry, Sales Invoice, corrections, refunds, book inventory, financial permissions | `finance/__init__.py`, `finance/policies.py`, `finance/corrections.py`, `finance/installments.py`, `finance/taxes.py`, `finance/cashier.py`, `finance/refunds.py`; native `Fees`/`Fee Structure`/`Item Price`/`Sales Invoice`/`Payment Entry`/`Stock Entry`; permission wiring in `hooks.py`, `permissions.py`, `security.py` | `tests/finance/` (159 tests: billing policy 23, corrections, policy, book-ledger contract, native refund accounting, installments 18, taxes 15, cashier 19, refund guards 28, containment hooks) | **Implemented; offline PASS** |
+| 1 | Audit tuition, placement fees, discounts, installments, receivables, Payment Entry, Sales Invoice, corrections, refunds, book inventory, financial permissions | `finance/__init__.py`, `finance/policies.py`, `finance/corrections.py`, `finance/installments.py`, `finance/taxes.py`, `finance/cashier.py`, `finance/refunds.py`; native `Fees`/`Fee Structure`/`Item Price`/`Sales Invoice`/`Payment Entry`/`Stock Entry`; permission wiring in `hooks.py`, `permissions.py`, `security.py` | `tests/finance/` (161 tests: billing policy 23, corrections, policy, book-ledger contract, native refund accounting, installments 18, taxes 15, cashier 21, refund guards 28, containment hooks) | **Implemented; offline PASS** |
 | 2 | Preserve native accounting, GL, inventory ledger, pricing, tax templates, payroll as source of truth | No parallel ledger, no owned arithmetic for money states. Installment plans are native `Fees` documents; cash close **posts nothing**; tax module only reads native templates and refuses unbacked lines | `test_cashier.py` (close posts nothing), `test_taxes.py`, desk “money states only from native `docstatus`/`status`/`outstanding_amount`” contract in `tests/desk/test_desk_contract.py` (105 tests) | **Implemented; offline PASS** |
 | 3 | Policy-driven tuition billing, fee adjustments, installment schedules, discounts, authorized corrections | Billing policy versions carry posting bounds, placement timing and installment terms; terms default **OFF**; installment split in integer cents with remainder on the last row; discounts resolve from the Course Owner’s `TH Discount Rule`; corrections via the existing framework | `test_billing_policy.py` (23), `test_installments.py` (18), `tests/configuration/test_discount_math.py`, `test_corrections.py` | **Implemented; offline PASS** |
 | 4 | Configurable tax via native ERPNext facilities; never invent Afghan tax law | `finance/taxes.py`: reads native default selling templates and Item Tax templates; refuses any invoice tax line not backed by them (pre-insert and pre-submit); sign rule is native (expectation = `grand_total − net_total`, sales ≥ 0, credit notes ≤ 0); reports `No native tax configured` | `test_taxes.py` (15); native check `finance-tax-configuration-native-state` | **Implemented; offline PASS; native pending exact-SHA run** |
@@ -60,6 +60,7 @@ recorded in [evidence/native-book-refund-2026-10-23.md](evidence/native-book-ref
 | `TH Cashier Day` used `autoname: naming_series:` without declaring a `naming_series` field, so the first native insert would be refused | Offline tests stub Frappe's insert path | Field added with series `TH-CASH-.YYYY.-`; command passes the same series; regression test walks every owned doctype with a series autoname |
 | The installment-plan command was missing from `security.FINANCE_COMMANDS`, so `guard_fees` would have refused the plan's own `Fees` writes | The guard is only consulted on a live insert | Registered as a `Fees` command; a wiring test now asserts every finance command declares a guarded doctype and a command role |
 | The refund guard blocked *cancelling* or editing a submitted refund, because the settled credit note rightly owes nothing by then | Native cancel is not exercised offline | The cancel/post-submit paths re-assert settlement shape but not the "no more than it owes" ceiling; creation and submission keep the strict limit. Tests added |
+| The cashier command's public `date` parameter shadowed `datetime.date`, so `date.fromisoformat(day)` raised `AttributeError` on the argument | Only visible on a real site; the offline shape tests never entered that branch | Class imported as `_date`; an executable regression asserts the business "valid business date" message, and an AST guard refuses the shadowing. Found by native run 40091964812 |
 
 ## 2. Evidence actually executed for this branch
 
@@ -69,9 +70,9 @@ not claimed here.
 
 | Command | Result |
 | --- | --- |
-| `python3 -m unittest discover -s tests -t .` | **1,758 tests**, 10 skipped, **3 errors** — all three are the pre-existing `bs4`-dependent real-sanitizer modules failing to import `bs4` in this environment; **no test failure** |
-| `python3 -m unittest discover -s tests/finance -t .` | **159 tests, OK** |
-| `python3 -m unittest tests.finance.test_installments tests.finance.test_taxes tests.finance.test_cashier tests.finance.test_refund_guards` | **80 tests, OK** (18 / 15 / 19 / 28) |
+| `python3 -m unittest discover -s tests -t .` | **1,760 tests**, 10 skipped, **3 errors** — all three are the pre-existing `bs4`-dependent real-sanitizer modules failing to import `bs4` in this environment; **no test failure** |
+| `python3 -m unittest discover -s tests/finance -t .` | **161 tests, OK** |
+| `python3 -m unittest tests.finance.test_installments tests.finance.test_taxes tests.finance.test_cashier tests.finance.test_refund_guards` | **82 tests, OK** (18 / 15 / 21 / 28) |
 | `python3 -m unittest tests.desk.test_desk_contract` | **105 tests, OK** |
 | `python3 -m unittest tests.finance.test_billing_policy tests.finance.test_containment_hooks tests.foundation.test_app_assembly` | **OK** |
 | `python3 -m unittest tests.placement.test_native_check_arity tests.placement.test_native_check_names tests.placement.test_native_check_actors tests.foundation.test_final_hosted_acceptance` | **65 tests, OK** (static guards over the harness edits) |
@@ -96,8 +97,20 @@ synthetic ERPNext lifecycle runs. This branch **appends** finance checks to it:
 | `finance-cashier-close-wrong-role-denied` | Accounts User without Finance Officer cannot close a day |
 | `finance-cashier-close-future-day-denied` | A future business date is refused |
 
-**Status: pending exact-SHA hosted qualification.** At authoring time no native
-run exists for the branch head, so none of the rows above is claimed as passing.
+**Status: PASS on the exact code SHA.** Native lifecycle integration
+[run 40092775298](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40092775298)
+**SUCCESS** at `6a183b5c400555630526166f33bcc8668aab26d7`, together with Owned
+suite
+[40092775280](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40092775280)
+**SUCCESS** on the same SHA. The first native attempt on this branch
+([40091964812](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40091964812),
+`e2882fc`) **failed** at `finance-cashier-day-close-native-ledger` with
+`AttributeError: 'str' object has no attribute 'fromisoformat'` — the
+shadowing defect in the table below — and passed after the fix. Per-check
+counts are not quoted: the retained artifact and job logs could not be
+downloaded from this environment, so the evidence here is the run conclusion
+plus the recorded failure annotation from the failing attempt.
+
 A positive installment plan is deliberately *not* asserted natively: owner terms
 take effect from a date strictly after the latest recorded version, so the
 split path cannot be positively exercised inside a single synthetic run. The
@@ -119,7 +132,10 @@ activate anything on the Owner site to close these gates.
 
 ## 5. Non-claims
 
-- No claim that the native suite passed on this branch’s head.
+- The native evidence is the run named above, on `6a183b5`. Later commits in
+  this branch are documentation only and do not re-trigger the native
+  workflow; re-run it on the final release commit before quoting it as the
+  release evidence.
 - No claim of cashier acceptance, physical counting, or Windows behaviour.
 - No claim of ruff/lint or dependency-audit status (not runnable here).
 - No Afghan tax rate, exemption, jurisdiction or accounting rule is encoded or
