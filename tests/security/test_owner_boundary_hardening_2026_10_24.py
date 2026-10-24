@@ -39,7 +39,7 @@ class SecurityHardeningContracts(unittest.TestCase):
         self.assertIn("PROTECTED_USERS", source("administration.py", "_require_control_role"))
         mutable = source("administration.py", "set_managed_role")
         self.assertIn("PROTECTED_USERS", mutable)
-        self.assertIn("security.require_operational()", mutable)
+        self.assertIn('if "Course Owner" not in actor_roles:', mutable)
 
     def test_separate_approver_for_corrections(self):
         for fn in ("approve_invoice_correction", "approve_fees_correction"):
