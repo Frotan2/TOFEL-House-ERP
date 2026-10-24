@@ -46,7 +46,7 @@ class SetuptoolsWindowsBoundaryTests(unittest.TestCase):
         # The boundary must cover Start, Repair and future update scripts,
         # not only the initial Install command used by the previous test.
         prohibited = re.compile(
-            r"(?i)\\b(?:python(?:3(?:\\.\\d+)?)?|pip(?:3)?|uv)(?:\\.exe)?\\b"
+            r"(?i)\b(?:python(?:3(?:\.\d+)?)?|pip(?:3)?|uv)(?:\.exe)?\b"
         )
         launchers = [name for name in ALLOWED_FILES
                      if Path(name).suffix.lower() in {".vbs", ".ps1", ".cmd"}]
