@@ -10,10 +10,14 @@ the earlier capability map, domain closure records, roadmaps and baselines
 ## 1. What it is
 
 A Course Management ERP for the TOEFL House language institute. It supports
-intake, placement, admission, enrollment, teaching, tuition and compensation
-workflows. Academic grading and student progression decisions remain deferred
-by Owner decision D1: catalog level links exist, but no runtime grading or
-promotion rule is activated.
+intake, placement, admission, enrollment, teaching, assessment, tuition and
+compensation workflows. Assessment, grading, publication and progression are
+implemented as governed runtime ([ACADEMIC-ASSESSMENT.md](ACADEMIC-ASSESSMENT.md)),
+but they carry no academic values of their own: every weight, pass mark,
+attendance minimum, retake limit and promotion rule comes from an
+effective-dated Owner-configured policy version plus the native Grading Scale.
+An unconfigured policy is an explicit refusal, so Owner decision D1 (the policy
+itself) is still the Owner's to supply.
 
 **Foundation (native, authoritative, pinned, never patched):** Frappe,
 ERPNext, Education, Payments, HRMS. Exact commits and digests:
@@ -52,8 +56,8 @@ Applicant ─► Placement ─► Admission ─► Enrollment ─► Class / Sch
 | Teacher | Instructor, Employee | `TH Instructor Contract`, `TH Teaching Assignment`, `TH Skill` | Implemented |
 | Schedule | Course Schedule (native overlap validation) | `schedule_session` | Implemented |
 | Attendance | Student Attendance (submitted, native statuses) | `record_attendance`; `TH Attendance Correction Request` (+ policy) | Implemented |
-| Assessment | Assessment Plan / Result / Grading Scale | `TH Assessment Policy` stores Owner-entered reference facets; native Education records remain authoritative | Carrier and validation implemented only; no runtime grading/assessment consumer is qualified and D1 remains deferred |
-| Progression | Program Enrollment (next level) | `set_next_level` maintains a catalog link; assessment-policy progression facet stores reference terms | No automatic promotion or progression decision consumer is implemented; D1 remains deferred |
+| Assessment | Assessment Plan / Result / Grading Scale | `TH Assessment Book` (+ marks, corrections), `TH Academic Result` (+ component snapshot), `TH Assessment Policy` facets; `open_assessment_book`, `record_assessment_marks`, `submit/review/approve_assessment_book`, `publish_assessment_results`, `correct_assessment_mark`, `correct_published_result` | Implemented; grades come only from the native Grading Scale, marks are instructor-only, and a published result carries its audit snapshot and the native Assessment Result |
+| Progression | Program Enrollment (next level) | `TH Progression Decision`; `decide_progression`, `override_progression`, `next_level_eligibility`; `set_next_level` maintains the catalog link | Implemented and fail-closed: a decision needs a configured policy version plus the policy's approval role, `Program Enrollment` is refused for a configured successor level without an approved decision, and an override is a separate senior, reasoned record |
 
 | Fees / Payments | Fee Structure, Fees, Sales Invoice, Payment Entry, Pricing Rule | `issue_tuition_fees`, `issue_placement_fee`, `TH Billing Policy`, `TH Discount Rule`, `TH Correction Request` (+ policy) | Implemented; prices are native configuration |
 | Teacher compensation | Additional Salary → Salary Slip / Payroll Entry | `calculate_teaching_compensation`, `TH Contract Adjustment`, `TH Adjustment Posting Policy` | Calculation implemented; posting gated by owner policy |
