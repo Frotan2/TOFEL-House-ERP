@@ -41,9 +41,6 @@ GUARDIAN_FIELDS = {
 CONSENT_DOCTYPE = "TH Guardian Consent"
 ANNOUNCEMENT_DOCTYPE = "TH Portal Announcement"
 
-# Age threshold for privacy (years). Configurable via guardian lifecycle policy later.
-AGE_PRIVACY_THRESHOLD = 18
-
 
 def _require_portal_enabled():
     if not portal_policy.is_portal_enabled("guardian_portal"):
@@ -169,7 +166,9 @@ def _is_consent_valid(guardian, student, policy_terms=None):
     consent = _get_consent(guardian, student)
     if not consent:
         return False
-    if consent.get("status") in ("Revoked", "Expired"):
+    # Pending evidence is not authorization. Only staff-approved Active
+    # consent can authorize child-grade, attendance or finance disclosures.
+    if consent.get("status") != "Active":
         return False
     if consent.get("revoked_at"):
         return False
@@ -232,23 +231,11 @@ def _can_access(guardian, student):
     verified = _get_verified_children(guardian)
     if student not in verified:
         return (False, "No verified guardian relationship for this student")
-    # Age-appropriate privacy: >=18 requires explicit consent
-    age = _student_age_years(student)
+    # Fail closed for every age. No hard-coded age, no guardian self-approval;
+    # staff must verify consent under the approved guardian lifecycle policy.
     terms = _governing_guardian_terms()
-    if age is not None and age >= AGE_PRIVACY_THRESHOLD:
-        # Adult student — consent always required
-        if not _is_consent_valid(guardian, student, terms):
-            return (False, "Consent is required and not valid for this adult student")
-    else:
-        # Minor or unknown age — still check consent if policy requires evidence
-        # If no governing policy, fail closed: require consent for any access
-        if not terms:
-            if not _is_consent_valid(guardian, student, None):
-                return (False, "Guardian access requires valid authorization")
-        else:
-            # Policy exists — check consent validity
-            if not _is_consent_valid(guardian, student, terms):
-                return (False, "Valid consent is required by guardian lifecycle policy")
+    if not _is_consent_valid(guardian, student, terms):
+        return (False, "A current, staff-approved guardian consent is required")
     return (True, "Authorized")
 
 
@@ -260,15 +247,10 @@ def _assert_guardian_scope(user, requested_student=None):
     """
     if user in (None, "Guest"):
         raise frappe.PermissionError("Authentication required")
-    # SEC-GUARDIAN-01 checks first (when available)
-    try:
-        from foundation_security.guards import validate_guardian_scope
-        validate_guardian_scope()
-    except Exception as exc:
-        # If the guard raises PermissionError, propagate; otherwise ignore (offline)
-        if exc.__class__.__name__ == "PermissionError":
-            raise
-        pass
+    # The foundation guardian scope control is a hard prerequisite;
+    # missing imports or runtime errors must never silently grant access.
+    from foundation_security.guards import validate_guardian_scope
+    validate_guardian_scope()
     guardian = _get_guardian_for_user(user)
     if not guardian:
         raise frappe.PermissionError("No guardian profile found for this account")
@@ -474,34 +456,17 @@ def record_consent(student, evidence_type="Link", attachment=None, link_referenc
         "evidence_type": evidence_type,
         "attachment": attachment or "",
         "link_reference": link_reference or "",
-        "status": "Active",
+        "status": "Pending",
         "recorded_by": user,
     }
-    try:
-        doc = frappe.get_doc(doc_data)
-        doc.insert(ignore_permissions=True)
-        return {"name": doc.name, "guardian": guardian, "student": student,
-                "consent_date": consent_date, "expiry_date": expiry_date,
-                "status": "Active", "evidence_type": evidence_type}
-    except Exception:
-        # Offline fallback: return synthetic record
-        import hashlib
-        name = "CONSENT-" + hashlib.sha256((guardian + student + consent_date).encode()).hexdigest()[:8]
-        doc_data["name"] = name
-        doc_data["status"] = "Active"
-        try:
-            if hasattr(frappe, "_test_consents"):
-                frappe._test_consents.append(dict(doc_data))
-            else:
-                _fallback_consents.append(dict(doc_data))
-        except Exception:
-            try:
-                _fallback_consents.append(dict(doc_data))
-            except Exception:
-                pass
-        return {"name": name, "guardian": guardian, "student": student,
-                "consent_date": consent_date, "expiry_date": expiry_date,
-                "status": "Active", "evidence_type": evidence_type}
+    # A guardian may lodge evidence, never approve their own evidence.
+    # The owning staff member reviews Pending and makes it Active in the
+    # protected native consent record. Persistence errors are not success.
+    doc = frappe.get_doc(doc_data)
+    doc.insert(ignore_permissions=True)
+    return {"name": doc.name, "guardian": guardian, "student": student,
+            "consent_date": consent_date, "expiry_date": expiry_date,
+            "status": "Pending", "evidence_type": evidence_type}
 
 
 @frappe.whitelist(methods=["POST"])
