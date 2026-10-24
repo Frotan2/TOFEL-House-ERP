@@ -5036,7 +5036,7 @@ def main():
             frappe.set_user('Administrator')
             si = s1inv['sales_invoice']
             gt = float(frappe.db.get_value('Sales Invoice', si, 'grand_total'))
-            req = as_user('finance_officer', lambda: corr.request_invoice_correction(
+            req = as_user('correction_probe', lambda: corr.request_invoice_correction(
                 's1_conv_req_00000001', si, 'SYN converted-student correction', gt))
             posted = as_user('finance_officer', lambda: corr.approve_invoice_correction(
                 's1_conv_appr_0000001', req['name']))
@@ -5087,7 +5087,7 @@ def main():
                 's1_hist_bill_0000001', case4['name'], customer,
                 pf_post, pf_due))
             gt = float(frappe.db.get_value('Sales Invoice', inv['sales_invoice'], 'grand_total'))
-            creq = as_user('finance_officer', lambda: corr.request_invoice_correction(
+            creq = as_user('correction_probe', lambda: corr.request_invoice_correction(
                 's1_hist_req_00000001', inv['sales_invoice'],
                 'SYN pre-enrollment correction', gt))
             cposted = as_user('finance_officer', lambda: corr.approve_invoice_correction(
