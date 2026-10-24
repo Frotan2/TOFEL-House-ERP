@@ -44,6 +44,12 @@ class RetireMergedBranchesSafetyTests(unittest.TestCase):
         self.assertFalse(self.eligible(pr={**self.pr, "head": {
             "repo": {"full_name": "someone/else"}, "ref": self.branch, "sha": self.sha}}))
 
+    def test_delete_endpoint_uses_plural_refs_and_only_heads(self):
+        self.assertEqual(cleanup.delete_ref_path("/git/ref/heads/arena/old"),
+                         "/git/refs/heads/arena/old")
+        with self.assertRaises(ValueError):
+            cleanup.delete_ref_path("/git/ref/tags/release")
+
     def test_allowlist_exact_shas_no_duplicates(self):
         names = [branch for _, branch, _ in cleanup.CANDIDATES]
         self.assertEqual(len(names), len(set(names)))
