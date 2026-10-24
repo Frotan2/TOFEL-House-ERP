@@ -170,6 +170,10 @@ def validate_close(doc):
             f"A cashier close covers at most {MAX_DRAWERS} drawers")
     drawers = {row["name"]: row.get("account_type") for row in cash_drawers(company)}
     seen = set()
+    # A signed close is for the *whole* company's postable Cash/Bank
+    # position, never just the drawers a caller chose to count.
+    if len(drawers) > MAX_DRAWERS:
+        raise frappe.ValidationError("Too many enabled cash drawers for this supported close")
     total_expected = 0.0
     total_counted = 0.0
     for row in rows:
@@ -192,6 +196,8 @@ def validate_close(doc):
                 f"Explain the {variance:.2f} variance for {account} before closing")
         total_expected += expected
         total_counted += counted
+    if seen != set(drawers):
+        raise frappe.ValidationError("Cashier close must include every enabled Cash/Bank drawer")
     if abs(round(float(doc.get("total_expected") or 0), 2) - round(total_expected, 2)) > TOLERANCE:
         raise frappe.ValidationError("The close total expected does not match its drawers")
     if abs(round(float(doc.get("total_counted") or 0), 2) - round(total_counted, 2)) > TOLERANCE:
@@ -248,6 +254,10 @@ def reconcile_cashier_day(request_key, company, date, counts):
         if not _company_permitted(company):
             raise frappe.PermissionError(
                 f"You are not permitted to record a cash close for {company}")
+        # Lock the Company as the serialization root before checking
+        # balances or existing closes; two concurrent first closes cannot
+        # both pass an empty day-query for the same company.
+        frappe.db.sql("select name from `tabCompany` where name=%s for update", (company,))
         if not isinstance(counts, list) or not counts:
             raise frappe.ValidationError("Record the counted amount for at least one drawer")
         if len(counts) > MAX_DRAWERS:
@@ -259,6 +269,8 @@ def reconcile_cashier_day(request_key, company, date, counts):
         if not drawers:
             raise frappe.ValidationError(
                 f"{company} has no Cash or Bank account to reconcile")
+        if len(drawers) > MAX_DRAWERS:
+            raise frappe.ValidationError("More enabled drawers exist than this close supports")
         prepared = {}
         for entry in counts:
             if not isinstance(entry, dict):
@@ -274,6 +286,9 @@ def reconcile_cashier_day(request_key, company, date, counts):
             if not isinstance(note, str) or len(note) > 500:
                 raise frappe.ValidationError(f"Explanation for {account} is too long")
             prepared[account] = {"counted": counted, "note": note.strip()}
+        if set(prepared) != set(drawers):
+            raise frappe.ValidationError(
+                "The close must count every enabled Cash/Bank drawer for this company")
 
         # Serialize closes for the same company/day, then refuse a duplicate.
         existing = frappe.db.sql(
@@ -353,9 +368,11 @@ def _resolve_companies(companies):
     scope (the desk does); the default is the configuration/readiness use.
     """
     if companies is not None:
-        return [name for name in companies if name]
+        return [name for name in dict.fromkeys(companies)
+                if name and _company_permitted(name)]
     return [row.get("name") for row in
-            (frappe.db.get_all(COMPANY, fields=["name"], limit_page_length=50) or [])]
+            (frappe.db.get_all(COMPANY, fields=["name"], limit_page_length=50) or [])
+            if row.get("name") and _company_permitted(row.get("name"))]
 
 
 def cashier_position(day=None, companies=None):
