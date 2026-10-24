@@ -1,5 +1,5 @@
 /*
- * Role desk client (docs/ROLE-DESKS.md).
+ * Role desk client — Executive Analytics Edition (Mission 6).
  *
  * Eight surfaces (seven daily-work desks plus the Configuration map) over
  * one whitelisted read endpoint each. The desks
@@ -11,6 +11,16 @@
  *
  * Every server value is escaped through escapeText() before it reaches
  * markup; nothing from the server is ever interpolated raw.
+ *
+ * Mission 6 enhancements:
+ * - Executive analytics: every figure carries explicit definition, permission
+ *   scope, source records, and drill-down path.
+ * - Authorized comparisons by branch, course, program, level, instructor, period
+ *   where underlying data permits — rendered as comparison tables and CSS bar charts.
+ * - Clear task queues, actionable alerts, contextual actions, validation messages,
+ *   loading skeletons, empty states with next steps, and error recovery with retry.
+ * - Consistent professional design system: improved hierarchy, contrast, responsive.
+ * - Accessible: keyboard navigation, focus rings, ARIA live regions, reduced motion.
  */
 frappe.provide("toefl_house.role_desks");
 
@@ -44,7 +54,7 @@ frappe.provide("toefl_house.role_desks");
 		"th-owner-cockpit": {
 			endpoint: "toefl_house.desk.owner.cockpit",
 			title: "TOEFL House Owner Cockpit",
-			description: "Business state with every definition stated, plus the fail-closed release posture.",
+			description: "Executive overview: enrollments, admissions, attendance, tuition, staffing and operational health — every figure with its definition and drill-down.",
 		},
 		"th-academic-setup": {
 			endpoint: "toefl_house.desk.setup.work",
@@ -71,14 +81,19 @@ frappe.provide("toefl_house.role_desks");
 		active: "ok", approved: "ok", completed: "ok", submitted: "ok",
 		paid: "ok", settled: "ok", received: "ok", released: "ok",
 		finalized: "ok", posted: "ok", "credit note issued": "ok",
+		effective: "ok", validated: "ok", configured: "ok",
 		draft: "info", review: "info", open: "info", applied: "info",
 		allocated: "info", verified: "info", "in progress": "info",
 		sealed: "info", marking: "info", outstanding: "info",
 		unpaid: "info", unbilled: "info", student: "info",
+		scheduled: "info", planned: "info", defined: "info",
 		requested: "warn", conditional: "warn", deferred: "warn",
 		overdue: "warn", unstaffed: "warn", expired: "warn",
+		pending: "warn", awaiting: "warn", attention: "warn",
 		rejected: "danger", cancelled: "danger", canceled: "danger",
 		revoked: "danger", withdrawn: "danger", return: "danger",
+		failed: "danger", blocked: "danger", error: "danger",
+		archived: "neutral", retired: "neutral", empty: "neutral",
 	});
 
 	function escapeText(value) {
@@ -104,6 +119,28 @@ frappe.provide("toefl_house.role_desks");
 		const parsed = new Date(value);
 		if (Number.isNaN(parsed.getTime())) return escapeText(String(value));
 		return escapeText(parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }));
+	}
+
+	function dateTimeLabel(value) {
+		if (!value) return "";
+		const parsed = new Date(value);
+		if (Number.isNaN(parsed.getTime())) return escapeText(String(value));
+		return escapeText(parsed.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }));
+	}
+
+	function numberLabel(value) {
+		if (value === undefined || value === null || value === "") return "0";
+		const num = Number(value);
+		if (Number.isNaN(num)) return escapeText(String(value));
+		return escapeText(num.toLocaleString());
+	}
+
+	function currencyLabel(amount, currency) {
+		if (amount === undefined || amount === null) return "";
+		const num = Number(amount);
+		if (Number.isNaN(num)) return escapeText(String(amount));
+		const code = currency || "";
+		return escapeText(num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (code ? " " + code : ""));
 	}
 
 	function newRequestKey() {
@@ -142,34 +179,56 @@ frappe.provide("toefl_house.role_desks");
 		desks.forEach((desk) => {
 			$("<button type='button' class='btn btn-secondary btn-xs th-desk-link'></button>")
 				.text(text(desk.title))
+				.attr("aria-label", text("Open " + desk.title))
 				.on("click", () => frappe.set_route(desk.slug))
 				.appendTo(strip);
 		});
 	}
 
-	function sectionShell(parent, title) {
+	function sectionShell(parent, title, kind) {
 		const block = $("<section class='th-section'></section>").appendTo(parent);
-		$("<h2 class='th-section-title'></h2>").text(text(title)).appendTo(block);
+		if (kind) block.attr("data-kind", kind);
+		const headerRow = $("<div class='th-section-header-row'></div>").appendTo(block);
+		$("<h2 class='th-section-title'></h2>").text(text(title)).appendTo(headerRow);
 		const body = $("<div class='th-section-body'></div>").appendTo(block);
 		return body;
 	}
 
 	function loadingState(body, message) {
-		const loading = $("<div class='th-loading'></div>").appendTo(body);
+		const loading = $("<div class='th-loading' role='status' aria-live='polite'></div>").appendTo(body);
 		$("<span class='th-spinner' aria-hidden='true'></span>").appendTo(loading);
 		$("<span></span>").text(text(message || "Loading…")).appendTo(loading);
-		$("<span class='th-visually-hidden' role='status'></span>").text(text("Loading")).appendTo(loading);
+		$("<span class='th-visually-hidden'></span>").text(text("Loading")).appendTo(loading);
 		return loading;
 	}
 
+	function skeletonGrid(body, count) {
+		const grid = $("<div class='th-skeleton-grid' aria-hidden='true'></div>").appendTo(body);
+		const n = count || 4;
+		for (let i = 0; i < n; i++) {
+			$("<div class='th-skeleton'></div>").appendTo(grid);
+		}
+		return grid;
+	}
+
 	function emptyState(body, empty) {
-		const emptyBox = $("<div class='th-empty'></div>").appendTo(body);
+		const emptyBox = $("<div class='th-empty' role='status'></div>").appendTo(body);
 		$("<p class='th-empty-title'></p>").text(text(empty.title || "Nothing here yet")).appendTo(emptyBox);
 		$("<p class='th-empty-body'></p>").text(text(empty.body || "")).appendTo(emptyBox);
+		if (empty.action) {
+			const actionBtn = $("<button type='button' class='btn btn-primary btn-sm th-empty-action'></button>")
+				.text(text(empty.action.label))
+				.on("click", () => {
+					if (empty.action.route) frappe.set_route(empty.action.route);
+					else if (empty.action.endpoint) openGuidedAction(empty.action);
+				})
+				.appendTo(emptyBox);
+			if (empty.action.description) actionBtn.attr("title", text(empty.action.description));
+		}
 	}
 
 	function errorState(body, retry) {
-		const alert = $("<div class='th-alert th-alert--danger'></div>").appendTo(body);
+		const alert = $("<div class='th-alert th-alert--danger' role='alert'></div>").appendTo(body);
 		const box = $("<div></div>").appendTo(alert);
 		$("<p class='th-alert-title'></p>").text(text("This section could not be loaded")).appendTo(box);
 		$("<p class='th-alert-body'></p>")
@@ -177,32 +236,256 @@ frappe.provide("toefl_house.role_desks");
 			.appendTo(box);
 		$("<button type='button' class='btn btn-secondary btn-sm'></button>")
 			.text(text("Retry"))
+			.attr("aria-label", text("Retry loading this section"))
 			.on("click", retry)
 			.appendTo(box);
 	}
+
+	function validationMarkup(message, tone) {
+		if (!message) return null;
+		const t = tone || "info";
+		const toneClass = { error: "th-validation--error", warn: "th-validation--warn", info: "th-validation--info", success: "th-validation--success" }[t] || "th-validation--info";
+		return $(`<div class='th-validation ${toneClass}' role='status'></div>`).text(text(message));
+	}
+
+	/* ------------------------------------------------------------------
+	 * Fact rendering — every figure carries explicit definition, scope,
+	 * source and drill-down. A number without its definition is not evidence.
+	 */
 
 	function factsMarkup(facts) {
 		const grid = $("<div class='th-fact-grid'></div>");
 		(facts || []).forEach((fact) => {
 			const tile = $("<div class='th-fact'></div>").appendTo(grid);
+			if (fact.highlight) tile.addClass("th-fact--highlight");
 			const head = $("<div class='th-fact-head'></div>").appendTo(tile);
-			$("<span class='th-fact-value'></span>").text(text(fact.value)).appendTo(head);
+			$("<span class='th-fact-value'></span>").text(text(String(fact.value))).appendTo(head);
+			if (fact.trend) {
+				const trendClass = fact.trend === "up" ? "th-fact-trend--up" : fact.trend === "down" ? "th-fact-trend--down" : "th-fact-trend--flat";
+				const trendIcon = fact.trend === "up" ? "↑" : fact.trend === "down" ? "↓" : "→";
+				$("<span class='th-fact-trend " + trendClass + "'></span>").text(trendIcon + " " + text(fact.trend_label || "")).appendTo(head);
+			}
 			if (fact.owner) $("<span class='th-role-chip'></span>").text(text(fact.owner)).appendTo(head);
+			else if (fact.scope) $("<span class='th-fact-scope'></span>").text(text(fact.scope)).appendTo(head);
 			$("<p class='th-fact-label'></p>").text(text(fact.label)).appendTo(tile);
 			$("<p class='th-fact-definition'></p>").text(text(fact.definition || "")).appendTo(tile);
+			if (fact.source) $("<p class='th-fact-source'></p>").text(text("Source: " + fact.source)).appendTo(tile);
+			if (fact.scope && fact.owner) $("<span class='th-fact-scope'></span>").text(text(fact.scope)).appendTo(tile);
+			if (fact.drill) {
+				const drill = $("<a class='th-fact-drill' href='#'></a>").text(text(fact.drill.label || fact.drill.title || "View records"));
+				drill.on("click", (e) => {
+					e.preventDefault();
+					if (fact.drill.route) frappe.set_route(fact.drill.route);
+					else if (fact.drill.slug) frappe.set_route(fact.drill.slug);
+				});
+				drill.appendTo(tile);
+			}
+			if (fact.drill_path) {
+				const drill2 = $("<button type='button' class='btn btn-secondary btn-xs' style='margin-top:0.5rem'></button>").text(text("View source records"));
+				drill2.on("click", () => frappe.set_route(fact.drill_path));
+				drill2.appendTo(tile);
+			}
 		});
 		return grid;
 	}
 
-	function actionButton(action) {
+	function analyticsMarkup(payload) {
+		// New in Mission 6: analytics kind — richer metric cards with provenance.
+		const container = $("<div class='th-analytics-container'></div>");
+		if (payload.hero) {
+			const hero = $("<div class='th-exec-band'></div>").appendTo(container);
+			const heroHeader = $("<div class='th-exec-band-header'></div>").appendTo(hero);
+			$("<p class='th-exec-band-title'></p>").text(text(payload.hero.title || "Executive overview")).appendTo(heroHeader);
+			if (payload.hero.updated) $("<span class='th-exec-band-updated'></span>").text(text(payload.hero.updated)).appendTo(heroHeader);
+			const heroGrid = $("<div class='th-exec-grid'></div>").appendTo(hero);
+			(payload.hero.metrics || []).forEach((m) => {
+				const cell = $("<div class='th-exec-metric'></div>").appendTo(heroGrid);
+				$("<div class='th-exec-metric-value'></div>").text(text(String(m.value))).appendTo(cell);
+				$("<div class='th-exec-metric-label'></div>").text(text(m.label)).appendTo(cell);
+				if (m.definition) $("<div class='th-exec-metric-definition'></div>").text(text(m.definition)).appendTo(cell);
+			});
+		}
+		if (payload.filters && payload.filters.length) {
+			const bar = $("<div class='th-filter-bar' role='toolbar'></div>").appendTo(container);
+			$("<span class='th-filter-bar-label'></span>").text(text("Filter by:")).appendTo(bar);
+			payload.filters.forEach((f) => {
+				const chip = $("<button type='button' class='th-filter-chip'></button>").text(text(f.label));
+				if (f.active) chip.addClass("th-filter-chip--active");
+				chip.attr("aria-pressed", f.active ? "true" : "false");
+				if (f.route) chip.on("click", () => frappe.set_route(f.route));
+				chip.appendTo(bar);
+			});
+		}
+		(payload.groups || []).forEach((group) => {
+			const section = $("<div class='th-exec-section'></div>").appendTo(container);
+			const header = $("<div class='th-exec-section-header'></div>").appendTo(section);
+			const headerText = $("<div></div>").appendTo(header);
+			$("<h3 class='th-exec-section-title'></h3>").text(text(group.title)).appendTo(headerText);
+			if (group.subtitle) $("<p class='th-exec-section-subtitle'></p>").text(text(group.subtitle)).appendTo(headerText);
+			if (group.drill) {
+				$("<button type='button' class='th-drill-link'></button>").text(text(group.drill.label || "View all"))
+					.on("click", () => frappe.set_route(group.drill.route || group.drill.slug))
+					.appendTo(header);
+			}
+			const body = $("<div class='th-exec-section-body'></div>").appendTo(section);
+			if (group.facts) body.append(factsMarkup(group.facts));
+			if (group.metrics) body.append(metricCardsMarkup(group.metrics));
+			if (group.comparison) body.append(comparisonMarkup(group.comparison));
+			if (group.chart) body.append(barChartMarkup(group.chart));
+			if (group.provenance) {
+				const prov = $("<div class='th-provenance'></div>").appendTo(body);
+				group.provenance.forEach((p) => {
+					const item = $("<span class='th-provenance-item'></span>").appendTo(prov);
+					if (p.label) $("<strong></strong>").text(text(p.label + ": ")).appendTo(item);
+					item.append(document.createTextNode(text(p.value || "")));
+				});
+			}
+			if (group.alerts) {
+				group.alerts.forEach((a) => {
+					body.append(alertMarkup(a.message || a.body || a.text || "", a.tone || "info", a.title, a.action));
+				});
+			}
+		});
+		// Fallback: if payload also carries flat facts (backwards compat)
+		if (payload.facts && !payload.groups) {
+			container.append(factsMarkup(payload.facts));
+		}
+		return container;
+	}
+
+	function metricCardsMarkup(metrics) {
+		const grid = $("<div class='th-analytics-grid'></div>");
+		(metrics || []).forEach((m) => {
+			const card = $("<div class='th-metric-card'></div>").appendTo(grid);
+			if (m.tone === "warn") card.addClass("th-metric-card--warn");
+			else if (m.tone === "danger") card.addClass("th-metric-card--danger");
+			else if (m.tone === "ok") card.addClass("th-metric-card--ok");
+			else if (m.highlight) card.addClass("th-metric-card--highlight");
+			const header = $("<div class='th-metric-card-header'></div>").appendTo(card);
+			$("<span class='th-metric-card-value'></span>").text(text(String(m.value))).appendTo(header);
+			if (m.badge) {
+				const tone = statusTone(m.badge);
+				$(`<span class='th-status th-status--${tone}'></span>`).text(text(m.badge)).appendTo(header);
+			} else if (m.owner) {
+				$("<span class='th-role-chip'></span>").text(text(m.owner)).appendTo(header);
+			}
+			$("<p class='th-metric-card-label'></p>").text(text(m.label)).appendTo(card);
+			if (m.definition) $("<p class='th-metric-card-definition'></p>").text(text(m.definition)).appendTo(card);
+			const meta = $("<div class='th-metric-card-meta'></div>").appendTo(card);
+			if (m.scope) $("<span class='th-metric-card-scope'></span>").text(text(m.scope)).appendTo(meta);
+			if (m.source) $("<span class='th-metric-card-source'></span>").text(text("Source: " + m.source)).appendTo(meta);
+			if (m.drill) {
+				const link = $("<button type='button' class='th-drill-link'></button>").text(text(m.drill.label || "View records"));
+				link.on("click", () => frappe.set_route(m.drill.route || m.drill.slug));
+				link.appendTo(meta);
+			}
+			if (m.drill_path) {
+				const link = $("<button type='button' class='th-drill-link'></button>").text(text("View records"));
+				link.on("click", () => frappe.set_route(m.drill_path));
+				link.appendTo(meta);
+			}
+		});
+		return grid;
+	}
+
+	function comparisonMarkup(comparison) {
+		const rows = comparison.rows || comparison.items || [];
+		if (!rows.length) return $("<div></div>");
+		const table = $("<table class='th-comparison'></table>");
+		if (comparison.title) $("<caption></caption>").text(text(comparison.title)).appendTo(table);
+		const thead = $("<thead></thead>").appendTo(table);
+		const headRow = $("<tr></tr>").appendTo(thead);
+		(comparison.columns || ["Name", "Value"]).forEach((col) => {
+			$("<th scope='col'></th>").text(text(col)).appendTo(headRow);
+		});
+		const tbody = $("<tbody></tbody>").appendTo(table);
+		const maxVal = Math.max(...rows.map((r) => Number(r.value) || 0), 1);
+		rows.forEach((row) => {
+			const tr = $("<tr></tr>").appendTo(tbody);
+			const labelCell = $("<td></td>").appendTo(tr);
+			$("<span></span>").text(text(row.label || row.name || row.person || "")).appendTo(labelCell);
+			if (row.bar !== false) {
+				const pct = Math.round(((Number(row.value) || 0) / maxVal) * 100);
+				const bar = $("<span class='th-comparison-bar'></span>").appendTo(labelCell);
+				bar.css("inline-size", pct + "%");
+				if (row.tone) bar.addClass("th-comparison-bar--" + row.tone);
+			}
+			const valCell = $("<td class='th-num'></td>").appendTo(tr);
+			valCell.text(text(String(row.value)));
+			if (row.drill) {
+				const link = $("<button type='button' class='th-drill-link' style='margin-left:0.5rem'></button>").text(text("View"));
+				link.on("click", () => frappe.set_route(row.drill.route || row.drill.slug));
+				link.appendTo(valCell);
+			}
+		});
+		return table;
+	}
+
+	function barChartMarkup(chart) {
+		const rows = chart.rows || chart.items || chart.data || [];
+		if (!rows.length) return $("<div></div>");
+		const container = $("<div class='th-bar-chart'></div>");
+		if (chart.title) $("<h4 class='th-bar-chart-title' style='font-size:var(--th-fs-body);font-weight:600;margin:0 0 0.5rem'></h4>").text(text(chart.title)).appendTo(container);
+		const maxVal = Math.max(...rows.map((r) => Number(r.value) || 0), 1);
+		rows.forEach((row) => {
+			const rowEl = $("<div class='th-bar-chart-row'></div>").appendTo(container);
+			$("<span class='th-bar-chart-label'></span>").text(text(row.label || row.name || "")).appendTo(rowEl);
+			const track = $("<div class='th-bar-chart-track'></div>").appendTo(rowEl);
+			const pct = Math.round(((Number(row.value) || 0) / maxVal) * 100);
+			const fill = $("<div class='th-bar-chart-fill'></div>").appendTo(track);
+			fill.css("inline-size", pct + "%");
+			if (row.tone) fill.addClass("th-bar-chart-fill--" + row.tone);
+			$("<span class='th-bar-chart-value'></span>").text(text(String(row.value))).appendTo(rowEl);
+		});
+		if (chart.provenance) {
+			const prov = $("<div class='th-provenance'></div>").appendTo(container);
+			$("<span class='th-provenance-item'></span>").text(text(chart.provenance)).appendTo(prov);
+		}
+		return container;
+	}
+
+	function alertMarkup(message, tone, title, action) {
+		const toneClass = {
+			warn: "th-alert--warn", danger: "th-alert--danger", info: "th-alert--info", ok: "th-alert--ok", exec: "th-alert--exec"
+		}[tone] || "th-alert--info";
+		const alert = $(`<div class='th-alert ${toneClass}' role='alert'></div>`);
+		const box = $("<div></div>").appendTo(alert);
+		if (title) $("<p class='th-alert-title'></p>").text(text(title)).appendTo(box);
+		$("<p class='th-alert-body'></p>").text(text(message)).appendTo(box);
+		if (action) {
+			const actions = $("<div class='th-alert-actions'></div>").appendTo(box);
+			const btn = $("<button type='button' class='btn btn-sm'></button>").text(text(action.label));
+			btn.addClass(tone === "danger" ? "btn-danger" : tone === "warn" ? "btn-warning" : "btn-primary");
+			btn.on("click", () => {
+				if (action.route) frappe.set_route(action.route);
+				else if (action.endpoint) openGuidedAction(action);
+			});
+			btn.appendTo(actions);
+			if (action.secondary) {
+				const btn2 = $("<button type='button' class='btn btn-secondary btn-sm'></button>").text(text(action.secondary.label));
+				btn2.on("click", () => {
+					if (action.secondary.route) frappe.set_route(action.secondary.route);
+					else if (action.secondary.endpoint) openGuidedAction(action.secondary);
+				});
+				btn2.appendTo(actions);
+			}
+		}
+		return alert;
+	}
+
+	function actionButton(action, variant = "primary") {
 		if (!action) return null;
-		return $("<button type='button' class='btn btn-primary btn-xs th-queue-action'></button>")
+		const buttonClass = variant === "secondary" ? "btn-secondary" : "btn-primary";
+		const btn = $(`<button type='button' class='btn ${buttonClass} btn-xs th-queue-action'></button>`)
 			.text(text(action.label))
+			.attr("aria-label", text(action.label))
 			.on("click", () => openGuidedAction(action));
+		return btn;
 	}
 
 	function queueMarkup(items, columns) {
 		const table = $("<table class='th-queue'><thead></thead><tbody></tbody></table>");
+		table.attr("aria-label", text("Task queue"));
 		const head = $("<tr></tr>").appendTo(table.find("thead"));
 		columns.forEach((column) => {
 			$("<th scope='col'></th>").text(text(column)).appendTo(head);
@@ -210,10 +493,19 @@ frappe.provide("toefl_house.role_desks");
 		const body = table.find("tbody");
 		(items || []).forEach((item) => {
 			const row = $("<tr class='th-queue-row'></tr>").appendTo(body);
+			if (item.priority === "urgent") row.addClass("th-queue-row--urgent");
 			const identity = $("<td class='th-queue-identity'></td>").appendTo(row);
 			$("<p class='th-queue-person'></p>").text(text(item.person || item.id)).appendTo(identity);
 			$("<p class='th-queue-id'></p>").text(text(item.id)).appendTo(identity);
 			if (item.detail) $("<p class='th-queue-detail'></p>").text(text(item.detail)).appendTo(identity);
+			if (item.meta) {
+				const meta = $("<div class='th-queue-meta'></div>").appendTo(identity);
+				(item.meta || []).forEach((badge) => $("<span class='th-queue-badge'></span>").text(text(badge)).appendTo(meta));
+			}
+			if (item.validation) {
+				const tone = item.validation.tone || "info";
+				validationMarkup(item.validation.message || item.validation.text, tone).appendTo(identity);
+			}
 			const state = $("<td class='th-queue-state'></td>").appendTo(row);
 			state.append(statusMarkup(item.status));
 			if (item.stage) $("<p class='th-queue-stage'></p>").text(text(item.stage)).appendTo(state);
@@ -223,13 +515,31 @@ frappe.provide("toefl_house.role_desks");
 			const when = $("<td class='th-queue-when'></td>").appendTo(row);
 			if (item.age) $("<p class='th-queue-age'></p>").text(text(item.age)).appendTo(when);
 			if (item.waiting_since) $("<p class='th-queue-date'></p>").text(dateLabel(item.waiting_since)).appendTo(when);
+			if (item.sla) {
+				const slaTone = item.sla.tone || "info";
+				$(`<span class='th-status th-status--${slaTone}' style='margin-top:0.25rem'></span>`).text(text(item.sla.label || item.sla.text)).appendTo(when);
+			}
 			const action = $("<td class='th-queue-action-cell'></td>").appendTo(row);
 			const button = actionButton(item.action);
 			if (button) button.appendTo(action);
 			(item.actions || []).forEach((extra) => {
-				const secondary = actionButton(extra);
-				if (secondary) secondary.appendTo(action);
+				const secondary = actionButton(extra, "secondary");
+				if (secondary) {
+					secondary.appendTo(action);
+				}
 			});
+			if (item.drill) {
+				const drillBtn = $("<button type='button' class='btn btn-secondary btn-xs th-queue-action'></button>")
+					.text(text(item.drill.label || "View"))
+					.on("click", () => frappe.set_route(item.drill.route || item.drill.slug));
+				drillBtn.appendTo(action);
+			}
+			if (item.drill_path) {
+				const drillBtn = $("<button type='button' class='btn btn-secondary btn-xs th-queue-action'></button>")
+					.text(text("View record"))
+					.on("click", () => frappe.set_route(item.drill_path));
+				drillBtn.appendTo(action);
+			}
 		});
 		return table;
 	}
@@ -239,6 +549,7 @@ frappe.provide("toefl_house.role_desks");
 		(items || []).forEach((link) => {
 			$("<button type='button' class='btn btn-secondary btn-sm'></button>")
 				.text(text(link.title || link.slug))
+				.attr("aria-label", text("Open " + (link.title || link.slug)))
 				.on("click", () => frappe.set_route(link.slug))
 				.appendTo(group);
 		});
@@ -250,10 +561,52 @@ frappe.provide("toefl_house.role_desks");
 		const kind = payload.kind;
 		if (kind === "facts") {
 			body.append(factsMarkup(payload.facts));
+			if (payload.comparison) body.append(comparisonMarkup(payload.comparison));
+			if (payload.chart) body.append(barChartMarkup(payload.chart));
+			if (payload.alerts) {
+				(payload.alerts || []).forEach((a) => {
+					body.append(alertMarkup(a.message || a.body || a.text || "", a.tone || "info", a.title, a.action));
+				});
+			}
+			if (payload.provenance) {
+				const prov = $("<div class='th-provenance'></div>").appendTo(body);
+				(payload.provenance || []).forEach((p) => {
+					const item = $("<span class='th-provenance-item'></span>").appendTo(prov);
+					if (p.label) $("<strong></strong>").text(text(p.label + ": ")).appendTo(item);
+					item.append(document.createTextNode(text(p.value || "")));
+				});
+			}
+		} else if (kind === "analytics") {
+			body.append(analyticsMarkup(payload));
+		} else if (kind === "comparison") {
+			body.append(comparisonMarkup(payload.comparison || payload));
+		} else if (kind === "chart") {
+			body.append(barChartMarkup(payload.chart || payload));
+		} else if (kind === "metrics") {
+			body.append(metricCardsMarkup(payload.metrics || payload.items));
+		} else if (kind === "alerts") {
+			(payload.alerts || payload.items || []).forEach((a) => {
+				body.append(alertMarkup(a.message || a.body || a.text || "", a.tone || "info", a.title, a.action));
+			});
 		} else if (kind === "links") {
 			body.append(linksMarkup(payload.items));
 		} else {
-			body.append(queueMarkup(payload.items, ["Record", "Status", "Next action", "Waiting", "Act"]));
+			body.append(queueMarkup(payload.items, [text("Record"), text("Status"), text("Next action"), text("Waiting"), text("Act")]));
+			if (payload.comparison) body.append(comparisonMarkup(payload.comparison));
+			if (payload.chart) body.append(barChartMarkup(payload.chart));
+		}
+		// Inline contextual actions below queue
+		if (payload.actions) {
+			const actionsBar = $("<div class='th-route-group' style='margin-top:1rem'></div>").appendTo(body);
+			payload.actions.forEach((act) => {
+				$("<button type='button' class='btn btn-secondary btn-sm'></button>")
+					.text(text(act.label))
+					.on("click", () => {
+						if (act.route) frappe.set_route(act.route);
+						else if (act.endpoint) openGuidedAction(act);
+					})
+					.appendTo(actionsBar);
+			});
 		}
 	}
 
@@ -283,6 +636,19 @@ frappe.provide("toefl_house.role_desks");
 		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
 	];
 	const ACTION_FIELDS = Object.freeze({
+		"toefl_house.finance.installments.issue_tuition_installment_plan": [
+			{ fieldname: "program_enrollment", label: "Program enrollment", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "fee_structure", label: "Fee plan", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "posting_date", label: "Posting date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "first_due_date", label: "First due date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "installments", label: "Installments (owner policy)", fieldtype: "Int", reqd: 1 },
+		],
+		"toefl_house.finance.cashier.reconcile_cashier_day": [
+			{ fieldname: "company", label: "Company", fieldtype: "Data", reqd: 1, read_only: 1 },
+			{ fieldname: "date", label: "Business date", fieldtype: "Date", reqd: 1 },
+			{ fieldname: "counts", label: "Counted drawers", fieldtype: "Small Text", reqd: 1 },
+		],
+
 		"toefl_house.operations.owner_configuration.create_owner_operations_policy": [
 			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
@@ -343,18 +709,6 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
 			{ fieldname: "active", label: "Active", fieldtype: "Check" },
 		],
-		"toefl_house.finance.installments.issue_tuition_installment_plan": [
-			{ fieldname: "program_enrollment", label: "Program enrollment", fieldtype: "Data", reqd: 1, read_only: 1 },
-			{ fieldname: "fee_structure", label: "Fee plan", fieldtype: "Data", reqd: 1, read_only: 1 },
-			{ fieldname: "posting_date", label: "Posting date", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "first_due_date", label: "First due date", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "installments", label: "Installments (owner policy)", fieldtype: "Int", reqd: 1 },
-		],
-		"toefl_house.finance.cashier.reconcile_cashier_day": [
-			{ fieldname: "company", label: "Company", fieldtype: "Data", reqd: 1, read_only: 1 },
-			{ fieldname: "date", label: "Business date", fieldtype: "Date", reqd: 1 },
-			{ fieldname: "counts", label: "Counted drawers", fieldtype: "Small Text", reqd: 1 },
-		],
 		"toefl_house.finance.policies.create_billing_policy": [
 			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
@@ -367,9 +721,6 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "max_backdate_days", label: "Max backdate days", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "max_future_days", label: "Max future days", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "placement_fee_timing", label: "Placement-fee timing", fieldtype: "Data", reqd: 1 },
-			{ fieldname: "installments_allowed", label: "Installments allowed", fieldtype: "Check" },
-			{ fieldname: "max_installments", label: "Maximum installments", fieldtype: "Int", reqd: 1 },
-			{ fieldname: "installment_interval_days", label: "Installment interval (days)", fieldtype: "Int", reqd: 1 },
 		],
 		"toefl_house.finance.policies.set_billing_policy_status": [
 			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
@@ -764,9 +1115,15 @@ frappe.provide("toefl_house.role_desks");
 	function loadSections(container, payload) {
 		container.empty();
 		(payload.sections || []).forEach((sectionPayload) => {
-			const body = sectionShell(container, sectionPayload.title);
+			const body = sectionShell(container, sectionPayload.title, sectionPayload.kind);
 			const items = sectionPayload.items || sectionPayload.facts || [];
-			if (!items.length) {
+			// Analytics sections may carry hero/groups even with no flat items
+			const hasAnalytics = sectionPayload.kind === "analytics" && (sectionPayload.hero || sectionPayload.groups);
+			if (!items.length && !hasAnalytics && sectionPayload.kind !== "analytics") {
+				emptyState(body, sectionPayload.empty || {});
+				return;
+			}
+			if (sectionPayload.kind === "analytics" && !items.length && !hasAnalytics) {
 				emptyState(body, sectionPayload.empty || {});
 				return;
 			}
@@ -782,22 +1139,30 @@ frappe.provide("toefl_house.role_desks");
 		let sections = body.find(".th-desk-sections");
 		if (!sections.length) sections = $("<div class='th-desk-sections'></div>").appendTo(body);
 		currentReload = () => loadDesk(page, surface, slug);
-		const loading = loadingState($("<div class='th-section'></div>").appendTo(sections),
-			"Loading your work…");
+		const loadingWrap = $("<div class='th-section'></div>").appendTo(sections);
+		loadingState(loadingWrap, "Loading your work…");
+		skeletonGrid(loadingWrap, 4);
 		frappe.call({
 			method: surface.endpoint,
 			callback(response) {
-				loading.parent().remove();
+				loadingWrap.remove();
 				loadSections(sections, response.message || {});
+				// Announce completion to screen readers
+				const announcement = $("<div class='th-visually-hidden' role='status' aria-live='polite'></div>")
+					.text(text("Your work has loaded. " + ((response.message || {}).sections || []).length + " sections available."));
+				sections.append(announcement);
+				if (typeof setTimeout === "function") {
+					setTimeout(() => announcement.remove(), 2000);
+				}
 			},
 			error() {
-				loading.parent().remove();
+				loadingWrap.remove();
 				const block = $("<section class='th-section'></section>").appendTo(sections);
 				$("<h2 class='th-section-title'></h2>").text(text("Your work")).appendTo(block);
 				const sectionBody = $("<div class='th-section-body'></div>").appendTo(block);
 				errorState(sectionBody, () => {
 					sectionBody.empty();
-					loadingState(sectionBody, "Loading your work…");
+					const retryLoading = loadingState(sectionBody, "Loading your work…");
 					frappe.call({
 						method: surface.endpoint,
 						callback(response) {
@@ -828,6 +1193,7 @@ frappe.provide("toefl_house.role_desks");
 			.appendTo(bar);
 		$("<button type='button' class='btn btn-primary btn-sm'></button>")
 			.text(text("Search"))
+			.attr("aria-label", text("Search for person"))
 			.on("click", () => runSearch(surface, body, input.val()))
 			.appendTo(bar);
 		input.on("keydown", (event) => {
@@ -869,11 +1235,11 @@ frappe.provide("toefl_house.role_desks");
 		}
 		if (applicants.length) {
 			$("<h3 class='th-search-heading'></h3>").text(text("In the admission funnel")).appendTo(results);
-			results.append(queueMarkup(applicants, ["Record", "Status", "Next action", "Waiting", "Act"]));
+			results.append(queueMarkup(applicants, [text("Record"), text("Status"), text("Next action"), text("Waiting"), text("Act")]));
 		}
 		if (students.length) {
 			$("<h3 class='th-search-heading'></h3>").text(text("Enrolled students")).appendTo(results);
-			results.append(queueMarkup(students, ["Record", "Status", "Next action", "Waiting", "Act"]));
+			results.append(queueMarkup(students, [text("Record"), text("Status"), text("Next action"), text("Waiting"), text("Act")]));
 		}
 	}
 
