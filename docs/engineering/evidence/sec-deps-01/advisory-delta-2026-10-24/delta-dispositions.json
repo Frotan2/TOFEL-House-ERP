@@ -1,0 +1,22 @@
+{
+  "schema": "sec-deps-01-advisory-delta/1",
+  "basis": "2026-10-24 SEC-DEPS-01 analysis of GHSA-xmj3-9gf7-h52w surfaced by Foundation runtime 40077009661. Payments pins setuptools 80.9.0, which cannot be changed to 84.1.0 without a dependency conflict (Foundation run 40076515818). The advisory concerns an exclusively Windows-specific legacy setuptools Wheel.install_as_egg namespace path. The product's Frappe/Python runtime and all Python package installations run inside a Linux container, while the Windows customer host operates PowerShell/CMD launchers and docker load/compose only.",
+  "packages": [
+    {
+      "package": "py:setuptools@80.9.0",
+      "advisories": [
+        {
+          "id": "GHSA-xmj3-9gf7-h52w",
+          "aliases": [],
+          "severity": "low",
+          "summary": "setuptools legacy Windows wheel installation path escape through dist-info/namespace_packages.txt",
+          "first_patched": "84.1.0",
+          "runtime_disposition": "NOT_REACHABLE",
+          "runtime_disposition_evidence": "GitHub advisory GHSA-xmj3-9gf7-h52w requires native Windows path resolution during setuptools.wheel.Wheel.install_as_egg() of an attacker-controlled legacy wheel. TOEFL House's shipped Python application is built with FROM python:${PYTHON_VERSION}-slim-bookworm in product/app.Dockerfile and runs under Docker Linux containers on Windows Desktop. The image installer invokes pip/uv inside that Linux image, not a native Windows interpreter; product customer packaging tools/release/create_customer_package.py ALLOWED_FILES includes only Windows VBS/PowerShell/CMD launchers, Compose, guides and a prebuilt Linux Docker image, no Windows Python interpreter/wheel installation facility. Foundation audit 40077009661 is executed on ubuntu-24.04. A test protects the Linux-image/Windows-host launcher boundary. Re-triage if a native Windows Python installer, embedded Windows Python runtime, or Windows-host setuptools wheel installation enters the customer product.",
+          "fix_path": "Upstream fix is setuptools 84.1.0. Payments currently pins 80.9.0 and a forced upgrade caused python-dependency-check failure in hosted run 40076515818. Maintain the supported Payments pin in the Linux runtime; require a fresh security assessment before any Windows-native Python component is shipped."
+        }
+      ]
+    }
+  ],
+  "withdraws": []
+}

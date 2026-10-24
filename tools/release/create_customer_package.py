@@ -119,6 +119,12 @@ def archive_identity(path: Path, supplied_labels: dict) -> tuple[dict[str, str],
             config = json.loads(config_bytes)
             if not isinstance(config, dict) or not isinstance(config.get("config"), dict):
                 raise ValueError("image config metadata is not an object")
+            # The customer runs the provider's Linux/amd64 appliance under
+            # Docker Desktop. A Windows container could carry the expected
+            # labels, but would invalidate our Linux-only runtime security
+            # assumptions (including the setuptools Windows advisory scope).
+            if config.get("os") != "linux" or config.get("architecture") != "amd64":
+                raise ValueError("customer application image must be linux/amd64")
             labels = config["config"].get("Labels")
             if (not isinstance(labels, dict)
                     or not all(isinstance(k, str) and isinstance(v, str) for k, v in labels.items())):
@@ -211,19 +217,44 @@ def copy_allowlist(source: Path, package: Path) -> None:
 
 
 def make_zip(package: Path) -> Path:
+    """Publish the archive and its checksum only after full verification.
+
+    A failed, interrupted, or oversized ZIP must never remain at the final
+    customer-facing filename. Intermediate files use conspicuous .part names.
+    """
     archive = package.parent / f"{package.name}.zip"
-    if archive.exists():
-        raise ValueError(f"refusing to overwrite existing archive: {archive}")
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as handle:
-        for path in sorted(package.rglob("*")):
-            if path.is_symlink():
-                raise ValueError(f"package contains a link: {path}")
-            if path.is_file():
-                handle.write(path, path.relative_to(package.parent).as_posix())
-    if archive.stat().st_size >= MAX_RELEASE_ASSET_BYTES:
-        raise ValueError("customer ZIP must be under GitHub's 2 GiB asset limit; reduce the provider image before publication")
-    write_utf8(archive.with_suffix(".zip.sha256"), sha256(archive) + "  " + archive.name + "\n")
-    return archive
+    checksum = archive.with_suffix(".zip.sha256")
+    staging = archive.with_name(archive.name + ".part")
+    staged_checksum = checksum.with_name(checksum.name + ".part")
+    if any(path.exists() or path.is_symlink()
+           for path in (archive, checksum, staging, staged_checksum)):
+        raise ValueError("refusing to overwrite an existing customer ZIP, checksum, or partial archive")
+    published = False
+    try:
+        with zipfile.ZipFile(staging, "x", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as handle:
+            for path in sorted(package.rglob("*")):
+                if path.is_symlink():
+                    raise ValueError(f"package contains a link: {path}")
+                if path.is_file():
+                    handle.write(path, path.relative_to(package.parent).as_posix())
+        if staging.stat().st_size >= MAX_RELEASE_ASSET_BYTES:
+            raise ValueError("customer ZIP must be under GitHub's 2 GiB asset limit; reduce the provider image before publication")
+        digest = sha256(staging)
+        write_utf8(staged_checksum, digest + "  " + archive.name + "\n")
+        # Never expose a final ZIP while it is still being written. On any
+        # publishing error, remove only artifacts created by this attempt.
+        staging.rename(archive)
+        published = True
+        staged_checksum.rename(checksum)
+        return archive
+    except BaseException:
+        for temporary in (staging, staged_checksum):
+            temporary.unlink(missing_ok=True)
+        # Never remove another invocation's existing archive on an early
+        # error; only this attempt's successful publish can be rolled back.
+        if published:
+            archive.unlink(missing_ok=True)
+        raise
 
 
 def create_package(

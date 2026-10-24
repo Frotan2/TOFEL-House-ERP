@@ -1,0 +1,67 @@
+{
+  "baseline_versions": {
+    "fast-uri": [
+      "3.1.8"
+    ],
+    "serialize-javascript": [
+      "7.1.2"
+    ],
+    "undici": [
+      "6.29.0"
+    ]
+  },
+  "patched_versions": {
+    "fast-uri": [
+      "3.1.9"
+    ],
+    "serialize-javascript": [
+      "7.1.3"
+    ],
+    "undici": [
+      "6.29.1"
+    ]
+  },
+  "removed_findings": [
+    [
+      "fast-uri",
+      1243098
+    ],
+    [
+      "fast-uri",
+      1243101
+    ],
+    [
+      "fast-uri",
+      1243104
+    ],
+    [
+      "fast-uri",
+      1243107
+    ],
+    [
+      "serialize-javascript",
+      1243082
+    ],
+    [
+      "undici",
+      1243079
+    ],
+    [
+      "undici",
+      1243114
+    ]
+  ],
+  "added_findings": [],
+  "baseline_triage": {
+    "closed": 12,
+    "accepted": 2,
+    "open": 7,
+    "untriaged": 7
+  },
+  "patched_triage": {
+    "closed": 12,
+    "accepted": 2,
+    "open": 0,
+    "untriaged": 0
+  }
+}
