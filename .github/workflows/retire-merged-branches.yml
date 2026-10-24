@@ -1,5 +1,5 @@
 name: One-time verified merged branch retirement
-# Retest 2026-10-24: API GET uses /git/ref/, DELETE must use /git/refs/.
+# Final retirement 2026-10-24: remove verified merged maintenance heads too; active agent branches excluded.
 
 on:
   push:
