@@ -38,7 +38,13 @@ policy, no governing version, a retired policy, or a passed cutoff, the
 ``add_class_member`` / ``move_class_member`` commands refuse — the owner
 opts in by appending a version with a live cutoff, never by default.
 Moves deactivate the source row (membership history is preserved) and
-(natively) every row, active or not, counts toward ``max_strength``.
+(natively) every row, active or not, counts toward ``max_strength``. An
+approved transfer executes inside that same roster window, so no path shifts
+a roster after the owner closed it.
+
+The operator-facing walkthrough (who calls which command, the order a session
+is validated in, the seat arithmetic, and what each refusal means) is
+``docs/CLASS-OPERATIONS.md``.
 """
 from contextlib import contextmanager
 from datetime import datetime, timedelta
