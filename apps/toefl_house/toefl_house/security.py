@@ -82,6 +82,17 @@ KIND_ROLES = {
     "request_fees_correction": "Finance Officer",
     "approve_fees_correction": "Finance Officer",
     "deny_fees_correction": "Finance Officer",
+    # Assessment commands require authorized academic / teaching roles.
+    "open_assessment_book": "Academic Manager",
+    "record_assessment_marks": "Instructor",
+    "submit_assessment_book": "Instructor",
+    "review_assessment_book": "Academic Manager",
+    "correct_assessment_mark": "Academic Manager",
+    "approve_assessment_book": "Academic Manager",
+    "publish_assessment_results": "Academic Manager",
+    "correct_published_result": "Academic Manager",
+    "decide_progression": "Academic Manager",
+    "override_progression": "General Manager",
 }
 KINDS = set(KIND_ROLES)
 DOCTYPES = {
@@ -98,6 +109,7 @@ DOCTYPES = {
     "TH Correction Policy", "TH Correction Request",
     "TH Attendance Correction Request",
     "TH Cashier Day",
+    "TH Assessment Book", "TH Academic Result", "TH Progression Decision",
 }
 CONFIG_DOCTYPES = ("TH Placement Blueprint Revision", "TH Placement Policy Revision",
                    "TH Placement Course Map Revision")
