@@ -22,6 +22,13 @@ on:
       # build green; changes to the disposable runner cannot silently skip it.
       - tools/native/runtime_restore.py
       - tools/native/run_native.py
+      # The native book/cashier verifier is a release-critical acceptance
+      # contract. It must trigger a fresh exact-SHA image gate after changes,
+      # instead of leaving an older image build as the latest result.
+      - tools/native/native_checks.py
+      # Changes to finance acceptance tests must also qualify the deliverable
+      # that the customer is about to receive, not only the fast Owned suite.
+      - tests/finance/**
       - tools/native/migrate_restore_site.py
       - tools/native/policy_restart_check.py
       - tools/native/browser_role_acceptance.py
