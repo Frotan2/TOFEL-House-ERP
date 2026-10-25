@@ -151,7 +151,12 @@ def set_portal_flags(request_key=None, student_portal=None, guardian_portal=None
                 for name in PORTAL_KINDS + CHANNEL_KINDS}
                if existing else {name: False
                                  for name in PORTAL_KINDS + CHANNEL_KINDS})
-        doc = existing or frappe.get_doc({"doctype": POLICY})
+        doc = existing or frappe.get_doc({
+            "doctype": POLICY,
+            "code": "TH-PORTAL-ACCESS",
+            "title": "TOEFL House portal and messaging access",
+            "status": "Active",
+        })
         for name, value in updates.items():
             doc.set(name + "_enabled", 1 if value else 0)
         # A new config must start with all other access paths disabled.
