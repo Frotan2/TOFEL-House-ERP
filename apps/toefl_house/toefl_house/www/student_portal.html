@@ -1,0 +1,27 @@
+{% extends "templates/web.html" %}
+{% block title %}My Learning Portal{% endblock %}
+{% block page_content %}
+<div class="container py-4" id="student-portal" style="max-width: 720px;">
+  <h1 class="h4">My Learning Portal</h1>
+  {% if not portal_enabled %}
+    <div class="alert alert-warning">{{ portal_message }}</div>
+  {% else %}
+    <p class="text-muted">View your schedule, attendance, grades, fees and announcements. Data updates from your enrolled classes.</p>
+    <div id="portal-announcements" class="mb-4"></div>
+    <ul class="nav nav-tabs" id="portal-tabs">
+      <li class="nav-item"><a class="nav-link active" data-tab="schedule">Schedule</a></li>
+      <li class="nav-item"><a class="nav-link" data-tab="attendance">Attendance</a></li>
+      <li class="nav-item"><a class="nav-link" data-tab="grades">Grades</a></li>
+      <li class="nav-item"><a class="nav-link" data-tab="fees">Fees</a></li>
+    </ul>
+    <div class="tab-content p-3 border" id="portal-content">
+      <div class="tab-pane active" data-pane="schedule"><em>Loading schedule…</em></div>
+      <div class="tab-pane d-none" data-pane="attendance"><em>Loading attendance…</em></div>
+      <div class="tab-pane d-none" data-pane="grades"><em>Loading grades…</em></div>
+      <div class="tab-pane d-none" data-pane="fees"><em>Loading fees…</em></div>
+    </div>
+    <p class="small text-muted mt-3">All data shown is personally authorized. If you believe information is missing, contact your instructor or the front desk.</p>
+  {% endif %}
+</div>
+<script src="/assets/toefl_house/js/th_student_portal.js"></script>
+{% endblock %}
