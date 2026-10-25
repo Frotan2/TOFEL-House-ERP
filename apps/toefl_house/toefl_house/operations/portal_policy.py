@@ -40,137 +40,136 @@ DEFAULTS = {
     "whatsapp": False,
 }
 
-# In-memory shadow for offline tests (when frappe.db is a stub).
+# Process-memory storage is never used for production authorization.
+# Only isolated Python tests, explicitly marked by Frappe's server-side test
+# flag, may use this deterministic non-durable substitute.
 _memory_flags = dict(DEFAULTS)
-_memory_flags["dashboard"] = True  # keep dashboard enabled even in memory default
+
+
+def _isolated_test():
+    return bool(getattr(getattr(frappe, "flags", None), "in_test", False))
 
 
 def _get_doc():
-    """Return the config doc or None if not configured."""
+    """Read the single authorized persistent configuration document."""
     try:
-        rows = frappe.db.get_all(POLICY, fields=["name"], limit=1)
-        if not rows:
+        rows = frappe.get_list(POLICY, fields=["name"], limit_page_length=2)
+        if len(rows) != 1:
             return None
         return frappe.get_doc(POLICY, rows[0]["name"])
     except Exception:
+        # A missing, malformed or inaccessible configuration cannot grant
+        # permission to expose student records or send external messages.
         return None
 
 
-def _flag_from_doc(doc, field):
+def _flag(doc, name):
     if doc is None:
-        return None
-    val = doc.get(field)
-    if val is None:
-        return None
-    # Frappe Check fields return 0/1 or bool
-    return bool(val)
+        return False
+    value = doc.get(name)
+    return value in (True, 1, "1")
 
 
 def is_portal_enabled(kind):
-    """Whether a portal is enabled. Fail-closed: unknown kind ⇒ False."""
     if kind not in PORTAL_KINDS:
         return False
-    # Try persistent doc first; fall back to in-memory for offline tests.
     doc = _get_doc()
-    field = kind + "_enabled"
-    # e.g. student_portal_enabled
-    if doc is not None:
-        v = _flag_from_doc(doc, field)
-        if v is not None:
-            return v
-    return bool(_memory_flags.get(kind, False))
+    if doc is None and _isolated_test():
+        return bool(_memory_flags.get(kind, False))
+    return _flag(doc, kind + "_enabled")
 
 
 def is_channel_enabled(kind):
-    """Whether a delivery channel is enabled. Fail-closed."""
-    if kind not in CHANNEL_KINDS:
+    normalized = str(kind or "").lower()
+    if normalized not in CHANNEL_KINDS:
         return False
-    norm = kind.lower()
     doc = _get_doc()
-    field_map = {
-        "dashboard": "dashboard_enabled",
-        "email": "email_enabled",
-        "sms": "sms_enabled",
-        "whatsapp": "whatsapp_enabled",
-    }
-    field = field_map.get(norm)
-    if doc is not None and field:
-        v = _flag_from_doc(doc, field)
-        if v is not None:
-            return v
-    return bool(_memory_flags.get(norm, False))
+    if doc is None and _isolated_test():
+        return bool(_memory_flags.get(normalized, False))
+    return _flag(doc, normalized + "_enabled")
 
 
 def governing_portal_config():
-    """Return the current enablement snapshot (for admin UI / tests)."""
     doc = _get_doc()
     if doc is not None:
-        return {
-            "student_portal": bool(doc.get("student_portal_enabled")),
-            "guardian_portal": bool(doc.get("guardian_portal_enabled")),
-            "dashboard": bool(doc.get("dashboard_enabled")),
-            "email": bool(doc.get("email_enabled")),
-            "sms": bool(doc.get("sms_enabled")),
-            "whatsapp": bool(doc.get("whatsapp_enabled")),
-            "source": "document",
-        }
-    return dict(_memory_flags, source="memory_defaults")
+        return {**{name: _flag(doc, name + "_enabled")
+                   for name in PORTAL_KINDS + CHANNEL_KINDS},
+                "source": "document"}
+    if _isolated_test():
+        return dict(_memory_flags, source="isolated_test")
+    return {**{name: False for name in PORTAL_KINDS + CHANNEL_KINDS},
+            "source": "unconfigured"}
 
 
+def _bool(value, name):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        if value.strip().lower() in ("1", "true", "yes", "on"):
+            return True
+        if value.strip().lower() in ("0", "false", "no", "off"):
+            return False
+    raise frappe.ValidationError(f"{name} must be true or false")
+
+
+@frappe.whitelist(methods=["POST"])
 def set_portal_flags(request_key=None, student_portal=None, guardian_portal=None,
                      dashboard=None, email=None, sms=None, whatsapp=None):
-    """Admin mutation: set one or more flags. Course Owner only.
+    """Owner-authorized, hash-audited and persistent portal/channel settings.
 
-    Each arg that is not None is coerced to bool and persisted. Returns
-    the new snapshot. In offline test mode (no DB), mutates _memory_flags.
+    Every production change must have an idempotent request key; there is no
+    untracked process-local fallback, including on database failure.
     """
-    # Authority check when frappe is available
-    try:
-        from toefl_house.configuration.audit import require_authority
+    from toefl_house.configuration.audit import execute, require_authority
+    from toefl_house.policy import digest
+
+    candidates = (("student_portal", student_portal),
+                  ("guardian_portal", guardian_portal),
+                  ("dashboard", dashboard), ("email", email),
+                  ("sms", sms), ("whatsapp", whatsapp))
+    updates = {name: _bool(value, name)
+               for name, value in candidates if value is not None}
+    if not updates:
+        raise frappe.ValidationError("Select at least one portal or channel setting")
+
+    if _isolated_test():
         require_authority("business_policy")
-    except Exception:
-        # In offline/test harness, skip authority check — caller is trusted
-        pass
+        _memory_flags.update(updates)
+        return governing_portal_config()
 
-    # Coerce supplied values
-    updates = {}
-    for kind, val in (("student_portal", student_portal), ("guardian_portal", guardian_portal),
-                      ("dashboard", dashboard), ("email", email),
-                      ("sms", sms), ("whatsapp", whatsapp)):
-        if val is not None:
-            if isinstance(val, str) and val.strip().lower() in ("1", "true", "yes", "on"):
-                val = True
-            elif isinstance(val, str) and val.strip().lower() in ("0", "false", "no", "off"):
-                val = False
-            elif isinstance(val, int) and val in (0, 1):
-                val = bool(val)
-            elif not isinstance(val, bool):
-                raise ValueError(f"{kind} must be true or false")
-            updates[kind] = bool(val)
+    if not request_key:
+        raise frappe.ValidationError("An idempotent Owner change key is required")
 
-    # Try to persist to doc if DB available
-    doc = _get_doc()
-    if doc is not None:
-        field_map = {
-            "student_portal": "student_portal_enabled",
-            "guardian_portal": "guardian_portal_enabled",
-            "dashboard": "dashboard_enabled",
-            "email": "email_enabled",
-            "sms": "sms_enabled",
-            "whatsapp": "whatsapp_enabled",
-        }
-        for kind, val in updates.items():
-            doc.set(field_map[kind], 1 if val else 0)
-        try:
+    def work(actor):
+        existing = _get_doc()
+        old = ({name: _flag(existing, name + "_enabled")
+                for name in PORTAL_KINDS + CHANNEL_KINDS}
+               if existing else {name: False
+                                 for name in PORTAL_KINDS + CHANNEL_KINDS})
+        doc = existing or frappe.get_doc({"doctype": POLICY})
+        for name, value in updates.items():
+            doc.set(name + "_enabled", 1 if value else 0)
+        # A new config must start with all other access paths disabled.
+        if existing is None:
+            for name in PORTAL_KINDS + CHANNEL_KINDS:
+                if name not in updates:
+                    doc.set(name + "_enabled", 0)
+            doc.insert(ignore_permissions=True)
+        else:
             doc.save(ignore_permissions=True)
-        except Exception:
-            pass
+        after = {name: _flag(doc, name + "_enabled")
+                 for name in PORTAL_KINDS + CHANNEL_KINDS}
+        result = dict(after, source="document")
+        target = doc.name
+        return result, {
+            "target": target,
+            "before_hash": digest([target, old]),
+            "after_hash": digest([target, after, actor]),
+        }
 
-    # Always update in-memory shadow (so offline tests work)
-    for kind, val in updates.items():
-        _memory_flags[kind] = bool(val)
-
-    return governing_portal_config()
+    return execute("set_portal_flags", request_key, updates, work)
 
 
 def reset_memory_flags():
