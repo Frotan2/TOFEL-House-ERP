@@ -75,6 +75,13 @@ what the screen said. Avoid sharing student data, passwords and raw logs.
 
 7. SAFETY AND BACKUPS
 ---------------------
+Course Owner: In Configuration > Backup & Recovery, the Backup On / Off
+control starts Off. Only the Course Owner can choose Turn backup On or
+Turn backup Off. Off prevents new TOEFL House product backups but keeps
+existing backup files. On alone does not begin backup: the encrypted
+backup policy, second local disk and separate recovery approval must
+also be verified. This does not authorize live student data or payments.
+
 Do not delete the product/data folder, Docker volumes or existing backups.
 Do not try Restore or move the installation to a second computer as a
 substitute for backed-up recovery. Real Windows installation, staff access,
