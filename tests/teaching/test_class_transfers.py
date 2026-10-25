@@ -66,7 +66,8 @@ class DeferredOwnerDecisionTests(TransferTestBase):
 
     def test_D5_refuses_existing_transfer_execution_after_policy_enabled(self):
         pending = self.request(key="d5-synthetic-request")["name"]
-        self.site.actor = APPROVER
+        self.ops.login(APPROVER)
+        self.site.set_roles(APPROVER, ["Academic Manager"])
         with patch.object(self.ops.transfers, "_transfer_scope_authorized",
                           return_value=False):
             with self.assertRaises(ValidationError) as ctx:
