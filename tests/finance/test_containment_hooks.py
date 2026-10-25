@@ -86,6 +86,11 @@ class ContainmentHookWiringTests(unittest.TestCase):
                             "TH Adjustment Posting Policy",
                             "TH Alerting Policy",
                             "TH Guardian Lifecycle Policy",
+                            # Exact audited and validation-only notification
+                            # and portal model hooks; finance guards unchanged.
+                            "TH Guardian Consent", "TH Notification Dispatch Rule",
+                            "TH Portal Configuration", "TH Notification",
+                            "TH Portal Announcement",
                             "TH Configuration Operation", "TH Configuration Audit Event",
                             # 2026-10-18: unconditional validate-only integrity hook (Office 365 link
                             # uniqueness, toefl_house/identity_links.py). Not a command guard.
