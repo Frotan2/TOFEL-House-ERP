@@ -35,6 +35,7 @@ AUDIT = "TH Configuration Audit Event"
 # and now keep receipts, so a retried call replays instead of erroring).
 KIND_AUTHORITY = {
     "approve_guardian_consent": "business_policy",
+    "set_portal_flags": "business_policy",
     "create_owner_operations_policy": "business_policy",
     "set_owner_operations_policy_version": "business_policy",
     "set_owner_operations_policy_status": "business_policy",
