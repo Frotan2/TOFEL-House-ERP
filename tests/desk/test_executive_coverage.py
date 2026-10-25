@@ -165,6 +165,67 @@ class VerifiedCoverageTests(unittest.TestCase):
         self.assertIn("10.00 AFN", result["collected_today"])
 
 
+def run_owner_cockpit(*, deny_counts=False):
+    """Exercise the actual Owner endpoint body without a live bench."""
+    import types
+
+    tree = ast.parse(OWNER.read_text(encoding="utf-8"))
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+              and n.name == "cockpit")
+    # The imported frappe.whitelist decorator is not part of the read logic.
+    fn.decorator_list = []
+    calls = []
+    admissions = [
+        {"name": str(i), "status": "Review", "student_applicant": "A",
+         "program": "P", "accepted": False, "native_student": None,
+         "modified": "2026-10-20"}
+        for i in range(400)
+    ]
+
+    def rows(desk, doctype, fields, **kwargs):
+        calls.append(("rows", doctype, kwargs.get("filters")))
+        return admissions if doctype == "TH Admission Decision" else []
+
+    def count(desk, doctype, filters=None):
+        calls.append(("count", doctype, filters))
+        if deny_counts and doctype in ("TH Admission Decision", "Student Group"):
+            raise PermissionError("count denied")
+        return {"TH Admission Decision": 401, "Student Group": 26}.get(doctype, 0)
+
+    def section(sid, title, kind, **kwargs):
+        return dict(id=sid, title=title, kind=kind, **kwargs)
+
+    scope = {
+        "SLUG": "th-owner-cockpit",
+        "ATTEMPT": "TH Placement Attempt",
+        "ADMISSION": "TH Admission Decision",
+        "DECISION": "TH Placement Decision",
+        "STUDENT": "Student",
+        "GROUP": "Student Group",
+        "DESKS": {"th-owner-cockpit": {"title": "Owner", "roles": ["Course Owner"]}},
+        "RELEASE_POSTURE": [],
+        "BOUNCE_WINDOW": 400, "LIMIT_QUEUES": 25,
+        "require_desk_audience": lambda slug: None,
+        "project_rows": rows, "project_count": count,
+        "lifecycle": types.SimpleNamespace(
+            ADMISSION_OPEN_STATUSES=["Draft", "Review", "Approved", "Conditional"],
+            PLACEMENT_ATTEMPT_ORDER=["Allocated", "Finalized"],
+            admission_stage=lambda *args: {"next": "Review", "role": "Approver"}),
+        "_funnel_and_exceptions": lambda: ([], []),
+        "_system_health": lambda: ([], []),
+        "_role_items": lambda _: [],
+        "_staff_counts": lambda: [],
+        "_recorded_action_items": lambda: [],
+        "_executive_analytics_sections": lambda: [],
+        "_site_mode": lambda: "REFUSED",
+        "_age_label": lambda x: "",
+        "viewer_roles": lambda: [],
+        "section": section,
+    }
+    exec(compile(ast.Module(body=[fn], type_ignores=[]), str(OWNER), "exec"), scope)
+    return scope["cockpit"](), calls
+
+
 class OwnerCockpitCoverageContracts(unittest.TestCase):
     def test_owner_summary_counts_scoped_records_not_bounded_previews(self):
         tree = ast.parse(OWNER.read_text(encoding="utf-8"))
@@ -180,6 +241,27 @@ class OwnerCockpitCoverageContracts(unittest.TestCase):
             and n.args[0].id == "admissions_open" for n in calls))
         self.assertIn("classes_running = project_count", OWNER.read_text())
         self.assertIn("admissions_count = project_count", OWNER.read_text())
+
+    def test_26_classes_and_401_open_admissions_are_counted_fully(self):
+        result, calls = run_owner_cockpit()
+        items = next(x for x in result["sections"]
+                     if x["id"] == "business")["facts"]
+        facts = {x["label"]: x["value"] for x in items}
+        self.assertEqual(facts["Classes running"], 26)
+        self.assertEqual(facts["Admissions in flight"], 401)
+        self.assertIn(("count", "Student Group",
+                       {"disabled": 0, "th_class_status": "Active"}), calls)
+        self.assertEqual(sum(
+            1 for kind, dt, _ in calls
+            if kind == "rows" and dt == "Student Group"), 0)
+
+    def test_denied_owner_count_does_not_claim_no_classes(self):
+        result, _ = run_owner_cockpit(deny_counts=True)
+        facts = {x["label"]: x["value"]
+                 for x in next(x for x in result["sections"]
+                               if x["id"] == "business")["facts"]}
+        self.assertEqual(facts["Classes running"], "—")
+        self.assertEqual(facts["Admissions in flight"], "—")
 
     def test_errors_render_unavailable_not_empty_or_zero(self):
         content = OWNER.read_text(encoding="utf-8")
