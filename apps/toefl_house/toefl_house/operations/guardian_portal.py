@@ -160,16 +160,15 @@ def _is_consent_valid(guardian, student, policy_terms=None):
         return False
     # Expiry check
     expiry = consent.get("expiry_date")
-    if expiry:
-        try:
-            if str(expiry) < _today():
-                return False
-        except Exception:
-            pass
-    else:
-        # No expiry on record but policy requires one — treat as expired
-        # Check policy expiry window
-        pass
+    if not expiry:
+        return False
+    try:
+        expiry_date = datetime.strptime(str(expiry)[:10], "%Y-%m-%d").date()
+        current = datetime.strptime(_today(), "%Y-%m-%d").date()
+        if expiry_date < current:
+            return False
+    except (TypeError, ValueError):
+        return False
 
     # Evidence check against policy consented evidence kind
     if policy_terms:
@@ -194,8 +193,8 @@ def _is_consent_valid(guardian, student, policy_terms=None):
             today_d = datetime.strptime(_today(), "%Y-%m-%d").date()
             if (today_d - c_d).days > window:
                 return False
-    except Exception:
-        pass
+    except (TypeError, ValueError):
+        return False
 
     return True
 
