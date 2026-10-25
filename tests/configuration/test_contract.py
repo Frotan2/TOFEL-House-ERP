@@ -61,6 +61,9 @@ class CodeValidationTests(unittest.TestCase):
 
     def test_duration_rejects_nonpositive_and_typos(self):
         self.assertEqual(rules.validate_duration_value("2", "Month"), 2.0)
+        self.assertEqual(rules.validate_duration_value(2, "Solar Hijri Month"), 2.0)
+        with self.assertRaisesRegex(ValueError, "whole number"):
+            rules.validate_duration_value(1.5, "Solar Hijri Month")
         with self.assertRaises(ValueError):
             rules.validate_duration_value(0, "Month")
         with self.assertRaises(ValueError):
@@ -372,7 +375,8 @@ class DoctypeContractTests(unittest.TestCase):
         self.assertTrue(doc["istable"])
         self.assertEqual(doc["permissions"], [])
         fields = {field["fieldname"]: field for field in doc["fields"]}
-        self.assertEqual(fields["duration_unit"]["options"], "Month\nWeek\nDay")
+        self.assertEqual(fields["duration_unit"]["options"],
+                         "Month\nWeek\nDay\nSolar Hijri Month")
         for field in ("set_by", "set_on", "superseded_on"):
             self.assertTrue(fields[field].get("read_only"), field)
 
