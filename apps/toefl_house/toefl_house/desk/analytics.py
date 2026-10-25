@@ -110,6 +110,28 @@ def _active_cohort_rows(groups):
     return [r for r in groups or [] if r.get("th_class_status") == "Active" and not r.get("disabled")]
 
 
+def _complete_project_rows(desk, doctype, fields, *, filters=None,
+                           order_by=None, limit=BOUNCE_WINDOW):
+    """Prove that a scoped bounded read covers the whole intended population.
+
+    A successful bounded list is not evidence of complete records. This count
+    uses the identical permission-scoped projection and filters. Without it,
+    Owner totals, sums, ratios, and exceptions are explicitly unavailable.
+    """
+    if (not isinstance(limit, int) or isinstance(limit, bool)
+            or limit < 1 or limit > BOUNCE_WINDOW):
+        raise ValueError("Invalid aggregate coverage limit")
+    scoped_filters = dict(filters or {})
+    rows = _project_rows(desk, doctype, fields, filters=scoped_filters,
+                         order_by=order_by, limit=limit)
+    count = _project_count(desk, doctype, filters=scoped_filters)
+    if (not isinstance(count, int) or isinstance(count, bool) or count < 0
+            or count > limit or not isinstance(rows, (list, tuple))
+            or len(rows) != count):
+        raise RuntimeError("Analytics source incomplete; metric unavailable")
+    return rows
+
+
 # ------------------------------------------------------------------ enrollments
 
 def enrollment_metrics():
@@ -119,7 +141,7 @@ def enrollment_metrics():
     Source: native enrollment records (submitted).
     Drill: enrollment list (submitted)
     """
-    rows = _project_rows("management", "Program Enrollment",
+    rows = _complete_project_rows("management", "Program Enrollment",
                         ["name", "student", "student_name", "program", "academic_year",
                          "enrollment_date", "docstatus"],
                         filters={"docstatus": 1},
@@ -167,7 +189,7 @@ def admission_metrics():
     Definition: admission decisions grouped by status.
     Source: admission decisions (guarded, but projected read-only here).
     """
-    all_open = _project_rows("management", "TH Admission Decision",
+    all_open = _complete_project_rows("management", "TH Admission Decision",
                             ["name", "student_applicant", "program", "status", "version",
                              "accepted", "native_student", "modified"],
                             filters={"status": ("in", ["Draft", "Review", "Approved", "Conditional"])},
@@ -199,7 +221,7 @@ def attendance_metrics():
     Rate = Present / (Present + Absent) where both exist.
     Source: native attendance (submitted).
     """
-    rows = _project_rows("management", "Student Attendance",
+    rows = _complete_project_rows("management", "Student Attendance",
                         ["name", "student", "student_group", "course_schedule", "date",
                          "status", "docstatus"],
                         filters={"docstatus": 1},
@@ -228,7 +250,7 @@ def attendance_metrics():
 
 def attendance_by_instructor():
     """Attendance sessions per instructor for the current window."""
-    schedules = _project_rows("management", "Course Schedule",
+    schedules = _complete_project_rows("management", "Course Schedule",
                              ["name", "student_group", "instructor", "course", "schedule_date"],
                              order_by="schedule_date desc", limit=BOUNCE_WINDOW)
     by_instructor = {}
@@ -257,7 +279,7 @@ def tuition_metrics():
     - Settled = outstanding_amount <=0 (submitted)
     """
     day = _today()
-    all_fees = _project_rows("management", "Fees",
+    all_fees = _complete_project_rows("management", "Fees",
                             ["name", "student", "student_name", "program", "program_enrollment",
                              "academic_year", "posting_date", "due_date", "grand_total",
                              "outstanding_amount", "currency", "company", "docstatus"],
@@ -270,7 +292,7 @@ def tuition_metrics():
     by_currency_charged = _money_sum(all_fees, "grand_total")
     by_currency_outstanding = _money_sum(outstanding, "outstanding_amount")
 
-    invoices = _project_rows("management", "Sales Invoice",
+    invoices = _complete_project_rows("management", "Sales Invoice",
                             ["name", "customer", "customer_name", "th_placement_case",
                              "posting_date", "due_date", "grand_total", "outstanding_amount",
                              "currency", "company", "status", "is_return", "docstatus"],
@@ -279,7 +301,7 @@ def tuition_metrics():
     inv_outstanding = [r for r in invoices if float(r.get("outstanding_amount") or 0) > 0]
     inv_overdue = [r for r in inv_outstanding if str(r.get("due_date") or "") and str(r["due_date"]) < day]
 
-    payments = _project_rows("management", "Payment Entry",
+    payments = _complete_project_rows("management", "Payment Entry",
                             ["name", "payment_type", "party_type", "party", "paid_amount",
                              "received_amount", "paid_from_account_currency", "company",
                              "posting_date", "docstatus"],
@@ -451,15 +473,15 @@ def exception_metrics():
         from toefl_house.desk.lifecycle import PLACEMENT_ATTEMPT_ORDER
     except Exception:
         PLACEMENT_ATTEMPT_ORDER = ["Allocated", "Verified", "Delivered", "Sealed", "Scored", "Review", "Finalized"]
-    corrections = _project_rows("management", "TH Correction Request",
+    corrections = _complete_project_rows("management", "TH Correction Request",
                               ["name", "sales_invoice", "fees", "reason", "requested_amount", "status", "modified"],
                               filters={"status": "Requested"},
                               order_by="modified asc", limit=LIMIT_QUEUES)
-    admissions_review = _project_rows("management", "TH Admission Decision",
+    admissions_review = _complete_project_rows("management", "TH Admission Decision",
                                      ["name", "student_applicant", "program", "status", "modified"],
                                      filters={"status": "Review"},
                                      order_by="modified asc", limit=LIMIT_QUEUES)
-    attempts_running = _project_rows("management", "TH Placement Attempt",
+    attempts_running = _complete_project_rows("management", "TH Placement Attempt",
                                     ["name", "case_name", "status", "deadline_at"],
                                     filters={"status": ("in", [s for s in PLACEMENT_ATTEMPT_ORDER if s != "Finalized"])},
                                     order_by="modified asc", limit=BOUNCE_WINDOW)
@@ -476,11 +498,11 @@ def exception_metrics():
                     continue
     except Exception:
         pass
-    finalized = _project_rows("management", "TH Placement Attempt",
+    finalized = _complete_project_rows("management", "TH Placement Attempt",
                              ["name", "case_name", "status"],
                              filters={"status": "Finalized"},
                              order_by="modified asc", limit=BOUNCE_WINDOW)
-    released = _project_rows("management", "TH Placement Decision",
+    released = _complete_project_rows("management", "TH Placement Decision",
                             ["name", "attempt", "status"],
                             filters={"status": "Released"},
                             order_by="released_at desc", limit=BOUNCE_WINDOW)
