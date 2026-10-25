@@ -7295,10 +7295,20 @@ def main():
             assert frappe.get_attr('hrms.utils.holiday_list.get_holiday_list_for_employee')(
                 employee,as_on='2026-09-30')==calendar.name
             frappe.db.commit()
+            # Direct HRMS Salary Slip creation must explicitly identify the
+            # employee's submitted Salary Structure Assignment; payroll-entry
+            # generation normally supplies this link on the employee's behalf.
+            structure_assignment=frappe.db.get_value('Salary Structure Assignment',
+                {'employee':employee,'docstatus':1,
+                 'from_date':['<=','2026-09-01']},
+                ['name','salary_structure'],as_dict=True,
+                order_by='from_date desc')
+            assert structure_assignment and structure_assignment.salary_structure==(
+                'SYN Teaching Structure'),('missing active synthetic payroll assignment',employee)
             slip=frappe.get_doc(dict(doctype='Salary Slip',employee=employee,
-                company=cfx['company'],payroll_frequency='Monthly',
-                start_date='2026-09-01',end_date='2026-09-30',
-                posting_date='2026-09-30'))
+                company=cfx['company'],salary_structure=structure_assignment.salary_structure,
+                payroll_frequency='Monthly',start_date='2026-09-01',
+                end_date='2026-09-30',posting_date='2026-09-30'))
             slip.insert()
             linked=[row.additional_salary for row in slip.earnings
                     if row.get('additional_salary')]
