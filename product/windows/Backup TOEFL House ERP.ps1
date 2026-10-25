@@ -396,6 +396,9 @@ try {
             throw "Backup source must be on a fixed local Windows drive."
         }
         $policy = Get-OwnerBackupPolicy
+        if ($policy.status -ceq "OFF") {
+            throw "OWNER_POLICY_REQUIRED: Backup is Off by Course Owner choice. No new backup, retention rotation or scheduled task change was made. Turn backup On in the ERP Configuration desk when needed."
+        }
         $policyConfigured = ($policy.configured -eq $true -and
             [regex]::IsMatch([string]$policy.schedule_time, "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$") -and
             [int]$policy.retention_versions -ge 2 -and
