@@ -257,6 +257,8 @@ jobs:
           import frappe
           from toefl_house.operations.owner_configuration import (
               create_owner_operations_policy,
+              current_backup_policy,
+              set_backup_enabled,
               set_owner_operations_policy_version,
               validate_owner_operations_policy,
           )
@@ -288,10 +290,16 @@ jobs:
                   "CI-only key-custody fixture; not real recovery evidence", 1)
               validate_owner_operations_policy(
                   "ci-backup-policy-validation", "TH-OWNER-OPS")
+              # D18: the real packaged product is Off by default. Only this
+              # disposable synthetic Course Owner explicitly enables backup.
+              assert current_backup_policy() == {"configured": False, "status": "OFF"}
+              switched = set_backup_enabled("ci-backup-owner-explicit-on", True)
+              assert switched["enabled"] is True and switched["status"] == "ON", switched
+              assert current_backup_policy().get("configured") is True
               frappe.db.commit()
           finally:
               frappe.session.user = previous_user
-          print("CI Course Owner backup policy configured through guarded commands")
+          print("CI backup default Off verified; disposable Owner explicitly switched On")
           PY
           checkpoint="effective Owner backup-policy projection and key identity"
           policy_json="$(docker compose exec -T web /build/tools/bin/bench --site toeflhouse.localhost execute toefl_house.operations.owner_configuration.current_backup_policy)"
