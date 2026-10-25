@@ -44,38 +44,35 @@ def _get_user_email(user):
 
 
 def _get_student_for_user(user):
-    """Resolve the Student owned by user. Fail-closed: None if ambiguous."""
+    """A unique student identity must be both emailed AND explicitly bound.
+
+    Never use email alone (a User email can change), nor optional legacy
+    Student.user fields. Administrator-created native User Permission links
+    are the durable identity evidence for personally sensitive data.
+    """
+    if not isinstance(user, str) or user in ("", "Guest", "Administrator"):
+        return None
+    if "Student" not in frappe.get_roles(user):
+        return None
+    if not frappe.db.get_value("User", user, "enabled"):
+        return None
     email = _get_user_email(user)
-    try:
-        # Primary: student_email_id matches User email
-        rows = frappe.db.get_all(
-            "Student",
-            filters={"student_email_id": email},
-            fields=["name", "customer", "student_email_id"],
-            limit=2,
-        )
-        if len(rows) == 1 and rows[0].get("customer"):
-            return rows[0]["name"]
-        if len(rows) == 1:
-            # Even without customer, allow — some installs omit customer
-            return rows[0]["name"]
-        if len(rows) != 1:
-            return None
-    except Exception:
-        pass
-    # Fallback: check Student's `user` field if present (some forks)
-    try:
-        rows = frappe.db.get_all(
-            "Student",
-            filters={"user": user},
-            fields=["name"],
-            limit=2,
-        )
-        if len(rows) == 1:
-            return rows[0]["name"]
-    except Exception:
-        pass
-    return None
+    if not email:
+        return None
+    rows = frappe.db.get_all(
+        "Student", filters={"student_email_id": email},
+        fields=["name"], limit_page_length=2)
+    if len(rows) != 1:
+        return None
+    student = rows[0]["name"]
+    allowed = frappe.db.get_all(
+        "User Permission",
+        filters={"user": user, "allow": "Student",
+                 "for_value": student},
+        fields=["name"], limit_page_length=2)
+    if len(allowed) != 1:
+        return None
+    return student
 
 
 def _assert_my_student(user, requested_student=None):
@@ -116,20 +113,25 @@ def _project(doctype, student, extra_filters=None, fields=None, limit=100):
         filters["student"] = student
         filters["docstatus"] = 1
     elif doctype == "Sales Invoice":
-        # Resolve customer via Student
-        try:
-            customer = frappe.db.get_value("Student", student, "customer")
-            if customer:
-                filters["customer"] = customer
-                filters["docstatus"] = 1
-            else:
-                return []
-        except Exception:
+        # Customer alone is NOT a student identity: siblings and guardians
+        # often share a native Customer. Never reveal all invoices for a
+        # family. Query only installations with an exact Student link.
+        if not frappe.get_meta("Sales Invoice").has_field("student"):
             return []
+        customer = frappe.db.get_value("Student", student, "customer")
+        if not customer:
+            return []
+        filters.update({"customer": customer, "student": student,
+                        "docstatus": 1})
     else:
         filters["student"] = student
 
     if extra_filters:
+        # API callers cannot replace mandatory student, customer or
+        # approval predicates with broader filters.
+        if any(k in filters and filters[k] != value
+               for k, value in extra_filters.items()):
+            raise frappe.PermissionError("A protected student scope cannot be replaced")
         filters.update(extra_filters)
 
     try:
