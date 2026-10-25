@@ -41,7 +41,7 @@ class FinalBranchRetirementTests(unittest.TestCase):
         raise AssertionError("Unexpected API request: " + path)
 
     def test_audited_candidates_are_exact_and_never_main(self):
-        self.assertEqual(len(retire.CANDIDATES), 25)
+        self.assertEqual(len(retire.CANDIDATES), 26)
         names = [record[1] for record in retire.CANDIDATES]
         self.assertEqual(len(set(names)), len(names))
         self.assertNotIn("main", names)
@@ -62,6 +62,9 @@ class FinalBranchRetirementTests(unittest.TestCase):
                       retire.CANDIDATES)
         self.assertIn((83, "fix/customer-gui-prebuilt-only-20261025",
                        "43d040709212ac250548565f5b20e114ba22df0f", None),
+                      retire.CANDIDATES)
+        self.assertIn((84, "feature/owner-backup-on-off-default-off-20261025",
+                       "44526ac39ce1a43830218cd0508e57e560742c8b", None),
                       retire.CANDIDATES)
 
     def test_closed_superseded_branch_requires_merged_replacement(self):
