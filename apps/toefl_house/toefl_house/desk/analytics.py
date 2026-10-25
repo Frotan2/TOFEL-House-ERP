@@ -225,7 +225,7 @@ def attendance_metrics():
     """Attendance: submitted attendance presence rate.
 
     Definition: submitted attendance records grouped by status.
-    Rate = Present / (Present + Absent) where both exist.
+    Attendance percentage is deferred under Owner D7; raw status counts only.
     Source: native attendance (submitted).
     """
     rows = _complete_project_rows("management", "Student Attendance",
@@ -237,7 +237,9 @@ def attendance_metrics():
     absent = sum(1 for r in rows if r.get("status") == "Absent")
     leave = sum(1 for r in rows if r.get("status") == "On Leave")
     total = len(rows)
-    rate = f"{(present / (present + absent) * 100):.1f}%" if (present + absent) else "—"
+    # D7 does not authorize a derived attendance percentage, even on fully
+    # verified records. Keep the raw counts and clearly defer the ratio.
+    rate = "—"
     by_group = _summarize_by(rows, "student_group")
     by_date = _summarize_by(rows, "date")
     return {
@@ -246,9 +248,10 @@ def attendance_metrics():
         "absent": absent,
         "leave": leave,
         "rate": rate,
+        "rate_status": "DEFERRED",
         "by_group": by_group,
         "by_date": by_date,
-        "definition": "Submitted attendance records. Present + Absent + On Leave are native marks; rate is Present divided by Present+Absent.",
+        "definition": "Submitted attendance records. Present, Absent and On Leave are native marks. Owner decision D7 defers the derived attendance rate pending approved stewardship, denominator and disclosure policy.",
         "source": "attendance records (native Education, submitted only)",
         "scope": "Branch-scoped via student roster.",
         "drill": "attendance list",
@@ -492,18 +495,26 @@ def exception_metrics():
                                     filters={"status": ("in", [s for s in PLACEMENT_ATTEMPT_ORDER if s != "Finalized"])},
                                     order_by="modified asc", limit=BOUNCE_WINDOW)
     overdue_deadlines = []
-    try:
-        from frappe.utils import get_datetime, now_datetime
-        now = now_datetime()
-        for row in attempts_running:
-            if row.get("deadline_at"):
-                try:
-                    if get_datetime(row["deadline_at"]) < now:
+    # Missing/invalid datetime evidence must never be converted into an
+    # apparently verified zero overdue attempts. A valid missing deadline is
+    # not overdue; a supplied but malformed deadline is an unavailable source.
+    if any(row.get("deadline_at") for row in attempts_running):
+        try:
+            from frappe.utils import get_datetime, now_datetime
+            now = now_datetime()
+            if now is None:
+                raise ValueError("clock unavailable")
+            for row in attempts_running:
+                if row.get("deadline_at"):
+                    deadline = get_datetime(row["deadline_at"])
+                    if deadline is None:
+                        raise ValueError("invalid deadline")
+                    if deadline < now:
                         overdue_deadlines.append(row)
-                except Exception:
-                    continue
-    except Exception:
-        pass
+        except Exception as exc:
+            raise RuntimeError(
+                "Placement deadline source incomplete; overdue count unavailable"
+            ) from exc
     finalized = _complete_project_rows("management", "TH Placement Attempt",
                              ["name", "case_name", "status"],
                              filters={"status": "Finalized"},
