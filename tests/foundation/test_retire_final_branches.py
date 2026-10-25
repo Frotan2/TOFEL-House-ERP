@@ -41,7 +41,7 @@ class FinalBranchRetirementTests(unittest.TestCase):
         raise AssertionError("Unexpected API request: " + path)
 
     def test_audited_candidates_are_exact_and_never_main(self):
-        self.assertEqual(len(retire.CANDIDATES), 19)
+        self.assertEqual(len(retire.CANDIDATES), 20)
         names = [record[1] for record in retire.CANDIDATES]
         self.assertEqual(len(set(names)), len(names))
         self.assertNotIn("main", names)
