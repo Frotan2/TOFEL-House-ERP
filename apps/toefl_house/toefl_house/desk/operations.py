@@ -590,7 +590,19 @@ def work():
                     "rows": [{"label": k, "value": v, "tone": "info"} for k, v in sorted(enroll["by_program"].items(), key=lambda x: -x[1])[:8]],
                 }
         except Exception:
-            pass
+            # A denied/incomplete accounting or academic source is UNKNOWN,
+            # never an absent section that looks like verified zero activity.
+            ops_analytics.append(section(
+                "ops-overview-unavailable", "Operational overview unavailable",
+                "facts", facts=[{
+                    "label": "Verified operational totals", "value": "—",
+                    "definition": "One or more required sources cannot be fully verified. No partial summary is published.",
+                    "source": "source verification incomplete",
+                    "scope": "unavailable", "drill_path": "source records list",
+                    "owner": "General Manager",
+                }],
+                empty_title="Operational metrics unavailable",
+                empty_body="A failed or partial read is not evidence of zero work."))
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
