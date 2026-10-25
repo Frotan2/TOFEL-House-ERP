@@ -641,6 +641,9 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "description", label: "Description", fieldtype: "Small Text", reqd: 1 },
 		],
+		"toefl_house.operations.owner_configuration.set_backup_enabled": [
+			{ fieldname: "enabled", label: "Backup On / Off", description: "Off stops future TOEFL House backup runs without deleting existing backup files. On still requires the verified backup configuration and separate recovery disk.", fieldtype: "Check" },
+		],
 		"toefl_house.operations.owner_configuration.set_owner_operations_policy_version": OWNER_POLICY_VERSION_FIELDS,
 		"toefl_house.operations.owner_configuration.validate_owner_operations_policy": [
 			{ fieldname: "policy", label: "Owner policy", fieldtype: "Data", reqd: 1, read_only: 1 },

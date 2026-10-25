@@ -501,6 +501,36 @@
         "D14",
         "D8-BACKUP-RECOVERY"
       ]
+    },
+    "D18": {
+      "id": "D18",
+      "date": "2026-10-25",
+      "title": "Owner optional local backup switch defaults Off",
+      "status": "DECIDED",
+      "authority": "Course Owner",
+      "questions": [
+        "Should the packaged encrypted local backup workflow be On by default or an optional Owner On/Off setting?"
+      ],
+      "owner_answers": [
+        "Add a Backup On/Off option in the Course Owner Configuration desk. Default and present requested state: Off. The Course Owner may turn it On later when needed."
+      ],
+      "exact_scope": "Independent audited fail-closed toggle for future TOEFL House product backup runs; on new and upgraded sites missing switch state reads Off. Existing backup files and receipts remain untouched when turned Off. Turning On still requires verified owner policy, local separate-drive encrypted backup and independent restore/launch evidence.",
+      "authorizes": [
+        "Implement a Course Owner-only On/Off control, default Off.",
+        "Refuse new TOEFL House product backup runs when the switch is Off without deleting any preexisting backup.",
+        "Invalidate prior backup receipt identity when the switch is turned On again."
+      ],
+      "does_not_authorize": [
+        "Deleting or invalidating previously created backup files or Owner computer data.",
+        "Declaring production GO or using real student/finance records while required recovery acceptance is missing.",
+        "Bypassing D17 retention decision, backup schedules, public recovery key, separate-drive proof, real restore tests, other release gates, or emergency backup preservation.",
+        "Disabling independent third-party backups or direct Frappe system maintenance beyond the TOEFL House packaged backup path."
+      ],
+      "supersedes": null,
+      "related": [
+        "D17",
+        "D8-BACKUP-RECOVERY"
+      ]
     }
   }
 }

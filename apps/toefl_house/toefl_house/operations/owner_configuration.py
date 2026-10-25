@@ -16,6 +16,7 @@ import hashlib
 import json
 import math
 import re
+import secrets
 from datetime import datetime, time as _clock_time, timedelta
 
 import frappe
@@ -53,6 +54,62 @@ def _bool(value, label):
     if isinstance(value, bool): return value
     if value in (0, 1): return bool(value)
     raise ValueError(f"{label} must be true or false")
+
+
+BACKUP_CONTROL = "TH Backup Control"
+
+
+def backup_switch_state():
+    """Read the independent Owner On/Off safety interlock; absent = Off.
+
+    A missing, malformed or unreadable setting never permits a backup. The
+    change identity makes Off -> On require a NEW verified recovery receipt;
+    an old receipt cannot be reused merely by toggling back to On.
+    """
+    try:
+        value = frappe.db.get_single_value(BACKUP_CONTROL, "enabled")
+        nonce = frappe.db.get_single_value(BACKUP_CONTROL, "switch_nonce")
+        if (value in (1, "1", True) and isinstance(nonce, str)
+                and re.fullmatch(r"[0-9a-f]{32}", nonce)):
+            return {"enabled": True, "status": "ON", "switch_nonce": nonce}
+    except Exception:
+        # Legacy sites have no saved switch. Never infer On from old policy.
+        pass
+    return {"enabled": False, "status": "OFF", "switch_nonce": ""}
+
+
+@frappe.whitelist(methods=["POST"])
+def set_backup_enabled(request_key, enabled):
+    """Owner-only, audit-receipted switch; never starts, deletes or restores."""
+    try:
+        flag = _bool(enabled, "Backup enabled")
+    except ValueError as exc:
+        raise frappe.ValidationError(str(exc)) from exc
+
+    def work(actor):
+        before = configuration_audit.latest_after_hash(BACKUP_CONTROL)
+        doc = frappe.get_single(BACKUP_CONTROL)
+        doc.enabled = int(flag)
+        # Change this on *every* accepted operation so prior backup receipts
+        # cannot qualify a later re-enablement without a fresh backup.
+        doc.switch_nonce = secrets.token_hex(16)
+        doc.changed_by = actor
+        doc.changed_at = frappe.utils.now_datetime()
+        doc.save(ignore_permissions=True)
+        return {
+            "enabled": flag, "status": "ON" if flag else "OFF",
+            "note": ("Backup is On, but it cannot run until the existing "
+                     "Owner schedule, encryption key, separate local disk and "
+                     "other verification requirements are satisfied.")
+                    if flag else
+                    "Backup is Off. Existing backup files are preserved.",
+        }, {
+            "target": BACKUP_CONTROL, "before_hash": before,
+            "after_hash": digest(["backup-switch", int(flag), doc.switch_nonce]),
+        }
+
+    return configuration_audit.execute(
+        "set_backup_enabled", request_key, {"enabled": flag}, work)
 
 
 def _int(value, label, minimum=0, maximum=3650):
@@ -416,7 +473,10 @@ def _validated_governing_owner_operations(on_date=None):
 
 
 def current_backup_policy(on_date=None):
-    """Expose only a currently validated, non-secret backup policy to tooling."""
+    """Expose only a currently validated, explicitly enabled backup policy."""
+    switch = backup_switch_state()
+    if switch["enabled"] is not True:
+        return {"configured": False, "status": "OFF"}
     try:
         terms = _validated_governing_owner_operations(on_date)
         if not terms:
@@ -444,6 +504,7 @@ def current_backup_policy(on_date=None):
             "retention_versions": retention,
             "retention_behavior": retention_behavior,
             "recovery_key_sha256": recovery_key_hash,
+            "switch_nonce": switch["switch_nonce"],
         }
         policy_hash = hashlib.sha256(json.dumps(
             identity, sort_keys=True, separators=(",", ":")

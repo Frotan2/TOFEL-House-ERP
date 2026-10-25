@@ -40,6 +40,7 @@ KIND_AUTHORITY = {
     "set_owner_operations_policy_version": "business_policy",
     "set_owner_operations_policy_status": "business_policy",
     "validate_owner_operations_policy": "business_policy",
+    "set_backup_enabled": "business_policy",
     "create_assessment_policy": "business_policy",
     "set_assessment_policy_version": "business_policy",
     "set_assessment_policy_status": "business_policy",

@@ -19,7 +19,7 @@ TEST_PUBLIC_KEY = (
 
 def load_policy_helpers():
     source = ast.parse(SOURCE.read_text(encoding="utf-8"))
-    names = {"_int", "_bool", "_backup_schedule_time", "_backup_public_key",
+    names = {"_int", "_bool", "backup_switch_state", "_backup_schedule_time", "_backup_public_key",
              "_backup_retention_behavior", "validate_terms", "_version_rows", "_governing_owner_terms",
              "_owner_policy_validation_is_current",
              "_validated_governing_owner_operations", "governing_owner_operations",
@@ -29,7 +29,7 @@ def load_policy_helpers():
     constants = [node for node in source.body
                  if isinstance(node, ast.Assign)
                  and any(isinstance(target, ast.Name) and target.id in {
-                     "MIN_BACKUP_VERSIONS", "MAX_BACKUP_VERSIONS",
+                     "BACKUP_CONTROL", "MIN_BACKUP_VERSIONS", "MAX_BACKUP_VERSIONS",
                      "MAX_BACKUP_PUBLIC_KEY", "MAX_CUSTODY",
                      "RETENTION_PRESERVE_ALL", "RETENTION_DELETE_BEYOND_KEEP",
                      "BACKUP_RETENTION_BEHAVIORS"
@@ -56,7 +56,13 @@ def load_policy_helpers():
         ),
         "configuration_audit": SimpleNamespace(AUDIT="TH Configuration Audit Event"),
         "frappe": SimpleNamespace(
-            db=SimpleNamespace(get_all=lambda *args, **kwargs: []),
+            db=SimpleNamespace(
+                get_all=lambda *args, **kwargs: [],
+                # Synthetic fixture explicitly switches backup On. Production
+                # without a saved switch must stay Off.
+                get_single_value=lambda _dt, field: "1" if field == "enabled"
+                else "f" * 32,
+            ),
             utils=SimpleNamespace(today=lambda: "2026-10-08"),
         ),
         "MIN_BACKUP_VERSIONS": 2,
@@ -131,6 +137,40 @@ class BackupPolicyValidationTests(unittest.TestCase):
         ):
             with self.subTest(update=update), self.assertRaises(ValueError):
                 self.policy["validate_terms"](valid_terms(**update))
+
+    def test_missing_switch_is_off_even_with_complete_owner_policy(self):
+        self.policy["frappe"].db.get_single_value = lambda *_: None
+        self.assertEqual(
+            self.policy["backup_switch_state"](),
+            {"enabled": False, "status": "OFF", "switch_nonce": ""},
+        )
+        terms = valid_terms()
+        terms["effective_from"] = "2026-10-07"
+        self.policy["_validated_governing_owner_operations"] = lambda _date=None: terms
+        self.assertEqual(
+            self.policy["current_backup_policy"](),
+            {"configured": False, "status": "OFF"},
+        )
+        self.assertEqual(self.policy["current_backup_public_key_b64"](), "")
+
+    def test_on_requires_valid_change_identity(self):
+        self.policy["frappe"].db.get_single_value = (
+            lambda _dt, field: "1" if field == "enabled" else "bad")
+        self.assertEqual(
+            self.policy["current_backup_policy"](),
+            {"configured": False, "status": "OFF"},
+        )
+
+    def test_re_enable_invalidates_previous_policy_hash(self):
+        terms = valid_terms()
+        terms["effective_from"] = "2026-10-07"
+        self.policy["_validated_governing_owner_operations"] = lambda _date=None: terms
+        first = self.policy["current_backup_policy"]()
+        self.policy["frappe"].db.get_single_value = (
+            lambda _dt, field: "1" if field == "enabled" else "e" * 32)
+        second = self.policy["current_backup_policy"]()
+        self.assertTrue(first["configured"] and second["configured"])
+        self.assertNotEqual(first["policy_hash"], second["policy_hash"])
 
     def test_preexisting_legacy_version_remains_saveable_but_unconfigured(self):
         legacy = valid_terms()
@@ -275,6 +315,7 @@ class BackupPolicyValidationTests(unittest.TestCase):
             "retention_behavior": "Preserve all valid backup sets",
             "recovery_key_sha256": hashlib.sha256(
                 TEST_PUBLIC_KEY.strip().encode("utf-8")).hexdigest(),
+            "switch_nonce": "f" * 32,
         }
         expected = hashlib.sha256(json.dumps(
             identity, sort_keys=True, separators=(",", ":")

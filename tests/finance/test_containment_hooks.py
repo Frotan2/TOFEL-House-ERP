@@ -86,6 +86,7 @@ class ContainmentHookWiringTests(unittest.TestCase):
                             "TH Adjustment Posting Policy",
                             "TH Alerting Policy",
                             "TH Guardian Lifecycle Policy",
+                            "TH Backup Control",
                             # Exact audited and validation-only notification
                             # and portal model hooks; finance guards unchanged.
                             "TH Guardian Consent", "TH Notification Dispatch Rule",

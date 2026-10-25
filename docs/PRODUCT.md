@@ -194,6 +194,7 @@ recovery or Owner Windows; issue #35 stays open until those gates pass.
   production is ready. SEC-DEPS-01 remains the gate before any public-internet
   exposure. The selected desktop deployment is loopback-only with private
   Tailscale access, so public-edge exposure is not a current launch gate.
+- **Backup On/Off (Owner decision D18, 2026-10-25):** The Configuration desk provides an independent, audited Course Owner switch, **Off by default** on new and existing installations. Off blocks new TOEFL House packaged backup runs without deleting existing files. On is only permission to attempt the previously designed workflow once the full policy, separate fixed local disk, recovery key, encrypted backup verification and Owner acceptance are satisfied. A later Off/On cycle changes the switch identity and requires a new verified receipt before activation. This change does **not** remove the active preservation/recovery hold, turn on native unrelated backup products, or authorize real student/payment data.
 - **Backup** is a current local requirement, but the Windows helper is on a
   **preservation hold**: The Owner decided the retention behavior on 2026-10-14 (decision D17): delete valid older sets beyond the keep count.
   There is no default in the ERP; backup/activation remain fail-closed while

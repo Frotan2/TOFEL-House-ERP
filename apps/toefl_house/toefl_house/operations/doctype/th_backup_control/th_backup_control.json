@@ -1,0 +1,63 @@
+{
+ "actions": [],
+ "creation": "2026-10-25 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "changed_by",
+  "changed_at",
+  "switch_nonce"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "description": "Course Owner's explicit On/Off switch for the TOEFL House encrypted local backup workflow. Default Off on new and upgraded sites. Switching On does not bypass recovery-key, retention, schedule, separate-disk or production-approval checks.",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Backup On / Off"
+  },
+  {
+   "fieldname": "changed_by",
+   "fieldtype": "Link",
+   "label": "Last changed by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "changed_at",
+   "fieldtype": "Datetime",
+   "label": "Last changed at",
+   "read_only": 1
+  },
+  {
+   "description": "Internal non-secret change identifier. Any re-enablement requires a new verified backup before activation.",
+   "fieldname": "switch_nonce",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Switch change identity",
+   "read_only": 1
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Operations",
+ "name": "TH Backup Control",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "Course Owner",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "print": 0
+  }
+ ],
+ "states": [],
+ "track_changes": 1
+}
