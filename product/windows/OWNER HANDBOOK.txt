@@ -223,6 +223,13 @@ procedure.
 
 11. BACKUP AND RECOVERY HOLD
 ----------------------------
+The Configuration desk has a Course Owner-only Backup On / Off switch.
+Its default is Off, including on upgraded sites. Off prevents new TOEFL
+House packaged backup runs without removing old backup files; selecting
+On later still requires full policy, encryption, separate disk and a new
+verified backup. The switch is not production authorization. During the
+current preservation/restore HOLD do not change it on the Owner machine.
+
 The Owner backup-drive, key-custody and authorized isolated-restore gates are
 still HOLD. Do not create/delete Owner keys, change backup policy, run retention
 or cleanup, or rehearse restore on the Owner machine under this handbook.
