@@ -71,10 +71,16 @@ def _summarize_by(rows, key):
     return counts
 
 
-def _money_sum(rows, field="grand_total"):
+def _money_sum(rows, field="grand_total", *, currency_field=None):
     totals = {}
     for row in rows:
-        currency = row.get("currency") or row.get("paid_from_account_currency") or ""
+        # In ERPNext a Receive Payment Entry has two possible currencies.
+        # Explicitly choose the money received by the course's destination
+        # account rather than the amount withdrawn from the payer's account.
+        currency = (row.get(currency_field) if currency_field else
+                    (row.get("currency") or row.get("paid_from_account_currency") or ""))
+        if currency_field and (not isinstance(currency, str) or not currency.strip()):
+            raise RuntimeError("Payment receiving-account currency unavailable")
         totals[currency] = totals.get(currency, 0) + float(row.get(field) or 0)
     if not totals:
         return "0"
@@ -315,13 +321,15 @@ def tuition_metrics():
 
     payments = _complete_project_rows("management", "Payment Entry",
                             ["name", "payment_type", "party_type", "party", "paid_amount",
-                             "received_amount", "paid_from_account_currency", "company",
+                             "received_amount", "paid_from_account_currency",
+                             "paid_to_account_currency", "company",
                              "posting_date", "docstatus"],
                             filters={"docstatus": 1, "payment_type": "Receive",
                                      "posting_date": day},
                             order_by="posting_date desc", limit=BOUNCE_WINDOW)
     collected_today = [r for r in payments if str(r.get("posting_date") or "") == day]
-    collected_today_sum = _money_sum(collected_today, "paid_amount")
+    collected_today_sum = _money_sum(
+        collected_today, "received_amount", currency_field="paid_to_account_currency")
 
     return {
         "fees_total": len(all_fees),
@@ -334,7 +342,7 @@ def tuition_metrics():
         "by_program": by_program,
         "by_currency_charged": by_currency_charged,
         "by_currency_outstanding": by_currency_outstanding,
-        "definition": "Fees: charged = submitted grand_total; outstanding = outstanding_amount>0; overdue = outstanding with due_date before today; settled = outstanding_amount<=0. Invoices use native outstanding_amount and status. Collected today = submitted payments (Receive) posted today.",
+        "definition": "Fees: charged = submitted grand_total; outstanding = outstanding_amount>0; overdue = outstanding with due_date before today; settled = outstanding_amount<=0. Invoices use native outstanding_amount and status. Collected today = submitted Payment Entry Receive transactions posted today, summed using received_amount in paid_to_account_currency (destination account). Different currencies are never combined.",
         "source": "tuition fees, placement invoices, payments (native ERPNext/Education)",
         "scope": "Fees branch-scoped via roster; invoices company-scoped; payments company-scoped.",
         "drill": "tuition fees list",
