@@ -13,7 +13,7 @@ import urllib.parse
 from retire_merged_branches import api, delete_ref_path, eligible, open_pulls
 
 REPOSITORY = "Frotan2/TOFEL-House-ERP"
-SELF_BRANCH = "maintenance/retire-owner-native-fix-20261025"
+SELF_BRANCH = "maintenance/retire-owner-coverage-fix-20261025"
 # (original PR number or None, exact branch, audited head SHA, replacement PR or None)
 # The replacement mapping is for intentionally closed, unmerged/obsolete
 # implementations; it is never permission to retire an open PR or a moved head.
@@ -39,6 +39,7 @@ CANDIDATES = (
     (69, "integration/final-operations-20261025", "6c6eaa59ab43d90832de3da39cf279325425168c", None),
     (72, "fix/deferred-policy-and-owner-metrics-20261025", "1ddd436a75d30b8ed96b044b73069300e123c0f2", None),
     (74, "fix/owner-desk-plain-language-native-20261025", "2bfbca38e573bfb8d0fdfb2820fe14c7e9555231", None),
+    (77, "fix/owner-analytics-complete-coverage-20261025", "fc2437f18979e2b282aa130e95fe9436fefe22e7", None),
 )
 
 
@@ -138,7 +139,7 @@ def main():
         return 2
     if args.apply and (
         os.environ.get("GITHUB_REF") != "refs/heads/main"
-        or os.environ.get("CONFIRM_FINAL_BRANCH_RETIREMENT") != "exact-21-heads-after-pr74"
+        or os.environ.get("CONFIRM_FINAL_BRANCH_RETIREMENT") != "exact-22-heads-after-pr77"
     ):
         print("FAIL CLOSED: main workflow authorization required", file=sys.stderr)
         return 2
