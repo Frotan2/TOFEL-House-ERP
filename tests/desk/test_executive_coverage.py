@@ -165,6 +165,56 @@ class VerifiedCoverageTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             ns["exception_metrics"]()
 
+    def test_d7_attendance_uses_verified_raw_counts_without_derived_rate(self):
+        ns, _ = load_analytics(rows={
+            "Student Attendance": [
+                {"name": "A1", "status": "Present", "student_group": "Class 1"},
+                {"name": "A2", "status": "Absent", "student_group": "Class 1"},
+            ],
+        })
+        result = ns["attendance_metrics"]()
+        self.assertEqual(result["total"], 2)
+        self.assertEqual(result["present"], 1)
+        self.assertEqual(result["absent"], 1)
+        self.assertEqual(result["rate"], "—")
+        self.assertEqual(result["rate_status"], "DEFERRED")
+        # Both hero and attendance facts must label withheld data explicitly.
+        self.assertEqual(OWNER.read_text(encoding="utf-8").count(
+            '"label": "Attendance rate (D7 deferred)"'), 2)
+
+    def test_malformed_placement_deadline_fails_closed_not_zero(self):
+        from datetime import datetime
+        from types import ModuleType
+        from unittest.mock import patch
+        import sys
+
+        ns, _ = load_analytics(rows={
+            "TH Placement Attempt": [
+                {"name": "T1", "deadline_at": "not-a-date", "status": "Allocated"}
+            ],
+        })
+        module = ModuleType("frappe.utils")
+        module.now_datetime = lambda: datetime(2026, 10, 25, 12, 0)
+        def invalid_datetime(_):
+            raise ValueError("invalid date")
+        module.get_datetime = invalid_datetime
+        with patch.dict(sys.modules, {"frappe.utils": module}):
+            with self.assertRaisesRegex(RuntimeError, "deadline source incomplete"):
+                ns["exception_metrics"]()
+
+    def test_missing_placement_clock_fails_closed_not_zero(self):
+        from unittest.mock import patch
+        import sys
+
+        ns, _ = load_analytics(rows={
+            "TH Placement Attempt": [
+                {"name": "T1", "deadline_at": "2026-10-25", "status": "Allocated"}
+            ],
+        })
+        with patch.dict(sys.modules, {"frappe.utils": None}):
+            with self.assertRaisesRegex(RuntimeError, "deadline source incomplete"):
+                ns["exception_metrics"]()
+
     def test_valid_finance_totals_remain_real_numbers(self):
         ns, _ = load_analytics(rows={
             "Fees": [
