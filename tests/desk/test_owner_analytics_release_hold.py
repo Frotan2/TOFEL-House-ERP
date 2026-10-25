@@ -2,7 +2,6 @@
 import ast
 from pathlib import Path
 import unittest
-from unittest.mock import Mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
