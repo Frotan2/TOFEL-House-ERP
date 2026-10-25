@@ -140,8 +140,13 @@ class S2CompensationTests(unittest.TestCase):
         stub.get_roles = lambda user: {"Finance Officer"}
         stub.whitelist = lambda **kwargs: (lambda func: func)
         stub.flags = SimpleNamespace()
+        def get_value(doctype, name, field=None, **kwargs):
+            if doctype == "Salary Component" and field == "type":
+                return "Deduction" if name == "SYN Contract Deduction" else "Earning"
+            return fake.currency
+
         stub.db = SimpleNamespace(
-            get_value=lambda doctype, name, field=None, **k: fake.currency,
+            get_value=get_value,
             exists=lambda doctype, name: True,
             get_all=get_all, sql=sql)
         stub.get_doc = get_doc
@@ -271,6 +276,17 @@ class S2CompensationTests(unittest.TestCase):
         self.assertEqual(result["skipped_existing"], 2)
         self.assertEqual(result["posted"], {})
         self.assertEqual(result["adjustments_posted"], 0)
+        self.assertEqual(self.posted, [])
+
+    def test_component_types_fail_closed_before_creating_payroll_inputs(self):
+        with self.assertRaisesRegex(_ValidationError, "requires an Earning"):
+            self.comp.calculate_teaching_compensation(
+                "invalid-earning", "2026-09-01", "2026-09-30",
+                "SYN Teaching House", "SYN Contract Deduction", "")
+        with self.assertRaisesRegex(_ValidationError, "requires a Deduction"):
+            self.comp.calculate_teaching_compensation(
+                "invalid-deduction", "2026-09-01", "2026-09-30",
+                "SYN Teaching House", "SYN Teaching Pay", "SYN Teaching Pay")
         self.assertEqual(self.posted, [])
 
     def test_teaching_and_adjustment_inputs_never_overwrite_salary_structure(self):
