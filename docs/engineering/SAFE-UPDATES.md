@@ -47,7 +47,7 @@ Install Update (confirmed)
      receipt, recovery authorization, installed image identity and labels,
      journal and host state, then records the census, `bench migrate` x2, the
      census again, apps, orphan rows and role desks
-  -> docker compose up -d --no-build, HTTP health, journal completed
+  -> guarded docker compose up -d --no-build --no-deps (application services only), HTTP health, journal completed
 ```
 
 `apply` accepts nothing but an `authorized` transaction, and a transaction can
@@ -62,7 +62,15 @@ replay from a later run folder is refused (`transaction.replayed`).
 
 The installed engine can use the earlier transaction protocol. Its signed
 archive authorization is only permission to import candidate image bytes; it
-does not authorize a migration. The candidate must issue a fresh transaction
+does not authorize a migration. For every Check, the Windows launcher pins the
+installed image by immutable ID and executes a restricted, offline, read-only
+file-presence probe to distinguish legacy engines from broker-capable engines.
+Only a broker-capable image receives the Docker socket mount; this distinction
+is preserved for its second archive authorization at Install. Unexpected
+probe failures refuse the operation, never silently downgrade to legacy mode.
+The update engine entrypoint may repair its private request/transaction
+directories, but must not chown mounted customer sites or logs before the
+independent preflight. The candidate must issue a fresh transaction
 after independently observing the running Docker containers, database volume,
 image, journal and site files. It then rechecks immediately before service
 stop. The previous image ID is retained for a held recovery path. Any import,
