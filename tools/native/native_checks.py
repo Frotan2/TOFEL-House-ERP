@@ -7235,7 +7235,13 @@ def main():
                 if reference not in references:
                     continue
                 assert reference not in selected,('duplicate teaching input',reference)
-                assert row.type=='Earning' and row.salary_component==cfx['earning'],row
+                # HRMS determines earning/deduction classification from
+                # Salary Component.type; the optional Additional Salary.type
+                # field is blank on normal teaching-assignment drafts.
+                assert row.salary_component==cfx['earning'],row
+                assert frappe.db.get_value('Salary Component',
+                    row.salary_component,'type')=='Earning',row
+                assert row.type in (None,'','Earning'),row
                 assert row.docstatus in (0,1),('invalid teaching input state',row)
                 selected[reference]=row
             assert set(selected)==references,(
