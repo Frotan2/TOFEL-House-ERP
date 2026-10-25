@@ -113,6 +113,29 @@ class OwnerNoFalseZeroContracts(unittest.TestCase):
         self.assertIn("Waiting metric deferred", source)
         self.assertIn('"exited": "—"', source)
 
+    def test_owner_visible_provenance_uses_staff_language(self):
+        source = OWNER.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        fn = next(node for node in tree.body
+                  if isinstance(node, ast.FunctionDef)
+                  and node.name == "_executive_analytics_sections")
+        public_fields = {"label", "definition", "source", "scope",
+                         "empty_title", "empty_body"}
+        native_names = ("Student Group", "Program Enrollment",
+                        "Sales Invoice", "Payment Entry", "docstatus")
+        for item in ast.walk(fn):
+            if not isinstance(item, ast.Dict):
+                continue
+            for key, value in zip(item.keys, item.values):
+                if (isinstance(key, ast.Constant)
+                        and key.value in public_fields
+                        and isinstance(value, ast.Constant)
+                        and isinstance(value.value, str)):
+                    for term in native_names:
+                        self.assertNotIn(term, value.value,
+                                         (key.value, term, value.value))
+        self.assertIn('"source": "class records (bounded, counted)"', source)
+
     def test_transfer_release_gate_is_separate_from_business_toggle(self):
         source = TRANSFERS.read_text(encoding="utf-8")
         tree = ast.parse(source)
