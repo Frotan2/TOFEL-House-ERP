@@ -1,4 +1,6 @@
 name: One-time verified final branch retirement
+# Re-run after PR #72 D5/D7 fix: retire its verified exact head and this
+# cleanup PR itself, preserving main and all immutable Git history.
 # Runs only after this workflow is changed on main. Deletion is guarded
 # by exact branch SHAs, replacement PRs and merged PR #69.
 
