@@ -238,12 +238,14 @@ class ClassOperationsJourneyTests(unittest.TestCase):
         self.assertIn("Academic Manager", str(ctx.exception))
         self.site.set_roles(APPROVER, ["Academic Manager"])
         self.ops.login(ACTOR)
-        pending = self.ops.transfers.request_class_transfer(
-            "journey-transfer-0003", "STU-3", "GRP-A", "GRP-B",
-            "second transfer request", "2026-09-26")
-        with self.assertRaises(PermissionError_) as ctx:
-            self.ops.transfers.approve_class_transfer(
-                "journey-transfer-0004", pending["name"])
+        with patch.object(self.ops.transfers, "_transfer_scope_authorized",
+                          return_value=True):
+            pending = self.ops.transfers.request_class_transfer(
+                "journey-transfer-0003", "STU-3", "GRP-A", "GRP-B",
+                "second transfer request", "2026-09-26")
+            with self.assertRaises(PermissionError_) as ctx:
+                self.ops.transfers.approve_class_transfer(
+                    "journey-transfer-0004", pending["name"])
         self.assertIn("Academic Manager", str(ctx.exception))
         self.ops.login("finance.officer@example.test")
         self.site.set_roles("finance.officer@example.test", ["Finance Officer"])
