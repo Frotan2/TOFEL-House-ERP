@@ -205,8 +205,10 @@ def admission_metrics():
     for row in all_open:
         s = row.get("status") or "Unknown"
         by_status[s] = by_status.get(s, 0) + 1
-    total_closed = _project_count("management", "TH Admission Decision",
-                                  {"status": ("in", ["Deferred", "Rejected", "Withdrawn", "Revoked", "Expired"])})
+    total_closed = _checked_project_count(
+        "management", "TH Admission Decision",
+        filters={"status": ("in", ["Deferred", "Rejected", "Withdrawn",
+                                  "Revoked", "Expired"])})
     return {
         "open": len(all_open),
         "by_status": by_status,
