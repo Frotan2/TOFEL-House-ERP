@@ -1,6 +1,6 @@
 name: One-time verified final branch retirement
-# Re-run after PR #72 D5/D7 fix: retire its verified exact head and this
-# cleanup PR itself, preserving main and all immutable Git history.
+# After independently qualified PR #74 merges, retire its exact verified
+# fix head and this cleanup PR head; preserve main and Git history.
 # Runs only after this workflow is changed on main. Deletion is guarded
 # by exact branch SHAs, replacement PRs and merged PR #69.
 
@@ -31,5 +31,5 @@ jobs:
       - name: Retire only exact reviewed, already integrated agent heads
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          CONFIRM_FINAL_BRANCH_RETIREMENT: exact-20-heads-after-pr69
+          CONFIRM_FINAL_BRANCH_RETIREMENT: exact-21-heads-after-pr74
         run: python3 tools/foundation/annotated_step.py "Retire final verified branches" -- python3 tools/maintenance/retire_final_branches.py --apply
