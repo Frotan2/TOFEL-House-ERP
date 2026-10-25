@@ -53,7 +53,10 @@ def _isolated_test():
 def _get_doc():
     """Read the single authorized persistent configuration document."""
     try:
-        rows = frappe.get_list(POLICY, fields=["name"], limit_page_length=2)
+        # This internal server-side flag resolution is not an API read.
+        # Students and guardians must be able to obtain the current flag
+        # without receiving native read permission on the Owner-only DocType.
+        rows = frappe.db.get_all(POLICY, fields=["name"], limit_page_length=2)
         if len(rows) != 1:
             return None
         return frappe.get_doc(POLICY, rows[0]["name"])
