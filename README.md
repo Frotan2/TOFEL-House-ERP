@@ -55,9 +55,14 @@ This README distinguishes today's source integration from the historical
 `v1.0.0-rc.1` candidate evidence. No actual customer release/package has
 been published merely by merging source.
 
-Baseline revision `c22b9979542c88a2cd179e179a91829d07a79a3a` has exact-SHA
-hosted successes for Owned, Native, Foundation, Product-image and Windows
-customer-package workflows. Those are engineering results only. The candidate
+Verified snapshot revision `9c9ec48a6ead45dc802117eecb4f423e9b64f99d` has
+exact-SHA hosted successes for Owned, Native, Foundation, Product-image and
+Windows customer-package workflows. Its image-inclusive test package is
+available from the [Product-image run](https://github.com/Frotan2/TOFEL-House-ERP/actions/runs/40173457925/artifacts/12593015016).
+See the [current delivery checkpoint](docs/engineering/DELIVERY-READINESS-2026-10-25.md)
+for the full source identity, artifact digest, evidence boundaries and remaining
+acceptance gates. This is **TEST PACKAGE - NO REAL DATA**; no GitHub Release
+was published at that checkpoint. Those are engineering results only. The candidate
 package pipeline requires all four canonical gate receipts on its exact full
 SHA, embeds them with checksums in the customer ZIP, attests the prebuilt
 Linux/amd64 image package, and publishes only an existing reviewed `v*` tag.
@@ -87,8 +92,8 @@ Full preparation, acceptance criteria and limitations:
 [Customer delivery](docs/CUSTOMER-DELIVERY.md). No-code operating and safety
 instructions are in the packaged
 [Owner Handbook](product/windows/OWNER%20HANDBOOK.txt), also available from the
-GUI. The source-checkout commands
-below are maintained for developers and diagnosis, not commercial onboarding.
+GUI. The disposable acceptance steps below use the prebuilt package;
+a source checkout is maintained for development and diagnosis.
 
 **For the existing Owner computer:** do not reinstall or test Repair during
 the release/preservation HOLD. In the graphical launcher, **Check This PC**
@@ -99,27 +104,32 @@ Install also refuses a completed existing site. These fail-closed protections
 do not restore missing records, approve live operation or replace actual
 backup/recovery acceptance.
 
-### Developer-only source checkout smoke instructions (NOT customer onboarding)
+### Disposable Windows acceptance (provider supervised)
 
 You need a 64-bit Windows 10/11 PC with internet and
 [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed
 once. Its installer is click-through.
 
-1. Download this repository (GitHub **Code → Download ZIP**) and unzip it.
-2. Open `product\windows` and double-click **Install TOEFL House ERP.cmd**.
-   The first build takes 20–60 minutes. When it finishes, it shows the initial
-   Administrator password and opens `http://127.0.0.1:8000` in your browser.
-   Administrator is for first-run setup/recovery, not the daily Course Owner
-   login; follow the validation checklist to create a separate native User
-   with the Course Owner role before configuring policy.
-3. Every day after that: **Start TOEFL House ERP.cmd** opens the system and
-   **Stop TOEFL House ERP.cmd** closes it.
-   **Backup TOEFL House ERP.cmd** is intended to create and verify an encrypted
-   backup on a separate fixed local drive on this PC; do not run it until the
-   Owner backup policy described below is complete. The Owner decided the retention behavior on 2026-10-14 (owner decision D17): delete valid older sets beyond the keep count.
-   No behavior is defaulted in the ERP, so
-   backup/activation fails closed while the policy is incomplete. **Repair TOEFL House ERP.cmd**
-   does a safe restart and never deletes data.
+1. Use a **separate, clean, disposable test PC** and invented records only.
+   Obtain the complete prebuilt test package through the trusted provider,
+   who independently verifies its provenance. A repository ZIP is not that
+   package; the installer refuses a missing image archive and never builds it.
+2. Extract the complete package, open **TOEFL House ERP.vbs**, choose
+   **Check This PC**, then follow **Owner Readiness Guide** for Install and
+   first login. Initialization time must be measured on that PC.
+   Use **View Administrator Login** privately; create a separate native
+   **Course Owner** account for routine administration.
+3. Follow the guide's Stop/Start, Windows reboot, synthetic record persistence,
+   role and book-sale checks. Repair is allowed only in that disposable test
+   exercise. On an existing Owner installation the preservation HOLD above
+   still permits only the read-only checks.
+
+**Backup defaults Off (Owner decision D18).** Only the Course Owner can change
+the audited switch. Off preserves existing backup files; On still requires the
+complete approved policy, separate local drive, key custody and authorized
+recovery evidence. D17 allows deletion only of verified older backup sets
+beyond the Owner-entered keep count, once all applicable gates permit it.
+Neither switch position lifts the current hold or authorizes production.
 
 **Other authorized computers:** the ERP always listens only on the central
 PC (nothing is opened on the public internet). Staff PCs in your Tailscale
