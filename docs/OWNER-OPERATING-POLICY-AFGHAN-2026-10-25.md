@@ -91,7 +91,7 @@ supported contractual payroll and financial recognition method.
 | Capability | New source / existing authority | Current level |
 |---|---|---|
 | ISO ↔ Afghan Solar Hijri / fiscal / Friday | `finance/shamsi.py` | Pure source + unit tests; hosted CI and physical acceptance pending |
-| Two-month Shamsi windows | `finance/shamsi.semester_bounds` | Date helper; **NOT yet wired** to native student-group semester validation |
+| Two-month Shamsi windows | `finance/shamsi.semester_bounds`, TH Level Duration `Solar Hijri Month`, `teaching.create_student_group` | Wires Owner-selected whole Shamsi months into fixed class dates, refusing mismatched explicit ends. Configure **2** months on each GE/EAP level in Owner Settings; end-to-end hosted/browser acceptance still pending |
 | Friday scheduling closure | `teaching/calendars.py` | Scheduler refusal except audited explicit Working Day; live rollout pending |
 | Versioned first-of-Shamsi-month tuition due/grace | `finance/policies.py`, `finance/installments.py`, TH Billing Policy Version | Policy field + generation; Frappe native posting/revenue deferrals and browser GUI acceptance not yet proved |
 | Student arrears and oldest-first payment suggestion | `finance/period_reporting.py` | Read-only reconciliation/proposal, **not integrated** with secure finance desk or automatic native Payment Entry |
