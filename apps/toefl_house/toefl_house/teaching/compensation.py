@@ -565,6 +565,10 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 doctype=ADDITIONAL_SALARY, employee=contract.employee,
                 salary_component=component, amount=amount, payroll_date=end,
                 company=company_name, currency=currency,
+                # HRMS get_additional_salaries filters directly on type, not
+                # Salary Component.type. Omitting Earning can silently exclude
+                # an assignment's one-off input from the native Salary Slip.
+                type="Earning",
                 # Each teaching fact is an ADDITIVE earning, never a replacement
                 # for the entire salary structure component. Native HRMS
                 # rejects two same-date overwrite records for one employee.
