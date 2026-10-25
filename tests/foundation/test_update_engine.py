@@ -32,7 +32,10 @@ sys.path.insert(0, str(PRODUCT))
 
 import update_engine as engine  # noqa: E402
 
-NOW = datetime(2026, 10, 24, 9, 30, tzinfo=timezone.utc)
+# Build fresh disposable, signed fixtures against the runner clock. A frozen
+# October 24 timestamp made CLI subprocesses correctly reject expired backups
+# on October 25, even though in-process tests injected the frozen clock.
+NOW = datetime.now(timezone.utc).replace(microsecond=0)
 OPENSSL = shutil.which("openssl")
 KDF = "org.toefl-house.source-revision"
 VERSION_LABEL = "org.toefl-house.release-version"
