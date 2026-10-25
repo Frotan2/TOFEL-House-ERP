@@ -288,7 +288,11 @@ def attendance_by_instructor():
 # ------------------------------------------------------------------ tuition
 
 def tuition_metrics():
-    """Tuition collection & overdue: native fee records.
+    """Native tuition obligations and all company-scoped incoming receipts.
+
+    Received Payment Entries may include non-tuition money. Never label
+    every incoming bank/cash receipt as tuition revenue or convert currencies
+    without an authoritative exchange-rate policy.
 
     Definitions use native fee vocabulary only:
     - Charged = submitted grand_total
@@ -342,7 +346,7 @@ def tuition_metrics():
         "by_program": by_program,
         "by_currency_charged": by_currency_charged,
         "by_currency_outstanding": by_currency_outstanding,
-        "definition": "Fees: charged = submitted grand_total; outstanding = outstanding_amount>0; overdue = outstanding with due_date before today; settled = outstanding_amount<=0. Invoices use native outstanding_amount and status. Collected today = submitted Payment Entry Receive transactions posted today, summed using received_amount in paid_to_account_currency (destination account). Different currencies are never combined.",
+        "definition": "Fees: charged = submitted grand_total; outstanding = outstanding_amount>0; overdue = outstanding with due_date before today; settled = outstanding_amount<=0. Invoices use native outstanding_amount and status. Collected today = all company-scoped submitted Payment Entry Receive transactions posted today (not tuition-only), summed using received_amount in paid_to_account_currency (destination account). Different currencies are never combined.",
         "source": "tuition fees, placement invoices, payments (native ERPNext/Education)",
         "scope": "Fees branch-scoped via roster; invoices company-scoped; payments company-scoped.",
         "drill": "tuition fees list",
