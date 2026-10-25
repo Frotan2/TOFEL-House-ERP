@@ -19,7 +19,8 @@ import frappe
 
 from toefl_house.configuration import rules as foundation
 from toefl_house.enrollment.exits import governing_exit_terms
-from toefl_house.operations.owner_configuration import current_backup_policy
+from toefl_house.operations.owner_configuration import (backup_switch_state,
+                                                     current_backup_policy)
 from toefl_house.desk import (
     LIMIT_QUEUES,
     project_count,
@@ -116,7 +117,7 @@ FUTURE_DOMAINS = (
 
 CURRENT_BACKUP_DOMAIN = (
     "Backup & Recovery",
-    "Intended local scope is a verified encrypted backup on a separate local drive. The Owner decided the retention behavior on 2026-10-14 (owner decision D17): delete valid older sets beyond the keep count. There is no default; an unset or incomplete policy still blocks backup and activation. Do not run the helper or proceed through activation until the Owner has entered the keep count, nightly schedule, public recovery key and custody terms in Owner Configuration and a verified backup exists. Off-site, NAS, second-device and cloud copies remain deferred. Restore and release authorization require separate evidence.",
+    "Backup On / Off is an independent Course Owner control, initially Off. When Off, no new TOEFL House backup may run, and existing sets are preserved. On alone does not start backup: the Owner must still configure the existing encrypted local backup schedule, retention behavior, public recovery key and separate local disk. Backup and activation fail closed until the policy and real recovery evidence verify. Off-site, NAS, second-device and cloud copies remain deferred.",
 )
 
 
@@ -185,7 +186,7 @@ def work():
     backup_title, backup_body = CURRENT_BACKUP_DOMAIN
     sections.append(section(
         "backup-recovery", backup_title, "queue",
-        items=[_owner_policy_item(today, backup_title, backup_body)],
+        items=[_backup_switch_item(), _owner_policy_item(today, backup_title, backup_body)],
         empty_title=backup_title, empty_body=backup_body))
     sections.append(
         section("owner-policies", "Course Owner Policy Controls", "queue",
@@ -284,6 +285,43 @@ def _native_owner_policy_item(sid, title, doctype, create_endpoint,
     }
 
 
+def _backup_switch_item():
+    """One simple, owner-only On/Off action, separate from advanced backup terms."""
+    state = backup_switch_state()
+    enabled = state["enabled"] is True
+    return {
+        "id": "owner-backup-switch",
+        "person": "Backup On / Off",
+        "status": "On" if enabled else "Off (default)",
+        "stage": "Course Owner setting",
+        "stage_definition": (
+            "A simple audited switch. Off refuses new product backup runs "
+            "and preserves prior backup files. On does not bypass existing "
+            "schedule, encryption, separate-drive, recovery and release gates."
+        ),
+        "detail": (
+            "Backup is On. Setup and verified recovery are still required "
+            "before any backup task or production activation can succeed."
+            if enabled else
+            "Backup is Off. No new TOEFL House product backup is authorized. "
+            "Previously saved backups are not deleted."
+        ),
+        "next": (
+            "Turn Off to stop future TOEFL House backup runs; any already "
+            "running job is not interrupted." if enabled else
+            "The Course Owner can turn backup On whenever needed. "
+            "Then complete the existing backup policy before running it."
+        ),
+        "next_role": "Course Owner",
+        "waiting_since": None,
+        "action": {
+            "endpoint": "toefl_house.operations.owner_configuration.set_backup_enabled",
+            "label": "Turn backup Off" if enabled else "Turn backup On",
+            "args": {"enabled": 0 if enabled else 1},
+        },
+    }
+
+
 def _owner_policy_item(today, title, body):
     """Project the canonical Course Owner carrier and its guarded commands."""
     is_backup = title == "Backup & Recovery"
@@ -320,7 +358,11 @@ def _owner_policy_item(today, title, body):
         next_text = "Reactivate the owner policy, then add and validate current effective-dated terms."
     elif is_backup:
         backup = current_backup_policy(today)
-        if backup.get("configured") is True:
+        if backup.get("status") == "OFF":
+            status_label = "Backup Off"
+            detail = "Backup is switched Off; no backup or activation is authorized. Existing backup files are preserved."
+            next_text = "The Course Owner can turn backup On using the switch above. The full existing local backup policy and independent recovery approval will still be required."
+        elif backup.get("configured") is True:
             status_label = "Backup policy configured"
             detail = (f"Nightly at {backup['schedule_time']} local time; "
                       f"configured keep count {backup['retention_versions']} "
