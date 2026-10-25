@@ -372,6 +372,7 @@ class BaseHarness(unittest.TestCase):
         stub.has_permission = has_permission
         stub.get_roles = lambda user: fake.users.get(user, {}).get("roles", [])
         stub.session = SimpleNamespace(user="Guest", data=SimpleNamespace(csrf_token="tok"), sid="test")
+        stub.flags = SimpleNamespace(in_test=True)
         stub.conf = {}
         stub.request = SimpleNamespace(path="/", method="GET")
         stub.form_dict = {}
