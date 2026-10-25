@@ -46,8 +46,16 @@ def _ensure_owner_operations_policy(frappe, owner_configuration):
         "Synthetic CI custody probe", 2)
     result = owner_configuration.validate_owner_operations_policy(
         "ops_restart_validate_0001", code)
-    if result.get("status") != "Active" or not owner_configuration.current_backup_policy().get("configured"):
+    if result.get("status") != "Active" or not owner_configuration.governing_owner_operations():
         raise AssertionError("Synthetic Owner Operations policy did not become effective")
+    # D18: policy validation alone cannot enable backup on a new site.
+    off = owner_configuration.current_backup_policy()
+    if off != {"configured": False, "status": "OFF"}:
+        raise AssertionError("Synthetic backup did not default to Off")
+    enabled = owner_configuration.set_backup_enabled("ops_restart_backup_on_0001", 1)
+    if (enabled.get("status") != "ON"
+            or owner_configuration.current_backup_policy().get("configured") is not True):
+        raise AssertionError("Audited Owner On command did not enable validated backup")
     frappe.db.commit()
     frappe.set_user("Administrator")
 
@@ -97,8 +105,9 @@ def _snapshot(frappe):
             "effective_terms": _normalize(resolver()),
         }
     backup = owner_configuration.current_backup_policy()
-    if backup.get("configured") is not True:
-        raise AssertionError("Owner Operations backup policy is not effective")
+    switch = owner_configuration.backup_switch_state()
+    if switch.get("enabled") is not True or backup.get("configured") is not True:
+        raise AssertionError("Owner-chosen On state or backup policy did not persist")
     result["owner_operations"]["backup_consumer"] = _normalize({
         key: backup.get(key) for key in
         ("configured", "status", "schedule_time", "retention_versions", "retention_behavior")
