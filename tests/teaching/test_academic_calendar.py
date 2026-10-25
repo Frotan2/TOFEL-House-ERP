@@ -55,8 +55,15 @@ class CalendarRuleTests(unittest.TestCase):
                                                   {})
         self.assertIn("is a Fri", refusal)
         self.assertIn("does not teach", refusal)
+        self.assertIn("Friday", self.calendars.teaching_refusal(
+            "2026-09-25", None, {}))
+        self.assertIn("Friday", self.calendars.teaching_refusal(
+            "2026-09-25", ("Fri",), {}))
+        # Exceptional Friday opening must be an explicit Course Owner
+        # calendar day, not a weekly policy that quietly changes holidays.
         self.assertEqual(self.calendars.teaching_refusal(
-            "2026-09-25", None, {}), "")
+            "2026-09-25", ("Fri",),
+            {"2026-09-25": "Working Day"}), "")
 
     def test_blocked_dates_are_only_the_blocking_kinds(self):
         plan = {"2026-09-21": "Holiday", "2026-09-22": "Working Day",
