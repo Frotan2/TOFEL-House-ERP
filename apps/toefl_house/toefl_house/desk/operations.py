@@ -328,6 +328,31 @@ def _funnel_and_exceptions():
             "next_role": "General Manager",
             "waiting_since": None,
         })
+    # A bounded oldest-action list is not the whole queue. When the
+    # independent native total exceeds that preview (or cannot be read),
+    # make the missing coverage explicit to staff rather than implying
+    # the visible list exhausts the review/correction backlog.
+    for count, preview, name, label, next_role in (
+        (review_count, review_waiting, "admission-preview",
+         "Admission reviews", "Admission Approver"),
+        (corrections_count, corrections, "correction-preview",
+         "Finance corrections", "Finance Officer"),
+    ):
+        if (not isinstance(count, int) or isinstance(count, bool)
+                or count > len(preview)):
+            exception_items.append({
+                "id": f"source:{name}",
+                "person": label,
+                "detail": "More requests exist or total is unavailable",
+                "status": "Partial",
+                "stage": "Action queue incomplete",
+                "stage_definition": (
+                    "This is only a bounded oldest-item preview. Review "
+                    "the native full list before claiming the queue is empty."),
+                "next": "Open the full source list and work remaining items.",
+                "next_role": next_role,
+                "waiting_since": None,
+            })
     for row in review_waiting:
         exception_items.append({
             "id": row["name"],
