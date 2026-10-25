@@ -41,8 +41,19 @@ engineering candidate is defined by the
 [v1.0.0-rc.1 release notes](docs/engineering/RELEASE-CANDIDATE.md),
 [integration contracts](docs/engineering/INTEGRATION-CONTRACTS.md), and
 [four-state acceptance matrix](docs/engineering/ACCEPTANCE-MATRIX.md).
-Assessment/Progression, portals, notification delivery, derived reporting,
-online payments, and other explicitly deferred scope are not silently included.
+The source on `main` now includes integrated academic assessment/progression
+mechanisms, scheduling and class-operations commands, notification/portal
+mechanisms, and role-desk analytics. **Having code is not Owner authorization
+to operate it.** D1/D4/D5/D7 remain deferred unless explicitly superseded.
+Class transfer request/approval is hard-refused despite any `allow_transfers`
+business-policy toggle (D5). Retention percentage and inferred
+waiting-for-class KPI remain unavailable (D7); incomplete or denied sources
+must not become false-zero values. Portals, external channels, online payments
+and production release are not automatically enabled.
+
+This README distinguishes today's source integration from the historical
+`v1.0.0-rc.1` candidate evidence. No actual customer release/package has
+been published merely by merging source.
 
 Baseline revision `c22b9979542c88a2cd179e179a91829d07a79a3a` has exact-SHA
 hosted successes for Owned, Native, Foundation, Product-image and Windows
