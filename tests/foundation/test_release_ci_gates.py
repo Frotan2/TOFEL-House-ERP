@@ -54,6 +54,31 @@ class EvaluateGateRunsTests(unittest.TestCase):
         self.assertEqual(report["status"], "pending")
         self.assertEqual(report["gates"][0]["reason"], "missing")
 
+    def test_release_ref_excludes_foreign_branch_with_identical_sha(self):
+        passing = passing_runs()
+        for item in passing:
+            item["head_branch"] = "main"
+        unrelated = run(
+            gates.REQUIRED_WORKFLOWS[0], 77,
+            created="2026-10-23T00:01:00Z", conclusion="cancelled")
+        unrelated["head_branch"] = "integration/new-branch"
+        # Without an explicit ref the old API was ambiguous and chose the
+        # newest unrelated cancellation, falsely blocking the product image.
+        self.assertEqual(self.evaluate(passing + [unrelated])["status"], "failed")
+        scoped = gates.evaluate_gate_runs(
+            passing + [unrelated], SHA, None,
+            expected_ref="refs/heads/main")
+        self.assertEqual(scoped["status"], "passed")
+        self.assertEqual(scoped["gates"][0]["run_id"], 1)
+        self.assertEqual(gates.evaluate_gate_runs(
+            [unrelated], SHA, None, expected_ref="refs/heads/main"
+        )["status"], "pending")
+
+    def test_scoped_release_ref_must_be_fully_qualified(self):
+        with self.assertRaises(ValueError):
+            gates.evaluate_gate_runs(passing_runs(), SHA, None,
+                                     expected_ref="integration/new-branch")
+
     def test_missing_and_current_run_cannot_qualify(self):
         self.assertEqual(self.evaluate([])["status"], "pending")
         report = self.evaluate(passing_runs(), current="1")

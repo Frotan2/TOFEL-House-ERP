@@ -49,7 +49,7 @@ class ReleaseImageTriggerContract(unittest.TestCase):
 
     def test_customer_package_contains_the_exact_sha_gate_receipt(self):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
-        self.assertIn('verify_ci_gates.py --timeout 3600 --output "$RUNNER_TEMP/toefl-house-ci-gates.json"', workflow)
+        self.assertIn('verify_ci_gates.py --timeout 3600 --scope-ref "$GITHUB_REF" --output "$RUNNER_TEMP/toefl-house-ci-gates.json"', workflow)
         self.assertIn('--gate-evidence "$RUNNER_TEMP/toefl-house-ci-gates.json"', workflow)
         self.assertIn("/product/release/ci-gates.json", workflow)
 

@@ -62,7 +62,7 @@ def _sha(value: str) -> str:
     return value.lower()
 
 
-def evaluate_gate_runs(runs, expected_sha, current_run_id) -> dict:
+def evaluate_gate_runs(runs, expected_sha, current_run_id, expected_ref=None) -> dict:
     """Pure report: passed, pending (including missing), or failed.
 
     Latest means creation time, then run ID and attempt. updated_at is never
@@ -71,6 +71,13 @@ def evaluate_gate_runs(runs, expected_sha, current_run_id) -> dict:
     malformed metadata for a relevant run fail closed.
     """
     expected_sha = _sha(expected_sha)
+    expected_branch = None
+    if expected_ref is not None:
+        if (not isinstance(expected_ref, str)
+                or not re.fullmatch(r"refs/(?:heads|tags)/[A-Za-z0-9_./-]+", expected_ref)
+                or ".." in expected_ref or "@{" in expected_ref):
+            raise ValueError("invalid fully-qualified release ref")
+        expected_branch = expected_ref.split("/", 2)[2]
     current = _positive_int(current_run_id) if current_run_id not in (None, "") else None
     if not isinstance(runs, (list, tuple)) or any(not isinstance(run, dict) for run in runs):
         raise ValueError("workflow runs must be a list of API run objects")
@@ -79,6 +86,11 @@ def evaluate_gate_runs(runs, expected_sha, current_run_id) -> dict:
     for run in runs:
         path = run.get("path")
         if path not in REQUIRED_WORKFLOWS or str(run.get("head_sha", "")).lower() != expected_sha:
+            continue
+        # An unrelated branch may share the exact SHA before either branch
+        # commits its first change. Its cancelled/failed check must not
+        # override the latest canonical check on the RELEASE branch.
+        if expected_branch is not None and run.get("head_branch") != expected_branch:
             continue
         try:
             run_id = _positive_int(run.get("id"))
@@ -325,6 +337,7 @@ def main(argv=None) -> int:
     parser.add_argument("--ensure-started", action="store_true", help="dispatch only missing canonical gates; do not wait")
     parser.add_argument("--timeout", type=int, default=900, help="polling deadline in seconds (1-3600; default 900)")
     parser.add_argument("--ref", default=os.environ.get("GITHUB_REF", ""), help="full branch/tag ref for --ensure-started")
+    parser.add_argument("--scope-ref", default="", help="restrict qualifying runs to the exact release branch/tag ref")
     parser.add_argument("--output", type=Path, help="write the final passing receipt to a new JSON file")
     args = parser.parse_args(argv)
     try:
@@ -348,7 +361,9 @@ def main(argv=None) -> int:
             return 0
         deadline = time.monotonic() + args.timeout
         while True:
-            report = evaluate_gate_runs(fetch_gate_runs(repository, sha, token, deadline=deadline), sha, current)
+            report = evaluate_gate_runs(
+                fetch_gate_runs(repository, sha, token, deadline=deadline),
+                sha, current, expected_ref=args.scope_ref or None)
             print(json.dumps(report, sort_keys=True), flush=True)
             if report["status"] == "failed":
                 return 1
