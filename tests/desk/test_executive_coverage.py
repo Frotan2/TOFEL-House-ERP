@@ -289,6 +289,7 @@ class OwnerCockpitCoverageContracts(unittest.TestCase):
         self.assertIn('"corrections_pending": "—"', content)
         self.assertIn('classes_running = "—"', content)
         self.assertIn('admissions_count = "—"', content)
+        self.assertNotIn("No open admission is waiting and no exception is recorded.", content)
 
 
 if __name__ == "__main__":
