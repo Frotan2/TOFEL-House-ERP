@@ -433,6 +433,8 @@ class ConfigurationAuditContractTests(unittest.TestCase):
                     and getattr(node.targets[0], "id", "") == "KIND_AUTHORITY"):
                 kinds = ast.literal_eval(node.value)
         self.assertEqual(kinds, {
+            # Approved by an independent Course Owner through the audit chain.
+            "approve_guardian_consent": "business_policy",
             "create_owner_operations_policy": "business_policy",
             "set_owner_operations_policy_version": "business_policy",
             "set_owner_operations_policy_status": "business_policy",
