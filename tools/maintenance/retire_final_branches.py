@@ -13,7 +13,7 @@ import urllib.parse
 from retire_merged_branches import api, delete_ref_path, eligible, open_pulls
 
 REPOSITORY = "Frotan2/TOFEL-House-ERP"
-SELF_BRANCH = "maintenance/final-branch-retirement-20261025"
+SELF_BRANCH = "maintenance/retire-policy-fix-20261025"
 # (original PR number or None, exact branch, audited head SHA, replacement PR or None)
 # The replacement mapping is for intentionally closed, unmerged/obsolete
 # implementations; it is never permission to retire an open PR or a moved head.
@@ -37,6 +37,7 @@ CANDIDATES = (
     (65, "integration/verified-role-desks-20261024", "50c1d70dd5f1772a614f8ee6c26dd0a94c3c9a9d", None),
     (59, "security/harden-owner-branch-attendance-approvals-20261024", "06afeef0d7da65eb2cd25905e51605496c37c349", None),
     (69, "integration/final-operations-20261025", "6c6eaa59ab43d90832de3da39cf279325425168c", None),
+    (72, "fix/deferred-policy-and-owner-metrics-20261025", "1ddd436a75d30b8ed96b044b73069300e123c0f2", None),
 )
 
 
