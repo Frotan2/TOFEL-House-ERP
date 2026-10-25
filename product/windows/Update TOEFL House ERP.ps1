@@ -604,6 +604,25 @@ function Invoke-UpdateEngine([string]$Mode) {
     return (Invoke-DockerVerbose $arguments)
 }
 
+# Detect the installed engine protocol without granting the old engine raw
+# Docker access. The probe executes only a shell file test in the pinned image:
+# no network, writable filesystem, application mounts or Docker socket.
+# Exit 1 means legacy image; every other unexpected error is a hard refusal.
+function Test-ImageRequiresObserver([string]$ImageId) {
+    if ($ImageId -cnotmatch '^sha256:[0-9a-f]{64}$') {
+        Stop-Update $script:ExitRefused "refused" "launcher" "updater.installed_version_unknown"
+    }
+    $probe = Invoke-Docker @(
+        "run", "--rm", "--network", "none", "--read-only",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+        "--entrypoint", "/bin/sh", $ImageId,
+        "-c", "test -f /product/update_host.py"
+    )
+    if ($probe.Code -eq 0) { return $true }
+    if ($probe.Code -eq 1) { return $false }
+    Stop-Update $script:ExitRefused "refused" "launcher" "updater.guard_blocked"
+}
+
 function Stop-EngineFailure([string]$Mode, [string]$Version) {
     if ($Mode -ceq "apply") {
         Set-JournalState "recovery-required" $Version
@@ -731,6 +750,10 @@ function Invoke-UpdateCheck {
     if (-not $installed.release_sequence) {
         Stop-Update $script:ExitRefused "refused" "launcher" "updater.installed_version_unknown"
     }
+    # Pin the original image, and expose the root-only observer just for an
+    # installed engine that actually contains the hardened observation broker.
+    $script:EngineImage = [string]$installed.image_id
+    $script:UseObserver = Test-ImageRequiresObserver $script:EngineImage
 
     # A verified independent backup must exist before any bytes are downloaded.
     # The engine re-verifies the same receipt and every artifact hash; this
@@ -926,6 +949,7 @@ function Invoke-UpdateCheck {
         RunFolder = $workRelative
         Response = $response
         Request = $request
+        ObserverRequired = [bool]$script:UseObserver
     }
 }
 
@@ -973,7 +997,9 @@ function Invoke-UpdateInstall($Check) {
     # Check and Install may be separated in time. Re-verify the exact signed
     # archive with the installed engine immediately before importing bytes.
     $script:EngineImage = $previousImageId
-    $script:UseObserver = $false
+    # A hardened installed image still requires its broker on later upgrades.
+    # Never give the raw Docker socket to a legacy installed engine.
+    $script:UseObserver = [bool]$Check.ObserverRequired
     $oldRequest = $Check.Request
     $oldRequest.action = "preflight"
     $oldRequest.archive = ""
