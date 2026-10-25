@@ -1,5 +1,4 @@
 """Cross-Shamsi-month receivables and allocation proposal acceptance."""
-import importlib.util
 import unittest
 from decimal import Decimal
 from pathlib import Path
