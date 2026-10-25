@@ -14,6 +14,8 @@
   "installments_allowed",
   "max_installments",
   "installment_interval_days",
+  "installment_cadence",
+  "payment_grace_days",
   "section_break_1",
   "reason",
   "column_break_2",
@@ -82,6 +84,21 @@
    "fieldname": "installment_interval_days",
    "fieldtype": "Int",
    "label": "Installment interval (days)"
+  },
+  {
+   "fieldname": "installment_cadence",
+   "fieldtype": "Select",
+   "label": "Installment cadence",
+   "options": "Days\nSolar Hijri Month",
+   "default": "Days",
+   "description": "Use Solar Hijri Month for Afghan calendar month boundaries. Legacy Days preserves the existing schedule."
+  },
+  {
+   "fieldname": "payment_grace_days",
+   "fieldtype": "Int",
+   "label": "Payment grace days",
+   "default": "0",
+   "description": "Days after first day of each Solar Hijri month when payment falls due (0-15); only valid for Solar Hijri Month cadence."
   },
   {
    "fieldname": "section_break_1",
