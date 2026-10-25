@@ -412,7 +412,16 @@ def cockpit():
     def safe_count(doctype, filters):
         """A denied or invalid native count is unavailable, never zero."""
         try:
-            value = project_count("management", doctype, filters)
+            # Every projection must use a module-level DocType constant,
+            # so the pinned-schema audit can resolve its native columns.
+            if doctype == ATTEMPT:
+                value = project_count("management", ATTEMPT, filters)
+            elif doctype == DECISION:
+                value = project_count("management", DECISION, filters)
+            elif doctype == STUDENT:
+                value = project_count("management", STUDENT, filters)
+            else:
+                raise ValueError("Unapproved Owner count source")
             if (not isinstance(value, int) or isinstance(value, bool)
                     or value < 0):
                 raise RuntimeError("Incomplete native management count")
