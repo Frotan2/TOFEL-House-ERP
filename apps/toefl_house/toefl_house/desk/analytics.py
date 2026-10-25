@@ -110,6 +110,35 @@ def _active_cohort_rows(groups):
     return [r for r in groups or [] if r.get("th_class_status") == "Active" and not r.get("disabled")]
 
 
+def _checked_project_count(desk, doctype, *, filters=None):
+    """Return a validated full scoped count, not a bounded page length."""
+    count = _project_count(desk, doctype, filters=dict(filters or {}))
+    if (not isinstance(count, int) or isinstance(count, bool) or count < 0):
+        raise RuntimeError("Analytics source incomplete; count unavailable")
+    return count
+
+
+def _complete_project_rows(desk, doctype, fields, *, filters=None,
+                           order_by=None, limit=BOUNCE_WINDOW):
+    """Prove that a scoped bounded read covers the whole intended population.
+
+    A successful bounded list is not evidence of complete records. This count
+    uses the identical permission-scoped projection and filters. Without it,
+    Owner totals, sums, ratios, and exceptions are explicitly unavailable.
+    """
+    if (not isinstance(limit, int) or isinstance(limit, bool)
+            or limit < 1 or limit > BOUNCE_WINDOW):
+        raise ValueError("Invalid aggregate coverage limit")
+    scoped_filters = dict(filters or {})
+    rows = _project_rows(desk, doctype, fields, filters=scoped_filters,
+                         order_by=order_by, limit=limit)
+    count = _checked_project_count(desk, doctype, filters=scoped_filters)
+    if (count > limit or not isinstance(rows, (list, tuple))
+            or len(rows) != count):
+        raise RuntimeError("Analytics source incomplete; metric unavailable")
+    return rows
+
+
 # ------------------------------------------------------------------ enrollments
 
 def enrollment_metrics():
@@ -119,7 +148,7 @@ def enrollment_metrics():
     Source: native enrollment records (submitted).
     Drill: enrollment list (submitted)
     """
-    rows = _project_rows("management", "Program Enrollment",
+    rows = _complete_project_rows("management", "Program Enrollment",
                         ["name", "student", "student_name", "program", "academic_year",
                          "enrollment_date", "docstatus"],
                         filters={"docstatus": 1},
@@ -167,7 +196,7 @@ def admission_metrics():
     Definition: admission decisions grouped by status.
     Source: admission decisions (guarded, but projected read-only here).
     """
-    all_open = _project_rows("management", "TH Admission Decision",
+    all_open = _complete_project_rows("management", "TH Admission Decision",
                             ["name", "student_applicant", "program", "status", "version",
                              "accepted", "native_student", "modified"],
                             filters={"status": ("in", ["Draft", "Review", "Approved", "Conditional"])},
@@ -176,8 +205,10 @@ def admission_metrics():
     for row in all_open:
         s = row.get("status") or "Unknown"
         by_status[s] = by_status.get(s, 0) + 1
-    total_closed = _project_count("management", "TH Admission Decision",
-                                  {"status": ("in", ["Deferred", "Rejected", "Withdrawn", "Revoked", "Expired"])})
+    total_closed = _checked_project_count(
+        "management", "TH Admission Decision",
+        filters={"status": ("in", ["Deferred", "Rejected", "Withdrawn",
+                                  "Revoked", "Expired"])})
     return {
         "open": len(all_open),
         "by_status": by_status,
@@ -196,10 +227,10 @@ def attendance_metrics():
     """Attendance: submitted attendance presence rate.
 
     Definition: submitted attendance records grouped by status.
-    Rate = Present / (Present + Absent) where both exist.
+    Attendance percentage is deferred under Owner D7; raw status counts only.
     Source: native attendance (submitted).
     """
-    rows = _project_rows("management", "Student Attendance",
+    rows = _complete_project_rows("management", "Student Attendance",
                         ["name", "student", "student_group", "course_schedule", "date",
                          "status", "docstatus"],
                         filters={"docstatus": 1},
@@ -208,7 +239,9 @@ def attendance_metrics():
     absent = sum(1 for r in rows if r.get("status") == "Absent")
     leave = sum(1 for r in rows if r.get("status") == "On Leave")
     total = len(rows)
-    rate = f"{(present / (present + absent) * 100):.1f}%" if (present + absent) else "—"
+    # D7 does not authorize a derived attendance percentage, even on fully
+    # verified records. Keep the raw counts and clearly defer the ratio.
+    rate = "—"
     by_group = _summarize_by(rows, "student_group")
     by_date = _summarize_by(rows, "date")
     return {
@@ -217,9 +250,10 @@ def attendance_metrics():
         "absent": absent,
         "leave": leave,
         "rate": rate,
+        "rate_status": "DEFERRED",
         "by_group": by_group,
         "by_date": by_date,
-        "definition": "Submitted attendance records. Present + Absent + On Leave are native marks; rate is Present divided by Present+Absent.",
+        "definition": "Submitted attendance records. Present, Absent and On Leave are native marks. Owner decision D7 defers the derived attendance rate pending approved stewardship, denominator and disclosure policy.",
         "source": "attendance records (native Education, submitted only)",
         "scope": "Branch-scoped via student roster.",
         "drill": "attendance list",
@@ -228,7 +262,7 @@ def attendance_metrics():
 
 def attendance_by_instructor():
     """Attendance sessions per instructor for the current window."""
-    schedules = _project_rows("management", "Course Schedule",
+    schedules = _complete_project_rows("management", "Course Schedule",
                              ["name", "student_group", "instructor", "course", "schedule_date"],
                              order_by="schedule_date desc", limit=BOUNCE_WINDOW)
     by_instructor = {}
@@ -257,7 +291,7 @@ def tuition_metrics():
     - Settled = outstanding_amount <=0 (submitted)
     """
     day = _today()
-    all_fees = _project_rows("management", "Fees",
+    all_fees = _complete_project_rows("management", "Fees",
                             ["name", "student", "student_name", "program", "program_enrollment",
                              "academic_year", "posting_date", "due_date", "grand_total",
                              "outstanding_amount", "currency", "company", "docstatus"],
@@ -270,7 +304,7 @@ def tuition_metrics():
     by_currency_charged = _money_sum(all_fees, "grand_total")
     by_currency_outstanding = _money_sum(outstanding, "outstanding_amount")
 
-    invoices = _project_rows("management", "Sales Invoice",
+    invoices = _complete_project_rows("management", "Sales Invoice",
                             ["name", "customer", "customer_name", "th_placement_case",
                              "posting_date", "due_date", "grand_total", "outstanding_amount",
                              "currency", "company", "status", "is_return", "docstatus"],
@@ -279,11 +313,12 @@ def tuition_metrics():
     inv_outstanding = [r for r in invoices if float(r.get("outstanding_amount") or 0) > 0]
     inv_overdue = [r for r in inv_outstanding if str(r.get("due_date") or "") and str(r["due_date"]) < day]
 
-    payments = _project_rows("management", "Payment Entry",
+    payments = _complete_project_rows("management", "Payment Entry",
                             ["name", "payment_type", "party_type", "party", "paid_amount",
                              "received_amount", "paid_from_account_currency", "company",
                              "posting_date", "docstatus"],
-                            filters={"docstatus": 1, "payment_type": "Receive"},
+                            filters={"docstatus": 1, "payment_type": "Receive",
+                                     "posting_date": day},
                             order_by="posting_date desc", limit=BOUNCE_WINDOW)
     collected_today = [r for r in payments if str(r.get("posting_date") or "") == day]
     collected_today_sum = _money_sum(collected_today, "paid_amount")
@@ -451,36 +486,42 @@ def exception_metrics():
         from toefl_house.desk.lifecycle import PLACEMENT_ATTEMPT_ORDER
     except Exception:
         PLACEMENT_ATTEMPT_ORDER = ["Allocated", "Verified", "Delivered", "Sealed", "Scored", "Review", "Finalized"]
-    corrections = _project_rows("management", "TH Correction Request",
-                              ["name", "sales_invoice", "fees", "reason", "requested_amount", "status", "modified"],
-                              filters={"status": "Requested"},
-                              order_by="modified asc", limit=LIMIT_QUEUES)
-    admissions_review = _project_rows("management", "TH Admission Decision",
-                                     ["name", "student_applicant", "program", "status", "modified"],
-                                     filters={"status": "Review"},
-                                     order_by="modified asc", limit=LIMIT_QUEUES)
-    attempts_running = _project_rows("management", "TH Placement Attempt",
+    # These are totals, not queue previews. Count all eligible rows directly:
+    # an institution with 26 pending items must never display only 25.
+    corrections_pending = _checked_project_count(
+        "management", "TH Correction Request", filters={"status": "Requested"})
+    admissions_in_review = _checked_project_count(
+        "management", "TH Admission Decision", filters={"status": "Review"})
+    attempts_running = _complete_project_rows("management", "TH Placement Attempt",
                                     ["name", "case_name", "status", "deadline_at"],
                                     filters={"status": ("in", [s for s in PLACEMENT_ATTEMPT_ORDER if s != "Finalized"])},
                                     order_by="modified asc", limit=BOUNCE_WINDOW)
     overdue_deadlines = []
-    try:
-        from frappe.utils import get_datetime, now_datetime
-        now = now_datetime()
-        for row in attempts_running:
-            if row.get("deadline_at"):
-                try:
-                    if get_datetime(row["deadline_at"]) < now:
+    # Missing/invalid datetime evidence must never be converted into an
+    # apparently verified zero overdue attempts. A valid missing deadline is
+    # not overdue; a supplied but malformed deadline is an unavailable source.
+    if any(row.get("deadline_at") for row in attempts_running):
+        try:
+            from frappe.utils import get_datetime, now_datetime
+            now = now_datetime()
+            if now is None:
+                raise ValueError("clock unavailable")
+            for row in attempts_running:
+                if row.get("deadline_at"):
+                    deadline = get_datetime(row["deadline_at"])
+                    if deadline is None:
+                        raise ValueError("invalid deadline")
+                    if deadline < now:
                         overdue_deadlines.append(row)
-                except Exception:
-                    continue
-    except Exception:
-        pass
-    finalized = _project_rows("management", "TH Placement Attempt",
+        except Exception as exc:
+            raise RuntimeError(
+                "Placement deadline source incomplete; overdue count unavailable"
+            ) from exc
+    finalized = _complete_project_rows("management", "TH Placement Attempt",
                              ["name", "case_name", "status"],
                              filters={"status": "Finalized"},
                              order_by="modified asc", limit=BOUNCE_WINDOW)
-    released = _project_rows("management", "TH Placement Decision",
+    released = _complete_project_rows("management", "TH Placement Decision",
                             ["name", "attempt", "status"],
                             filters={"status": "Released"},
                             order_by="released_at desc", limit=BOUNCE_WINDOW)
@@ -488,8 +529,8 @@ def exception_metrics():
     awaiting_release = [r for r in finalized if r["name"] not in released_attempts]
 
     return {
-        "corrections_pending": len(corrections),
-        "admissions_in_review": len(admissions_review),
+        "corrections_pending": corrections_pending,
+        "admissions_in_review": admissions_in_review,
         "attempts_past_deadline": len(overdue_deadlines),
         "awaiting_release": len(awaiting_release),
         "definition": "Corrections in Requested, admissions longest in Review, attempts past server-set deadline, finalized attempts with no released decision.",
