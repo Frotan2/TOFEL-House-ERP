@@ -475,6 +475,25 @@ class BaseHarness(unittest.TestCase):
 # ===========================================================================
 # 1. Dispatch rule configurability
 # ===========================================================================
+class PortalFailClosedAuthorizationTests(BaseHarness):
+    def test_process_memory_cannot_enable_production_portals(self):
+        self.portal_policy.set_portal_flags(
+            guardian_portal=True, student_portal=True,
+            email=True, whatsapp=True)
+        self.assertTrue(self.portal_policy.is_portal_enabled("guardian_portal"))
+        self.frappe.flags.in_test = False
+        self.assertFalse(self.portal_policy.is_portal_enabled("guardian_portal"))
+        self.assertFalse(self.portal_policy.is_portal_enabled("student_portal"))
+        self.assertFalse(self.portal_policy.is_channel_enabled("email"))
+        self.assertFalse(self.portal_policy.is_channel_enabled("whatsapp"))
+
+    def test_direct_doc_writes_cannot_activate_guardian_consents(self):
+        path = APP / "operations/doctype/th_guardian_consent/th_guardian_consent.py"
+        source = path.read_text(encoding="utf-8")
+        self.assertIn('foundation.active_command() != "approve_guardian_consent"', source)
+        self.assertIn("recorded_by", source)
+
+
 class DispatchRuleTests(BaseHarness):
     def test_all_event_types_have_disabled_default(self):
         for et in self.notifications_mod.EVENT_TYPES:
