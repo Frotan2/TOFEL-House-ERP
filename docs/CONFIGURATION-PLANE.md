@@ -62,6 +62,7 @@ policy shell does not mean its values are configured or runtime-consumed:
 - **Deferred** means the policy/feature is explicitly outside the current
   operating scope. A carrier value may be recorded, but it is not active
   authority and does not enable behavior; no default is inferred.
+- **Owner optional backup control (D18, 2026-10-25):** An independent Single `TH Backup Control` is **Off by default** (also on upgraded sites with no saved value). Only the guarded, audited POST `set_backup_enabled` may change it. Off blocks TOEFL House packaged backup and guarded activation but never deletes stored backups or credentials. On does not bypass the existing versioned Owner Operations backup policy, recovery keys, retention decision D17, a separate local disk or production NO-GO. Each switch change issues a new non-secret identity included in the verified backup policy hash, so switching Off then On cannot reuse the old backup receipt. In-progress backup tasks are not forcibly killed, and previously scheduled Windows tasks may still start but fail safely with Off; the switch is a safety interlock, not the host Task Scheduler editor.
 - **Runtime-consumed** is limited to the consumers explicitly qualified in
   the domain map. In `TH Owner Operations Policy`, the nightly backup time,
   retention count, explicit retention behavior and public recovery-key identity
