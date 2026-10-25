@@ -255,10 +255,10 @@ class OwnerCockpitCoverageContracts(unittest.TestCase):
         self.assertFalse(any(
             isinstance(n.func, ast.Name) and n.func.id == "active_cohort_rows"
             for n in calls), "25 class previews cannot be institution totals")
-        self.assertFalse(any(
-            isinstance(n.func, ast.Name) and n.func.id == "len"
-            and n.args and isinstance(n.args[0], ast.Name)
-            and n.args[0].id == "admissions_open" for n in calls))
+        # len(admissions_open) is permitted only as a sanity check against
+        # the full count, never as the reported business metric.
+        self.assertIn("admissions_count < len(admissions_open)",
+                      OWNER.read_text())
         self.assertIn("classes_running = project_count", OWNER.read_text())
         self.assertIn("admissions_count = project_count", OWNER.read_text())
 
