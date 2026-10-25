@@ -132,6 +132,15 @@ def qualify(base_url: str, destination: Path):
                         # Navigate through the live router so Page.getpage loads
                         # and executes the installed page script in Chromium.
                         page.wait_for_function("typeof frappe !== 'undefined' && typeof frappe.set_route === 'function'")
+                        # /desk navigation can complete before Frappe's first
+                        # Desktop page has actually become visible. Wait for
+                        # the initial SPA surface before requesting our route,
+                        # otherwise a late initial render can hide the desk.
+                        page.wait_for_function("""() => document.readyState === 'complete' &&
+                            Array.from(document.querySelectorAll('.page-content'))
+                                .some(e => e.getClientRects().length > 0 &&
+                                           getComputedStyle(e).visibility !== 'hidden')""",
+                            timeout=60_000)
                         with page.expect_response(lambda r: urlsplit(r.url).path == PAGE_API, timeout=60_000) as page_reply:
                             with page.expect_response(lambda r: urlsplit(r.url).path == "/api/method/toefl_house.desk." + method,
                                                       timeout=60_000) as desk_reply, page.expect_response(
@@ -188,6 +197,22 @@ def qualify(base_url: str, destination: Path):
                                     .filter(e => !!(e.offsetWidth || e.offsetHeight ||
                                                     e.getClientRects().length)).length,
                                 bodies: document.querySelectorAll('.page-content').length,
+                                hiddenAncestors: (() => {
+                                    const node = document.querySelector('.th-page');
+                                    const values = [];
+                                    let e = node;
+                                    for (let i = 0; e && i < 10; i++, e = e.parentElement) {
+                                        const style = getComputedStyle(e);
+                                        values.push({
+                                            tag: e.tagName.toLowerCase(),
+                                            classes: String(e.className || '').slice(0, 140),
+                                            display: style.display,
+                                            visibility: style.visibility,
+                                            hasRect: e.getClientRects().length > 0
+                                        });
+                                    }
+                                    return values;
+                                })(),
                                 title: document.title.slice(0, 120)
                             })""", slug)
                             report["failure_diagnostic"] = detail
