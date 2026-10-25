@@ -186,3 +186,20 @@ def fiscal_year_bounds(year):
 def solar_month_label(period):
     year, month = parse_shamsi_month(period)
     return f"{MONTH_NAMES[month - 1]} {year}"
+
+
+def friday_holidays_for_fiscal_year(year):
+    """Only weekly Fridays within the 1 Hamal - last Hoot fiscal year.
+
+    Returns ISO days to configure a *native* submitted HRMS Holiday List and
+    corresponding Holiday List Assignment through Owner-authorized setup.
+    No Afghan public/national or religious dates are invented or imported.
+    """
+    start, end = fiscal_year_bounds(year)
+    first_friday = start + timedelta(days=(4 - start.weekday()) % 7)
+    days = []
+    current = first_friday
+    while current <= end:
+        days.append(current)
+        current += timedelta(days=7)
+    return days
