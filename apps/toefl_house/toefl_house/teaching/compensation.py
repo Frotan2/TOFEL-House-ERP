@@ -556,6 +556,10 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                 doctype=ADDITIONAL_SALARY, employee=contract.employee,
                 salary_component=component, amount=amount, payroll_date=end,
                 company=company_name, currency=currency,
+                # Each teaching fact is an ADDITIVE earning, never a replacement
+                # for the entire salary structure component. Native HRMS
+                # rejects two same-date overwrite records for one employee.
+                overwrite_salary_structure_amount=0, is_recurring=0,
                 ref_doctype=ASSIGNMENT, ref_docname=row.name))
             salary.flags.ignore_permissions = True
             salary.flags.ignore_links = True
@@ -591,6 +595,9 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
                                       else component),
                     amount=float(adjustment.amount),
                     payroll_date=end, company=company_name, currency=currency,
+                    # Contract adjustments also add to/deduct from the slip,
+                    # rather than overwrite an existing salary structure row.
+                    overwrite_salary_structure_amount=0, is_recurring=0,
                     type="Earning" if adjustment.adjustment_type == "Bonus" else "Deduction",
                     ref_doctype=ADJUSTMENT, ref_docname=adjustment.name))
                 salary.flags.ignore_permissions = True
