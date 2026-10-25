@@ -1,0 +1,193 @@
+"""Full-population Owner analytics: never mistake a bounded page for a total.
+
+Uses real function bodies with mocked, scoped projections; no live school data.
+"""
+import ast
+from pathlib import Path
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = ROOT / "apps/toefl_house/toefl_house/desk/analytics.py"
+OWNER = ROOT / "apps/toefl_house/toefl_house/desk/owner.py"
+FUNCTIONS = {
+    "_complete_project_rows", "_summarize_by", "_money_sum",
+    "enrollment_metrics", "admission_metrics", "attendance_metrics",
+    "attendance_by_instructor", "tuition_metrics", "exception_metrics",
+}
+
+
+def load_analytics(*, rows=None, counts=None, error=None):
+    tree = ast.parse(SOURCE.read_text(encoding="utf-8"))
+    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+             and n.name in FUNCTIONS]
+    assert {n.name for n in nodes} == FUNCTIONS
+    seen = []
+    data = rows or {}
+    totals = counts or {}
+
+    def projection(desk, doctype, fields, **kwargs):
+        seen.append(("rows", desk, doctype, dict(kwargs.get("filters") or {})))
+        if error == ("rows", doctype):
+            raise PermissionError("source denied")
+        return list(data.get(doctype, []))[:kwargs.get("limit", 400)]
+
+    def counted(desk, doctype, filters=None):
+        seen.append(("count", desk, doctype, dict(filters or {})))
+        if error == ("count", doctype):
+            raise PermissionError("count denied")
+        if doctype in totals:
+            return totals[doctype]
+        return len(data.get(doctype, []))
+
+    scope = {
+        "BOUNCE_WINDOW": 400, "LIMIT_QUEUES": 25,
+        "_project_rows": projection, "_project_count": counted,
+        "_today": lambda: "2026-10-25",
+    }
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), str(SOURCE), "exec"),
+         scope)
+    return scope, seen
+
+
+class VerifiedCoverageTests(unittest.TestCase):
+    def test_exact_scoped_count_and_filters_used_for_same_population(self):
+        ns, calls = load_analytics(
+            rows={"Program Enrollment": [{"name": "E1"}]})
+        result = ns["_complete_project_rows"](
+            "management", "Program Enrollment", ["name"],
+            filters={"docstatus": 1}, order_by="name")
+        self.assertEqual(result, [{"name": "E1"}])
+        self.assertEqual(calls, [
+            ("rows", "management", "Program Enrollment", {"docstatus": 1}),
+            ("count", "management", "Program Enrollment", {"docstatus": 1}),
+        ])
+
+    def test_zero_and_exactly_400_are_supported(self):
+        ns, _ = load_analytics()
+        self.assertEqual(ns["_complete_project_rows"](
+            "management", "Program Enrollment", ["name"]), [])
+        sample = [{"name": str(i)} for i in range(400)]
+        ns, _ = load_analytics(rows={"Program Enrollment": sample})
+        self.assertEqual(len(ns["_complete_project_rows"](
+            "management", "Program Enrollment", ["name"])), 400)
+
+    def test_401st_record_never_silently_disappears(self):
+        sample = [{"name": str(i)} for i in range(401)]
+        ns, _ = load_analytics(rows={"Program Enrollment": sample})
+        with self.assertRaisesRegex(RuntimeError, "incomplete"):
+            ns["_complete_project_rows"](
+                "management", "Program Enrollment", ["name"])
+
+    def test_denied_or_missing_count_is_not_a_zero(self):
+        for bad in (-1, None, False, 2, "1"):
+            with self.subTest(count=bad):
+                ns, _ = load_analytics(
+                    rows={"Program Enrollment": [{"name": "E1"}]},
+                    counts={"Program Enrollment": bad})
+                with self.assertRaisesRegex(RuntimeError, "incomplete"):
+                    ns["_complete_project_rows"](
+                        "management", "Program Enrollment", ["name"])
+        for phase in ("rows", "count"):
+            ns, _ = load_analytics(error=(phase, "Program Enrollment"))
+            with self.assertRaises(PermissionError):
+                ns["_complete_project_rows"](
+                    "management", "Program Enrollment", ["name"])
+
+    def test_aggregate_limit_is_explicit_not_unbounded(self):
+        ns, _ = load_analytics()
+        for limit in (0, 401, -1, True):
+            with self.subTest(limit=limit), self.assertRaises(ValueError):
+                ns["_complete_project_rows"](
+                    "management", "Program Enrollment", ["name"], limit=limit)
+
+    def test_owner_enrollment_and_open_admissions_reject_401(self):
+        for function, name in (
+                ("enrollment_metrics", "Program Enrollment"),
+                ("admission_metrics", "TH Admission Decision")):
+            with self.subTest(function=function):
+                ns, _ = load_analytics(
+                    rows={name: [{"name": str(i)} for i in range(401)]})
+                with self.assertRaisesRegex(RuntimeError, "incomplete"):
+                    ns[function]()
+
+    def test_attendance_cannot_publish_rate_from_400_of_401(self):
+        values = ([{"name": str(i), "status": "Present"} for i in range(400)]
+                  + [{"name": "401", "status": "Absent"}])
+        ns, _ = load_analytics(rows={"Student Attendance": values})
+        with self.assertRaisesRegex(RuntimeError, "incomplete"):
+            ns["attendance_metrics"]()
+
+    def test_finance_counts_and_currency_sums_require_all_sources(self):
+        for doctype in ("Fees", "Sales Invoice", "Payment Entry"):
+            with self.subTest(doctype=doctype):
+                rows = [{"name": str(i), "grand_total": 1,
+                         "outstanding_amount": 1, "paid_amount": 1,
+                         "posting_date": "2026-10-25", "currency": "AFN"}
+                        for i in range(401)]
+                ns, _ = load_analytics(rows={doctype: rows})
+                with self.assertRaisesRegex(RuntimeError, "incomplete"):
+                    ns["tuition_metrics"]()
+
+    def test_instructor_and_exception_counts_reject_bounded_queue(self):
+        ns, _ = load_analytics(
+            rows={"Course Schedule": [{"name": str(i)}
+                                      for i in range(401)]})
+        with self.assertRaisesRegex(RuntimeError, "incomplete"):
+            ns["attendance_by_instructor"]()
+        for doctype, n in (
+                ("TH Correction Request", 26),
+                ("TH Admission Decision", 26),
+                ("TH Placement Attempt", 401),
+                ("TH Placement Decision", 401)):
+            with self.subTest(doctype=doctype):
+                ns, _ = load_analytics(
+                    rows={doctype: [{"name": str(i)} for i in range(n)]})
+                with self.assertRaisesRegex(RuntimeError, "incomplete"):
+                    ns["exception_metrics"]()
+
+    def test_valid_finance_totals_remain_real_numbers(self):
+        ns, _ = load_analytics(rows={
+            "Fees": [
+                {"name": "F1", "grand_total": 100, "outstanding_amount": 20,
+                 "currency": "AFN", "due_date": "2026-10-01"},
+                {"name": "F2", "grand_total": 30, "outstanding_amount": 0,
+                 "currency": "USD", "due_date": "2026-11-01"}],
+            "Payment Entry": [
+                {"name": "P1", "posting_date": "2026-10-25", "paid_amount": 10,
+                 "paid_from_account_currency": "AFN"}],
+        })
+        result = ns["tuition_metrics"]()
+        self.assertEqual(result["fees_total"], 2)
+        self.assertEqual(result["fees_outstanding"], 1)
+        self.assertEqual(result["fees_overdue"], 1)
+        self.assertIn("AFN", result["by_currency_charged"])
+        self.assertIn("USD", result["by_currency_charged"])
+        self.assertIn("10.00 AFN", result["collected_today"])
+
+
+class OwnerCockpitCoverageContracts(unittest.TestCase):
+    def test_owner_summary_counts_scoped_records_not_bounded_previews(self):
+        tree = ast.parse(OWNER.read_text(encoding="utf-8"))
+        cockpit = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                       and n.name == "cockpit")
+        calls = [n for n in ast.walk(cockpit) if isinstance(n, ast.Call)]
+        self.assertFalse(any(
+            isinstance(n.func, ast.Name) and n.func.id == "active_cohort_rows"
+            for n in calls), "25 class previews cannot be institution totals")
+        self.assertFalse(any(
+            isinstance(n.func, ast.Name) and n.func.id == "len"
+            and n.args and isinstance(n.args[0], ast.Name)
+            and n.args[0].id == "admissions_open" for n in calls))
+        self.assertIn("classes_running = project_count", OWNER.read_text())
+        self.assertIn("admissions_count = project_count", OWNER.read_text())
+
+    def test_errors_render_unavailable_not_empty_or_zero(self):
+        content = OWNER.read_text(encoding="utf-8")
+        self.assertIn('"executive-unavailable"', content)
+        self.assertIn('"corrections_pending": "—"', content)
+        self.assertIn('classes_running = "—"', content)
+        self.assertIn('admissions_count = "—"', content)
+
+
+if __name__ == "__main__":
+    unittest.main()
