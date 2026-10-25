@@ -494,6 +494,15 @@ def calculate_teaching_compensation(request_key, period_start, period_end, compa
             raise frappe.ValidationError("Unknown salary component")
         if deduction and not frappe.db.exists("Salary Component", deduction):
             raise frappe.ValidationError("Unknown deduction salary component")
+        # The selection comes from Finance input, but HRMS owns the component
+        # classification. Never credit an earning to a deduction component or
+        # silently convert a contractual deduction into a wage increase.
+        if frappe.db.get_value("Salary Component", component, "type") != "Earning":
+            raise frappe.ValidationError(
+                "Teaching compensation requires an Earning Salary Component")
+        if deduction and frappe.db.get_value("Salary Component", deduction, "type") != "Deduction":
+            raise frappe.ValidationError(
+                "Contract deductions require a Deduction Salary Component")
         currency = frappe.db.get_value("Company", company_name, "default_currency")
         if not currency:
             raise frappe.ValidationError(
