@@ -7228,7 +7228,8 @@ def main():
                 filters={'employee':employee,'payroll_date':'2026-09-30',
                          'disabled':0},
                 fields=['name','ref_doctype','ref_docname','type','docstatus',
-                        'salary_component'])
+                        'salary_component','overwrite_salary_structure_amount',
+                        'is_recurring'])
             selected={}
             for row in rows:
                 reference=(row.ref_doctype,row.ref_docname)
@@ -7242,6 +7243,13 @@ def main():
                 assert frappe.db.get_value('Salary Component',
                     row.salary_component,'type')=='Earning',row
                 assert row.type in (None,'','Earning'),row
+                # Native HRMS rejects a second same-component same-date
+                # salary with overwrite enabled. Teaching inputs must add,
+                # never replace the underlying Salary Structure amount.
+                assert not row.overwrite_salary_structure_amount,(
+                    'teaching compensation incorrectly overwrites structure',row.name)
+                assert not row.is_recurring,(
+                    'one-off teaching input unexpectedly recurs',row.name)
                 assert row.docstatus in (0,1),('invalid teaching input state',row)
                 selected[reference]=row
             assert set(selected)==references,(
