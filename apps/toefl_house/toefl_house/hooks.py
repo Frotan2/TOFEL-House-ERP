@@ -60,6 +60,9 @@ has_permission = {
                  "TH Adjustment Posting Policy",
                  "TH Alerting Policy",
                  "TH Guardian Lifecycle Policy", "TH Owner Operations Policy",
+                 "TH Notification", "TH Notification Dispatch Rule",
+                 "TH Portal Configuration", "TH Guardian Consent",
+                 "TH Portal Announcement",
                  "TH Configuration Operation", "TH Configuration Audit Event",
                  "TH Assessment Book", "TH Academic Result", "TH Progression Decision")
 }
@@ -77,6 +80,10 @@ has_permission["TH Catalog Linkage Policy"] = "toefl_house.permissions.configura
 has_permission["TH Adjustment Posting Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Alerting Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Guardian Lifecycle Policy"] = "toefl_house.permissions.configuration_has_permission"
+for _dt in ("TH Notification", "TH Notification Dispatch Rule",
+            "TH Portal Configuration", "TH Guardian Consent",
+            "TH Portal Announcement"):
+    has_permission[_dt] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Owner Operations Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
@@ -126,6 +133,10 @@ permission_query_conditions["TH Catalog Linkage Policy"] = "toefl_house.permissi
 permission_query_conditions["TH Adjustment Posting Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Alerting Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Guardian Lifecycle Policy"] = "toefl_house.permissions.configuration_query"
+for _dt in ("TH Notification", "TH Notification Dispatch Rule",
+            "TH Portal Configuration", "TH Guardian Consent",
+            "TH Portal Announcement"):
+    permission_query_conditions[_dt] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Owner Operations Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
@@ -203,6 +214,21 @@ doc_events = {
     },
     "TH Guardian Lifecycle Policy": {
         "validate": "toefl_house.operations.doctype.th_guardian_lifecycle_policy.th_guardian_lifecycle_policy.validate",
+    },
+    "TH Notification": {
+        "validate": "toefl_house.operations.doctype.th_notification.th_notification.validate",
+    },
+    "TH Notification Dispatch Rule": {
+        "validate": "toefl_house.operations.doctype.th_notification_dispatch_rule.th_notification_dispatch_rule.validate",
+    },
+    "TH Portal Configuration": {
+        "validate": "toefl_house.operations.doctype.th_portal_configuration.th_portal_configuration.validate",
+    },
+    "TH Guardian Consent": {
+        "validate": "toefl_house.operations.doctype.th_guardian_consent.th_guardian_consent.validate",
+    },
+    "TH Portal Announcement": {
+        "validate": "toefl_house.operations.doctype.th_portal_announcement.th_portal_announcement.validate",
     },
     "TH Configuration Operation": {
         "validate": "toefl_house.operations.doctype.th_configuration_operation.th_configuration_operation.validate",
