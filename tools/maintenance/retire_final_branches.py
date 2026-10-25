@@ -1,6 +1,6 @@
 """Final branch retirement, SHA-pinned and fail-closed. Main is never deleted.
 
-Only run from the explicit main-branch maintenance workflow after PR #69
+Only run from the explicit main-branch maintenance workflow after PR #84
 has merged. Superseded agent heads have named, verified replacement PRs.
 Dry-run unless --apply is passed with CI authorization.
 """
@@ -13,7 +13,7 @@ import urllib.parse
 from retire_merged_branches import api, delete_ref_path, eligible, open_pulls
 
 REPOSITORY = "Frotan2/TOFEL-House-ERP"
-SELF_BRANCH = "maintenance/retire-receipt-currency-fix-20261025"
+SELF_BRANCH = "maintenance/retire-owner-backup-switch-20261025"
 # (original PR number or None, exact branch, audited head SHA, replacement PR or None)
 # The replacement mapping is for intentionally closed, unmerged/obsolete
 # implementations; it is never permission to retire an open PR or a moved head.
@@ -43,6 +43,7 @@ CANDIDATES = (
     (80, "fix/manager-funnel-completeness-d7-20261025", "b4819ac1e751c6178188525cf80d878a1de6dbb1", None),
     (81, "fix/receipt-currency-owner-report-20261025", "74a63ae5600eadb8a7de33990a22fb9c4f20ccf5", None),
     (83, "fix/customer-gui-prebuilt-only-20261025", "43d040709212ac250548565f5b20e114ba22df0f", None),
+    (84, "feature/owner-backup-on-off-default-off-20261025", "44526ac39ce1a43830218cd0508e57e560742c8b", None),
 )
 
 
@@ -142,7 +143,7 @@ def main():
         return 2
     if args.apply and (
         os.environ.get("GITHUB_REF") != "refs/heads/main"
-        or os.environ.get("CONFIRM_FINAL_BRANCH_RETIREMENT") != "exact-25-heads-after-pr83"
+        or os.environ.get("CONFIRM_FINAL_BRANCH_RETIREMENT") != "exact-26-heads-after-pr84"
     ):
         print("FAIL CLOSED: main workflow authorization required", file=sys.stderr)
         return 2
@@ -152,6 +153,7 @@ def main():
         verify_replacement(69)
         verify_replacement(81)
         verify_replacement(83)
+        verify_replacement(84)
         if not api("/contents/apps/toefl_house/toefl_house/teaching/transfers.py?ref=main", TOKEN):
             raise RuntimeError("Class transfer implementation missing from main")
         if not api("/contents/apps/toefl_house/toefl_house/operations/guardian_portal.py?ref=main", TOKEN):
