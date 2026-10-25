@@ -35,7 +35,7 @@ _DESK_PAGES = (
 )
 page_js.update({name: "public/js/th_role_desks.js" for name in _DESK_PAGES})
 fixtures = [{"dt": "Role", "filters": [["name", "in", ["Placement Author", "Placement Publisher", "Placement Auditor", "Placement Invigilator", "Placement Assessor", "Placement Reviewer", "Placement Releaser", "Admission Officer", "Admission Reviewer", "Admission Approver", "Admission Auditor", "Enrollment Officer", "Enrollment Auditor", "Teaching Scheduler", "Attendance Recorder", "Teaching Auditor", "Finance Officer", "Finance Auditor", "Course Owner", "General Manager", "Academic Manager", "Finance Manager", "Reception", "Instructor"]]]},
-            {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Fees", "Student Group", "Student Applicant"]]]}]
+            {"dt": "Custom Field", "filters": [["dt", "in", ["Sales Invoice", "Fee Structure", "Fees", "Student Group", "Student Applicant", "Course Schedule"]]]}]
 has_permission = {
     name: "toefl_house.permissions.has_permission"
     for name in ("TH Placement Item Revision", "TH Placement Key Revision", "TH Placement Audit Event",
@@ -64,7 +64,14 @@ has_permission = {
                  "TH Portal Configuration", "TH Guardian Consent",
                  "TH Portal Announcement",
                  "TH Configuration Operation", "TH Configuration Audit Event",
-                 "TH Assessment Book", "TH Academic Result", "TH Progression Decision")
+                 "TH Assessment Book", "TH Academic Result", "TH Progression Decision",
+                 # Mission 3 class operations: the configurable calendar,
+                 # timetable and operations policy (governance), plus the
+                 # guarded operational records.
+                 "TH Class Operations Policy", "TH Academic Calendar",
+                 "TH Timetable Template",
+                 "TH Class Transfer", "TH Class Waiting List",
+                 "TH Capacity Approval", "TH Class Suspension")
 }
 has_permission["TH Academic Program"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Program Level"] = "toefl_house.permissions.configuration_has_permission"
@@ -87,6 +94,9 @@ for _dt in ("TH Notification", "TH Notification Dispatch Rule",
 has_permission["TH Owner Operations Policy"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Operation"] = "toefl_house.permissions.configuration_has_permission"
 has_permission["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Class Operations Policy"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Academic Calendar"] = "toefl_house.permissions.configuration_has_permission"
+has_permission["TH Timetable Template"] = "toefl_house.permissions.configuration_has_permission"
 # Branch isolation (the multi-branch operating rule): the four native
 # doctypes that are not synthetic-gated gain their own branch hooks. See
 # toefl_house.permissions.BRANCH_KINDS / BRANCH_NATIVE_DOCTYPES.
@@ -116,7 +126,11 @@ permission_query_conditions = {
         ("TH Enrollment Exit", "enrollment_exit"),
         ("TH Assessment Book", "assessment_book"),
         ("TH Academic Result", "academic_result"),
-        ("TH Progression Decision", "progression_decision"))
+        ("TH Progression Decision", "progression_decision"),
+        ("TH Class Transfer", "class_transfer"),
+        ("TH Class Waiting List", "class_waiting_list"),
+        ("TH Capacity Approval", "capacity_approval"),
+        ("TH Class Suspension", "class_suspension"))
 }
 # Governance configuration is queried through the non-synthetic checker.
 permission_query_conditions["TH Academic Program"] = "toefl_house.permissions.configuration_query"
@@ -140,6 +154,9 @@ for _dt in ("TH Notification", "TH Notification Dispatch Rule",
 permission_query_conditions["TH Owner Operations Policy"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Operation"] = "toefl_house.permissions.configuration_query"
 permission_query_conditions["TH Configuration Audit Event"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Class Operations Policy"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Academic Calendar"] = "toefl_house.permissions.configuration_query"
+permission_query_conditions["TH Timetable Template"] = "toefl_house.permissions.configuration_query"
 # Branch isolation: the four native doctypes' row conditions (see
 # toefl_house.permissions.branch_query_*).
 permission_query_conditions["Student"] = "toefl_house.permissions.branch_query_student"
@@ -235,6 +252,18 @@ doc_events = {
     },
     "TH Configuration Audit Event": {
         "validate": "toefl_house.operations.doctype.th_configuration_audit_event.th_configuration_audit_event.validate",
+    },
+    # Mission 3 class-operations configuration: unconditional integrity hooks
+    # (the rules bind on every write path, native form included) and the
+    # command-context refusal inside each controller.
+    "TH Class Operations Policy": {
+        "validate": "toefl_house.teaching.doctype.th_class_operations_policy.th_class_operations_policy.validate",
+    },
+    "TH Academic Calendar": {
+        "validate": "toefl_house.teaching.doctype.th_academic_calendar.th_academic_calendar.validate",
+    },
+    "TH Timetable Template": {
+        "validate": "toefl_house.teaching.doctype.th_timetable_template.th_timetable_template.validate",
     },
     "Program Enrollment": {
         "validate": "toefl_house.enrollment.guard_program_enrollment",

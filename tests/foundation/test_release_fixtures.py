@@ -18,6 +18,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "apps/toefl_house/toefl_house"
 ROLES = APP / "fixtures/role.json"
+CUSTOM_FIELDS = APP / "fixtures/custom_field.json"
 MODULES = APP / "modules.txt"
 HOOKS = APP / "hooks.py"
 
@@ -29,6 +30,7 @@ EXPECTED = {
 # native Accounts module (finance officer = Accounts User).
 NATIVE_MODULES = {"Accounts"}
 KNOWN_REPORTS = {"TH Tuition Billing Register", "TH Placement Billing Register"}
+LAYOUT_FIELDS = {"Section Break", "Column Break", "Tab Break"}
 KNOWN_DOCTYPES = {
     # native (education/erpnext) targets used by the workspaces
     "Student Applicant", "Student", "Program Enrollment", "Course Enrollment",
@@ -44,6 +46,12 @@ KNOWN_DOCTYPES = {
     "TH Placement Response", "TH Placement Score", "TH Placement Decision",
     "TH Placement Operation", "TH Placement Audit Event",
     "TH Admission Decision",
+    # Mission 3 class operations, scheduling, capacity and mobility
+    "TH Class Operations Policy", "TH Class Operations Policy Version",
+    "TH Academic Calendar", "TH Academic Calendar Day",
+    "TH Timetable Template", "TH Timetable Slot",
+    "TH Capacity Approval", "TH Class Waiting List",
+    "TH Class Transfer", "TH Class Suspension",
 }
 
 
@@ -88,6 +96,22 @@ class ReleaseFixtureTests(unittest.TestCase):
             self.assertTrue(roles, (ws["name"], "empty roles would make the workspace visible to everyone"))
             self.assertTrue(roles <= self.role_names,
                             (ws["name"], sorted(roles - self.role_names)))
+
+    def test_custom_field_fixtures_are_importable(self):
+        # Frappe's fixture import reads each Custom Field row by its `name`,
+        # which must be "<dt>-<fieldname>"; a row without one aborts
+        # `bench install-app` with a bare KeyError. That happened once, so the
+        # shape is pinned here instead of being discovered on a runner.
+        rows = json.loads(CUSTOM_FIELDS.read_text())
+        self.assertEqual(len({(row["dt"], row["fieldname"]) for row in rows}), len(rows))
+        for row in rows:
+            self.assertEqual(row["doctype"], "Custom Field", row.get("name"))
+            self.assertEqual(row.get("name"), f"{row['dt']}-{row['fieldname']}", row.get("name"))
+            self.assertTrue(row.get("fieldtype"), row["name"])
+            if row["fieldtype"] not in LAYOUT_FIELDS:
+                self.assertTrue(row.get("label"), row["name"])
+            if row["fieldtype"] == "Select":
+                self.assertTrue(row.get("options"), row["name"])
 
     def test_modules_exist(self):
         for ws in self.workspaces:

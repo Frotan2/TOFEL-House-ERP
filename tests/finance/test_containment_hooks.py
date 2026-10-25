@@ -92,6 +92,14 @@ class ContainmentHookWiringTests(unittest.TestCase):
                             "TH Portal Configuration", "TH Notification",
                             "TH Portal Announcement",
                             "TH Configuration Operation", "TH Configuration Audit Event",
+                            # Mission 3 (2026-10-24): the three new teaching
+                            # configuration masters carry the same
+                            # command-only integrity hook as the other config
+                            # masters above — validate-only, not a command
+                            # guard, and registered in
+                            # configuration.audit.KIND_AUTHORITY.
+                            "TH Class Operations Policy", "TH Academic Calendar",
+                            "TH Timetable Template",
                             # 2026-10-18: unconditional validate-only integrity hook (Office 365 link
                             # uniqueness, toefl_house/identity_links.py). Not a command guard.
                             "User"}
