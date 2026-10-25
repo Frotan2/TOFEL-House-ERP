@@ -7236,13 +7236,14 @@ def main():
                 if reference not in references:
                     continue
                 assert reference not in selected,('duplicate teaching input',reference)
-                # HRMS determines earning/deduction classification from
-                # Salary Component.type; the optional Additional Salary.type
-                # field is blank on normal teaching-assignment drafts.
+                # HRMS queries submitted Additional Salary by its *own*
+                # type when populating a Salary Slip. Salary Component.type
+                # alone cannot rescue an input that has a blank/wrong type.
                 assert row.salary_component==cfx['earning'],row
                 assert frappe.db.get_value('Salary Component',
                     row.salary_component,'type')=='Earning',row
-                assert row.type in (None,'','Earning'),row
+                assert row.type=='Earning',(
+                    'teaching input would be excluded by native HRMS',row.name)
                 # Native HRMS rejects a second same-component same-date
                 # salary with overwrite enabled. Teaching inputs must add,
                 # never replace the underlying Salary Structure amount.
