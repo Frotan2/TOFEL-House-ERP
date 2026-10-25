@@ -225,7 +225,7 @@ class BaseHarness(unittest.TestCase):
                 if not u:
                     return None
                 if isinstance(fieldname, str):
-                    return u.get(fieldname) or u.get("email")
+                    return u.get(fieldname)
                 if isinstance(fieldname, list):
                     return {f: u.get(f) for f in fieldname}
                 return u
@@ -748,6 +748,14 @@ class StudentPortalTests(BaseHarness):
         self._add_user("bob@example.com", email="bob@example.com", roles=["Student"])
         self._add_student("STU-ALICE", "alice@example.com", customer="CUST-A", dob="2010-05-01")
         self._add_student("STU-BOB", "bob@example.com", customer="CUST-B", dob="2009-03-15")
+        # Email on its own cannot establish a student identity. These
+        # administrator-provisioned native User Permissions are the binding.
+        self.user_permissions.extend([
+            {"name": "UP-ALICE", "user": "alice@example.com",
+             "allow": "Student", "for_value": "STU-ALICE"},
+            {"name": "UP-BOB", "user": "bob@example.com",
+             "allow": "Student", "for_value": "STU-BOB"},
+        ])
         # Roster + schedules
         self.roster.append({"parent": "GRP-10A", "student": "STU-ALICE", "active": 1})
         self.course_schedules.append({"name": "CS-1", "student_group": "GRP-10A", "course": "TOEFL-A", "room": "R1", "schedule_date": "2026-10-24", "from_time": "09:00", "to_time": "10:00", "instructor": "T1"})
@@ -788,6 +796,20 @@ class StudentPortalTests(BaseHarness):
         data = self.student_portal.get_my_fees()
         self.assertEqual(len(data["fees"]), 1)
         self.assertEqual(data["fees"][0]["name"], "FEE-ALICE")
+
+    def test_email_match_without_native_student_binding_cannot_access_records(self):
+        self._set_session("alice@example.com")
+        self.user_permissions = [
+            p for p in self.user_permissions if p.get("user") != "alice@example.com"
+        ]
+        with self.assertRaises(PermissionError):
+            self.student_portal.get_my_attendance()
+
+    def test_disabled_student_account_cannot_read_grades(self):
+        self._set_session("alice@example.com")
+        self.users["alice@example.com"]["enabled"] = 0
+        with self.assertRaises(PermissionError):
+            self.student_portal.get_my_grades()
 
     def test_idor_via_explicit_student_param_blocked(self):
         self._set_session("alice@example.com")
