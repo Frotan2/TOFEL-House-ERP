@@ -102,6 +102,12 @@ def teaching_refusal(day, teaching_days, plan):
     kind = (plan or {}).get(day, "")
     if is_blocking_kind(kind):
         return f"{day} is a {kind} day in the academic calendar"
+    # Institution-wide weekly closure: Friday only. An authorized explicit
+    # "Working Day" exception in the audited academic calendar can reopen
+    # a particular Friday, but merely listing Fri in a legacy teaching-days
+    # policy never silently creates a recurring Friday timetable.
+    if weekday_code(day) == "Fri" and kind != "Working Day":
+        return f"{day} is Friday, the institution's weekly holiday"
     if teaching_days is not None and not weekday_matches(day, teaching_days):
         return (f"{day} is a {weekday_code(day)} and the class-operations "
                 "policy does not teach on that weekday")
