@@ -2019,17 +2019,35 @@ def main():
                 live=_ocfg.governing_owner_operations()
                 # governing terms carry the database value (a timedelta); normalize as the consumer does
                 assert live and _ocfg._backup_schedule_time(live['backup_schedule_time'])=='02:30',live
+                # D18: a validated policy cannot silently turn on backup.
+                cur=_ocfg.current_backup_policy()
+                assert cur == {'configured':False,'status':'OFF'},cur
+                assert _ocfg.current_backup_public_key_b64()=='','Off exposed a recovery key'
+                assert _ocfg.backup_switch_state()['enabled'] is False
+                enabled=_ocfg.set_backup_enabled('ops_life_switch_on_001',1)
+                assert enabled['status']=='ON' and enabled['enabled'] is True,enabled
                 cur=_ocfg.current_backup_policy()
                 assert cur['configured'] is True and cur['status']=='CONFIGURED',cur
                 assert cur['schedule_time']=='02:30' and cur['retention_versions']==7,cur
                 assert cur['retention_behavior']==_ocfg.RETENTION_DELETE_BEYOND_KEEP,cur
+                prior_hash=cur['policy_hash']
+                switched_off=_ocfg.set_backup_enabled('ops_life_switch_off_001',0)
+                assert switched_off['status']=='OFF' and switched_off['enabled'] is False,switched_off
+                assert _ocfg.current_backup_policy()=={'configured':False,'status':'OFF'}
+                assert _ocfg.current_backup_public_key_b64()=='','Off exposed recovery key'
+                enabled_again=_ocfg.set_backup_enabled('ops_life_switch_on_002',1)
+                assert enabled_again['status']=='ON',enabled_again
+                after_reenable=_ocfg.current_backup_policy()
+                assert after_reenable['configured'] is True,after_reenable
+                assert after_reenable['policy_hash']!=prior_hash,'old backup receipt identity reused'
                 off=_ocfg.set_owner_operations_policy_status('ops_life_retire_0001',code,0)
                 assert off['status']=='Retired',off
                 assert _ocfg.governing_owner_operations()=={},'retired policy still resolves terms'
                 assert _ocfg.current_backup_policy()['configured'] is False
                 kinds=set(frappe.db.get_all('TH Configuration Operation',filters={'actor':users['course_owner']},pluck='kind'))
                 need={'create_owner_operations_policy','set_owner_operations_policy_version',
-                      'validate_owner_operations_policy','set_owner_operations_policy_status'}
+                      'validate_owner_operations_policy','set_owner_operations_policy_status',
+                      'set_backup_enabled'}
                 assert need<=kinds,sorted(kinds)
                 return {'policy':pol['name'],'versions_written':1,'refused_invalid':2,
                         'receipts':sorted(need)}
