@@ -246,21 +246,39 @@ def _funnel_and_exceptions():
     corrections_count = _scoped_count_or_unknown(
         CORRECTION, {"status": "Requested"}, preview=corrections)
 
-    now = now_datetime()
     overdue_deadlines = []
-    for row in attempts_running:
-        if row.get("deadline_at"):
-            try:
-                from frappe.utils import get_datetime
-                if get_datetime(row["deadline_at"]) < now:
-                    overdue_deadlines.append(row)
-            except Exception:
-                continue
+    deadline_evidence_complete = (
+        isinstance(running_count, int)
+        and not isinstance(running_count, bool)
+        and running_count == len(attempts_running)
+    )
+    if deadline_evidence_complete and any(row.get("deadline_at") for row in attempts_running):
+        try:
+            from frappe.utils import get_datetime
+            now = now_datetime()
+            if now is None:
+                raise ValueError("Placement deadline clock unavailable")
+            for row in attempts_running:
+                if row.get("deadline_at"):
+                    deadline = get_datetime(row["deadline_at"])
+                    if deadline is None:
+                        raise ValueError("Invalid placement deadline")
+                    if deadline < now:
+                        overdue_deadlines.append(row)
+        except Exception:
+            # Do not silently skip a broken deadline or claim zero overdue.
+            deadline_evidence_complete = False
 
     funnel_facts = [
         {"label": "Placement sessions running",
          "definition": "Attempts from Allocated through Review.",
          "value": running_count, "owner": "Placement Invigilator"},
+        {"label": "Placement deadlines overdue",
+         "definition": (
+             "Running attempts whose validated server deadline has passed. "
+             "Unavailable if any running attempt or deadline cannot be checked."),
+         "value": len(overdue_deadlines) if deadline_evidence_complete else "—",
+         "owner": "Placement Invigilator"},
         {"label": "Results awaiting release",
          "definition": "Finalized attempts with no released decision yet.",
          "value": awaiting_release_count, "owner": "Placement Releaser"},
@@ -283,6 +301,20 @@ def _funnel_and_exceptions():
     ]
 
     exception_items = []
+    if not deadline_evidence_complete:
+        exception_items.append({
+            "id": "source:placement-deadlines",
+            "person": "Placement deadlines",
+            "detail": "Unavailable or incomplete deadline evidence",
+            "status": "Unknown",
+            "stage": "Deadline source needs verification",
+            "stage_definition": (
+                "An incomplete list or invalid datetime cannot establish "
+                "that no placement sessions are overdue."),
+            "next": "Verify placement attempts and their server deadlines.",
+            "next_role": "General Manager",
+            "waiting_since": None,
+        })
     for row in review_waiting:
         exception_items.append({
             "id": row["name"],
@@ -565,12 +597,12 @@ def work():
         "sections": [
             *ops_analytics,
             section("funnel", "Operation funnel — today\u2019s state", "facts", facts=funnel_facts,
-                    empty_title="No operational records yet",
-                    empty_body="Nothing is running in the placement, admission, enrollment or finance pipeline."),
+                    empty_title="No operational preview items",
+                    empty_body="The preview alone cannot prove all operational queues are empty; check scoped counts and source records."),
             section("exceptions", "Exceptions and oldest waiting work — action queue", "queue",
                     items=exception_items,
-                    empty_title="No exceptions",
-                    empty_body="Nothing is overdue, stuck or waiting on an approver right now."),
+                    empty_title="No exception preview items",
+                    empty_body="Check the scoped source counts and deadline evidence before concluding there are no exceptions."),
             section("activity", "Recent recorded actions", "queue",
                     items=_recorded_action_items(),
                     empty_title="No recorded actions yet",
