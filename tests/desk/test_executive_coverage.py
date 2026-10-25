@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "apps/toefl_house/toefl_house/desk/analytics.py"
 OWNER = ROOT / "apps/toefl_house/toefl_house/desk/owner.py"
 FUNCTIONS = {
-    "_complete_project_rows", "_summarize_by", "_money_sum",
+    "_complete_project_rows", "_checked_project_count", "_summarize_by", "_money_sum",
     "enrollment_metrics", "admission_metrics", "attendance_metrics",
     "attendance_by_instructor", "tuition_metrics", "exception_metrics",
 }
@@ -135,8 +135,6 @@ class VerifiedCoverageTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "incomplete"):
             ns["attendance_by_instructor"]()
         for doctype, n in (
-                ("TH Correction Request", 26),
-                ("TH Admission Decision", 26),
                 ("TH Placement Attempt", 401),
                 ("TH Placement Decision", 401)):
             with self.subTest(doctype=doctype):
@@ -144,6 +142,28 @@ class VerifiedCoverageTests(unittest.TestCase):
                     rows={doctype: [{"name": str(i)} for i in range(n)]})
                 with self.assertRaisesRegex(RuntimeError, "incomplete"):
                     ns["exception_metrics"]()
+
+    def test_queue_total_uses_full_count_even_when_26_or_more_pending(self):
+        ns, calls = load_analytics(rows={
+            "TH Correction Request": [{"name": str(i)} for i in range(26)],
+            "TH Admission Decision": [{"name": str(i)} for i in range(26)],
+        })
+        result = ns["exception_metrics"]()
+        self.assertEqual(result["corrections_pending"], 26)
+        self.assertEqual(result["admissions_in_review"], 26)
+        self.assertFalse(any(
+            phase == "rows" and dt in ("TH Correction Request",
+                                        "TH Admission Decision")
+            for phase, _, dt, _ in calls))
+        self.assertIn(("count", "management", "TH Correction Request",
+                       {"status": "Requested"}), calls)
+        self.assertIn(("count", "management", "TH Admission Decision",
+                       {"status": "Review"}), calls)
+
+    def test_denied_correction_count_is_unavailable_not_zero(self):
+        ns, _ = load_analytics(error=("count", "TH Correction Request"))
+        with self.assertRaises(PermissionError):
+            ns["exception_metrics"]()
 
     def test_valid_finance_totals_remain_real_numbers(self):
         ns, _ = load_analytics(rows={
