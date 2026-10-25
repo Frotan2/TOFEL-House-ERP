@@ -75,6 +75,15 @@ class AfghanShamsiTests(unittest.TestCase):
         self.assertEqual(shamsi.month_key("2026-10-25"), "1405-08")
         self.assertEqual(shamsi.solar_month_label("1405-08"), "عقرب 1405")
 
+    def test_only_fridays_are_generated_for_the_afghan_fiscal_year(self):
+        holidays = shamsi.friday_holidays_for_fiscal_year(1405)
+        first, last = shamsi.fiscal_year_bounds(1405)
+        self.assertIn(len(holidays), (52, 53))
+        self.assertEqual(len(set(holidays)), len(holidays))
+        self.assertTrue(all(first <= d <= last and d.weekday() == 4
+                            for d in holidays))
+        self.assertFalse(any(d.weekday() in (5, 6) for d in holidays))
+
     def test_invalid_dates_and_ambiguous_policy_inputs_fail_closed(self):
         for value in ("1405-8", "۱۴۰۵-۰۸", "1405-00", "1405-13", "2026-08", None):
             with self.subTest(period=value), self.assertRaises(ValueError):
