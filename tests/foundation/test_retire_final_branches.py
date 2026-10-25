@@ -64,7 +64,7 @@ class FinalBranchRetirementTests(unittest.TestCase):
                        "43d040709212ac250548565f5b20e114ba22df0f", None),
                       retire.CANDIDATES)
         self.assertIn((84, "feature/owner-backup-on-off-default-off-20261025",
-                       "e0b51174bac53563648280e644257e5f059119e0", None),
+                       "2a0ff05b4f12c0db8009088ab6a4cdd17aebe18d", None),
                       retire.CANDIDATES)
 
     def test_closed_superseded_branch_requires_merged_replacement(self):
