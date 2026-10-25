@@ -212,6 +212,11 @@ def _coerce_int(v):
 # ---------------------------------------------------------------------------
 # Dispatch rule persistence
 # ---------------------------------------------------------------------------
+def _isolated_test():
+    """Synthetic in-memory transport must never authorize production state."""
+    return bool(getattr(getattr(frappe, "flags", None), "in_test", False))
+
+
 def get_dispatch_rule(event_type):
     """Return the effective dispatch rule for an event_type.
 
@@ -220,7 +225,7 @@ def get_dispatch_rule(event_type):
     """
     if event_type not in EVENT_TYPES:
         raise ValueError(f"Unknown event_type: {event_type}")
-    if event_type in _memory_rules:
+    if _isolated_test() and event_type in _memory_rules:
         return _memory_rules[event_type]
     # Try DB
     try:
@@ -464,10 +469,15 @@ def create_notification(event_type, title, message, severity=None,
             "created_at": doc_data["created_at"],
         }
         # Keep fallback store in sync for offline harness
-        _memory_notifications[result["name"]] = dict(result)
+        if _isolated_test():
+            _memory_notifications[result["name"]] = dict(result)
         return result
     except Exception:
-        # Offline stub fallback: return dict without DB
+        if not _isolated_test():
+            # A failed DB write is never a durable queued notification.
+            # Do not report success from an ephemeral in-memory fallback.
+            raise
+        # Only isolated unit-test harnesses may simulate missing DB writes.
         # Simulate a doc name (include title to make unique within second)
         import hashlib
         name = "NOTIF-" + hashlib.sha256((_now() + title).encode()).hexdigest()[:8].upper()
@@ -497,7 +507,7 @@ def create_notification(event_type, title, message, severity=None,
 def _load_notification(name):
     """Load a notification doc/dict by name."""
     # In-memory fallback store first (offline harness)
-    if isinstance(name, str) and name in _memory_notifications:
+    if _isolated_test() and isinstance(name, str) and name in _memory_notifications:
         data = dict(_memory_notifications[name])
         class _MemDoc(dict):
             def get(self, k, d=None):
@@ -654,7 +664,8 @@ def attempt_delivery(notification_name, provider_override=None):
                 doc.last_failure = detail
             doc.save(ignore_permissions=True)
         except Exception:
-            pass
+            if not _isolated_test():
+                raise
         data["status"] = new_status
         data["retry_count"] = new_retry
         data["next_retry_at"] = next_retry_at
@@ -702,7 +713,8 @@ def acknowledge_notification(notification_name, actor=None):
             doc.acknowledged_by = actor
             doc.save(ignore_permissions=True)
         except Exception:
-            pass
+            if not _isolated_test():
+                raise
     data["status"] = "acknowledged"
     data["acknowledged_at"] = _now()
     data["acknowledged_by"] = actor
