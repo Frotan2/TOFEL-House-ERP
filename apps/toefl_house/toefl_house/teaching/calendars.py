@@ -106,7 +106,9 @@ def teaching_refusal(day, teaching_days, plan):
     # "Working Day" exception in the audited academic calendar can reopen
     # a particular Friday, but merely listing Fri in a legacy teaching-days
     # policy never silently creates a recurring Friday timetable.
-    if weekday_code(day) == "Fri" and kind != "Working Day":
+    if weekday_code(day) == "Fri":
+        if kind == "Working Day":
+            return ""  # one audited dated exception, not a recurring weekly rule
         return f"{day} is Friday, the institution's weekly holiday"
     if teaching_days is not None and not weekday_matches(day, teaching_days):
         return (f"{day} is a {weekday_code(day)} and the class-operations "
