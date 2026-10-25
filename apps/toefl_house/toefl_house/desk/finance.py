@@ -401,14 +401,17 @@ def _compensation_items(contracts, instructors):
         items.append({
             "id": "payroll-period",
             "person": "Payroll period",
-            "detail": "Compensation posts once per period, from the active "
-                      "contracts and the recorded teaching facts.",
+            "detail": "Calculate auditable native Additional Salary drafts for eligible "
+                      "teaching facts. These are not submitted wages or payments.",
             "status": "Periodic",
             "stage": "Compensation period",
-            "stage_definition": ("One payroll-period calculation into native "
-                                 "payroll inputs; fixed-salary instructors "
-                                 "stay on their native salary structure."),
-            "next": "Run the calculation when the period closes.",
+            "stage_definition": ("Calculation prepares native Additional Salary drafts. "
+                                 "Authorized payroll staff must review and submit "
+                                 "them before HRMS Salary Slip; fixed-salary "
+                                 "instructors stay on native Salary Structure."),
+            "next": "Calculate when the period closes. Authorized payroll staff must "
+                    "review and submit the Additional Salary drafts, then process "
+                    "Salary Slip under normal HRMS approvals.",
             "next_role": "Finance Officer",
             "waiting_since": None,
         })
