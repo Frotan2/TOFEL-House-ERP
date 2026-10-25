@@ -30,10 +30,11 @@ import re
 from toefl_house.configuration import rules as foundation
 
 CODE_PATTERN = re.compile(r"[A-Z0-9][A-Z0-9-]{1,31}")
-DURATION_UNITS = ("Month", "Week", "Day")
+DURATION_UNITS = ("Month", "Week", "Day", "Solar Hijri Month")
 # Numeric ceiling: one year in the smallest unit is already far beyond any
 # real TOEFL House level; this is a typo guard, not business policy.
-DURATION_MAX = {"Month": 24.0, "Week": 104.0, "Day": 730.0}
+DURATION_MAX = {"Month": 24.0, "Week": 104.0, "Day": 730.0,
+                "Solar Hijri Month": 24.0}
 TITLE_MAX = 140
 REASON_MAX = 500
 
@@ -91,9 +92,11 @@ def validate_duration_value(value, unit):
         raise ValueError("Duration must be a number")
     value = float(value)
     if unit not in DURATION_UNITS:
-        raise ValueError("Duration unit must be Month, Week or Day")
+        raise ValueError("Duration unit must be Month, Week, Day or Solar Hijri Month")
     if value <= 0:
         raise ValueError("Duration must be greater than zero")
+    if unit == "Solar Hijri Month" and not value.is_integer():
+        raise ValueError("Solar Hijri month duration must be a whole number")
     if value > DURATION_MAX[unit]:
         raise ValueError(
             f"Duration of {value:g} {unit.lower()}s looks like a typo; "
@@ -139,7 +142,7 @@ def duration_label(row):
     value = float(row.get("duration_value") or 0)
     unit = str(row.get("duration_unit") or "").lower()
     number = f"{value:g}"
-    if float(value).is_integer() and unit in ("month", "week", "day") and value == 1:
+    if float(value).is_integer() and unit in ("month", "week", "day", "solar hijri month") and value == 1:
         return f"{number} {unit}"
     return f"{number} {unit}s" if unit else ""
 
