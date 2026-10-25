@@ -270,6 +270,39 @@ class BillingPolicyTests(unittest.TestCase):
             "installments_allowed": 0, "max_installments": 1,
             "installment_interval_days": 0})
 
+    def test_owner_can_version_solar_month_due_dates_and_grace(self):
+        self._existing_policy()
+        result = self.policies.set_billing_policy_version(
+            "test-key-billpol-solar001", "BILL-POL", "2026-09-23",
+            "Owner enables Afghan monthly billing", 90, 30, "any",
+            installments_allowed=1, max_installments=2,
+            installment_interval_days=0,
+            installment_cadence="Solar Hijri Month",
+            payment_grace_days=3)
+        self.assertEqual(result["version_count"], 1)
+        self.today = "2026-09-23"
+        terms = self.policies.governing_billing_terms()
+        self.assertEqual(terms["installment_cadence"], "Solar Hijri Month")
+        self.assertEqual(terms["payment_grace_days"], 3)
+        self.assertEqual(terms["max_installments"], 2)
+        self.assertEqual(terms["installment_interval_days"], 0)
+
+    def test_owner_solar_cadence_refuses_unapproved_shapes(self):
+        self._existing_policy()
+        for cadence, grace in (("Lunar", 0), ("Days", 3),
+                               ("Solar Hijri Month", -1),
+                               ("Solar Hijri Month", 16),
+                               ("Solar Hijri Month", True)):
+            with self.subTest(cadence=cadence, grace=grace):
+                with self.assertRaises(_ValidationError):
+                    self.policies.set_billing_policy_version(
+                        "test-key-billpol-solar002", "BILL-POL", "2026-09-23",
+                        "Owner rejects invalid cadence", 90, 30, "any",
+                        installments_allowed=1, max_installments=2,
+                        installment_interval_days=0,
+                        installment_cadence=cadence,
+                        payment_grace_days=grace)
+
     def test_bad_bounds_are_refused(self):
         self._existing_policy()
         for back, fut in ((-1, 30), (30, -1), (367, 30), (30, 367),
