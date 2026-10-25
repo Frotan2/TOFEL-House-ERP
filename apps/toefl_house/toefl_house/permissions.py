@@ -358,6 +358,9 @@ GOVERNANCE_DOCTYPES = {"TH Academic Program", "TH Program Level", "TH Discount R
                         "TH Adjustment Posting Policy",
                         "TH Alerting Policy",
                         "TH Guardian Lifecycle Policy", "TH Owner Operations Policy",
+                        "TH Notification", "TH Notification Dispatch Rule",
+                        "TH Portal Configuration", "TH Guardian Consent",
+                        "TH Portal Announcement",
                         "TH Configuration Operation", "TH Configuration Audit Event"}
 
 
