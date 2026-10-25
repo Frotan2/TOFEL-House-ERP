@@ -109,9 +109,12 @@ deletion is performed automatically.
 
 Evidence added for this boundary: independent host-state mutation tests, a
 real Unix HTTP transport on unrestricted Linux runners, and a root/nobody
-privilege probe using a synthetic Docker HTTP socket. The latter proves raw
-socket denial and the restricted broker protocol, **not real Docker Desktop,
-Windows update, Owner backup/restore, or production qualification**.
+privilege probe using a synthetic Docker HTTP socket. That probe proves raw
+socket denial and the restricted broker protocol. The Product-image pipeline
+also runs a read-only probe against the actual Docker daemon of its disposable
+synthetic deployment. Release-critical `fix/**` branches qualify through the
+same image pipeline before integration. These checks are **not real Docker
+Desktop, Windows update, Owner backup/restore, or production qualification**.
 
 Failures:
 

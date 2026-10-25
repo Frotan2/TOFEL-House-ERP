@@ -41,6 +41,8 @@ class ReleaseImageTriggerContract(unittest.TestCase):
         workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
         self.assertIn("- 'fix/**'", workflow)
         self.assertIn("tools/native/product_update_host_probe.py", push_paths("product-image.yml"))
+        self.assertIn("docs/CUSTOMER-UPDATES.md", push_paths("product-image.yml"))
+        self.assertIn("docs/engineering/SAFE-UPDATES.md", push_paths("product-image.yml"))
         self.assertIn("/probe.py:ro", workflow)
         self.assertIn("target=/run/th-update-docker.sock,readonly", workflow)
 

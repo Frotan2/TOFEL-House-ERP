@@ -58,6 +58,8 @@ on:
       - docs/engineering/foundation-version-matrix.json
       - docs/engineering/LAUNCH-RUNBOOK.md
       - docs/PRODUCT.md
+      - docs/CUSTOMER-UPDATES.md
+      - docs/engineering/SAFE-UPDATES.md
       - docs/owner-decisions.json
       - tools/release/create_customer_package.py
       - tools/release/verify_ci_gates.py
