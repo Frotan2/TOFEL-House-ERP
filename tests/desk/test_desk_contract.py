@@ -2013,6 +2013,11 @@ class OwnerOperationsWorldTests(unittest.TestCase):
         module = _import_desk("owner", roles={"Course Owner"})
         module.frappe.get_all = world_get_all
         module.frappe.db.get_all = world_get_all
+        # The real native db.count uses the same scoped records as get_all.
+        # A disconnected zero-only fake would violate this fixture's own
+        # promise and incorrectly hide the two pending corrections.
+        module.frappe.db.count = (
+            lambda doctype, filters=None: len(world_get_all(doctype, filters=filters)))
         return module.cockpit()
 
     def test_owner_sees_the_same_pending_corrections_as_gm(self):

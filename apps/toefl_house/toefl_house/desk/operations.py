@@ -12,8 +12,7 @@ from toefl_house.desk import (
     DESKS,
     LIMIT_QUEUES,
     _assert_projection,
-    active_cohort_rows,
-    open_cohort_keys,
+    project_count,
     project_rows,
     require_desk_audience,
     section,
@@ -177,6 +176,32 @@ def _recorded_action_items():
 
 
 
+def _scoped_count_or_unknown(doctype, filters, *, preview=None):
+    """Full native management-scope count, never an extrapolated preview."""
+    try:
+        # Keep every query anchored to a module-level native DocType
+        # constant so schema-ledger and projection audit can resolve it.
+        if doctype == ATTEMPT:
+            total = project_count("management", ATTEMPT, filters=filters)
+        elif doctype == DECISION:
+            total = project_count("management", DECISION, filters=filters)
+        elif doctype == ADMISSION:
+            total = project_count("management", ADMISSION, filters=filters)
+        elif doctype == GROUP:
+            total = project_count("management", GROUP, filters=filters)
+        elif doctype == CORRECTION:
+            total = project_count("management", CORRECTION, filters=filters)
+        else:
+            raise ValueError("Unapproved management count source")
+        if (not isinstance(total, int) or isinstance(total, bool) or total < 0
+                or (preview is not None and total < len(preview))):
+            return "—"
+        return total
+    except Exception:
+        # A denied, missing or inconsistent source is not verified zero.
+        return "—"
+
+
 def _funnel_and_exceptions():
     """Shared operational facts for the GM desk and the Owner cockpit.
 
@@ -194,9 +219,11 @@ def _funnel_and_exceptions():
                                 "requested_amount", "status", "modified"],
                                filters={"status": "Requested"},
                                order_by="modified asc", limit=LIMIT_QUEUES)
+    running_statuses = [s for s in lifecycle.PLACEMENT_ATTEMPT_ORDER
+                        if s != "Finalized"]
     attempts_running = project_rows("management", ATTEMPT,
                                     ["name", "case_name", "status", "deadline_at"],
-                                    filters={"status": ("in", list(lifecycle.PLACEMENT_ATTEMPT_ORDER))},
+                                    filters={"status": ("in", running_statuses)},
                                     order_by="modified asc", limit=BOUNCE_WINDOW)
     finalized = project_rows("management", ATTEMPT,
                              ["name", "case_name", "status", "deadline_at"],
@@ -209,57 +236,123 @@ def _funnel_and_exceptions():
     released_attempts = {row["attempt"] for row in released if row.get("attempt")}
     awaiting_release = [row for row in finalized if row["name"] not in released_attempts]
 
-    enrollments = project_rows("management", ENROLLMENT,
-                               ["name", "student", "student_name", "program",
-                                "academic_year", "enrollment_date", "docstatus"],
-                               filters={"docstatus": 1},
-                               order_by="enrollment_date desc", limit=BOUNCE_WINDOW)
-    groups = project_rows("management", GROUP,
-                          ["name", "student_group_name", "program", "academic_year",
-                           "max_strength", "course", "disabled", "th_class_status"],
-                          filters={"disabled": 0}, order_by="student_group_name asc",
-                          limit=LIMIT_QUEUES)
-    cohorts = open_cohort_keys(groups)
-    unclassed = [row for row in enrollments
-                 if (row.get("program"), row.get("academic_year")) not in cohorts]
+    # D7 forbids publishing an inferred waiting-for-class KPI.
+    # Verify that bounded lists cover the full population before subtracting.
+    running_count = _scoped_count_or_unknown(
+        ATTEMPT, {"status": ("in", running_statuses)}, preview=attempts_running)
+    finalized_count = _scoped_count_or_unknown(
+        ATTEMPT, {"status": "Finalized"}, preview=finalized)
+    released_count = _scoped_count_or_unknown(
+        DECISION, {"status": "Released"}, preview=released)
+    awaiting_release_count = (
+        len(awaiting_release)
+        if (isinstance(finalized_count, int) and not isinstance(finalized_count, bool)
+            and isinstance(released_count, int) and not isinstance(released_count, bool)
+            and finalized_count == len(finalized)
+            and released_count == len(released))
+        else "—")
+    draft_count = _scoped_count_or_unknown(ADMISSION, {"status": "Draft"})
+    review_count = _scoped_count_or_unknown(
+        ADMISSION, {"status": "Review"}, preview=review_waiting)
+    active_classes_count = _scoped_count_or_unknown(
+        GROUP, {"disabled": 0, "th_class_status": "Active"})
+    corrections_count = _scoped_count_or_unknown(
+        CORRECTION, {"status": "Requested"}, preview=corrections)
 
-    now = now_datetime()
     overdue_deadlines = []
-    for row in attempts_running:
-        if row.get("deadline_at"):
-            try:
-                from frappe.utils import get_datetime
-                if get_datetime(row["deadline_at"]) < now:
-                    overdue_deadlines.append(row)
-            except Exception:
-                continue
+    deadline_evidence_complete = (
+        isinstance(running_count, int)
+        and not isinstance(running_count, bool)
+        and running_count == len(attempts_running)
+    )
+    if deadline_evidence_complete and any(row.get("deadline_at") for row in attempts_running):
+        try:
+            from frappe.utils import get_datetime
+            now = now_datetime()
+            if now is None:
+                raise ValueError("Placement deadline clock unavailable")
+            for row in attempts_running:
+                if row.get("deadline_at"):
+                    deadline = get_datetime(row["deadline_at"])
+                    if deadline is None:
+                        raise ValueError("Invalid placement deadline")
+                    if deadline < now:
+                        overdue_deadlines.append(row)
+        except Exception:
+            # Do not silently skip a broken deadline or claim zero overdue.
+            deadline_evidence_complete = False
 
     funnel_facts = [
         {"label": "Placement sessions running",
          "definition": "Attempts from Allocated through Review.",
-         "value": len(attempts_running), "owner": "Placement Invigilator"},
+         "value": running_count, "owner": "Placement Invigilator"},
+        {"label": "Placement deadlines overdue",
+         "definition": (
+             "Running attempts whose validated server deadline has passed. "
+             "Unavailable if any running attempt or deadline cannot be checked."),
+         "value": len(overdue_deadlines) if deadline_evidence_complete else "—",
+         "owner": "Placement Invigilator"},
         {"label": "Results awaiting release",
          "definition": "Finalized attempts with no released decision yet.",
-         "value": len(awaiting_release), "owner": "Placement Releaser"},
+         "value": awaiting_release_count, "owner": "Placement Releaser"},
         {"label": "Admissions in Draft",
          "definition": "Admission decisions in Draft.",
-         "value": sum(1 for row in admissions_open if row["status"] == "Draft"),
+         "value": draft_count,
          "owner": "Admission Reviewer"},
         {"label": "Admissions in review",
          "definition": "Admission decisions in Review.",
-         "value": len(review_waiting), "owner": "Admission Approver"},
+         "value": review_count, "owner": "Admission Approver"},
         {"label": "Enrollments awaiting a class",
-         "definition": "Confirmed enrollments whose level and academic year have no class planned or running yet.",
-         "value": len(unclassed), "owner": "Teaching Scheduler"},
+         "definition": "Owner decision D7 defers the inferred class-waiting indicator; assignment and denominator policy are not approved.",
+         "value": "—", "owner": "Teaching Scheduler"},
         {"label": "Classes running",
          "definition": "Classes whose lifecycle is Active (planned classes are counted under enrollment coverage instead).",
-         "value": len(active_cohort_rows(groups)), "owner": "Teaching Scheduler"},
+         "value": active_classes_count, "owner": "Teaching Scheduler"},
         {"label": "Corrections pending",
          "definition": "Correction requests (invoice or tuition fee) in Requested status.",
-         "value": len(corrections), "owner": "Finance Officer"},
+         "value": corrections_count, "owner": "Finance Officer"},
     ]
 
     exception_items = []
+    if not deadline_evidence_complete:
+        exception_items.append({
+            "id": "source:placement-deadlines",
+            "person": "Placement deadlines",
+            "detail": "Unavailable or incomplete deadline evidence",
+            "status": "Unknown",
+            "stage": "Deadline source needs verification",
+            "stage_definition": (
+                "An incomplete list or invalid datetime cannot establish "
+                "that no placement sessions are overdue."),
+            "next": "Verify placement attempts and their server deadlines.",
+            "next_role": "General Manager",
+            "waiting_since": None,
+        })
+    # A bounded oldest-action list is not the whole queue. When the
+    # independent native total exceeds that preview (or cannot be read),
+    # make the missing coverage explicit to staff rather than implying
+    # the visible list exhausts the review/correction backlog.
+    for count, preview, name, label, next_role in (
+        (review_count, review_waiting, "admission-preview",
+         "Admission reviews", "Admission Approver"),
+        (corrections_count, corrections, "correction-preview",
+         "Finance corrections", "Finance Officer"),
+    ):
+        if (not isinstance(count, int) or isinstance(count, bool)
+                or count > len(preview)):
+            exception_items.append({
+                "id": f"source:{name}",
+                "person": label,
+                "detail": "More requests exist or total is unavailable",
+                "status": "Partial",
+                "stage": "Action queue incomplete",
+                "stage_definition": (
+                    "This is only a bounded oldest-item preview. Review "
+                    "the native full list before claiming the queue is empty."),
+                "next": "Open the full source list and work remaining items.",
+                "next_role": next_role,
+                "waiting_since": None,
+            })
     for row in review_waiting:
         exception_items.append({
             "id": row["name"],
@@ -535,19 +628,31 @@ def work():
                     "rows": [{"label": k, "value": v, "tone": "info"} for k, v in sorted(enroll["by_program"].items(), key=lambda x: -x[1])[:8]],
                 }
         except Exception:
-            pass
+            # A denied/incomplete accounting or academic source is UNKNOWN,
+            # never an absent section that looks like verified zero activity.
+            ops_analytics.append(section(
+                "ops-overview-unavailable", "Operational overview unavailable",
+                "facts", facts=[{
+                    "label": "Verified operational totals", "value": "—",
+                    "definition": "One or more required sources cannot be fully verified. No partial summary is published.",
+                    "source": "source verification incomplete",
+                    "scope": "unavailable", "drill_path": "source records list",
+                    "owner": "General Manager",
+                }],
+                empty_title="Operational metrics unavailable",
+                empty_body="A failed or partial read is not evidence of zero work."))
     return {
         "desk": SLUG,
         "title": DESKS[SLUG]["title"],
         "sections": [
             *ops_analytics,
             section("funnel", "Operation funnel — today\u2019s state", "facts", facts=funnel_facts,
-                    empty_title="No operational records yet",
-                    empty_body="Nothing is running in the placement, admission, enrollment or finance pipeline."),
+                    empty_title="No operational preview items",
+                    empty_body="The preview alone cannot prove all operational queues are empty; check scoped counts and source records."),
             section("exceptions", "Exceptions and oldest waiting work — action queue", "queue",
                     items=exception_items,
-                    empty_title="No exceptions",
-                    empty_body="Nothing is overdue, stuck or waiting on an approver right now."),
+                    empty_title="No exception preview items",
+                    empty_body="Check the scoped source counts and deadline evidence before concluding there are no exceptions."),
             section("activity", "Recent recorded actions", "queue",
                     items=_recorded_action_items(),
                     empty_title="No recorded actions yet",
