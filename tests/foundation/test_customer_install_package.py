@@ -105,13 +105,19 @@ class CustomerInstallerContract(unittest.TestCase):
             self.assertIn(word, DAILY_GUIDE)
 
     def test_incomplete_customer_folder_never_attempts_source_build(self):
-        # Customer packages deliberately omit app.Dockerfile and all source.
-        # Their GUI must refuse a missing archive rather than enter a Docker
-        # build path that can never succeed on the customer's computer.
-        self.assertIn('Join-Path $productRoot "app.Dockerfile"', GUI)
+        # Even a developer checkout is NOT a verified customer package.  The
+        # one-click GUI must refuse an absent image regardless of Dockerfile.
+        self.assertIn('Join-Path $productRoot "release\\toefl-house-erp-app.tar"', GUI)
         self.assertIn('"Incomplete customer package"', GUI)
         self.assertIn("Request a complete package from your provider", GUI)
-        self.assertIn("if ($answer -ne [System.Windows.Forms.DialogResult]::Yes)", GUI)
+        self.assertIn("No installation was started", GUI)
+        self.assertNotIn('Join-Path $productRoot "app.Dockerfile"', GUI)
+        self.assertNotIn("Developer source installation", GUI)
+        self.assertNotIn("Building from source can take a long time", GUI)
+        # The real CMD installer must also refuse source builds.
+        self.assertIn('goto :packagemissing', INSTALL)
+        self.assertIn('docker compose up -d --no-build', INSTALL)
+        self.assertNotIn('docker compose build', INSTALL)
 
     def test_customer_can_open_error_diagnostics_without_terminal(self):
         self.assertIn("View Details", GUI)
