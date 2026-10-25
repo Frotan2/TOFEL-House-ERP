@@ -323,10 +323,15 @@ def create_student_group(request_key, group_name, program, academic_year, academ
                 if not solar_end:
                     raise frappe.ValidationError(
                         "This program needs a valid Solar Hijri month duration")
-                if class_end_date and validate_schedule_date(class_end_date) != solar_end:
-                    raise frappe.ValidationError(
-                        "The class end date must match the approved Solar Hijri "
-                        "month duration for this program")
+                if class_end_date:
+                    try:
+                        proposed_end = validate_schedule_date(class_end_date)
+                    except ValueError as exc:
+                        raise frappe.ValidationError(str(exc)) from exc
+                    if proposed_end != solar_end:
+                        raise frappe.ValidationError(
+                            "The class end date must match the approved Solar "
+                            "Hijri month duration for this program")
         # Other program durations preserve the historical explicit-date workflow.
         if class_end_date:
             try:
