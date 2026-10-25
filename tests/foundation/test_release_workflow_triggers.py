@@ -37,6 +37,13 @@ class ReleaseImageTriggerContract(unittest.TestCase):
         self.assertIn("tools/native/native_checks.py", paths)
         self.assertIn("tests/finance/**", paths)
 
+    def test_release_critical_fix_branches_and_observer_probe_are_qualified(self):
+        workflow = (WORKFLOWS / "product-image.yml").read_text(encoding="utf-8")
+        self.assertIn("- 'fix/**'", workflow)
+        self.assertIn("tools/native/product_update_host_probe.py", push_paths("product-image.yml"))
+        self.assertIn("/probe.py:ro", workflow)
+        self.assertIn("target=/run/th-update-docker.sock,readonly", workflow)
+
     def test_native_integration_separately_covers_native_checker_changes(self):
         self.assertIn("tools/native/**", push_paths("native-lifecycle.yml"))
 
