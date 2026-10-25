@@ -178,8 +178,9 @@ class BaseHarness(unittest.TestCase):
                          else "escalation_recipients")
                 rows = [{"parent": r["name"], "recipient": address}
                         for r in fake.dispatch_rules.values()
-                        for address in r.get(field, []) if match(
-                            {"parent": r["name"], "recipient": address}, filters)]
+                        for child in r.get(field, [])
+                        for address in [child.get("recipient") if isinstance(child, dict) else child]
+                        if match({"parent": r["name"], "recipient": address}, filters)]
                 return apply(rows)[:(limit or limit_page_length or 9999)]
             # Default: empty
             return []
@@ -228,6 +229,16 @@ class BaseHarness(unittest.TestCase):
                 if isinstance(fieldname, list):
                     return {f: u.get(f) for f in fieldname}
                 return u
+            if doctype == "TH Guardian Consent":
+                row = next((r for r in fake.guardian_consents if r.get("name") == name), None)
+                if row is None:
+                    return None
+                if isinstance(fieldname, list):
+                    fields = _FakeDoc({key: row.get(key) for key in fieldname})
+                    return fields if kw.get("as_dict") else dict(fields)
+                if isinstance(fieldname, str):
+                    return row.get(fieldname)
+                return _FakeDoc(dict(row)) if kw.get("as_dict") else dict(row)
             # fallback
             return None
 
@@ -747,6 +758,26 @@ class StudentPortalTests(BaseHarness):
         self.assessment_results.append({"name": "AR-2", "student": "STU-BOB", "assessment_plan": "AP-1", "grade": "C", "docstatus": 0, "posting_date": "2026-10-24"})  # draft — not visible
         self.announcements.append({"name": "ANN-1", "title": "Welcome", "message": "Hello students", "publish_date": "2026-10-24", "audience": "All", "status": "Published"})
 
+    def _approve_independently(self, student):
+        """Guardian evidence alone is insufficient: staff must approve it."""
+        self._set_session("guardian@example.com")
+        pending = self.guardian_portal.record_consent(
+            student=student, evidence_type="Link",
+            link_reference="https://example.com/consent")
+        with self.assertRaises(PermissionError):
+            self.guardian_portal.get_child_attendance(student=student)
+        return self.guardian_portal.approve_guardian_consent(
+            "synthetic-guardian-approval-" + student, pending["name"])
+
+    def test_pending_evidence_does_not_authorize_private_student_data(self):
+        self._set_session("guardian@example.com")
+        pending = self.guardian_portal.record_consent(
+            student="STU-CHILD1", evidence_type="Link",
+            link_reference="https://example.com/evidence")
+        self.assertEqual(pending["status"], "Pending")
+        with self.assertRaises(PermissionError):
+            self.guardian_portal.get_child_fees(student="STU-CHILD1")
+
     def test_portal_disabled_by_default(self):
         self.portal_policy.reset_memory_flags()
         self._set_session("alice@example.com")
@@ -864,14 +895,14 @@ class GuardianPortalTests(BaseHarness):
         with self.assertRaises(PermissionError):
             self.guardian_portal.get_child_attendance(student="STU-CHILD1")
         # Record consent
-        self.guardian_portal.record_consent(student="STU-CHILD1", evidence_type="Link", link_reference="http://example.com/consent")
+        self._approve_independently("STU-CHILD1")
         rows = self.guardian_portal.get_child_attendance(student="STU-CHILD1")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["name"], "ATT-C1")
 
     def test_revocation_immediately_denies(self):
         self._set_session("guardian@example.com")
-        self.guardian_portal.record_consent(student="STU-CHILD1", evidence_type="Link")
+        self._approve_independently("STU-CHILD1")
         # Access works
         self.guardian_portal.get_child_attendance(student="STU-CHILD1")
         # Revoke
@@ -891,14 +922,14 @@ class GuardianPortalTests(BaseHarness):
         with self.assertRaises(PermissionError):
             self.guardian_portal.get_child_grades(student="STU-CHILD2")
         # After consent, allowed
-        self.guardian_portal.record_consent(student="STU-CHILD2", evidence_type="Link")
+        self._approve_independently("STU-CHILD2")
         rows = self.guardian_portal.get_child_grades(student="STU-CHILD2")
         # No grades for child2, but call succeeds (empty list) rather than PermissionError
         self.assertIsInstance(rows, list)
 
     def test_record_level_authorization(self):
         self._set_session("guardian@example.com")
-        self.guardian_portal.record_consent(student="STU-CHILD1", evidence_type="Link")
+        self._approve_independently("STU-CHILD1")
         # Guardian can see child1 fees but not other
         data = self.guardian_portal.get_child_fees(student="STU-CHILD1")
         self.assertEqual(len(data["fees"]), 1)
