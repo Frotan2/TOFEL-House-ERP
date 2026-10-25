@@ -1037,6 +1037,12 @@ class PrivacyAdversarialTests(BaseHarness):
         self._add_user("mallory@example.com", email="mallory@example.com", roles=["Student"])
         self._add_student("STU-ALICE", "alice@example.com", customer="CUST-A")
         self._add_student("STU-MALLORY", "mallory@example.com", customer="CUST-B")
+        self.user_permissions.extend([
+            {"name": "UP-PRIV-ALICE", "user": "alice@example.com",
+             "allow": "Student", "for_value": "STU-ALICE"},
+            {"name": "UP-PRIV-MALLORY", "user": "mallory@example.com",
+             "allow": "Student", "for_value": "STU-MALLORY"},
+        ])
         self.fees.append({"name": "FEE-ALICE", "student": "STU-ALICE", "grand_total": 1000, "outstanding_amount": 500, "docstatus": 1})
         self.fees.append({"name": "FEE-MALLORY", "student": "STU-MALLORY", "grand_total": 1000, "outstanding_amount": 0, "docstatus": 1})
 
