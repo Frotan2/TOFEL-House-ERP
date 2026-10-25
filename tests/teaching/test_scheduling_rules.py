@@ -98,7 +98,7 @@ class SessionValidationTests(SchedulingTestBase):
 
     def test_a_non_teaching_weekday_is_refused_by_policy(self):
         with self.assertRaises(ValidationError) as ctx:
-            self.schedule(day="2026-09-25")  # Friday
+            self.schedule(day="2026-09-26")  # Saturday, not in this class policy
         self.assertIn("does not teach on that weekday", str(ctx.exception))
 
     def test_session_duration_bounds_come_from_the_policy(self):
