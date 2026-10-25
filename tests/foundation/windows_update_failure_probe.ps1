@@ -57,6 +57,26 @@ try {
     try { Invoke-EngineStep 'recheck' @{} 'test-version'; throw 'inconsistent check was accepted' }
     catch { if ($_.Exception.Message -cne 'updater.engine_failed') { throw } }
 
+    # Exercise the real installed-engine compatibility probe without a
+    # Docker daemon. A missing broker is legacy; transport/probe failures must
+    # not be treated as permission to run without the observer.
+    . (Import-ProbeFunction 'Test-ImageRequiresObserver')
+    function Invoke-Docker { param($Arguments)
+        $script:ProbeArguments = @($Arguments)
+        return [pscustomobject]@{ Code = $script:ProbeExit }
+    }
+    $imageId = 'sha256:' + ('a' * 64)
+    $script:ProbeExit = 0
+    if (-not (Test-ImageRequiresObserver $imageId)) { throw 'Hardened image was not detected' }
+    if (@($script:ProbeArguments) -ccontains '/run/th-update-docker.sock') {
+        throw 'Capability probe unexpectedly mounted a Docker socket'
+    }
+    $script:ProbeExit = 1
+    if (Test-ImageRequiresObserver $imageId) { throw 'Legacy image was granted observer access' }
+    $script:ProbeExit = 125
+    try { Test-ImageRequiresObserver $imageId; throw 'Probe infrastructure failure was accepted' }
+    catch { if ($_.Exception.Message -cne 'updater.guard_blocked') { throw } }
+
     . (Import-ProbeFunction 'Invoke-UpdateInstall' $true)
     function Invoke-EngineStep {
         param($Mode, $Request, $Version)
