@@ -20,12 +20,11 @@ if [ ! -f /update/request.json ]; then
     exit 4
 fi
 
-# Same ownership repair as product/entrypoint.sh: Windows bind mounts do not
-# carry container UIDs, so the frappe user cannot write the response file until
-# root has fixed ownership.  chown is best-effort by design; if it cannot be
-# applied, the engine fails closed with an unreadable response instead of
-# writing outside the run folder.
-chown -R frappe:frappe /home/frappe/bench/sites /home/frappe/bench/logs 2>/dev/null || true
+# Only the updater's private request and transaction state may be repaired
+# for the unprivileged engine. Never recursively chown mounted customer sites
+# or logs before independent host observation: that would change site metadata
+# before any migration authorization, even when the engine later refuses.
+# Unreadable customer storage must fail closed, not be silently rewritten.
 chown -R frappe:frappe /update 2>/dev/null || true
 chown -R frappe:frappe /update-state 2>/dev/null || true
 
