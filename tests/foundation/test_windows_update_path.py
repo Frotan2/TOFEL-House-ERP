@@ -91,6 +91,34 @@ class UpdateWorkflowTests(unittest.TestCase):
         self.assertIn("sitesRoot", apply_branch)
         self.assertNotIn("sitesRoot", engine_call[engine_call.index("} else {"):])
 
+    def test_legacy_and_hardened_engine_observer_selection_is_pinned(self):
+        """New installs need broker on Check; legacy installs must not get the socket."""
+        helper = UPDATE[UPDATE.index("function Test-ImageRequiresObserver"):
+                        UPDATE.index("function Stop-EngineFailure")]
+        self.assertIn('"--network", "none", "--read-only"', helper)
+        self.assertIn('"--cap-drop", "ALL"', helper)
+        self.assertIn('"--entrypoint", "/bin/sh", $ImageId', helper)
+        self.assertIn('"test -f /product/update_host.py"', helper)
+        self.assertIn('if ($probe.Code -eq 0) { return $true }', helper)
+        self.assertIn('if ($probe.Code -eq 1) { return $false }', helper)
+        self.assertIn('"updater.guard_blocked"', helper)
+        check = UPDATE[UPDATE.index("function Invoke-UpdateCheck"):
+                       UPDATE.index("function Invoke-UpdateStart")]
+        self.assertIn('$script:EngineImage = [string]$installed.image_id', check)
+        self.assertIn('$script:UseObserver = Test-ImageRequiresObserver $script:EngineImage', check)
+        self.assertIn('ObserverRequired = [bool]$script:UseObserver', check)
+        install = UPDATE[UPDATE.index("function Invoke-UpdateInstall"):
+                         UPDATE.index("function Invoke-SmokeTest")]
+        self.assertIn('$script:UseObserver = [bool]$Check.ObserverRequired', install)
+        self.assertIn('$script:UseObserver = $true', install)
+        self.assertLess(install.index('$script:UseObserver = [bool]$Check.ObserverRequired'),
+                        install.index('$script:UseObserver = $true'))
+
+    def test_update_entrypoint_never_mutates_customer_site_metadata_before_preflight(self):
+        self.assertNotIn("chown -R frappe:frappe /home/frappe/bench/sites", ENTRYPOINT)
+        self.assertNotIn("chown -R frappe:frappe /home/frappe/bench/logs", ENTRYPOINT)
+        self.assertIn("chown -R frappe:frappe /update-state", ENTRYPOINT)
+
     def test_only_a_prebuilt_verified_image_is_imported(self):
         self.assertTrue('Invoke-DockerVerbose @("load", "--input", $Check.Archive)' in UPDATE,
                         "the verified prebuilt archive is not the only imported image")
