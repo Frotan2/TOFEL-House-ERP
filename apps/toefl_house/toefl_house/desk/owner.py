@@ -409,10 +409,21 @@ def cockpit():
                                     "version", "accepted", "native_student", "modified"],
                                    filters={"status": ("in", list(lifecycle.ADMISSION_OPEN_STATUSES))},
                                    order_by="modified asc", limit=BOUNCE_WINDOW)
-    attempts_running = project_count("management", ATTEMPT, {
+    def safe_count(doctype, filters):
+        """A denied or invalid native count is unavailable, never zero."""
+        try:
+            value = project_count("management", doctype, filters)
+            if (not isinstance(value, int) or isinstance(value, bool)
+                    or value < 0):
+                raise RuntimeError("Incomplete native management count")
+            return value
+        except Exception:
+            return "—"
+
+    attempts_running = safe_count(ATTEMPT, {
         "status": ("in", [s for s in lifecycle.PLACEMENT_ATTEMPT_ORDER if s != "Finalized"])})
-    released = project_count("management", DECISION, {"status": "Released"})
-    students = project_count("management", STUDENT, {"enabled": 1})
+    released = safe_count(DECISION, {"status": "Released"})
+    students = safe_count(STUDENT, {"enabled": 1})
     # These are full scoped counts, not lengths of queue-sized previews.
     # If a permission or source fails, do not fabricate a zero.
     try:
