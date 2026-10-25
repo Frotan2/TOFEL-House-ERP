@@ -1312,7 +1312,12 @@ class ConfigurationDeskWorldTests(unittest.TestCase):
         self.assertTrue(all("action" in item for item in owner_policies["items"]))
         backup_section = self._section(payload, "backup-recovery")
         self.assertEqual(backup_section["kind"], "queue")
-        backup_item = backup_section["items"][0]
+        switch_item = backup_section["items"][0]
+        self.assertEqual(switch_item["status"], "Off (default)")
+        self.assertEqual(switch_item["action"]["endpoint"],
+                         "toefl_house.operations.owner_configuration.set_backup_enabled")
+        self.assertEqual(switch_item["action"]["args"], {"enabled": 1})
+        backup_item = backup_section["items"][1]
         self.assertEqual(backup_item["status"], "Owner configuration required")
         self.assertIn("decision D17: delete valid older sets beyond the keep count", backup_item["detail"])
         self.assertIn("backup and activation fail closed", backup_item["detail"])
