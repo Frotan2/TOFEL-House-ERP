@@ -6,6 +6,12 @@ backup/restore and real-machine qualification holds take precedence over
 this packaging guide. This document describes the installation capability,
 not permission to operate real student, payroll or financial data.
 
+For the exact tested source, current image-inclusive Actions download and
+remaining acceptance gates, use the
+[2026-10-25 delivery checkpoint](engineering/DELIVERY-READINESS-2026-10-25.md).
+That download is a **TEST PACKAGE - NO REAL DATA**, not a published GitHub
+Release or permission to install over an existing Owner site.
+
 ## The customer experience
 
 The customer receives a dedicated **TOEFL-House-ERP-Customer-...** folder
@@ -130,6 +136,9 @@ party able to replace both an archive and its local hash could otherwise
 replace the image. The Windows verifier checks the manifest and image hash
 before import; it never treats those checks alone as production approval.
 
+Backup is **Off by default** under Owner decision D18. Its audited Course Owner
+switch preserves existing backup files. Turning it On does not waive the
+complete policy, separate fixed local disk, recovery key or recovery acceptance.
 The customer GUI intentionally offers **no** Backup, Restore, Activate,
 Deactivate or production bypass controls while the relevant holds apply.
 The older specialized guarded scripts remain in the developer repository for
@@ -176,9 +185,9 @@ evidence. Only then consider releasing the package to real customers.
   do not reinstall or delete data.
 - If the archive checksum fails, the installer **must not** import or start it.
   Obtain an intact, trusted package from the provider.
-- If the user has a repository checkout rather than a package, the GUI can
-  explicitly offer a source build. This slow developer fallback is **not**
-  the intended customer experience.
+- If the user has a repository checkout or incomplete package, the GUI refuses
+  installation when the prebuilt archive is missing. Obtain the complete,
+  trusted image-inclusive package; there is no customer source-build fallback.
 - If Windows Script Host is disabled by policy, the Windows launcher may
   not run. A signed Windows executable/installer and enterprise packaging
   support are future distribution requirements; do not disable customer
