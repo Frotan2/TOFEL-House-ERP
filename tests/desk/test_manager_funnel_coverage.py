@@ -88,6 +88,8 @@ class GeneralManagerFunnelCoverage(unittest.TestCase):
         facts = facts_by_label(result)
         self.assertEqual(facts["Classes running"], 26)
         self.assertEqual(facts["Corrections pending"], 26)
+        self.assertTrue(any(item["id"] == "source:correction-preview"
+                            for item in result[1]))
         self.assertEqual(sum(item["stage"] == "Correction pending"
                              for item in result[1]), 25)
         self.assertEqual(facts["Enrollments awaiting a class"], "—")
@@ -104,6 +106,8 @@ class GeneralManagerFunnelCoverage(unittest.TestCase):
         self.assertEqual(facts_by_label(result)["Admissions in review"], 401)
         self.assertEqual(sum(item["stage"] == "Admission waiting in review"
                              for item in result[1]), 400)
+        self.assertTrue(any(item["id"] == "source:admission-preview"
+                            for item in result[1]))
 
     def test_denied_count_is_unknown_never_zero(self):
         funnel, _ = load_funnel(deny="Student Group")
