@@ -1,0 +1,170 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-10-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "student_group",
+  "student",
+  "column_break_1",
+  "seats",
+  "status",
+  "section_approval",
+  "reason",
+  "column_break_2",
+  "approved_by",
+  "approved_on",
+  "expires_on",
+  "section_use",
+  "used_on",
+  "revoked_on",
+  "revocation_reason",
+  "policy_effective_from",
+  "synthetic"
+ ],
+ "fields": [
+  {
+   "fieldname": "student_group",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Class",
+   "options": "Student Group",
+   "reqd": 1
+  },
+  {
+   "fieldname": "student",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Student",
+   "options": "Student",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Approved override of the class capacity for this one student. Consumed once, in the same transaction as the roster row.",
+   "fieldname": "seats",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Extra seats above capacity",
+   "reqd": 1
+  },
+  {
+   "default": "Approved",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Approved\nUsed\nRevoked\nExpired",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_approval",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved by",
+   "options": "User"
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved on"
+  },
+  {
+   "fieldname": "expires_on",
+   "fieldtype": "Date",
+   "label": "Expires on"
+  },
+  {
+   "fieldname": "section_use",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "used_on",
+   "fieldtype": "Datetime",
+   "label": "Used on",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revoked_on",
+   "fieldtype": "Datetime",
+   "label": "Revoked on",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revocation_reason",
+   "fieldtype": "Small Text",
+   "label": "Revocation reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "policy_effective_from",
+   "fieldtype": "Data",
+   "label": "Governing policy version",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "synthetic",
+   "fieldtype": "Check",
+   "label": "Synthetic",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Teaching",
+ "name": "TH Capacity Approval",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Academic Manager",
+   "select": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Teaching Scheduler",
+   "select": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Teaching Auditor",
+   "select": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

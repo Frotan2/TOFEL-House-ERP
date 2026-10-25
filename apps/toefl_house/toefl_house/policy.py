@@ -1,5 +1,5 @@
 """Pure content validation, not scoring or academic placement policy."""
-from datetime import datetime, timedelta
+from datetime import datetime, time as clock_time, timedelta
 import hashlib
 import hmac
 import json
@@ -431,9 +431,37 @@ def validate_finance_dates(posting_date, due_date):
 
 
 def _normalize_time(value, field):
+    """Normalize one time-of-day to ``HH:MM:SS``.
+
+    MySQL TIME columns come back from ``frappe.db.sql`` as
+    ``datetime.timedelta``, and a ``Time`` field on a loaded document is a
+    ``timedelta`` too; ``datetime.time``/``datetime.datetime`` values arrive
+    from Python callers. All of them mean the same wall-clock time, so they
+    are accepted and normalized rather than refused — comparing a stored
+    session against a new one must not depend on which shape the driver used.
+    """
+    if isinstance(value, timedelta):
+        seconds = int(value.total_seconds())
+        if seconds < 0 or seconds >= 24 * 60 * 60:
+            raise ValueError(f"{field} must be a time of day")
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    if isinstance(value, (clock_time, datetime)):
+        return value.strftime("%H:%M:%S")
     if not isinstance(value, str) or not TIME_PATTERN.fullmatch(value):
         raise ValueError(f"{field} must be HH:MM or HH:MM:SS")
     return value if len(value) == 8 else value + ":00"
+
+
+def clock_text(value, field="time"):
+    """``HH:MM:SS`` text for one time-of-day value.
+
+    Public wrapper for the normalizer: command results and defaulted fields
+    must render a native ``timedelta`` exactly like the ``HH:MM:SS`` string the
+    same value has on a JSON payload, instead of ``str(timedelta)`` -> "9:30:00".
+    """
+    return _normalize_time(value, field)
 
 
 def validate_session_window(from_time, to_time):
@@ -447,6 +475,34 @@ def validate_session_window(from_time, to_time):
     if start >= end:
         raise ValueError("from_time must be strictly before to_time")
     return start, end
+
+
+def session_minutes(from_time, to_time):
+    """Duration of a normalized session window, in whole minutes.
+
+    Pure arithmetic over the same ``HH:MM:SS`` strings the native Course
+    Schedule stores, so a policy bound and a stored session always agree.
+    """
+    start = _normalize_time(from_time, "from_time")
+    end = _normalize_time(to_time, "to_time")
+    if start >= end:
+        raise ValueError("from_time must be strictly before to_time")
+    start_h, start_m = (int(part) for part in start.split(":")[:2])
+    end_h, end_m = (int(part) for part in end.split(":")[:2])
+    return (end_h * 60 + end_m) - (start_h * 60 + start_m)
+
+
+def session_windows_overlap(start_a, end_a, start_b, end_b):
+    """Half-open overlap: two sessions conflict when their times intersect.
+
+    Touching windows (one ends exactly when the other starts) do not
+    conflict — that is how back-to-back classes are scheduled.
+    """
+    a_start = _normalize_time(start_a, "from_time")
+    a_end = _normalize_time(end_a, "to_time")
+    b_start = _normalize_time(start_b, "from_time")
+    b_end = _normalize_time(end_b, "to_time")
+    return a_start < b_end and b_start < a_end
 
 
 def validate_attendance_statuses(value):
@@ -552,6 +608,22 @@ def can_read(kind, roles, actor, owner, status=None):
     if kind == "progression_decision":
         return bool(roles & {"Academic Manager", "Teaching Auditor",
                              "Enrollment Officer", "Enrollment Auditor"})
+    # Mission 3 class operations: operational records stay with the staff who
+    # run classes; Reception reads the waiting list it creates, and the
+    # Academic Manager reads the decisions it approves.
+    if kind == "class_transfer":
+        return bool(roles & {"Teaching Scheduler", "Teaching Auditor",
+                             "Academic Manager", "General Manager", "Course Owner"})
+    if kind == "class_waiting_list":
+        return bool(roles & {"Reception", "Teaching Scheduler", "Teaching Auditor",
+                             "Academic Manager", "General Manager", "Course Owner",
+                             "Enrollment Officer", "Enrollment Auditor"})
+    if kind == "capacity_approval":
+        return bool(roles & {"Academic Manager", "Teaching Scheduler",
+                             "Teaching Auditor", "General Manager", "Course Owner"})
+    if kind == "class_suspension":
+        return bool(roles & {"Teaching Scheduler", "Teaching Auditor",
+                             "Academic Manager", "General Manager", "Course Owner"})
     if "Placement Publisher" in roles:
         return True
     # Invigilator may operate the Digital session and read the operational

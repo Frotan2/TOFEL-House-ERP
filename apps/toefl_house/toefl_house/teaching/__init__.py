@@ -18,6 +18,19 @@ delivery mode, or branch after creation require an explicit owner amendment
 policy and are deliberately refused until then — no silent ad-hoc Desk edit,
 API call, or script may rewrite class facts.
 
+Everyday class operations (Mission 3) build on the same authorities:
+``toefl_house.teaching.class_operations`` carries the owner's configurable
+rules (teaching days, session duration bounds, daily limits, postponement,
+suspensions, waiting lists, capacity overrides, transfers);
+``calendars`` holds configurable academic calendars; ``timetables`` turns a
+weekly template into native sessions; ``scheduling`` validates conflicts,
+postponements, cancellations and make-ups; ``capacity`` owns seat truth,
+waiting lists and override consumption; ``transfers`` runs the request/
+approval/execution workflow; ``suspensions`` records bounded pauses. None of
+them introduces a parallel roster, session or accounting record — every one
+writes native Student Group / Course Schedule rows or a thin operational
+record that points at them.
+
 The roster (``students`` table) is deliberately NOT a class fact: mid-term
 additions and inter-class moves are governed separately by the single
 TH Roster Change Policy (``toefl_house.teaching.policies``). With no
@@ -25,21 +38,38 @@ policy, no governing version, a retired policy, or a passed cutoff, the
 ``add_class_member`` / ``move_class_member`` commands refuse — the owner
 opts in by appending a version with a live cutoff, never by default.
 Moves deactivate the source row (membership history is preserved) and
-(natively) every row, active or not, counts toward ``max_strength``.
+(natively) every row, active or not, counts toward ``max_strength``. An
+approved transfer executes inside that same roster window, so no path shifts
+a roster after the owner closed it.
+
+Attendance obeys three gates in this order, and each one exists for a
+different reason: the class must be active and the student's roster row
+active (an exited student keeps history but cannot be marked anew), the
+session must still meet (a Postponed or Cancelled session carries no marks),
+and a bounded suspension window refuses ``Present`` while still recording
+``Absent``/``Leave``. The native Student Attendance row is the only record;
+this module never stores a second copy of a mark.
+
+The operator-facing walkthrough (who calls which command, the order a session
+is validated in, the seat arithmetic, and what each refusal means) is
+``docs/CLASS-OPERATIONS.md``.
 """
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 import frappe
 from toefl_house.api import _execute
 from toefl_house.academic.rules import resolve_duration
-from toefl_house.policy import (DELIVERY_MODES, digest, distinct_roster_rows,
+from toefl_house.policy import (DELIVERY_MODES, clock_text, digest, distinct_roster_rows,
                                 is_valid_class_transition,
                                 validate_attendance_statuses, validate_capacity,
                                 validate_class_status, validate_delivery_mode,
                                 validate_group_name, validate_schedule_date,
                                 validate_session_window)
 from toefl_house.security import active_command_kind, is_production, require_operational, teaching_command_active
+from toefl_house.teaching import capacity as class_capacity
 from toefl_house.teaching import policies as roster_policies
+from toefl_house.teaching import scheduling as session_rules
+from toefl_house.teaching import suspensions as class_suspensions
 
 GROUP = "Student Group"
 STUDENT = "Student"
@@ -414,13 +444,21 @@ def schedule_session(request_key, student_group, schedule_date, from_time, to_ti
             raise frappe.ValidationError("A departed instructor cannot be scheduled")
         if not frappe.db.exists("Program Course", {"parent": group.program, "course": course_name}):
             raise frappe.ValidationError("Course is not part of the group's program catalog")
+        class_suspensions.assert_scheduling_allowed(group_name, day)
         frappe.db.sql("select name from `tabStudent Group` where name=%s for update", (group_name,))
         frappe.db.sql("select name from `tabInstructor` where name=%s for update", (instructor_name,))
         frappe.db.sql("select name from `tabRoom` where name=%s for update", (room_name,))
+        # Server-side conflict/climate checks: class window, calendar,
+        # policy bounds (when a class-operations policy governs), class /
+        # instructor / room / student overlap and room seating.
+        session_rules.check_new_session(
+            session_rules.governing_terms(), group_name, day, start, end,
+            instructor_name, room_name, course_name)
         session = frappe.get_doc(dict(
             doctype=SCHEDULE, naming_series="EDU-CSH-.YYYY.-",
             student_group=group_name, instructor=instructor_name, room=room_name,
-            course=course_name, schedule_date=day, from_time=start, to_time=end))
+            course=course_name, schedule_date=day, from_time=start, to_time=end,
+            th_session_kind="Regular", th_session_status="Scheduled"))
         session.flags.ignore_permissions = True
         session.flags.ignore_links = True
         session.insert(ignore_permissions=True)
@@ -431,8 +469,8 @@ def schedule_session(request_key, student_group, schedule_date, from_time, to_ti
             "instructor": instructor_name,
             "room": room_name,
             "schedule_date": str(session.schedule_date),
-            "from_time": str(session.from_time),
-            "to_time": str(session.to_time),
+            "from_time": clock_text(session.from_time),
+            "to_time": clock_text(session.to_time),
             "title": session.title,
         }
         return result, dict(target=session.name,
@@ -474,6 +512,12 @@ def record_attendance(request_key, course_schedule, statuses):
             ["disabled", "th_class_status"], as_dict=True)
         if not group or group.disabled or group.th_class_status in _TERMINAL_CLASS_STATUSES:
             raise frappe.ValidationError("Attendance is closed for this student group")
+        # Mission 3: only a session that will actually meet carries marks, and
+        # a bounded suspension window pauses Present marks without hiding the
+        # Absent/Leave record.
+        session_rules.assert_session_open_for_attendance(schedule_name)
+        class_suspensions.assert_attendance_allowed(
+            session.student_group, str(session.schedule_date), marks)
         roster = {row.student for row in frappe.db.sql(
             "select student from `tabStudent Group Student` "
             "where parent=%s and active=1",
@@ -643,7 +687,7 @@ def _set_membership(group_name, student_name, student_label, active):
 
 
 @frappe.whitelist(methods=["POST"])
-def add_class_member(request_key, student_group, student):
+def add_class_member(request_key, student_group, student, override=None):
     """Add an enrolled student to a Planned/Active class roster.
 
     Executed by the Teaching Scheduler inside an open roster-change
@@ -652,6 +696,12 @@ def add_class_member(request_key, student_group, student):
     have room (native max_strength counts deactivated rows). A former
     member whose row was deactivated by an earlier move is
     reactivated, never duplicated.
+
+    A free seat must remain AFTER unexpired waiting-list offers are
+    reserved; when the class is full, ``override`` must name an Approved
+    capacity override for exactly this student and class. An override is
+    consumed in the same transaction as the roster row, so it can never be
+    reused, and no roster path bypasses the capacity rule.
     """
     def work(actor):
         group_name = _bounded_name(student_group, "Student group")
@@ -669,18 +719,31 @@ def add_class_member(request_key, student_group, student):
                 f"Student {student_name} is already an active member of "
                 f"{group_name}")
         label = frappe.db.get_value(STUDENT, student_name, "student_name")
+        seat = None
         if existing is None:
-            _require_capacity(group_name, facts)
+            if not override:
+                _require_capacity(group_name, facts)
+            seat = class_capacity.assert_seat_available(
+                group_name, student_name, override or "")
         _set_membership(group_name, student_name, label, True)
+        # ``seat`` is measured before the row lands; report the seats that
+        # remain AFTER this admission so Reception reads a live number.
+        remaining = None
+        if seat:
+            remaining = max(0, int(seat["seats"]["available"]) - 1)
         result = {"student_group": group_name, "student": student_name,
-                  "reactivated": existing is not None, "cutoff": cutoff}
+                  "reactivated": existing is not None, "cutoff": cutoff,
+                  "seats_available": remaining,
+                  "override": seat["override"] if seat else None}
         return result, dict(
             target=group_name,
             after_hash=digest([group_name, student_name, cutoff,
-                               "reactivated" if existing is not None else "added"]))
+                               "reactivated" if existing is not None else "added",
+                               (seat or {}).get("override")]))
 
     return _execute("add_class_member", request_key,
-                    {"student_group": student_group, "student": student}, work)
+                    {"student_group": student_group, "student": student,
+                     "override": override or ""}, work)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -703,6 +766,7 @@ def move_class_member(request_key, student_group, student, to_group):
             raise frappe.ValidationError(
                 "Source and target classes must differ")
         _require_active_student(student_name)
+        class_capacity.assert_direct_move_allowed()
         for name in (source, target):
             if not frappe.db.exists(GROUP, name):
                 raise frappe.ValidationError(f"Unknown student group: {name}")
@@ -737,3 +801,40 @@ def move_class_member(request_key, student_group, student, to_group):
     return _execute("move_class_member", request_key,
                     {"student_group": student_group, "student": student,
                      "to_group": to_group}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def remove_class_member(request_key, student_group, student, reason):
+    """Deactivate one member's roster row, preserving it as history.
+
+    The class-level withdrawal path: the row stays (its roll number and
+    membership history are not rewritten) and only ``active`` flips. Native
+    capacity still counts the row — a compact with the module docstring,
+    and the reason availability is reported separately from active seats.
+    The governing policy must permit member removal.
+    """
+    def work(actor):
+        group_name = _bounded_name(student_group, "Student group")
+        student_name = _bounded_name(student, "Student")
+        if not isinstance(reason, str) or not reason.strip() or len(reason.strip()) > 300:
+            raise frappe.ValidationError(
+                "A removal reason is required (at most 300 characters)")
+        facts = _locked_group_facts(group_name)
+        _require_mutable_class(group_name, facts)
+        cutoff = _require_open_cutoff()
+        class_capacity.assert_remove_allowed()
+        current = _locked_roster_row(group_name, student_name)
+        if current is None or not int(current.active or 0):
+            raise frappe.ValidationError(
+                f"Student {student_name} is not an active member of {group_name}")
+        label = frappe.db.get_value(STUDENT, student_name, "student_name")
+        _set_membership(group_name, student_name, label, False)
+        result = {"student_group": group_name, "student": student_name,
+                  "active": 0, "reason": reason.strip(), "cutoff": cutoff}
+        return result, dict(
+            target=group_name,
+            after_hash=digest([group_name, student_name, cutoff, "removed"]))
+
+    return _execute("remove_class_member", request_key,
+                    {"student_group": student_group, "student": student,
+                     "reason": reason}, work)

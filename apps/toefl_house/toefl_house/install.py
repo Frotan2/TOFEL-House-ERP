@@ -87,6 +87,25 @@ def after_migrate():
                           ("th_class_start_date", "th_sg_start_date")):
         if frappe.db.has_column("Student Group", column):
             frappe.db.add_index("Student Group", [column], index)
+    # Mission 3 class operations: session lifecycle and conflict lookups. The
+    # Course Schedule columns come from Custom Field fixtures, so guard on
+    # existence exactly like the Student Group class facts below.
+    if frappe.db.has_column("Course Schedule", "th_session_status"):
+        frappe.db.add_index("Course Schedule", ["student_group", "schedule_date"],
+                            "th_cs_group_date")
+        frappe.db.add_index("Course Schedule", ["th_session_status"], "th_cs_status")
+        frappe.db.add_index("Course Schedule", ["th_replaces"], "th_cs_replaces")
+    frappe.db.add_index("TH Class Waiting List", ["student_group", "status"],
+                        "th_wait_group_status")
+    frappe.db.add_index("TH Class Waiting List", ["student", "status"], "th_wait_student")
+    frappe.db.add_index("TH Capacity Approval", ["student_group", "status"],
+                        "th_approval_group_status")
+    frappe.db.add_index("TH Class Suspension", ["student_group", "status"],
+                        "th_suspension_group_status")
+    frappe.db.add_index("TH Class Transfer", ["student", "status"], "th_transfer_student")
+    frappe.db.add_index("TH Class Transfer", ["status"], "th_transfer_status")
+    frappe.db.add_index("TH Academic Calendar", ["academic_year", "status"],
+                        "th_calendar_year_status")
     # Branch isolation lookups on applicants (branch-scoped admission funnel).
     if frappe.db.has_column("Student Applicant", "th_branch"):
         frappe.db.add_index("Student Applicant", ["th_branch"], "th_sa_branch")

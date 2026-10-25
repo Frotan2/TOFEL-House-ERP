@@ -440,6 +440,33 @@ PROJECTION_FIELDS = {
     ("configuration", "TH Guardian Lifecycle Policy"): [
         "name", "code", "title", "status", "description", "modified",
     ],
+
+    # Notification dispatch (Mission 5): each event type's recipients,
+    # severity, timing, channel, retries, escalation, enabled — all
+    # owner-configurable, no defaults invented.
+    ("configuration", "TH Notification Dispatch Rule"): [
+        "name", "event_type", "enabled", "severity", "channel",
+        "timing_delay_minutes", "max_retries", "retry_delay_minutes",
+        "escalate_after_minutes",
+    ],
+    ("configuration", "TH Portal Configuration"): [
+        "name", "code", "title", "status", "student_portal_enabled",
+        "guardian_portal_enabled", "dashboard_enabled", "email_enabled",
+        "sms_enabled", "whatsapp_enabled", "modified",
+    ],
+    ("configuration", "TH Guardian Consent"): [
+        "name", "guardian", "student", "consent_date", "expiry_date",
+        "evidence_type", "status", "revoked_at", "revoked_by",
+    ],
+    ("configuration", "TH Portal Announcement"): [
+        "name", "title", "audience", "status", "publish_date", "message",
+    ],
+    # Notification ledger — readable by managers, not deletable by anyone.
+    ("configuration", "TH Notification"): [
+        "name", "event_type", "title", "severity", "channel", "status",
+        "related_doctype", "related_name", "retry_count", "max_retries",
+        "created_at", "delivered_at", "acknowledged_at",
+    ],
     ("configuration", "TH Guardian Lifecycle Policy Version"): [
         "name", "parent", "parenttype", "effective_from",
         "delegation_window_days", "pre_admission_proxy",

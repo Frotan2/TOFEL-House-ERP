@@ -433,6 +433,8 @@ class ConfigurationAuditContractTests(unittest.TestCase):
                     and getattr(node.targets[0], "id", "") == "KIND_AUTHORITY"):
                 kinds = ast.literal_eval(node.value)
         self.assertEqual(kinds, {
+            "approve_guardian_consent": "business_policy",
+            "set_portal_flags": "business_policy",
             "create_owner_operations_policy": "business_policy",
             "set_owner_operations_policy_version": "business_policy",
             "set_owner_operations_policy_status": "business_policy",
@@ -496,6 +498,22 @@ class ConfigurationAuditContractTests(unittest.TestCase):
             "set_guardian_lifecycle_policy_version": "business_policy",
             "set_guardian_lifecycle_policy_status": "business_policy",
             "validate_guardian_lifecycle_policy": "business_policy",
+            # Mission 3 class operations (decision classification,
+            # 2026-10-24): teaching days, session duration bounds, daily
+            # limits, postponement/suspension windows, waiting-list and
+            # override ceilings, transfer eligibility and approver roles are
+            # all owner policy. Engineering binds the kinds and hard-ceilings
+            # them; it picks no operational value.
+            "create_class_operations_policy": "business_policy",
+            "set_class_operations_policy_version": "business_policy",
+            "set_class_operations_policy_status": "business_policy",
+            "create_academic_calendar": "business_policy",
+            "add_academic_calendar_day": "business_policy",
+            "remove_academic_calendar_day": "business_policy",
+            "set_academic_calendar_status": "business_policy",
+            "create_timetable_template": "business_policy",
+            "set_timetable_slots": "business_policy",
+            "set_timetable_template_status": "business_policy",
         })
 
     def test_audit_reuses_the_command_pattern_without_site_gates(self):
