@@ -349,19 +349,23 @@ def get_child_fees(student=None):
             fields=GUARDIAN_FIELDS["Fees"],
             limit_page_length=50,
         )
-        # Also invoices via customer
+        # A Customer is often shared by siblings or the same guardian.
+        # Invoice access is permitted ONLY when the native invoice has a
+        # direct Student link and that link matches this verified child.
         invoices = []
         try:
-            customer = frappe.db.get_value("Student", student, "customer")
-            if customer:
-                invoices = frappe.get_all(
-                    "Sales Invoice",
-                    filters={"customer": customer, "docstatus": 1},
-                    fields=GUARDIAN_FIELDS["Sales Invoice"],
-                    limit_page_length=50,
-                )
+            if frappe.get_meta("Sales Invoice").has_field("student"):
+                customer = frappe.db.get_value("Student", student, "customer")
+                if customer:
+                    invoices = frappe.get_all(
+                        "Sales Invoice",
+                        filters={"customer": customer, "student": student,
+                                 "docstatus": 1},
+                        fields=GUARDIAN_FIELDS["Sales Invoice"],
+                        limit_page_length=50)
         except Exception:
-            pass
+            # Do not broaden to a Customer-only query on schema mismatch.
+            invoices = []
         return {"fees": fees, "invoices": invoices}
     except Exception:
         return {"fees": [], "invoices": []}
