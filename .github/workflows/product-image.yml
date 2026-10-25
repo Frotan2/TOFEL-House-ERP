@@ -16,6 +16,9 @@ on:
       - "v*"
     paths:
       - .github/workflows/product-image.yml
+      # Changing native qualification policy must also recheck the exact
+      # customer-image release gate before packaging.
+      - .github/workflows/native-lifecycle.yml
       # The final retired-branch cleanup changes the release source revision;
       # qualify its exact main SHA rather than only an earlier integration head.
       - .github/workflows/retire-merged-branches.yml
