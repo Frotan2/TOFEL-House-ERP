@@ -183,6 +183,7 @@ def _executive_analytics_sections():
         groups_for_waiting = []
         classes_running = "—"
 
+    # Native U5: describe record provenance to staff, not internal DocType names.
     waiting_facts = [
         {"label": "Waiting for a class (D7 deferred)", "value": waiting["total"],
          "definition": waiting["definition"],
@@ -190,7 +191,7 @@ def _executive_analytics_sections():
          "drill_path": waiting["drill"], "owner": "Course Owner"},
         {"label": "Classes running (Active)", "value": classes_running,
          "definition": "Accessible active class count; unavailable if source is incomplete or denied.",
-         "source": "native Student Group (bounded, counted)", "scope": "Branch via class branch",
+         "source": "class records (bounded, counted)", "scope": "Branch via class branch",
          "drill_path": "class list", "owner": "Teaching Scheduler"},
     ]
     waiting_section = section(
