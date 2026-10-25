@@ -303,6 +303,24 @@ class S2CompensationTests(unittest.TestCase):
         for item in self.posted:
             self.assertEqual(item["overwrite_salary_structure_amount"], 0)
             self.assertEqual(item["is_recurring"], 0)
+            # HRMS filters on Additional Salary.type during slip generation.
+            self.assertEqual(item["type"], "Earning")
+
+    def test_deduction_adjustments_reach_native_deduction_component(self):
+        self.contract_doc = _contract("C-1", [_adjustment("ADJ-D", kind="Deduction")])
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        self._calc()
+        self.assertEqual(len(self.posted), 2)
+        salary = next(item for item in self.posted
+                      if item["ref_doctype"] == ASSIGNMENT)
+        deduction = next(item for item in self.posted
+                         if item["ref_doctype"] == ADJUSTMENT)
+        self.assertEqual(salary["type"], "Earning")
+        self.assertEqual(deduction["type"], "Deduction")
+        self.assertEqual(deduction["salary_component"], "SYN Contract Deduction")
+        self.assertEqual(deduction["overwrite_salary_structure_amount"], 0)
 
     def test_posting_rereads_lock(self):
         self.contract_lists.append([SimpleNamespace(
