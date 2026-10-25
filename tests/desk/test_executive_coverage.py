@@ -165,6 +165,21 @@ class VerifiedCoverageTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             ns["exception_metrics"]()
 
+    def test_closed_admission_count_must_be_validated(self):
+        ns, _ = load_analytics()
+        original_count = ns["_project_count"]
+
+        def count(desk, doctype, filters=None):
+            if doctype == "TH Admission Decision" and filters and (
+                    filters.get("status") == (
+                        "in", ["Deferred", "Rejected", "Withdrawn", "Revoked", "Expired"])):
+                return None
+            return original_count(desk, doctype, filters=filters)
+
+        ns["_project_count"] = count
+        with self.assertRaisesRegex(RuntimeError, "count unavailable"):
+            ns["admission_metrics"]()
+
     def test_d7_attendance_uses_verified_raw_counts_without_derived_rate(self):
         ns, _ = load_analytics(rows={
             "Student Attendance": [
