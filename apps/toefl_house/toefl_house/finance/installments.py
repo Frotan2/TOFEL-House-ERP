@@ -33,6 +33,7 @@ from toefl_house.api import _execute
 from toefl_house.finance import (COMPANY, FEES, FEE_STRUCTURE, PROGRAM_ENROLLMENT,
                                  _name, resolved_billable_components)
 from toefl_house.finance import policies as billing_policies
+from toefl_house.finance import shamsi
 from toefl_house.policy import digest, validate_finance_dates
 
 SINGLE_BILL = 1
@@ -62,18 +63,30 @@ def split_amounts(total, parts):
     return [round(value / 100.0, 2) for value in amounts]
 
 
-def schedule_due_dates(first_due, count, interval_days):
-    """Due dates for a plan: the owner's first date, then the interval.
+def schedule_due_dates(first_due, count, interval_days,
+                       cadence="Days", grace_days=0):
+    """Legacy day-spaced plans or exact Afghan Solar Hijri month dues.
 
-    The interval is the policy version's term, never a lunar/monthly
-    convention invented here: calendar months are not uniform and the owner
-    states the spacing in days.
+    `first_due` is the first *actual* due date (including grace).
+    Solar mode fails closed unless that day is exactly the first day of
+    the selected Shamsi month plus configured grace. An arbitrary date
+    must never silently create a rolling personal student semester.
     """
     start = date.fromisoformat(str(first_due))
     if isinstance(count, bool) or not isinstance(count, int) or count < 1:
         raise ValueError("Installment count must be a whole number of at least 1")
     if isinstance(interval_days, bool) or not isinstance(interval_days, int) or interval_days < 0:
         raise ValueError("Installment interval must be a whole number of days")
+    cadence, grace_days = billing_policies.validate_shamsi_cadence(
+        cadence, grace_days)
+    if cadence == "Solar Hijri Month":
+        first_period = shamsi.month_key(start - timedelta(days=grace_days))
+        result = shamsi.monthly_due_dates(first_period, count, grace_days)
+        if result[0] != start:
+            raise ValueError(
+                "The first Solar Hijri month due date must be the first "
+                "day of the month plus the configured grace days")
+        return [day.isoformat() for day in result]
     return [str(start + timedelta(days=interval_days * index))
             for index in range(count)]
 
@@ -104,7 +117,10 @@ def plan_terms(terms, installments, posting, first_due):
         raise ValueError(
             f"The governing billing policy allows at most {maximum} installments")
     interval = int(terms.get("installment_interval_days") or 0)
-    if interval < 1:
+    cadence, grace = billing_policies.validate_shamsi_cadence(
+        terms.get("installment_cadence") or "Days",
+        int(terms.get("payment_grace_days") or 0))
+    if cadence == "Days" and interval < 1:
         raise ValueError(
             "The governing billing policy does not state an installment "
             "interval; the Course Owner must set one")
@@ -112,7 +128,8 @@ def plan_terms(terms, installments, posting, first_due):
     first = date.fromisoformat(str(first_due))
     if first < posted:
         raise ValueError("The first installment cannot fall due before the bill is posted")
-    return installments, interval, schedule_due_dates(first, installments, interval)
+    return installments, interval, schedule_due_dates(
+        first, installments, interval, cadence, grace)
 
 
 def build_installment_components(fee_components, installments):
@@ -252,6 +269,8 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
             "program_enrollment": pe_name, "student": pe.student,
             "fee_structure": fs_name, "installments": count,
             "interval_days": interval, "posting_date": posting,
+            "installment_cadence": terms.get("installment_cadence") or "Days",
+            "payment_grace_days": int(terms.get("payment_grace_days") or 0),
             "installment_total": net_total, "gross_total": gross_total,
             "installments_issued": issued,
         }
@@ -264,6 +283,8 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
         return result, dict(
             target=issued[0]["fees"],
             after_hash=digest([pe_name, fs_name, posting, count, interval,
+                               result["installment_cadence"],
+                               result["payment_grace_days"],
                                [row["fees"] for row in issued],
                                [row["grand_total"] for row in issued],
                                applied_discounts]))
