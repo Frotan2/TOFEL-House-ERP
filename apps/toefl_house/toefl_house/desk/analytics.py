@@ -312,7 +312,8 @@ def tuition_metrics():
                             ["name", "payment_type", "party_type", "party", "paid_amount",
                              "received_amount", "paid_from_account_currency", "company",
                              "posting_date", "docstatus"],
-                            filters={"docstatus": 1, "payment_type": "Receive"},
+                            filters={"docstatus": 1, "payment_type": "Receive",
+                                     "posting_date": day},
                             order_by="posting_date desc", limit=BOUNCE_WINDOW)
     collected_today = [r for r in payments if str(r.get("posting_date") or "") == day]
     collected_today_sum = _money_sum(collected_today, "paid_amount")
