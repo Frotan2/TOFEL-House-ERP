@@ -1,5 +1,22 @@
 # Owner acceptance package
 
+> **Current entry point — 2026-10-25:** use the
+> [delivery readiness checkpoint](DELIVERY-READINESS-2026-10-25.md) for the
+> exact tested source, available prebuilt test artifact and outstanding gates.
+> All five hosted gates passed on `9c9ec48a6ead45dc802117eecb4f423e9b64f99d`.
+> Production remains **REJECT / NO-GO**. Backup defaults **Off** under D18;
+> turning it On does not authorize recovery or waive the preservation hold.
+>
+> **Everything below is historical evidence from October 18–19, not current
+> operating instructions.** Its old Foundation failures, branch/PR inventory,
+> restore-capability statements and unqualified setup actions must not be used
+> as today's status or authorization. On the existing Owner PC use only
+> **Check This PC** and **Copy Safe Support Status**. Do not configure policies,
+> run backup/restore, or perform lifecycle tests there during the hold. Use the
+> packaged **Owner Readiness Guide** for a separate disposable synthetic test.
+
+## Historical acceptance record (preserved)
+
 **Latest verified code head: `94107b7`** (2026-10-19). Owned suite `39283081361` and `39283073756` success; Native lifecycle integration `39283073600` success; Product image `39283073592` success; Foundation runtime `39283073629` **failure**: both audits exit 1 (`hosted-full-stack-dependency-audit`, `hosted-frontend-advisory-audit`), header `advisory matches=153 in 42 packages`, as `OD-2026-10-18-A` requires while BROWSER_SELF_DENIAL stays open. The open records are showdown (GHSA-rmmh-p597-ppvv, ReDoS) and `@tiptap/core` (GHSA-cp6q-959q-f8rh). Local: 1463 tests OK, no skips; ruff 0.16.8 clean. Foundation red is expected and is not a regression.
 
 Status as of 2026-10-18: **NO-GO**. Session head is `3eaf6a6` (the `docs:` commit that records it is the final head). On `3eaf6a6`: owned suite green (`39155286319`, `39155281874`), Native lifecycle integration `39155281814` SUCCESS, Product image `39155281835` SUCCESS, and Foundation runtime `39155281803` **FAILED** (both audits exit 1: `hosted-full-stack-dependency-audit`, `hosted-frontend-advisory-audit`). The Foundation failure is what `OD-2026-10-18-A` requires while `BROWSER_SELF_DENIAL` stays open. Inferred from the register, not proven from the job log (the job log was not retrievable from the sandbox): the open records are now `showdown` (GHSA-rmmh-p597-ppvv) and `@tiptap/core` (GHSA-cp6q-959q-f8rh). Commits since `1edce63`: `e0c22ca` (Education overlay, markdown-it 14.1.1; run `39150998353` failed because 14.1.1 has two new advisories), `882ec90` (docs), `8742b52` (Education overlay, markdown-it 14.3.3; run `39152266092` failed on the remaining open records), `3eaf6a6` (Administrator refused at login). Before this decision the last fully green Foundation run was `39138282175` on `879f6f2`. Final `main` SHA is still to be recorded after PR #21 merges. **Owner answers of 2026-10-19** are recorded in `docs/owner-decisions.json` as `OD-2026-10-19-A` to `D`: showdown acceptance is **NOT accepted as worded**: GHSA-rmmh-p597-ppvv is a ReDoS (not XSS), so the sanitizer-based control in the first answer does not apply, and the owner must re-confirm (candidate control: input-length cap in `frappe.markdown`, not yet implemented); `@tiptap/core` 2.27.3 pin accepted with the risk recorded; BROWSER_SELF_DENIAL register unchanged; A11 Option A accepted (proxy-log check still owner work).
