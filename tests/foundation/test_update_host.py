@@ -145,6 +145,12 @@ class LiveHostTests(unittest.TestCase):
         self.db["Id"] = "replacement-container"
         self.assert_refused_without_migration(transaction, "apply.host_unsafe")
 
+    def test_a_worker_running_another_image_is_not_a_valid_installation(self):
+        transaction = self.prepare()
+        self.documents["/containers/" + host.CONTAINERS["worker"] + "/json"]["Image"] = (
+            "sha256:" + "9" * 64)
+        self.assert_refused_without_migration(transaction, "preflight.host.unavailable")
+
     def test_changed_real_journal_is_not_hidden_by_stale_idle_hint(self):
         transaction = self.prepare()
         document = json.loads(self.journal.read_text())

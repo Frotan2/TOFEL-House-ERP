@@ -86,6 +86,9 @@ def collect() -> dict:
     original_id = web.get("Image", "")
     if not isinstance(original_id, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", original_id):
         raise ObservationError("Installed image unavailable")
+    if any(containers[name].get("Image") != original_id
+           for name in ("worker", "scheduler", "socketio")):
+        raise ObservationError("Application services do not share the installed image")
     original = docker_get("/images/" + quote(original_id, safe="") + "/json")
     target = docker_get("/images/" + quote(TAG, safe="") + "/json")
     volume = docker_get("/volumes/" + quote(VOLUME, safe=""))

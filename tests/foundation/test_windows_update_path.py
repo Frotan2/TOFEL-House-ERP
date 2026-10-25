@@ -230,7 +230,7 @@ class TwoPhaseProtocolTests(unittest.TestCase):
         check = self.block("function Invoke-UpdateCheck", "function Invoke-UpdateStart")
         self.assertIn('[string]$transaction.phase -cne "authorized"', check)
         install = self.block("function Invoke-UpdateInstall", "function Invoke-SmokeTest")
-        for field in ("transaction = $Check.Transaction", "archive = ($Check.RunFolder",
+        for field in ("transaction = $freshAuthorization.transaction", "archive = ($Check.RunFolder",
                       "backup_receipt =", "backup_dir =",
                       "recovery_authorization =", "recovery_signature ="):
             self.assertIn(field, install, f"the apply request does not carry {field}")
@@ -239,6 +239,34 @@ class TwoPhaseProtocolTests(unittest.TestCase):
         self.assertNotIn("journal_state =", apply_request)
         self.assertNotIn("installed =", apply_request)
         self.assertLess(install.index('Invoke-EngineStep "recheck"'), install.index('Set-JournalState "prepared"'))
+
+    def test_old_engine_verifies_archive_then_new_engine_authorizes_live_host(self):
+        install = self.block("function Invoke-UpdateInstall", "function Invoke-SmokeTest")
+        self.assertLess(UPDATE.index('Invoke-EngineStep "authorize"'),
+                        UPDATE.index("function Invoke-UpdateInstall"))
+        old_preflight = install.index('Invoke-EngineStep "preflight"')
+        old_authorize = install.index('Invoke-EngineStep "authorize"')
+        load = install.index('Invoke-DockerVerbose @("load", "--input", $Check.Archive)')
+        candidate = install.index('$script:EngineImage = $candidateImageId')
+        new_preflight = install.index('Invoke-EngineStep "preflight"', candidate)
+        new_authorize = install.index('Invoke-EngineStep "authorize"', candidate)
+        recheck = install.index('Invoke-EngineStep "recheck"')
+        stop = install.index('Invoke-Compose @("stop"')
+        self.assertLess(old_preflight, old_authorize)
+        self.assertLess(old_authorize, load)
+        self.assertLess(load, candidate)
+        self.assertLess(candidate, new_preflight)
+        self.assertLess(new_preflight, new_authorize)
+        self.assertLess(new_authorize, recheck)
+        self.assertLess(recheck, stop)
+        self.assertIn('$freshRequest.Remove("transaction")', install)
+        self.assertIn('"tag", $previousImageId, $imageTag', install[:new_preflight])
+        self.assertIn('"tag", $candidateImageId, $imageTag', install[stop:])
+        engine = self.block("function Invoke-UpdateEngine", "function Stop-EngineFailure")
+        self.assertIn('if ($script:UseObserver)', engine)
+        self.assertIn('source=/var/run/docker.sock,target=/run/th-update-docker.sock,readonly', engine)
+        self.assertIn('$script:UseObserver = $false', install[:load])
+        self.assertIn('$script:UseObserver = $true', install[load:new_preflight])
 
     def test_every_engine_request_is_answered_with_a_fresh_document(self):
         self.assertIn('Remove-Item -LiteralPath (Join-Path $script:WorkDir "response.json")', UPDATE)

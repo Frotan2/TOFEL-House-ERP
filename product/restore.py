@@ -317,10 +317,14 @@ def _sha256_stream(stream) -> str:
 
 
 def _same_file_state(left, right) -> bool:
-    return (left.st_dev, left.st_ino, left.st_size, left.st_mtime_ns,
-            left.st_ctime_ns) == (
-                right.st_dev, right.st_ino, right.st_size, right.st_mtime_ns,
-                right.st_ctime_ns)
+    identity = ("st_dev", "st_ino", "st_size", "st_mtime_ns")
+    # Windows can finalize creation-time metadata after a newly written file
+    # is opened. The shipped restore runs in Linux, where ctime is a reliable
+    # extra in-place-change signal. Keep that stronger check there; inode,
+    # device, size, mtime and the staged-content hash remain checked on both.
+    if os.name != "nt":
+        identity += ("st_ctime_ns",)
+    return all(getattr(left, field) == getattr(right, field) for field in identity)
 
 
 def _stage_restore_artifacts(paths: dict[str, Path], temporary_root: Path) -> dict[str, Path]:

@@ -7206,6 +7206,36 @@ def main():
             return {'doctypes':observed,'commands':len(commands)+5,
                     'unconfigured_missing':sorted(empty['missing'])}
         check('academic-s14-deployment-and-fail-closed',traced(s14_academic_wiring))
+        def native_payroll_bridge():
+            # D2: HRMS remains the payroll authority. This synthetic check
+            # verifies that the teaching inputs enter a real native slip;
+            # statutory rates, payable accounts and actual payment stay with
+            # the institution's configured HRMS process.
+            frappe.set_user('Administrator')
+            employee=cfx['emps']['One']
+            expected={row.name for row in frappe.get_all(ADS,
+                filters={'employee':employee,'payroll_date':'2026-09-30',
+                         'docstatus':1,'type':'Earning','disabled':0},
+                fields=['name'])}
+            assert expected,('no submitted teaching payroll inputs',employee)
+            slip=frappe.get_doc(dict(doctype='Salary Slip',employee=employee,
+                company=cfx['company'],payroll_frequency='Monthly',
+                start_date='2026-09-01',end_date='2026-09-30',
+                posting_date='2026-09-30'))
+            slip.insert()
+            linked=[row.additional_salary for row in slip.earnings
+                    if row.get('additional_salary')]
+            assert expected.issubset(set(linked)),('native slip omitted teaching inputs',
+                sorted(expected-set(linked)))
+            assert len(linked)==len(set(linked)),('native slip duplicated an input',linked)
+            assert slip.employee==employee and slip.company==cfx['company']
+            assert float(slip.net_pay)>=0,slip.net_pay
+            slip.submit()
+            assert slip.docstatus==1 and frappe.db.get_value('Salary Slip',slip.name,'docstatus')==1
+            frappe.db.commit()
+            return {'salary_slip':slip.name,'linked_teaching_inputs':len(expected),
+                    'native_submitted':True,'statutory_policy_asserted':False}
+        check('teaching-native-payroll-slip-bridge',traced(native_payroll_bridge))
         report['status']='pass'
 
     except Exception as exc:

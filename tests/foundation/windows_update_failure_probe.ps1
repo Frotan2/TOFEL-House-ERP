@@ -60,9 +60,16 @@ try {
     . (Import-ProbeFunction 'Invoke-UpdateInstall' $true)
     function Invoke-EngineStep {
         param($Mode, $Request, $Version)
+        [void]$script:Calls.Add(('engine ' + $Mode))
+        if ($Mode -ceq 'preflight') { return [pscustomobject]@{decision='allow';transaction=[pscustomobject]@{transaction_id=('c' * 32);phase='manifest'}} }
+        if ($Mode -ceq 'authorize') { return [pscustomobject]@{
+            decision='allow';transaction=[pscustomobject]@{transaction_id=('d' * 32);phase='authorized'}
+            target=[pscustomobject]@{image=[pscustomobject]@{config_digest=('sha256:' + ('b' * 64))}}
+        } }
         if ($Mode -ceq 'recheck') { return [pscustomobject]@{decision='allow'} }
         return $script:ApplyReport
     }
+    function Get-InstalledImage { return [pscustomobject]@{Id=('sha256:' + ('b' * 64))} }
     function Assert-EngineAllowed { param($Response, $Version)
         if ($Response.decision -cne 'allow') { throw 'not allowed' }
     }
@@ -99,6 +106,7 @@ try {
         $script:StartCount = 0
         $script:LastPhase = ''
         $script:StopExit = 0; $script:LoadExit = 0
+        $script:EngineImage = $null; $script:UseObserver = $false
         if ($scenario -ceq 'stop-failed') { $script:StopExit = 1 }
         if ($scenario -ceq 'load-failed') { $script:LoadExit = 1 }
         $outcome = 'recovery-required'
@@ -110,6 +118,15 @@ try {
         }
         if ($script:StartCount -ne 0) { throw ('Unsafe automatic restart: ' + $scenario) }
         if ($script:LastPhase -cne 'recovery-required') { throw ('Missing durable hold: ' + $scenario) }
+        if ($scenario -cne 'load-failed') {
+            $order = $script:Calls -join '|'
+            if ($order -cnotmatch 'engine preflight.*engine authorize.*load --input synthetic.tar.*engine preflight.*engine authorize.*engine recheck') {
+                throw ('The candidate did not establish a fresh authorization: ' + $scenario)
+            }
+            if ($scenario -cne 'stop-failed' -and $order -cnotmatch 'engine recheck.*compose stop.*tag sha256:.*engine apply') {
+                throw ('The candidate did not recheck before stopping and applying: ' + $scenario)
+            }
+        }
     }
     Write-Host 'PASS: structured failures preserved; no automatic restart on stop/import/apply failure.'
 } finally {

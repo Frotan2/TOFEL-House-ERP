@@ -580,9 +580,11 @@ function Invoke-UpdateEngine([string]$Mode) {
         "--volume", ($productRoot + ":" + $containerProductRoot + ":ro"),
         "--volume", ($script:WorkDir + ":" + $containerWorkRoot),
         "--volume", ($engineStateRoot + ":" + $containerEngineState),
-        "--mount", "type=bind,source=/var/run/docker.sock,target=/run/th-update-docker.sock,readonly",
         "--entrypoint", "/product/update_entrypoint.sh"
     )
+    if ($script:UseObserver) {
+        $arguments += @("--mount", "type=bind,source=/var/run/docker.sock,target=/run/th-update-docker.sock,readonly")
+    }
     if ($Mode -ceq "apply") {
         $arguments += @("--network", ($composeProject + "_default"))
         $arguments += @("--volume", ($sitesRoot + ":/home/frappe/bench/sites"))
@@ -962,21 +964,77 @@ function Invoke-UpdateInstall($Check) {
     }
     Write-Stage "updater.applying"
 
-    # Rehash release/evidence and query the root-owned live Docker observer
-    # immediately before stopping anything. Earlier $Check facts are hints,
-    # never authorization to act on a changed host.
-    $script:EngineImage = [string]$Check.Installed.image_id
-    $recheckRequest = $Check.Request
-    $recheckRequest.action = "recheck"
-    $recheckRequest.transaction = $Check.Transaction
-    $recheck = Invoke-EngineStep "recheck" $recheckRequest $Check.Version
-    [void](Assert-EngineAllowed $recheck $Check.Version)
     $previousImageId = [string]$Check.Installed.image_id
-    $script:ActiveTransactionId = [string]$Check.Transaction.transaction_id
     $candidateImageId = [string]$Check.Response.target.image.config_digest
     if ($candidateImageId -cnotmatch '^sha256:[0-9a-f]{64}$') {
         Stop-Update $script:ExitRefused "refused" "launcher" "updater.package_invalid" $Check.Version
     }
+
+    # Check and Install may be separated in time. Re-verify the exact signed
+    # archive with the installed engine immediately before importing bytes.
+    $script:EngineImage = $previousImageId
+    $script:UseObserver = $false
+    $oldRequest = $Check.Request
+    $oldRequest.action = "preflight"
+    $oldRequest.archive = ""
+    $oldRequest.Remove("transaction")
+    $oldPreflight = Invoke-EngineStep "preflight" $oldRequest $Check.Version
+    [void](Assert-EngineAllowed $oldPreflight $Check.Version)
+    $oldRequest.action = "authorize"
+    $oldRequest.archive = ($Check.RunFolder + "/toefl-house-erp-app.tar")
+    $oldRequest.transaction = $oldPreflight.transaction
+    $oldAuthorization = Invoke-EngineStep "authorize" $oldRequest $Check.Version
+    [void](Assert-EngineAllowed $oldAuthorization $Check.Version)
+    if ([string]$oldAuthorization.transaction.phase -cne "authorized" -or
+        [string]$oldAuthorization.target.image.config_digest -cne $candidateImageId) {
+        Stop-Update $script:ExitRefused "refused" "launcher" "updater.package_invalid" $Check.Version
+    }
+
+    # The installed engine verified the signed archive, but an older image
+    # cannot issue a live-host authorization. Import the candidate while all
+    # services still run, verify its image ID, then restore the old Compose tag.
+    $loaded = Invoke-DockerVerbose @("load", "--input", $Check.Archive)
+    if ($loaded -ne 0) {
+        Invoke-DockerVerbose @("tag", $previousImageId, $imageTag) | Out-Null
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
+    }
+    $loadedImage = Get-InstalledImage
+    if ($null -eq $loadedImage -or [string]$loadedImage.Id -cne $candidateImageId) {
+        Invoke-DockerVerbose @("tag", $previousImageId, $imageTag) | Out-Null
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
+    }
+    if ((Invoke-DockerVerbose @("tag", $previousImageId, $imageTag)) -ne 0) {
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
+    }
+    $script:EngineImage = $candidateImageId
+    $script:UseObserver = $true
+
+    # Begin a fresh schema-2 authorization inside the verified candidate.
+    # It observes the actual running host through the authenticated broker.
+    $freshRequest = $Check.Request
+    $freshRequest.action = "preflight"
+    $freshRequest.archive = ""
+    $freshRequest.Remove("transaction")
+    $freshPreflight = Invoke-EngineStep "preflight" $freshRequest $Check.Version
+    [void](Assert-EngineAllowed $freshPreflight $Check.Version)
+    $freshRequest.action = "authorize"
+    $freshRequest.archive = ($Check.RunFolder + "/toefl-house-erp-app.tar")
+    $freshRequest.transaction = $freshPreflight.transaction
+    $freshAuthorization = Invoke-EngineStep "authorize" $freshRequest $Check.Version
+    [void](Assert-EngineAllowed $freshAuthorization $Check.Version)
+    if ($null -eq $freshAuthorization.transaction -or
+        [string]$freshAuthorization.transaction.phase -cne "authorized") {
+        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Check.Version
+    }
+    $recheckRequest = $freshRequest
+    $recheckRequest.action = "recheck"
+    $recheckRequest.transaction = $freshAuthorization.transaction
+    $recheck = Invoke-EngineStep "recheck" $recheckRequest $Check.Version
+    [void](Assert-EngineAllowed $recheck $Check.Version)
+    $script:ActiveTransactionId = [string]$freshAuthorization.transaction.transaction_id
     Set-JournalState "prepared" $Check.Version
     Write-Stage "updater.verifying"
     $stopped = Invoke-Compose @("stop", "web", "worker", "scheduler", "socketio")
@@ -985,13 +1043,7 @@ function Invoke-UpdateInstall($Check) {
         Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
     }
 
-    $loaded = Invoke-DockerVerbose @("load", "--input", $Check.Archive)
-    if ($loaded -ne 0) {
-        # Import may have changed the tag. Restore it only as a best-effort
-        # pointer repair; do not start services on storage we cannot re-prove.
-        if ($previousImageId) {
-            Invoke-DockerVerbose @("tag", $previousImageId, $imageTag) | Out-Null
-        }
+    if ((Invoke-DockerVerbose @("tag", $candidateImageId, $imageTag)) -ne 0) {
         Set-JournalState "recovery-required" $Check.Version
         Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
     }
@@ -1006,7 +1058,7 @@ function Invoke-UpdateInstall($Check) {
         signature = $Check.Signature
         trust_store = "data/updates/trust-store.json"
         archive = ($Check.RunFolder + "/toefl-house-erp-app.tar")
-        transaction = $Check.Transaction
+        transaction = $freshAuthorization.transaction
         backup_receipt = "data/activation/backup-receipt.json"
         backup_dir = $script:BackupDirRelative
         recovery_authorization = ""

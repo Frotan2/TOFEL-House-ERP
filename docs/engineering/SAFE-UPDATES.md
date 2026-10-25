@@ -37,9 +37,12 @@ Check for Updates
                                     archive identity, issues a 30-minute
                                     `authorized` transaction
 Install Update (confirmed)
+  -> docker load <archive verified by the installed engine>, with services running
+  -> verify candidate image ID, restore the installed Compose image tag
+  -> candidate engine preflight/authorize/recheck using the live host observer
   -> docker compose stop web worker scheduler socketio     (never -v)
-  -> docker load <verified archive>
-  -> engine apply: loads the `authorized` record from the durable engine state,
+  -> tag the verified candidate image for Compose
+  -> candidate engine apply: loads its `authorized` record from durable state,
      re-verifies the manifest signature, archive hash and identity, backup
      receipt, recovery authorization, installed image identity and labels,
      journal and host state, then records the census, `bench migrate` x2, the
@@ -56,6 +59,14 @@ the engine's own authentication tag, so a fabricated or edited `authorized`
 document is refused (`transaction.unknown` / `transaction.tampered`) before any
 migration runs. The one-use marker is written to the same durable folder, so a
 replay from a later run folder is refused (`transaction.replayed`).
+
+The installed engine can use the earlier transaction protocol. Its signed
+archive authorization is only permission to import candidate image bytes; it
+does not authorize a migration. The candidate must issue a fresh transaction
+after independently observing the running Docker containers, database volume,
+image, journal and site files. It then rechecks immediately before service
+stop. The previous image ID is retained for a held recovery path. Any import,
+identity or tag failure records a recovery hold and never starts Compose.
 
 At apply time the engine re-reads signed release, image and recovery evidence.
 Host facts are obtained through the authenticated local broker described below,
