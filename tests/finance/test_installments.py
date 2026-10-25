@@ -47,6 +47,7 @@ def load_installments():
     sys.modules["toefl_house.api"] = api
 
     finance = types.ModuleType("toefl_house.finance")
+    finance.__path__ = [str(APP / "finance")]
     finance.COMPANY = "TOEFL House"
     finance.FEES = "Fees"
     finance.FEE_STRUCTURE = "Fee Structure"
@@ -58,6 +59,15 @@ def load_installments():
     policies = types.ModuleType("toefl_house.finance.policies")
     policies.governing_billing_terms = lambda on_date=None: {}
     policies.check_posting_bounds = lambda *args, **kwargs: None
+    def validate_cadence(cadence, grace):
+        if cadence not in ("Days", "Solar Hijri Month"):
+            raise ValueError("Unknown installment cadence")
+        if isinstance(grace, bool) or not isinstance(grace, int) or not 0 <= grace <= 15:
+            raise ValueError("Invalid payment grace days")
+        if cadence == "Days" and grace:
+            raise ValueError("Payment grace days require Solar Hijri Month cadence")
+        return cadence, grace
+    policies.validate_shamsi_cadence = validate_cadence
     sys.modules["toefl_house.finance.policies"] = policies
 
     package = types.ModuleType("toefl_house")
@@ -111,6 +121,22 @@ class ScheduleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.module.schedule_due_dates("2026-10-24", 2, -1)
 
+    def test_real_solar_months_and_grace_from_owner_policy(self):
+        self.assertEqual(self.module.schedule_due_dates(
+            "2026-09-23", 3, 0, "Solar Hijri Month", 0),
+            ["2026-09-23", "2026-10-23", "2026-11-22"])
+        self.assertEqual(self.module.schedule_due_dates(
+            "2026-09-26", 2, 0, "Solar Hijri Month", 3),
+            ["2026-09-26", "2026-10-26"])
+
+    def test_unaligned_first_solar_due_date_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "first Solar Hijri"):
+            self.module.schedule_due_dates(
+                "2026-09-25", 2, 0, "Solar Hijri Month", 3)
+        with self.assertRaisesRegex(ValueError, "Unknown installment cadence"):
+            self.module.schedule_due_dates(
+                "2026-09-23", 2, 0, "Lunar", 0)
+
 
 class PlanTermsTests(unittest.TestCase):
     """Only the owner's enabled policy can authorize a split."""
@@ -153,6 +179,15 @@ class PlanTermsTests(unittest.TestCase):
             self.enabled, 3, "2026-10-24", "2026-10-24")
         self.assertEqual((count, interval), (3, 30))
         self.assertEqual(dates[-1], "2026-12-23")
+
+    def test_solar_month_policy_does_not_need_fictitious_thirty_days(self):
+        terms = dict(self.enabled, installment_interval_days=0,
+                     installment_cadence="Solar Hijri Month",
+                     payment_grace_days=3)
+        count, interval, dates = self.module.plan_terms(
+            terms, 2, "2026-09-25", "2026-09-26")
+        self.assertEqual((count, interval), (2, 0))
+        self.assertEqual(dates, ["2026-09-26", "2026-10-26"])
 
 
 class ComponentSplitTests(unittest.TestCase):
