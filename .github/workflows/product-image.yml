@@ -35,6 +35,10 @@ on:
       # Changes to finance acceptance tests must also qualify the deliverable
       # that the customer is about to receive, not only the fast Owned suite.
       - tests/finance/**
+      # Payroll regression contracts are release-critical: a change to the
+      # additive/finance-approval guard must qualify the customer image too.
+      - tests/teaching/test_compensation_guards.py
+      - tests/teaching/test_compensation.py
       - tools/native/migrate_restore_site.py
       - tools/native/policy_restart_check.py
       - tools/native/browser_role_acceptance.py
