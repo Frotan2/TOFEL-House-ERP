@@ -53,7 +53,7 @@ class CalendarRuleTests(unittest.TestCase):
         self.assertEqual(refusal, "2026-09-24 is a Holiday day in the academic calendar")
         refusal = self.calendars.teaching_refusal("2026-09-25", ("Mon",),
                                                   {})
-        self.assertIn("is a Fri", refusal)
+        self.assertIn("Friday", refusal)
         self.assertIn("does not teach", refusal)
         self.assertIn("Friday", self.calendars.teaching_refusal(
             "2026-09-25", None, {}))
