@@ -7266,6 +7266,35 @@ def main():
                     'teaching input not submitted',row.name)
                 expected.add(row.name)
             frappe.db.commit()
+            # HRMS v16 reads a submitted Holiday List Assignment (employee or
+            # company), not merely Company.default_holiday_list. The isolated
+            # teaching fixture must supply its own explicit synthetic calendar
+            # before submitting the native Salary Slip; otherwise HRMS properly
+            # refuses due to a missing payroll holiday policy on today's date.
+            # Never bypass holiday validation, or configure a real Owner site.
+            calendar_name='SYN Teaching Payroll Calendar'
+            assert not frappe.db.exists('Holiday List',calendar_name),(
+                'synthetic payroll calendar unexpectedly exists',calendar_name)
+            assert not frappe.db.exists('Holiday List Assignment',
+                {'assigned_to':cfx['company'],'docstatus':1}),(
+                'unexpected submitted payroll holiday policy',cfx['company'])
+            calendar_to=f"{max(2026,frappe.utils.getdate().year)}-12-31"
+            calendar=frappe.get_doc(dict(
+                doctype='Holiday List',holiday_list_name=calendar_name,
+                from_date='2026-01-01',to_date=calendar_to,weekly_off='Friday'))
+            calendar.get_weekly_off_dates()
+            calendar.insert()
+            holiday_assignment=frappe.get_doc(dict(
+                doctype='Holiday List Assignment',
+                naming_series='HR-HLA-.YYYY.-',applicable_for='Company',
+                assigned_to=cfx['company'],holiday_list=calendar.name,
+                from_date='2026-01-01'))
+            holiday_assignment.insert()
+            holiday_assignment.submit()
+            assert holiday_assignment.docstatus==1
+            assert frappe.get_attr('hrms.utils.holiday_list.get_holiday_list_for_employee')(
+                employee,as_on='2026-09-30')==calendar.name
+            frappe.db.commit()
             slip=frappe.get_doc(dict(doctype='Salary Slip',employee=employee,
                 company=cfx['company'],payroll_frequency='Monthly',
                 start_date='2026-09-01',end_date='2026-09-30',
