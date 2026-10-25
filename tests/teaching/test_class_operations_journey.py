@@ -8,6 +8,7 @@ lost. Every assertion is made against the stored native and owned rows.
 """
 import json
 import unittest
+from unittest.mock import patch
 
 from tests.teaching.operations_site import (
     ACTOR, APPROVER, COURSE_OWNER, RECEPTION, OperationsSite,
@@ -172,24 +173,28 @@ class ClassOperationsJourneyTests(unittest.TestCase):
         history = {doctype: len(self.site.all(doctype)) for doctype in
                    ("Student Attendance", "Program Enrollment",
                     "TH Teaching Assignment", "Fees")}
-        transfer = self.ops.transfers.request_class_transfer(
-            "journey-transfer-0001", "STU-2", "GRP-A", "GRP-B",
-            "moves to the afternoon cohort", "2026-09-25")
-        self.assertEqual(transfer["transfer_kind"], "Class")
-        self.ops.login(APPROVER)
-        executed = self.ops.transfers.approve_class_transfer(
-            "journey-transfer-0002", transfer["name"])
-        self.assertEqual(executed["status"], "Executed")
-        self.assertEqual(self.ops.roster("GRP-A"),
-                         [("STU-1", 1), ("STU-2", 0), ("STU-3", 1),
-                          ("STU-4", 1)])
-        self.assertEqual(self.ops.roster("GRP-B"), [("STU-2", 1)])
-        self.assertEqual(
-            {doctype: len(self.site.all(doctype)) for doctype in history},
-            history, "no attendance, enrollment or finance row was rewritten")
-        preserved = json.loads(self.site.get("TH Class Transfer",
-                                             transfer["name"])["preserved_json"])
-        self.assertEqual(preserved["attendance_in_source_class"]["count"], 1)
+        # Simulate an explicitly superseded D5 for this synthetic-only
+        # positive journey. Real deployments still refuse transfers.
+        with patch.object(self.ops.transfers, "_transfer_scope_authorized",
+                          return_value=True):
+            transfer = self.ops.transfers.request_class_transfer(
+                "journey-transfer-0001", "STU-2", "GRP-A", "GRP-B",
+                "moves to the afternoon cohort", "2026-09-25")
+            self.assertEqual(transfer["transfer_kind"], "Class")
+            self.ops.login(APPROVER)
+            executed = self.ops.transfers.approve_class_transfer(
+                "journey-transfer-0002", transfer["name"])
+            self.assertEqual(executed["status"], "Executed")
+            self.assertEqual(self.ops.roster("GRP-A"),
+                             [("STU-1", 1), ("STU-2", 0), ("STU-3", 1),
+                              ("STU-4", 1)])
+            self.assertEqual(self.ops.roster("GRP-B"), [("STU-2", 1)])
+            self.assertEqual(
+                {doctype: len(self.site.all(doctype)) for doctype in history},
+                history, "no attendance, enrollment or finance row was rewritten")
+            preserved = json.loads(self.site.get("TH Class Transfer",
+                                                 transfer["name"])["preserved_json"])
+            self.assertEqual(preserved["attendance_in_source_class"]["count"], 1)
 
         # 7. A temporary suspension pauses marking, never the history.
         self.ops.login(ACTOR)
@@ -233,12 +238,14 @@ class ClassOperationsJourneyTests(unittest.TestCase):
         self.assertIn("Academic Manager", str(ctx.exception))
         self.site.set_roles(APPROVER, ["Academic Manager"])
         self.ops.login(ACTOR)
-        pending = self.ops.transfers.request_class_transfer(
-            "journey-transfer-0003", "STU-3", "GRP-A", "GRP-B",
-            "second transfer request", "2026-09-26")
-        with self.assertRaises(PermissionError_) as ctx:
-            self.ops.transfers.approve_class_transfer(
-                "journey-transfer-0004", pending["name"])
+        with patch.object(self.ops.transfers, "_transfer_scope_authorized",
+                          return_value=True):
+            pending = self.ops.transfers.request_class_transfer(
+                "journey-transfer-0003", "STU-3", "GRP-A", "GRP-B",
+                "second transfer request", "2026-09-26")
+            with self.assertRaises(PermissionError_) as ctx:
+                self.ops.transfers.approve_class_transfer(
+                    "journey-transfer-0004", pending["name"])
         self.assertIn("Academic Manager", str(ctx.exception))
         self.ops.login("finance.officer@example.test")
         self.site.set_roles("finance.officer@example.test", ["Finance Officer"])

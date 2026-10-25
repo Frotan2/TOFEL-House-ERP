@@ -8,6 +8,7 @@ finance and instructor records exactly where they happened.
 """
 import json
 import unittest
+from unittest.mock import patch
 
 from tests.teaching.operations_site import (
     ACTOR, APPROVER, OperationsSite, PermissionError_, ValidationError)
@@ -17,6 +18,12 @@ class TransferTestBase(unittest.TestCase):
     def setUp(self):
         self.ops = OperationsSite()
         self.addCleanup(self.ops.close)
+        # Simulate an already-approved Owner supersession ONLY inside the
+        # historical engine journey tests. Production source remains D5-held.
+        self.approved_scope = patch.object(
+            self.ops.transfers, "_transfer_scope_authorized", return_value=True)
+        self.approved_scope.start()
+        self.addCleanup(self.approved_scope.stop)
         self.site = self.ops.site
         self.ops.seed_policy()
         self.ops.seed_class(name="GRP-A", capacity=3,
@@ -46,6 +53,30 @@ class TransferTestBase(unittest.TestCase):
                 day="2026-09-25", key="transfer-request-0001"):
         return self.ops.transfers.request_class_transfer(
             key, student, source, target, "family requested", day)
+
+
+class DeferredOwnerDecisionTests(TransferTestBase):
+    def test_D5_refuses_new_request_despite_enabled_policy(self):
+        # seed_policy enables allow_transfers; that is NOT a supersession.
+        with patch.object(self.ops.transfers, "_transfer_scope_authorized",
+                          return_value=False):
+            with self.assertRaises(ValidationError) as ctx:
+                self.request(key="d5-deferred-new-request")
+        self.assertIn("D5", str(ctx.exception))
+
+    def test_D5_refuses_existing_transfer_execution_after_policy_enabled(self):
+        pending = self.request(key="d5-synthetic-request")["name"]
+        self.ops.login(APPROVER)
+        self.site.set_roles(APPROVER, ["Academic Manager"])
+        with patch.object(self.ops.transfers, "_transfer_scope_authorized",
+                          return_value=False):
+            with self.assertRaises(ValidationError) as ctx:
+                self.ops.transfers.approve_class_transfer(
+                    "d5-deferred-execution", pending)
+        self.assertIn("D5", str(ctx.exception))
+        self.assertEqual(self.site.get("TH Class Transfer", pending)["status"],
+                         "Requested")
+
 
 
 class ClassificationTests(TransferTestBase):

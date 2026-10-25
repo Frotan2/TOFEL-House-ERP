@@ -398,30 +398,47 @@ def payroll_metrics(authorized=False):
 # ------------------------------------------------------------------ retention
 
 def retention_metrics():
-    """Retention: active vs exited enrollments."""
-    try:
-        exits = _project_rows("management", "TH Enrollment Exit",
-                             ["name", "program_enrollment", "student", "exit_kind", "exit_date",
-                              "reason", "status", "creation"],
-                             order_by="creation desc", limit=BOUNCE_WINDOW)
-    except Exception:
-        exits = []
-    enrollments = _project_rows("management", "Program Enrollment",
-                              ["name", "student", "program", "academic_year", "docstatus"],
-                              filters={"docstatus": 1},
-                              order_by="enrollment_date desc", limit=BOUNCE_WINDOW)
-    active = len(enrollments)
-    exited = len(exits)
-    rate = f"{(active / (active + exited) * 100):.1f}%" if (active + exited) else "—"
-    by_type = _summarize_by(exits, "exit_kind")
+    """Raw enrollment/exit facts; D7 has NOT authorized a retention ratio.
+
+    Never interpret a missing, denied or truncated source as zero exits.
+    The current Owner decision D7 permits raw reports, not derived metrics.
+    """
+    exit_fields = ["name", "program_enrollment", "student", "exit_kind",
+                   "exit_date", "reason", "status", "creation"]
+    exits = _project_rows(
+        "management", "TH Enrollment Exit", exit_fields,
+        order_by="creation desc", limit=BOUNCE_WINDOW)
+    enrollments = _project_rows(
+        "management", "Program Enrollment",
+        ["name", "student", "program", "academic_year", "docstatus"],
+        filters={"docstatus": 1}, order_by="enrollment_date desc",
+        limit=BOUNCE_WINDOW)
+    # Counts are from the *same* scoped projection; a limit can silently
+    # truncate an otherwise successful read. A failed count must propagate,
+    # rather than turn unknown exits into a valid-looking retention rate.
+    exit_count = _project_count("management", "TH Enrollment Exit")
+    active_count = _project_count(
+        "management", "Program Enrollment", filters={"docstatus": 1})
+    if (not isinstance(exit_count, int) or isinstance(exit_count, bool)
+            or not isinstance(active_count, int) or isinstance(active_count, bool)
+            or exit_count < 0 or active_count < 0
+            or exit_count > BOUNCE_WINDOW or active_count > BOUNCE_WINDOW
+            or len(exits) != exit_count
+            or len(enrollments) != active_count):
+        raise RuntimeError(
+            "Enrollment/exit source is incomplete; retention facts unavailable")
     return {
-        "active": active,
-        "exited": exited,
-        "retention_rate": rate,
-        "by_type": by_type,
-        "definition": "Active = submitted enrollments; exited = enrollment exits (withdrawal or dismissal) where the governing exit policy cites a resolved supersession. Retention = Active / (Active + Exited).",
-        "source": "enrollments (active), enrollment exits (authorized exits)",
-        "scope": "Branch-scoped via roster for enrollments; exits via student.",
+        "active": active_count,
+        "exited": exit_count,
+        "retention_rate": "—",
+        "status": "DEFERRED",
+        "by_type": _summarize_by(exits, "exit_kind"),
+        "definition": (
+            "Owner decision D7 defers derived retention percentages until "
+            "the calculation, steward, denominator, disclosure and retention "
+            "policy are formally approved. Raw verified counts only."),
+        "source": "enrollments (submitted), enrollment exits (recorded)",
+        "scope": "Branch-scoped enrollment and exit projections.",
         "drill": "enrollment exits list",
     }
 

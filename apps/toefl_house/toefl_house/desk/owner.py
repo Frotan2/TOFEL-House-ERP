@@ -85,9 +85,21 @@ def _executive_analytics_sections():
         admiss = analytics.admission_metrics()
         tuit = analytics.tuition_metrics()
         attend = analytics.attendance_metrics()
-        reten = analytics.retention_metrics()
     except Exception:
         return []
+
+    # A missing/denied/incomplete exit source must never become exited=0.
+    # Preserve the raw overview even when retention data is unavailable.
+    try:
+        reten = analytics.retention_metrics()
+    except Exception:
+        reten = {
+            "retention_rate": "—", "exited": "—",
+            "status": "unavailable", "by_type": {},
+            "definition": "Retention is unavailable (D7 approval pending; source could not be verified).",
+            "source": "unavailable — enrollment exits could not be verified",
+            "scope": "unavailable", "drill": "enrollment exits list",
+        }
 
     hero_metrics = [
         {"label": "Active enrollments", "value": enroll["total"],
@@ -116,7 +128,7 @@ def _executive_analytics_sections():
          "definition": enroll["definition"],
          "source": enroll["source"], "scope": enroll["scope"],
          "drill_path": enroll["drill"], "owner": "Enrollment Officer"},
-        {"label": "Retention (active / active+exited)", "value": reten["retention_rate"],
+        {"label": "Retention (D7 deferred)", "value": reten["retention_rate"],
          "definition": reten["definition"],
          "source": reten["source"], "scope": reten["scope"],
          "drill_path": reten["drill"], "owner": "Course Owner"},
@@ -140,34 +152,54 @@ def _executive_analytics_sections():
     ]
     sections.append(enroll_section)
 
-    groups_for_waiting = project_rows("management", GROUP,
-                                      ["name", "student_group_name", "program", "academic_year",
-                                       "max_strength", "course", "disabled", "th_class_status"],
-                                      filters={"disabled": 0}, order_by="student_group_name asc",
-                                      limit=LIMIT_QUEUES)
+    # D7 permits raw reports, not inferred counts of "waiting for a class".
+    # A zero would be especially misleading if a projection fails or is cut
+    # off at LIMIT_QUEUES. Until the Owner approves a derived definition,
+    # show an explicit unavailable state even when inputs appear complete.
+    waiting = {
+        "total": "—", "by_program": {},
+        "definition": (
+            "Not available: Owner decision D7 defers derived waiting-for-class "
+            "metrics until a named steward, coverage rule and denominator "
+            "are approved."),
+        "source": "not published — derived metric on hold",
+        "scope": "D7 deferred", "drill": "enrollment list",
+    }
     try:
-        waiting = analytics.enrollment_cohort_breakdown(enroll["rows"], groups_for_waiting)
+        groups_for_waiting = project_rows(
+            "management", GROUP,
+            ["name", "student_group_name", "program", "academic_year",
+             "max_strength", "course", "disabled", "th_class_status"],
+            filters={"disabled": 0}, order_by="student_group_name asc",
+            limit=LIMIT_QUEUES)
+        # The raw active-class count may be displayed only after proving
+        # the bounded query covers all accessible class rows.
+        group_total = project_count("management", GROUP, filters={"disabled": 0})
+        if (not isinstance(group_total, int) or isinstance(group_total, bool)
+                or group_total != len(groups_for_waiting)):
+            raise RuntimeError("Class projection incomplete")
+        classes_running = len(active_cohort_rows(groups_for_waiting))
     except Exception:
-        waiting = {"total": 0, "by_program": {}, "definition": "", "source": "", "scope": "", "drill": ""}
+        groups_for_waiting = []
+        classes_running = "—"
+
     waiting_facts = [
-        {"label": "Waiting for a class", "value": waiting["total"],
-         "definition": waiting["definition"] or "Enrollments whose program/year has no planned or active class.",
-         "source": waiting["source"] or "enrollments without open class", "scope": waiting["scope"] or "Branch via roster",
-         "drill_path": waiting["drill"] or "enrollment list", "owner": "Teaching Scheduler"},
-        {"label": "Classes running (Active)", "value": len(active_cohort_rows(groups_for_waiting)),
-         "definition": "Classes whose lifecycle is Active; sessions can be scheduled.",
-         "source": "active classes (native roster)", "scope": "Branch via class branch",
+        {"label": "Waiting for a class (D7 deferred)", "value": waiting["total"],
+         "definition": waiting["definition"],
+         "source": waiting["source"], "scope": waiting["scope"],
+         "drill_path": waiting["drill"], "owner": "Course Owner"},
+        {"label": "Classes running (Active)", "value": classes_running,
+         "definition": "Accessible active class count; unavailable if source is incomplete or denied.",
+         "source": "native Student Group (bounded, counted)", "scope": "Branch via class branch",
          "drill_path": "class list", "owner": "Teaching Scheduler"},
     ]
-    waiting_section = section("waiting", "Waiting list & cohort capacity", "facts", facts=waiting_facts,
-                              empty_title="No waiting enrollments", empty_body="Every enrolled student has a planned or running class.")
-    if waiting["by_program"]:
-        waiting_section["chart"] = {
-            "title": "Waiting enrollments by program",
-            "rows": [{"label": k, "value": v, "tone": "warn"} for k, v in sorted(waiting["by_program"].items())],
-        }
+    waiting_section = section(
+        "waiting", "Waiting list & cohort capacity", "facts",
+        facts=waiting_facts,
+        empty_title="Waiting metric deferred",
+        empty_body="An unapproved or incomplete source is not evidence that no students are waiting.")
     waiting_section["provenance"] = [
-        {"label": "Source records", "value": "enrollments + class roster status"},
+        {"label": "Source records", "value": waiting["source"]},
         {"label": "Permission scope", "value": waiting["scope"]},
         {"label": "Drill-down", "value": "enrollment list and class list"},
     ]
