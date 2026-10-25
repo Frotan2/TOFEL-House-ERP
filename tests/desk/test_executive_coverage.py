@@ -254,7 +254,7 @@ class VerifiedCoverageTests(unittest.TestCase):
 
 
 
-def run_owner_cockpit(*, deny_counts=False):
+def run_owner_cockpit(*, deny_counts=False, deny_operational=False):
     """Exercise the actual Owner endpoint body without a live bench."""
     import types
 
@@ -279,6 +279,9 @@ def run_owner_cockpit(*, deny_counts=False):
         calls.append(("count", doctype, filters))
         if deny_counts and doctype in ("TH Admission Decision", "Student Group"):
             raise PermissionError("count denied")
+        if deny_operational and doctype in (
+                "TH Placement Attempt", "TH Placement Decision", "Student"):
+            return None
         return {"TH Admission Decision": 401, "Student Group": 26}.get(doctype, 0)
 
     def section(sid, title, kind, **kwargs):
@@ -351,6 +354,15 @@ class OwnerCockpitCoverageContracts(unittest.TestCase):
                                if x["id"] == "business")["facts"]}
         self.assertEqual(facts["Classes running"], "—")
         self.assertEqual(facts["Admissions in flight"], "—")
+
+    def test_invalid_operational_counts_are_not_published_as_zero(self):
+        result, _ = run_owner_cockpit(deny_operational=True)
+        facts = {x["label"]: x["value"]
+                 for x in next(x for x in result["sections"]
+                               if x["id"] == "business")["facts"]}
+        for label in ("Active students", "Placement sessions running",
+                      "Released placement results"):
+            self.assertEqual(facts[label], "—")
 
     def test_errors_render_unavailable_not_empty_or_zero(self):
         content = OWNER.read_text(encoding="utf-8")
