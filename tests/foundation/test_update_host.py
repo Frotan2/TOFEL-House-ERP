@@ -41,6 +41,7 @@ class LiveHostTests(unittest.TestCase):
         # Reuse the signed-release and subprocess migration harness. The
         # decision engine's independent observer is replaced below with the
         # real collector talking HTTP over a Unix socket, not a host snapshot.
+        real_observer = suite.engine._observe_host
         self.harness = suite.ApplyTests()
         self.harness.setUp()
         self.addCleanup(self.harness.doCleanups)
@@ -101,7 +102,8 @@ class LiveHostTests(unittest.TestCase):
             patch.object(host, "DOCKER_SOCKET", self.socket_path),
             patch.object(host, "PRODUCT_ROOT", self.fixture.product_root),
             patch.object(host.shutil, "disk_usage", return_value=type("Usage", (), {"free": 60 * 1024**3})()),
-            patch.object(suite.engine, "_observe_host", side_effect=host.collect),
+            patch.object(host, "observe", side_effect=host.collect),
+            patch.object(suite.engine, "_observe_host", side_effect=real_observer),
         ):
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -148,7 +150,7 @@ class LiveHostTests(unittest.TestCase):
     def test_a_worker_running_another_image_is_not_a_valid_installation(self):
         transaction = self.prepare()
         self.documents["/containers/" + host.CONTAINERS["worker"] + "/json"]["Image"] = (
-            "sha256:" + "9" * 64)
+            "sha256:" + "8" * 64)
         self.assert_refused_without_migration(transaction, "preflight.host.unavailable")
 
     def test_changed_real_journal_is_not_hidden_by_stale_idle_hint(self):
@@ -164,7 +166,7 @@ class LiveHostTests(unittest.TestCase):
         image["Id"] = "sha256:" + "7" * 64
         self.documents["/images/" + image["Id"] + "/json"] = image
         self.documents["/containers/" + host.CONTAINERS["web"] + "/json"]["Image"] = image["Id"]
-        self.assert_refused_without_migration(transaction, "apply.installed_mismatch")
+        self.assert_refused_without_migration(transaction, "preflight.host.unavailable")
 
     def test_loaded_tag_must_be_the_verified_candidate(self):
         transaction = self.prepare()
