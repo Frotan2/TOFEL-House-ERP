@@ -4489,10 +4489,20 @@ def main():
                     ename=emp.name
                 emps[label]=ename
                 if not frappe.db.exists('Salary Structure','SYN Teaching Structure'):
-                    frappe.get_doc(dict(doctype='Salary Structure',name='SYN Teaching Structure',
-                        company=comp,currency=cur,is_active='Yes',payroll_frequency='Monthly',
+                    structure=frappe.get_doc(dict(
+                        doctype='Salary Structure',name='SYN Teaching Structure',
+                        company=comp,currency=cur,is_active='Yes',
+                        payroll_frequency='Monthly',
                         earnings=[dict(salary_component='SYN Teaching Pay',
-                                       amount_based_on_formula=0,amount=1)])).insert()
+                                       amount_based_on_formula=0,amount=1)]))
+                    structure.insert()
+                    # HRMS check_sal_struct() joins a SUBMITTED Salary
+                    # Structure: merely inserting a draft and submitting
+                    # its Assignment is insufficient for a native slip.
+                    structure.submit()
+                assert frappe.db.get_value(
+                    'Salary Structure','SYN Teaching Structure','docstatus')==1,(
+                    'synthetic Salary Structure not submitted')
                 if not frappe.db.get_value('Salary Structure Assignment',{'employee':ename,'docstatus':1},'name'):
                     ssa=frappe.get_doc(dict(doctype='Salary Structure Assignment',employee=ename,
                         salary_structure='SYN Teaching Structure',from_date='2026-01-01',
