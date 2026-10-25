@@ -758,26 +758,6 @@ class StudentPortalTests(BaseHarness):
         self.assessment_results.append({"name": "AR-2", "student": "STU-BOB", "assessment_plan": "AP-1", "grade": "C", "docstatus": 0, "posting_date": "2026-10-24"})  # draft — not visible
         self.announcements.append({"name": "ANN-1", "title": "Welcome", "message": "Hello students", "publish_date": "2026-10-24", "audience": "All", "status": "Published"})
 
-    def _approve_independently(self, student):
-        """Guardian evidence alone is insufficient: staff must approve it."""
-        self._set_session("guardian@example.com")
-        pending = self.guardian_portal.record_consent(
-            student=student, evidence_type="Link",
-            link_reference="https://example.com/consent")
-        with self.assertRaises(PermissionError):
-            self.guardian_portal.get_child_attendance(student=student)
-        return self.guardian_portal.approve_guardian_consent(
-            "synthetic-guardian-approval-" + student, pending["name"])
-
-    def test_pending_evidence_does_not_authorize_private_student_data(self):
-        self._set_session("guardian@example.com")
-        pending = self.guardian_portal.record_consent(
-            student="STU-CHILD1", evidence_type="Link",
-            link_reference="https://example.com/evidence")
-        self.assertEqual(pending["status"], "Pending")
-        with self.assertRaises(PermissionError):
-            self.guardian_portal.get_child_fees(student="STU-CHILD1")
-
     def test_portal_disabled_by_default(self):
         self.portal_policy.reset_memory_flags()
         self._set_session("alice@example.com")
@@ -874,6 +854,26 @@ class GuardianPortalTests(BaseHarness):
             "records_recording_rights": "Test rights text"
         }
         sys.modules["toefl_house.operations.guardian_lifecycle"] = gl
+
+    def _approve_independently(self, student):
+        """Guardian evidence alone is insufficient: staff must approve it."""
+        self._set_session("guardian@example.com")
+        pending = self.guardian_portal.record_consent(
+            student=student, evidence_type="Link",
+            link_reference="https://example.com/consent")
+        with self.assertRaises(PermissionError):
+            self.guardian_portal.get_child_attendance(student=student)
+        return self.guardian_portal.approve_guardian_consent(
+            "synthetic-guardian-approval-" + student, pending["name"])
+
+    def test_pending_evidence_does_not_authorize_private_student_data(self):
+        self._set_session("guardian@example.com")
+        pending = self.guardian_portal.record_consent(
+            student="STU-CHILD1", evidence_type="Link",
+            link_reference="https://example.com/evidence")
+        self.assertEqual(pending["status"], "Pending")
+        with self.assertRaises(PermissionError):
+            self.guardian_portal.get_child_fees(student="STU-CHILD1")
 
     def test_portal_disabled_by_default(self):
         self.portal_policy.reset_memory_flags()
