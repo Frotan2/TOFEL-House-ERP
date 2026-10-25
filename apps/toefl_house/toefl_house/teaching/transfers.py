@@ -41,6 +41,24 @@ MAX_SESSIONS = 200
 TERMINAL_CLASS = ("Completed", "Cancelled")
 TRANSFER_KINDS = ("Class", "Time", "Program", "Branch")
 
+# Release decision D5 remains DEFERRED in docs/owner-decisions.json. An
+# effective-dated class-operations allow_transfers toggle is a *business term*,
+# never independent Owner approval to unlock the deferred transfer lifecycle.
+# Only a reviewed code change citing an explicit superseding Owner decision may
+# change this release authorization boundary. Synthetic tests can inject
+# approval locally; live requests may not set or override this flag.
+def _transfer_scope_authorized():
+    return False
+
+
+def _require_transfer_scope():
+    if not _transfer_scope_authorized():
+        raise frappe.ValidationError(
+            "Owner decision D5 has not authorized class transfers; "
+            "a class-operations policy switch alone cannot activate them")
+
+
+
 
 def _bounded(value, what):
     if not isinstance(value, str) or not value.strip() or len(value.strip()) > NAME_LIMIT:
@@ -331,6 +349,7 @@ def request_class_transfer(request_key, student, from_group, to_group, reason,
     from toefl_house.api import _execute
 
     def work(actor):
+        _require_transfer_scope()
         terms = class_operations.require_operations(
             feature="allow_transfers",
             message="Transfers are not permitted by the governing "
@@ -391,6 +410,7 @@ def approve_class_transfer(request_key, transfer, override=""):
     from toefl_house.api import _execute
 
     def work(actor):
+        _require_transfer_scope()
         terms = class_operations.require_operations(
             feature="allow_transfers",
             message="Transfers are not permitted by the governing "
