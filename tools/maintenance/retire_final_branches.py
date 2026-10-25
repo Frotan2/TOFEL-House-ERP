@@ -43,7 +43,7 @@ CANDIDATES = (
     (80, "fix/manager-funnel-completeness-d7-20261025", "b4819ac1e751c6178188525cf80d878a1de6dbb1", None),
     (81, "fix/receipt-currency-owner-report-20261025", "74a63ae5600eadb8a7de33990a22fb9c4f20ccf5", None),
     (83, "fix/customer-gui-prebuilt-only-20261025", "43d040709212ac250548565f5b20e114ba22df0f", None),
-    (84, "feature/owner-backup-on-off-default-off-20261025", "e0b51174bac53563648280e644257e5f059119e0", None),
+    (84, "feature/owner-backup-on-off-default-off-20261025", "2a0ff05b4f12c0db8009088ab6a4cdd17aebe18d", None),
 )
 
 
