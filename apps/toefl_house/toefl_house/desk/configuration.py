@@ -117,7 +117,7 @@ FUTURE_DOMAINS = (
 
 CURRENT_BACKUP_DOMAIN = (
     "Backup & Recovery",
-    "Backup On / Off is an independent Course Owner control, initially Off. When Off, no new TOEFL House backup may run, and existing sets are preserved. On alone does not start backup: the Owner must still configure the existing encrypted local backup schedule, retention behavior, public recovery key and separate local disk. Backup and activation fail closed until the policy and real recovery evidence verify. Off-site, NAS, second-device and cloud copies remain deferred.",
+    "Backup On / Off is an independent Course Owner control, initially Off. When Off, no new TOEFL House backup may run, and existing sets are preserved. On alone does not start backup: the owner decision D17 approves deleting older *verified* backup sets beyond an Owner-entered keep count, but no cleanup occurs unless all existing schedule, retention, public recovery key, separate local disk and owner policy gates are satisfied. Backup and activation fail closed until real recovery evidence verifies. Off-site, NAS, second-device and cloud copies remain deferred.",
 )
 
 
