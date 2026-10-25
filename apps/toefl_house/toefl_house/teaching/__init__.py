@@ -252,6 +252,11 @@ def _suggested_end_date(start_date_str, program_name):
         return None
     unit = str(governing.get("duration_unit") or "")
     value = float(governing.get("duration_value") or 0)
+    if unit == "Solar Hijri Month":
+        if value <= 0 or not value.is_integer():
+            return None
+        from toefl_house.finance.shamsi import semester_bounds
+        return semester_bounds(start.isoformat(), months=int(value))[1].isoformat()
     if unit not in DURATION_UNIT_TO_KWARGS or value <= 0:
         return None
     kwargs = {DURATION_UNIT_TO_KWARGS[unit]: value}
@@ -305,7 +310,24 @@ def create_student_group(request_key, group_name, program, academic_year, academ
             raise frappe.ValidationError("Unknown academic year")
         if term_name and not frappe.db.exists(TERM, term_name):
             raise frappe.ValidationError("Unknown academic term")
-        # End date: explicit value wins, else suggested from duration policy.
+        # End date: a versioned duration in Solar Hijri calendar is the
+        # governing cohort window. An explicit override cannot silently
+        # lengthen or shorten a fixed Solar-month semester.
+        solar_end = _suggested_end_date(start, program_name)
+        level_name = frappe.db.get_value(LEVEL, {"native_program": program_name}, "name")
+        if level_name:
+            level = frappe.get_doc(LEVEL, level_name)
+            governing = resolve_duration(
+                [row.as_dict() for row in (level.get("durations") or [])], start)
+            if governing and governing.get("duration_unit") == "Solar Hijri Month":
+                if not solar_end:
+                    raise frappe.ValidationError(
+                        "This program needs a valid Solar Hijri month duration")
+                if class_end_date and validate_schedule_date(class_end_date) != solar_end:
+                    raise frappe.ValidationError(
+                        "The class end date must match the approved Solar Hijri "
+                        "month duration for this program")
+        # Other program durations preserve the historical explicit-date workflow.
         if class_end_date:
             try:
                 end = validate_schedule_date(class_end_date)
