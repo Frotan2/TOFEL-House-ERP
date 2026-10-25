@@ -726,6 +726,8 @@ frappe.provide("toefl_house.role_desks");
 			{ fieldname: "installments_allowed", label: "Installments allowed", fieldtype: "Check" },
 			{ fieldname: "max_installments", label: "Maximum installments", fieldtype: "Int", reqd: 1 },
 			{ fieldname: "installment_interval_days", label: "Installment interval (days)", fieldtype: "Int", reqd: 1 },
+			{ fieldname: "installment_cadence", label: "Installment schedule", fieldtype: "Select", options: ["Days", "Solar Hijri Month"].join("\n"), default: "Days", reqd: 1, description: "Choose Solar Hijri Month for Afghan month-based tuition. Days preserves existing plans." },
+			{ fieldname: "payment_grace_days", label: "Shamsi month payment grace (days)", fieldtype: "Int", default: 0, reqd: 1, description: "Only used for Solar Hijri Month, from 0 to 15 days after first day of the month." },
 		],
 		"toefl_house.finance.policies.set_billing_policy_status": [
 			{ fieldname: "policy", label: "Policy", fieldtype: "Data", reqd: 1, read_only: 1 },
