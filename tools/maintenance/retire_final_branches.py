@@ -13,7 +13,7 @@ import urllib.parse
 from retire_merged_branches import api, delete_ref_path, eligible, open_pulls
 
 REPOSITORY = "Frotan2/TOFEL-House-ERP"
-SELF_BRANCH = "maintenance/retire-owner-coverage-fix-20261025"
+SELF_BRANCH = "maintenance/retire-receipt-currency-fix-20261025"
 # (original PR number or None, exact branch, audited head SHA, replacement PR or None)
 # The replacement mapping is for intentionally closed, unmerged/obsolete
 # implementations; it is never permission to retire an open PR or a moved head.
@@ -41,6 +41,8 @@ CANDIDATES = (
     (74, "fix/owner-desk-plain-language-native-20261025", "2bfbca38e573bfb8d0fdfb2820fe14c7e9555231", None),
     (77, "fix/owner-analytics-complete-coverage-20261025", "6877aaec8dbacfe441156edc92c13a5e7770ce17", None),
     (80, "fix/manager-funnel-completeness-d7-20261025", "b4819ac1e751c6178188525cf80d878a1de6dbb1", None),
+    (81, "fix/receipt-currency-owner-report-20261025", "74a63ae5600eadb8a7de33990a22fb9c4f20ccf5", None),
+    (83, "fix/customer-gui-prebuilt-only-20261025", "43d040709212ac250548565f5b20e114ba22df0f", None),
 )
 
 
@@ -140,7 +142,7 @@ def main():
         return 2
     if args.apply and (
         os.environ.get("GITHUB_REF") != "refs/heads/main"
-        or os.environ.get("CONFIRM_FINAL_BRANCH_RETIREMENT") != "exact-23-heads-after-pr80"
+        or os.environ.get("CONFIRM_FINAL_BRANCH_RETIREMENT") != "exact-25-heads-after-pr83"
     ):
         print("FAIL CLOSED: main workflow authorization required", file=sys.stderr)
         return 2
@@ -148,6 +150,8 @@ def main():
         # No cleanup until the two outstanding major feature lines have been
         # reconciled into a merged, reviewed integration PR.
         verify_replacement(69)
+        verify_replacement(81)
+        verify_replacement(83)
         if not api("/contents/apps/toefl_house/toefl_house/teaching/transfers.py?ref=main", TOKEN):
             raise RuntimeError("Class transfer implementation missing from main")
         if not api("/contents/apps/toefl_house/toefl_house/operations/guardian_portal.py?ref=main", TOKEN):
