@@ -65,6 +65,8 @@ $minFreeBytes = [int64]32212254720
 $script:Catalog = $null
 $script:WorkDir = ""
 $script:BackupDirRelative = ""
+$script:ActiveTransactionId = ""
+$script:EngineImage = ""
 
 # ---------------------------------------------------------------------------
 # Bilingual catalogue, result document and stage output
@@ -258,6 +260,7 @@ function Set-JournalState([string]$Phase, [string]$Version) {
             document_type = "toefl-house-erp-update-journal"
             phase = $Phase
             version = $Version
+            transaction_id = $script:ActiveTransactionId
             updated_utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
         }
         $text = $document | ConvertTo-Json -Depth 4
@@ -577,6 +580,7 @@ function Invoke-UpdateEngine([string]$Mode) {
         "--volume", ($productRoot + ":" + $containerProductRoot + ":ro"),
         "--volume", ($script:WorkDir + ":" + $containerWorkRoot),
         "--volume", ($engineStateRoot + ":" + $containerEngineState),
+        "--mount", "type=bind,source=/var/run/docker.sock,target=/run/th-update-docker.sock,readonly",
         "--entrypoint", "/product/update_entrypoint.sh"
     )
     if ($Mode -ceq "apply") {
@@ -592,8 +596,18 @@ function Invoke-UpdateEngine([string]$Mode) {
             $arguments += @("--volume", ($script:BackupMount + ":" + $containerProductRoot + "/" + $script:BackupDirRelative + ":ro"))
         }
     }
-    $arguments += $imageTag
+    # Pin the engine container too: a mutable tag cannot select a different
+    # image between independent observation and container creation.
+    if ($script:EngineImage) { $arguments += $script:EngineImage } else { $arguments += $imageTag }
     return (Invoke-DockerVerbose $arguments)
+}
+
+function Stop-EngineFailure([string]$Mode, [string]$Version) {
+    if ($Mode -ceq "apply") {
+        Set-JournalState "recovery-required" $Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Version
+    }
+    Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
 }
 
 function Invoke-EngineStep([string]$Mode, $Request, [string]$Version) {
@@ -607,15 +621,25 @@ function Invoke-EngineStep([string]$Mode, $Request, [string]$Version) {
     $engineExit = Invoke-UpdateEngine $Mode
     $response = Read-EngineResponse
     if ($null -eq $response) {
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
+        Stop-EngineFailure $Mode $Version
     }
     if ($response.document_type -cne "toefl-house-erp-update-engine-response") {
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
+        Stop-EngineFailure $Mode $Version
     }
-    if ($engineExit -ne $script:ExitAllowed -and $engineExit -ne $script:ExitRefused) {
+    $validEngineExit = (($engineExit -eq $script:ExitAllowed -and $response.decision -ceq "allow") -or
+                        ($engineExit -eq $script:ExitRefused -and $response.decision -ceq "refuse"))
+    if ($Mode -ceq "apply") {
+        # Exit 5 carries a structured migration/verification failure. Return it
+        # to the recovery handler; require a coherent exit/status/outcome pair.
+        $validEngineExit = (($engineExit -eq $script:ExitAllowed -and $response.status -ceq "succeeded" -and
+                             $response.transaction_outcome -ceq "completed") -or
+                            ($engineExit -eq $script:ExitFailed -and $response.status -ceq "failed" -and
+                             @("safe-abort", "recovery-required") -ccontains [string]$response.transaction_outcome))
+    }
+    if (-not $validEngineExit) {
         # Exit 4/5 means the engine itself could not decide.  A stray allow in
         # that state would be a fail-open, so treat it as a hard stop.
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.engine_failed" $Version
+        Stop-EngineFailure $Mode $Version
     }
     return $response
 }
@@ -899,6 +923,7 @@ function Invoke-UpdateCheck {
         Signature = $workRelative + "/signature.json"
         RunFolder = $workRelative
         Response = $response
+        Request = $request
     }
 }
 
@@ -906,8 +931,17 @@ function Invoke-UpdateCheck {
 # Install pipeline (mutating, engine-gated)
 # ---------------------------------------------------------------------------
 
-function Invoke-UpdateStart {
-    $code = Invoke-Compose @("up", "-d", "--no-build")
+function Invoke-UpdateStart([string]$ExpectedImageId) {
+    # Never let Compose silently recreate missing storage after any update.
+    try {
+        . (Join-Path $PSScriptRoot "Test Existing Installation.ps1")
+        Test-ExistingInstallation -ProductRoot $productRoot
+    } catch { return $false }
+    $image = Get-InstalledImage
+    if ($null -eq $image -or [string]$image.Id -cne $ExpectedImageId) { return $false }
+    # The verified migration already ran. Do not rerun bootstrap or recreate
+    # DB/Redis dependencies after the preservation census.
+    $code = Invoke-Compose @("up", "-d", "--no-build", "--no-deps", "web", "worker", "scheduler", "socketio")
     return ($code -eq 0)
 }
 
@@ -928,31 +962,42 @@ function Invoke-UpdateInstall($Check) {
     }
     Write-Stage "updater.applying"
 
-    $previousImageId = ""
-    $image = Get-InstalledImage
-    if ($null -ne $image -and $null -ne $image.Id) { $previousImageId = [string]$image.Id }
-
+    # Rehash release/evidence and query the root-owned live Docker observer
+    # immediately before stopping anything. Earlier $Check facts are hints,
+    # never authorization to act on a changed host.
+    $script:EngineImage = [string]$Check.Installed.image_id
+    $recheckRequest = $Check.Request
+    $recheckRequest.action = "recheck"
+    $recheckRequest.transaction = $Check.Transaction
+    $recheck = Invoke-EngineStep "recheck" $recheckRequest $Check.Version
+    [void](Assert-EngineAllowed $recheck $Check.Version)
+    $previousImageId = [string]$Check.Installed.image_id
+    $script:ActiveTransactionId = [string]$Check.Transaction.transaction_id
+    $candidateImageId = [string]$Check.Response.target.image.config_digest
+    if ($candidateImageId -cnotmatch '^sha256:[0-9a-f]{64}$') {
+        Stop-Update $script:ExitRefused "refused" "launcher" "updater.package_invalid" $Check.Version
+    }
     Set-JournalState "prepared" $Check.Version
     Write-Stage "updater.verifying"
     $stopped = Invoke-Compose @("stop", "web", "worker", "scheduler", "socketio")
     if ($stopped -ne 0) {
-        Set-JournalState "rolled-back" ""
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.failed" $Check.Version
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
     }
 
     $loaded = Invoke-DockerVerbose @("load", "--input", $Check.Archive)
     if ($loaded -ne 0) {
-        # The tag may or may not have changed.  Restore the previous identity
-        # explicitly, then bring the untouched installation back.
+        # Import may have changed the tag. Restore it only as a best-effort
+        # pointer repair; do not start services on storage we cannot re-prove.
         if ($previousImageId) {
             Invoke-DockerVerbose @("tag", $previousImageId, $imageTag) | Out-Null
         }
-        $restarted = Invoke-UpdateStart
-        if ($restarted) { Set-JournalState "rolled-back" "" } else { Set-JournalState "recovery-required" "" }
-        Stop-Update $script:ExitFailed "failed" "launcher" "updater.rollback_done" $Check.Version
+        Set-JournalState "recovery-required" $Check.Version
+        Stop-Update $script:ExitRecoveryRequired "recovery-required" "launcher" "updater.recovery_required" $Check.Version
     }
 
     Set-JournalState "applying" $Check.Version
+    $script:EngineImage = $candidateImageId
     $applyRequest = [ordered]@{
         action = "apply"
         site = $siteName
@@ -962,13 +1007,6 @@ function Invoke-UpdateInstall($Check) {
         trust_store = "data/updates/trust-store.json"
         archive = ($Check.RunFolder + "/toefl-house-erp-app.tar")
         transaction = $Check.Transaction
-        installed = [pscustomobject]@{
-            version = [string]$Check.Installed.version
-            release_sequence = $Check.Installed.release_sequence
-            source_revision = [string]$Check.Installed.source_revision
-            image_labels = $Check.Installed.image_labels
-            image_id = [string]$Check.Installed.image_id
-        }
         backup_receipt = "data/activation/backup-receipt.json"
         backup_dir = $script:BackupDirRelative
         recovery_authorization = ""
@@ -978,8 +1016,6 @@ function Invoke-UpdateInstall($Check) {
         host_updater_version = [string]$Check.Installed.version
         migrate_replays = 2
         command_timeout_seconds = 1800
-        journal_state = [string]$Check.JournalState
-        host = $Check.Facts
     }
     if (Test-Path -LiteralPath $recoveryAuthorizationPath -PathType Leaf) {
         $applyRequest.recovery_authorization = "data/updates/recovery-authorization.json"
@@ -998,18 +1034,12 @@ function Invoke-UpdateInstall($Check) {
     if ($status -ne "succeeded") {
         $blockers = Get-BlockerCodes $report
         if ($outcome -ceq "safe-abort") {
+            # The database was not migrated, but the refusal may mean its
+            # volume vanished or changed. Compose up could create an empty
+            # replacement, so safe-abort never means safe automatic restart.
             if ($previousImageId) {
                 Invoke-DockerVerbose @("tag", $previousImageId, $imageTag) | Out-Null
             }
-            $restarted = Invoke-UpdateStart
-            if ($restarted) { Set-JournalState "rolled-back" "" } else { Set-JournalState "recovery-required" "" }
-            $primary = "updater.rollback_done"
-            if ($blockers.Count -gt 0 -and $null -ne (Get-Text "messages" $blockers[0])) { $primary = $blockers[0] }
-            Save-Result -Status "failed" -Section "messages" -Key $primary -Version $Check.Version -Blockers $blockers
-            Write-Host ""
-            Write-Bilingual "launcher" "updater.rollback_done"
-            Write-Bilingual "messages" $primary
-            exit $script:ExitFailed
         }
         # A migration may already have changed the database.  Never start the
         # stack as if the update succeeded, and never restore over live data.
@@ -1028,7 +1058,7 @@ function Invoke-UpdateInstall($Check) {
     }
 
     Write-Stage "updater.applying"
-    if (-not (Invoke-UpdateStart)) {
+    if (-not (Invoke-UpdateStart $candidateImageId)) {
         Set-JournalState "recovery-required" $Check.Version
         Save-Result -Status "recovery-required" -Section "launcher" -Key "updater.recovery_required" -Version $Check.Version
         Write-Host ""

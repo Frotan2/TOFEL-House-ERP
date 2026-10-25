@@ -130,6 +130,7 @@ COPY product/perf_baseline.py /product/perf_baseline.py
 # updater starts this image with the product folder mounted read-only; the
 # engine decides whether an already-downloaded release may be applied.
 COPY product/update_engine.py /product/update_engine.py
+COPY product/update_host.py /product/update_host.py
 COPY product/update_entrypoint.sh /product/update_entrypoint.sh
 # Fail the build if a Windows checkout or manually altered build context
 # carries CRLFs, a Unicode BOM, or a non-LF kernel shebang into the image.

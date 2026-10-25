@@ -7,6 +7,9 @@ on:
       - docs/engineering/FINAL-HOSTED-ACCEPTANCE-2026-10-23.md
       - "product/windows/**"
       - "product/update_engine.py"
+      - "product/update_host.py"
+      - "tests/foundation/test_update_host.py"
+      - "tests/foundation/windows_update_failure_probe.ps1"
       - "product/update_entrypoint.sh"
       - "product/updates/**"
       - "tests/foundation/test_update_engine.py"
@@ -58,6 +61,11 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "product/windows/Update TOEFL House ERP.ps1" -SmokeTest
           if ($LASTEXITCODE -ne 0) { throw "Windows updater refused its fail-closed smoke." }
+      - name: Exercise actual updater failure and recovery handlers with synthetic services
+        shell: powershell
+        run: |
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'tests/foundation/windows_update_failure_probe.ps1'
+          if ($LASTEXITCODE -ne 0) { throw "Updater failure/recovery probe failed." }
       - name: Initialize Windows GUI without opening a desktop window
         shell: powershell
         run: |

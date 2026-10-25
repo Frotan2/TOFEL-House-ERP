@@ -455,7 +455,7 @@ class LineEndingContract(unittest.TestCase):
             "product/backup.py", "product/native_gpg.py", "product/native_db.py",
             "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
             # Signed update engine + its container entrypoint (Issue #40).
-            "product/update_engine.py", "product/update_entrypoint.sh",
+            "product/update_engine.py", "product/update_host.py", "product/update_entrypoint.sh",
             "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_frappe_python.py",
             "tools/foundation/secure_hrms.py",
             "tools/foundation/hrms-locks", "tools/foundation/banking-locks",

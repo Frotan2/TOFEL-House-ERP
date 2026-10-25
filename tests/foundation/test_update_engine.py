@@ -387,6 +387,30 @@ class UpdateFixture:
         facts.update(overrides)
         return facts
 
+    def live_observation(self) -> dict:
+        applying = getattr(self, "live_applying", False)
+        installed = self.installed()
+        states = {key: "running" for key in engine.update_host.CONTAINERS}
+        journal = {"phase": "idle"}
+        image_id = installed["image_id"]
+        labels = installed["image_labels"]
+        if applying:
+            states.update({key: "exited" for key in ("web", "worker", "scheduler", "socketio")})
+            journal = {"phase": "applying", "version": self.version,
+                       "transaction_id": self.live_transaction_id}
+            image_id = self.identity["config_digest"]
+            labels = self.identity["labels"]
+        result = {"schema_version": 1, "facts": self.host(),
+                  "identity": {key: value * 64 for key, value in (
+                      ("storage_sha256", "a"), ("credentials_sha256", "b"), ("site_config_sha256", "c"))},
+                  "states": states, "journal": journal,
+                  "tag_image_id": image_id, "tag_image_labels": labels}
+        # Independent simulated host state: never derive this from a request's
+        # caller-editable host/installed/journal fields.
+        for key, value in getattr(self, "live_changes", {}).items():
+            result[key] = value
+        return result
+
     def preflight_request(self, **overrides) -> dict:
         request = {
             "action": "preflight",
@@ -444,7 +468,11 @@ class UpdateEngineBase(unittest.TestCase):
         self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
 
     def fixture(self, **overrides) -> UpdateFixture:
-        return UpdateFixture(self.tmp / "fixture", **overrides)
+        fixture = UpdateFixture(self.tmp / "fixture", **overrides)
+        observer = patch.object(engine, "_observe_host", side_effect=fixture.live_observation)
+        observer.start()
+        self.addCleanup(observer.stop)
+        return fixture
 
 
 class TrustStoreTests(UpdateEngineBase):
@@ -957,20 +985,22 @@ class ApplyTests(UpdateEngineBase):
             "transaction": transaction,
             "archive": str((self.fixture.staging / "toefl-house-erp-app.tar")
                            .relative_to(self.fixture.product_root)),
-            "installed": self.fixture.installed(),
             "backup_receipt": self.fixture.receipt_rel,
             "backup_dir": str(self.fixture.backup_dir.relative_to(self.fixture.product_root)),
             "recovery_authorization": self.fixture.authorization_rel,
             "recovery_signature": self.fixture.authorization_signature_rel,
-            "journal_state": "idle",
-            "host": self.fixture.host(),
         }
         request.update(overrides)
         return request
 
     def apply(self, **overrides) -> dict:
-        return engine.apply_update(self.apply_request(**overrides), now=NOW,
-                                   state_dir=self.fixture.state_dir)
+        request = self.apply_request(**overrides)
+        self.fixture.live_applying = True
+        self.fixture.live_transaction_id = request["transaction"]["transaction_id"]
+        try:
+            return engine.apply_update(request, now=NOW, state_dir=self.fixture.state_dir)
+        finally:
+            self.fixture.live_applying = False
 
     def blocker_codes(self, report: dict) -> set[str]:
         return {item["code"] for item in report["blockers"]}
@@ -1053,7 +1083,7 @@ class ApplyTests(UpdateEngineBase):
 
 
 class ProtocolTests(UpdateEngineBase):
-    def test_cli_uses_request_and_response_documents(self):
+    def test_cli_refuses_without_trusted_observer_using_response_document(self):
         fixture = self.fixture()
         request = fixture.preflight_request()
         request_path = self.tmp / "request.json"
@@ -1063,10 +1093,11 @@ class ProtocolTests(UpdateEngineBase):
             [sys.executable, str(PRODUCT / "update_engine.py"),
              "--request", str(request_path), "--response", str(response_path)],
             capture_output=True, text=True, timeout=120)
-        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertEqual(completed.returncode, 3, completed.stdout + completed.stderr)
         self.assertEqual(completed.stdout, "")
         response = json.loads(response_path.read_text())
-        self.assertEqual(response["decision"], "allow", response["blockers"])
+        self.assertEqual(response["decision"], "refuse", response["blockers"])
+        self.assertIn("preflight.host.unavailable", codes(response))
         self.assertEqual(response["document_type"], engine.DOCUMENT_RESPONSE)
 
     def test_cli_reads_request_path_from_environment(self):
@@ -1079,8 +1110,8 @@ class ProtocolTests(UpdateEngineBase):
             capture_output=True, text=True, timeout=120,
             env={**os.environ, "TH_UPDATE_REQUEST": str(request_path),
                  "TH_UPDATE_RESPONSE": str(response_path)})
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(json.loads(response_path.read_text())["decision"], "allow")
+        self.assertEqual(completed.returncode, 3, completed.stderr)
+        self.assertIn("preflight.host.unavailable", codes(json.loads(response_path.read_text())))
 
     def test_missing_request_is_a_safe_failure(self):
         completed = subprocess.run(
@@ -1142,7 +1173,11 @@ class ManifestInvariantTests(UpdateEngineBase):
     """A manifest cannot waive its own safety requirements (BLOCKER A)."""
 
     def fixture(self, **overrides) -> UpdateFixture:
-        return UpdateFixture(self.tmp / "fixture", **overrides)
+        fixture = UpdateFixture(self.tmp / "fixture", **overrides)
+        observer = patch.object(engine, "_observe_host", side_effect=fixture.live_observation)
+        observer.start()
+        self.addCleanup(observer.stop)
+        return fixture
 
     def with_requirement(self, name: str, value) -> dict:
         fixture = self.fixture()
@@ -1373,7 +1408,7 @@ class TransactionBindingTests(ApplyTests):
         installed = {**self.fixture.installed(), "image_id": "sha256:" + "7" * 64}
         report = self.apply(transaction=transaction, installed=installed)
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.installed_mismatch", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
     def test_apply_refuses_when_the_backup_receipt_changed(self):
@@ -1411,30 +1446,30 @@ class AuthenticatedAuthorizationTests(ApplyTests):
                                       "org.toefl-house.release-version": "2099.01.01"}}
         report = self.apply(transaction=transaction, installed=installed)
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.installed_mismatch", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
-    def test_changing_the_actual_docker_image_is_refused(self):
+    def test_caller_carried_image_snapshot_is_refused(self):
         transaction = self.transaction()
         report = self.apply(transaction=transaction,
                             host=self.fixture.host(image_id="sha256:" + "8" * 64))
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.installed_mismatch", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
     def test_changing_the_journal_after_authorization_is_refused(self):
         transaction = self.transaction()
         report = self.apply(transaction=transaction, journal_state="applying")
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.journal_unsafe", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
-    def test_losing_the_database_volume_after_authorization_is_refused(self):
+    def test_caller_carried_volume_snapshot_is_refused(self):
         transaction = self.transaction()
         report = self.apply(transaction=transaction,
                             host=self.fixture.host(volume_present=False))
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.host_unsafe", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
     def test_stopping_a_service_after_authorization_is_refused(self):
@@ -1442,7 +1477,7 @@ class AuthenticatedAuthorizationTests(ApplyTests):
         services = {**self.fixture.host()["services"], "db": False}
         report = self.apply(transaction=transaction, host=self.fixture.host(services=services))
         self.assertEqual(report["status"], "failed")
-        self.assertIn("apply.host_unsafe", self.blocker_codes(report))
+        self.assertIn("engine.request_invalid", self.blocker_codes(report))
         self.assertFalse(self.migrate_called())
 
     def test_the_use_marker_is_durable_not_per_run(self):

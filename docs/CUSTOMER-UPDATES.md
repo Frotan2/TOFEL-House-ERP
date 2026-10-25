@@ -2,8 +2,8 @@
 
 ## Current status / وضعیت فعلی
 
-The update feature is implemented and tested, but **not enabled for real school
-records**. The shipped channel is disabled until the provider completes the
+The update feature is under safety qualification and **not enabled for real
+school records**. The shipped channel is disabled until the provider completes the
 release and Owner acceptance gates (#12, #36). Until then, *Check for Updates*
 explains that the provider has paused updates and changes nothing.
 
@@ -88,8 +88,11 @@ a verified backup and a signed Owner authorization is rejected as invalid.
 
 If an update stops, the window explains the state in both languages:
 
-* **The update was not applied** — the previous working version was restored;
-  your records were not changed. Open the ERP normally.
+* **The update was refused before installation** — no installation change was
+  started. Follow the displayed support instructions.
+* **An import or apply step failed** — services are not automatically restarted,
+  even when the database migration did not start; storage may be unavailable.
+  Keep the installation intact and ask trusted support for a recovery decision.
 * **The update needs a recovery decision** — do **not** reinstall, do not delete
   data, do not reset Docker and do not restore over the live site. Keep this
   folder, copy the safe support status, and contact trusted support. The journal
@@ -97,7 +100,8 @@ If an update stops, the window explains the state in both languages:
 
 اگر به‌روزرسانی متوقف شود، پنجره وضعیت را به هر دو زبان توضیح می‌دهد:
 
-* **به‌روزرسانی تطبیق نشد** — نسخهٔ قبلی بازگردانده شد و سوابق شما تغییر نکرد.
+* **به‌روزرسانی پیش از نصب رد شد** — تغییر نصب آغاز نشد؛ رهنمایی روی صفحه را دنبال کنید.
+* **واردکردن تصویر یا تطبیق نسخه ناکام شد** — سرویس‌ها خودکار دوباره آغاز نمی‌شوند؛ وضعیت ذخیره‌سازی باید تأیید شود. نصب موجود را حفظ و با پشتیبانی مطمئن تماس بگیرید.
 برنامه را به‌طور عادی باز کنید.
 * **به‌روزرسانی نیاز به تصمیم بازیابی دارد** — دوباره نصب نکنید، داده‌ها را حذف
 نکنید، Docker را بازنشانی نکنید و روی سایت زنده بازیابی نکنید. این پوشه را

@@ -56,6 +56,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Mapping, Sequence
 
+if __package__:
+    from . import update_host
+else:
+    import update_host
+
 PRODUCT = "TOEFL House ERP"
 DOCUMENT_UPDATE = "toefl-house-erp-update"
 DOCUMENT_UPDATE_SIGNATURE = "toefl-house-erp-update-signature"
@@ -85,7 +90,7 @@ MAX_BACKUP_MAX_AGE_HOURS = 24
 MAX_RECOVERY_MAX_AGE_HOURS = 168
 # A verified transaction is short-lived: apply must follow the image-phase
 # authorization quickly, and revalidates everything it can re-read.
-TRANSACTION_SCHEMA_VERSION = 1
+TRANSACTION_SCHEMA_VERSION = 2
 DOCUMENT_TRANSACTION = "toefl-house-erp-update-transaction"
 TRANSACTION_TTL_MINUTES = 30
 TRANSACTION_PHASES = ("manifest", "authorized")
@@ -166,6 +171,7 @@ ORPHAN_CHECKS = (
 # Every code the engine can emit.  The Windows catalog must define English and
 # Dari text for each one; tests/foundation/test_update_engine.py enforces it.
 MESSAGE_CODES = frozenset({
+    "preflight.host.unavailable",
     "trust.not_provisioned",
     "trust.invalid",
     "trust.key_expired",
@@ -1304,6 +1310,70 @@ def _host_facts(request: Mapping[str, object]) -> dict:
     }
 
 
+def _observe_host() -> dict:
+    try:
+        return update_host.observe()
+    except update_host.ObservationError:
+        raise refuse("preflight.host.unavailable", "the trusted live host observer is unavailable") from None
+
+
+def _live_identity(request: Mapping[str, object], manifest: dict, *,
+                   transaction: dict | None = None) -> dict:
+    """Read a privileged local broker, never caller-carried host snapshots.
+
+    The broker can only inspect fixed Docker objects and installation files.
+    It cannot accept an API path or perform a Docker mutation. Its Unix peer
+    credentials authenticate root; the migrating frappe process cannot read
+    the raw Docker socket or impersonate that peer.
+    """
+    observation = _observe_host()
+    if observation.get("schema_version") != 1:
+        raise refuse("preflight.host.unavailable", "unsupported live host observation")
+    facts = _host_facts({"host": observation.get("facts")})
+    installed = request.get("installed") if transaction is None else transaction["installed"]
+    if (not isinstance(installed, dict) or facts["image_id"] != installed.get("image_id")
+            or facts["image_labels"] != installed.get("image_labels")):
+        raise refuse("apply.installed_mismatch", "the actual installed container image changed")
+    identity = observation.get("identity")
+    fields = {"storage_sha256", "credentials_sha256", "site_config_sha256"}
+    if (not isinstance(identity, dict) or set(identity) != fields
+            or any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+                   for value in identity.values())):
+        raise refuse("preflight.host.unavailable", "live installation identity is incomplete")
+    required_free = max(manifest["requirements"]["minimum_free_bytes"], MIN_FREE_BYTES_FLOOR)
+    if (facts["disk_free_bytes"] < required_free or not facts["volume_present"]
+            or not facts["volume_verified"] or not facts["site_credentials_present"]
+            or not facts["site_config_present"] or not facts["image_present"]):
+        raise refuse("apply.host_unsafe", "the actual installation is no longer safe to update")
+    states = observation.get("states")
+    expected = {key: "running" for key in update_host.CONTAINERS}
+    if transaction is not None:
+        expected.update({key: "exited" for key in ("web", "worker", "scheduler", "socketio")})
+    if states != expected:
+        raise refuse("apply.host_unsafe", "actual service states do not match the update phase")
+    journal = observation.get("journal")
+    if not isinstance(journal, dict):
+        raise refuse("apply.journal_unsafe", "the actual update journal is unavailable")
+    if transaction is None:
+        if journal.get("phase") not in JOURNAL_TERMINAL_STATES:
+            raise refuse("apply.journal_unsafe", "the actual update journal is unfinished")
+        expected_image = installed.get("image_id")
+        expected_labels = installed.get("image_labels")
+    else:
+        if (journal.get("phase") != "applying"
+                or journal.get("version") != manifest["version"]
+                or journal.get("transaction_id") != transaction["transaction_id"]):
+            raise refuse("apply.journal_unsafe", "the actual journal belongs to another update phase")
+        if identity != transaction.get("host_identity"):
+            raise refuse("apply.host_unsafe", "actual storage or site credentials changed after authorization")
+        expected_image = transaction["target"].get("image_config_digest")
+        expected_labels = manifest["image"]["labels"]
+    if (observation.get("tag_image_id") != expected_image
+            or observation.get("tag_image_labels") != expected_labels):
+        raise refuse("apply.installed_mismatch", "the actual tagged image does not match this update phase")
+    return dict(identity)
+
+
 def preflight(request: Mapping[str, object], *, now: datetime,
               state_dir: Path | None = None) -> dict:
     """Return an allow/refuse decision.  This function never mutates anything.
@@ -1351,6 +1421,26 @@ def authorize(request: Mapping[str, object], *, now: datetime,
     assert context is not None
     _bind_transaction(transaction, context)
     response["transaction"] = _persist_authorization(state_dir, context, phase="authorized", now=now)
+    return response
+
+
+def recheck(request: Mapping[str, object], *, now: datetime,
+            state_dir: Path | None = None) -> dict:
+    """Revalidate an issued image authorization before any host mutation."""
+    supplied = _require_object(request.get("transaction"), "transaction")
+    transaction_id = supplied.get("transaction_id")
+    if not isinstance(transaction_id, str) or not TRANSACTION_ID.fullmatch(transaction_id):
+        raise refuse("transaction.invalid", "the transaction identifier is malformed")
+    transaction = _load_persisted_transaction(state_dir, transaction_id, now=now)
+    if transaction["phase"] != "authorized":
+        raise refuse("transaction.invalid", "an image authorization is required")
+    response, context = _evaluate({**request, "action": "authorize"}, now=now, action="authorize",
+                                  require_archive=True, state_dir=state_dir)
+    response["action"] = "recheck"
+    if response["decision"] == "allow":
+        assert context is not None
+        _bind_transaction(transaction, context)
+        response["transaction"] = transaction
     return response
 
 
@@ -1527,8 +1617,10 @@ def _evaluate(request: Mapping[str, object], *, now: datetime, action: str,
 
     context = None
     if not blockers:
+        host_identity = _live_identity(request, manifest)
         context = _build_context(request, product_root, manifest, identity, receipt_details,
                                  recovery_details, now)
+        context["host_identity"] = host_identity
         if require_archive and (identity is None or context is None):
             blockers.append(_block("release.archive.missing", "the downloaded image archive is required here"))
             context = None
@@ -1714,6 +1806,7 @@ def _issue_transaction(context: dict, *, phase: str, now: datetime) -> dict:
         "issued_utc": parse_utc_iso(now),
         "expires_utc": parse_utc_iso(expires),
         "installed": dict(context["installed"]),
+        "host_identity": dict(context["host_identity"]),
         "target": dict(context["target"]),
         "evidence": dict(context["evidence"]),
         "migration": dict(context["migration"]),
@@ -1726,7 +1819,7 @@ def _load_transaction(value: object, *, now: datetime) -> dict:
         raise refuse("transaction.missing", "no verified update transaction was supplied")
     document = _require_object(value, "transaction")
     fields = ("schema_version", "document_type", "phase", "transaction_id", "site", "issued_utc",
-              "expires_utc", "installed", "target", "evidence", "migration")
+              "expires_utc", "installed", "target", "evidence", "migration", "host_identity")
     _require_exact_keys(document, fields, fields, "transaction", code="transaction.invalid")
     if (document["schema_version"] != TRANSACTION_SCHEMA_VERSION
             or document["document_type"] != DOCUMENT_TRANSACTION):
@@ -1746,7 +1839,7 @@ def _load_transaction(value: object, *, now: datetime) -> dict:
         raise refuse("transaction.invalid", "the transaction is dated in the future")
     if expires <= now:
         raise refuse("transaction.expired", "the verified update transaction has expired")
-    for name in ("installed", "target", "evidence", "migration"):
+    for name in ("installed", "target", "evidence", "migration", "host_identity"):
         document[name] = _require_object(document[name], f"transaction.{name}")
     return document
 
@@ -1758,7 +1851,7 @@ def _bind_transaction(transaction: dict, context: dict) -> None:
     archive identity it saw is empty.  Everything it did establish must match
     exactly; the image fields are the ones this phase adds.
     """
-    for section in ("installed", "evidence", "migration"):
+    for section in ("installed", "evidence", "migration", "host_identity"):
         if transaction[section] != context[section]:
             raise refuse("transaction.mismatch",
                          f"the update transaction does not match the current {section} evidence")
@@ -1971,12 +2064,11 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
         _require_exact_keys(request, (
             "action", "site", "product_root", "manifest", "signature", "trust_store", "sites_dir", "bench",
             "host_updater_version", "migrate_replays", "command_timeout_seconds", "transaction", "archive",
-            "installed", "backup_receipt", "backup_dir", "recovery_authorization", "recovery_signature",
-            "host", "journal_state",
+            "backup_receipt", "backup_dir", "recovery_authorization", "recovery_signature",
         ), (
             "action", "site", "product_root", "manifest", "signature", "trust_store", "sites_dir", "bench",
-            "host_updater_version", "transaction", "archive", "installed", "backup_receipt",
-            "recovery_authorization", "recovery_signature", "host", "journal_state",
+            "host_updater_version", "transaction", "archive", "backup_receipt",
+            "recovery_authorization", "recovery_signature",
         ), "request")
         if request["action"] != "apply":
             raise refuse("engine.request_invalid", "request action is not apply")
@@ -2066,6 +2158,7 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
     if manifest["database"]["migration"] == "supported":
         try:
             for _ in range(migrate_replays):
+                _live_identity(request, manifest, transaction=transaction)
                 runner.migrate(SITE_NAME)
         except UpdateError as error:
             return _apply_report("failed", "migrating", blockers=[_block(error.code, error.detail)],
@@ -2101,6 +2194,10 @@ def apply_update(request: Mapping[str, object], *, now: datetime,
     lost_pages = [page for page in ROLE_DESK_PAGES if page not in pages]
     if lost_pages:
         blockers.append(_block("apply.role_desk_missing", "missing role desks: " + ",".join(lost_pages)))
+    try:
+        _live_identity(request, manifest, transaction=transaction)
+    except UpdateError as error:
+        blockers.append(_block(error.code, error.detail))
     status = "succeeded" if not blockers else "failed"
     return _apply_report(status, "verified" if status == "succeeded" else "verify-data",
                          blockers=blockers, counts_before=counts_before, counts_after=counts_after,
@@ -2151,13 +2248,6 @@ def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction
             or identity["config_digest"] != target.get("image_config_digest")):
         raise refuse("apply.archive_mismatch", "the image identity does not match the authorized release")
 
-    installed = _require_object(request.get("installed"), "installed")
-    authorized_installed = transaction["installed"]
-    for name in ("version", "release_sequence", "source_revision", "image_id", "image_labels"):
-        if installed.get(name) != authorized_installed.get(name):
-            raise refuse("apply.installed_mismatch",
-                         f"the installed {name} changed since the update was authorized")
-
     evidence = transaction["evidence"]
     receipt_path = resolve_inside(product_root, request["backup_receipt"], "request.backup_receipt")
     if sha256_file(receipt_path) != evidence.get("backup_receipt_sha256"):
@@ -2175,32 +2265,9 @@ def _rebind_apply(request: Mapping[str, object], product_root: Path, transaction
         store, site=SITE_NAME, receipt_sha256=evidence.get("backup_receipt_sha256"), now=now,
         max_age_hours=manifest["requirements"]["recovery_max_age_hours"])
 
-    # Re-read the host and journal state now, not at authorize time: a change
-    # since the authorization (a lost volume, a stopped service, a half-finished
-    # update, a replaced image) must stop the migration before it starts.
-    journal_state = request.get("journal_state", "idle")
-    if journal_state not in JOURNAL_TERMINAL_STATES:
-        raise refuse("apply.journal_unsafe", "the update journal is not in a finished state")
-    facts = _host_facts(request)
-    required_free = max(manifest["requirements"]["minimum_free_bytes"], MIN_FREE_BYTES_FLOOR)
-    if facts["disk_free_bytes"] < required_free:
-        raise refuse("apply.host_unsafe", "free disk space changed after authorization")
-    if not facts["volume_present"] or not facts["volume_verified"]:
-        raise refuse("apply.host_unsafe", "the database volume changed after authorization")
-    if not facts["site_credentials_present"] or not facts["site_config_present"]:
-        raise refuse("apply.host_unsafe", "the site files changed after authorization")
-    if not facts["image_present"]:
-        raise refuse("apply.host_unsafe", "the installed image disappeared after authorization")
-    if facts["image_id"] != transaction["installed"].get("image_id"):
-        raise refuse("apply.installed_mismatch",
-                     "the installed image identity changed after authorization")
-    if facts["image_labels"] != transaction["installed"].get("image_labels"):
-        raise refuse("apply.installed_mismatch",
-                     "the installed image labels changed after authorization")
-    unhealthy = [name for name, value in facts["services"].items() if value is not True]
-    if unhealthy:
-        raise refuse("apply.host_unsafe",
-                     "services changed after authorization: " + ",".join(sorted(unhealthy)))
+    # No host, installed-image or journal snapshot is accepted in apply JSON.
+    # Query the independently authenticated broker after all evidence hashing.
+    _live_identity(request, manifest, transaction=transaction)
 
 
 def _consume_transaction(state_dir: Path, transaction: dict) -> None:
@@ -2312,6 +2379,9 @@ def run(request: Mapping[str, object], *, now: datetime | None = None,
         if action == "apply":
             response = apply_update(request, now=now, state_dir=state_dir)
             return response, 0 if response["status"] == "succeeded" else 5
+        if action == "recheck":
+            response = recheck(request, now=now, state_dir=state_dir)
+            return response, 0 if response["decision"] == "allow" else 3
         if action == "authorize":
             response = authorize(request, now=now, state_dir=state_dir)
             return response, 0 if response["decision"] == "allow" else 3

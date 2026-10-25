@@ -1,6 +1,6 @@
 # Safe updates — engineering design (Issue #40)
 
-Status: implementation complete and tested; **not activated for real school data**.
+Status: hardened implementation under qualification; **not activated for real school data**.
 The customer channel ships disabled and the release gates from #12/#36 still
 govern every production release. Nothing in this document changes the current
 hold posture in `README.md`, `VALIDATION.md`, `LAUNCH-RUNBOOK.md` or
@@ -57,12 +57,61 @@ document is refused (`transaction.unknown` / `transaction.tampered`) before any
 migration runs. The one-use marker is written to the same durable folder, so a
 replay from a later run folder is refused (`transaction.replayed`).
 
-At apply time the engine re-reads every mutable fact -- manifest signature,
-archive identity, backup receipt, recovery authorization, installed image
-identity and labels, journal state, database volume, services and disk space --
-and refuses with `transaction.mismatch`, `apply.installed_mismatch`,
-`apply.archive_mismatch`, `apply.evidence_mismatch`, `apply.host_unsafe` or
-`apply.journal_unsafe` if anything changed since the authorization was issued.
+At apply time the engine re-reads signed release, image and recovery evidence.
+Host facts are obtained through the authenticated local broker described below,
+not through the request's earlier `host`, `installed` or `journal_state` fields.
+Those fields are rejected in apply requests. Changed evidence refuses the
+update before migration; a failure after migration starts requires recovery.
+
+### Independent live host observation (2026-10-25)
+
+`product/update_host.py` runs a small root broker inside the ephemeral engine
+container. It accepts only a fresh nonce over a fixed Unix socket; Linux peer
+credentials authenticate the root process. It exposes no API URL, shell command,
+Docker mutation or caller-selected path. Its fixed GET requests inspect the
+seven existing product containers, the original web image, the current image
+tag and the exact database volume/mount. The actual journal and site files are
+read from the fixed, read-only `/product-root` mount. No credential contents or
+raw Docker inspect documents are returned or logged.
+
+The raw Docker socket is mounted only for this broker. A `readonly` mount
+**does not** restrict Docker API operations. The broker therefore refuses to
+start unless socket ownership and permissions deny the frappe engine account
+access. The broker socket remains root-owned and restricted to that account's
+group; the client also checks the server's actual root UID via `SO_PEERCRED`.
+It is private to the ephemeral container and is not exposed over TCP. This
+privileged boundary requires independent security review and Docker Desktop
+qualification; unit tests are not authorization to enable the channel.
+
+Transaction schema 2 binds storage/container/mount identity and hashes of
+`db.env` and `site_config.json` to the authenticated authorization. Old schema
+1 transactions cannot be applied; a fresh complete check is required. All
+services must still be running at preflight/authorize and at the new `recheck`
+phase immediately before any host mutation. After the intentional stop/import,
+the actual original application containers must be stopped, the DB/Redis must
+still run, the loaded tag must match the verified candidate config digest and
+labels, and the on-disk journal must say `applying` for this exact transaction
+and target version. Docker containers for engine steps are selected by immutable
+image ID after the check. Missing/unavailable observations never fall back to
+caller-supplied booleans. Host state is queried after evidence hashing, before
+each migrate replay, and after data/role verification.
+
+A structured apply exit 5 must reach the launcher's failure handler. It is not
+an engine transport error that can be discarded. Any stop/import/apply failure
+leaves `recovery-required`; even `safe-abort` does not automatically restart
+Compose, since the refusal may mean storage vanished or was replaced. A
+best-effort tag restoration is not recovery proof. Only a successful apply can
+reach the guarded Start path, which repeats the existing-installation preflight
+before Compose. It starts only the four application services with `--no-deps`,
+so bootstrap and DB/Redis are not recreated after the verified census. The
+current image ID must still match the verified candidate. No restore or
+deletion is performed automatically.
+
+Evidence added for this boundary: independent host-state mutation tests, a
+real Unix HTTP transport on unrestricted Linux runners, and a root/nobody
+privilege probe using a synthetic Docker HTTP socket. The latter proves raw
+socket denial and the restricted broker protocol, **not real Docker Desktop,
+Windows update, Owner backup/restore, or production qualification**.
 
 Failures:
 

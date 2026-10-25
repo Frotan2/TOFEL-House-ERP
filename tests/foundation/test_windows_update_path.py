@@ -121,6 +121,14 @@ class UpdateWorkflowTests(unittest.TestCase):
         self.assertIn("ConvertTo-ReleaseSequence", UPDATE)
         self.assertIn("release_sequence = $sequence", UPDATE)
 
+    def test_verified_start_does_not_recreate_storage_or_rerun_bootstrap(self):
+        start = UPDATE[UPDATE.index("function Invoke-UpdateStart"):UPDATE.index("function Wait-ForApplication")]
+        self.assertIn("Test-ExistingInstallation -ProductRoot $productRoot", start)
+        self.assertIn("$image.Id -cne $ExpectedImageId", start)
+        self.assertIn('"--no-deps", "web", "worker", "scheduler", "socketio"', start)
+        self.assertNotIn('"bootstrap"', start)
+        self.assertLess(start.index("Test-ExistingInstallation"), start.index('Invoke-Compose'))
+
     def test_a_failed_migration_is_never_restarted_automatically(self):
         install = UPDATE[UPDATE.index("function Invoke-UpdateInstall"):]
         install = install[:install.index("function Invoke-SmokeTest")]
@@ -223,10 +231,14 @@ class TwoPhaseProtocolTests(unittest.TestCase):
         self.assertIn('[string]$transaction.phase -cne "authorized"', check)
         install = self.block("function Invoke-UpdateInstall", "function Invoke-SmokeTest")
         for field in ("transaction = $Check.Transaction", "archive = ($Check.RunFolder",
-                      "backup_receipt =", "backup_dir =", "installed = [pscustomobject]@{",
-                      "recovery_authorization =", "recovery_signature =",
-                      "journal_state =", "host = $Check.Facts"):
+                      "backup_receipt =", "backup_dir =",
+                      "recovery_authorization =", "recovery_signature ="):
             self.assertIn(field, install, f"the apply request does not carry {field}")
+        apply_request = install[install.index("$applyRequest ="):]
+        self.assertNotIn("host = $Check.Facts", apply_request)
+        self.assertNotIn("journal_state =", apply_request)
+        self.assertNotIn("installed =", apply_request)
+        self.assertLess(install.index('Invoke-EngineStep "recheck"'), install.index('Set-JournalState "prepared"'))
 
     def test_every_engine_request_is_answered_with_a_fresh_document(self):
         self.assertIn('Remove-Item -LiteralPath (Join-Path $script:WorkDir "response.json")', UPDATE)

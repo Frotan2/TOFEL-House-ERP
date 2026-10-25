@@ -4,6 +4,10 @@
   "language": "en+fa",
   "fallback": "en",
   "messages": {
+    "preflight.host.unavailable": {
+      "en": "The current installation could not be independently verified. No database upgrade was started. Contact trusted support.",
+      "fa": "وضعیت فعلی نصب به‌صورت مستقل تأیید نشد. ارتقای دیتابیس آغاز نشده است. با پشتیبانی مطمئن تماس بگیرید."
+    },
     "apply.apps_missing": {
       "en": "A required part of the updated system is missing. Do not use the system; contact trusted support.",
       "fa": "بخشی لازم از سیستم به‌روزشده موجود نیست. از سیستم استفاده نکنید؛ با پشتیبانی مطمئن تماس بگیرید."

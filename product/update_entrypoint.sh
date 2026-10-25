@@ -29,4 +29,23 @@ chown -R frappe:frappe /home/frappe/bench/sites /home/frappe/bench/logs 2>/dev/n
 chown -R frappe:frappe /update 2>/dev/null || true
 chown -R frappe:frappe /update-state 2>/dev/null || true
 
-exec su -s /bin/sh frappe -c 'exec python3 /product/update_engine.py --request /update/request.json --response /update/response.json --state-dir /update-state'
+# A root-owned broker exposes only fixed GET observations. The frappe engine
+# cannot open the raw Docker socket; the broker verifies that permission before
+# listening. No API URL or mutating operation exists in its protocol.
+python3 /product/update_host.py --serve &
+observer_pid=$!
+trap 'kill "$observer_pid" 2>/dev/null || true' EXIT HUP INT TERM
+attempt=0
+while [ ! -f /run/th-update-observer.ready ]; do
+    if ! kill -0 "$observer_pid" 2>/dev/null || [ "$attempt" -ge 50 ]; then
+        exit 5
+    fi
+    attempt=$((attempt + 1))
+    sleep 0.1
+done
+set +e
+su -s /bin/sh frappe -c 'exec python3 /product/update_engine.py --request /update/request.json --response /update/response.json --state-dir /update-state'
+engine_exit=$?
+kill "$observer_pid" 2>/dev/null || true
+wait "$observer_pid" 2>/dev/null || true
+exit "$engine_exit"
