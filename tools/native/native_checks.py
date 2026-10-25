@@ -7213,11 +7213,44 @@ def main():
             # the institution's configured HRMS process.
             frappe.set_user('Administrator')
             employee=cfx['emps']['One']
-            expected={row.name for row in frappe.get_all(ADS,
+            # Compensation calculates DRAFT native inputs. Finance approval
+            # is a separate HRMS submit action; a synthetic acceptance must
+            # exercise that approval, not assume calculation auto-submitted pay.
+            # Select only the fixture's verified instructor One references,
+            # never unrelated additional salaries for the same employee.
+            references={
+                (ASSIGN,afacts['assignments']['a1']),
+                (ASSIGN,afacts['assignments']['a2']),
+                ('TH Contract Adjustment',
+                 frappe.get_doc(CON,cauth['contracts']['one']).adjustments[0].name),
+            }
+            rows=frappe.get_all(ADS,
                 filters={'employee':employee,'payroll_date':'2026-09-30',
-                         'docstatus':1,'type':'Earning','disabled':0},
-                fields=['name'])}
-            assert expected,('no submitted teaching payroll inputs',employee)
+                         'disabled':0},
+                fields=['name','ref_doctype','ref_docname','type','docstatus',
+                        'salary_component'])
+            selected={}
+            for row in rows:
+                reference=(row.ref_doctype,row.ref_docname)
+                if reference not in references:
+                    continue
+                assert reference not in selected,('duplicate teaching input',reference)
+                assert row.type=='Earning' and row.salary_component==cfx['earning'],row
+                assert row.docstatus in (0,1),('invalid teaching input state',row)
+                selected[reference]=row
+            assert set(selected)==references,(
+                'missing genuine teaching payroll inputs',sorted(references-set(selected)))
+            expected=set()
+            for reference in sorted(selected):
+                row=selected[reference]
+                if row.docstatus==0:
+                    # Administrator performs the Finance-approved native
+                    # submission on this isolated synthetic site only.
+                    frappe.get_doc(ADS,row.name).submit()
+                assert frappe.db.get_value(ADS,row.name,'docstatus')==1,(
+                    'teaching input not submitted',row.name)
+                expected.add(row.name)
+            frappe.db.commit()
             slip=frappe.get_doc(dict(doctype='Salary Slip',employee=employee,
                 company=cfx['company'],payroll_frequency='Monthly',
                 start_date='2026-09-01',end_date='2026-09-30',
