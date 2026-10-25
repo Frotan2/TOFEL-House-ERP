@@ -94,7 +94,7 @@ def as_flag(value, what="value"):
     raise ValueError(f"{what} must be true or false")
 
 
-def validate_installment_terms(allowed, max_installments, interval_days):
+def validate_installment_terms(allowed, max_installments, interval_days, cadence="Days"):
     """Shape-check one version's installment schedule terms.
 
     Off is the only state a fresh version can be in without the owner
@@ -121,10 +121,22 @@ def validate_installment_terms(allowed, max_installments, interval_days):
         raise ValueError(
             "Enabling installments needs a maximum of at least 2; a single "
             "installment is the ordinary one-document bill")
-    if on and interval_days < 1:
+    if on and cadence == "Days" and interval_days < 1:
         raise ValueError(
             "Enabling installments needs an interval of at least 1 day")
     return on, max_installments, interval_days
+
+
+def validate_shamsi_cadence(cadence, grace_days):
+    """Exact Solar Hijri monthly billing is opt-in, never a 30-day guess."""
+    if cadence not in ("Days", "Solar Hijri Month"):
+        raise ValueError("Installment cadence must be Days or Solar Hijri Month")
+    if isinstance(grace_days, bool) or not isinstance(grace_days, int) or (
+            not 0 <= grace_days <= 15):
+        raise ValueError("Payment grace days must be a whole number (0-15)")
+    if cadence == "Days" and grace_days:
+        raise ValueError("Payment grace days require Solar Hijri Month cadence")
+    return cadence, grace_days
 
 
 def check_posting_bounds(posting, today, backdate_days, future_days):
@@ -190,6 +202,10 @@ def _policy_result(doc, extra=None):
             governing.get("max_installments") if governing else ""),
         "governing_installment_interval_days": (
             governing.get("installment_interval_days") if governing else ""),
+        "governing_installment_cadence": (
+            governing.get("installment_cadence") or "Days" if governing else ""),
+        "governing_payment_grace_days": (
+            int(governing.get("payment_grace_days") or 0) if governing else 0),
     }
     if extra:
         result.update(extra)
@@ -214,7 +230,7 @@ def governing_billing_terms(on_date=None):
         versions, on_date or frappe.utils.today())
     if not governing:
         return {}
-    return {
+    terms = {
         "effective_from": str(governing.get("effective_from") or ""),
         "max_backdate_days": governing.get("max_backdate_days"),
         "max_future_days": governing.get("max_future_days"),
@@ -227,6 +243,13 @@ def governing_billing_terms(on_date=None):
         "installment_interval_days": int(
             governing.get("installment_interval_days") or 0),
     }
+    # Existing policy versions are unmodified and preserve legacy fixed-day
+    # behavior; only the explicit Owner-selected Solar cadence adds fields.
+    if governing.get("installment_cadence") == "Solar Hijri Month":
+        terms["installment_cadence"] = "Solar Hijri Month"
+        terms["payment_grace_days"] = int(
+            governing.get("payment_grace_days") or 0)
+    return terms
 
 
 @frappe.whitelist(methods=["POST"])
@@ -273,7 +296,8 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
                                max_backdate_days, max_future_days,
                                placement_fee_timing, installments_allowed=0,
                                max_installments=1,
-                               installment_interval_days=0):
+                               installment_interval_days=0,
+                               installment_cadence="Days", payment_grace_days=0):
     """Append an effective-dated billing policy version.
 
     The version enacts one pair of posting-date bounds, one
@@ -290,10 +314,12 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
             clean_reason = configuration_rules.validate_change_reason(reason)
             clean_back, clean_fut, clean_timing = validate_terms(
                 max_backdate_days, max_future_days, placement_fee_timing)
+            clean_cadence, clean_grace = validate_shamsi_cadence(
+                installment_cadence, payment_grace_days)
             clean_inst_on, clean_inst_max, clean_inst_days = \
                 validate_installment_terms(
                     installments_allowed, max_installments,
-                    installment_interval_days)
+                    installment_interval_days, cadence=clean_cadence)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         doc = _policy_doc(clean_code, for_update=True)
@@ -316,6 +342,8 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
             "installments_allowed": 1 if clean_inst_on else 0,
             "max_installments": clean_inst_max,
             "installment_interval_days": clean_inst_days,
+            "installment_cadence": clean_cadence,
+            "payment_grace_days": clean_grace,
             "reason": clean_reason, "set_by": actor,
             "set_on": frappe.utils.now_datetime()})
         if current:
@@ -339,7 +367,9 @@ def set_billing_policy_version(request_key, policy, effective_from, reason,
                "placement_fee_timing": placement_fee_timing,
                "installments_allowed": installments_allowed,
                "max_installments": max_installments,
-               "installment_interval_days": installment_interval_days}
+               "installment_interval_days": installment_interval_days,
+               "installment_cadence": installment_cadence,
+               "payment_grace_days": payment_grace_days}
     return configuration_audit.execute(
         "set_billing_policy_version", request_key, payload, work)
 
