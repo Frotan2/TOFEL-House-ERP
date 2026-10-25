@@ -302,8 +302,8 @@ PROJECTION_FIELDS = {
     ],
     ("management", "Payment Entry"): [
         "name", "payment_type", "party_type", "party", "paid_amount",
-        "received_amount", "paid_from_account_currency", "company",
-        "posting_date", "docstatus",
+        "received_amount", "paid_from_account_currency",
+        "paid_to_account_currency", "company", "posting_date", "docstatus",
     ],
     ("management", "Student Attendance"): [
         "name", "student", "student_group", "course_schedule", "date",

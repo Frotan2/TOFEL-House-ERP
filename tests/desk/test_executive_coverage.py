@@ -230,6 +230,41 @@ class VerifiedCoverageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "deadline source incomplete"):
                 ns["exception_metrics"]()
 
+    def test_receive_uses_destination_amount_and_currency_not_payer(self):
+        # ERPNext paid_amount is on the source side of the payment, while
+        # received_amount is credited to the institution's paid_to account.
+        ns, _ = load_analytics(rows={
+            "Payment Entry": [
+                {"name": "EXCHANGE-1", "posting_date": "2026-10-25",
+                 "payment_type": "Receive", "paid_amount": 100,
+                 "paid_from_account_currency": "USD",
+                 "received_amount": 7000, "paid_to_account_currency": "AFN"},
+                {"name": "EXCHANGE-2", "posting_date": "2026-10-25",
+                 "payment_type": "Receive", "paid_amount": 50,
+                 "paid_from_account_currency": "USD",
+                 "received_amount": 50, "paid_to_account_currency": "USD"},
+            ],
+        })
+        result = ns["tuition_metrics"]()
+        self.assertIn("7000.00 AFN", result["collected_today"])
+        self.assertIn("50.00 USD", result["collected_today"])
+        self.assertNotIn("150.00 USD", result["collected_today"])
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn('"paid_to_account_currency"', source)
+        self.assertIn('"received_amount", currency_field="paid_to_account_currency"', source)
+
+    def test_missing_receiving_account_currency_cannot_be_fabricated(self):
+        ns, _ = load_analytics(rows={
+            "Payment Entry": [
+                {"name": "RECEIVE-1", "posting_date": "2026-10-25",
+                 "payment_type": "Receive", "paid_amount": 100,
+                 "paid_from_account_currency": "USD",
+                 "received_amount": 7000, "paid_to_account_currency": None},
+            ],
+        })
+        with self.assertRaisesRegex(RuntimeError, "receiving-account currency"):
+            ns["tuition_metrics"]()
+
     def test_valid_finance_totals_remain_real_numbers(self):
         ns, _ = load_analytics(rows={
             "Fees": [
@@ -239,7 +274,8 @@ class VerifiedCoverageTests(unittest.TestCase):
                  "currency": "USD", "due_date": "2026-11-01"}],
             "Payment Entry": [
                 {"name": "P1", "posting_date": "2026-10-25", "paid_amount": 10,
-                 "paid_from_account_currency": "AFN"}],
+                 "received_amount": 10, "paid_from_account_currency": "AFN",
+                 "paid_to_account_currency": "AFN"}],
         })
         result = ns["tuition_metrics"]()
         self.assertEqual(result["fees_total"], 2)
