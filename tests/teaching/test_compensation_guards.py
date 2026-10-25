@@ -283,7 +283,7 @@ class S2CompensationTests(unittest.TestCase):
             self.comp.calculate_teaching_compensation(
                 "invalid-earning", "2026-09-01", "2026-09-30",
                 "SYN Teaching House", "SYN Contract Deduction", "")
-        with self.assertRaisesRegex(_ValidationError, "requires a Deduction"):
+        with self.assertRaisesRegex(_ValidationError, "require a Deduction"):
             self.comp.calculate_teaching_compensation(
                 "invalid-deduction", "2026-09-01", "2026-09-30",
                 "SYN Teaching House", "SYN Teaching Pay", "SYN Teaching Pay")
