@@ -179,7 +179,20 @@ def _recorded_action_items():
 def _scoped_count_or_unknown(doctype, filters, *, preview=None):
     """Full native management-scope count, never an extrapolated preview."""
     try:
-        total = project_count("management", doctype, filters=filters)
+        # Keep every query anchored to a module-level native DocType
+        # constant so schema-ledger and projection audit can resolve it.
+        if doctype == ATTEMPT:
+            total = project_count("management", ATTEMPT, filters=filters)
+        elif doctype == DECISION:
+            total = project_count("management", DECISION, filters=filters)
+        elif doctype == ADMISSION:
+            total = project_count("management", ADMISSION, filters=filters)
+        elif doctype == GROUP:
+            total = project_count("management", GROUP, filters=filters)
+        elif doctype == CORRECTION:
+            total = project_count("management", CORRECTION, filters=filters)
+        else:
+            raise ValueError("Unapproved management count source")
         if (not isinstance(total, int) or isinstance(total, bool) or total < 0
                 or (preview is not None and total < len(preview))):
             return "—"
