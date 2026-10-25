@@ -86,7 +86,20 @@ def _executive_analytics_sections():
         tuit = analytics.tuition_metrics()
         attend = analytics.attendance_metrics()
     except Exception:
-        return []
+        unavailable = section(
+            "executive-unavailable", "Executive metrics unavailable", "facts",
+            facts=[{
+                "label": "Verified executive totals", "value": "—",
+                "definition": (
+                    "One or more required sources cannot be fully verified. "
+                    "No partial count, sum or percentage is published."),
+                "source": "source verification incomplete",
+                "scope": "unavailable", "drill_path": "source records list",
+                "owner": "Course Owner",
+            }],
+            empty_title="Executive metrics unavailable",
+            empty_body="Check the source records; a partial read is not zero.")
+        return [unavailable]
 
     # A missing/denied/incomplete exit source must never become exited=0.
     # Preserve the raw overview even when retention data is unavailable.
@@ -349,7 +362,15 @@ def _executive_analytics_sections():
                           empty_title="No payroll data", empty_body=pay["definition"] if not pay.get("authorized") else "No payroll inputs yet.")
     sections.append(pay_section)
 
-    exc = analytics.exception_metrics()
+    try:
+        exc = analytics.exception_metrics()
+    except Exception:
+        exc = {
+            "corrections_pending": "—", "admissions_in_review": "—",
+            "attempts_past_deadline": "—", "awaiting_release": "—",
+            "scope": "unavailable; incomplete source", "source": "unavailable",
+            "drill": "source records list",
+        }
     exc_facts = [
         {"label": "Corrections pending", "value": exc["corrections_pending"],
          "definition": "Correction requests awaiting approver.",
@@ -369,7 +390,7 @@ def _executive_analytics_sections():
          "drill_path": "placement decision list", "owner": "Placement Releaser"},
     ]
     exc_section = section("ops-exceptions", "Operational exceptions", "facts", facts=exc_facts,
-                          empty_title="No exceptions", empty_body="Nothing is overdue, stuck or waiting on an approver.")
+                          empty_title="No exceptions", empty_body="No items in this preview; verify all underlying sources before concluding none are pending.")
     exc_section["provenance"] = [
         {"label": "Source records", "value": exc["source"]},
         {"label": "Permission scope", "value": exc["scope"]},
@@ -392,11 +413,28 @@ def cockpit():
         "status": ("in", [s for s in lifecycle.PLACEMENT_ATTEMPT_ORDER if s != "Finalized"])})
     released = project_count("management", DECISION, {"status": "Released"})
     students = project_count("management", STUDENT, {"enabled": 1})
-    groups = project_rows("management", GROUP,
-                          ["name", "student_group_name", "program", "academic_year",
-                           "max_strength", "course", "disabled", "th_class_status"],
-                          filters={"disabled": 0}, order_by="student_group_name asc",
-                          limit=LIMIT_QUEUES)
+    # These are full scoped counts, not lengths of queue-sized previews.
+    # If a permission or source fails, do not fabricate a zero.
+    try:
+        admissions_count = project_count(
+            "management", ADMISSION,
+            {"status": ("in", list(lifecycle.ADMISSION_OPEN_STATUSES))})
+        if (not isinstance(admissions_count, int)
+                or isinstance(admissions_count, bool)
+                or admissions_count < len(admissions_open)):
+            raise RuntimeError("Admissions source count incomplete")
+    except Exception:
+        admissions_count = "—"
+    try:
+        classes_running = project_count(
+            "management", GROUP,
+            {"disabled": 0, "th_class_status": "Active"})
+        if (not isinstance(classes_running, int)
+                or isinstance(classes_running, bool)
+                or classes_running < 0):
+            raise RuntimeError("Class source count incomplete")
+    except Exception:
+        classes_running = "—"
 
     business_facts = [
         {"label": "Active students",
@@ -405,8 +443,8 @@ def cockpit():
          "source": "active learners (native register)", "scope": "Branch via roster or HQ unrestricted",
          "drill_path": "student list"},
         {"label": "Admissions in flight",
-         "definition": "Open admission decisions (Draft, Review, Approved, Conditional).",
-         "value": len(admissions_open), "owner": "Admission Approver",
+         "definition": "Scoped total open admission decisions, counted independently of the oldest-record preview.",
+         "value": admissions_count, "owner": "Admission Approver",
          "source": "admission decisions (open)", "scope": "Branch via applicant linkage",
          "drill_path": "admission decision list"},
         {"label": "Placement sessions running",
@@ -420,8 +458,8 @@ def cockpit():
          "source": "placement decisions (released)", "scope": "Branch-wide",
          "drill_path": "placement decision list"},
         {"label": "Classes running",
-         "definition": "Classes whose lifecycle is Active; a class counts from activation to completion.",
-         "value": len(active_cohort_rows(groups)), "owner": "Teaching Scheduler",
+         "definition": "Full scoped count of non-archived classes whose lifecycle is Active.",
+         "value": classes_running, "owner": "Teaching Scheduler",
          "source": "active classes", "scope": "Branch via class branch",
          "drill_path": "class list"},
     ]
