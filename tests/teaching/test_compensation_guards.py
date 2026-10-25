@@ -273,6 +273,21 @@ class S2CompensationTests(unittest.TestCase):
         self.assertEqual(result["adjustments_posted"], 0)
         self.assertEqual(self.posted, [])
 
+    def test_teaching_and_adjustment_inputs_never_overwrite_salary_structure(self):
+        # Multiple one-off teaching facts for one employee/month/component
+        # must be additive HRMS inputs. Otherwise native Additional Salary
+        # refuses the second Submit as a duplicate overwrite.
+        self.contract_lists.append([SimpleNamespace(
+            name="C-1", effective_start="2026-01-01", effective_end=None,
+            compensation_model="Skill-Based")])
+        self._calc()
+        self.assertEqual(len(self.posted), 2)
+        self.assertEqual({(item["ref_doctype"], item["ref_docname"]) for item in self.posted},
+                         {(ASSIGNMENT, "A-1"), (ADJUSTMENT, "ADJ-1")})
+        for item in self.posted:
+            self.assertEqual(item["overwrite_salary_structure_amount"], 0)
+            self.assertEqual(item["is_recurring"], 0)
+
     def test_posting_rereads_lock(self):
         self.contract_lists.append([SimpleNamespace(
             name="C-1", effective_start="2026-01-01", effective_end=None,
