@@ -183,6 +183,10 @@ class VerifiedCoverageTests(unittest.TestCase):
         self.assertIn("AFN", result["by_currency_charged"])
         self.assertIn("USD", result["by_currency_charged"])
         self.assertIn("10.00 AFN", result["collected_today"])
+        self.assertIn(("count", "management", "Payment Entry",
+                       {"docstatus": 1, "payment_type": "Receive",
+                        "posting_date": "2026-10-25"}), _)
+
 
 
 def run_owner_cockpit(*, deny_counts=False):
