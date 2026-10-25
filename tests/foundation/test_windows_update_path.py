@@ -293,7 +293,9 @@ class TwoPhaseProtocolTests(unittest.TestCase):
         engine = self.block("function Invoke-UpdateEngine", "function Stop-EngineFailure")
         self.assertIn('if ($script:UseObserver)', engine)
         self.assertIn('source=/var/run/docker.sock,target=/run/th-update-docker.sock,readonly', engine)
-        self.assertIn('$script:UseObserver = $false', install[:load])
+        # Reauthorization preserves the observer requirement of the exact
+        # installed image; only a genuinely legacy image runs without it.
+        self.assertIn('$script:UseObserver = [bool]$Check.ObserverRequired', install[:load])
         self.assertIn('$script:UseObserver = $true', install[load:new_preflight])
 
     def test_every_engine_request_is_answered_with_a_fresh_document(self):
