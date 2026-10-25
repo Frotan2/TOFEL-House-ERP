@@ -110,6 +110,14 @@ def _active_cohort_rows(groups):
     return [r for r in groups or [] if r.get("th_class_status") == "Active" and not r.get("disabled")]
 
 
+def _checked_project_count(desk, doctype, *, filters=None):
+    """Return a validated full scoped count, not a bounded page length."""
+    count = _project_count(desk, doctype, filters=dict(filters or {}))
+    if (not isinstance(count, int) or isinstance(count, bool) or count < 0):
+        raise RuntimeError("Analytics source incomplete; count unavailable")
+    return count
+
+
 def _complete_project_rows(desk, doctype, fields, *, filters=None,
                            order_by=None, limit=BOUNCE_WINDOW):
     """Prove that a scoped bounded read covers the whole intended population.
@@ -124,9 +132,8 @@ def _complete_project_rows(desk, doctype, fields, *, filters=None,
     scoped_filters = dict(filters or {})
     rows = _project_rows(desk, doctype, fields, filters=scoped_filters,
                          order_by=order_by, limit=limit)
-    count = _project_count(desk, doctype, filters=scoped_filters)
-    if (not isinstance(count, int) or isinstance(count, bool) or count < 0
-            or count > limit or not isinstance(rows, (list, tuple))
+    count = _checked_project_count(desk, doctype, filters=scoped_filters)
+    if (count > limit or not isinstance(rows, (list, tuple))
             or len(rows) != count):
         raise RuntimeError("Analytics source incomplete; metric unavailable")
     return rows
@@ -473,14 +480,12 @@ def exception_metrics():
         from toefl_house.desk.lifecycle import PLACEMENT_ATTEMPT_ORDER
     except Exception:
         PLACEMENT_ATTEMPT_ORDER = ["Allocated", "Verified", "Delivered", "Sealed", "Scored", "Review", "Finalized"]
-    corrections = _complete_project_rows("management", "TH Correction Request",
-                              ["name", "sales_invoice", "fees", "reason", "requested_amount", "status", "modified"],
-                              filters={"status": "Requested"},
-                              order_by="modified asc", limit=LIMIT_QUEUES)
-    admissions_review = _complete_project_rows("management", "TH Admission Decision",
-                                     ["name", "student_applicant", "program", "status", "modified"],
-                                     filters={"status": "Review"},
-                                     order_by="modified asc", limit=LIMIT_QUEUES)
+    # These are totals, not queue previews. Count all eligible rows directly:
+    # an institution with 26 pending items must never display only 25.
+    corrections_pending = _checked_project_count(
+        "management", "TH Correction Request", filters={"status": "Requested"})
+    admissions_in_review = _checked_project_count(
+        "management", "TH Admission Decision", filters={"status": "Review"})
     attempts_running = _complete_project_rows("management", "TH Placement Attempt",
                                     ["name", "case_name", "status", "deadline_at"],
                                     filters={"status": ("in", [s for s in PLACEMENT_ATTEMPT_ORDER if s != "Finalized"])},
@@ -510,8 +515,8 @@ def exception_metrics():
     awaiting_release = [r for r in finalized if r["name"] not in released_attempts]
 
     return {
-        "corrections_pending": len(corrections),
-        "admissions_in_review": len(admissions_review),
+        "corrections_pending": corrections_pending,
+        "admissions_in_review": admissions_in_review,
         "attempts_past_deadline": len(overdue_deadlines),
         "awaiting_release": len(awaiting_release),
         "definition": "Corrections in Requested, admissions longest in Review, attempts past server-set deadline, finalized attempts with no released decision.",
