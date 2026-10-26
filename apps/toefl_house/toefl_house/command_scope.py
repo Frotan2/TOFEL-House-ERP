@@ -26,13 +26,31 @@ COMPANY_REFERENCES = {
     "fee_structure": "Fee Structure", "fees": "Fees", "invoice": "Sales Invoice",
     "sales_invoice": "Sales Invoice",
     "employee": "Employee", "salary_slip": "Salary Slip", "payroll_entry": "Payroll Entry",
+    "contract": "TH Instructor Contract", "supersedes": "TH Instructor Contract",
+    "credit_note": "Sales Invoice",
 }
 
 
-def _authorize_company_scope(payload, actor, result):
+CORRECTION_COMMANDS = frozenset({
+    "approve_invoice_correction", "deny_invoice_correction",
+    "approve_fees_correction", "deny_fees_correction",
+})
+
+
+def _reference_company(doctype, name):
+    """Resolve Company through the employee on a teaching contract."""
+    if doctype == "TH Instructor Contract":
+        employee = frappe.db.get_value(doctype, name, "employee")
+        return frappe.db.get_value("Employee", employee, "company") if employee else None
+    return frappe.db.get_value(doctype, name, "company")
+
+
+def _authorize_company_scope(kind, payload, actor, result):
     sources = [payload] + ([result] if isinstance(result, dict) else [])
-    if not any(any(source.get(field) for field in ("company", *COMPANY_REFERENCES))
-               for source in sources):
+    if not (kind in CORRECTION_COMMANDS and payload.get("request")) and not any(
+        any(source.get(field) for field in ("company", *COMPANY_REFERENCES))
+        for source in sources
+    ):
         return
     allowed = frappe.get_all("User Permission", filters={"user": actor, "allow": "Company"},
                              pluck="for_value", limit_page_length=100)
@@ -47,9 +65,25 @@ def _authorize_company_scope(payload, actor, result):
         for field, doctype in COMPANY_REFERENCES.items():
             name = source.get(field)
             if isinstance(name, str) and name:
-                company = frappe.db.get_value(doctype, name, "company")
+                company = _reference_company(doctype, name)
                 if company:
                     companies.add(company)
+                elif doctype == "TH Instructor Contract":
+                    raise frappe.PermissionError("The contract Company cannot be resolved")
+    if kind in CORRECTION_COMMANDS:
+        request = payload.get("request")
+        if not isinstance(request, str) or not request or len(request) > 140:
+            raise frappe.PermissionError("A scoped correction request is required")
+        invoice = frappe.db.get_value("TH Correction Request", request, "sales_invoice")
+        fee = frappe.db.get_value("TH Correction Request", request, "fees")
+        if not invoice and not fee:
+            raise frappe.PermissionError("The correction Company's source is unavailable")
+        for doctype, name in (("Sales Invoice", invoice), ("Fees", fee)):
+            if name:
+                company = _reference_company(doctype, name)
+                if not company:
+                    raise frappe.PermissionError("The correction Company cannot be resolved")
+                companies.add(company)
     if not companies <= set(allowed):
         raise frappe.PermissionError("The command target is outside this login's permitted companies")
 
@@ -116,7 +150,7 @@ def roster_for_branch(rows, branch):
 
 
 def authorize_command_scope(kind, payload, actor, *, result=None):
-    _authorize_company_scope(payload, actor, result)
+    _authorize_company_scope(kind, payload, actor, result)
     allowed = actor_branches(actor)
     if allowed is None:
         return

@@ -132,6 +132,61 @@ class CommandScopeTests(unittest.TestCase):
             "issue_placement_fee", {"case": "case", "customer": "customer"},
             "actor", result={"sales_invoice": "own-placement"})
 
+    def test_cached_contract_revision_obeys_changed_company(self):
+        self.branches = []
+        self.companies = ["Company B"]
+        self.values[("TH Instructor Contract", "old-contract", "employee")] = "employee-a"
+        self.values[("Employee", "employee-a", "company")] = "Company A"
+        payload = {"contract": "old-contract"}
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "revise_teaching_contract", payload, "actor",
+                result={"name": "new-contract", "supersedes": "old-contract"})
+        self.companies = ["Company A"]
+        self.scope.authorize_command_scope(
+            "revise_teaching_contract", payload, "actor",
+            result={"name": "new-contract", "supersedes": "old-contract"})
+
+    def test_cached_invoice_correction_obeys_changed_company(self):
+        self.branches = []
+        self.companies = ["Company B"]
+        self.values[("TH Correction Request", "req", "sales_invoice")] = "inv-a"
+        self.values[("Sales Invoice", "inv-a", "company")] = "Company A"
+        for command in ("approve_invoice_correction", "deny_invoice_correction"):
+            with self.subTest(command=command), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(
+                    command, {"request": "req"}, "actor",
+                    result={"name": "req", "status": "Denied"})
+        self.companies = ["Company A"]
+        self.scope.authorize_command_scope(
+            "deny_invoice_correction", {"request": "req"}, "actor",
+            result={"name": "req", "status": "Denied"})
+
+    def test_cached_fees_correction_obeys_changed_company(self):
+        self.branches = []
+        self.companies = ["Company B"]
+        self.values[("TH Correction Request", "fee-req", "fees")] = "fees-a"
+        self.values[("Fees", "fees-a", "company")] = "Company A"
+        for command in ("approve_fees_correction", "deny_fees_correction"):
+            with self.subTest(command=command), self.assertRaises(PermissionError):
+                self.scope.authorize_command_scope(
+                    command, {"request": "fee-req"}, "actor",
+                    result={"name": "fee-req", "status": "Denied"})
+        self.companies = []
+        self.scope.authorize_command_scope(
+            "approve_fees_correction", {"request": "fee-req"}, "actor",
+            result={"name": "fee-req", "fees": "fees-a"})
+
+    def test_missing_contract_or_correction_scope_fails_closed(self):
+        self.branches = []
+        self.companies = ["Company A"]
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "revise_teaching_contract", {"contract": "missing"}, "actor")
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "approve_invoice_correction", {"request": "missing"}, "actor")
+
     def test_fee_structure_company_is_resolved_before_receipt_replay(self):
         self.branches = []
         self.companies = ["Company A"]
