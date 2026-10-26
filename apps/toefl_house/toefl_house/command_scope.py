@@ -1,4 +1,4 @@
-"""Apply native Branch restrictions before guarded writes and receipt replay."""
+"""Apply native Branch/Company scope before guarded writes and receipt replay."""
 import frappe
 
 
@@ -22,6 +22,35 @@ RESULT_NAMES = {
     "create_admission": "TH Admission Decision", "schedule_session": "Course Schedule",
     "assign_teaching_skill": "TH Teaching Assignment",
 }
+COMPANY_REFERENCES = {
+    "fee_structure": "Fee Structure", "fees": "Fees", "invoice": "Sales Invoice",
+    "employee": "Employee", "salary_slip": "Salary Slip", "payroll_entry": "Payroll Entry",
+}
+
+
+def _authorize_company_scope(payload, actor, result):
+    sources = [payload] + ([result] if isinstance(result, dict) else [])
+    if not any(any(source.get(field) for field in ("company", *COMPANY_REFERENCES))
+               for source in sources):
+        return
+    allowed = frappe.get_all("User Permission", filters={"user": actor, "allow": "Company"},
+                             pluck="for_value", limit_page_length=100)
+    if not allowed:
+        return
+    companies = set()
+    for source in sources:
+        if source.get("company"):
+            if not isinstance(source["company"], str) or len(source["company"]) > 140:
+                raise frappe.PermissionError("The command company must resolve to a permitted company")
+            companies.add(source["company"])
+        for field, doctype in COMPANY_REFERENCES.items():
+            name = source.get(field)
+            if isinstance(name, str) and name:
+                company = frappe.db.get_value(doctype, name, "company")
+                if company:
+                    companies.add(company)
+    if not companies <= set(allowed):
+        raise frappe.PermissionError("The command target is outside this login's permitted companies")
 
 
 def actor_branches(actor):
@@ -86,6 +115,7 @@ def roster_for_branch(rows, branch):
 
 
 def authorize_command_scope(kind, payload, actor, *, result=None):
+    _authorize_company_scope(payload, actor, result)
     allowed = actor_branches(actor)
     if allowed is None:
         return

@@ -4031,6 +4031,36 @@ def main():
                     [dict(account=fin_close['drawer'],counted_amount=0,note='')])),
                 'future business day')
         check('finance-cashier-close-future-day-denied',cashier_close_future_day)
+        def cashier_receipt_company_scope():
+            from toefl_house.finance import cashier as fin_cash
+            frappe.set_user('Administrator')
+            other='SYN Receipt Scope Company'
+            if not frappe.db.exists('Company',other):
+                frappe.get_doc(dict(doctype='Company',company_name=other,abbr='SRC',
+                    country='Afghanistan',default_currency='AFN',
+                    create_chart_of_accounts_based_on='Standard Template')).insert()
+            permission=frappe.get_doc(dict(doctype='User Permission',
+                user=users['book_seller'],allow='Company',for_value=other)).insert()
+            frappe.db.commit()
+            count=frappe.db.count('GL Entry')
+            try:
+                try:
+                    as_user('book_seller',lambda:fin_cash.reconcile_cashier_day(
+                        'fin_cashier_close_0001',fin['company'],frappe.utils.today(),
+                        [dict(account=fin_close['drawer'],
+                              counted_amount=fin_close['ledger_closing'],note='')]))
+                except frappe.PermissionError:
+                    pass
+                else:
+                    raise AssertionError('cached cash-close receipt bypassed changed Company scope')
+                frappe.set_user('Administrator')
+                assert frappe.db.count('GL Entry')==count
+                return {'changed_company_receipt_denied':True,'gl_unchanged':True}
+            finally:
+                frappe.set_user('Administrator')
+                frappe.delete_doc('User Permission',permission.name)
+                frappe.db.commit()
+        check('finance-cashier-receipt-company-scope',traced(cashier_receipt_company_scope))
         # ---- A13 containment: native bypass-route negative proofs. Pinned
         # frappe (988e54f3c4c2, document.py run_before_save_methods):
         # "validate" fires only for save/submit; cancel runs "before_cancel"

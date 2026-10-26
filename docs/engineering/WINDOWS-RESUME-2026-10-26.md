@@ -112,6 +112,25 @@ environment key case-insensitively. All three previously failing verifier
 cases passed on Windows in the targeted retest (26.110 seconds). This is a
 test-process environment repair; no package integrity check was weakened.
 
+## QA-009: saved cash-close receipt bypasses changed Company scope
+
+On the isolated restored copy, native Company User Permission correctly
+denied a fresh close for a second valid Company and left the GL unchanged.
+However, after Finance's Company scope changed, replay of the existing cash
+close returned HTTP 200 with the former Company's totals. The receipt path
+returned before the work function's Company permission check.
+
+The shared command gate now checks Company scope before fresh execution and
+receipt replay, independently of Branch restrictions. It also resolves
+Company through supplied native Fee Structure, Fees, Sales Invoice, Employee,
+Salary Slip and Payroll Entry references, and checks a resolved result Company
+when the original command used an implicit default. Unrestricted management
+keeps its existing behavior. Two new regressions failed before the change;
+all 12 focused tests, 214 Finance tests and 339 Teaching tests passed after it.
+Native qualification now includes a real Company permission change followed
+by cash-close receipt replay and a check that GL row count is unchanged.
+Live HTTP retest and final-revision CI remain required.
+
 ## Still required
 
 Final-revision CI, official rebuilt package and supported in-place Windows

@@ -10,12 +10,14 @@ from unittest.mock import Mock, patch
 class CommandScopeTests(unittest.TestCase):
     def setUp(self):
         self.branches = ["A"]
+        self.companies = []
         self.documents = {}
         self.student_branches = {}
         self.values = {}
         self.frappe = types.ModuleType("frappe")
         self.frappe.PermissionError = PermissionError
-        self.frappe.get_all = Mock(side_effect=lambda *a, **kw: self.branches)
+        self.frappe.get_all = Mock(side_effect=lambda *a, **kw:
+            self.branches if kw["filters"]["allow"] == "Branch" else self.companies)
         self.frappe.get_doc = Mock(side_effect=lambda dt, name: self.documents[(dt, name)])
         self.frappe.db = types.SimpleNamespace(get_value=lambda *key: self.values.get(key))
         permissions = types.ModuleType("toefl_house.permissions")
@@ -85,3 +87,30 @@ class CommandScopeTests(unittest.TestCase):
         self.values[("Student Applicant", "applicant", "th_branch")] = "B"
         with self.assertRaises(PermissionError):
             self.scope.authorize_command_scope("enroll", {"student": "new"}, "actor")
+
+    def test_company_receipt_denied_even_without_branch_restriction(self):
+        self.branches = []
+        self.companies = ["Company B"]
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope("reconcile_cashier_day",
+                {"company": "Company A"}, "actor", result={"company": "Company A"})
+
+    def test_allowed_company_receipt_and_unrestricted_hq_remain_usable(self):
+        self.branches = []
+        self.companies = ["Company A"]
+        self.scope.authorize_command_scope("reconcile_cashier_day", {"company": "Company A"}, "actor")
+        self.companies = []
+        self.scope.authorize_command_scope("reconcile_cashier_day", {"company": "Company B"}, "actor")
+
+    def test_result_company_is_checked_when_default_was_implicit(self):
+        self.branches = []
+        self.companies = ["Company B"]
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope("reconcile_cashier_day", {}, "actor", result={"company": "Company A"})
+
+    def test_fee_structure_company_is_resolved_before_receipt_replay(self):
+        self.branches = []
+        self.companies = ["Company A"]
+        self.values[("Fee Structure", "foreign", "company")] = "Company B"
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope("issue_tuition_fees", {"fee_structure": "foreign"}, "actor")
