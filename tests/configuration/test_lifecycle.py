@@ -585,6 +585,11 @@ class FeeConfigurationLifecycleTests(unittest.TestCase):
             self.assertEqual(plan.company, "TOEFL House")
             self.assertEqual(float(plan.get("components")[0].get("amount")), 5000.0)
             self.assertEqual(len(fake.store["Fee Structure"]), 1)
+            with self.assertRaises(fake.ValidationError) as ambiguous:
+                academic.set_level_fee_component(
+                    "J" * 24, "STARTER", "2026-27", "Tuition Fee", 7000)
+            self.assertIn("More than one company", str(ambiguous.exception))
+            self.assertEqual(float(plan.get("components")[0].get("amount")), 5000.0)
             # Updating with the matching company remains allowed.
             updated = academic.set_level_fee_component(
                 "I" * 24, "STARTER", "2026-27", "Tuition Fee", 6000,
