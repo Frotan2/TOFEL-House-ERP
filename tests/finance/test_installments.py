@@ -6,6 +6,7 @@ pinned here: exact cents, remainder on the last installment, no zero
 installment, and a schedule that cannot exist without the Course Owner's
 enabled policy terms.
 """
+import ast
 import importlib.util
 import sys
 import types
@@ -261,6 +262,34 @@ class ReceiptWiringTests(unittest.TestCase):
                       self.security)
         self.assertIn('_execute("issue_tuition_installment_plan", request_key',
                       self.installments)
+
+    def test_both_billing_paths_lock_and_check_all_live_fees_for_enrollment(self):
+        # Distinct Fee Structures must never bypass the *same enrollment's*
+        # duplicate-tuition protection. This is a money-loss prevention
+        # backstop and protects the path where one Officer issues a single
+        # Fees while another tries the two-month installment command.
+        for path, command in (
+            (APP / "finance" / "__init__.py", "issue_tuition_fees"),
+            (APP / "finance" / "installments.py", "issue_tuition_installment_plan"),
+        ):
+            with self.subTest(command=command):
+                source = path.read_text(encoding="utf-8")
+                tree = ast.parse(source)
+                node = next(n for n in ast.walk(tree)
+                            if isinstance(n, ast.FunctionDef) and n.name == command)
+                code = ast.unparse(node)
+                self.assertIn("for update", code)
+                fees_exists = [
+                    x for x in ast.walk(node)
+                    if isinstance(x, ast.Call)
+                    and ast.unparse(x.func) == "frappe.db.exists"
+                    and x.args and ast.unparse(x.args[0]) == "FEES"
+                    and len(x.args) >= 2 and isinstance(x.args[1], ast.Dict)
+                ]
+                self.assertEqual(len(fees_exists), 1, code)
+                keys = [k.value for k in fees_exists[0].args[1].keys
+                        if isinstance(k, ast.Constant)]
+                self.assertEqual(set(keys), {"program_enrollment", "docstatus"})
 
     def test_fees_guard_still_gates_the_write(self):
         # The plan writes native Fees rows; the Fees containment guard is the
