@@ -510,6 +510,23 @@ def work():
     from toefl_house.finance import policies as billing_policy
     installment_terms = billing_policy.governing_billing_terms()
 
+    if (installment_terms.get("installment_cadence") == "Solar Hijri Month"
+            and int(installment_terms.get("installments_allowed") or 0)):
+        from toefl_house.finance import shamsi as solar_calendar
+        grace = int(installment_terms.get("payment_grace_days") or 0)
+        first_solar_due = solar_calendar.monthly_due_dates(
+            solar_calendar.month_key(day), 1, grace)[0].isoformat()
+        installment_message = (
+            f"Solar Hijri monthly, first of each month + {grace} grace days; "
+            f"up to {int(installment_terms.get('max_installments') or 0)} charges")
+    else:
+        first_solar_due = None
+        installment_message = (
+            f"Allowed, up to {int(installment_terms.get('max_installments') or 0)}"
+            f" every {int(installment_terms.get('installment_interval_days') or 0)} days"
+            if installment_terms and int(installment_terms.get("installments_allowed") or 0)
+            else "Not enabled")
+
     money_facts = [
         {"label": "Collected today",
          "definition": "Money received today from posted payment records, summed per receiving currency.",
@@ -537,10 +554,7 @@ def work():
          "definition": ("The governing billing policy's installment terms. The "
                         "Course Owner decides whether a configured price may be "
                         "split and how far apart the due dates fall."),
-         "value": (f"Allowed, up to {int(installment_terms.get('max_installments') or 0)}"
-                   f" every {int(installment_terms.get('installment_interval_days') or 0)} days"
-                   if installment_terms and int(installment_terms.get("installments_allowed") or 0)
-                   else "Not enabled"),
+         "value": installment_message,
          "owner": "Course Owner"},
         {"label": "Teaching assignments on file",
          "definition": "Instructor skill assignments. Pay is native payroll, one-off per assignment; this desk does not calculate pay.",
@@ -620,8 +634,16 @@ def work():
             "Issue installment plan",
             {"program_enrollment": row["name"],
              "fee_structure": plan["name"],
-             "posting_date": day, "first_due_date": day,
-             "installments": maximum})
+             "posting_date": day,
+             # For an approved Shamsi cadence the *contractual* date is
+             # 1st of the present Afghan month + configured grace, even
+             # when a student joins after that date. The server permits
+             # current-month arrears only; it never backdates the GL.
+             "first_due_date": first_solar_due or day,
+             # Propose the standard two-month GE/EAP semester, not a
+             # maximum-count invoice plan by accident. Finance explicitly
+             # changes this field for Owner-configured longer courses.
+             "installments": min(2, maximum)})
 
     def billing_guidance(row):
         """Resolve the plan for one unbilled enrollment into next/action.
