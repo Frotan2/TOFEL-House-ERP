@@ -6356,6 +6356,65 @@ def main():
                     'rosters_assigned_only':True,'off_roster_excluded':outsider_stu,
                     'compensation_rows':len(pay),'unlinked_empty_state':True}
         check('role-desk-teacher-hosted',traced(desk_teacher))
+        def five_role_business_walkthrough():
+            """Five independent real HTTP sessions with populated native data.
+
+            Every user opens their own installed Frappe Page AND calls their
+            own role Desk endpoint over HTTP. We check actual underlying
+            populated Fees/student/teacher fixtures, then try accessing
+            another role's endpoint. This is NOT a claim of physical Windows
+            or completed client-side Chromium interaction.
+            """
+            cases=(
+                ('receptionist','th-reception-desk','people',
+                 'toefl_house.desk.finance.work'),
+                ('finance_manager','th-finance-desk','outstanding',
+                 'toefl_house.desk.owner.cockpit'),
+                ('general_manager','th-operations-desk','staffing',
+                 'toefl_house.desk.finance.work'),
+                ('teacher_one','th-teacher-desk','students',
+                 'toefl_house.desk.finance.work'),
+                ('course_owner','th-owner-cockpit','tuition',
+                 'toefl_house.desk.teacher.work'),
+            )
+            report={}
+            for label,page,section_id,foreign_api in cases:
+                with login(label) as session:
+                    role_page_identity(session,base,users[label])
+                    role_page_api_observation(session,base,page,users[label])
+                    own_api=ROLE_PAGE_CASES[page][1]
+                    response=session.get(base+'/api/method/'+own_api,
+                        headers={'Accept':'application/json'},
+                        timeout=40,allow_redirects=False)
+                    assert response.status_code==200,(label,'own role desk',response.status_code)
+                    payload=response.json().get('message')
+                    assert isinstance(payload,dict) and payload.get('desk')==page,(label,'desk identity')
+                    sections=payload.get('sections') or []
+                    target=next((x for x in sections if x.get('id')==section_id),None)
+                    assert target,(label,'business section not rendered',section_id)
+                    # Realistic synthetic native rows must be visible on the
+                    # operational Reception, Finance and Instructor desks,
+                    # not merely a successful login with empty placeholders.
+                    if label in ('receptionist','finance_manager','teacher_one'):
+                        assert target.get('items'),(label,section_id,'empty despite native fixture data')
+                    stranger=session.get(base+'/api/method/'+foreign_api,
+                        headers={'Accept':'application/json'},timeout=40,
+                        allow_redirects=False)
+                    assert stranger.status_code==403,(label,'cross-desk data leak',stranger.status_code)
+                    assert stranger.json().get('exc_type')=='PermissionError',(
+                        label,'cross-desk must fail by native permission')
+                    report[label]={'own_page':page,'role_http':200,
+                        'business_section':section_id,
+                        'native_rows':len(target.get('items') or []),
+                        'cross_role_denied':True}
+            frappe.set_user('Administrator')
+            assert frappe.db.count('Fees',{'docstatus':1})>=1,'populated native Finance ledger missing'
+            assert frappe.db.count('Student Group')>=2,'native cohorts missing'
+            return {'isolation':'synthetic real-site HTTP', 'roles':report,
+                    'native_records_used':True,
+                    'browser_chromium_physical_windows_not_claimed':True}
+        check('five-role-populated-native-http-journey',
+              traced(five_role_business_walkthrough))
         # --- S6/S9 broad-isolation matrix: two branches, two students, all
         # surfaces. Each cell names its enforcement layer, proven at runtime:
         # desk RPCs gate on audience; native list/REST gate on role read plus
