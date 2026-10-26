@@ -553,13 +553,14 @@ def _managed_fee_structure(native_program, academic_year, company=""):
         # already-created fee plan. A plan is keyed by program/year and its
         # company is immutable here; changing it requires a separate reviewed
         # Finance migration rather than retargeting existing tuition policy.
-        if isinstance(company, str) and company.strip():
-            requested_company = _resolve_company(company)
-            if structure.company != requested_company:
-                raise frappe.ValidationError(
-                    f"Fee plan {structure.name} belongs to company "
-                    f"{structure.company}; it cannot be edited as company "
-                    f"{requested_company}")
+        # Resolve the company even for an existing plan. With two companies,
+        # an omitted Company is ambiguous and must not silently target one.
+        requested_company = _resolve_company(company)
+        if structure.company != requested_company:
+            raise frappe.ValidationError(
+                f"Fee plan {structure.name} belongs to company "
+                f"{structure.company}; it cannot be edited as company "
+                f"{requested_company}")
         return structure
     company_name = _resolve_company(company)
     receivable = frappe.db.get_value(
