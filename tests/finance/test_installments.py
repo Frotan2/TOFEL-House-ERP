@@ -180,6 +180,28 @@ class PlanTermsTests(unittest.TestCase):
         self.assertEqual((count, interval), (3, 30))
         self.assertEqual(dates[-1], "2026-12-23")
 
+    def test_late_join_in_current_solar_month_keeps_real_posting_date(self):
+        terms = dict(self.enabled, installment_interval_days=0,
+                     installment_cadence="Solar Hijri Month",
+                     payment_grace_days=0)
+        count, interval, dates = self.module.plan_terms(
+            terms, 2, "2026-10-26", "2026-10-23")
+        self.assertEqual((count, interval), (2, 0))
+        self.assertEqual(dates, ["2026-10-23", "2026-11-22"])
+
+    def test_previous_solar_month_backbilling_requires_separate_approval(self):
+        terms = dict(self.enabled, installment_interval_days=0,
+                     installment_cadence="Solar Hijri Month",
+                     payment_grace_days=0)
+        with self.assertRaisesRegex(ValueError, "current Solar Hijri"):
+            self.module.plan_terms(terms, 2, "2026-11-23", "2026-10-23")
+        with self.assertRaisesRegex(ValueError, "first Solar Hijri"):
+            self.module.plan_terms(terms, 2, "2026-10-26", "2026-10-24")
+
+    def test_fixed_day_mode_still_disallows_overdue_first_due(self):
+        with self.assertRaisesRegex(ValueError, "cannot fall due"):
+            self.module.plan_terms(self.enabled, 2, "2026-10-26", "2026-10-23")
+
     def test_solar_month_policy_does_not_need_fictitious_thirty_days(self):
         terms = dict(self.enabled, installment_interval_days=0,
                      installment_cadence="Solar Hijri Month",
