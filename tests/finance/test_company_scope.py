@@ -89,6 +89,14 @@ class CompanyScopeTests(unittest.TestCase):
         self.assertLess(installments.index("require_finance_company(company)"),
                         installments.index("fees.insert(ignore_permissions=True)"))
 
+        payroll = (APP / "teaching" / "compensation.py").read_text(encoding="utf-8")
+        self.assertGreaterEqual(payroll.count("require_finance_company("), 3)
+        self.assertIn('require_finance_company(company_name)', payroll)
+        self.assertIn('require_finance_company(frappe.db.get_value(EMPLOYEE, old.employee, "company"))', payroll)
+        self.assertIn('require_finance_company(frappe.db.get_value(EMPLOYEE, employee_name, "company"))', payroll)
+        self.assertLess(payroll.index("require_finance_company(company_name)"),
+                        payroll.index("salary.insert(ignore_permissions=True)"))
+
 
 if __name__ == "__main__":
     unittest.main()
