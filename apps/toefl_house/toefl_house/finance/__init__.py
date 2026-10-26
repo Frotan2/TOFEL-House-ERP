@@ -288,10 +288,15 @@ def issue_tuition_fees(request_key, program_enrollment, fee_structure,
             raise frappe.ValidationError("Unknown fee structure")
         if fs.program != pe.program or fs.academic_year != pe.academic_year:
             raise frappe.ValidationError("Fee structure does not match the enrollment program/year")
+        # The enrollment lock serializes concurrent single/plan writers.
+        # Never accept a second tuition bill on a *different* Fee Structure:
+        # the same student otherwise acquires two independent receivables
+        # for one program enrollment without any approved new contract.
         if frappe.db.exists(FEES, {"program_enrollment": pe_name,
-                                   "fee_structure": fs_name, "docstatus": ("!=", 2)}):
+                                   "docstatus": ("!=", 2)}):
             raise frappe.ValidationError(
-                "Tuition is already billed for this enrollment on this fee plan")
+                "Tuition is already billed for this enrollment; "
+                "Finance must use the audited correction process")
 
         fee_components, applied_discounts, gross_total = \
             resolved_billable_components(pe, fs_name)
