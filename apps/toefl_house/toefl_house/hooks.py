@@ -27,6 +27,12 @@ setup_wizard_success = "toefl_house.academic.native_setup.setup_wizard_success"
 # `app_home` routes the TOEFL House app tile to the role-filtered command centre;
 # every individual page remains independently Page-role-gated server-side.
 app_home = "/app/th-command-centre"
+# The app tile is not the native login destination. Route staff at login and
+# root-page resolution too; native Page and document permissions remain intact.
+get_website_user_home_page = "toefl_house.navigation.staff_home_page"
+on_login = "toefl_house.navigation.on_login"
+boot_session = "toefl_house.navigation.boot_session"
+after_request = "toefl_house.navigation.after_request"
 _COMMAND_PAGES = (
     "th-administration-control-centre",
     "th-command-centre",

@@ -131,6 +131,33 @@ Native qualification now includes a real Company permission change followed
 by cash-close receipt replay and a check that GL row count is unchanged.
 Live HTTP retest and final-revision CI remain required.
 
+## QA-010: real Android login lands in generic ERP navigation
+
+The Owner opened the private Windows preview on an Android peer and reported
+Organization, Accounting, Buying, Quality and Selling instead of Reception.
+Native login activity matched that peer to `uat-reception@example.test`.
+Its business roles were Reception and Admission Officer, with no Finance or
+System Manager role. Its resolved home page was the generic `desk`.
+
+The app-tile `app_home` hook did not govern native login. Hosted browser checks
+had manually routed every account after login, masking this defect. The fix
+uses native home/login/boot hooks and a private, noncached root redirect for
+existing `/desk` bookmarks. It leaves explicit deep links, setup-wizard routing,
+built-in accounts, roles, module preferences and document permissions intact.
+Hosted acceptance now follows natural login for each primary role and adds
+an Android device context with the old `/desk` return URL. Only Owner's
+secondary configuration pages still require explicit navigation in that test.
+
+Real Windows HTTPS checks pass for all seven identity landing destinations.
+Reception's own Page passes; Finance/Administration Pages, their privileged
+APIs, Payment Entry, Sales Invoice, Salary Slip, User Permission lists and full
+Role configuration return 403. Native role-name selection is distinct from full
+Role configuration permission. The Android user then confirmed the visible
+heading "TOEFL House Reception Desk". This accepts mobile landing and the
+tested permission boundaries, not collection/handover or all staff workflows.
+The local owned run passed 2,572 tests with 172 platform skips; final routing
+regressions and new-revision CI must also pass before release qualification.
+
 ## Still required
 
 Final-revision CI, official rebuilt package and supported in-place Windows
