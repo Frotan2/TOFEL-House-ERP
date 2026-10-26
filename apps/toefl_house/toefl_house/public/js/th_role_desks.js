@@ -642,6 +642,9 @@ frappe.provide("toefl_house.role_desks");
 		// workflow is delivered and independently tested.
 		"toefl_house.teaching.record_instructor_attendance": [
 			{ fieldname: "course_schedule", label: "My scheduled session", fieldtype: "Data", read_only: 1, reqd: 1 },
+			// Exact native command signature; value is generated from
+			// per-student selects below, never manually typed.
+			{ fieldname: "statuses", label: "Submitted marks", fieldtype: "Small Text", hidden: 1, read_only: 1 },
 		],
 		"toefl_house.teaching.record_attendance": [
 			{ fieldname: "course_schedule", label: "Scheduled session", fieldtype: "Data", read_only: 1, reqd: 1 },
