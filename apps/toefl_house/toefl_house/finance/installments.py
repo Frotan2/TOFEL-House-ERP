@@ -236,11 +236,14 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
         if fs.program != pe.program or fs.academic_year != pe.academic_year:
             raise frappe.ValidationError(
                 "Fee structure does not match the enrollment program/year")
+        # Same enrollment, not the selected structure, is the financial
+        # uniqueness anchor: changing the Fee Structure must not allow a
+        # second semester's tuition to be sold for the same enrollment.
         if frappe.db.exists(FEES, {"program_enrollment": pe_name,
-                                   "fee_structure": fs_name,
                                    "docstatus": ("!=", 2)}):
             raise frappe.ValidationError(
-                "Tuition is already billed for this enrollment on this fee plan")
+                "Tuition is already billed for this enrollment; "
+                "Finance must use the audited correction process")
 
         fee_components, applied_discounts, gross_total = \
             resolved_billable_components(pe, fs_name)
