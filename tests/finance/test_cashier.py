@@ -148,6 +148,14 @@ class CloseShapeTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(_ValidationError):
                 self.module._counted(value, "Counted amount")
 
+    def test_cashier_count_does_not_silently_round_fractional_minor_units(self):
+        for value in ("0.001", "1.005", "100.999", 0.0001, 1.234):
+            with self.subTest(value=repr(value)):
+                with self.assertRaisesRegex(_ValidationError, "two decimal places"):
+                    self.module._counted(value, "Counted amount")
+        self.assertEqual(self.module._counted("0.01", "Counted amount"), 0.01)
+        self.assertEqual(self.module._counted("20.000", "Counted amount"), 20.0)
+
     def test_signed_ledger_overdraft_and_explained_variance_are_valid(self):
         row = _Row(account="Cash - TH", account_type="Cash", expected_amount=-20,
                    counted_amount=0, variance=20, note="Overdraft requires Finance review")
