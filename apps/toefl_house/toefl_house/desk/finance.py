@@ -652,8 +652,8 @@ def work():
              # when a student joins after that date. The server permits
              # current-month arrears only; it never backdates the GL.
              "first_due_date": first_solar_due or day,
-             # Propose the standard two-month GE/EAP semester, not a
-             # maximum-count invoice plan by accident. Finance explicitly
+             # Propose a two-month plan for the common short semester,
+             # not the maximum invoice count. Finance explicitly
              # changes this field for Owner-configured longer courses.
              "installments": min(2, maximum)})
 
