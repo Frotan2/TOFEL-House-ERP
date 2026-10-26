@@ -28,6 +28,7 @@ from toefl_house.desk import (
 
 from toefl_house.finance import cashier as cashier_money
 from toefl_house.finance import taxes as tax_configuration
+from toefl_house.finance import shamsi as solar_calendar
 
 SLUG = "th-finance-desk"
 
@@ -563,6 +564,15 @@ def work():
 
     def money_item(row, kind):
         state = _invoice_display_state(row) if kind == "Sales Invoice" else _money_state(row)
+        # An ISO due date is preserved as the native bookkeeping date;
+        # the Afghan Solar Hijri month is a read-only human label, never
+        # an alternative mutable invoice date or a second receivable.
+        due_iso = str(row.get("due_date") or "")
+        try:
+            due_label = solar_calendar.solar_month_label(
+                solar_calendar.month_key(due_iso)) if due_iso else ""
+        except ValueError:
+            due_label = ""
         return {
             "id": row["name"],
             "person": row.get("customer_name") or row.get("customer")
@@ -573,9 +583,12 @@ def work():
             "stage": {"Sales Invoice": "Invoice", "Fees": "Tuition fee"}.get(kind, kind),
             "stage_definition": (
                 "Charged {grand} {currency}; outstanding {outstanding} {currency}. "
-                "Amounts are read straight from the posted document.").format(
+                "Solar Hijri due month: {period}. "
+                "Amounts are read straight from the posted document; this is "
+                "a CURRENT balance, not a historical month-end GL report.").format(
                     grand=row.get("grand_total") or 0, currency=row.get("currency") or "",
-                    outstanding=row.get("outstanding_amount") or 0),
+                    outstanding=row.get("outstanding_amount") or 0,
+                    period=due_label or "Not recorded"),
             "next": ("Record the payment against this document in the finance workspace. "
                      "This desk does not collect money itself.")
             if state in ("Outstanding", "Overdue", "Unpaid")
