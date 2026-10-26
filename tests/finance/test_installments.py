@@ -239,6 +239,15 @@ class ComponentSplitTests(unittest.TestCase):
                              {"SYN-Tuition", "SYN-Books"})
             self.assertTrue(all(row["amount"] > 0 for row in installment))
 
+    def test_duplicate_fee_category_rows_keep_their_individual_amounts(self):
+        rows = [{"fees_category": "SYN-Tuition", "amount": "100.00"},
+                {"fees_category": "SYN-Tuition", "amount": "33.33"}]
+        plan = self.module.build_installment_components(rows, 2)
+        self.assertEqual([[line["amount"] for line in part] for part in plan],
+                         [[50.0, 16.66], [50.0, 16.67]])
+        self.assertEqual(sum(self.module._plan_total(part) for part in plan),
+                         133.33)
+
     def test_a_discount_row_survives_the_split(self):
         rows = [{"fees_category": "SYN-Tuition", "amount": 17500.0,
                  "discount": 30.0}]
