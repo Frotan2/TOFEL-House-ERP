@@ -231,14 +231,21 @@ def work():
             "next": ("Attendance is recorded "
                      f"({len(marked)} marked, {absent} absent)."
                      if marked else "Record attendance after the session."),
-            "next_role": "Attendance Recorder" if not marked else None,
+            "next_role": "Instructor" if not marked else None,
             "waiting_since": None,
         }
         if not marked:
-            action = guided_action("Attendance Recorder",
-                                   "toefl_house.teaching.record_attendance",
+            action = guided_action("Instructor",
+                                   "toefl_house.teaching.record_instructor_attendance",
                                    "Record attendance",
-                                   {"course_schedule": row["name"]})
+                                   {"course_schedule": row["name"],
+                                    "roster": [
+                                        {"student": member["student"],
+                                         "name": member.get("student_name") or member["student"]}
+                                        for member in roster
+                                        if member.get("parent") == row.get("student_group")
+                                        and int(member.get("active") or 0) == 1
+                                    ]})
             if action:
                 item["action"] = action
         today_items.append(item)
@@ -259,14 +266,21 @@ def work():
             "stage_definition": ("A scheduled session with its recorded attendance. "
                                "Only submitted attendance rows count."),
             "next": ("No action." if marked else "Record attendance for this session."),
-            "next_role": None if marked else "Attendance Recorder",
+            "next_role": None if marked else "Instructor",
             "waiting_since": str(row.get("schedule_date") or "") or None,
         }
         if not marked:
-            action = guided_action("Attendance Recorder",
-                                   "toefl_house.teaching.record_attendance",
+            action = guided_action("Instructor",
+                                   "toefl_house.teaching.record_instructor_attendance",
                                    "Record attendance",
-                                   {"course_schedule": row["name"]})
+                                   {"course_schedule": row["name"],
+                                    "roster": [
+                                        {"student": member["student"],
+                                         "name": member.get("student_name") or member["student"]}
+                                        for member in roster
+                                        if member.get("parent") == row.get("student_group")
+                                        and int(member.get("active") or 0) == 1
+                                    ]})
             if action:
                 item["action"] = action
         session_items.append(item)
