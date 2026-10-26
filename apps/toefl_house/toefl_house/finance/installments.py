@@ -55,7 +55,13 @@ def split_amounts(total, parts):
         value = Decimal(str(total))
     except (InvalidOperation, ValueError, TypeError) as exc:
         raise ValueError("Tuition amount must be a finite exact currency value") from exc
-    if not value.is_finite() or value != value.quantize(Decimal("0.01")):
+    if not value.is_finite():
+        raise ValueError("Tuition amount must be finite")
+    try:
+        precise = value.quantize(Decimal("0.01"))
+    except InvalidOperation as exc:
+        raise ValueError("Tuition amount is outside supported precision") from exc
+    if value != precise:
         raise ValueError("Tuition amount must use exact two-decimal currency units")
     cents = int(value * 100)
     if cents < parts:
@@ -156,13 +162,17 @@ def build_installment_components(fee_components, installments):
     configured (net-of-discount) component amounts, which is what native
     ``Fees`` totals and posts.
     """
-    splits = {row["fees_category"]: split_amounts(float(row["amount"]), installments)
-              for row in fee_components}
+    # Fee Category is not a unique row identifier: two native component
+    # lines may legitimately share a category but differ in amount. Keeping
+    # splits per *row*, and never converting money to float before splitting,
+    # prevents one line silently inheriting another line's distribution.
+    splits = [split_amounts(row["amount"], installments)
+              for row in fee_components]
     plan = []
     for index in range(installments):
         rows = []
-        for row in fee_components:
-            amount = splits[row["fees_category"]][index]
+        for row, amounts in zip(fee_components, splits):
+            amount = amounts[index]
             if amount <= 0:
                 raise ValueError(
                     "An installment would carry no amount for a fee component; "
