@@ -1112,7 +1112,7 @@ frappe.provide("toefl_house.role_desks");
 				fieldname: "mark_" + index,
 				label: text(item.name || item.student) + " (" + text(item.student) + ")",
 				fieldtype: "Select",
-				options: "\\nPresent\\nAbsent\\nLeave",
+				options: "\nPresent\nAbsent\nLeave",
 				reqd: 1,
 			}))];
 		}
