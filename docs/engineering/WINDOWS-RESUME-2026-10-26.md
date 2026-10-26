@@ -107,8 +107,10 @@ receipt after changing the actor's scope. Hosted native qualification adds
 positive replay plus foreign fresh-write and replay denials. The broader
 2,538-test Windows run had three verifier-harness failures from inheriting
 PowerShell 7's module path in a Windows PowerShell 5.1 subprocess; the harness
-now lets the selected shell construct its own module path. Retest evidence
-must be recorded before this revision can qualify.
+now lets the selected shell construct its own module path, removing the
+environment key case-insensitively. All three previously failing verifier
+cases passed on Windows in the targeted retest (26.110 seconds). This is a
+test-process environment repair; no package integrity check was weakened.
 
 ## Still required
 

@@ -363,7 +363,9 @@ class CustomerPackageManifestTests(unittest.TestCase):
         # Python can inherit PowerShell 7's module path, which is incompatible
         # with the explicitly selected Windows PowerShell 5.1 subprocess.
         # Let that shell construct its own standard module search path.
-        env.pop("PSModulePath", None)
+        for key in list(env):
+            if key.casefold() == "psmodulepath":
+                del env[key]
         command = r"""
 function docker {
     if ($args[0] -ne 'image' -or $args[1] -ne 'inspect' -or $args[2] -ne 'toefl-house-erp-app:local') {
