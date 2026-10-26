@@ -30,10 +30,13 @@ class SecurityHardeningContracts(unittest.TestCase):
 
     def test_attendance_uses_active_roster_and_open_class(self):
         self.assertIn("active=1", source("teaching/__init__.py", "_roster_read"))
-        attendance = source("teaching/__init__.py", "record_attendance")
+        attendance = source("teaching/__init__.py", "_record_attendance")
         self.assertIn("active=1", attendance)
         self.assertIn("_TERMINAL_CLASS_STATUSES", attendance)
         self.assertIn("group.disabled", attendance)
+        self.assertIn("_require_own_instructor_session(actor, session, schedule_name)", attendance)
+        for role_path in ("record_attendance", "record_instructor_attendance"):
+            self.assertIn("_record_attendance(", source("teaching/__init__.py", role_path))
 
     def test_business_admin_rejects_system_identity(self):
         self.assertIn("PROTECTED_USERS", source("administration.py", "_require_control_role"))
