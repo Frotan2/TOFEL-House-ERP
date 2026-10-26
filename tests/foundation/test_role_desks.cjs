@@ -110,6 +110,17 @@ const surfaces = client.toefl_house.role_desks.surfaces;
 const uiSource = fs.readFileSync(SCRIPT, "utf8");
 assert(uiSource.includes("This command has no supported form yet. Nothing was submitted."),
 	"unsupported commands must show actionable, fail-closed feedback");
+const teacherFormFields = client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_instructor_attendance"];
+assert(teacherFormFields && teacherFormFields.some(field => field.fieldname === "course_schedule"),
+    "Instructor form must target a native scheduled session");
+assert(uiSource.includes("new Set(ids).size !== ids.length"),
+    "Instructor must refuse duplicate roster identities");
+const teacherSource = fs.readFileSync(path.join(APP, "desk/teacher.py"), "utf8");
+assert(teacherSource.includes("toefl_house.teaching.record_instructor_attendance"),
+    "Instructor desk must use own-session command");
+const teacherSecurity = fs.readFileSync(path.join(APP, "security.py"), "utf8");
+assert(teacherSecurity.includes('"record_instructor_attendance": "Instructor"'),
+    "Instructor command must have a distinct role gate");
 const recorderFields = client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_attendance"];
 assert(recorderFields && recorderFields.some((field) => field.fieldname === "course_schedule")
 	&& recorderFields.some((field) => field.fieldname === "statuses"),
