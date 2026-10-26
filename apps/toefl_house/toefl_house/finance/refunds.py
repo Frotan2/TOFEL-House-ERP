@@ -34,7 +34,8 @@ import frappe
 
 INVOICE = "Sales Invoice"
 PAYMENT = "Payment Entry"
-TOLERANCE = 0.005
+TOLERANCE = 0.005  # native currency rounding, not stock quantity
+QUANTITY_TOLERANCE = 0.0000005  # _flt rounds stock quantities to six decimals
 CASH_ACCOUNT_TYPES = ("Cash", "Bank")
 
 
@@ -78,7 +79,7 @@ def return_quantities_ok(original_items, prior_returns, current_items):
         running[code] = running.get(code, 0.0) + amount
         if not math.isfinite(running[code]):
             return False
-        if running[code] - original[code] > TOLERANCE:
+        if running[code] - original[code] > QUANTITY_TOLERANCE:
             return False
     return True
 
