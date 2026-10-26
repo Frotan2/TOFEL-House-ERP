@@ -71,6 +71,19 @@ class ReturnQuantityTests(unittest.TestCase):
                 self.assertFalse(self.module.return_quantities_ok(
                     self.original, [], {"SYN-BOOK": qty}))
 
+    def test_nonfinite_book_quantities_never_bypass_return_ceiling(self):
+        for invalid in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(invalid=repr(invalid)):
+                self.assertFalse(self.module.return_quantities_ok(
+                    self.original, [], {"SYN-BOOK": invalid}))
+                self.assertFalse(self.module.return_quantities_ok(
+                    {"SYN-BOOK": invalid}, [], {"SYN-BOOK": 1.0}))
+                self.assertFalse(self.module.return_quantities_ok(
+                    self.original, [{"SYN-BOOK": invalid}], {"SYN-BOOK": 1.0}))
+        self.assertFalse(self.module.return_quantities_ok(self.original, [], {}))
+        self.assertFalse(self.module.return_quantities_ok(
+            self.original, [{"SYN-OTHER": 1.0}], {"SYN-BOOK": 1.0}))
+
 
 class ReturnValueTests(unittest.TestCase):
     def setUp(self):
@@ -87,6 +100,14 @@ class ReturnValueTests(unittest.TestCase):
 
     def test_zero_credit_is_refused(self):
         self.assertFalse(self.module.return_value_ok(600.0, 0.0, 0.0))
+
+    def test_nonfinite_book_credit_values_never_bypass_invoice_ceiling(self):
+        for invalid in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(invalid=repr(invalid)):
+                self.assertFalse(self.module.return_value_ok(600.0, 0.0, invalid))
+                self.assertFalse(self.module.return_value_ok(invalid, 0.0, -300.0))
+                self.assertFalse(self.module.return_value_ok(600.0, invalid, -300.0))
+        self.assertFalse(self.module.return_value_ok(0, 0, -1.0))
 
 
 def credit_note(**overrides):
