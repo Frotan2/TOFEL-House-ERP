@@ -636,6 +636,14 @@ frappe.provide("toefl_house.role_desks");
 		{ fieldname: "recovery_quorum", label: "Recovery quorum", fieldtype: "Int", reqd: 1 },
 	];
 	const ACTION_FIELDS = Object.freeze({
+		// This command is ONLY for a separately authorized Attendance
+		// Recorder, not for any Instructor. The existing server role gate
+		// stays intact until a securely own-session-scoped instructor
+		// workflow is delivered and independently tested.
+		"toefl_house.teaching.record_attendance": [
+			{ fieldname: "course_schedule", label: "Scheduled session", fieldtype: "Data", read_only: 1, reqd: 1 },
+			{ fieldname: "statuses", label: "Student attendance (JSON)", fieldtype: "Small Text", reqd: 1, description: "Enter a JSON object of Student IDs and Present, Absent or Leave (example: {\"EDU-STU-00001\":\"Present\"}). Only on-roster students are accepted." },
+		],
 		"toefl_house.operations.owner_configuration.create_owner_operations_policy": [
 			{ fieldname: "code", label: "Policy code", fieldtype: "Data", reqd: 1 },
 			{ fieldname: "title", label: "Policy title", fieldtype: "Data", reqd: 1 },
@@ -1080,7 +1088,16 @@ frappe.provide("toefl_house.role_desks");
 
 	function openGuidedAction(action) {
 		const fields = ACTION_FIELDS[action.endpoint];
-		if (!fields) return;
+		if (!fields) {
+			// Never expose a clickable no-op. The server remains the only
+			// write authority; no dynamic unrestricted command form is made.
+			frappe.msgprint({
+				title: text(action.label),
+				message: text("This command has no supported form yet. Nothing was submitted. Ask your administrator to complete the role-specific workflow."),
+				indicator: "red",
+			});
+			return;
+		}
 		const dialog = new frappe.ui.Dialog({
 			title: text(action.label),
 			fields: [{ fieldname: "request_key", label: text("Request reference (filled in for you)"), fieldtype: "Data", reqd: 1, read_only: 1, default: newRequestKey(), description: text("Reuse this exact value if you must retry the same request after a connection error.") }, ...fields],
