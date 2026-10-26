@@ -3417,6 +3417,16 @@ def main():
                 'owner_fee_plan_native_0001',level['code'],cat['academic_year'],label,5000,fin['company']))
             saved=frappe.get_doc('Fee Structure',plan['fee_structure'])
             assert len(saved.components)==1 and float(saved.total_amount)==5000,plan
+            # Live native commands must refuse invalid Owner money BEFORE
+            # updating a saved fee plan. This also exercises the real Frappe
+            # guarded command, not only the pure unit validator.
+            for index, invalid in enumerate(('nan','inf','-inf')):
+                denial=denied(lambda:as_user('course_owner',lambda:owner_catalog.set_level_fee_component(
+                    f'owner_fee_bad_amount_{index:04d}',level['code'],
+                    cat['academic_year'],label,invalid,fin['company'])))
+                assert denial['denied']=='ValidationError',denial
+            saved.reload()
+            assert len(saved.components)==1 and float(saved.total_amount)==5000,saved.name
             return {'fee_category':result['name'],'native_item':result['item'],
                     'raw_item_permissions':False,'idempotent_replay':True,
                     'first_fee_structure':saved.name,'total':saved.total_amount}
