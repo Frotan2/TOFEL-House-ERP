@@ -34,6 +34,14 @@ no claim of actual authenticated access to the Owner's Windows instance.
    Windows acceptance results must be attached below before checking
    any end-to-end cell as PASS. In-progress CI is *not* a pass.
 
+**Source CI update (2026-10-26):** Revision `0232cfb8` subsequently passed
+all seven hosted release checks, including native Frappe and five-role HTTP,
+isolated Chromium, Foundation, Product image and Windows package smoke
+(Native workflow `40296504711`; Product image `40296504693`). This
+qualifies **that source revision**, not any later merged changes or the
+Owner's physical Windows acceptance. Two-teacher browser isolation, real
+cash custody, separate-drive restore and release approval remain open.
+
 ## Role-by-role walkthrough
 
 | Persona/login role | Native operational expectation and scope | Finding as of source audit | Acceptance result |
@@ -41,7 +49,7 @@ no claim of actual authenticated access to the Owner's Windows instance.
 | Reception: `Reception` | Locate and follow applicant/student intake, placement release, admissions and enrollment; gender-separated cashier collects and hands cash to Finance | `reception.work` offers the view and requests next actions from `Admission Officer`. A user with *only* Reception does **not** automatically receive Admission Officer, Enrollment Officer or native payment authority. A dedicated, audited reception-collection / Finance handover path is not proven by this Desk. | **INCOMPLETE** |
 | Finance Manager: `Finance Manager` | Identify posted receipts, dues by Afghan month, advance balances, overdue amounts, expense, native payroll and corrections | Finance Desk contains read projections and Finance Officer actions. Holding *only* Finance Manager does not meet the `Finance Officer` command gate. Native receipt entry, advance allocations, cross-month GL/deferred income and a cutover reconciliation remain separate acceptance items. | **INCOMPLETE** |
 | General Manager: `General Manager` | Cross-role funnel, staffing, operational exceptions, service failures, attendance and follow-up | `operations.work` contains funnel, exceptions, staffing and health; limited view intentionally does not grant Finance or Owner write powers. Live escalation and role-specific workflow completion have not been physically tested. | **PARTIAL / NOT SIGNED OFF** |
-| Teacher: `Instructor` | See only assigned classes, students, sessions; mark attendance for own scheduled session; inspect work without payroll leakage | `teacher.work` resolves own Employee→Instructor and reads assigned group. Mark-attendance action currently requires `Attendance Recorder`, *not* Instructor. Generic `record_attendance` verifies group/roster but has no own-login-to-session-instructor authorization; blindly giving every teacher the Attendance Recorder role would risk cross-class marking. Implement a separately scoped instructor command and test own vs cross-class refusal before claiming daily usability. | **INCOMPLETE / SECURITY HOLD** |
+| Teacher: `Instructor` | See only assigned classes, students, sessions; mark attendance for own scheduled session; inspect work without payroll leakage | `teacher.work` resolves own Employee→Instructor. Separate Instructor-only `record_instructor_attendance` checks the active linked Employee, actual instructor of the session, effective teaching assignment and native roster, without giving the generic `Attendance Recorder` role. Hosted source and security regressions passed on a qualified source revision; two distinct Windows instructor logins with own-vs-cross-class evidence still need acceptance. | **CODE IMPLEMENTED / WINDOWS UAT OPEN** |
 | Course Owner: `Course Owner` | Versioned academic/fee/calendar policies; see summaries of intake, enrollment, money, payroll, risks and release posture | `owner.cockpit`, Academic Setup and Configuration are role-gated. Solar Hijri income vs actual receipts, outstanding payroll, physical backup/restore evidence, installation acceptance and owner signoff are not certified from the login screen. | **PARTIAL / NOT SIGNED OFF** |
 
 ## Required business scenarios before declaring complete
