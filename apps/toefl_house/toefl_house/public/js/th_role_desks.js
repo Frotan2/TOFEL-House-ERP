@@ -640,6 +640,9 @@ frappe.provide("toefl_house.role_desks");
 		// Recorder, not for any Instructor. The existing server role gate
 		// stays intact until a securely own-session-scoped instructor
 		// workflow is delivered and independently tested.
+		"toefl_house.teaching.record_instructor_attendance": [
+			{ fieldname: "course_schedule", label: "My scheduled session", fieldtype: "Data", read_only: 1, reqd: 1 },
+		],
 		"toefl_house.teaching.record_attendance": [
 			{ fieldname: "course_schedule", label: "Scheduled session", fieldtype: "Data", read_only: 1, reqd: 1 },
 			{ fieldname: "statuses", label: "Student attendance (JSON)", fieldtype: "Small Text", reqd: 1, description: "Enter a JSON object of Student IDs and Present, Absent or Leave (example: {\"EDU-STU-00001\":\"Present\"}). Only on-roster students are accepted." },
@@ -1087,7 +1090,32 @@ frappe.provide("toefl_house.role_desks");
 	}
 
 	function openGuidedAction(action) {
-		const fields = ACTION_FIELDS[action.endpoint];
+		const ownAttendance = action.endpoint === "toefl_house.teaching.record_instructor_attendance";
+		let fields = ACTION_FIELDS[action.endpoint];
+		if (ownAttendance) {
+			// The roster is a teacher-only server projection of the selected
+			// session. Never use it as authorization: the POST command
+			// rechecks native Employee/Instructor, active assignment,
+			// schedule and roster under its transaction lock.
+			const roster = action.args && action.args.roster;
+			const students = Array.isArray(roster) ? roster : [];
+			const ids = students.map((item) => item && item.student);
+			if (!students.length || students.length > 100 ||
+					ids.some((id) => typeof id !== "string" || !id || id.length > 140) ||
+					new Set(ids).size !== ids.length) {
+				frappe.msgprint({ title: text(action.label),
+					message: text("This session has no valid active roster. No marks were submitted. Ask Academic to check the class roster."),
+					indicator: "red" });
+				return;
+			}
+			fields = [...fields, ...students.map((item, index) => ({
+				fieldname: "mark_" + index,
+				label: text(item.name || item.student) + " (" + text(item.student) + ")",
+				fieldtype: "Select",
+				options: "\\nPresent\\nAbsent\\nLeave",
+				reqd: 1,
+			}))];
+		}
 		if (!fields) {
 			// Never expose a clickable no-op. The server remains the only
 			// write authority; no dynamic unrestricted command form is made.
@@ -1113,6 +1141,17 @@ frappe.provide("toefl_house.role_desks");
 				}
 				const args = { request_key: values.request_key };
 				fields.forEach((field) => { args[field.fieldname] = values[field.fieldname]; });
+				if (ownAttendance) {
+					const statuses = {};
+					action.args.roster.forEach((member, index) => {
+						const key = "mark_" + index;
+						statuses[member.student] = values[key];
+						delete args[key];
+					});
+					// No status is defaulted to Present, and this JSON is
+					// generated from selected human-friendly dropdowns.
+					args.statuses = JSON.stringify(statuses);
+				}
 				frappe.call({
 					method: action.endpoint,
 					args,
