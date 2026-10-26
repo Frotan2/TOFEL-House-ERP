@@ -73,6 +73,12 @@ class CodeValidationTests(unittest.TestCase):
             rules.validate_duration_value(30, "Month")
         with self.assertRaises(ValueError):
             rules.validate_duration_value(2, "Quarter")
+        for invalid in ("nan", "NaN", "inf", "-inf", "1e999",
+                        float("nan"), float("inf"), float("-inf")):
+            for unit in ("Day", "Month", "Solar Hijri Month"):
+                with self.subTest(invalid=repr(invalid), unit=unit):
+                    with self.assertRaisesRegex(ValueError, "finite"):
+                        rules.validate_duration_value(invalid, unit)
 
     def test_dates_are_real_calendar_dates(self):
         self.assertEqual(rules.parse_date("2026-07-01"), "2026-07-01")
@@ -136,7 +142,9 @@ class FeeRuleTests(unittest.TestCase):
     def test_fee_amount_bounds(self):
         self.assertEqual(rules.validate_fee_amount("5000"), 5000.0)
         self.assertEqual(rules.validate_fee_amount(1250.5), 1250.5)
-        for bad in (0, -1, "abc", None, True, 100_000_001):
+        for bad in (0, -1, "abc", None, True, 100_000_001,
+                    "nan", "NaN", "inf", "-inf", "1e999",
+                    float("nan"), float("inf"), float("-inf")):
             with self.assertRaises(ValueError, msg=repr(bad)):
                 rules.validate_fee_amount(bad)
 
