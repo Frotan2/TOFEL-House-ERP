@@ -565,6 +565,33 @@ class FeeConfigurationLifecycleTests(unittest.TestCase):
                                                       company="Second Co")
             self.assertEqual(result["company"], "Second Co")
 
+    def test_existing_plan_refuses_cross_company_retargeting(self):
+        # An explicitly selected second company must not silently change
+        # the first company's already-configured tuition price.
+        for academic, fake in self._world():
+            original = academic.set_level_fee_component(
+                "G" * 24, "STARTER", "2026-27", "Tuition Fee", 5000,
+                company="TOEFL House")
+            fake.store["Company"]["Second Co"] = {
+                "name": "Second Co",
+                "default_receivable_account": "Debtors - S2",
+            }
+            with self.assertRaises(fake.ValidationError) as ctx:
+                academic.set_level_fee_component(
+                    "H" * 24, "STARTER", "2026-27", "Tuition Fee", 9000,
+                    company="Second Co")
+            self.assertIn("belongs to company TOEFL House", str(ctx.exception))
+            plan = fake.store["Fee Structure"][original["fee_structure"]]
+            self.assertEqual(plan.company, "TOEFL House")
+            self.assertEqual(float(plan.get("components")[0].get("amount")), 5000.0)
+            self.assertEqual(len(fake.store["Fee Structure"]), 1)
+            # Updating with the matching company remains allowed.
+            updated = academic.set_level_fee_component(
+                "I" * 24, "STARTER", "2026-27", "Tuition Fee", 6000,
+                company="TOEFL House")
+            self.assertEqual(updated["company"], "TOEFL House")
+            self.assertEqual(updated["total"], 6000.0)
+
     def test_fee_commands_refuse_the_wrong_role(self):
         for roles in (set(), {"Finance Manager"}, {"Finance Officer"}):
             for academic, fake in _load_module(roles):
