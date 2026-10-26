@@ -104,6 +104,17 @@ function loadClient(frappeOverrides = {}) {
 
 const client = loadClient();
 const surfaces = client.toefl_house.role_desks.surfaces;
+// A guided action must either have a real, signature-reviewed dialog or
+// explicitly tell the user that the workflow is unavailable. Never ship a
+// button whose click handler silently returns without explanation.
+const uiSource = fs.readFileSync(SCRIPT, "utf8");
+assert(uiSource.includes("This command has no supported form yet. Nothing was submitted."),
+	"unsupported commands must show actionable, fail-closed feedback");
+const recorderFields = client.toefl_house.role_desks.actionFields["toefl_house.teaching.record_attendance"];
+assert(recorderFields && recorderFields.some((field) => field.fieldname === "course_schedule")
+	&& recorderFields.some((field) => field.fieldname === "statuses"),
+	"authorized Attendance Recorder needs a session and bounded roster marks");
+
 assert.deepStrictEqual(Object.keys(surfaces).sort(), Object.keys(EXPECTED).sort(),
 	"the desk surface set changed");
 
