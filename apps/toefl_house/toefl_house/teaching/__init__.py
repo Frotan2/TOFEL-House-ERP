@@ -510,8 +510,47 @@ def schedule_session(request_key, student_group, schedule_date, from_time, to_ti
                      "room": room, "course": course}, work)
 
 
-@frappe.whitelist(methods=["POST"])
-def record_attendance(request_key, course_schedule, statuses):
+def _require_own_instructor_session(actor, session, schedule_name):
+    """Fail closed: an Instructor may mark only an assigned session.
+
+    A bare Instructor role never confers generic Attendance Recorder authority.
+    Verify native Employee.user_id -> Instructor.employee -> actual scheduled
+    instructor and a still-effective TH Teaching Assignment for this class.
+    Names and payloads supplied by the browser are never treated as authority.
+    """
+    employees = frappe.get_all(
+        "Employee", filters={"user_id": actor, "status": "Active"},
+        fields=["name"], limit_page_length=2)
+    if len(employees) != 1:
+        raise frappe.PermissionError("This login needs one active linked employee")
+    instructors = frappe.get_all(
+        "Instructor", filters={"employee": employees[0]["name"]},
+        fields=["name", "status"], limit_page_length=3)
+    # Multiple Instructor links on one Employee are not automatically a
+    # privilege escalation: authorize only the actual session instructor.
+    owning = [i for i in instructors
+              if i["name"] == session.instructor and i.get("status") != "Left"]
+    if len(owning) != 1:
+        raise frappe.PermissionError("This session belongs to another instructor")
+    day = str(session.schedule_date)
+    assignments = frappe.get_all(
+        "TH Teaching Assignment",
+        filters={"student_group": session.student_group,
+                 "instructor": session.instructor,
+                 "effective_start": ("<=", day)},
+        fields=["effective_end", "course_schedule"],
+        limit_page_length=100)
+    if not any((not row.get("effective_end")
+                or str(row["effective_end"]) >= day)
+               and (not row.get("course_schedule")
+                    or row["course_schedule"] == schedule_name)
+               for row in assignments):
+        raise frappe.PermissionError(
+            "There is no active teaching assignment for this session")
+
+
+def _record_attendance(request_key, course_schedule, statuses, *,
+                       command_kind, own_instructor=False):
     """Record submitted native Student Attendance for a scheduled session.
 
     Only explicit per-student native statuses are accepted; missing students
@@ -530,7 +569,11 @@ def record_attendance(request_key, course_schedule, statuses):
         frappe.db.sql("select name from `tabCourse Schedule` where name=%s for update",
                       (schedule_name,))
         session = frappe.db.get_value(SCHEDULE, schedule_name,
-                                      ["student_group", "schedule_date"], as_dict=True)
+                                      ["student_group", "instructor", "schedule_date"], as_dict=True)
+        if own_instructor:
+            # This runs inside the Instructor-only audit command, BEFORE
+            # accessing any roster or creating a native attendance row.
+            _require_own_instructor_session(actor, session, schedule_name)
         # A submitted mark is valid only for an active class and active
         # roster member; exited students keep their history but cannot be
         # marked anew merely because their old child row remains.
@@ -582,8 +625,29 @@ def record_attendance(request_key, course_schedule, statuses):
                             after_hash=digest([schedule_name,
                                                {s: records[s] for s in sorted(records)}]))
 
-    return _execute("record_attendance", request_key,
+    return _execute(command_kind, request_key,
                     {"course_schedule": course_schedule, "statuses": statuses}, work)
+
+
+@frappe.whitelist(methods=["POST"])
+def record_attendance(request_key, course_schedule, statuses):
+    """Legacy authorized Attendance Recorder path (not an Instructor grant)."""
+    return _record_attendance(
+        request_key, course_schedule, statuses,
+        command_kind="record_attendance")
+
+
+@frappe.whitelist(methods=["POST"])
+def record_instructor_attendance(request_key, course_schedule, statuses):
+    """Instructor-only own-session, current-assignment attendance entry.
+
+    The same native Student Attendance, duplicate, suspension and roster
+    checks govern both roles. The new pathway never grants an Instructor
+    the broad, unrelated Attendance Recorder role.
+    """
+    return _record_attendance(
+        request_key, course_schedule, statuses,
+        command_kind="record_instructor_attendance", own_instructor=True)
 
 
 _TERMINAL_CLASS_STATUSES = ("Completed", "Cancelled")
