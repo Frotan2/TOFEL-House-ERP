@@ -3409,7 +3409,7 @@ def main():
             assert owner_program['code']=='SYN-FEE-OWNED',owner_program
             level=as_user('course_owner',lambda:owner_catalog.create_level(
                 'owner_fee_level_native_0001','SYN-FEE-OWNED','SYN-FEE-LVL',
-                'Synthetic Fee Level',1,2,'Month','2026-09-01'))
+                'Synthetic Fee Level',1,2,'Solar Hijri Month','2026-09-01'))
             assert level['native_program'] and frappe.db.exists('Program',level['native_program']),level
             assert not frappe.db.exists('Fee Structure',{'program':level['native_program'],
                 'academic_year':cat['academic_year'],'docstatus':0})
