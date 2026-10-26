@@ -107,6 +107,21 @@ class WiringTests(unittest.TestCase):
         self.assertIn("policy-configured approver role", source)
         self.assertIn("Partial corrections await owner-defined terms", source)
 
+    def test_every_native_correction_command_preserves_company_scope(self):
+        source = CORRECTIONS.read_text()
+        functions = {n.name: n for n in ast.walk(ast.parse(source))
+                     if isinstance(n, ast.FunctionDef)}
+        for name in ("request_invoice_correction", "approve_invoice_correction",
+                     "deny_invoice_correction", "request_fees_correction",
+                     "approve_fees_correction", "deny_fees_correction"):
+            with self.subTest(command=name):
+                self.assertIn("_require_target_company(",
+                              ast.get_source_segment(source, functions[name]))
+        for name in ("request_invoice_correction", "request_fees_correction"):
+            with self.subTest(money=name):
+                self.assertIn("math.isfinite(float(requested_amount))",
+                              ast.get_source_segment(source, functions[name]))
+
     def test_credit_note_path_is_native_only(self):
         """The only money artifact comes from erpnext make_sales_return; the
         module itself creates only the two TH framework doctypes."""
