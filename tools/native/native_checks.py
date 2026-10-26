@@ -6356,6 +6356,54 @@ def main():
                     'rosters_assigned_only':True,'off_roster_excluded':outsider_stu,
                     'compensation_rows':len(pay),'unlinked_empty_state':True}
         check('role-desk-teacher-hosted',traced(desk_teacher))
+        def instructor_attendance_own_vs_cross():
+            # Two native Employee->Instructor links, two real Course Schedule
+            # rows, two separate class assignments, one Instructor-only role.
+            # The existing Attendance Recorder command must still refuse
+            # teachers who have not separately been granted that broad role.
+            frappe.set_user('Administrator')
+            stu_b=groupB['roster'][0]
+            before=frappe.db.count('Student Attendance')
+            assert denied(lambda:as_user('teacher_two',lambda:
+                tea.record_attendance('own_att_broad_role_01',
+                    schedB['name'],{stu_b:'Present'}))),(
+                        'Instructor gained generic Attendance Recorder authority')
+            assert denied(lambda:as_user('teacher_one',lambda:
+                tea.record_instructor_attendance('own_att_cross_a_01',
+                    schedB['name'],{stu_b:'Present'}))),(
+                        'Teacher One recorded Teacher Two class')
+            assert denied(lambda:as_user('teacher_unlinked',lambda:
+                tea.record_instructor_attendance('own_att_unlinked_01',
+                    schedB['name'],{stu_b:'Present'}))),(
+                        'Unlinked instructor recorded attendance')
+            assert frappe.db.count('Student Attendance')==before,(
+                'Denied cross-class attendance mutated native records')
+            result=as_user('teacher_two',lambda:
+                tea.record_instructor_attendance('own_att_positive_b_01',
+                    schedB['name'],{stu_b:'Present'}))
+            assert result['marked']==1 and result['course_schedule']==schedB['name'],result
+            mark=frappe.db.get_value('Student Attendance',result['records'][stu_b],
+                ['student','status','docstatus','course_schedule'],as_dict=True)
+            assert mark.student==stu_b and mark.status=='Present' and int(mark.docstatus)==1
+            old=frappe.db.count('Student Attendance')
+            repeated=as_user('teacher_two',lambda:
+                tea.record_instructor_attendance('own_att_positive_b_01',
+                    schedB['name'],{stu_b:'Present'}))
+            assert repeated==result and frappe.db.count('Student Attendance')==old
+            assert denied(lambda:as_user('teacher_two',lambda:
+                tea.record_instructor_attendance('own_att_duplicate_01',
+                    schedB['name'],{stu_b:'Absent'}))),(
+                        'Duplicate teacher attendance accepted')
+            frappe.set_user('Administrator')
+            op=frappe.db.get_value(api.OP,digest(['record_instructor_attendance',
+                'own_att_positive_b_01']),['actor','kind','status'],as_dict=True)
+            assert op and op.actor==users['teacher_two'] and op.status=='Complete'
+            assert op.kind=='record_instructor_attendance'
+            return {'own_session_native_mark':True,'another_teacher_denied':True,
+                    'unlinked_denied':True,'generic_role_not_granted':True,
+                    'idempotent_receipt':True,'native_audit':True}
+        check('teacher-instructor-own-attendance-and-cross-class-denials',
+              traced(instructor_attendance_own_vs_cross))
         def five_role_business_walkthrough():
             """Five independent real HTTP sessions with populated native data.
 
