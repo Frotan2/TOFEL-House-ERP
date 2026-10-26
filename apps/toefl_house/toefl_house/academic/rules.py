@@ -91,6 +91,8 @@ def validate_duration_value(value, unit):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("Duration must be a number")
     value = float(value)
+    if not math.isfinite(value):
+        raise ValueError("Duration must be finite")
     if unit not in DURATION_UNITS:
         raise ValueError("Duration unit must be Month, Week, Day or Solar Hijri Month")
     if value <= 0:
@@ -168,6 +170,8 @@ def validate_fee_amount(value):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("Fee amount must be a number")
     value = float(value)
+    if not math.isfinite(value):
+        raise ValueError("Fee amount must be finite")
     if value <= 0:
         raise ValueError("Fee amount must be greater than zero")
     if value > 100_000_000:
