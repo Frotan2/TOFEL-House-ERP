@@ -27,6 +27,7 @@ Rules this module binds, and why they are not configurable here:
   no owned ledger.
 """
 from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 import frappe
 
 from toefl_house.api import _execute
@@ -50,7 +51,13 @@ def split_amounts(total, parts):
     """
     if isinstance(parts, bool) or not isinstance(parts, int) or parts < 1:
         raise ValueError("Installment count must be a whole number of at least 1")
-    cents = int(round(float(total) * 100))
+    try:
+        value = Decimal(str(total))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise ValueError("Tuition amount must be a finite exact currency value") from exc
+    if not value.is_finite() or value != value.quantize(Decimal("0.01")):
+        raise ValueError("Tuition amount must use exact two-decimal currency units")
+    cents = int(value * 100)
     if cents < parts:
         raise ValueError(
             "The configured amount is too small to split into that many installments")
