@@ -56,12 +56,18 @@ def prepare():
         frappe.set_user("Administrator")
         if not frappe.is_setup_complete():
             from frappe.desk.page.setup_wizard.setup_wizard import setup_complete
-            year = frappe.utils.getdate().year
+            from toefl_house.finance.shamsi import (
+                fiscal_year_bounds, gregorian_to_shamsi,
+            )
+            solar_year = gregorian_to_shamsi(frappe.utils.getdate())[0]
+            fy_start, fy_end = fiscal_year_bounds(solar_year)
+            # The real Afghanistan test company must never use a Jan-Dec
+            # fiscal year simply because the CI host is Gregorian.
             setup_complete({
                 "language": "English", "timezone": "Asia/Kabul", "country": "Afghanistan",
                 "currency": "AFN", "company_name": "SYN Browser Institute", "company_abbr": "SBI",
-                "chart_of_accounts": "Standard", "fy_start_date": f"{year}-01-01",
-                "fy_end_date": f"{year}-12-31", "enable_telemetry": 0, "setup_demo": 0,
+                "chart_of_accounts": "Standard", "fy_start_date": fy_start.isoformat(),
+                "fy_end_date": fy_end.isoformat(), "enable_telemetry": 0, "setup_demo": 0,
             })
         if not frappe.is_setup_complete():
             raise RuntimeError("Native synthetic setup did not complete")
