@@ -126,10 +126,20 @@ def plan_terms(terms, installments, posting, first_due):
             "interval; the Course Owner must set one")
     posted = date.fromisoformat(str(posting))
     first = date.fromisoformat(str(first_due))
-    if first < posted:
-        raise ValueError("The first installment cannot fall due before the bill is posted")
-    return installments, interval, schedule_due_dates(
+    due_dates = schedule_due_dates(
         first, installments, interval, cadence, grace)
+    if first < posted:
+        # Owner-approved late join: the contractual first-of-Shamsi-month
+        # due date may already have passed when a learner is enrolled in an
+        # active cohort. Keep the real (current) GL posting date, expose that
+        # first invoice as outstanding/overdue, and prohibit arbitrary
+        # previous-month backbilling by this everyday Finance command.
+        if (cadence != "Solar Hijri Month"
+                or shamsi.month_key(first) != shamsi.month_key(posted)):
+            raise ValueError(
+                "The first installment cannot fall due before the bill is "
+                "posted unless it is the current Solar Hijri month")
+    return installments, interval, due_dates
 
 
 def build_installment_components(fee_components, installments):
@@ -176,7 +186,12 @@ def issue_tuition_installment_plan(request_key, program_enrollment, fee_structur
         pe_name = _name(program_enrollment, "Program enrollment")
         fs_name = _name(fee_structure, "Fee structure")
         try:
-            posting, due = validate_finance_dates(posting_date, first_due_date)
+            # Validate BOTH date strings strictly, without conflating a
+            # contractual due date with the *actual* GL posting date.
+            # plan_terms judges whether a past due day is justified by the
+            # explicit Owner's Solar-month late-join rule.
+            posting, _ = validate_finance_dates(posting_date, posting_date)
+            due, _ = validate_finance_dates(first_due_date, first_due_date)
         except ValueError as exc:
             raise frappe.ValidationError(str(exc)) from exc
         if not frappe.db.exists(PROGRAM_ENROLLMENT, pe_name):
