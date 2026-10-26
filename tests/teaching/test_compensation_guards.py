@@ -97,6 +97,7 @@ class S2CompensationTests(unittest.TestCase):
         self.company_permissions = []  # HQ unrestricted unless explicitly scoped
         self.lock_order = []
         self.paid_queries = []
+        self.paid_sql_queries = []
         self.posted = []
         self.get_doc_calls = []
         previous = dict(sys.modules)
@@ -111,6 +112,7 @@ class S2CompensationTests(unittest.TestCase):
                 return []
             if "tabAdditional Salary" in query:
                 assert "for update" in query, "posting re-read must lock"
+                fake.paid_sql_queries.append(query)
                 fake.paid_queries.append((values[0], values[1]))
                 return [(day,) for day in fake.paid.get((values[0], values[1]), [])]
             raise AssertionError(f"unexpected sql {query[:80]}")
@@ -376,6 +378,18 @@ class S2CompensationTests(unittest.TestCase):
         result = self._monthly_calc("2026-10-23", "2026-11-21", ["2026-11-05"])
         self.assertEqual(self.posted, [])
         self.assertEqual(result["skipped_existing"], 1)
+
+    def test_cancelled_or_disabled_inputs_do_not_block_monthly_replacement(self):
+        # The isolated SQL stub returns only rows selected by the production
+        # query. Assert that cancelled (docstatus 2) and disabled rows cannot
+        # enter that result, then verify an otherwise eligible month posts.
+        result = self._monthly_calc("2026-10-23", "2026-11-21")
+        self.assertEqual(len(self.posted), 1)
+        self.assertEqual(result["posted"]["INS-1"][0]["amount"], 200)
+        self.assertTrue(self.paid_sql_queries)
+        for query in self.paid_sql_queries:
+            self.assertIn("disabled=0", query)
+            self.assertIn("docstatus<2", query)
 
     def test_monthly_contract_refuses_gregorian_and_partial_month_windows(self):
         with self.assertRaisesRegex(_ValidationError, "full Solar Hijri month"):
