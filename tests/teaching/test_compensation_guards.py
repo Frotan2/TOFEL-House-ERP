@@ -94,6 +94,7 @@ class S2CompensationTests(unittest.TestCase):
         self.fresh_doc = None
         self.paid = {}
         self.currency = "USD"
+        self.company_permissions = []  # HQ unrestricted unless explicitly scoped
         self.lock_order = []
         self.paid_queries = []
         self.posted = []
@@ -115,6 +116,8 @@ class S2CompensationTests(unittest.TestCase):
             raise AssertionError(f"unexpected sql {query[:80]}")
 
         def get_all(doctype, filters=None, fields=None, **kwargs):
+            if doctype == "User Permission":
+                return list(fake.company_permissions)
             if doctype == CONTRACT:
                 return list(fake.contract_lists.pop(0))
             raise AssertionError(f"unexpected get_all {doctype}")
@@ -149,6 +152,7 @@ class S2CompensationTests(unittest.TestCase):
             get_value=get_value,
             exists=lambda doctype, name: True,
             get_all=get_all, sql=sql)
+        stub.get_all = get_all
         stub.get_doc = get_doc
         sys.modules["frappe"] = stub
 
@@ -179,6 +183,9 @@ class S2CompensationTests(unittest.TestCase):
         finance_pkg = types.ModuleType("toefl_house.finance")
         finance_pkg.__path__ = [str(APP / "finance")]
         sys.modules["toefl_house.finance"] = finance_pkg
+        # A previously imported module must not retain another test's frappe
+        # object when this scripted runtime installs its own Frappe stub.
+        sys.modules.pop("toefl_house.finance.company_scope", None)
         _load_real("toefl_house.finance.shamsi", APP / "finance/shamsi.py")
         self.comp = _load_real("toefl_house.teaching.compensation",
                                APP / "teaching/compensation.py")
