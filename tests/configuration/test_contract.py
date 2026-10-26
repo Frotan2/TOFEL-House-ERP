@@ -142,6 +142,14 @@ class FeeRuleTests(unittest.TestCase):
     def test_fee_amount_bounds(self):
         self.assertEqual(rules.validate_fee_amount("5000"), 5000.0)
         self.assertEqual(rules.validate_fee_amount(1250.5), 1250.5)
+        self.assertEqual(rules.validate_fee_amount("0.01"), 0.01)
+        self.assertEqual(rules.validate_fee_amount("20.000"), 20.0)
+        self.assertEqual(rules.validate_fee_amount(100000000), 100000000.0)
+        for bad in ("0.001", "1.005", "20.009", "1e-10",
+                    0.0001, 1.234, 999.999):
+            with self.subTest(money=repr(bad)):
+                with self.assertRaisesRegex(ValueError, "two decimal places"):
+                    rules.validate_fee_amount(bad)
         for bad in (0, -1, "abc", None, True, 100_000_001,
                     "nan", "NaN", "inf", "-inf", "1e999",
                     float("nan"), float("inf"), float("-inf")):
