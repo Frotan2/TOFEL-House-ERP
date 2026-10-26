@@ -360,6 +360,10 @@ class CustomerPackageManifestTests(unittest.TestCase):
         env = dict(os.environ, TH_TEST_VERIFY_SCRIPT=str(ROOT / "product/windows/Verify Package Image.ps1"),
                    TH_TEST_RELEASE=str(release), TH_TEST_DOCKER_EXIT=str(docker_exit),
                    TH_TEST_INSPECT=json.dumps(inspect) if not isinstance(inspect, str) else inspect)
+        # Python can inherit PowerShell 7's module path, which is incompatible
+        # with the explicitly selected Windows PowerShell 5.1 subprocess.
+        # Let that shell construct its own standard module search path.
+        env.pop("PSModulePath", None)
         command = r"""
 function docker {
     if ($args[0] -ne 'image' -or $args[1] -ne 'inspect' -or $args[2] -ne 'toefl-house-erp-app:local') {

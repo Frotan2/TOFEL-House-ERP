@@ -291,6 +291,8 @@ def create_student_group(request_key, group_name, program, academic_year, academ
             branch_name = _bounded_name(branch, "Branch")
             if not frappe.db.exists("Branch", branch_name):
                 raise frappe.ValidationError("Unknown branch")
+        from toefl_house.command_scope import resolve_creation_branch
+        branch_name = resolve_creation_branch(branch_name, actor)
         if not frappe.db.exists(PROGRAM, program_name):
             raise frappe.ValidationError("Unknown program")
         if not frappe.db.exists(YEAR, year_name):
@@ -336,8 +338,11 @@ def create_student_group(request_key, group_name, program, academic_year, academ
         from education.education.doctype.student_group.student_group import get_program_enrollment
         roster_rows = distinct_roster_rows(
             get_program_enrollment(year_name, term_name or None, program_name))
+        from toefl_house.command_scope import actor_branches, roster_for_branch
+        if actor_branches(actor) is not None:
+            roster_rows = roster_for_branch(roster_rows, branch_name)
         if not roster_rows:
-            raise frappe.ValidationError("No submitted program enrollment for this intake")
+            raise frappe.ValidationError("No submitted program enrollment for this intake and branch")
         if len(roster_rows) > capacity:
             raise frappe.ValidationError("Roster exceeds the declared class capacity")
         if frappe.db.exists(GROUP, name):

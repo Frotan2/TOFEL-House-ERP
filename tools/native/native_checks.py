@@ -6571,6 +6571,33 @@ def main():
             frappe.set_user('Administrator')
             assert frappe.db.get_value('Student Group',IA,'th_branch')=='SYN-ISOL-A'
             assert frappe.db.get_value('Student Group',IB,'th_branch')=='SYN-ISOL-B'
+            # Writes and cached command receipts must obey the same native
+            # Branch User Permission after it is added or changed.
+            scheduler_scope=frappe.get_doc(dict(doctype='User Permission',
+                user=users['teaching_scheduler'],allow='Branch',
+                for_value='SYN-ISOL-A')).insert()
+            frappe.db.commit()
+            try:
+                own_replay=as_user('teaching_scheduler',lambda:tea.create_student_group(
+                    'isol_group_a_0000001',IA,cat['program'],cat['academic_year'],'',
+                    roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-A'))
+                assert own_replay['name']==IA
+                for key,group in (('isol_group_b_0000001',IB),
+                                  ('isol_foreign_write_0001','SYN-ISOL-DENIED')):
+                    try:
+                        as_user('teaching_scheduler',lambda:tea.create_student_group(
+                            key,group,cat['program'],cat['academic_year'],'',
+                            roster_n,'2026-09-01','2026-12-31',branch='SYN-ISOL-B'))
+                    except frappe.PermissionError:
+                        pass
+                    else:
+                        raise AssertionError('foreign branch write or receipt escaped scope')
+                frappe.set_user('Administrator')
+                assert not frappe.db.exists('Student Group','SYN-ISOL-DENIED')
+            finally:
+                frappe.set_user('Administrator')
+                frappe.delete_doc('User Permission',scheduler_scope.name)
+                frappe.db.commit()
             up=frappe.get_doc(dict(doctype='User Permission',user=users['teacher_two'],
                 allow='Branch',for_value='SYN-ISOL-A')).insert()
             frappe.db.commit()

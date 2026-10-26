@@ -59,12 +59,63 @@ item suites passed 30 tests. Applying the repair on the preserved synthetic
 site returned true, and the previously failing native accounting setup then
 completed, retaining the Fee Component name, all children and its fee Item.
 
+## Continued Windows acceptance, 27 October
+
+The preview was advanced to `9d7d1ab`; all seven hosted checks passed at that
+revision. The following results are native synthetic-site evidence, not
+qualification of the official rebuilt image or graphical Windows launcher:
+
+- Books: receive 12, sell two for AFN 600, return both and refund AFN 600.
+  Stock returned to 12 and cash to AFN 5,000; both sales documents settled.
+- Attendance: two teachers recorded their own sessions; cross-teacher writes
+  returned 403. Four native attendance records persisted.
+- Payroll: two submitted native slips of AFN 1,500, including AFN 500 skill
+  compensation each, produced AFN 3,000 payroll liability. Wages were not
+  disbursed. The synthetic Finance fixture alone received HR Manager for the
+  native payroll submit path. Twelve salary-privacy checks passed.
+- Encrypted database, public/private files and site configuration were
+  restored into the separate `placement-second.localhost` database. All 20
+  table snapshots, both file markers and an encrypted secret matched. The
+  original database was not overwritten or activated for production.
+- On the restored copy, an AFN 500 unallocated advance was reconciled against
+  the second learner's Fees: unallocated zero, outstanding AFN 4,500, one
+  new Payment Entry. Cash close counted AFN 5,500 against AFN 5,500 expected;
+  Reception was denied and unexplained variance was refused without GL edits.
+- Restart retained the original site's records, AFN 5,000 cash and AFN 5,000
+  outstanding. Native ERPNext scheduled GL/SLE numbering was accounted for by
+  comparing every field except its three documented numbering fields, after
+  verifying the restored pre-numbering reference against the backup hash.
+
+## QA-008: guarded writes bypass native Branch User Permission
+
+An authenticated scheduler restricted to Branch A created a Branch B class
+and received its roster (HTTP 200). This was reproduced only on the restored
+synthetic copy and blocks release despite the preceding green CI.
+
+The fix scopes guarded command references before mutation and rechecks cached
+receipt targets after permissions change. Restricted class creation resolves
+a sole permitted branch and filters its derived roster by current membership,
+falling back to applicant intake only before initial placement. Unrestricted
+management retains its existing cross-branch administration behavior.
+
+Eight focused regression tests passed, including initial enrollment using
+the applicant's branch before first placement. The teaching suite passed all
+334 tests. Six real authenticated HTTP checks
+passed on the restored copy: own replay, foreign replay denial, fresh own
+creation, fresh foreign denial, omitted-branch default and denial of that
+receipt after changing the actor's scope. Hosted native qualification adds
+positive replay plus foreign fresh-write and replay denials. The broader
+2,538-test Windows run had three verifier-harness failures from inheriting
+PowerShell 7's module path in a Windows PowerShell 5.1 subprocess; the harness
+now lets the selected shell construct its own module path. Retest evidence
+must be recorded before this revision can qualify.
+
 ## Still required
 
-Unallocated advances and settlement, book stock/sale/return/cash refund,
-attendance and cross-teacher denials, native payroll and liabilities,
-Company/Branch and female-counter custody, restart/repair, encrypted isolated
-Windows recovery, official rebuilt package qualification, staff-device access
-and independent business/security acceptance remain open. Main is unmerged;
-branches and production activation remain unchanged. No completed status is
-claimed for these remaining gates.
+Final-revision CI, official rebuilt package and supported in-place Windows
+update/repair qualification, graphical staff transaction acceptance,
+Company-negative cases, female-counter collection/handover, staff-device
+access and independent business/security acceptance remain open. The Windows
+computer-use helper again stopped because it could not verify the current
+browser URL, even after the user opened the ERP page. No further UI input was
+attempted. Main remains unmerged, branches retained and production inactive.
