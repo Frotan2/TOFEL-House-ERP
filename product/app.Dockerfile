@@ -107,6 +107,8 @@ COPY product/backup.py /product/backup.py
 COPY product/native_gpg.py /product/native_gpg.py
 COPY product/native_db.py /product/native_db.py
 COPY product/wsgi.py /product/wsgi.py
+COPY product/web.cjs /product/web.cjs
+COPY product/realtime.cjs /product/realtime.cjs
 COPY product/entrypoint.sh /product/entrypoint.sh
 COPY tools/foundation/secure_weasyprint.py /product/secure_weasyprint.py
 COPY tools/foundation/secure_frappe_python.py /product/secure_frappe_python.py

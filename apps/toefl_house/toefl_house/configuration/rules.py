@@ -253,6 +253,23 @@ def compute_readiness(*, status, versions, validations, today,
 # ignore_permissions write — with a business-language refusal. Token reset
 # keeps an outer context intact if commands ever nest.
 _COMMAND_CONTEXT = ContextVar("toefl_house_configuration_command", default=None)
+_FEE_ITEM_CONTEXT = ContextVar("toefl_house_native_fee_item", default=None)
+
+
+def active_fee_item():
+    return _FEE_ITEM_CONTEXT.get()
+
+
+@contextmanager
+def fee_item_context(actor, code):
+    """One native fee service item within an already authorized command."""
+    if active_command() != "create_fee_type" or _FEE_ITEM_CONTEXT.get() is not None:
+        raise ValueError("Fee item creation requires its configuration command")
+    token = _FEE_ITEM_CONTEXT.set((actor, code))
+    try:
+        yield
+    finally:
+        _FEE_ITEM_CONTEXT.reset(token)
 
 
 def active_command():

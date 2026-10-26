@@ -331,6 +331,12 @@ def work():
             row_actions.append(guided_action(
                 "Course Owner", "toefl_house.academic.set_next_level",
                 "Set progression", {"level": level["code"], "next_level": ""}))
+            if (current_year and level.get("native_program")
+                    and any(row.get("item") for row in fee_types)
+                    and not issuable_plans(plans_by_program, level["native_program"], current_year)):
+                row_actions.append(guided_action(
+                    "Course Owner", "toefl_house.academic.set_level_fee_component",
+                    "Define fee plan", {"level": level["code"], "academic_year": current_year}))
             if not usage.get(level.get("native_program")):
                 # Refusal-free by construction: retire appears only when no
                 # submitted enrollment runs on the level.

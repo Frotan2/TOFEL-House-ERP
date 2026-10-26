@@ -76,6 +76,8 @@ class _Doc:
                                 for row in value]
 
     def insert(self, ignore_permissions=False):
+        if self.doctype == "Fee Structure" and not self.get("components"):
+            raise self._backend.ValidationError("Native Fee Structure requires Components")
         store = self._backend.store.setdefault(self.doctype, {})
         # Real frappe stamps docstatus 0 on insert; the fake mirrors that so
         # docstatus filters behave.
@@ -110,6 +112,8 @@ class _Doc:
         return self
 
     def save(self, ignore_permissions=False):
+        if not self.name:
+            return self.insert(ignore_permissions=ignore_permissions)
         return self
 
     def submit(self):
@@ -291,6 +295,14 @@ class CatalogIdempotencyTests(unittest.TestCase):
                 for doc in fake.store.get(
                     "TH Configuration Audit Event", {}).values()
                 if doc.target == target]
+
+    def test_fee_type_refuses_an_existing_accounting_item(self):
+        for academic, fake in _load_module({"Course Owner"}):
+            fake.store.setdefault("Item", {})["Existing Item"] = {}
+            with self.assertRaises(fake.ValidationError) as error:
+                academic.create_fee_type("FEE-ITEM-COLLISION-0001", "Existing Item")
+            self.assertIn("accounting Item", str(error.exception))
+            self.assertFalse(fake.store.get("Fee Category"))
 
     def test_replay_returns_recorded_result_without_double_apply(self):
         for academic, fake in _load_module({"Course Owner"}):

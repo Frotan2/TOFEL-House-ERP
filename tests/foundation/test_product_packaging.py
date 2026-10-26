@@ -454,6 +454,7 @@ class LineEndingContract(unittest.TestCase):
             "product/bootstrap.py", "product/activate.py", "product/restore.py",
             "product/backup.py", "product/native_gpg.py", "product/native_db.py",
             "product/wsgi.py", "product/entrypoint.sh", "product/perf_baseline.py",
+            "product/web.cjs", "product/realtime.cjs",
             # Signed update engine + its container entrypoint (Issue #40).
             "product/update_engine.py", "product/update_host.py", "product/update_entrypoint.sh",
             "tools/foundation/secure_weasyprint.py", "tools/foundation/secure_frappe_python.py",
@@ -470,7 +471,7 @@ class LineEndingContract(unittest.TestCase):
         self.assertEqual(len(copy_rows), len(expected), "COPY syntax must stay source/destination only")
 
         text_suffixes = {
-            ".py", ".sh", ".js", ".json", ".css", ".md", ".txt", ".toml",
+            ".py", ".sh", ".js", ".cjs", ".json", ".css", ".md", ".txt", ".toml",
             ".yaml", ".yml", ".html", ".xml", ".csv", ".svg", ".jinja", ".jinja2",
         }
         copy_files = set()
@@ -981,7 +982,7 @@ class EntrypointContract(unittest.TestCase):
                             r"(?m)^[^#\n]*chmod\s+0?777")
         self.assertIn("exec su -s /bin/sh frappe -c 'python3 /product/bootstrap.py'", entrypoint_text)
         self.assertNotIn("exec run_frappe '", entrypoint_text)
-        self.assertIn("exec /home/frappe/bench/env/bin/gunicorn", entrypoint_text)
+        self.assertIn("exec node /product/web.cjs", entrypoint_text)
 
         # Bootstrap remains a one-shot: restart "no", db.env secret isolated.
         bootstrap = re.search(r"^  bootstrap:\n(.*?)(?=^  [^ \n]+:\n)",
@@ -1154,7 +1155,7 @@ class BootstrapLogicContract(unittest.TestCase):
         self.assertIn("from bootstrap import ensure_web_assets; ensure_web_assets()",
                       entrypoint)
         self.assertLess(entrypoint.index("ensure_web_assets; ensure_web_assets()"),
-                        entrypoint.index("exec /home/frappe/bench/env/bin/gunicorn"))
+                        entrypoint.index("exec node /product/web.cjs"))
 
     def test_web_asset_recovery_restores_provider_seed_without_compilation(self):
         from unittest.mock import patch
@@ -1208,8 +1209,8 @@ class BootstrapLogicContract(unittest.TestCase):
         # Regression (product-image run 36758667184): frappe resolves the site
         # from the Host header unless frappe.app._site is set; 127.0.0.1 is no
         # site name, so every Owner request failed.
-        entry = (PRODUCT / "entrypoint.sh").read_text()
-        self.assertIn("--pythonpath /product", entry)
+        entry = (PRODUCT / "web.cjs").read_text()
+        self.assertIn('"--pythonpath", "/product"', entry)
         self.assertIn("wsgi:application", entry)
         self.assertNotIn("frappe.app:application", entry)
         wsgi = (PRODUCT / "wsgi.py").read_text()
@@ -1237,9 +1238,9 @@ class BootstrapLogicContract(unittest.TestCase):
         # the sites path must resolve the way the entrypoint expects
         # (gunicorn runs with cwd = the sites directory)
         self.assertIn('os.environ.get("SITES_PATH", ".")', wsgi)
-        entry = (PRODUCT / "entrypoint.sh").read_text()
-        self.assertLess(entry.index("cd /home/frappe/bench/sites"),
-                        entry.index("exec /home/frappe/bench/env/bin/gunicorn"))
+        ingress = (PRODUCT / "web.cjs").read_text()
+        self.assertIn('cwd: "/home/frappe/bench/sites"', ingress)
+        self.assertIn('"--bind", "127.0.0.1:8001"', ingress)
 
     def test_credentials_written_once_with_owner_permissions(self):
         import tempfile
@@ -1524,7 +1525,9 @@ class DesktopRuntimeReliabilityContract(unittest.TestCase):
         # Each service case runs its own long-running process as frappe.
         self.assertIn("/build/tools/bin/bench --site toeflhouse.localhost worker", entrypoint_text)
         self.assertIn("/build/tools/bin/bench --site toeflhouse.localhost schedule", entrypoint_text)
-        self.assertIn("node apps/frappe/socketio.js", entrypoint_text)
+        self.assertIn("exec node /product/realtime.cjs", entrypoint_text)
+        self.assertIn('require("/home/frappe/bench/apps/frappe/socketio.js")',
+                      (PRODUCT / "realtime.cjs").read_text())
 
         # Only bootstrap mounts the db.env secret.
         bootstrap = re.search(r"^  bootstrap:\n(.*?)(?=^  [^ \n]+:\n)",

@@ -59,6 +59,7 @@ jobs:
 
       - name: Node suites
         run: |
+          node --test tests/foundation/test_product_ingress.cjs
           node tests/foundation/test_realtime_guard.cjs
           node tests/foundation/test_command_pages.cjs
           node tests/foundation/test_design_system.cjs

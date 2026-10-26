@@ -1028,7 +1028,7 @@ class SetupDeskWorldTests(unittest.TestCase):
     readiness for the current academic year.
     """
 
-    def _run(self, *, mismatch=False):
+    def _run(self, *, mismatch=False, no_year=False, no_fee_types=False):
         world = {
             "TH Academic Program": [{
                 "name": "PROG-GEN", "code": "GEN-ENG", "title": "General English",
@@ -1091,6 +1091,11 @@ class SetupDeskWorldTests(unittest.TestCase):
             }],
         }
 
+        if no_year:
+            world["Academic Year"] = []
+        if no_fee_types:
+            world["Fee Category"] = []
+
         def world_get_all(doctype, filters=None, fields=None, order_by=None,
                           limit_start=None, limit_page_length=None, **kwargs):
             assert_columns_real("setup world", doctype,
@@ -1144,6 +1149,18 @@ class SetupDeskWorldTests(unittest.TestCase):
         self.assertIn("Fee plan ready for 2026-2027.", ready["next"])
         unready = self._item(payload, "levels", "GEN-A2")
         self.assertIn("No complete fee plan for 2026-2027 yet.", unready["next"])
+
+    def test_first_fee_plan_has_a_guided_action_only_after_its_prerequisites(self):
+        payload = self._run()
+        unready = self._item(payload, "levels", "GEN-A2")
+        action = next(a for a in unready["actions"] if a["label"] == "Define fee plan")
+        self.assertEqual(action["endpoint"], "toefl_house.academic.set_level_fee_component")
+        self.assertEqual(action["args"], {"level": "GEN-A2", "academic_year": "2026-2027"})
+        ready = self._item(payload, "levels", "GEN-A1")
+        self.assertNotIn("Define fee plan", [a["label"] for a in ready.get("actions", [])])
+        for options in ({"no_year": True}, {"no_fee_types": True}):
+            level = self._item(self._run(**options), "levels", "GEN-A2")
+            self.assertNotIn("Define fee plan", [a["label"] for a in level.get("actions", [])])
 
     def test_the_orphan_native_program_is_audited(self):
         payload = self._run()

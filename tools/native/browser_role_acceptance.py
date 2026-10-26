@@ -176,10 +176,16 @@ def qualify(base_url: str, destination: Path):
                         assert not failed_assets, (slug, "failed assets", failed_assets)
                         identity = context.request.get(base_url + "/api/method/frappe.auth.get_logged_user")
                         assert identity.status == 200 and identity.json().get("message") == f"browser-{actor}@example.test"
+                        # A healthy Engine.IO listener alone missed the broken
+                        # same-origin route and container-local auth callback.
+                        page.wait_for_function("""typeof frappe !== 'undefined' &&
+                            frappe.realtime && frappe.realtime.socket &&
+                            frappe.realtime.socket.connected === true""", timeout=30_000)
                         page.screenshot(path=str(destination / f"{slug}.png"), full_page=True)
                         report["desks"].append({"page": slug, "role": role, "status": "pass", "sections": sections,
                                                 "page_api_status": 200, "desk_rpc_status": 200,
-                                                "javascript_errors": 0, "failed_assets": 0})
+                                                "javascript_errors": 0, "failed_assets": 0,
+                                                "authenticated_realtime_connected": True})
                         print("PASS Chromium " + slug, flush=True)
                     except Exception:
                         report["status"] = "fail"

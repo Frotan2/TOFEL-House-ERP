@@ -390,6 +390,9 @@ def create_fee_type(request_key, name, description=""):
             raise frappe.ValidationError(str(exc)) from exc
         if frappe.db.exists(FEE_CATEGORY, clean_name):
             raise frappe.ValidationError(f"Fee type {clean_name} already exists")
+        if frappe.db.exists("Item", clean_name):
+            raise frappe.ValidationError(
+                f"An accounting Item named {clean_name} already exists; choose a different fee type name")
         if not frappe.db.exists("Item Group", "Fee Component"):
             raise frappe.ValidationError(
                 "The native 'Fee Component' item group is missing, so fee types "
@@ -399,7 +402,8 @@ def create_fee_type(request_key, name, description=""):
             "doctype": FEE_CATEGORY, "category_name": clean_name,
             "description": clean_description,
         })
-        doc.insert(ignore_permissions=True)
+        with configuration_rules.fee_item_context(actor, clean_name):
+            doc.insert(ignore_permissions=True)
         result = {"name": doc.name,
                   "item": frappe.db.get_value(FEE_CATEGORY, doc.name, "item")}
         return result, {
@@ -559,7 +563,9 @@ def _managed_fee_structure(native_program, academic_year, company=""):
         "company": company_name, "receivable_account": receivable,
         "components": [],
     })
-    doc.insert(ignore_permissions=True)
+    # Native Fee Structure requires at least one component. Return the new
+    # document unsaved; the caller appends its first component before save()
+    # performs native insertion and validation in the same transaction.
     return doc
 
 

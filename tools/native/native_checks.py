@@ -3378,6 +3378,39 @@ def main():
                     'receivable':comp.default_receivable_account,'payer':payers['one'],
                     'payer_waiver':payers['two'],'before':fin_before}
         fin=check('finance-native-catalog',traced(finance_catalog))
+        def owner_fee_type_native():
+            from toefl_house import academic as owner_catalog
+            label='SYN-Owner-Fee-Type'
+            result=as_user('course_owner',lambda:owner_catalog.create_fee_type(
+                'owner_fee_type_native_0001',label,'Synthetic Owner native fee item'))
+            assert result['item']==label,result
+            item=frappe.get_doc('Item',label)
+            assert item.item_group=='Fee Component' and not item.is_stock_item and item.is_sales_item,item.name
+            assert item.owner==users['course_owner'],item.owner
+            replay=as_user('course_owner',lambda:owner_catalog.create_fee_type(
+                'owner_fee_type_native_0001',label,'Synthetic Owner native fee item'))
+            assert replay==result,(result,replay)
+            def raw_item_denied():
+                assert not frappe.has_permission('Item',ptype='create')
+                assert not frappe.get_doc('Item',label).has_permission('write')
+                assert not frappe.get_doc('Item',label).has_permission('read')
+            as_user('course_owner',raw_item_denied)
+            denied(lambda:as_user('receptionist',lambda:owner_catalog.create_fee_type(
+                'owner_fee_type_foreign_001','SYN-Unauthorized-Fee','')))
+            denied(lambda:as_user('course_owner',lambda:owner_catalog.create_fee_type(
+                'owner_fee_type_collision_1','SYN-PLACEMENT-FEE','')))
+            level=frappe.get_all('TH Program Level',filters={'status':'Active'},
+                fields=['code','native_program'],order_by='name asc',limit=1)[0]
+            assert not frappe.db.exists('Fee Structure',{'program':level.native_program,
+                'academic_year':cat['academic_year'],'docstatus':0})
+            plan=as_user('course_owner',lambda:owner_catalog.set_level_fee_component(
+                'owner_fee_plan_native_0001',level.code,cat['academic_year'],label,5000,fin['company']))
+            saved=frappe.get_doc('Fee Structure',plan['fee_structure'])
+            assert len(saved.components)==1 and float(saved.total_amount)==5000,plan
+            return {'fee_category':result['name'],'native_item':result['item'],
+                    'raw_item_permissions':False,'idempotent_replay':True,
+                    'first_fee_structure':saved.name,'total':saved.total_amount}
+        check('owner-native-fee-type-without-item-roles',traced(owner_fee_type_native))
         def isolation_evidence():
             # S3: record the effective transaction isolation the first-writer
             # races run under. Every money path uses anchor locks + locking

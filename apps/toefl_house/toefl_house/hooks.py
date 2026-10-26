@@ -12,6 +12,9 @@ required_apps = ["erpnext", "education", "foundation_security"]
 override_doctype_class = {
     "Student Attendance": "toefl_house.teaching.native_attendance.THStudentAttendance",
 }
+extend_doctype_class = {
+    "Item": ["toefl_house.academic.native_fee_item.FeeItemPermissionMixin"],
+}
 after_install = "toefl_house.install.after_install"
 after_migrate = "toefl_house.install.after_migrate"
 # Release navigation is deliberately split by the native framework boundary.
