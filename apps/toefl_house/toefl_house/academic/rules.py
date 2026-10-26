@@ -301,6 +301,8 @@ def validate_discount_percentage(value):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("Discount percentage must be a number")
     val = float(value)
+    if not math.isfinite(val):
+        raise ValueError("Discount percentage must be finite")
     if val <= 0:
         raise ValueError("Discount percentage must be greater than zero")
     if val > 100.0:
@@ -347,7 +349,14 @@ def apply_charge_discount(gross, discount_percentage):
     amount itself. One application per line — stacking is unrepresentable by
     construction, because a single percentage is supplied here at most once.
     """
-    g = float(gross)
+    if isinstance(gross, bool):
+        raise ValueError("Gross fee must be a finite number")
+    try:
+        g = float(gross)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise ValueError("Gross fee must be a finite number") from exc
+    if not math.isfinite(g):
+        raise ValueError("Gross fee must be a finite number")
     if g < 0:
         raise ValueError("Fee amount must not be negative")
     percent = validate_discount_percentage(discount_percentage)
@@ -375,7 +384,10 @@ def resolve_charge_discount(rules_list, fee_category=None, program=None, student
         beneficiary = rule.get("student")
         if beneficiary and beneficiary != student:
             continue
-        percent = float(rule.get("discount_percentage") or 0)
+        # A malformed active discount must never silently become the
+        # winning rule and corrupt a native tuition charge. Invalid legacy
+        # percentages require Owner correction before issuing new Fees.
+        percent = validate_discount_percentage(rule.get("discount_percentage"))
         if 50 < percent < 100 or (percent == 100 and not beneficiary):
             continue
         eligible.append(rule)
