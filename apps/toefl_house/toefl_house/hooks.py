@@ -17,6 +17,7 @@ extend_doctype_class = {
 }
 after_install = "toefl_house.install.after_install"
 after_migrate = "toefl_house.install.after_migrate"
+setup_wizard_success = "toefl_house.academic.native_setup.setup_wizard_success"
 # Release navigation is deliberately split by the native framework boundary.
 # Workspaces remain only TH Receipts and TH Finance.  They pass Frappe's
 # workspace module gate and do not grant document permission.  D10's

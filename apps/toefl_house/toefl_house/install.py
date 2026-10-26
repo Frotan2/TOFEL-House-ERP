@@ -42,6 +42,8 @@ def _seed_skills():
 
 
 def after_migrate():
+    from toefl_house.academic.native_setup import ensure_fee_component_root
+    ensure_fee_component_root()
     frappe.db.add_unique("TH Placement Item Revision", ["family", "revision"], "th_item_family_revision")
     frappe.db.add_unique("TH Placement Key Revision", ["item_revision", "key_version"], "th_key_item_version")
     frappe.db.add_unique("TH Placement Blueprint Revision", ["code", "revision"], "th_blueprint_code_revision")

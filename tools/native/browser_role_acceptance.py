@@ -71,6 +71,12 @@ def prepare():
             })
         if not frappe.is_setup_complete():
             raise RuntimeError("Native synthetic setup did not complete")
+        # Education can predate the native wizard. Its Fee Component leaf
+        # must not remain the non-group root of the wizard's item presets.
+        fee_group = frappe.get_doc("Item Group", "Fee Component")
+        if not fee_group.parent_item_group and not fee_group.is_group:
+            raise RuntimeError("The native fee accounting tree has a leaf root")
+        fee_group.save()
         for actor, role in sorted({(c[1], c[2]) for c in CASES}):
             frappe.get_doc({
                 "doctype": "User", "email": f"browser-{actor}@example.test",
