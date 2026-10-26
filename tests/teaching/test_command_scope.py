@@ -132,6 +132,29 @@ class CommandScopeTests(unittest.TestCase):
             "issue_placement_fee", {"case": "case", "customer": "customer"},
             "actor", result={"sales_invoice": "own-placement"})
 
+    def test_cached_assignment_replay_obeys_changed_company(self):
+        self.branches = []
+        self.companies = ["Company B"]
+        self.values[("TH Teaching Assignment", "assignment-a", "contract")] = "contract-a"
+        self.values[("TH Instructor Contract", "contract-a", "employee")] = "employee-a"
+        self.values[("Employee", "employee-a", "company")] = "Company A"
+        payload = {"assignment": "assignment-a"}
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "end_teaching_assignment", payload, "actor",
+                result={"name": "assignment-a", "effective_end": "2026-10-27"})
+        self.companies = ["Company A"]
+        self.scope.authorize_command_scope(
+            "end_teaching_assignment", payload, "actor",
+            result={"name": "assignment-a", "effective_end": "2026-10-27"})
+
+    def test_assignment_without_contract_fails_closed_for_scoped_actor(self):
+        self.branches = []
+        self.companies = ["Company A"]
+        with self.assertRaises(PermissionError):
+            self.scope.authorize_command_scope(
+                "end_teaching_assignment", {"assignment": "missing"}, "actor")
+
     def test_cached_contract_revision_obeys_changed_company(self):
         self.branches = []
         self.companies = ["Company B"]

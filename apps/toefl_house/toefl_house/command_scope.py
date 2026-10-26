@@ -27,7 +27,7 @@ COMPANY_REFERENCES = {
     "sales_invoice": "Sales Invoice",
     "employee": "Employee", "salary_slip": "Salary Slip", "payroll_entry": "Payroll Entry",
     "contract": "TH Instructor Contract", "supersedes": "TH Instructor Contract",
-    "credit_note": "Sales Invoice",
+    "assignment": "TH Teaching Assignment", "credit_note": "Sales Invoice",
 }
 
 
@@ -38,7 +38,10 @@ CORRECTION_COMMANDS = frozenset({
 
 
 def _reference_company(doctype, name):
-    """Resolve Company through the employee on a teaching contract."""
+    """Resolve Company through the native teaching contract and its employee."""
+    if doctype == "TH Teaching Assignment":
+        contract = frappe.db.get_value(doctype, name, "contract")
+        return _reference_company("TH Instructor Contract", contract) if contract else None
     if doctype == "TH Instructor Contract":
         employee = frappe.db.get_value(doctype, name, "employee")
         return frappe.db.get_value("Employee", employee, "company") if employee else None
@@ -68,8 +71,8 @@ def _authorize_company_scope(kind, payload, actor, result):
                 company = _reference_company(doctype, name)
                 if company:
                     companies.add(company)
-                elif doctype == "TH Instructor Contract":
-                    raise frappe.PermissionError("The contract Company cannot be resolved")
+                elif doctype in ("TH Instructor Contract", "TH Teaching Assignment"):
+                    raise frappe.PermissionError("The teaching record Company cannot be resolved")
     if kind in CORRECTION_COMMANDS:
         request = payload.get("request")
         if not isinstance(request, str) or not request or len(request) > 140:
